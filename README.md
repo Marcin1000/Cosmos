@@ -68,8 +68,22 @@ Wariant Electron sam startuje serwer — nie musisz nic uruchamiać osobno.
 Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona). Telefon łączy się
 z serwerem na Twoim PC — tam jest klucz API i tam wykonuje się cała logika.
 
+### iPhone / iPad — PWA (Safari)
+
+Otwórz adres serwera w **Safari** → **Udostępnij** → **„Dodaj do ekranu początkowego"**.
+Ikona i pasek stanu są przygotowane pod iOS.
+
+### Mac — PWA (Safari / Chrome)
+
+Safari (macOS Sonoma+): **Plik → Dodaj do Docka**. Chrome/Edge: ikona „Zainstaluj"
+w pasku adresu. Cosmos trafia do Docka jako osobna aplikacja.
+
 > 💡 Chcesz używać Cosmos poza domem? Wystaw serwer przez [Tailscale](https://tailscale.com)
 > (darmowy VPN między Twoimi urządzeniami) — bez otwierania portów na routerze.
+
+**Ikony aplikacji** są dołączone dla wszystkich platform: Windows/Android (192, 512,
+maskable 192/512, SVG), iOS (`apple-touch-icon` 180, nieprzezroczysta), macOS Safari
+(`mask-icon` do przypiętej karty) oraz 1024 px dla ekranów o wysokiej rozdzielczości.
 
 ## 🔌 Konfiguracja modeli (`.env`)
 

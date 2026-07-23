@@ -161,6 +161,33 @@ Najkrótsza droga (gdy telefon i komputer są w tej samej sieci Wi-Fi):
 
 ---
 
+# CZĘŚĆ 3b — Aplikacja na iPhone / iPad (iOS, iPadOS)
+
+1. Na iPhonie/iPadzie otwórz Cosmosa w przeglądarce **Safari** (nie Chrome — na iOS
+   tylko Safari potrafi instalować aplikacje). Adres jak przy Androidzie:
+   `http://ADRES-KOMPUTERA:3000` (ta sama sieć Wi-Fi), albo adres z Tailscale.
+2. Dotknij ikony **Udostępnij** (kwadrat ze strzałką w górę).
+3. Wybierz **„Dodaj do ekranu początkowego"**.
+4. Cosmos pojawi się na ekranie z własną ikoną i będzie działał pełnoekranowo,
+   jak natywna aplikacja.
+
+> Ikona i pasek stanu są już przygotowane pod iOS — nie musisz nic ustawiać.
+
+---
+
+# CZĘŚĆ 3c — Aplikacja na Mac (macOS)
+
+Na Macu z przeglądarką **Safari** (wersja z macOS Sonoma lub nowszą):
+1. Otwórz Cosmosa: `http://localhost:3000` (jeśli serwer jest na tym Macu) albo
+   adres komputera/serwera w sieci.
+2. W menu górnym: **Plik → Dodaj do Docka** (lub przycisk **Udostępnij → Dodaj do Docka**).
+3. Cosmos pojawi się w Docku jako osobna aplikacja z własnym oknem i ikoną.
+
+W przeglądarce **Chrome/Edge** na Macu działa też zwykła instalacja PWA
+(ikona „Zainstaluj" w pasku adresu) — tak samo jak na Windows.
+
+---
+
 # CZĘŚĆ 4 — Zmysły: głos, wzrok, pamięć (opcjonalnie)
 
 To dodatkowa usługa w Pythonie. Bez niej Cosmos działa (czat, obrazy), ale nie ma

@@ -2,7 +2,7 @@
    Statyczne pliki: cache-first (działa offline).
    API: zawsze sieć — czat wymaga połączenia z modelem. */
 
-const CACHE = 'cosmos-v11';
+const CACHE = 'cosmos-v12';
 
 const STATIC_ASSETS = [
   '/',
@@ -14,6 +14,10 @@ const STATIC_ASSETS = [
   '/icons/icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/mask-icon.svg',
+  '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png',
   '/fonts/fonts.css',
   '/fonts/IBMPlexSans-400-latin.woff2',
   '/fonts/IBMPlexSans-400-latin-ext.woff2',
