@@ -257,6 +257,28 @@ Aby Twój edytor kodu Cursor widział bazę wiedzy i pamięć Cosmosa:
 
 ---
 
+# Co możesz robić w Cosmosie (przegląd)
+
+Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
+
+- **Rozmowy pod kontrolą** — wyszukiwarka rozmów (po tytule i treści), przypinanie
+  ważnych, zmiana nazwy, eksport, regeneracja odpowiedzi i edycja własnej wiadomości.
+- **Pamięć i wiedza** — przycisk „✦ Zapamiętaj" pod wiadomością, profil użytkownika
+  (Ustawienia) doklejany do każdej rozmowy, podsumowania rozmów, licznik tokenów.
+- **Baza wiedzy** — wrzucaj pliki, linki i notatki głosowe; zaznaczone pozycje
+  Cosmos dokłada do kontekstu, z reszty sam przywołuje pasujące fragmenty.
+- **Studio** — generowanie obrazów (OpenAI / Adobe Firefly) z wariantami, szablonami,
+  storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
+  także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
+- **Kamera na żywo** — panel z detekcją obiektów i trybem głosowym „Hej, Kosmos".
+- **Digital Time Machine** — włącz w Ustawieniach, a Cosmos zapisuje migawki sceny
+  do osi czasu (wskaźnik „REC"); wyłączona domyślnie dla prywatności.
+- **Kopie zapasowe, statystyki i tryb offline** — w Ustawieniach.
+
+> Pełny opis każdej funkcji: **[../README.md](../README.md)**.
+
+---
+
 # Gdy coś nie działa
 
 | Objaw | Co zrobić |

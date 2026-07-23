@@ -23,11 +23,22 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 - ☁️ / 🖥️ **Tryb hybrydowy** — przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym
 - 🛰️ Monitor statusu obu endpointów na żywo
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
+- 🔎 **Zarządzanie rozmowami**: wyszukiwarka (po tytule i treści), przypinanie, zmiana
+  nazwy, eksport, regeneracja odpowiedzi, edycja własnej wiadomości, skróty klawiszowe
+- 🧾 **Podsumowania rozmów**, licznik tokenów w kompozytorze, profil użytkownika
+  doklejany do kontekstu każdej rozmowy
 - ⚙️ Osobny wybór modelu dla chmury i dla GPU, system prompt, temperatura, limit tokenów
 - 🌗 Motyw ciemny (kosmos) i jasny (sterylny), czcionki IBM Plex dołączone offline
-- 🌍 **Dwa języki interfejsu — polski i angielski** (przełącznik w panelu bocznym);
-  język steruje też instrukcją systemową modelu i rozpoznawaniem/syntezą mowy
-- 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe) i Android (PWA)
+- 🌍 **Dwa języki interfejsu — polski i angielski** (przełącznik w panelu bocznym
+  i na ekranie logowania); język steruje też instrukcją systemową modelu
+  i rozpoznawaniem/syntezą mowy
+- 📸 **Panel kamery na żywo** z detekcją YOLO na podglądzie, zdarzeniami pozycji
+  (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**
+- 🕰️ **Digital Time Machine** (włączana w Ustawieniach) — automatyczny zapis migawek
+  sceny do osi czasu, ze wskaźnikiem „REC"
+- 💾 **Kopie zapasowe i statystyki** danych, **tryb offline**, uwierzytelnianie hasłem
+- 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe),
+  Android (PWA), iOS/iPadOS (Safari) i macOS (Dock/PWA)
 
 ## 🚀 Szybki start (każdy system)
 
@@ -237,6 +248,17 @@ czego użyjesz — środkami ze swoich kont):
 **Wszystko spina baza wiedzy:** każdy wygenerowany obraz, dźwięk i wideo trafia
 do niej automatycznie (z promptem jako opisem), więc możesz się do nich odnosić
 w rozmowie i używać ich w kolejnych krokach (obraz z OpenAI → wideo w Seedance).
+
+**Studio to więcej niż jeden przycisk „generuj":**
+- **Warianty** — jednym poleceniem stwórz 1 / 2 / 4 wersje tego samego promptu.
+- **Szablony promptów** — gotowe style (np. fotorealizm, plakat, ikona) doklejane
+  do Twojego opisu jednym kliknięciem.
+- **Storyboard** — rozpisz scenę na kadry i wygeneruj je seryjnie (przydatne przed
+  klipem w Seedance).
+- **Edycja / inpainting** — zamaluj fragment obrazu na płótnie i podmień tylko go.
+- **Upscale** — powiększanie i wyostrzanie (Real-ESRGAN przez usługę zmysłów).
+- **Galeria** — wszystkie wygenerowane materiały w jednym miejscu, z podglądem
+  i ponownym użyciem w rozmowie lub jako pierwsza/ostatnia klatka wideo.
 
 ### 🎬 Adobe: Firefly + Creative Cloud
 
