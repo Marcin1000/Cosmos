@@ -16,14 +16,20 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [x] **Edytuj i wyślij ponownie** — pod wiadomością użytkownika
 - [x] **Skróty klawiszowe** — Ctrl/Cmd+K (szukaj), Ctrl/Cmd+Shift+O (nowa rozmowa)
 
-## 🔜 Partia 2 — Studio i biblioteka mediów
+## ✅ Partia 2 — Studio i biblioteka mediów (rdzeń GOTOWE)
 
-- [ ] **Galeria wyników Studio** — miniatury wszystkich wygenerowanych mediów z filtrowaniem
+- [x] **Galeria wyników Studio** — miniatury wszystkich wygenerowanych mediów
+  (obraz/dźwięk/wideo) z filtrowaniem, pobieraniem, usuwaniem i „użyj jako klatka wideo"
+- [x] **Warianty obrazu** — generowanie ×1 / ×2 / ×4 naraz, wyniki w siatce
+- [x] **Szablony promptów** — zapis i wywołanie zapisanych stylów w Studiu
+
+### Partia 2b — zaawansowana obróbka (wymaga dodatkowej pracy/usług)
+- [ ] **Upscale obrazu** — wymaga osobnego modelu powiększającego (np. Real-ESRGAN
+  w usłudze zmysłów) — OpenAI/Firefly nie mają prostego endpointu upscale
+- [ ] **Edycja przez maskowanie (inpainting)** — UI do rysowania maski + endpoint
+  images/edit; dedykowana pod-partia
+- [ ] **Storyboard AI** — model generuje sekwencję kadrów → wsadowe generowanie klatek
 - [ ] **Kolejka zadań Studio** — seria generacji ze śledzeniem postępu
-- [ ] **Warianty i upscale** obrazu
-- [ ] **Edycja obrazu przez maskowanie** (inpainting)
-- [ ] **Szablony promptów** — zapisane style wywoływane jednym kliknięciem
-- [ ] **Storyboard AI** — z promptu sekwencja kadrów → klatki do Seedance
 
 ## 🔜 Partia 3 — wiedza i pamięć
 

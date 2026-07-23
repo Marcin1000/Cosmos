@@ -994,38 +994,46 @@ async function handleStudio(req, res, pathname) {
     const size = ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
       .includes(data.size) ? data.size : '1024x1024';
     const provider = providers.some((p) => p.id === data.provider) ? data.provider : providers[0].id;
+    const count = Math.min(4, Math.max(1, parseInt(data.count, 10) || 1)); // liczba wariantów
+
+    const genOne = async () => {
+      if (provider === 'firefly') {
+        return { buf: await fireflyGenerateImage(prompt, size), engineLabel: 'Adobe Firefly' };
+      }
+      const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
+      if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
+      const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(180000),
+      });
+      const resp = await r.json();
+      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+      const first = resp.data?.[0] || {};
+      let buf;
+      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
+      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+      else throw new Error('API nie zwróciło obrazu.');
+      return { buf, engineLabel: STUDIO.openai.imageModel };
+    };
 
     try {
-      let buf;
-      let engineLabel;
-      if (provider === 'firefly') {
-        buf = await fireflyGenerateImage(prompt, size);
-        engineLabel = 'Adobe Firefly';
-      } else {
-        const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
-        if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
-        const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(180000),
-        });
-        const resp = await r.json();
-        if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
-        const first = resp.data?.[0] || {};
-        if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-        else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
-        else throw new Error('API nie zwróciło obrazu.');
-        engineLabel = STUDIO.openai.imageModel;
+      const items = [];
+      let engineLabel = '';
+      for (let k = 0; k < count; k++) {
+        const { buf, engineLabel: lbl } = await genOne();
+        engineLabel = lbl;
+        const name = tsName('obraz', 'png');
+        const item = await kbAddFile(name, 'image/png', buf,
+          `Grafika wygenerowana w Studiu (silnik: ${lbl}). Prompt: ${prompt}`);
+        exportToStudioDir(name, buf);
+        items.push({ item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
       }
-
-      const name = tsName('obraz', 'png');
-      const item = await kbAddFile(name, 'image/png', buf,
-        `Grafika wygenerowana w Studiu (silnik: ${engineLabel}). Prompt: ${prompt}`);
-      const exported = exportToStudioDir(name, buf);
-      addEvent('studio', `wygenerowano obraz (${engineLabel}): „${prompt.slice(0, 80)}”`);
+      addEvent('studio', `wygenerowano ${count > 1 ? count + ' warianty obrazu' : 'obraz'} (${engineLabel}): „${prompt.slice(0, 80)}”`);
+      // zgodność wstecz: pierwszy obraz jako item/url (dla znacznika [OBRAZ:] w czacie)
       return sendJson(res, 200, {
-        ok: true, provider, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported,
+        ok: true, provider, items, item: items[0].item, url: items[0].url,
       });
     } catch (err) {
       return sendJson(res, 502, { error: `Generowanie obrazu nie powiodło się: ${err.message}` });

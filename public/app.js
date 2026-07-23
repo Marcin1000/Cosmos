@@ -1385,9 +1385,15 @@ async function openStudio() {
     const opts = images.map((i) =>
       `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
     $('studio-video-image').innerHTML =
-      '<option value="">pierwsza klatka: brak (sam prompt)</option>' + opts;
+      `<option value="">${t('st.frameNone')}</option>` + opts;
     $('studio-video-last').innerHTML =
-      '<option value="">ostatnia klatka: brak</option>' + opts;
+      `<option value="">${t('st.lastNone')}</option>` + opts;
+    // klatka wybrana wcześniej w Galerii
+    if (pendingVideoFrameId) {
+      $('studio-video-image').value = pendingVideoFrameId;
+      pendingVideoFrameId = null;
+    }
+    renderPromptTemplates();
   } catch { /* sekcje zostają w stanie domyślnym */ }
 }
 
@@ -1408,15 +1414,122 @@ $('studio-image-go').addEventListener('click', async () => {
       body: JSON.stringify({
         prompt,
         size: $('studio-image-size').value,
+        count: Number($('studio-image-count').value) || 1,
         provider: $('studio-image-provider').value || undefined,
       }),
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-    studioOut('image', `<img src="${escapeHtml(d.url)}" alt="wygenerowany obraz">` + studioNote(d.item, d.exported));
+    const imgs = (d.items || [{ item: d.item, url: d.url }])
+      .map((r) => `<img src="${escapeHtml(r.url)}" alt="wygenerowany obraz">`).join('');
+    studioOut('image', imgs + studioNote(d.item, d.exported));
   } catch (err) {
     studioOut('image', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
+});
+
+// --- szablony promptów obrazu (localStorage) ---
+function loadPromptTemplates() {
+  return loadJson('cosmos.promptTemplates', []);
+}
+function renderPromptTemplates() {
+  const sel = $('studio-image-tpl');
+  const tpls = loadPromptTemplates();
+  sel.innerHTML = `<option value="">${t('st.tplSelect')}</option>` +
+    tpls.map((tp, i) => `<option value="${i}">${escapeHtml(tp.name)}</option>`).join('');
+}
+$('studio-image-tpl').addEventListener('change', (e) => {
+  const tpls = loadPromptTemplates();
+  const tp = tpls[Number(e.target.value)];
+  if (tp) { $('studio-image-prompt').value = tp.prompt; e.target.value = ''; }
+});
+$('studio-image-tpl-save').addEventListener('click', () => {
+  const prompt = $('studio-image-prompt').value.trim();
+  if (!prompt) return;
+  const name = prompt.length > 40 ? prompt.slice(0, 40) + '…' : prompt;
+  const chosen = window.prompt(t('st.tplNamePrompt'), name);
+  if (chosen === null) return;
+  const tpls = loadPromptTemplates();
+  tpls.push({ name: (chosen.trim() || name).slice(0, 60), prompt });
+  localStorage.setItem('cosmos.promptTemplates', JSON.stringify(tpls));
+  renderPromptTemplates();
+});
+
+// ----------------------------------------------------------------
+// GALERIA — przegląd wygenerowanych mediów (z bazy wiedzy)
+// ----------------------------------------------------------------
+
+let galleryFilter = 'all';
+
+async function openGallery() {
+  $('gallery-modal').style.display = '';
+  await renderGallery();
+}
+function closeGallery() { $('gallery-modal').style.display = 'none'; }
+
+async function renderGallery() {
+  const grid = $('gallery-grid');
+  grid.innerHTML = `<div class="gallery-empty">${t('loading')}</div>`;
+  let items = [];
+  try {
+    const d = await (await fetch('/api/kb')).json();
+    items = (d.items || []).filter((i) => /^(image|audio|video)\//.test(i.mime || ''));
+  } catch { /* offline */ }
+
+  const kind = (m) => (m || '').split('/')[0];
+  const filtered = galleryFilter === 'all' ? items : items.filter((i) => kind(i.mime) === galleryFilter);
+  filtered.sort((a, b) => b.time - a.time);
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="gallery-empty">${t('gallery.empty')}</div>`;
+    return;
+  }
+  grid.innerHTML = '';
+  for (const it of filtered) {
+    const k = kind(it.mime);
+    const url = `/api/kb/raw?id=${encodeURIComponent(it.id)}`;
+    const cell = document.createElement('div');
+    cell.className = 'gallery-cell';
+    let media;
+    if (k === 'image') media = `<img src="${url}" loading="lazy" alt="${escapeHtml(it.name)}">`;
+    else if (k === 'video') media = `<video src="${url}" controls preload="metadata"></video>`;
+    else media = `<div class="gallery-audio">🎵</div><audio src="${url}" controls></audio>`;
+
+    const frameBtn = k === 'image'
+      ? `<button data-frame="${escapeHtml(it.id)}" title="${t('gallery.useFrame')}">🎬</button>` : '';
+    cell.innerHTML =
+      media +
+      `<div class="gallery-meta" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</div>` +
+      `<div class="gallery-actions">` +
+      `<a href="${url}" download="${escapeHtml(it.name)}" style="flex:1"><button style="width:100%">${t('gallery.download')}</button></a>` +
+      frameBtn +
+      `<button class="danger" data-del="${escapeHtml(it.id)}">✕</button>` +
+      `</div>`;
+    grid.appendChild(cell);
+  }
+
+  grid.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    await fetch(`/api/kb?id=${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' });
+    renderGallery();
+  }));
+  grid.querySelectorAll('[data-frame]').forEach((b) => b.addEventListener('click', () => {
+    pendingVideoFrameId = b.dataset.frame;
+    b.textContent = '✓';
+    setTimeout(() => { b.textContent = '🎬'; }, 1200);
+  }));
+}
+
+let pendingVideoFrameId = null; // obraz wybrany w galerii jako pierwsza klatka wideo
+
+$('gallery-btn').addEventListener('click', openGallery);
+$('gallery-close').addEventListener('click', closeGallery);
+$('gallery-modal').addEventListener('click', (e) => { if (e.target === $('gallery-modal')) closeGallery(); });
+$('gallery-filters').addEventListener('click', (e) => {
+  const btn = e.target.closest('.gallery-filter');
+  if (!btn) return;
+  galleryFilter = btn.dataset.filter;
+  $('gallery-filters').querySelectorAll('.gallery-filter').forEach((f) => f.classList.toggle('active', f === btn));
+  renderGallery();
 });
 
 $('studio-speech-go').addEventListener('click', async () => {
