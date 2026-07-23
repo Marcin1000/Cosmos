@@ -38,13 +38,18 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [x] **Wskaźnik tokenów** — szacunkowy licznik kontekstu przy polu wiadomości
 - [ ] **Foldery / tagi rozmów** — do rozważenia; obecnie mamy wyszukiwarkę + przypinanie, co pokrywa większość potrzeb
 
-## 🔜 Partia 4 — percepcja i robotyka
+## ✅ Partia 4 — percepcja i robotyka (GOTOWE / scaffold)
 
-- [ ] **Panel podglądu kamery na żywo** obok czatu z nakładką detekcji
-- [ ] **Wake-word lokalny** (openWakeWord/Porcupine) — „Hej, Kosmos" bez otwartej karty
-- [ ] **Sterowanie gestami** (MediaPipe)
-- [ ] **Pamięć przestrzenna** — „gdzie zostawiłem telefon?" na bazie Kinecta
-- [ ] **Integracja z Mavic 3** — import zdjęć z lotu → model 3D
+- [x] **Panel podglądu kamery na żywo** — pływające okno z obrazem + nakładką detekcji
+  YOLO; działa na kamerze telefonu i komputera
+- [x] **Pamięć przestrzenna** — detekcja z pozycją (po lewej/na środku/po prawej) trafia
+  jako zdarzenie percepcji do kontekstu → model odpowiada „gdzie coś jest"
+- [x] **Wake-word lokalny** — `senses/wake_listener.py` (openWakeWord); nasłuch mikrofonu
+  bez otwartej karty (własny model „Hej Kosmos" do wytrenowania — patrz plik)
+- [~] **Integracja z Mavic 3** — pokryta przez `senses/photoscan.py`: zdjęcia z lotu →
+  model 3D (COLMAP). Sterowanie lotem z PC jest ograniczone przez DJI (patrz analiza wcześniej)
+- [ ] **Sterowanie gestami** — wymaga biblioteki MediaPipe w przeglądarce (zewnętrzna,
+  do rozważenia offline); alternatywnie gesty z endpointu /pose usługi zmysłów
 
 ## 🔜 Partia 5 — platforma i infrastruktura
 

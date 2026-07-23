@@ -1564,6 +1564,94 @@ $('studio-edit-go').addEventListener('click', async () => {
 });
 
 // ----------------------------------------------------------------
+// KAMERA NA ŻYWO — podgląd + detekcja YOLO + zdarzenia percepcji
+// ----------------------------------------------------------------
+
+let liveStream = null;
+let liveTimer = null;
+let livePrevObjects = '';
+
+function posLabel(cx, w) {
+  const r = cx / w;
+  return r < 0.34 ? t('posLeft') : r > 0.66 ? t('posRight') : t('posCenter');
+}
+
+async function startLive() {
+  try {
+    liveStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
+  } catch (err) {
+    alert(t('cam.err') + ' ' + err.message);
+    return;
+  }
+  $('live-panel').style.display = '';
+  const video = $('live-video');
+  video.srcObject = liveStream;
+  $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
+  await video.play().catch(() => {});
+  liveTimer = setInterval(liveDetect, 3000);
+  setTimeout(liveDetect, 800);
+}
+
+function stopLive() {
+  clearInterval(liveTimer); liveTimer = null;
+  if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
+  $('live-video').srcObject = null;
+  $('live-panel').style.display = 'none';
+  livePrevObjects = '';
+}
+
+async function liveDetect() {
+  const video = $('live-video');
+  if (!video.videoWidth) return;
+  const overlay = $('live-overlay');
+  overlay.width = video.videoWidth;
+  overlay.height = video.videoHeight;
+  const octx = overlay.getContext('2d');
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  if (!(senses.online && senses.caps.yolo)) return; // sam podgląd bez detekcji
+
+  const cap = document.createElement('canvas');
+  cap.width = video.videoWidth; cap.height = video.videoHeight;
+  cap.getContext('2d').drawImage(video, 0, 0);
+  let data;
+  try {
+    const res = await fetch('/api/detect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7) }),
+    });
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'detect');
+  } catch { return; }
+
+  const objs = data.objects || [];
+  octx.strokeStyle = '#9db9ff'; octx.lineWidth = Math.max(2, overlay.width / 300);
+  octx.font = `${Math.max(14, overlay.width / 40)}px sans-serif`; octx.fillStyle = '#9db9ff';
+  for (const o of objs) {
+    const [x1, y1, x2, y2] = o.box;
+    octx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    octx.fillText(o.label, x1 + 4, Math.max(14, y1 - 4));
+  }
+  $('live-status').textContent = objs.length
+    ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
+    : t('liveNothing');
+
+  // zdarzenie percepcji z pozycją — tylko gdy zestaw obiektów się zmienił
+  const sig = objs.map((o) => o.label).sort().join(',');
+  if (sig && sig !== livePrevObjects) {
+    livePrevObjects = sig;
+    const withPos = objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ');
+    fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'kamera', summary: `widzę w kadrze: ${withPos}` }),
+    }).catch(() => {});
+  }
+}
+
+$('live-btn').addEventListener('click', () => { liveStream ? stopLive() : startLive(); });
+$('live-close').addEventListener('click', stopLive);
+
+// ----------------------------------------------------------------
 // GALERIA — przegląd wygenerowanych mediów (z bazy wiedzy)
 // ----------------------------------------------------------------
 
