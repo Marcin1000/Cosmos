@@ -278,6 +278,12 @@ płatności/wysłania/potwierdzenia i tak wraca do ręcznego runnera z bramką.
 3. Po treningu wpinasz model z powrotem jako profil **„Lokalnie"** (przez Ollama/GGUF) —
    rozmawiasz z własnym modelem w tym samym UI. **Pętla:** używaj → zbierz dane → dotrenuj → wepnij.
 
+**Albo jednym kliknięciem — przycisk „🎓 Dotrenuj teraz"** (Ustawienia → Dane treningowe).
+Pojawia się, gdy masz lokalnie **Pythona** i skrypt; Cosmos zapisuje dataset, uruchamia
+QLoRA w tle (podgląd logu na żywo) i po sukcesie **sam rejestruje model w Ollamie**
+(`ollama create`) — zostaje tylko ustawić `LOCAL_MODEL` i przełączyć na profil „Lokalnie".
+Wymaga zainstalowanych zależności (patrz `training/README.md`); trening korzysta z Twojego GPU.
+
 Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe:
 **[training/README.md](training/README.md)**.
 
@@ -391,6 +397,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
 | `/api/automation/status` `/api/procedures/run-readonly` | GET / POST | Nauka: automatyzacja web tylko-do-odczytu (Playwright) |
 | `/api/train/dataset?format=` `/api/train/stats` | GET | Eksport danych treningowych (JSONL: chat/instrukcje) i licznik przykładów |
+| `/api/train/env` `/api/train/start` `/api/train/status` `/api/train/stop` | GET/POST | Trening w aplikacji: wykrycie wymagań, start/stop, log |
 
 ## 💰 Koszty
 

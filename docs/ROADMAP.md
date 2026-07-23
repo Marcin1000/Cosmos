@@ -106,6 +106,10 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   eksportują rozmowy do JSONL (format chat lub instrukcje); `training/` zawiera gotowy
   skrypt QLoRA (Unsloth) i przewodnik, jak dotrenować własny model i wpiąć go z powrotem
   jako profil „Lokalnie" (przez Ollama/GGUF). Endpointy: `/api/train/dataset`, `/api/train/stats`.
+- [x] **Przycisk „Dotrenuj" w aplikacji** — Ustawienia uruchamiają trening QLoRA lokalnie
+  jednym kliknięciem: serwer wykrywa wymagania (Python/Ollama), odpala skrypt w tle
+  z podglądem logu na żywo i po sukcesie sam rejestruje model w Ollamie (`ollama create`).
+  Endpointy: `/api/train/env`, `/api/train/start`, `/api/train/status`, `/api/train/stop`.
 - [ ] **Automatyczne odtwarzanie web ZMIENIAJĄCE STAN (płatność/wysłanie)** — świadomie
   odłożone: kroki wrażliwe (confirm/płatność) pozostają w ręcznym runnerze z bramką.
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
