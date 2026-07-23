@@ -64,11 +64,23 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [ ] **Profile / wielu użytkowników** — obecnie logowanie jednym hasłem + profil osobisty;
   konta wielu użytkowników to osobny moduł
 
-## 🔭 Partia 6 — kierunki ambitne
+## ✅ Partia 6 — kierunki ambitne (GOTOWE / fundament)
 
-- [ ] **Digital Time Machine** — codzienny skan otoczenia, przeglądanie zmian w czasie
-- [ ] **Agent wykonujący zadania** — realne kroki (pliki, przeglądarka) z akceptacją
-- [ ] **Uniwersalny agent eksploracyjny** — jeden mózg, wiele „ciał"
+- [x] **Digital Time Machine** — migawki otoczenia (obraz + wykryte obiekty) na osi czasu
+  z automatycznymi różnicami (co się pojawiło / zniknęło); migawka z panelu kamery na żywo
+- [x] **Agent wykonujący zadania** — model proponuje akcje `[AKCJA: typ | treść]`, a Ty je
+  zatwierdzasz jednym kliknięciem (zapamiętaj / notatka). Fundament „human-in-the-loop"
+  gotowy; kolejne, bardziej wrażliwe akcje (pliki, przeglądarka) można dokładać w tym wzorcu
+- [~] **Uniwersalny agent eksploracyjny** — zrealizowany architektonicznie: jeden mózg
+  (Nemotron) + wiele „ciał" i zmysłów zgłaszających zdarzenia do wspólnego kontekstu
+  (kamera, Kinect, watchery, dron przez PhotoScan). Rozbudowa = kolejne „ciała" w tym samym modelu zdarzeń
+
+---
+
+## 🎉 Wszystkie partie z roadmapy zrealizowane
+Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
+streaming WebRTC, konta wielu użytkowników) to świadomie odłożone rozszerzenia
+wymagające zewnętrznych bibliotek/infrastruktury — opisane przy swoich partiach.
 
 ---
 

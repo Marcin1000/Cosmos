@@ -672,6 +672,69 @@ async function kbAddFile(name, mime, buf, presetText = null) {
   return item;
 }
 
+// ---------------------------------------------------------------------------
+// Digital Time Machine — oś czasu migawek otoczenia (obraz + wykryte obiekty).
+// ---------------------------------------------------------------------------
+
+const TIMELINE_FILE = path.join(DATA_DIR, 'timeline.json');
+let timeline = [];
+try { timeline = JSON.parse(fs.readFileSync(TIMELINE_FILE, 'utf8')); } catch { /* brak */ }
+function saveTimeline() {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TIMELINE_FILE, JSON.stringify(timeline)); }
+  catch (err) { console.error('Nie udało się zapisać osi czasu:', err.message); }
+}
+
+async function handleTimeline(req, res) {
+  if (req.method === 'GET') {
+    // dołącz różnice względem poprzedniej migawki
+    const withDiff = timeline.map((s, i) => {
+      const prev = timeline[i - 1];
+      const cur = new Set(s.objects || []);
+      const old = new Set(prev ? prev.objects || [] : []);
+      return {
+        ...s,
+        appeared: [...cur].filter((o) => !old.has(o)),
+        disappeared: [...old].filter((o) => !cur.has(o)),
+      };
+    });
+    return sendJson(res, 200, { snapshots: withDiff });
+  }
+  if (req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    let imageId = null;
+    if (data.image) {
+      try {
+        const buf = Buffer.from(String(data.image).split(',').pop(), 'base64');
+        const item = await kbAddFile(tsName('migawka', 'jpg'), 'image/jpeg', buf, 'Migawka osi czasu.');
+        imageId = item.id;
+      } catch { /* bez obrazu */ }
+    }
+    const snap = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      time: Date.now(),
+      label: String(data.label || '').slice(0, 120),
+      objects: Array.isArray(data.objects) ? data.objects.slice(0, 40) : [],
+      imageId,
+    };
+    timeline.push(snap);
+    if (timeline.length > 500) timeline = timeline.slice(-500);
+    saveTimeline();
+    addEvent('oś-czasu', `zapisano migawkę otoczenia${snap.objects.length ? `: ${snap.objects.join(', ')}` : ''}`);
+    return sendJson(res, 200, { ok: true, id: snap.id });
+  }
+  if (req.method === 'DELETE') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    const snap = timeline.find((s) => s.id === id);
+    if (snap?.imageId) { try { fs.unlinkSync(path.join(KB_FILES, snap.imageId)); } catch { /* skip */ }
+      kbItems = kbItems.filter((it) => it.id !== snap.imageId); saveKb(); }
+    timeline = timeline.filter((s) => s.id !== id);
+    saveTimeline();
+    return sendJson(res, 200, { ok: true });
+  }
+  res.writeHead(405); res.end();
+}
+
 async function handleKb(req, res, pathname) {
   if (pathname === '/api/kb' && req.method === 'GET') {
     return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
@@ -1502,6 +1565,18 @@ async function handleChat(req, res) {
     });
   }
 
+  if (payload.useActions !== false) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — AKCJE (za zgodą użytkownika): gdy użytkownik prosi o zapisanie lub ' +
+        'zapamiętanie czegoś, zakończ odpowiedź osobną linią w formacie ' +
+        '[AKCJA: typ | treść]. Dozwolone typy: "zapamiętaj" (trwały fakt do pamięci), ' +
+        '"notatka" (notatka do bazy wiedzy). Użytkownik ręcznie zatwierdzi akcję. ' +
+        'Nie używaj [AKCJA:] w innych sytuacjach.',
+    });
+  }
+
   if (imageProviders().length && payload.useStudio !== false) {
     extras.push({
       role: 'system',
@@ -1802,6 +1877,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
       }
     }
+    if (p === '/api/timeline') return await handleTimeline(req, res);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');

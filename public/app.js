@@ -216,10 +216,10 @@ function escapeHtml(s) {
 
 // treść wiadomości: string albo { text, images: [dataURL] }
 function msgText(m) {
-  return typeof m.content === 'string' ? m.content : (m.content.text || '');
+  return typeof m.content === 'string' ? m.content : (m.content?.text || '');
 }
 function msgImages(m) {
-  return typeof m.content === 'string' ? [] : (m.content.images || []);
+  return typeof m.content === 'string' ? [] : (m.content?.images || []);
 }
 
 // ----------------------------------------------------------------
@@ -475,6 +475,26 @@ function messageElement(m, idx = -1) {
   const body = document.createElement('div');
   body.className = 'msg-content' + (role === 'assistant' && !isError ? ' md' : '');
 
+  if (m.role === 'action') {
+    msg.className = 'msg msg-action-card';
+    const done = m.done;
+    const label = m.actionType === 'zapamiętaj' || m.actionType === 'remember' ? t('remember') : t('kb.record');
+    msg.innerHTML =
+      `<div class="action-card">` +
+      `<div class="action-card-body"><span class="action-card-type">⚡ ${escapeHtml(label)}</span>` +
+      `<span class="action-card-text">${escapeHtml(m.actionText)}</span></div>` +
+      (done
+        ? `<span class="action-card-done">✓</span>`
+        : `<div class="action-card-btns"><button class="btn-primary act-do">${t('actionDo')}</button>` +
+          `<button class="btn-secondary act-skip">${t('actionSkip')}</button></div>`) +
+      `</div>`;
+    if (!done) {
+      msg.querySelector('.act-do').addEventListener('click', () => runAction(m, msg));
+      msg.querySelector('.act-skip').addEventListener('click', () => { m.done = 'skip'; saveConversations(); renderMessages(); });
+    }
+    return msg;
+  }
+
   if (m.search) {
     msg.className = 'msg msg-search';
     msg.innerHTML =
@@ -572,6 +592,23 @@ function messageActions(text, { copy, role, idx = -1 }) {
   }
 
   return actions;
+}
+
+async function runAction(m, msgEl) {
+  const btn = msgEl.querySelector('.act-do');
+  if (btn) btn.disabled = true;
+  try {
+    if (m.actionType === 'zapamiętaj' || m.actionType === 'remember') {
+      await fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: m.actionText }) });
+    } else {
+      await fetch('/api/kb/note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: m.actionText }) });
+    }
+    m.done = true;
+    saveConversations();
+    renderMessages();
+  } catch {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function regenerateFrom(idx) {
@@ -820,7 +857,7 @@ function toApiMessages(conv) {
     api.push({ role: 'system', content: sysPrompt });
   }
   for (const m of conv.messages) {
-    if (m.error) continue;
+    if (m.error || m.role === 'action') continue;
     const text = msgText(m);
     const images = msgImages(m);
     if (images.length && m.role === 'user') {
@@ -969,6 +1006,7 @@ async function webSearch(query) {
 
 const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
+const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
   isGenerating = true;
@@ -1043,7 +1081,15 @@ async function runGeneration(conv) {
       }
 
       finalText = acc || t('emptyReply');
-      conv.messages.push({ role: 'assistant', content: finalText });
+      const actMarker = finalText.match(ACTION_RE);
+      if (actMarker) {
+        const shown = finalText.replace(actMarker[0], '').trim();
+        conv.messages.push({ role: 'assistant', content: shown || '…' });
+        conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
+        finalText = shown;
+      } else {
+        conv.messages.push({ role: 'assistant', content: finalText });
+      }
       saveConversations();
       break;
     }
@@ -1571,6 +1617,7 @@ $('studio-edit-go').addEventListener('click', async () => {
 let liveStream = null;
 let liveTimer = null;
 let livePrevObjects = '';
+let liveLastObjects = [];
 
 function posLabel(cx, w) {
   const r = cx / w;
@@ -1626,6 +1673,7 @@ async function liveDetect() {
   } catch { return; }
 
   const objs = data.objects || [];
+  liveLastObjects = objs.map((o) => o.label);
   octx.strokeStyle = '#9db9ff'; octx.lineWidth = Math.max(2, overlay.width / 300);
   octx.font = `${Math.max(14, overlay.width / 40)}px sans-serif`; octx.fillStyle = '#9db9ff';
   for (const o of objs) {
@@ -1651,6 +1699,63 @@ async function liveDetect() {
 
 $('live-btn').addEventListener('click', () => { liveStream ? stopLive() : startLive(); });
 $('live-close').addEventListener('click', stopLive);
+
+// migawka do osi czasu (Digital Time Machine)
+$('live-snapshot').addEventListener('click', async () => {
+  const video = $('live-video');
+  if (!video.videoWidth) return;
+  const cap = document.createElement('canvas');
+  const scale = Math.min(1, 800 / video.videoWidth);
+  cap.width = Math.round(video.videoWidth * scale);
+  cap.height = Math.round(video.videoHeight * scale);
+  cap.getContext('2d').drawImage(video, 0, 0, cap.width, cap.height);
+  const btn = $('live-snapshot'); const prev = btn.textContent;
+  btn.disabled = true;
+  try {
+    await fetch('/api/timeline', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7), objects: [...new Set(liveLastObjects)] }),
+    });
+    btn.textContent = t('tm.saved');
+    setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1400);
+  } catch { btn.disabled = false; }
+});
+
+// ----------------------------------------------------------------
+// OŚ CZASU — Digital Time Machine
+// ----------------------------------------------------------------
+
+async function openTimeline() {
+  $('timeline-modal').style.display = '';
+  const list = $('timeline-list');
+  list.innerHTML = `<div class="tl-empty">${t('loading')}</div>`;
+  let snaps = [];
+  try { snaps = (await (await fetch('/api/timeline')).json()).snapshots || []; } catch { /* offline */ }
+  if (!snaps.length) { list.innerHTML = `<div class="tl-empty">${t('tm.empty')}</div>`; return; }
+  list.innerHTML = '';
+  for (const s of snaps.slice().reverse()) {
+    const row = document.createElement('div');
+    row.className = 'tl-item';
+    const when = new Date(s.time).toLocaleString(getLang());
+    const change = [];
+    if (s.appeared?.length) change.push(`<span class="app">+ ${t('tm.appeared')}: ${escapeHtml(s.appeared.join(', '))}</span>`);
+    if (s.disappeared?.length) change.push(`<span class="dis">− ${t('tm.disappeared')}: ${escapeHtml(s.disappeared.join(', '))}</span>`);
+    row.innerHTML =
+      (s.imageId ? `<img src="/api/kb/raw?id=${encodeURIComponent(s.imageId)}" loading="lazy">` : '') +
+      `<div class="tl-body"><span class="tl-time">${escapeHtml(when)}</span>` +
+      `<span class="tl-objects">${s.objects?.length ? escapeHtml(s.objects.join(', ')) : '—'}</span>` +
+      (change.length ? `<span class="tl-change">${change.join(' · ')}</span>` : '') + `</div>` +
+      `<button class="tl-del" data-del="${escapeHtml(s.id)}">✕</button>`;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    await fetch(`/api/timeline?id=${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' });
+    openTimeline();
+  }));
+}
+$('timeline-btn').addEventListener('click', openTimeline);
+$('timeline-close').addEventListener('click', () => { $('timeline-modal').style.display = 'none'; });
+$('timeline-modal').addEventListener('click', (e) => { if (e.target === $('timeline-modal')) $('timeline-modal').style.display = 'none'; });
 
 // ----------------------------------------------------------------
 // GALERIA — przegląd wygenerowanych mediów (z bazy wiedzy)
