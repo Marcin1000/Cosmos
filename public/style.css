@@ -1081,6 +1081,17 @@ kbd {
 .login-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 .login-box .btn-primary { width: 100%; padding: 12px; font-size: 15px; }
 .login-error { color: var(--danger); font-size: 12.5px; min-height: 16px; margin: 0; }
+.login-lang {
+  margin-top: 4px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.login-lang:hover { color: var(--accent); background: var(--bg-hover); }
 
 /* ============================ TRYB GŁOSOWY ============================ */
 

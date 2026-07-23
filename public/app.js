@@ -2194,6 +2194,10 @@ async function checkAuth() {
 function showLogin() {
   const overlay = $('login-overlay');
   overlay.style.display = '';
+  // przełącznik języka działający jeszcze przed zalogowaniem
+  $('login-lang').addEventListener('click', () => {
+    setLang(getLang() === 'pl' ? 'en' : 'pl'); // setLang wywołuje applyI18n()
+  });
   const form = $('login-form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
