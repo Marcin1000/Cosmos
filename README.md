@@ -6,6 +6,14 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 
 ![Cosmos](docs/screenshot.png)
 
+> ### 👉 Pierwszy raz? Zacznij tutaj:
+> - **[docs/START-TUTAJ.md](docs/START-TUTAJ.md)** — instrukcja krok po kroku (instalacja
+>   na komputerze i telefonie, prostym językiem).
+> - **[docs/ANDROID-I-KOMPUTER.md](docs/ANDROID-I-KOMPUTER.md)** — czy komputer musi być
+>   cały czas włączony? (odpowiedź + rozwiązania).
+>
+> Poniżej znajduje się dokumentacja techniczna każdego elementu.
+
 ## ✨ Funkcje
 
 - 💬 Czat ze streamingiem odpowiedzi w czasie rzeczywistym (SSE)
