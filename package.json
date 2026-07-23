@@ -1,0 +1,13 @@
+{
+  "name": "bear-chat",
+  "version": "1.0.0",
+  "description": "Interfejs czatu (UI/UX w stylu ChatGPT/Claude) dla modeli NVIDIA Nemotron przez dowolny endpoint zgodny z API OpenAI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
