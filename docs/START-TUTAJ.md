@@ -278,6 +278,9 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 - **Digital Time Machine** — włącz w Ustawieniach, a Cosmos zapisuje migawki sceny
   do osi czasu (wskaźnik „REC"); wyłączona domyślnie dla prywatności.
 - **Kopie zapasowe, statystyki i tryb offline** — w Ustawieniach.
+- **Trening własnego modelu** (dla zaawansowanych) — w Ustawieniach wyeksportujesz swoje
+  rozmowy jako dane treningowe (JSONL), a w `training/` znajdziesz gotowy skrypt QLoRA
+  i przewodnik, jak dotrenować model i wpiąć go z powrotem jako profil „Lokalnie".
 
 > Pełny opis każdej funkcji: **[../README.md](../README.md)**.
 

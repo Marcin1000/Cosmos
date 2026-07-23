@@ -2683,6 +2683,7 @@ function openSettings() {
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
+  loadTrainStats();
   el.settingsModal.style.display = '';
 }
 
@@ -2786,6 +2787,20 @@ $('backup-download').addEventListener('click', () => {
   a.download = `cosmos-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
 });
+function downloadDataset(fmt) {
+  const a = document.createElement('a');
+  a.href = '/api/train/dataset?format=' + fmt;
+  a.download = `cosmos-dataset-${fmt}-${new Date().toISOString().slice(0, 10)}.jsonl`;
+  a.click();
+}
+$('train-export-chat').addEventListener('click', () => downloadDataset('chat'));
+$('train-export-inst').addEventListener('click', () => downloadDataset('instruction'));
+async function loadTrainStats() {
+  try {
+    const d = await (await fetch('/api/train/stats')).json();
+    $('train-stats').textContent = t('train.count', { chat: d.chat, inst: d.instruction });
+  } catch { /* offline */ }
+}
 $('backup-restore-btn').addEventListener('click', () => $('backup-file').click());
 $('backup-file').addEventListener('change', async () => {
   const file = $('backup-file').files[0];

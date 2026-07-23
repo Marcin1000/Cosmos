@@ -102,6 +102,10 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   `{{secret:nazwa}}` z Bitwarden / 1Password / pass / KeePassXC / env / własnego polecenia,
   w locie po stronie serwera (nigdy w procedurze ani w przeglądarce-kliencie). Dzięki temu
   auto-odczyt działa też za logowaniem. Endpoint: `/api/automation/status` (pole `secrets`).
+- [x] **Eksport danych treningowych + przykład QLoRA** — Ustawienia → „Dane treningowe"
+  eksportują rozmowy do JSONL (format chat lub instrukcje); `training/` zawiera gotowy
+  skrypt QLoRA (Unsloth) i przewodnik, jak dotrenować własny model i wpiąć go z powrotem
+  jako profil „Lokalnie" (przez Ollama/GGUF). Endpointy: `/api/train/dataset`, `/api/train/stats`.
 - [ ] **Automatyczne odtwarzanie web ZMIENIAJĄCE STAN (płatność/wysłanie)** — świadomie
   odłożone: kroki wrażliwe (confirm/płatność) pozostają w ręcznym runnerze z bramką.
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji

@@ -278,6 +278,15 @@
           </div>
         </div>
 
+        <div class="field">
+          <span class="field-label" data-i18n="set.train">Dane treningowe (fine-tuning)</span>
+          <span class="field-hint" id="train-stats" data-i18n="train.hint">Wyeksportuj swoje rozmowy jako zbiór JSONL do dotrenowania własnego modelu (QLoRA). Przewodnik: training/README.md.</span>
+          <div class="field-row">
+            <button class="btn-secondary" id="train-export-chat" data-i18n="train.exportChat">Eksport JSONL (chat)</button>
+            <button class="btn-secondary" id="train-export-inst" data-i18n="train.exportInst">Eksport JSONL (instrukcje)</button>
+          </div>
+        </div>
+
         <div class="config-info mono" id="config-info"></div>
       </div>
       <div class="modal-footer">

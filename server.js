@@ -1192,6 +1192,50 @@ async function handleAutomation(req, res, pathname) {
   res.writeHead(405); res.end();
 }
 
+// ---------------------------------------------------------------------------
+// TRENING — eksport danych do fine-tuningu (QLoRA/LoRA).
+// Buduje zbiór JSONL z rozmów: czyste tury user↔assistant (bez akcji, wyszukiwań,
+// błędów i obrazów). Dwa formaty: "chat" (messages[]) i "instruction".
+// To NIE trenuje modelu — przygotowuje dane, które wytrenujesz w training/ .
+// ---------------------------------------------------------------------------
+function convTextTurns(conv) {
+  const turns = [];
+  for (const m of (conv.messages || [])) {
+    if (m.role !== 'user' && m.role !== 'assistant') continue; // pomiń action/search
+    if (m.search || m.error) continue;
+    const text = typeof m.content === 'string' ? m.content : (m.content && m.content.text) || '';
+    const t = String(text).trim();
+    if (!t) continue; // pomiń tury bez tekstu (np. sam obraz)
+    turns.push({ role: m.role, content: t });
+  }
+  return turns;
+}
+
+function buildTrainingDataset(format) {
+  const sys = userProfile.trim();
+  const out = [];
+  for (const meta of convIndex) {
+    let conv;
+    try { conv = JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { continue; }
+    const turns = convTextTurns(conv);
+    if (turns.length < 2) continue;
+
+    if (format === 'instruction') {
+      // pary: każda tura użytkownika + następna odpowiedź asystenta
+      for (let i = 0; i < turns.length - 1; i++) {
+        if (turns[i].role === 'user' && turns[i + 1].role === 'assistant') {
+          out.push({ instruction: turns[i].content, input: '', output: turns[i + 1].content });
+        }
+      }
+    } else { // chat
+      if (!turns.some((t) => t.role === 'assistant')) continue;
+      const messages = sys ? [{ role: 'system', content: sys }] : [];
+      out.push({ messages: messages.concat(turns) });
+    }
+  }
+  return { lines: out.map((o) => JSON.stringify(o)).join('\n') + (out.length ? '\n' : ''), count: out.length };
+}
+
 async function handleKb(req, res, pathname) {
   if (pathname === '/api/kb' && req.method === 'GET') {
     return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
@@ -2302,6 +2346,22 @@ const server = http.createServer(async (req, res) => {
         'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
       });
       return res.end(JSON.stringify(bundle));
+    }
+    if (p === '/api/train/dataset' && req.method === 'GET') {
+      const fmt = new URL(req.url, 'http://localhost').searchParams.get('format') || 'chat';
+      const { lines, count } = buildTrainingDataset(fmt);
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'X-Example-Count': String(count),
+        'Content-Disposition': `attachment; filename="cosmos-dataset-${fmt}-${new Date().toISOString().slice(0, 10)}.jsonl"`,
+      });
+      return res.end(lines);
+    }
+    if (p === '/api/train/stats' && req.method === 'GET') {
+      return sendJson(res, 200, {
+        chat: buildTrainingDataset('chat').count,
+        instruction: buildTrainingDataset('instruction').count,
+      });
     }
     if (p === '/api/backup' && req.method === 'POST') {
       let bundle;

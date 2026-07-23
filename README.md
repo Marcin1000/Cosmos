@@ -42,6 +42,8 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 - 🕰️ **Digital Time Machine** (włączana w Ustawieniach) — automatyczny zapis migawek
   sceny do osi czasu, ze wskaźnikiem „REC"
 - 💾 **Kopie zapasowe i statystyki** danych, **tryb offline**, uwierzytelnianie hasłem
+- 🎓 **Eksport danych treningowych** (JSONL) + przykład **QLoRA** — dotrenuj własny model
+  na swoich rozmowach i wepnij go z powrotem jako profil „Lokalnie" (`training/`)
 - 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe),
   Android (PWA), iOS/iPadOS (Safari) i macOS (Dock/PWA)
 
@@ -265,6 +267,20 @@ płatności/wysłania/potwierdzenia i tak wraca do ręcznego runnera z bramką.
 > obsługuje odczyt (i ewentualnie logowanie); kroki zmieniające stan zawsze wymagają Twojego
 > potwierdzenia.
 
+### 🎓 Trening własnego modelu (fine-tuning)
+
+„Nauka" uczy **Cosmosa** (pamięć/umiejętności) — nie zmienia wag modelu. Jeśli chcesz
+**wpisać** swój styl/domenę w wagi, możesz dotrenować własny model:
+
+1. **Ustawienia → Dane treningowe → „Eksport JSONL (chat)"** — Twoje rozmowy jako zbiór
+   treningowy (jedna rozmowa na linię; dostępny też format „instrukcje").
+2. **`training/`** — gotowy skrypt **QLoRA** (Unsloth, pod jedno GPU jak RTX 3080) i przewodnik.
+3. Po treningu wpinasz model z powrotem jako profil **„Lokalnie"** (przez Ollama/GGUF) —
+   rozmawiasz z własnym modelem w tym samym UI. **Pętla:** używaj → zbierz dane → dotrenuj → wepnij.
+
+Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe:
+**[training/README.md](training/README.md)**.
+
 ### Zmysł głębi — Kinect 360
 
 `python senses/kinect_watcher.py` — czyta mapę głębi (libfreenect) i melduje:
@@ -374,6 +390,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
 | `/api/automation/status` `/api/procedures/run-readonly` | GET / POST | Nauka: automatyzacja web tylko-do-odczytu (Playwright) |
+| `/api/train/dataset?format=` `/api/train/stats` | GET | Eksport danych treningowych (JSONL: chat/instrukcje) i licznik przykładów |
 
 ## 💰 Koszty
 
