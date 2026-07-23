@@ -735,6 +735,306 @@ async function handleTimeline(req, res) {
   res.writeHead(405); res.end();
 }
 
+// ---------------------------------------------------------------------------
+// NAUKA — uczenie Cosmosa.
+//   1) Rozpoznawanie przez zmysły ("pokaż w kamerze"): zapamiętane wzorce
+//      (etykieta + opis + embedding + miniatura). Później dopasowywane do
+//      tego, co widzą zmysły — jak pamięć długotrwała, ale dla obrazu/gestu.
+//   2) Procedury ("pokaż kroki"): nauczona sekwencja czynności w przeglądarce,
+//      z krokami oznaczonymi jako wrażliwe (płatność, wysłanie) — te zawsze
+//      wymagają potwierdzenia użytkownika.
+//   3) Rutyny: cykliczny harmonogram odpalania procedur. Domyślnie tryb
+//      "prepare" — Cosmos przygotowuje czynność, ale nic nieodwracalnego nie
+//      robi sam. Scheduler tylko zgłasza, że nadszedł czas.
+// ---------------------------------------------------------------------------
+
+const LESSONS_FILE = path.join(DATA_DIR, 'lessons.json');
+const PROCEDURES_FILE = path.join(DATA_DIR, 'procedures.json');
+const ROUTINES_FILE = path.join(DATA_DIR, 'routines.json');
+
+let lessons = [];
+let procedures = [];
+let routines = [];
+try { lessons = JSON.parse(fs.readFileSync(LESSONS_FILE, 'utf8')); } catch { /* brak */ }
+try { procedures = JSON.parse(fs.readFileSync(PROCEDURES_FILE, 'utf8')); } catch { /* brak */ }
+try { routines = JSON.parse(fs.readFileSync(ROUTINES_FILE, 'utf8')); } catch { /* brak */ }
+
+function saveJsonFile(file, data) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
+  catch (err) { console.error(`Nie udało się zapisać ${path.basename(file)}:`, err.message); }
+}
+const saveLessons = () => saveJsonFile(LESSONS_FILE, lessons);
+const saveProcedures = () => saveJsonFile(PROCEDURES_FILE, procedures);
+const saveRoutines = () => saveJsonFile(ROUTINES_FILE, routines);
+
+const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function lessonDescriptor(l) {
+  return [l.label, l.note, (l.objects || []).join(', ')].filter(Boolean).join('. ');
+}
+
+// --- 1) Rozpoznawanie ---
+async function handleLessons(req, res, pathname) {
+  if (pathname === '/api/lessons' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      lessons: lessons.map((l) => ({
+        id: l.id, label: l.label, kind: l.kind, note: l.note,
+        objects: l.objects || [], thumbId: l.thumbId, createdAt: l.createdAt,
+        hasEmbedding: Boolean(l.embedding),
+      })),
+    });
+  }
+  if (pathname === '/api/lessons' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const label = String(data.label || '').trim().slice(0, 120);
+    if (!label) return sendJson(res, 400, { error: 'Podaj nazwę tego, czego Cosmos ma się nauczyć.' });
+    const kind = ['object', 'gesture', 'pose', 'scene'].includes(data.kind) ? data.kind : 'object';
+    let thumbId = null;
+    if (data.image) {
+      try {
+        const buf = Buffer.from(String(data.image).split(',').pop(), 'base64');
+        const item = await kbAddFile(tsName('wzorzec', 'jpg'), 'image/jpeg', buf, `Wzorzec nauki: ${label}`);
+        thumbId = item.id;
+      } catch { /* bez miniatury */ }
+    }
+    const item = {
+      id: genId(), label, kind, note: String(data.note || '').slice(0, 400),
+      objects: Array.isArray(data.objects) ? data.objects.slice(0, 40) : [],
+      thumbId, createdAt: Date.now(), embedding: null,
+    };
+    const vecs = await embedTexts([lessonDescriptor(item)]);
+    if (vecs) item.embedding = vecs[0];
+    lessons.push(item);
+    saveLessons();
+    addEvent('nauka', `nauczono rozpoznawać: ${label}`);
+    return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding) });
+  }
+  if (pathname === '/api/lessons' && req.method === 'DELETE') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    const l = lessons.find((x) => x.id === id);
+    if (l?.thumbId) { try { fs.unlinkSync(path.join(KB_FILES, l.thumbId)); } catch { /* skip */ }
+      kbItems = kbItems.filter((it) => it.id !== l.thumbId); saveKb(); }
+    lessons = lessons.filter((x) => x.id !== id);
+    saveLessons();
+    return sendJson(res, 200, { ok: true });
+  }
+  // dopasowanie: co z tego, co widać, Cosmos już zna?
+  if (pathname === '/api/lessons/match' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const matches = await matchLessons(String(data.text || ''), Array.isArray(data.objects) ? data.objects : []);
+    return sendJson(res, 200, { matches });
+  }
+  res.writeHead(405); res.end();
+}
+
+async function matchLessons(text, objects, limit = 4) {
+  if (!lessons.length) return [];
+  const queryText = [text, objects.join(', ')].filter(Boolean).join('. ');
+  if (!queryText.trim()) return [];
+  let qvec = null;
+  const vecs = await embedTexts([queryText], 5000);
+  if (vecs) {
+    qvec = vecs[0];
+    const missing = lessons.filter((l) => !l.embedding);
+    if (missing.length) {
+      const embs = await embedTexts(missing.map(lessonDescriptor));
+      if (embs) { missing.forEach((l, i) => { l.embedding = embs[i]; }); saveLessons(); }
+    }
+  }
+  const objSet = new Set(objects.map((o) => String(o).toLowerCase()));
+  const threshold = qvec ? 0.4 : 0.2;
+  return lessons
+    .map((l) => {
+      let score = (qvec && l.embedding) ? cosine(qvec, l.embedding) : keywordScore(queryText, lessonDescriptor(l));
+      // premia, gdy wykryte obiekty pokrywają się z obiektami wzorca
+      const overlap = (l.objects || []).filter((o) => objSet.has(String(o).toLowerCase())).length;
+      if (overlap) score += 0.15 * overlap;
+      return { l, score };
+    })
+    .filter((s) => s.score > threshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => ({ id: s.l.id, label: s.l.label, kind: s.l.kind, note: s.l.note, score: Math.round(s.score * 100) / 100 }));
+}
+
+// --- 2) Procedury ---
+function sanitizeStep(s) {
+  const action = ['open', 'click', 'type', 'read', 'wait', 'confirm', 'note'].includes(s.action) ? s.action : 'note';
+  return {
+    action,
+    target: String(s.target || '').slice(0, 500),
+    value: String(s.value || '').slice(0, 500),
+    // krok wrażliwy = nieodwracalny (płatność, wysłanie, potwierdzenie); zawsze wymaga zgody
+    sensitive: Boolean(s.sensitive) || action === 'confirm',
+    note: String(s.note || '').slice(0, 300),
+  };
+}
+
+async function handleProcedures(req, res, pathname) {
+  const url = new URL(req.url, 'http://localhost');
+  if (pathname === '/api/procedures' && req.method === 'GET') {
+    return sendJson(res, 200, { procedures });
+  }
+  if (pathname === '/api/procedures' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const name = String(data.name || '').trim().slice(0, 120);
+    if (!name) return sendJson(res, 400, { error: 'Podaj nazwę procedury.' });
+    const steps = Array.isArray(data.steps) ? data.steps.slice(0, 60).map(sanitizeStep) : [];
+    const item = {
+      id: genId(), name, description: String(data.description || '').slice(0, 600),
+      scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    procedures.push(item);
+    saveProcedures();
+    addEvent('nauka', `nauczono procedury: ${name} (${steps.length} kroków)`);
+    return sendJson(res, 200, { ok: true, id: item.id });
+  }
+  if (pathname === '/api/procedures' && req.method === 'PUT') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const p = procedures.find((x) => x.id === data.id);
+    if (!p) return sendJson(res, 404, { error: 'Nie znaleziono procedury.' });
+    if (data.name != null) p.name = String(data.name).trim().slice(0, 120) || p.name;
+    if (data.description != null) p.description = String(data.description).slice(0, 600);
+    if (Array.isArray(data.steps)) p.steps = data.steps.slice(0, 60).map(sanitizeStep);
+    p.updatedAt = Date.now();
+    saveProcedures();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/procedures' && req.method === 'DELETE') {
+    const id = url.searchParams.get('id');
+    procedures = procedures.filter((x) => x.id !== id);
+    routines = routines.filter((r) => r.procedureId !== id); saveRoutines();
+    saveProcedures();
+    return sendJson(res, 200, { ok: true });
+  }
+  res.writeHead(405); res.end();
+}
+
+// --- 3) Rutyny (harmonogram) ---
+function computeNextRun(schedule, from = Date.now()) {
+  const s = schedule || {};
+  if (s.type === 'interval') {
+    const mins = Math.max(1, Number(s.everyMinutes) || 60);
+    return from + mins * 60 * 1000;
+  }
+  const [hh, mm] = String(s.time || '09:00').split(':').map((n) => parseInt(n, 10) || 0);
+  const d = new Date(from);
+  d.setSeconds(0, 0);
+  d.setHours(hh, mm, 0, 0);
+  if (s.type === 'weekly') {
+    const target = Math.min(6, Math.max(0, Number(s.day) || 0));
+    let add = (target - d.getDay() + 7) % 7;
+    if (add === 0 && d.getTime() <= from) add = 7;
+    d.setDate(d.getDate() + add);
+  } else if (s.type === 'monthly') {
+    const dom = Math.min(28, Math.max(1, Number(s.day) || 1));
+    d.setDate(dom);
+    if (d.getTime() <= from) d.setMonth(d.getMonth() + 1);
+  } else { // daily
+    if (d.getTime() <= from) d.setDate(d.getDate() + 1);
+  }
+  return d.getTime();
+}
+
+function routineView(r) {
+  const proc = procedures.find((p) => p.id === r.procedureId);
+  return { ...r, procedureName: proc ? proc.name : '(usunięta procedura)' };
+}
+
+async function handleRoutines(req, res, pathname) {
+  const url = new URL(req.url, 'http://localhost');
+  if (pathname === '/api/routines' && req.method === 'GET') {
+    return sendJson(res, 200, { routines: routines.map(routineView) });
+  }
+  if (pathname === '/api/routines/due' && req.method === 'GET') {
+    return sendJson(res, 200, { due: routines.filter((r) => r.pending).map(routineView) });
+  }
+  if (pathname === '/api/routines' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    if (!procedures.find((p) => p.id === data.procedureId)) {
+      return sendJson(res, 400, { error: 'Wskaż istniejącą procedurę.' });
+    }
+    const schedule = {
+      type: ['daily', 'weekly', 'monthly', 'interval'].includes(data.type) ? data.type : 'daily',
+      time: String(data.time || '09:00').slice(0, 5),
+      day: Number(data.day) || 0,
+      everyMinutes: Number(data.everyMinutes) || 60,
+    };
+    const item = {
+      id: genId(), procedureId: data.procedureId, schedule,
+      // "prepare": przygotuj i poproś o potwierdzenie (bezpieczne, domyślne).
+      // "auto-read": tylko czynności do odczytu mogą iść same.
+      mode: data.mode === 'auto-read' ? 'auto-read' : 'prepare',
+      enabled: data.enabled !== false, pending: false,
+      lastRun: null, nextRun: computeNextRun(schedule), createdAt: Date.now(),
+    };
+    routines.push(item);
+    saveRoutines();
+    return sendJson(res, 200, { ok: true, id: item.id, nextRun: item.nextRun });
+  }
+  if (pathname === '/api/routines' && req.method === 'PUT') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const r = routines.find((x) => x.id === data.id);
+    if (!r) return sendJson(res, 404, { error: 'Nie znaleziono rutyny.' });
+    if (typeof data.enabled === 'boolean') r.enabled = data.enabled;
+    if (data.mode) r.mode = data.mode === 'auto-read' ? 'auto-read' : 'prepare';
+    if (data.schedule || data.type) {
+      const s = data.schedule || data;
+      r.schedule = {
+        type: ['daily', 'weekly', 'monthly', 'interval'].includes(s.type) ? s.type : r.schedule.type,
+        time: String(s.time || r.schedule.time).slice(0, 5),
+        day: Number(s.day) || 0,
+        everyMinutes: Number(s.everyMinutes) || r.schedule.everyMinutes,
+      };
+      r.nextRun = computeNextRun(r.schedule);
+    }
+    if (data.pending === false) { r.pending = false; }
+    saveRoutines();
+    return sendJson(res, 200, { ok: true, nextRun: r.nextRun });
+  }
+  if (pathname === '/api/routines' && req.method === 'DELETE') {
+    const id = url.searchParams.get('id');
+    routines = routines.filter((x) => x.id !== id);
+    saveRoutines();
+    return sendJson(res, 200, { ok: true });
+  }
+  res.writeHead(405); res.end();
+}
+
+// Scheduler: co 30 s sprawdza rutyny. Gdy nadszedł czas — TYLKO oznacza je
+// jako "pending" i zgłasza zdarzenie. Nic nieodwracalnego nie dzieje się samo;
+// właściwe wykonanie (za zgodą) uruchamia użytkownik w interfejsie.
+let schedulerTimer = null;
+function tickRoutines() {
+  const now = Date.now();
+  let changed = false;
+  for (const r of routines) {
+    if (!r.enabled) continue;
+    if (!r.nextRun) { r.nextRun = computeNextRun(r.schedule, now); changed = true; }
+    if (now >= r.nextRun) {
+      r.pending = true;
+      r.lastRun = now;
+      r.nextRun = computeNextRun(r.schedule, now);
+      changed = true;
+      const proc = procedures.find((p) => p.id === r.procedureId);
+      addEvent('rutyna', `zaplanowana czynność do wykonania: ${proc ? proc.name : r.procedureId}`);
+    }
+  }
+  if (changed) saveRoutines();
+}
+function startScheduler() {
+  if (schedulerTimer) return;
+  tickRoutines();
+  schedulerTimer = setInterval(tickRoutines, 30 * 1000);
+  if (schedulerTimer.unref) schedulerTimer.unref();
+}
+
 async function handleKb(req, res, pathname) {
   if (pathname === '/api/kb' && req.method === 'GET') {
     return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
@@ -1566,14 +1866,21 @@ async function handleChat(req, res) {
   }
 
   if (payload.useActions !== false) {
+    const procList = procedures.length
+      ? ' Nauczone procedury (możesz zaproponować ich uruchomienie): ' +
+        procedures.map((pr) => `"${pr.name}"`).join(', ') +
+        '. Aby uruchomić procedurę, użyj [AKCJA: procedura | dokładna nazwa]. ' +
+        'Uruchomienie tylko przygotowuje kroki — każdy krok wrażliwy (płatność, wysłanie) ' +
+        'i tak wymaga osobnego potwierdzenia użytkownika.'
+      : '';
     extras.push({
       role: 'system',
       content:
         'NARZĘDZIE — AKCJE (za zgodą użytkownika): gdy użytkownik prosi o zapisanie lub ' +
         'zapamiętanie czegoś, zakończ odpowiedź osobną linią w formacie ' +
         '[AKCJA: typ | treść]. Dozwolone typy: "zapamiętaj" (trwały fakt do pamięci), ' +
-        '"notatka" (notatka do bazy wiedzy). Użytkownik ręcznie zatwierdzi akcję. ' +
-        'Nie używaj [AKCJA:] w innych sytuacjach.',
+        '"notatka" (notatka do bazy wiedzy)' + (procList ? ', "procedura" (uruchom nauczoną czynność)' : '') +
+        '. Użytkownik ręcznie zatwierdzi akcję. Nie używaj [AKCJA:] w innych sytuacjach.' + procList,
     });
   }
 
@@ -1878,6 +2185,9 @@ const server = http.createServer(async (req, res) => {
       }
     }
     if (p === '/api/timeline') return await handleTimeline(req, res);
+    if (p === '/api/lessons' || p === '/api/lessons/match') return await handleLessons(req, res, p);
+    if (p === '/api/procedures') return await handleProcedures(req, res, p);
+    if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
@@ -1916,7 +2226,11 @@ function start(port = PORT) {
         STUDIO.eleven.key && 'dźwięk(ElevenLabs)', STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
       console.log(`  → Studio:  ${studioOn.length ? studioOn.join(', ') : 'brak kluczy (opcjonalne)'}` +
         (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
+      if (procedures.length || routines.length) {
+        console.log(`  → Nauka:   ${lessons.length} wzorców, ${procedures.length} procedur, ${routines.length} rutyn`);
+      }
       console.log('');
+      startScheduler();
       resolve(server);
     });
   });

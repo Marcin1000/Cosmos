@@ -75,12 +75,37 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
   (Nemotron) + wiele „ciał" i zmysłów zgłaszających zdarzenia do wspólnego kontekstu
   (kamera, Kinect, watchery, dron przez PhotoScan). Rozbudowa = kolejne „ciała" w tym samym modelu zdarzeń
 
+## ✅ Partia 7 — Nauka (GOTOWE / fundament)
+
+Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
+
+- [x] **Rozpoznawanie przez zmysły** — pokazujesz coś w kamerze i nazywasz (obiekt / gest /
+  poza / scena); Cosmos zapisuje wzorzec (etykieta + opis + miniatura + embedding) i później
+  rozpoznaje to na żywo w panelu kamery. Nauka przez przykład, lokalnie — nie zmienia wag
+  modelu. Bez usługi zmysłów działa wariant na słowach kluczowych.
+  Endpointy: `/api/lessons`, `/api/lessons/match`.
+- [x] **Procedury (nauka czynności)** — nagrywasz czynność jako listę kroków (otwórz / kliknij /
+  wpisz / odczytaj / poczekaj / potwierdź / notatka). Kroki **wrażliwe** (płatność, wysłanie,
+  potwierdzenie) są oznaczane i **zawsze** wymagają Twojego kliknięcia w runnerze. Hasła/dane
+  karty nie są zapisywane. Endpointy: `/api/procedures`. Nemotron może zaproponować
+  uruchomienie procedury przez `[AKCJA: procedura | nazwa]`.
+- [x] **Rutyny (cykliczne odpalanie)** — harmonogram (codziennie / co tydzień / co miesiąc /
+  co N minut) dla procedury. Scheduler na serwerze zgłasza, że nadszedł czas (nic
+  nieodwracalnego nie dzieje się samo); interfejs proponuje uruchomienie z bramką
+  potwierdzeń. Endpointy: `/api/routines`, `/api/routines/due`.
+- [ ] **Automatyczne odtwarzanie web (Playwright)** — świadomie odłożone: pełne bezobsługowe
+  odtwarzanie kroków w przeglądarce jako osobny, opcjonalny moduł wykonawczy z twardą bramką
+  przed każdym krokiem wrażliwym. Obecnie runner prowadzi krok po kroku (asystent z bramką).
+- [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
+  systemowej poza przeglądarką (osobne narzędzia/uprawnienia).
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
-streaming WebRTC, konta wielu użytkowników) to świadomie odłożone rozszerzenia
-wymagające zewnętrznych bibliotek/infrastruktury — opisane przy swoich partiach.
+streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
+to świadomie odłożone rozszerzenia wymagające zewnętrznych bibliotek/infrastruktury
+— opisane przy swoich partiach.
 
 ---
 

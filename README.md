@@ -34,6 +34,9 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   i rozpoznawaniem/syntezą mowy
 - 📸 **Panel kamery na żywo** z detekcją YOLO na podglądzie, zdarzeniami pozycji
   (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**
+- 🎓 **Nauka** — uczysz Cosmosa rozpoznawania (pokaż w kamerze i nazwij),
+  nagrywasz **procedury** (czynności krok po kroku) i planujesz je jako **rutyny**
+  cykliczne; kroki wrażliwe (płatność, wysłanie) zawsze wymagają potwierdzenia
 - 🕰️ **Digital Time Machine** (włączana w Ustawieniach) — automatyczny zapis migawek
   sceny do osi czasu, ze wskaźnikiem „REC"
 - 💾 **Kopie zapasowe i statystyki** danych, **tryb offline**, uwierzytelnianie hasłem
@@ -214,6 +217,34 @@ wpisy** (wyszukiwanie semantyczne przez embeddingi **bge-m3** z usługi zmysłó
 gdy zmysły są offline — wyszukiwanie po słowach kluczowych) i dokleja je do
 kontekstu jako sekcję „PAMIĘĆ DŁUGOTRWAŁA". Wpisami zarządzasz w **Ustawieniach**.
 
+### 🎓 Nauka — uczysz Cosmosa (przycisk „Nauka" w panelu bocznym)
+
+Trzy zakładki, wszystkie z zasadą **człowiek w pętli** (nic nieodwracalnego nie dzieje się samo):
+
+**1. Rozpoznawanie (przez zmysły).** Włącz kamerę, pokaż coś (klucz, gest, pozę), nazwij
+i kliknij *Naucz*. Cosmos zapisuje wzorzec (etykieta + opis + miniatura + embedding) i od
+tej pory **rozpoznaje to na żywo** w panelu kamery — dopisuje np. „✦ Mój klucz" do statusu
+i melduje jako zdarzenie percepcji, więc możesz o tym rozmawiać. To nauka **przez przykład**,
+lokalnie — nie dotrenowuje wag Nemotrona. Bez usługi zmysłów działa dopasowanie po słowach
+kluczowych.
+
+**2. Procedury (nauka czynności).** Rozpisz czynność (np. *„sprawdź rachunek za prąd"*) na
+kroki: otwórz stronę, kliknij, wpisz, odczytaj, poczekaj, **potwierdź**, notatka. Kroki
+oznaczone jako **wrażliwe** (płatność, wysłanie, potwierdzenie) w runnerze **zawsze** wymagają
+Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty **nie są** zapisywane
+w procedurze (wartość kroku możesz zostawić jako wskazówkę „z menedżera haseł"). Uruchomienie
+prowadzi Cię krok po kroku (asystent z bramką), z przyciskiem otwarcia strony i kopiowaniem
+wartości. Nemotron może sam zaproponować uruchomienie: *„odpal sprawdzenie rachunku"* →
+`[AKCJA: procedura | nazwa]`, którą zatwierdzasz.
+
+**3. Rutyny (cyklicznie).** Zaplanuj procedurę: codziennie / co tydzień / co miesiąc / co N
+minut. O wyznaczonej porze Cosmos **przygotowuje** czynność i pyta, czy uruchomić (z bramką
+na krokach wrażliwych). Licznik przy „Nauce" pokazuje, ile rutyn czeka.
+
+> **Bezpieczeństwo pieniędzy:** domyślnie żadna rutyna nie wykonuje płatności automatycznie.
+> Pełne bezobsługowe odtwarzanie kroków w przeglądarce (Playwright) jest świadomie odłożone
+> jako osobny, opcjonalny moduł — z twardą bramką przed każdym nieodwracalnym krokiem.
+
 ### Zmysł głębi — Kinect 360
 
 `python senses/kinect_watcher.py` — czyta mapę głębi (libfreenect) i melduje:
@@ -319,6 +350,9 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe) |
+| `/api/lessons` `/api/lessons/match` | GET/POST/DELETE | Nauka: wzorce rozpoznawania i dopasowanie |
+| `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
+| `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
 
 ## 💰 Koszty
 

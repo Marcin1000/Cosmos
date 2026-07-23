@@ -271,6 +271,10 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
   storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
 - **Kamera na żywo** — panel z detekcją obiektów i trybem głosowym „Hej, Kosmos".
+- **Nauka** (przycisk w panelu bocznym) — naucz Cosmosa rozpoznawania (pokaż w kamerze
+  i nazwij), nagraj **procedury** (czynności krok po kroku, np. sprawdzenie rachunku)
+  i zaplanuj je jako **rutyny** cykliczne. Kroki wrażliwe (płatność, wysłanie) zawsze
+  wymagają Twojego potwierdzenia — Cosmos nigdy nie płaci sam.
 - **Digital Time Machine** — włącz w Ustawieniach, a Cosmos zapisuje migawki sceny
   do osi czasu (wskaźnik „REC"); wyłączona domyślnie dla prywatności.
 - **Kopie zapasowe, statystyki i tryb offline** — w Ustawieniach.

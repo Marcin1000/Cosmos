@@ -74,6 +74,10 @@
           <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="19" cy="17" r="1.4" fill="currentColor"/><circle cx="6" cy="19" r="1" fill="currentColor"/></svg>
           <span data-i18n="studio">Studio</span>
         </button>
+        <button class="footer-btn" id="learn-btn">
+          <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 9.5V15c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5V9.5M21 7v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="learn">Nauka</span> <span class="kb-badge mono" id="learn-badge"></span>
+        </button>
         <button class="footer-btn" id="timeline-btn">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           <span data-i18n="timeMachine">Oś czasu</span>
@@ -427,6 +431,91 @@
         <div class="field-hint" id="kb-status"></div>
         <div class="kb-list" id="kb-list"></div>
         <span class="field-hint" data-i18n-html="kb.hint">☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: NAUKA ================= -->
+  <div class="modal-overlay" id="learn-modal" style="display:none">
+    <div class="modal studio-modal" role="dialog" aria-labelledby="learn-title">
+      <div class="modal-header">
+        <h2 id="learn-title" data-i18n="learn">Nauka</h2>
+        <button class="icon-btn" id="learn-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="studio-tabs" role="tablist">
+          <button class="studio-tab active" data-learn-tab="recog" data-i18n="learn.tabRecog">Rozpoznawanie</button>
+          <button class="studio-tab" data-learn-tab="proc" data-i18n="learn.tabProc">Procedury</button>
+          <button class="studio-tab" data-learn-tab="routine" data-i18n="learn.tabRoutine">Rutyny</button>
+        </div>
+
+        <!-- Rozpoznawanie -->
+        <div class="learn-pane" id="learn-pane-recog">
+          <p class="field-hint" data-i18n="learn.recogIntro">Pokaż Cosmosowi coś w kamerze i nazwij to — nauczy się to rozpoznawać (obiekt, gest, poza). Uczy się przez przykład, lokalnie; nie zmienia wag modelu.</p>
+          <div class="field-row">
+            <input type="text" id="learn-label" data-i18n-ph="learn.labelPh" placeholder="Nazwa, np. „Mój klucz do domu”, „gest STOP”">
+            <select id="learn-kind">
+              <option value="object" data-i18n="learn.kindObject">Obiekt</option>
+              <option value="gesture" data-i18n="learn.kindGesture">Gest</option>
+              <option value="pose" data-i18n="learn.kindPose">Poza</option>
+              <option value="scene" data-i18n="learn.kindScene">Scena</option>
+            </select>
+          </div>
+          <textarea id="learn-note" rows="2" data-i18n-ph="learn.notePh" placeholder="Opis (opcjonalnie) — pomaga rozpoznawaniu"></textarea>
+          <div class="learn-capture">
+            <video id="learn-video" autoplay playsinline muted></video>
+            <img id="learn-thumb" alt="" style="display:none">
+          </div>
+          <div class="field-row">
+            <button class="btn-secondary" id="learn-cam-btn" data-i18n="learn.openCam">📷 Włącz kamerę</button>
+            <button class="btn-secondary" id="learn-shot-btn" data-i18n="learn.capture" disabled>Zrób zdjęcie wzorca</button>
+            <button class="btn-primary" id="learn-save" data-i18n="learn.teach">Naucz</button>
+          </div>
+          <div class="field-hint" id="learn-recog-status"></div>
+          <div class="learn-list" id="learn-lessons"></div>
+        </div>
+
+        <!-- Procedury -->
+        <div class="learn-pane" id="learn-pane-proc" style="display:none">
+          <p class="field-hint" data-i18n-html="learn.procIntro">Naucz Cosmosa czynności krok po kroku (np. „sprawdź rachunek za prąd”). Kroki <strong>wrażliwe</strong> (płatność, wysłanie, potwierdzenie) zawsze wymagają Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty <strong>nie są</strong> zapisywane w procedurze.</p>
+          <div class="field-row">
+            <input type="text" id="proc-name" data-i18n-ph="learn.procNamePh" placeholder="Nazwa procedury">
+            <select id="proc-picker"></select>
+          </div>
+          <textarea id="proc-desc" rows="2" data-i18n-ph="learn.procDescPh" placeholder="Krótki opis, co ta procedura robi"></textarea>
+          <div class="proc-steps" id="proc-steps"></div>
+          <button class="btn-secondary" id="proc-add-step" data-i18n="learn.addStep">+ Dodaj krok</button>
+          <div class="field-row" style="margin-top:10px">
+            <button class="btn-primary" id="proc-save" data-i18n="learn.saveProc">Zapisz procedurę</button>
+            <button class="btn-secondary" id="proc-run" data-i18n="learn.runProc">Uruchom (z potwierdzeniem)</button>
+            <button class="btn-ghost" id="proc-delete" data-i18n="learn.deleteProc" style="display:none">Usuń</button>
+          </div>
+          <div class="field-hint" id="learn-proc-status"></div>
+        </div>
+
+        <!-- Rutyny -->
+        <div class="learn-pane" id="learn-pane-routine" style="display:none">
+          <p class="field-hint" data-i18n="learn.routineIntro">Odpalaj nauczone procedury cyklicznie. O wyznaczonej porze Cosmos przygotuje czynność i poprosi o potwierdzenie — nic nieodwracalnego nie dzieje się samo.</p>
+          <div class="field-row">
+            <select id="routine-proc"></select>
+            <select id="routine-type">
+              <option value="daily" data-i18n="learn.freqDaily">Codziennie</option>
+              <option value="weekly" data-i18n="learn.freqWeekly">Co tydzień</option>
+              <option value="monthly" data-i18n="learn.freqMonthly">Co miesiąc</option>
+              <option value="interval" data-i18n="learn.freqInterval">Co N minut</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="time" id="routine-time" value="09:00">
+            <select id="routine-day" style="display:none"></select>
+            <input type="number" id="routine-mins" min="1" value="60" style="display:none" data-i18n-ph="learn.minsPh" placeholder="minuty">
+            <button class="btn-primary" id="routine-add" data-i18n="learn.addRoutine">Dodaj rutynę</button>
+          </div>
+          <div class="field-hint" id="learn-routine-status"></div>
+          <div class="learn-list" id="routine-list"></div>
+        </div>
       </div>
     </div>
   </div>
