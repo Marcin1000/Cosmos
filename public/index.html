@@ -255,6 +255,11 @@
           <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline — bez wyszukiwania w internecie</span></span>
         </label>
 
+        <label class="field">
+          <span class="field-label"><input type="checkbox" id="set-timemachine" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="tm.enable">Digital Time Machine — automatyczny zapis otoczenia</span></span>
+          <span class="field-hint" data-i18n="tm.enableHint">Gdy włączone, panel kamery na żywo sam zapisuje migawki przy zmianie sceny.</span>
+        </label>
+
         <div class="field">
           <span class="field-label" data-i18n="set.stats">Statystyki</span>
           <div class="config-info mono" id="stats-info">—</div>
@@ -430,6 +435,7 @@
   <div class="live-panel" id="live-panel" style="display:none">
     <div class="live-head">
       <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
+      <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
       <button class="icon-btn" id="live-close" data-i18n-aria="close" aria-label="Zamknij">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>

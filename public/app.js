@@ -1618,6 +1618,29 @@ let liveStream = null;
 let liveTimer = null;
 let livePrevObjects = '';
 let liveLastObjects = [];
+let liveLastAutoSnap = 0;
+
+function updateLiveRec() {
+  const rec = $('live-rec');
+  if (rec) rec.style.display = (liveStream && settings.timeMachine) ? '' : 'none';
+}
+
+async function captureTimelineSnapshot() {
+  const video = $('live-video');
+  if (!video.videoWidth) return false;
+  const cap = document.createElement('canvas');
+  const scale = Math.min(1, 800 / video.videoWidth);
+  cap.width = Math.round(video.videoWidth * scale);
+  cap.height = Math.round(video.videoHeight * scale);
+  cap.getContext('2d').drawImage(video, 0, 0, cap.width, cap.height);
+  try {
+    await fetch('/api/timeline', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7), objects: [...new Set(liveLastObjects)] }),
+    });
+    return true;
+  } catch { return false; }
+}
 
 function posLabel(cx, w) {
   const r = cx / w;
@@ -1632,6 +1655,7 @@ async function startLive() {
     return;
   }
   $('live-panel').style.display = '';
+  updateLiveRec();
   const video = $('live-video');
   video.srcObject = liveStream;
   $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
@@ -1694,31 +1718,25 @@ async function liveDetect() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'kamera', summary: `widzę w kadrze: ${withPos}` }),
     }).catch(() => {});
+
+    // Digital Time Machine: automatyczny zapis migawki przy zmianie sceny (min. 30 s)
+    if (settings.timeMachine && Date.now() - liveLastAutoSnap > 30000) {
+      liveLastAutoSnap = Date.now();
+      captureTimelineSnapshot();
+    }
   }
 }
 
 $('live-btn').addEventListener('click', () => { liveStream ? stopLive() : startLive(); });
 $('live-close').addEventListener('click', stopLive);
 
-// migawka do osi czasu (Digital Time Machine)
+// ręczna migawka do osi czasu (Digital Time Machine)
 $('live-snapshot').addEventListener('click', async () => {
-  const video = $('live-video');
-  if (!video.videoWidth) return;
-  const cap = document.createElement('canvas');
-  const scale = Math.min(1, 800 / video.videoWidth);
-  cap.width = Math.round(video.videoWidth * scale);
-  cap.height = Math.round(video.videoHeight * scale);
-  cap.getContext('2d').drawImage(video, 0, 0, cap.width, cap.height);
   const btn = $('live-snapshot'); const prev = btn.textContent;
   btn.disabled = true;
-  try {
-    await fetch('/api/timeline', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7), objects: [...new Set(liveLastObjects)] }),
-    });
-    btn.textContent = t('tm.saved');
-    setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1400);
-  } catch { btn.disabled = false; }
+  const ok = await captureTimelineSnapshot();
+  btn.textContent = ok ? t('tm.saved') : prev;
+  setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1400);
 });
 
 // ----------------------------------------------------------------
@@ -2627,6 +2645,7 @@ function openSettings() {
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   $('set-offline').checked = Boolean(settings.offline);
+  $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
   el.settingsModal.style.display = '';
 }
@@ -2712,7 +2731,9 @@ el.settingsSave.addEventListener('click', () => {
   settings.temperature = parseFloat(el.setTemp.value);
   settings.maxTokens = parseInt(el.setMaxTokens.value, 10) || DEFAULT_SETTINGS.maxTokens;
   settings.offline = $('set-offline').checked;
+  settings.timeMachine = $('set-timemachine').checked;
   saveSettings();
+  updateLiveRec();
   // profil zapisywany na serwerze (wspólny dla urządzeń)
   fetch('/api/profile', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
