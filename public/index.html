@@ -285,6 +285,18 @@
             <button class="btn-secondary" id="train-export-chat" data-i18n="train.exportChat">Eksport JSONL (chat)</button>
             <button class="btn-secondary" id="train-export-inst" data-i18n="train.exportInst">Eksport JSONL (instrukcje)</button>
           </div>
+          <div class="train-run" id="train-run" style="display:none">
+            <div class="field-row">
+              <input type="text" id="train-model" class="mono" value="unsloth/Qwen2.5-7B-Instruct-bnb-4bit" data-i18n-ph="train.modelPh" placeholder="model bazowy (4-bit)">
+              <input type="text" id="train-ollama" class="mono" value="cosmos-ft" data-i18n-ph="train.ollamaPh" placeholder="nazwa w Ollamie" style="max-width:150px">
+            </div>
+            <div class="field-row">
+              <button class="btn-primary" id="train-start" data-i18n="train.start">🎓 Dotrenuj teraz</button>
+              <button class="btn-ghost" id="train-stop" data-i18n="train.stop" style="display:none">Zatrzymaj</button>
+            </div>
+            <div class="field-hint" id="train-env"></div>
+            <pre class="train-log mono" id="train-log" style="display:none"></pre>
+          </div>
         </div>
 
         <div class="config-info mono" id="config-info"></div>

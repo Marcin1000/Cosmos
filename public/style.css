@@ -1557,3 +1557,19 @@ kbd {
 .runner-confirm { font-size: 12.5px; color: #f5b544; display: flex; align-items: center; gap: 7px; }
 .runner-btns { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
 .runner-done { text-align: center; font-size: 15px; color: var(--accent); padding: 24px 0; }
+
+/* Trening — „Dotrenuj" */
+.train-run { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.train-log {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-faint);
+}

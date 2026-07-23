@@ -2800,7 +2800,56 @@ async function loadTrainStats() {
     const d = await (await fetch('/api/train/stats')).json();
     $('train-stats').textContent = t('train.count', { chat: d.chat, inst: d.instruction });
   } catch { /* offline */ }
+  loadTrainEnv();
+  refreshTrainStatus();
 }
+async function loadTrainEnv() {
+  try {
+    const e = await (await fetch('/api/train/env')).json();
+    // pokaż sekcję „Dotrenuj" tylko, gdy da się to zrobić lokalnie (Python + skrypt)
+    $('train-run').style.display = (e.python && e.script) ? '' : 'none';
+    const parts = [];
+    parts.push(`Python: ${e.python ? '✓' : '—'}`);
+    parts.push(`Ollama: ${e.ollama ? '✓' : '—'}`);
+    parts.push(t('train.envExamples', { n: e.examples }));
+    if (!e.python) parts.push(t('train.needPython'));
+    $('train-env').textContent = parts.join(' · ');
+    $('train-start').disabled = !e.examples || e.busy;
+  } catch { /* offline */ }
+}
+let trainPollTimer = null;
+async function refreshTrainStatus() {
+  try {
+    const s = await (await fetch('/api/train/status')).json();
+    const running = s.running;
+    $('train-stop').style.display = running ? '' : 'none';
+    $('train-start').style.display = running ? 'none' : '';
+    const logEl = $('train-log');
+    if (s.log && s.log.length) { logEl.style.display = ''; logEl.textContent = s.log.join('\n'); logEl.scrollTop = logEl.scrollHeight; }
+    if (running && !trainPollTimer) {
+      trainPollTimer = setInterval(refreshTrainStatus, 3000);
+    } else if (!running && trainPollTimer) {
+      clearInterval(trainPollTimer); trainPollTimer = null;
+      loadTrainEnv(); loadTrainStats();
+    }
+  } catch { /* offline */ }
+}
+$('train-start').addEventListener('click', async () => {
+  $('train-start').disabled = true;
+  try {
+    const r = await fetch('/api/train/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: $('train-model').value.trim(), ollamaName: $('train-ollama').value.trim() }),
+    });
+    const d = await r.json();
+    if (!r.ok) { $('train-env').textContent = d.message || d.error || t('train.startErr'); $('train-start').disabled = false; return; }
+    refreshTrainStatus();
+  } catch { $('train-start').disabled = false; }
+});
+$('train-stop').addEventListener('click', async () => {
+  await fetch('/api/train/stop', { method: 'POST' });
+  refreshTrainStatus();
+});
 $('backup-restore-btn').addEventListener('click', () => $('backup-file').click());
 $('backup-file').addEventListener('change', async () => {
   const file = $('backup-file').files[0];
