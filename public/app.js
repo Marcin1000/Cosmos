@@ -42,6 +42,12 @@ let voiceState = 'off';       // wake | listening | thinking | speaking
 let voiceWakeRec = null;
 let voiceQueryRec = null;
 let voiceCameraStream = null;
+let voiceNoteMode = false;    // dyktowanie notatki do bazy wiedzy
+let voiceNoteBuffer = [];
+let kbSelected = new Set(loadJson('cosmos.kbSelected', []));
+let kbRecorder = null;
+let kbSpeechRec = null;
+let kbRecording = false;
 
 // ----------------------------------------------------------------
 // Elementy DOM
@@ -108,6 +114,18 @@ const el = {
   voiceAnswer: $('voice-answer'),
   voiceCameraWrap: $('voice-camera-wrap'),
   voiceCamera: $('voice-camera'),
+  kbBtn: $('kb-btn'),
+  kbBadge: $('kb-badge'),
+  kbModal: $('kb-modal'),
+  kbClose: $('kb-close'),
+  kbUploadBtn: $('kb-upload-btn'),
+  kbFileInput: $('kb-file-input'),
+  kbRecordBtn: $('kb-record-btn'),
+  kbUrl: $('kb-url'),
+  kbAddLink: $('kb-add-link'),
+  kbDrop: $('kb-drop'),
+  kbStatus: $('kb-status'),
+  kbList: $('kb-list'),
 };
 
 const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
@@ -671,6 +689,7 @@ async function streamOnce(conv) {
         model: modelOverride || undefined,
         temperature: settings.temperature,
         max_tokens: settings.maxTokens,
+        kbSelected: [...kbSelected],
       }),
       signal: abortController.signal,
     });
@@ -1081,6 +1100,293 @@ el.cameraCapture.addEventListener('click', () => {
 });
 
 // ----------------------------------------------------------------
+// BAZA WIEDZY — pliki, linki, notatki głosowe
+// ----------------------------------------------------------------
+
+const KB_MAX_FILE = 50 * 1024 * 1024; // 50 MB na plik
+
+function kbIcon(item) {
+  if (item.type === 'link') return '🔗';
+  if (item.type === 'note') return '📝';
+  const mime = item.mime || '';
+  if (mime.startsWith('image/')) return '🖼️';
+  if (mime.startsWith('audio/')) return '🎵';
+  if (mime.startsWith('video/')) return '🎬';
+  const ext = item.name.split('.').pop().toLowerCase();
+  if (['xlsx', 'xls', 'csv', 'ods'].includes(ext)) return '📊';
+  if (['pdf'].includes(ext)) return '📕';
+  if (['docx', 'doc', 'odt'].includes(ext)) return '📄';
+  if (['pptx', 'ppt'].includes(ext)) return '📽️';
+  return '📁';
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function saveKbSelected() {
+  localStorage.setItem('cosmos.kbSelected', JSON.stringify([...kbSelected]));
+  updateKbBadge();
+}
+
+function updateKbBadge() {
+  el.kbBadge.textContent = kbSelected.size ? `(${kbSelected.size})` : '';
+}
+
+function kbSetStatus(text) {
+  el.kbStatus.textContent = text || '';
+}
+
+async function loadKbList() {
+  try {
+    const res = await fetch('/api/kb');
+    const data = await res.json();
+    const items = data.items || [];
+
+    // usuń z zaznaczenia pozycje, których już nie ma
+    const ids = new Set(items.map((i) => i.id));
+    let changed = false;
+    for (const id of kbSelected) if (!ids.has(id)) { kbSelected.delete(id); changed = true; }
+    if (changed) saveKbSelected();
+
+    el.kbList.innerHTML = '';
+    if (!items.length) {
+      el.kbList.innerHTML = '<div class="kb-empty">Baza jest pusta — dodaj pliki, linki albo nagraj notatkę.</div>';
+      return;
+    }
+    for (const item of [...items].reverse()) {
+      const row = document.createElement('div');
+      row.className = 'kb-item';
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.title = 'Dołączaj do rozmowy';
+      check.checked = kbSelected.has(item.id);
+      check.addEventListener('change', () => {
+        if (check.checked) kbSelected.add(item.id);
+        else kbSelected.delete(item.id);
+        saveKbSelected();
+      });
+
+      const icon = document.createElement('span');
+      icon.className = 'kb-item-icon';
+      icon.textContent = kbIcon(item);
+
+      const main = document.createElement('div');
+      main.className = 'kb-item-main';
+      const name = document.createElement('div');
+      name.className = 'kb-item-name';
+      if (item.type === 'link' && item.url) {
+        name.innerHTML = `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.name)}</a>`;
+      } else if (item.type === 'file') {
+        name.innerHTML = `<a href="/api/kb/raw?id=${encodeURIComponent(item.id)}" target="_blank" rel="noopener">${escapeHtml(item.name)}</a>`;
+      } else {
+        name.textContent = item.name;
+      }
+      const meta = document.createElement('div');
+      meta.className = 'kb-item-meta';
+      const bits = [];
+      if (item.size) bits.push(fmtSize(item.size));
+      bits.push(new Date(item.time).toLocaleDateString('pl-PL'));
+      bits.push(item.textChars ? `tekst: ${item.textChars} zn.` : 'bez tekstu');
+      meta.textContent = bits.join(' · ');
+      meta.title = item.preview || '';
+      main.append(name, meta);
+
+      const del = document.createElement('button');
+      del.className = 'kb-item-del';
+      del.textContent = '×';
+      del.title = 'Usuń z bazy';
+      del.addEventListener('click', async () => {
+        if (!confirm(`Usunąć „${item.name}” z bazy wiedzy?`)) return;
+        await fetch(`/api/kb?id=${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+        kbSelected.delete(item.id);
+        saveKbSelected();
+        loadKbList();
+      });
+
+      row.append(check, icon, main, del);
+      el.kbList.appendChild(row);
+    }
+  } catch {
+    el.kbList.innerHTML = '<div class="kb-empty">Nie udało się wczytać bazy wiedzy.</div>';
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
+    reader.onerror = () => reject(new Error('Nie udało się odczytać pliku.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function kbUploadFiles(files) {
+  const list = [...files];
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    if (file.size > KB_MAX_FILE) {
+      alert(`„${file.name}” jest większy niż 50 MB — pomijam.`);
+      continue;
+    }
+    kbSetStatus(`Przetwarzam ${i + 1}/${list.length}: ${file.name}` +
+      (/^(audio|video)/.test(file.type) ? ' (transkrypcja może chwilę potrwać)…' : '…'));
+    try {
+      const res = await fetch('/api/kb/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, mime: file.type, data: await fileToBase64(file) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    } catch (err) {
+      alert(`Nie udało się dodać „${file.name}”:\n${err.message}`);
+    }
+  }
+  kbSetStatus('');
+  loadKbList();
+}
+
+async function kbAddLink() {
+  const url = el.kbUrl.value.trim();
+  if (!url) return;
+  el.kbAddLink.disabled = true;
+  kbSetStatus(`Pobieram stronę: ${url}…`);
+  try {
+    const res = await fetch('/api/kb/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    el.kbUrl.value = '';
+  } catch (err) {
+    alert(`Nie udało się dodać linku:\n${err.message}`);
+  } finally {
+    el.kbAddLink.disabled = false;
+    kbSetStatus('');
+    loadKbList();
+  }
+}
+
+async function kbSaveNote(text) {
+  const clean = (text || '').trim();
+  if (!clean) return false;
+  const res = await fetch('/api/kb/note', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: clean }),
+  });
+  loadKbList();
+  return res.ok;
+}
+
+function setKbRecordingUI(on) {
+  kbRecording = on;
+  el.kbRecordBtn.classList.toggle('recording', on);
+  el.kbRecordBtn.textContent = on ? '⏹ Zakończ i zapisz' : '🎙 Nagraj notatkę';
+}
+
+async function kbToggleRecording() {
+  if (kbRecording) {
+    if (kbRecorder?.state === 'recording') kbRecorder.stop();
+    if (kbSpeechRec) { kbSpeechRec.stop(); }
+    return;
+  }
+  // wariant 1: Whisper przez zmysły (nagranie audio)
+  if (senses.online && senses.caps.whisper) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks = [];
+      kbRecorder = new MediaRecorder(stream);
+      kbRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      kbRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setKbRecordingUI(false);
+        kbSetStatus('Transkrybuję nagranie (Whisper)…');
+        try {
+          const blob = new Blob(chunks, { type: kbRecorder.mimeType || 'audio/webm' });
+          const res = await fetch('/api/stt', {
+            method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+          if (data.text) await kbSaveNote(data.text);
+          else alert('Nie rozpoznano mowy w nagraniu.');
+        } catch (err) {
+          alert(`Transkrypcja nie powiodła się:\n${err.message}`);
+        } finally {
+          kbSetStatus('');
+        }
+      };
+      kbRecorder.start();
+      setKbRecordingUI(true);
+      kbSetStatus('Nagrywam… kliknij ⏹, aby zakończyć i zapisać.');
+    } catch (err) {
+      alert(`Brak dostępu do mikrofonu: ${err.message}`);
+    }
+    return;
+  }
+  // wariant 2: dyktowanie przeglądarki (Chrome/Edge)
+  const SR = getSR();
+  if (!SR) {
+    alert('Nagrywanie notatki wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.');
+    return;
+  }
+  let acc = '';
+  kbSpeechRec = new SR();
+  kbSpeechRec.lang = 'pl-PL';
+  kbSpeechRec.continuous = true;
+  kbSpeechRec.interimResults = true;
+  kbSpeechRec.onresult = (e) => {
+    acc = [...e.results].filter((r) => r.isFinal).map((r) => r[0].transcript).join(' ');
+    const interim = [...e.results].filter((r) => !r.isFinal).map((r) => r[0].transcript).join(' ');
+    kbSetStatus('🎙 ' + (acc + ' ' + interim).trim().slice(-160));
+  };
+  kbSpeechRec.onend = async () => {
+    kbSpeechRec = null;
+    setKbRecordingUI(false);
+    kbSetStatus('');
+    if (acc.trim()) await kbSaveNote(acc);
+  };
+  kbSpeechRec.onerror = () => { /* onend zapisze, co się udało */ };
+  kbSpeechRec.start();
+  setKbRecordingUI(true);
+}
+
+el.kbBtn.addEventListener('click', () => {
+  el.kbModal.style.display = '';
+  loadKbList();
+});
+el.kbClose.addEventListener('click', () => { el.kbModal.style.display = 'none'; });
+el.kbModal.addEventListener('click', (e) => {
+  if (e.target === el.kbModal) el.kbModal.style.display = 'none';
+});
+el.kbUploadBtn.addEventListener('click', () => el.kbFileInput.click());
+el.kbFileInput.addEventListener('change', () => {
+  kbUploadFiles(el.kbFileInput.files);
+  el.kbFileInput.value = '';
+});
+el.kbAddLink.addEventListener('click', kbAddLink);
+el.kbUrl.addEventListener('keydown', (e) => { if (e.key === 'Enter') kbAddLink(); });
+el.kbRecordBtn.addEventListener('click', kbToggleRecording);
+
+for (const evt of ['dragover', 'dragenter']) {
+  el.kbDrop.addEventListener(evt, (e) => { e.preventDefault(); el.kbDrop.classList.add('dragover'); });
+}
+for (const evt of ['dragleave', 'drop']) {
+  el.kbDrop.addEventListener(evt, (e) => { e.preventDefault(); el.kbDrop.classList.remove('dragover'); });
+}
+el.kbDrop.addEventListener('drop', (e) => {
+  if (e.dataTransfer?.files?.length) kbUploadFiles(e.dataTransfer.files);
+});
+
+// ----------------------------------------------------------------
 // ASYSTENT GŁOSOWY — „Hej, Kosmos” (jak Asystent Google)
 // Wake word i rozmowa: Web Speech API (Chrome/Edge, także Android).
 // ----------------------------------------------------------------
@@ -1157,6 +1463,8 @@ async function enterVoiceMode() {
 
 function exitVoiceMode() {
   voiceMode = false;
+  voiceNoteMode = false;
+  voiceNoteBuffer = [];
   stopVoiceRecognizers();
   stopSpeaking();
   el.voiceOverlay.style.display = 'none';
@@ -1249,8 +1557,45 @@ function captureVoiceFrame() {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
+const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|start)\s+(nagrywanie|nagrywa[ćc]|notatk[ęe]|dyktowanie))\b/i;
+const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae]))\b/i;
+
 async function handleVoiceQuery(text) {
   el.voiceTranscript.textContent = text;
+
+  // --- tryb dyktowania notatki do bazy wiedzy ---
+  if (voiceNoteMode) {
+    if (NOTE_STOP_RE.test(text)) {
+      voiceNoteMode = false;
+      const note = voiceNoteBuffer.join(' ').trim();
+      voiceNoteBuffer = [];
+      el.voiceAnswer.textContent = '';
+      setVoiceState('speaking');
+      if (note) {
+        const ok = await kbSaveNote(note);
+        await speakText(ok ? 'Zapisałem notatkę w bazie wiedzy.' : 'Nie udało się zapisać notatki.');
+      } else {
+        await speakText('Notatka była pusta, nic nie zapisałem.');
+      }
+      if (voiceMode) startQueryListening();
+      return;
+    }
+    voiceNoteBuffer.push(text);
+    el.voiceAnswer.textContent = '📝 ' + voiceNoteBuffer.join(' ').slice(-300);
+    chime(660);
+    if (voiceMode) startQueryListening();
+    return;
+  }
+
+  if (NOTE_START_RE.test(text)) {
+    voiceNoteMode = true;
+    voiceNoteBuffer = [];
+    el.voiceAnswer.textContent = '📝 Tryb notatki — mów, a zakończ słowami: „koniec notatki”.';
+    setVoiceState('speaking');
+    await speakText('Nagrywam notatkę. Zakończ słowami: koniec notatki.');
+    if (voiceMode) startQueryListening();
+    return;
+  }
 
   if (END_RE.test(text) && text.length < 30) {
     setVoiceState('speaking');
@@ -1526,6 +1871,7 @@ if ('serviceWorker' in navigator) {
 
 setEndpoint(endpoint);
 el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
+updateKbBadge();
 renderSidebar();
 renderMessages();
 updateSendButton();

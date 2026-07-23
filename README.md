@@ -138,6 +138,25 @@ Wymagania trybu głosowego: przeglądarka **Chrome lub Edge** (Web Speech API; d
 też w PWA na Androidzie). Rozpoznawanie wake word wymaga otwartej aplikacji.
 Wyszukiwarkę można podmienić na własną (np. SearXNG): `SEARCH_URL` w `.env`.
 
+### 📚 Baza wiedzy
+
+Przycisk **„Baza wiedzy"** w panelu bocznym otwiera Twój prywatny magazyn materiałów
+(`data/kb/` na serwerze):
+
+- **Pliki dowolnego typu** (przycisk lub przeciągnij-upuść): dokumenty, PDF, Word,
+  **Excel**, PowerPoint, grafiki, **audio i wideo**. Tekst jest wyciągany automatycznie
+  (dokumenty — usługa zmysłów `/extract`; nagrania — transkrypcja Whisper; obrazy —
+  opis detekcji YOLO, a przy użyciu w rozmowie trafiają do modelu wizyjnego).
+- **Linki do stron** — Cosmos pobiera treść strony i indeksuje ją jak plik.
+- **Notatki głosowe** — przycisk 🎙 w bazie (start/stop) albo **komendy głosowe**
+  w trybie „Hej, Kosmos": powiedz *„nowa notatka"* / *„zacznij nagrywanie"*, dyktuj,
+  zakończ słowami *„koniec notatki"* — transkrypcja ląduje w bazie.
+
+**Użycie w rozmowie:** pozycje zaznaczone ☑ są **zawsze** dołączane do kontekstu
+(„interesują mnie te konkretne pliki"), a z pozostałych Cosmos **sam przywołuje
+pasujące fragmenty** (embeddingi bge-m3 albo słowa kluczowe, gdy zmysły są offline).
+Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
+
 **W interfejsie:**
 - 🎤 przycisk mikrofonu — dyktowanie: Whisper (lokalnie, przez Senses), a gdy usługa
   nie działa, rozpoznawanie wbudowane w Chrome/Edge,

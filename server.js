@@ -240,6 +240,253 @@ async function handleMemory(req, res) {
 }
 
 // ---------------------------------------------------------------------------
+// Baza wiedzy — pliki, linki i notatki użytkownika.
+// Tekst wyciągany lokalnie (pliki tekstowe) lub przez usługę zmysłów
+// (PDF/Office → /extract, audio/wideo → /stt, obrazy → /detect).
+// ---------------------------------------------------------------------------
+
+const KB_DIR = path.join(DATA_DIR, 'kb');
+const KB_FILES = path.join(KB_DIR, 'files');
+const KB_INDEX = path.join(KB_DIR, 'index.json');
+
+let kbItems = [];
+try { kbItems = JSON.parse(fs.readFileSync(KB_INDEX, 'utf8')); } catch { /* brak pliku */ }
+
+function saveKb() {
+  try {
+    fs.mkdirSync(KB_FILES, { recursive: true });
+    fs.writeFileSync(KB_INDEX, JSON.stringify(kbItems));
+  } catch (err) {
+    console.error('Nie udało się zapisać bazy wiedzy:', err.message);
+  }
+}
+
+const TEXT_EXTS = new Set(['txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'js', 'ts', 'py',
+  'html', 'htm', 'css', 'xml', 'yaml', 'yml', 'log', 'ini', 'sh', 'bat', 'sql']);
+const OFFICE_EXTS = new Set(['pdf', 'docx', 'xlsx', 'pptx', 'doc', 'xls', 'ppt', 'odt', 'ods']);
+const AV_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4', 'webm', 'mov', 'mkv', 'avi']);
+
+function extOf(name) {
+  return (String(name).split('.').pop() || '').toLowerCase();
+}
+
+async function sensesExtract(name, buf) {
+  try {
+    const r = await fetch(`${SENSES_URL}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, data: buf.toString('base64') }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!r.ok) return '';
+    return (await r.json()).text || '';
+  } catch { return ''; }
+}
+
+async function sensesTranscribe(buf, mime) {
+  try {
+    const r = await fetch(`${SENSES_URL}/stt`, {
+      method: 'POST',
+      headers: { 'Content-Type': mime || 'application/octet-stream' },
+      body: buf,
+      signal: AbortSignal.timeout(600000),
+    });
+    if (!r.ok) return '';
+    return (await r.json()).text || '';
+  } catch { return ''; }
+}
+
+async function sensesDetectSummary(buf, mime) {
+  try {
+    const r = await fetch(`${SENSES_URL}/detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: `data:${mime};base64,${buf.toString('base64')}` }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) return '';
+    return (await r.json()).summary || '';
+  } catch { return ''; }
+}
+
+async function extractKbText(name, mime, buf) {
+  const ext = extOf(name);
+  if (TEXT_EXTS.has(ext) || /^text\//.test(mime || '')) {
+    return buf.toString('utf8').slice(0, 200000);
+  }
+  if (OFFICE_EXTS.has(ext)) return (await sensesExtract(name, buf)).slice(0, 200000);
+  if (AV_EXTS.has(ext) || /^(audio|video)\//.test(mime || '')) {
+    return (await sensesTranscribe(buf, mime)).slice(0, 200000);
+  }
+  if (/^image\//.test(mime || '')) {
+    const summary = await sensesDetectSummary(buf, mime);
+    return summary ? `Na obrazie wykryto: ${summary}` : '';
+  }
+  return '';
+}
+
+function chunkText(text, size = 1500, max = 30) {
+  const chunks = [];
+  for (let i = 0; i < text.length && chunks.length < max; i += size) {
+    chunks.push(text.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function buildChunks(text) {
+  const parts = chunkText(text || '');
+  if (!parts.length) return [];
+  const embs = await embedTexts(parts);
+  return parts.map((t, i) => ({ text: t, embedding: embs ? embs[i] : null }));
+}
+
+function kbItemMeta(it) {
+  return {
+    id: it.id,
+    type: it.type,
+    name: it.name,
+    mime: it.mime || '',
+    url: it.url || '',
+    size: it.size || 0,
+    time: it.time,
+    textChars: (it.text || '').length,
+    preview: (it.text || '').slice(0, 140),
+  };
+}
+
+async function kbSearch(query, excludeIds = [], limit = 4) {
+  if (!query || !query.trim()) return [];
+  const pool = [];
+  for (const it of kbItems) {
+    if (excludeIds.includes(it.id)) continue;
+    for (const ch of it.chunks || []) pool.push({ name: it.name, ...ch });
+  }
+  if (!pool.length) return [];
+
+  let qvec = null;
+  const vecs = await embedTexts([query]);
+  if (vecs) qvec = vecs[0];
+
+  const threshold = qvec ? 0.35 : 0.18;
+  return pool
+    .map((c) => ({
+      c,
+      score: (qvec && c.embedding) ? cosine(qvec, c.embedding) : keywordScore(query, c.text),
+    }))
+    .filter((s) => s.score > threshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => ({ name: s.c.name, text: s.c.text }));
+}
+
+async function handleKb(req, res, pathname) {
+  if (pathname === '/api/kb' && req.method === 'GET') {
+    return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
+  }
+
+  if (pathname === '/api/kb' && req.method === 'DELETE') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    const item = kbItems.find((it) => it.id === id);
+    kbItems = kbItems.filter((it) => it.id !== id);
+    if (item?.type === 'file') {
+      try { fs.unlinkSync(path.join(KB_FILES, item.id)); } catch { /* już nie ma */ }
+    }
+    saveKb();
+    return sendJson(res, 200, { ok: true, total: kbItems.length });
+  }
+
+  if (pathname === '/api/kb/raw' && req.method === 'GET') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    const item = kbItems.find((it) => it.id === id && it.type === 'file');
+    if (!item) { res.writeHead(404); return res.end(); }
+    try {
+      const buf = fs.readFileSync(path.join(KB_FILES, item.id));
+      res.writeHead(200, {
+        'Content-Type': item.mime || 'application/octet-stream',
+        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(item.name)}`,
+      });
+      return res.end(buf);
+    } catch { res.writeHead(404); return res.end(); }
+  }
+
+  if (pathname === '/api/kb/file' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const name = String(data.name || 'plik').slice(0, 200);
+    const mime = String(data.mime || '');
+    let buf;
+    try { buf = Buffer.from(String(data.data || ''), 'base64'); } catch { buf = null; }
+    if (!buf || !buf.length) return sendJson(res, 400, { error: 'Brak danych pliku.' });
+
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    fs.mkdirSync(KB_FILES, { recursive: true });
+    fs.writeFileSync(path.join(KB_FILES, id), buf);
+
+    const text = await extractKbText(name, mime, buf);
+    const item = {
+      id, type: 'file', name, mime, size: buf.length, time: Date.now(),
+      text, chunks: await buildChunks(text),
+    };
+    kbItems.push(item);
+    saveKb();
+    addEvent('baza-wiedzy', `dodano plik: ${name}${text ? ` (${text.length} znaków tekstu)` : ''}`);
+    return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
+  }
+
+  if (pathname === '/api/kb/link' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    let url = String(data.url || '').trim();
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    try {
+      const r = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0' },
+        signal: AbortSignal.timeout(20000),
+      });
+      const html = await r.text();
+      const title = stripTags((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || url;
+      const text = stripTags(
+        html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<(nav|footer|header)[\s\S]*?<\/\1>/gi, ' ')
+      ).slice(0, 200000);
+      const item = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        type: 'link', name: title.slice(0, 200), url, time: Date.now(),
+        text, chunks: await buildChunks(text),
+      };
+      kbItems.push(item);
+      saveKb();
+      addEvent('baza-wiedzy', `dodano link: ${title.slice(0, 80)}`);
+      return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Nie udało się pobrać strony: ${err.message}` });
+    }
+  }
+
+  if (pathname === '/api/kb/note' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const text = String(data.text || '').trim().slice(0, 200000);
+    if (!text) return sendJson(res, 400, { error: 'Pusta notatka.' });
+    const name = String(data.title || '').trim() ||
+      `Notatka głosowa ${new Date().toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}`;
+    const item = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      type: 'note', name: name.slice(0, 200), time: Date.now(),
+      text, chunks: await buildChunks(text),
+    };
+    kbItems.push(item);
+    saveKb();
+    addEvent('baza-wiedzy', `zapisano notatkę: ${name.slice(0, 80)}`);
+    return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
+  }
+
+  res.writeHead(405);
+  res.end();
+}
+
+// ---------------------------------------------------------------------------
 // Pomocnicze
 // ---------------------------------------------------------------------------
 
@@ -474,24 +721,16 @@ async function handleChat(req, res) {
     });
   }
 
-  const hasImages = payload.messages.some((m) => Array.isArray(m.content) &&
-    m.content.some((p) => p.type === 'image_url'));
-
-  const model = payload.model
-    || (hasImages && ep.visionModel ? ep.visionModel : ep.model);
-
-  if (!model) {
-    return sendJson(res, 400, {
-      error: payload.endpoint === 'local'
-        ? 'Nie skonfigurowano modelu lokalnego. Ustaw LOCAL_MODEL w .env albo wybierz model w Ustawieniach.'
-        : 'Nie skonfigurowano modelu. Ustaw NEMOTRON_MODEL w .env albo wybierz model w Ustawieniach.',
-    });
-  }
-
-  // Kontekst percepcji + pamięć długotrwała: doklejamy jako dodatkowe
+  // Kontekst: percepcja + narzędzia + pamięć + baza wiedzy — jako dodatkowe
   // wiadomości systemowe, zaraz po instrukcji systemowej użytkownika.
   const messages = [...payload.messages];
   const extras = [];
+
+  const lastUser = [...payload.messages].reverse().find((m) => m.role === 'user');
+  const queryText = !lastUser ? ''
+    : (typeof lastUser.content === 'string'
+        ? lastUser.content
+        : (lastUser.content.find?.((p) => p.type === 'text')?.text || ''));
 
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });
@@ -510,21 +749,81 @@ async function handleChat(req, res) {
   }
 
   if (payload.useMemory !== false) {
-    const lastUser = [...payload.messages].reverse().find((m) => m.role === 'user');
-    let queryText = '';
-    if (lastUser) {
-      queryText = typeof lastUser.content === 'string'
-        ? lastUser.content
-        : (lastUser.content.find?.((p) => p.type === 'text')?.text || '');
-    }
     const recalled = await searchMemory(queryText);
     const memCtx = memoryContextLines(recalled);
     if (memCtx) extras.push({ role: 'system', content: memCtx });
   }
 
+  // Baza wiedzy — pozycje zaznaczone przez użytkownika (zawsze dołączane)
+  const kbSelected = Array.isArray(payload.kbSelected) ? payload.kbSelected : [];
+  if (kbSelected.length) {
+    const chosen = kbItems.filter((it) => kbSelected.includes(it.id));
+
+    const textItems = chosen.filter((it) => !/^image\//.test(it.mime || ''));
+    if (textItems.length) {
+      const parts = textItems.map((it) =>
+        `### ${it.name}${it.url ? ` (${it.url})` : ''}\n` +
+        `${(it.text || '(plik binarny — brak wyodrębnionego tekstu)').slice(0, 6000)}`);
+      extras.push({
+        role: 'system',
+        content: 'BAZA WIEDZY — materiały wybrane przez użytkownika do tej rozmowy. ' +
+                 'Odpowiadając, opieraj się na nich w pierwszej kolejności:\n\n' + parts.join('\n\n'),
+      });
+    }
+
+    // obrazy z bazy dołączamy do ostatniej wiadomości użytkownika (model wizyjny)
+    const imageItems = chosen.filter((it) => /^image\//.test(it.mime || '')).slice(0, 3);
+    if (imageItems.length) {
+      const idx = messages.map((m) => m.role).lastIndexOf('user');
+      if (idx >= 0) {
+        const m = messages[idx];
+        const parts = Array.isArray(m.content)
+          ? [...m.content]
+          : [{ type: 'text', text: String(m.content) }];
+        for (const it of imageItems) {
+          try {
+            const buf = fs.readFileSync(path.join(KB_FILES, it.id));
+            parts.unshift({
+              type: 'image_url',
+              image_url: { url: `data:${it.mime};base64,${buf.toString('base64')}` },
+            });
+          } catch { /* plik zniknął z dysku */ }
+        }
+        messages[idx] = { ...m, content: parts };
+      }
+    }
+  }
+
+  // Baza wiedzy — automatyczne przywołanie pasujących fragmentów z reszty bazy
+  if (payload.useKb !== false) {
+    const found = await kbSearch(queryText, kbSelected);
+    if (found.length) {
+      extras.push({
+        role: 'system',
+        content: 'BAZA WIEDZY — fragmenty pasujące do bieżącego pytania:\n\n' +
+                 found.map((f) => `### ${f.name}\n${f.text}`).join('\n\n'),
+      });
+    }
+  }
+
   if (extras.length) {
     const insertAt = messages[0]?.role === 'system' ? 1 : 0;
     messages.splice(insertAt, 0, ...extras);
+  }
+
+  // Wybór modelu — po zbudowaniu kontekstu, bo baza wiedzy mogła dodać obrazy.
+  const hasImages = messages.some((m) => Array.isArray(m.content) &&
+    m.content.some((p) => p.type === 'image_url'));
+
+  const model = payload.model
+    || (hasImages && ep.visionModel ? ep.visionModel : ep.model);
+
+  if (!model) {
+    return sendJson(res, 400, {
+      error: payload.endpoint === 'local'
+        ? 'Nie skonfigurowano modelu lokalnego. Ustaw LOCAL_MODEL w .env albo wybierz model w Ustawieniach.'
+        : 'Nie skonfigurowano modelu. Ustaw NEMOTRON_MODEL w .env albo wybierz model w Ustawieniach.',
+    });
   }
 
   const body = {
@@ -649,6 +948,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+    if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
@@ -673,6 +973,7 @@ function start(port = PORT) {
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
       console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
+      console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
       console.log('');
       resolve(server);
     });

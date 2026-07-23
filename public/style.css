@@ -867,6 +867,80 @@ kbd {
   background: #000;
 }
 
+/* ============================ BAZA WIEDZY ============================ */
+
+.kb-badge { color: var(--accent); font-size: 11px; }
+
+.kb-modal { max-width: 700px; }
+
+.kb-add-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.kb-drop {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  transition: border-color .2s, background .2s;
+}
+.kb-drop.dragover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--text);
+}
+
+.kb-list {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.kb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.kb-item:last-child { border-bottom: none; }
+.kb-item:hover { background: var(--bg-hover); }
+.kb-item input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+.kb-item-icon { font-size: 16px; flex-shrink: 0; }
+.kb-item-main { flex: 1; min-width: 0; }
+.kb-item-name {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-item-name a { color: inherit; text-decoration: none; }
+.kb-item-name a:hover { color: var(--accent); }
+.kb-item-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.kb-item-del {
+  color: var(--text-faint);
+  font-size: 15px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.kb-item-del:hover { color: var(--danger); background: var(--bg); }
+.kb-empty { padding: 16px; text-align: center; font-size: 12.5px; color: var(--text-faint); }
+
+#kb-record-btn.recording {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
 /* ============================ TRYB GŁOSOWY ============================ */
 
 .voice-overlay {

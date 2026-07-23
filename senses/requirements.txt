@@ -24,6 +24,12 @@ mediapipe
 # bge-m3 (~2 GB, domyślny) lub lżejszy: ustaw EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 sentence-transformers
 
+# BAZA WIEDZY — ekstrakcja tekstu z dokumentów (endpoint /extract)
+pypdf
+python-docx
+openpyxl
+python-pptx
+
 # Obserwatory (watcher.py, kinect_watcher.py, photoscan.py)
 requests
 numpy

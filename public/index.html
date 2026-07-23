@@ -37,6 +37,10 @@
       <nav class="conversations" id="conversations" aria-label="Lista rozmów"></nav>
 
       <div class="sidebar-footer">
+        <button class="footer-btn" id="kb-btn">
+          <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 4.5v15zM20 17v5H6.5a2.5 2.5 0 0 1 0-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Baza wiedzy <span class="kb-badge mono" id="kb-badge"></span>
+        </button>
         <button class="footer-btn" id="settings-btn">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Ustawienia
@@ -197,6 +201,33 @@
       <div class="modal-footer">
         <button class="btn-secondary" id="settings-reset">Przywróć domyślne</button>
         <button class="btn-primary" id="settings-save">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: BAZA WIEDZY ================= -->
+  <div class="modal-overlay" id="kb-modal" style="display:none">
+    <div class="modal kb-modal" role="dialog" aria-labelledby="kb-title">
+      <div class="modal-header">
+        <h2 id="kb-title">Baza wiedzy</h2>
+        <button class="icon-btn" id="kb-close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="kb-add-row">
+          <button class="btn-secondary" id="kb-upload-btn">📁 Dodaj pliki</button>
+          <input type="file" id="kb-file-input" multiple style="display:none">
+          <button class="btn-secondary" id="kb-record-btn">🎙 Nagraj notatkę</button>
+        </div>
+        <div class="field-row">
+          <input type="text" id="kb-url" placeholder="https://adres-strony.pl — dodaj link do bazy" class="mono">
+          <button class="btn-secondary" id="kb-add-link">Dodaj link</button>
+        </div>
+        <div class="kb-drop" id="kb-drop">…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)</div>
+        <div class="field-hint" id="kb-status"></div>
+        <div class="kb-list" id="kb-list"></div>
+        <span class="field-hint">☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.</span>
       </div>
     </div>
   </div>

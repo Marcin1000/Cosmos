@@ -225,6 +225,66 @@ async def pose(request: Request):
     return {"present": True, "summary": f"widoczna sylwetka, osoba prawdopodobnie {posture}"}
 
 
+@app.post("/extract")
+async def extract(request: Request):
+    """{"name": "plik.xlsx", "data": base64} -> {"text": "..."}
+    Wyciąga tekst z PDF/DOCX/XLSX/PPTX na potrzeby bazy wiedzy Cosmosa."""
+    payload = await request.json()
+    name = str(payload.get("name", ""))
+    try:
+        data = base64.b64decode(payload.get("data", ""))
+    except Exception:
+        return JSONResponse({"error": "Nieprawidłowe dane base64."}, status_code=400)
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+    try:
+        if ext == "pdf":
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        elif ext == "docx":
+            import docx
+            document = docx.Document(io.BytesIO(data))
+            parts = [p.text for p in document.paragraphs]
+            for table in document.tables:
+                for row in table.rows:
+                    parts.append(" | ".join(c.text for c in row.cells))
+            text = "\n".join(parts)
+        elif ext in ("xlsx", "xlsm"):
+            from openpyxl import load_workbook
+            wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+            lines = []
+            for ws in wb.worksheets:
+                lines.append(f"## Arkusz: {ws.title}")
+                for row in ws.iter_rows(values_only=True):
+                    cells = [str(c) for c in row if c is not None]
+                    if cells:
+                        lines.append(" | ".join(cells))
+                    if len(lines) > 8000:
+                        break
+            text = "\n".join(lines)
+        elif ext == "pptx":
+            from pptx import Presentation
+            pres = Presentation(io.BytesIO(data))
+            parts = []
+            for i, slide in enumerate(pres.slides, 1):
+                parts.append(f"## Slajd {i}")
+                for shape in slide.shapes:
+                    if getattr(shape, "text", ""):
+                        parts.append(shape.text)
+            text = "\n".join(parts)
+        else:
+            text = data.decode("utf-8", errors="ignore")
+        return {"text": text[:200000]}
+    except ImportError as e:
+        return JSONResponse(
+            {"error": f"Brak biblioteki do formatu .{ext} — pip install {e.name}"},
+            status_code=501,
+        )
+    except Exception as e:
+        return JSONResponse({"error": f"Błąd ekstrakcji: {e}"}, status_code=400)
+
+
 @app.post("/embed")
 async def embed(request: Request):
     """{"texts": ["...", ...]} -> {"vectors": [[...], ...]} (pamięć długotrwała)"""
