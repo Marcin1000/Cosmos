@@ -1,0 +1,24 @@
+# Cosmos Senses — zależności
+# Rdzeń usługi (wymagany):
+fastapi
+uvicorn
+python-multipart
+
+# Zmysły — instaluj te, których chcesz używać (każdy jest opcjonalny):
+
+# SŁUCH — rozpoznawanie mowy (Whisper); świetnie zna polski
+faster-whisper
+
+# GŁOS — synteza mowy (Piper); pobierz też plik głosu .onnx, np.
+# https://huggingface.co/rhasspy/piper-voices (pl_PL-darkman-medium)
+piper-tts
+
+# WZROK — detekcja obiektów (YOLO) + obraz
+ultralytics
+opencv-python
+
+# CIAŁO — sylwetka i pozy (MediaPipe)
+mediapipe
+
+# Obserwator kamery (watcher.py)
+requests

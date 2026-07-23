@@ -93,40 +93,61 @@ Alternatywy dla Ollama: **vLLM** (`http://localhost:8000/v1`) albo kontener **NV
 > 4-bit (np. Nemotron Nano 9B, Qwen 7B/14B, Mistral 7B). Większe modele (49B+) używaj
 > przez profil „Chmura".
 
-## 🧩 Modele wspomagające (open source)
+## 🧠 Orkiestra — jeden byt, wiele zmysłów
 
-Nemotron to „mózg" — do pełnego systemu percepcji warto dołożyć wyspecjalizowane modele.
-Wszystkie poniższe są darmowe i działają lokalnie na RTX 3080:
+Cosmos to nie czat + osobne narzędzia, tylko **jeden organizm**:
 
-| Zadanie | Model | Uwagi |
+```
+                        🖥 UI (przeglądarka / PWA / Electron)
+                 mikrofon 🎤 · aparat 📷 · głos 🔊 · czat 💬
+                                   │
+                          ✦ COSMOS CORE (server.js)
+              dyrygent: routing modeli + pamięć zdarzeń percepcji
+                 │                  │                    │
+        ☁ chmura NVIDIA      🖥 lokalny GPU        🐍 COSMOS SENSES (Python)
+        Nemotron / VL        Ollama / vLLM         słuch  — Whisper (STT)
+        (build.nvidia.com)   (RTX 3080)            głos   — Piper (TTS)
+                                                   wzrok  — YOLO (detekcja)
+                                                   ciało  — MediaPipe (pozy)
+                                                   oczy²  — watcher.py (kamera 24/7)
+```
+
+**Jak zmysły współgrają z mózgiem:** obserwator kamery (`senses/watcher.py`) wykrywa
+zmiany w otoczeniu i wysyła je do Cosmosa (`POST /api/events`). Serwer dokleja ostatnie
+zdarzenia do **kontekstu każdej rozmowy** (sekcja „KONTEKST PERCEPCJI"), więc możesz
+zapytać *„co się zmieniło w pokoju?"* — a Nemotron odpowie na podstawie prawdziwych
+obserwacji, niezależnie od tego, czy działa lokalnie, czy w chmurze.
+
+**W interfejsie:**
+- 🎤 przycisk mikrofonu — dyktowanie: Whisper (lokalnie, przez Senses), a gdy usługa
+  nie działa, rozpoznawanie wbudowane w Chrome/Edge,
+- 🔊 przełącznik głosu (pasek górny) — odpowiedzi czytane przez Piper (naturalny polski
+  głos, lokalnie), fallback: głos systemowy przeglądarki,
+- 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
+  analizowane przez model wizyjny,
+- 🛰️ status „Zmysły" w panelu bocznym pokazuje, które zmysły są aktywne.
+
+Instalacja zmysłów: **[senses/README.md](senses/README.md)** (każdy jest opcjonalny —
+Cosmos działa też bez żadnego z nich).
+
+### Pozostałe elementy orkiestry
+
+| Zadanie | Narzędzie | Jak podłączyć |
 |---|---|---|
-| Widzenie (opis obrazu) | **Qwen2.5-VL 7B**, LLaVA | przez Ollama; lub Nemotron VL w chmurze |
-| Rozpoznawanie mowy | **Whisper** (faster-whisper) | świetna polszczyzna, działa offline |
-| Synteza mowy (głos) | **Piper** | lekki, polskie głosy, czas rzeczywisty |
-| Detekcja obiektów | **YOLO** (v8/11) | kamera/Kinect → „co jest w kadrze" |
-| Śledzenie sylwetki | **MediaPipe** | szkielet/gesty z RGB (alternatywa dla SDK Kinecta) |
-| Wyszukiwanie w wiedzy (RAG) | **bge-m3**, multilingual-e5 | pamięć długoterminowa, dokumenty |
-| Fotogrametria | **COLMAP**, Meshroom | zdjęcia z Canona/Mavica → model 3D |
+| Widzenie (opis obrazu) | Nemotron VL (chmura) lub **Qwen2.5-VL** (Ollama) | `NEMOTRON_VISION_MODEL` / `LOCAL_VISION_MODEL` w `.env` |
+| Pamięć długoterminowa (RAG) | **bge-m3** | planowany moduł `senses/memory` |
+| Fotogrametria | **COLMAP**, Meshroom | zdjęcia z Canona/Mavica → model 3D (workflow w docs) |
 
-Architektura Cosmos (endpoint zgodny z API OpenAI) pozwala podłączyć każdy z modeli
-językowych/wizyjnych bez zmian w kodzie — wystarczy wpis w `.env`.
-
-## 🏗️ Architektura
-
-```
-przeglądarka / PWA / Electron          server.js                     modele
-┌──────────────────────────┐   POST /api/chat   ┌──────────────┐
-│ index.html  app.js       │ ─────────────────▶ │  proxy + SSE │ ──▶ ☁ chmura NVIDIA
-│ style.css   sw.js (PWA)  │ ◀───── stream ──── │  klucz API   │ ──▶ 🖥 lokalny GPU
-└──────────────────────────┘                    └──────────────┘     (Ollama/vLLM/NIM)
-```
+## 🏗️ API serwera
 
 | Endpoint | Metoda | Opis |
 |---|---|---|
-| `/api/chat` | POST | Rozmowa (tekst + obrazy), strumień SSE; pole `endpoint: cloud\|local` |
+| `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji, strumień SSE |
 | `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
-| `/api/status` | GET | Dostępność obu endpointów |
+| `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
+| `/api/events` | POST/GET | Zdarzenia percepcji (od watchera/czujników) |
+| `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe) |
 
 ## 💰 Koszty
 

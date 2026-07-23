@@ -57,6 +57,11 @@
             <span class="status-name">Lokalny GPU</span>
             <span class="status-state">—</span>
           </div>
+          <div class="status-row" id="status-senses">
+            <span class="status-dot"></span>
+            <span class="status-name">Zmysły</span>
+            <span class="status-state">—</span>
+          </div>
         </div>
       </div>
     </aside>
@@ -80,6 +85,9 @@
           </button>
         </div>
 
+        <button class="icon-btn tts-toggle" id="tts-toggle" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
+          <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
+        </button>
         <div class="topbar-model" id="topbar-model" title="Aktywny model">—</div>
       </header>
 
@@ -111,6 +119,12 @@
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+          <button class="attach-btn" id="camera-btn" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
+            <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
+          <button class="attach-btn" id="mic-btn" title="Mów (dyktowanie)" aria-label="Mów">
+            <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
           <textarea id="input" rows="1" placeholder="Napisz wiadomość…"></textarea>
           <button class="send-btn" id="send-btn" title="Wyślij" aria-label="Wyślij">
             <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -174,6 +188,24 @@
       <div class="modal-footer">
         <button class="btn-secondary" id="settings-reset">Przywróć domyślne</button>
         <button class="btn-primary" id="settings-save">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: KAMERA ================= -->
+  <div class="modal-overlay" id="camera-modal" style="display:none">
+    <div class="modal camera-modal" role="dialog" aria-label="Kamera">
+      <div class="modal-header">
+        <h2>Kamera</h2>
+        <button class="icon-btn" id="camera-close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="camera-body">
+        <video id="camera-video" autoplay playsinline muted></video>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="camera-capture">Zrób zdjęcie</button>
       </div>
     </div>
   </div>

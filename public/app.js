@@ -18,9 +18,10 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   modelCloud: '',       // puste = model z konfiguracji serwera
   modelLocal: '',
-  systemPrompt: 'Jesteś pomocnym asystentem AI. Odpowiadasz po polsku, chyba że użytkownik pisze w innym języku.',
+  systemPrompt: 'Jesteś pomocnym asystentem AI o imieniu Cosmos. Masz zmysły: możesz otrzymywać obrazy z kamery oraz zdarzenia z czujników (sekcja KONTEKST PERCEPCJI). Odpowiadasz po polsku, chyba że użytkownik pisze w innym języku.',
   temperature: 0.6,
   maxTokens: 2048,
+  speak: false,
 };
 
 let conversations = loadJson(STORAGE_KEYS.conversations, []);
@@ -31,6 +32,11 @@ let serverConfig = { endpoints: { cloud: {}, local: {} } };
 let abortController = null;
 let isGenerating = false;
 let pendingImages = []; // dataURL-e załączników czekających na wysłanie
+let senses = { online: false, caps: {} }; // stan usługi percepcji (Python)
+let mediaRecorder = null;
+let speechRec = null;
+let isRecording = false;
+let cameraStream = null;
 
 // ----------------------------------------------------------------
 // Elementy DOM
@@ -62,6 +68,14 @@ const el = {
   tabLocal: $('tab-local'),
   statusCloud: $('status-cloud'),
   statusLocal: $('status-local'),
+  statusSenses: $('status-senses'),
+  micBtn: $('mic-btn'),
+  cameraBtn: $('camera-btn'),
+  cameraModal: $('camera-modal'),
+  cameraClose: $('camera-close'),
+  cameraCapture: $('camera-capture'),
+  cameraVideo: $('camera-video'),
+  ttsToggle: $('tts-toggle'),
   settingsBtn: $('settings-btn'),
   settingsModal: $('settings-modal'),
   settingsClose: $('settings-close'),
@@ -650,6 +664,7 @@ async function generate(conv) {
     if (!acc) acc = '*(pusta odpowiedź modelu)*';
     conv.messages.push({ role: 'assistant', content: acc });
     saveConversations();
+    if (settings.speak) speakText(acc);
   } catch (err) {
     if (err.name === 'AbortError') {
       if (acc) {
@@ -727,6 +742,204 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
     updateSendButton();
     sendMessage();
   });
+});
+
+// ----------------------------------------------------------------
+// Zmysły: mowa (TTS) — Piper przez senses, fallback: głos systemowy
+// ----------------------------------------------------------------
+
+function stripForSpeech(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_#>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1200);
+}
+
+let currentAudio = null;
+
+async function speakText(text) {
+  const clean = stripForSpeech(text);
+  if (!clean) return;
+  stopSpeaking();
+
+  // 1. Piper (lokalny, naturalny głos) przez usługę zmysłów
+  if (senses.online && senses.caps.piper) {
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        currentAudio = new Audio(URL.createObjectURL(blob));
+        currentAudio.play();
+        return;
+      }
+    } catch { /* fallback niżej */ }
+  }
+
+  // 2. Głos systemowy przeglądarki
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = 'pl-PL';
+    const plVoice = speechSynthesis.getVoices().find((v) => v.lang.startsWith('pl'));
+    if (plVoice) u.voice = plVoice;
+    speechSynthesis.speak(u);
+  }
+}
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
+el.ttsToggle.addEventListener('click', () => {
+  settings.speak = !settings.speak;
+  saveSettings();
+  el.ttsToggle.classList.toggle('active', settings.speak);
+  if (!settings.speak) stopSpeaking();
+});
+
+// ----------------------------------------------------------------
+// Zmysły: słuch (STT) — Whisper przez senses, fallback: przeglądarka
+// ----------------------------------------------------------------
+
+function setRecordingUI(on) {
+  isRecording = on;
+  el.micBtn.classList.toggle('recording', on);
+  el.micBtn.title = on ? 'Zatrzymaj nagrywanie' : 'Mów (dyktowanie)';
+}
+
+async function startWhisperRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const chunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    setRecordingUI(false);
+    const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+    el.input.placeholder = 'Rozpoznawanie mowy…';
+    try {
+      const res = await fetch('/api/stt', {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type },
+        body: blob,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (data.text) {
+        el.input.value = (el.input.value ? el.input.value + ' ' : '') + data.text;
+        autosizeInput();
+        updateSendButton();
+      }
+    } catch (err) {
+      alert(`Rozpoznawanie mowy nie powiodło się:\n${err.message}`);
+    } finally {
+      el.input.placeholder = 'Napisz wiadomość…';
+      el.input.focus();
+    }
+  };
+  mediaRecorder.start();
+  setRecordingUI(true);
+}
+
+function startBrowserRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    alert('Dyktowanie wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.');
+    return;
+  }
+  speechRec = new SR();
+  speechRec.lang = 'pl-PL';
+  speechRec.interimResults = false;
+  speechRec.continuous = true;
+  speechRec.onresult = (e) => {
+    const text = [...e.results].slice(e.resultIndex).map((r) => r[0].transcript).join(' ').trim();
+    if (text) {
+      el.input.value = (el.input.value ? el.input.value + ' ' : '') + text;
+      autosizeInput();
+      updateSendButton();
+    }
+  };
+  speechRec.onend = () => setRecordingUI(false);
+  speechRec.onerror = () => setRecordingUI(false);
+  speechRec.start();
+  setRecordingUI(true);
+}
+
+el.micBtn.addEventListener('click', async () => {
+  if (isRecording) {
+    if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+    if (speechRec) { speechRec.stop(); speechRec = null; }
+    return;
+  }
+  stopSpeaking();
+  if (senses.online && senses.caps.whisper) {
+    try {
+      await startWhisperRecording();
+    } catch (err) {
+      alert(`Brak dostępu do mikrofonu: ${err.message}`);
+    }
+  } else {
+    startBrowserRecognition();
+  }
+});
+
+// ----------------------------------------------------------------
+// Zmysły: wzrok — zdjęcie z kamery (webcam / Kinect RGB)
+// ----------------------------------------------------------------
+
+async function openCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
+  } catch (err) {
+    alert(`Brak dostępu do kamery: ${err.message}`);
+    return;
+  }
+  el.cameraVideo.srcObject = cameraStream;
+  el.cameraModal.style.display = '';
+}
+
+function closeCamera() {
+  el.cameraModal.style.display = 'none';
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+  }
+  el.cameraVideo.srcObject = null;
+}
+
+el.cameraBtn.addEventListener('click', openCamera);
+el.cameraClose.addEventListener('click', closeCamera);
+el.cameraModal.addEventListener('click', (e) => {
+  if (e.target === el.cameraModal) closeCamera();
+});
+
+el.cameraCapture.addEventListener('click', () => {
+  const video = el.cameraVideo;
+  if (!video.videoWidth) return;
+  const canvas = document.createElement('canvas');
+  const maxDim = 1024;
+  const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (pendingImages.length < 4) {
+    pendingImages.push(canvas.toDataURL('image/jpeg', 0.85));
+    renderAttachments();
+    updateSendButton();
+  }
+  closeCamera();
+  el.input.focus();
 });
 
 // ----------------------------------------------------------------
@@ -899,9 +1112,19 @@ async function refreshStatus() {
       setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? 'online' : 'offline');
     }
     setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? 'online' : 'offline');
+    senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
+    if (senses.online) {
+      const active = Object.entries(senses.caps).filter(([, v]) => v).map(([k]) => k);
+      setStatusRow(el.statusSenses, true, active.length ? active.length + ' aktywne' : 'online');
+      el.statusSenses.title = active.length ? 'Aktywne zmysły: ' + active.join(', ') : 'Usługa działa';
+    } else {
+      setStatusRow(el.statusSenses, 'warn', 'offline');
+      el.statusSenses.title = 'Uruchom: python senses/service.py';
+    }
   } catch {
     setStatusRow(el.statusCloud, false, '—');
     setStatusRow(el.statusLocal, false, '—');
+    setStatusRow(el.statusSenses, false, '—');
   }
 }
 
@@ -929,6 +1152,7 @@ if ('serviceWorker' in navigator) {
 // ----------------------------------------------------------------
 
 setEndpoint(endpoint);
+el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
 renderSidebar();
 renderMessages();
 updateSendButton();

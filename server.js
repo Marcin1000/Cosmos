@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * Cosmos — serwer aplikacji AI
+ * Cosmos — serwer aplikacji AI („dyrygent orkiestry”)
  *
- * Obsługuje dwa profile endpointów zgodnych z API OpenAI:
- *   • cloud — chmura NVIDIA (build.nvidia.com) lub inny zdalny serwer,
- *   • local — model uruchomiony lokalnie (Ollama / vLLM / NIM na RTX 3080).
+ * Łączy w jeden organizm:
+ *   • cloud  — chmura NVIDIA (build.nvidia.com) — rozumowanie / wizja,
+ *   • local  — model na Twoim GPU (Ollama / vLLM / NIM),
+ *   • senses — usługa percepcji (Python): słuch (Whisper), głos (Piper),
+ *              widzenie (YOLO/MediaPipe) i zdarzenia z czujników.
+ *
+ * Zdarzenia percepcji trafiają do kontekstu rozmowy, więc model
+ * „wie”, co dzieje się wokół — jak jeden byt, nie zbiór narzędzi.
  *
  * Zero zależności — wystarczy Node.js >= 18.
  */
@@ -54,6 +59,8 @@ const ENDPOINTS = {
   },
 };
 
+const SENSES_URL = (process.env.SENSES_URL || 'http://localhost:7060').replace(/\/+$/, '');
+
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -70,6 +77,34 @@ const MIME = {
 };
 
 // ---------------------------------------------------------------------------
+// Magazyn zdarzeń percepcji (pamięć krótkotrwała „zmysłów”)
+// ---------------------------------------------------------------------------
+
+const EVENTS_MAX = 100;
+const events = []; // { time, type, summary }
+
+function addEvent(type, summary) {
+  events.push({ time: Date.now(), type: String(type || 'event'), summary: String(summary || '').slice(0, 400) });
+  if (events.length > EVENTS_MAX) events.splice(0, events.length - EVENTS_MAX);
+}
+
+function recentEvents(maxAgeMs = 10 * 60 * 1000, limit = 12) {
+  const cutoff = Date.now() - maxAgeMs;
+  return events.filter((e) => e.time >= cutoff).slice(-limit);
+}
+
+function sceneContext() {
+  const recent = recentEvents();
+  if (!recent.length) return '';
+  const lines = recent.map((e) => {
+    const t = new Date(e.time).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `[${t}] (${e.type}) ${e.summary}`;
+  });
+  return 'KONTEKST PERCEPCJI — ostatnie zdarzenia z czujników (kamera/mikrofon/czujniki użytkownika). ' +
+         'Traktuj je jako to, co właśnie widzisz i słyszysz w otoczeniu użytkownika:\n' + lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Pomocnicze
 // ---------------------------------------------------------------------------
 
@@ -82,7 +117,7 @@ function sendJson(res, status, data) {
   res.end(body);
 }
 
-function readBody(req, limit = 32 * 1024 * 1024) {
+function readBodyBuffer(req, limit = 64 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
@@ -95,9 +130,13 @@ function readBody(req, limit = 32 * 1024 * 1024) {
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+}
+
+async function readJson(req) {
+  return JSON.parse((await readBodyBuffer(req)).toString('utf8'));
 }
 
 function pickEndpoint(name) {
@@ -111,7 +150,7 @@ function authHeaders(ep) {
 }
 
 // ---------------------------------------------------------------------------
-// Endpointy API
+// API: konfiguracja i status
 // ---------------------------------------------------------------------------
 
 function handleConfig(res) {
@@ -130,47 +169,96 @@ function handleConfig(res) {
         baseUrl: ENDPOINTS.local.baseUrl,
         model: ENDPOINTS.local.model,
         visionModel: ENDPOINTS.local.visionModel,
-        hasApiKey: true, // lokalny endpoint zwykle nie wymaga klucza
+        hasApiKey: true,
       },
     },
+    senses: { baseUrl: SENSES_URL },
   });
-}
-
-async function handleModels(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  const ep = pickEndpoint(url.searchParams.get('endpoint'));
-  try {
-    const upstream = await fetch(`${ep.baseUrl}/models`, {
-      headers: authHeaders(ep),
-      signal: AbortSignal.timeout(15000),
-    });
-    const data = await upstream.json();
-    sendJson(res, upstream.status, data);
-  } catch (err) {
-    sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
-  }
 }
 
 async function handleStatus(req, res) {
   const results = {};
-  await Promise.all(Object.entries(ENDPOINTS).map(async ([name, ep]) => {
-    try {
-      const r = await fetch(`${ep.baseUrl}/models`, {
-        headers: authHeaders(ep),
-        signal: AbortSignal.timeout(5000),
-      });
-      results[name] = { online: r.ok, status: r.status };
-    } catch {
-      results[name] = { online: false, status: 0 };
-    }
-  }));
+  await Promise.all([
+    ...Object.entries(ENDPOINTS).map(async ([name, ep]) => {
+      try {
+        const r = await fetch(`${ep.baseUrl}/models`, {
+          headers: authHeaders(ep),
+          signal: AbortSignal.timeout(5000),
+        });
+        results[name] = { online: r.ok, status: r.status };
+      } catch {
+        results[name] = { online: false, status: 0 };
+      }
+    }),
+    (async () => {
+      try {
+        const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(3000) });
+        const caps = r.ok ? await r.json() : {};
+        results.senses = { online: r.ok, caps };
+      } catch {
+        results.senses = { online: false, caps: {} };
+      }
+    })(),
+  ]);
   sendJson(res, 200, results);
 }
+
+// ---------------------------------------------------------------------------
+// API: zdarzenia percepcji
+// ---------------------------------------------------------------------------
+
+async function handleEvents(req, res) {
+  if (req.method === 'POST') {
+    try {
+      const data = await readJson(req);
+      if (Array.isArray(data)) {
+        for (const e of data) addEvent(e.type, e.summary);
+      } else {
+        addEvent(data.type, data.summary);
+      }
+      return sendJson(res, 200, { ok: true, stored: events.length });
+    } catch {
+      return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' });
+    }
+  }
+  // GET — ostatnie zdarzenia dla UI
+  sendJson(res, 200, { events: recentEvents(60 * 60 * 1000, 50) });
+}
+
+// ---------------------------------------------------------------------------
+// API: proxy do usługi percepcji (Cosmos Senses)
+// ---------------------------------------------------------------------------
+
+async function proxySenses(req, res, targetPath, { json = false } = {}) {
+  let upstream;
+  try {
+    const body = await readBodyBuffer(req);
+    upstream = await fetch(`${SENSES_URL}${targetPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': req.headers['content-type'] || (json ? 'application/json' : 'application/octet-stream') },
+      body,
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (err) {
+    return sendJson(res, 502, {
+      error: `Usługa percepcji (Cosmos Senses) nie odpowiada pod ${SENSES_URL}. ` +
+             `Uruchom ją: python senses/service.py (${err.message})`,
+    });
+  }
+  const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+  const buf = Buffer.from(await upstream.arrayBuffer());
+  res.writeHead(upstream.status, { 'Content-Type': contentType, 'Content-Length': buf.length });
+  res.end(buf);
+}
+
+// ---------------------------------------------------------------------------
+// API: czat (streaming SSE) z kontekstem percepcji
+// ---------------------------------------------------------------------------
 
 async function handleChat(req, res) {
   let payload;
   try {
-    payload = JSON.parse(await readBody(req));
+    payload = await readJson(req);
   } catch {
     return sendJson(res, 400, { error: 'Nieprawidłowy JSON w żądaniu.' });
   }
@@ -188,7 +276,6 @@ async function handleChat(req, res) {
     });
   }
 
-  // Jeśli rozmowa zawiera obrazy, a skonfigurowano osobny model wizyjny — użyj go.
   const hasImages = payload.messages.some((m) => Array.isArray(m.content) &&
     m.content.some((p) => p.type === 'image_url'));
 
@@ -203,9 +290,18 @@ async function handleChat(req, res) {
     });
   }
 
+  // Kontekst percepcji: doklejamy jako dodatkową wiadomość systemową,
+  // zaraz po instrukcji systemowej użytkownika (jeśli jest).
+  const messages = [...payload.messages];
+  const scene = payload.useSenses === false ? '' : sceneContext();
+  if (scene) {
+    const insertAt = messages[0]?.role === 'system' ? 1 : 0;
+    messages.splice(insertAt, 0, { role: 'system', content: scene });
+  }
+
   const body = {
     model,
-    messages: payload.messages,
+    messages,
     temperature: typeof payload.temperature === 'number' ? payload.temperature : 0.6,
     max_tokens: Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048,
     top_p: typeof payload.top_p === 'number' ? payload.top_p : 0.95,
@@ -246,7 +342,6 @@ async function handleChat(req, res) {
     return sendJson(res, upstream.status, { error: message });
   }
 
-  // Przekazujemy strumień SSE 1:1 do klienta.
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -262,6 +357,25 @@ async function handleChat(req, res) {
     /* klient przerwał lub upstream padł — kończymy strumień */
   }
   res.end();
+}
+
+// ---------------------------------------------------------------------------
+// API: lista modeli
+// ---------------------------------------------------------------------------
+
+async function handleModels(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const ep = pickEndpoint(url.searchParams.get('endpoint'));
+  try {
+    const upstream = await fetch(`${ep.baseUrl}/models`, {
+      headers: authHeaders(ep),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await upstream.json();
+    sendJson(res, upstream.status, data);
+  } catch (err) {
+    sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -299,10 +413,16 @@ function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.url === '/api/config' && req.method === 'GET') return handleConfig(res);
-    if (req.url.startsWith('/api/models') && req.method === 'GET') return await handleModels(req, res);
-    if (req.url === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
-    if (req.url === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    const p = new URL(req.url, 'http://localhost').pathname;
+    if (p === '/api/config' && req.method === 'GET') return handleConfig(res);
+    if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
+    if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
+    if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    if (p === '/api/events') return await handleEvents(req, res);
+    if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
+    if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
+    if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
+    if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
     if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
     res.writeHead(405);
     res.end();
@@ -321,6 +441,7 @@ function start(port = PORT) {
       console.log(`  → Chmura:  ${ENDPOINTS.cloud.baseUrl}  (model: ${ENDPOINTS.cloud.model})`);
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
+      console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
       console.log('');
       resolve(server);
     });
