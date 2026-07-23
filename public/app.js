@@ -18,7 +18,7 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   modelCloud: '',       // puste = model z konfiguracji serwera
   modelLocal: '',
-  systemPrompt: 'Jesteś pomocnym asystentem AI o imieniu Cosmos. Masz zmysły: możesz otrzymywać obrazy z kamery oraz zdarzenia z czujników (sekcja KONTEKST PERCEPCJI). Odpowiadasz po polsku, chyba że użytkownik pisze w innym języku.',
+  systemPrompt: '',
   temperature: 0.6,
   maxTokens: 2048,
   speak: false,
@@ -270,7 +270,7 @@ function renderMarkdown(text) {
       html.push(
         `<div class="code-block">` +
         `<div class="code-block-header"><span>${escapeHtml(lang || 'kod')}</span>` +
-        `<button class="code-copy-btn" data-copy>${COPY_SVG}Kopiuj</button></div>` +
+        `<button class="code-copy-btn" data-copy>${COPY_SVG}${t('copy')}</button></div>` +
         `<pre><code>${escapeHtml(code.join('\n'))}</code></pre></div>`
       );
       continue;
@@ -365,13 +365,13 @@ function renderSidebar() {
 
     const title = document.createElement('button');
     title.className = 'conv-title';
-    title.textContent = conv.title || 'Nowa rozmowa';
-    title.title = conv.title || 'Nowa rozmowa';
+    title.textContent = conv.title || t('newChatFallback');
+    title.title = conv.title || t('newChatFallback');
     title.addEventListener('click', () => selectConversation(conv.id));
 
     const del = document.createElement('button');
     del.className = 'conv-delete';
-    del.title = 'Usuń rozmowę';
+    del.title = t('deleteConv');
     del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     del.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -390,7 +390,7 @@ function imagesHtml(images) {
   for (const src of images) {
     const img = document.createElement('img');
     img.src = src;
-    img.alt = 'załącznik';
+    img.alt = t('attachment');
     wrap.appendChild(img);
   }
   return wrap;
@@ -418,7 +418,7 @@ function messageElement(m) {
   if (m.search) {
     msg.className = 'msg msg-search';
     msg.innerHTML =
-      `<details class="search-results"><summary>🔍 Wyniki wyszukiwania: „${escapeHtml(m.searchQuery || '')}”</summary>` +
+      `<details class="search-results"><summary>${t('chat.searchResults', { q: escapeHtml(m.searchQuery || '') })}</summary>` +
       `<pre>${escapeHtml(text)}</pre></details>`;
     return msg;
   }
@@ -461,11 +461,11 @@ function messageActions(text, { copy }) {
   if (copy) {
     const copyBtn = document.createElement('button');
     copyBtn.className = 'msg-action-btn';
-    copyBtn.innerHTML = COPY_SVG + ' Kopiuj';
+    copyBtn.innerHTML = COPY_SVG + ' ' + t('copy');
     copyBtn.addEventListener('click', () => {
       navigator.clipboard.writeText(text).then(() => {
-        copyBtn.textContent = '✓ Skopiowano';
-        setTimeout(() => { copyBtn.innerHTML = COPY_SVG + ' Kopiuj'; }, 1500);
+        copyBtn.textContent = t('copied');
+        setTimeout(() => { copyBtn.innerHTML = COPY_SVG + ' ' + t('copy'); }, 1500);
       });
     });
     actions.appendChild(copyBtn);
@@ -474,7 +474,7 @@ function messageActions(text, { copy }) {
   if (text.trim()) {
     const remBtn = document.createElement('button');
     remBtn.className = 'msg-action-btn';
-    remBtn.innerHTML = '✦ Zapamiętaj';
+    remBtn.innerHTML = t('remember');
     remBtn.addEventListener('click', async () => {
       remBtn.disabled = true;
       try {
@@ -484,9 +484,9 @@ function messageActions(text, { copy }) {
           body: JSON.stringify({ text: text.trim() }),
         });
         if (!res.ok) throw new Error();
-        remBtn.textContent = '✓ Zapamiętano';
+        remBtn.textContent = t('remembered');
       } catch {
-        remBtn.textContent = '✗ Błąd zapisu';
+        remBtn.textContent = t('rememberErr');
         remBtn.disabled = false;
       }
     });
@@ -546,8 +546,8 @@ async function selectConversation(id) {
 
 function deleteConversation(id) {
   const conv = conversations.find((c) => c.id === id);
-  const name = conv?.title || 'tę rozmowę';
-  if (!confirm(`Usunąć „${name}”?`)) return;
+  const name = conv?.title || t('newChatFallback');
+  if (!confirm(t('confirmDelConv', { name }))) return;
   conversations = conversations.filter((c) => c.id !== id);
   cacheConvIndex();
   fetch(`/api/conversations?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
@@ -642,7 +642,7 @@ function resizeImage(file, maxDim = 1024, quality = 0.85) {
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', quality));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Nie udało się wczytać obrazu.')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('cam.readErr'))); };
     img.src = url;
   });
 }
@@ -657,7 +657,7 @@ function renderAttachments() {
     const rm = document.createElement('button');
     rm.className = 'attachment-remove';
     rm.textContent = '×';
-    rm.title = 'Usuń załącznik';
+    rm.title = t('removeAttachment');
     rm.addEventListener('click', () => {
       pendingImages.splice(idx, 1);
       renderAttachments();
@@ -673,7 +673,7 @@ el.attachBtn.addEventListener('click', () => el.fileInput.click());
 el.fileInput.addEventListener('change', async () => {
   for (const file of el.fileInput.files) {
     if (!file.type.startsWith('image/')) continue;
-    if (pendingImages.length >= 4) { alert('Maksymalnie 4 obrazy na wiadomość.'); break; }
+    if (pendingImages.length >= 4) { alert(t('cam.maxImages')); break; }
     try {
       pendingImages.push(await resizeImage(file));
     } catch (err) {
@@ -705,8 +705,9 @@ el.input.addEventListener('paste', async (e) => {
 
 function toApiMessages(conv) {
   const api = [];
-  if (settings.systemPrompt.trim()) {
-    api.push({ role: 'system', content: settings.systemPrompt.trim() });
+  const sysPrompt = settings.systemPrompt.trim() || t('systemPromptDefault');
+  if (sysPrompt) {
+    api.push({ role: 'system', content: sysPrompt });
   }
   for (const m of conv.messages) {
     if (m.error) continue;
@@ -842,17 +843,16 @@ async function webSearch(query) {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     if (data.error && !data.results.length) {
-      return `WYNIKI WYSZUKIWANIA („${query}”): błąd — ${data.error}\nOdpowiedz na podstawie własnej wiedzy i zaznacz, że nie udało się sprawdzić internetu.`;
+      return t('search.err', { q: query, e: data.error });
     }
     if (!data.results.length) {
-      return `WYNIKI WYSZUKIWANIA („${query}”): brak wyników.\nOdpowiedz na podstawie własnej wiedzy i zaznacz brak wyników.`;
+      return t('search.none', { q: query });
     }
     const lines = data.results.map((r, i) =>
       `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`);
-    return `WYNIKI WYSZUKIWANIA („${query}”):\n${lines.join('\n')}\n\n` +
-           'Odpowiedz teraz na pytanie użytkownika na podstawie tych wyników i podaj źródła.';
+    return t('search.results', { q: query, lines: lines.join('\n') });
   } catch (err) {
-    return `WYNIKI WYSZUKIWANIA („${query}”): błąd sieci (${err.message}).`;
+    return t('search.netErr', { q: query, e: err.message });
   }
 }
 
@@ -875,13 +875,13 @@ async function runGeneration(conv) {
         const before = acc.replace(marker[0], '').trim();
         conv.messages.push({
           role: 'assistant',
-          content: (before ? before + '\n\n' : '') + `🔍 *Szukam w internecie: „${q}”…*`,
+          content: (before ? before + '\n\n' : '') + t('chat.searching', { q }),
         });
         saveConversations();
         renderMessages();
         if (voiceMode) {
           setVoiceState('speaking');
-          await speakText('Sprawdzam w internecie.');
+          await speakText(t('voice.searching'));
           setVoiceState('thinking');
         }
         const resultsText = await webSearch(q);
@@ -897,13 +897,13 @@ async function runGeneration(conv) {
         const before = acc.replace(imgMarker[0], '').trim();
         conv.messages.push({
           role: 'assistant',
-          content: (before ? before + '\n\n' : '') + '🎨 *Generuję obraz…*',
+          content: (before ? before + '\n\n' : '') + t('chat.genImage'),
         });
         saveConversations();
         renderMessages();
         if (voiceMode) {
           setVoiceState('speaking');
-          await speakText('Generuję obraz.');
+          await speakText(t('voice.generatingImage'));
           setVoiceState('thinking');
         }
         try {
@@ -916,22 +916,22 @@ async function runGeneration(conv) {
           if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
           conv.messages.push({
             role: 'assistant',
-            content: { text: 'Gotowe — obraz zapisany w Bazie wiedzy.', images: [d.url] },
+            content: { text: t('chat.imageSaved'), images: [d.url] },
           });
-          finalText = 'Wygenerowałem obraz i zapisałem go w bazie wiedzy.';
+          finalText = t('chat.imageDone');
         } catch (err) {
           conv.messages.push({
             role: 'assistant',
-            content: `⚠ Generowanie obrazu nie powiodło się: ${err.message}`,
+            content: t('chat.imageErr', { msg: err.message }),
             error: true,
           });
-          if (voiceMode) finalText = 'Nie udało się wygenerować obrazu.';
+          if (voiceMode) finalText = t('chat.imageErrVoice');
         }
         saveConversations();
         break;
       }
 
-      finalText = acc || '*(pusta odpowiedź modelu)*';
+      finalText = acc || t('emptyReply');
       conv.messages.push({ role: 'assistant', content: finalText });
       saveConversations();
       break;
@@ -945,7 +945,7 @@ async function runGeneration(conv) {
     } else {
       conv.messages.push({ role: 'assistant', content: `⚠ ${err.message}`, error: true });
       saveConversations();
-      if (voiceMode) finalText = 'Przepraszam, wystąpił błąd połączenia z modelem.';
+      if (voiceMode) finalText = t('voice.errReply');
     }
   } finally {
     isGenerating = false;
@@ -1011,7 +1011,7 @@ document.addEventListener('click', (e) => {
   const code = btn.closest('.code-block')?.querySelector('code')?.textContent || '';
   navigator.clipboard.writeText(code).then(() => {
     const prev = btn.innerHTML;
-    btn.innerHTML = '✓ Skopiowano';
+    btn.innerHTML = t('copied');
     setTimeout(() => { btn.innerHTML = prev; }, 1500);
   });
 });
@@ -1019,7 +1019,7 @@ document.addEventListener('click', (e) => {
 // podpowiedzi na ekranie startowym
 document.querySelectorAll('.suggestion').forEach((btn) => {
   btn.addEventListener('click', () => {
-    el.input.value = btn.dataset.prompt;
+    el.input.value = t(btn.dataset.promptKey);
     autosizeInput();
     updateSendButton();
     sendMessage();
@@ -1077,9 +1077,10 @@ async function speakText(text) {
   if ('speechSynthesis' in window) {
     await new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(clean);
-      u.lang = 'pl-PL';
-      const plVoice = speechSynthesis.getVoices().find((v) => v.lang.startsWith('pl'));
-      if (plVoice) u.voice = plVoice;
+      u.lang = t('speechLang');
+      const langPrefix = t('speechLang').slice(0, 2);
+      const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
+      if (voice) u.voice = voice;
       u.onend = resolve;
       u.onerror = resolve;
       speechSynthesis.speak(u);
@@ -1106,7 +1107,7 @@ el.ttsToggle.addEventListener('click', () => {
 function setRecordingUI(on) {
   isRecording = on;
   el.micBtn.classList.toggle('recording', on);
-  el.micBtn.title = on ? 'Zatrzymaj nagrywanie' : 'Mów (dyktowanie)';
+  el.micBtn.title = on ? t('stopRecording') : t('speak');
 }
 
 async function startWhisperRecording() {
@@ -1118,7 +1119,7 @@ async function startWhisperRecording() {
     stream.getTracks().forEach((t) => t.stop());
     setRecordingUI(false);
     const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-    el.input.placeholder = 'Rozpoznawanie mowy…';
+    el.input.placeholder = t('chat.dictating');
     try {
       const res = await fetch('/api/stt', {
         method: 'POST',
@@ -1133,9 +1134,9 @@ async function startWhisperRecording() {
         updateSendButton();
       }
     } catch (err) {
-      alert(`Rozpoznawanie mowy nie powiodło się:\n${err.message}`);
+      alert(t('chat.sttErr', { msg: err.message }));
     } finally {
-      el.input.placeholder = 'Napisz wiadomość…';
+      el.input.placeholder = t('inputPh');
       el.input.focus();
     }
   };
@@ -1146,11 +1147,11 @@ async function startWhisperRecording() {
 function startBrowserRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    alert('Dyktowanie wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.');
+    alert(t('dictNoStt'));
     return;
   }
   speechRec = new SR();
-  speechRec.lang = 'pl-PL';
+  speechRec.lang = t('speechLang');
   speechRec.interimResults = false;
   speechRec.continuous = true;
   speechRec.onresult = (e) => {
@@ -1178,7 +1179,7 @@ el.micBtn.addEventListener('click', async () => {
     try {
       await startWhisperRecording();
     } catch (err) {
-      alert(`Brak dostępu do mikrofonu: ${err.message}`);
+      alert(t('kb.micErr') + ' ' + err.message);
     }
   } else {
     startBrowserRecognition();
@@ -1260,7 +1261,7 @@ async function openStudio() {
       box.classList.toggle('disabled', !on);
       box.querySelector('.studio-off').style.display = on ? 'none' : '';
     }
-    if (prov.voice) $('studio-speech-voice').placeholder = `voice ID (puste = ${prov.voice})`;
+    if (prov.voice) $('studio-speech-voice').placeholder = t('st.voicePhDefault', { v: prov.voice });
     // wybór silnika obrazów (OpenAI / Adobe Firefly), gdy jest więcej niż jeden
     const provSel = $('studio-image-provider');
     const imgProv = prov.imageProviders || [];
@@ -1292,7 +1293,7 @@ el.studioModal.addEventListener('click', (e) => {
 $('studio-image-go').addEventListener('click', async () => {
   const prompt = $('studio-image-prompt').value.trim();
   if (!prompt) return;
-  studioOut('image', '<span class="studio-note"><span class="studio-spinner"></span>Generuję obraz…</span>');
+  studioOut('image', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genImage')}</span>`);
   try {
     const res = await fetch('/api/studio/image', {
       method: 'POST',
@@ -1314,7 +1315,7 @@ $('studio-image-go').addEventListener('click', async () => {
 $('studio-speech-go').addEventListener('click', async () => {
   const text = $('studio-speech-text').value.trim();
   if (!text) return;
-  studioOut('speech', '<span class="studio-note"><span class="studio-spinner"></span>Generuję dźwięk…</span>');
+  studioOut('speech', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genSound')}</span>`);
   try {
     const res = await fetch('/api/studio/speech', {
       method: 'POST',
@@ -1332,7 +1333,7 @@ $('studio-speech-go').addEventListener('click', async () => {
 $('studio-video-go').addEventListener('click', async () => {
   const prompt = $('studio-video-prompt').value.trim();
   if (!prompt) return;
-  studioOut('video', '<span class="studio-note"><span class="studio-spinner"></span>Zlecam zadanie wideo…</span>');
+  studioOut('video', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genVideoTask')}</span>`);
   try {
     const res = await fetch('/api/studio/video', {
       method: 'POST',
@@ -1355,16 +1356,16 @@ $('studio-video-go').addEventListener('click', async () => {
     while (true) {
       await new Promise((r) => setTimeout(r, 5000));
       const min = Math.round((Date.now() - started) / 60000 * 10) / 10;
-      studioOut('video', `<span class="studio-note"><span class="studio-spinner"></span>Generuję wideo… (${min} min — to może potrwać kilka minut)</span>`);
+      studioOut('video', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genVideo', { min })}</span>`);
       const st = await (await fetch(`/api/studio/video/status?id=${encodeURIComponent(d.taskId)}`)).json();
       if (st.status === 'done') {
         studioOut('video', `<video controls src="${escapeHtml(st.url)}"></video>` + studioNote(st.item, st.exported));
         break;
       }
       if (st.status === 'failed' || st.error) {
-        throw new Error(st.error || 'Zadanie nie powiodło się.');
+        throw new Error(st.error || t('st.videoFailed'));
       }
-      if (Date.now() - started > 20 * 60000) throw new Error('Przekroczono limit 20 minut oczekiwania.');
+      if (Date.now() - started > 20 * 60000) throw new Error(t('st.videoTimeout'));
     }
   } catch (err) {
     studioOut('video', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
@@ -1426,7 +1427,7 @@ async function loadKbList() {
 
     el.kbList.innerHTML = '';
     if (!items.length) {
-      el.kbList.innerHTML = '<div class="kb-empty">Baza jest pusta — dodaj pliki, linki albo nagraj notatkę.</div>';
+      el.kbList.innerHTML = `<div class="kb-empty">${t('kb.empty')}</div>`;
       return;
     }
     for (const item of [...items].reverse()) {
@@ -1435,7 +1436,7 @@ async function loadKbList() {
 
       const check = document.createElement('input');
       check.type = 'checkbox';
-      check.title = 'Dołączaj do rozmowy';
+      check.title = t('kb.include');
       check.checked = kbSelected.has(item.id);
       check.addEventListener('change', () => {
         if (check.checked) kbSelected.add(item.id);
@@ -1462,7 +1463,7 @@ async function loadKbList() {
       meta.className = 'kb-item-meta';
       const bits = [];
       if (item.size) bits.push(fmtSize(item.size));
-      bits.push(new Date(item.time).toLocaleDateString('pl-PL'));
+      bits.push(new Date(item.time).toLocaleDateString(getLang()));
       bits.push(item.textChars ? `tekst: ${item.textChars} zn.` : 'bez tekstu');
       meta.textContent = bits.join(' · ');
       meta.title = item.preview || '';
@@ -1471,7 +1472,7 @@ async function loadKbList() {
       const del = document.createElement('button');
       del.className = 'kb-item-del';
       del.textContent = '×';
-      del.title = 'Usuń z bazy';
+      del.title = t('kb.remove');
       del.addEventListener('click', async () => {
         if (!confirm(`Usunąć „${item.name}” z bazy wiedzy?`)) return;
         await fetch(`/api/kb?id=${encodeURIComponent(item.id)}`, { method: 'DELETE' });
@@ -1484,7 +1485,7 @@ async function loadKbList() {
       el.kbList.appendChild(row);
     }
   } catch {
-    el.kbList.innerHTML = '<div class="kb-empty">Nie udało się wczytać bazy wiedzy.</div>';
+    el.kbList.innerHTML = `<div class="kb-empty">${t('kb.loadErr')}</div>`;
   }
 }
 
@@ -1492,7 +1493,7 @@ function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
-    reader.onerror = () => reject(new Error('Nie udało się odczytać pliku.'));
+    reader.onerror = () => reject(new Error(t('fileReadErr')));
     reader.readAsDataURL(file);
   });
 }
@@ -1502,11 +1503,11 @@ async function kbUploadFiles(files) {
   for (let i = 0; i < list.length; i++) {
     const file = list[i];
     if (file.size > KB_MAX_FILE) {
-      alert(`„${file.name}” jest większy niż 50 MB — pomijam.`);
+      alert(t('kb.tooBig', { name: file.name }));
       continue;
     }
-    kbSetStatus(`Przetwarzam ${i + 1}/${list.length}: ${file.name}` +
-      (/^(audio|video)/.test(file.type) ? ' (transkrypcja może chwilę potrwać)…' : '…'));
+    kbSetStatus(t('kb.processing', { i: i + 1, n: list.length, name: file.name }) +
+      (/^(audio|video)/.test(file.type) ? t('kb.transcribing') : '…'));
     try {
       const res = await fetch('/api/kb/file', {
         method: 'POST',
@@ -1516,7 +1517,7 @@ async function kbUploadFiles(files) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     } catch (err) {
-      alert(`Nie udało się dodać „${file.name}”:\n${err.message}`);
+      alert(t('kb.addErr', { name: file.name }) + '\n' + err.message);
     }
   }
   kbSetStatus('');
@@ -1527,7 +1528,7 @@ async function kbAddLink() {
   const url = el.kbUrl.value.trim();
   if (!url) return;
   el.kbAddLink.disabled = true;
-  kbSetStatus(`Pobieram stronę: ${url}…`);
+  kbSetStatus(t('kb.fetchingPage', { url }));
   try {
     const res = await fetch('/api/kb/link', {
       method: 'POST',
@@ -1538,7 +1539,7 @@ async function kbAddLink() {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     el.kbUrl.value = '';
   } catch (err) {
-    alert(`Nie udało się dodać linku:\n${err.message}`);
+    alert(t('kb.linkErr') + '\n' + err.message);
   } finally {
     el.kbAddLink.disabled = false;
     kbSetStatus('');
@@ -1561,7 +1562,7 @@ async function kbSaveNote(text) {
 function setKbRecordingUI(on) {
   kbRecording = on;
   el.kbRecordBtn.classList.toggle('recording', on);
-  el.kbRecordBtn.textContent = on ? '⏹ Zakończ i zapisz' : '🎙 Nagraj notatkę';
+  el.kbRecordBtn.textContent = on ? t('kb.recordStop') : t('kb.record');
 }
 
 async function kbToggleRecording() {
@@ -1580,7 +1581,7 @@ async function kbToggleRecording() {
       kbRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         setKbRecordingUI(false);
-        kbSetStatus('Transkrybuję nagranie (Whisper)…');
+        kbSetStatus(t('kb.transcribingNote'));
         try {
           const blob = new Blob(chunks, { type: kbRecorder.mimeType || 'audio/webm' });
           const res = await fetch('/api/stt', {
@@ -1589,30 +1590,30 @@ async function kbToggleRecording() {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
           if (data.text) await kbSaveNote(data.text);
-          else alert('Nie rozpoznano mowy w nagraniu.');
+          else alert(t('kb.noSpeech'));
         } catch (err) {
-          alert(`Transkrypcja nie powiodła się:\n${err.message}`);
+          alert(t('kb.transcribeErr') + '\n' + err.message);
         } finally {
           kbSetStatus('');
         }
       };
       kbRecorder.start();
       setKbRecordingUI(true);
-      kbSetStatus('Nagrywam… kliknij ⏹, aby zakończyć i zapisać.');
+      kbSetStatus(t('kb.recording'));
     } catch (err) {
-      alert(`Brak dostępu do mikrofonu: ${err.message}`);
+      alert(t('kb.micErr') + ' ' + err.message);
     }
     return;
   }
   // wariant 2: dyktowanie przeglądarki (Chrome/Edge)
   const SR = getSR();
   if (!SR) {
-    alert('Nagrywanie notatki wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.');
+    alert(t('kb.noStt'));
     return;
   }
   let acc = '';
   kbSpeechRec = new SR();
-  kbSpeechRec.lang = 'pl-PL';
+  kbSpeechRec.lang = t('speechLang');
   kbSpeechRec.continuous = true;
   kbSpeechRec.interimResults = true;
   kbSpeechRec.onresult = (e) => {
@@ -1664,7 +1665,7 @@ el.kbDrop.addEventListener('drop', (e) => {
 // ----------------------------------------------------------------
 
 const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)\b/i;
-const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop)\b/i;
+const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
 const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;
 
 function getSR() {
@@ -1675,10 +1676,10 @@ function setVoiceState(state) {
   voiceState = state;
   el.voiceOrb.className = 'voice-orb ' + state;
   el.voiceStatus.textContent = {
-    wake: 'POWIEDZ „HEJ, KOSMOS”',
-    listening: 'SŁUCHAM…',
-    thinking: 'MYŚLĘ…',
-    speaking: 'MÓWIĘ…',
+    wake: t('voice.wake'),
+    listening: t('voice.listening'),
+    thinking: t('voice.thinking'),
+    speaking: t('voice.speaking'),
   }[state] || '';
 }
 
@@ -1713,7 +1714,7 @@ function stopVoiceRecognizers() {
 async function enterVoiceMode() {
   const SR = getSR();
   if (!SR) {
-    alert('Tryb głosowy wymaga przeglądarki Chrome lub Edge (Web Speech API).');
+    alert(t('voice.noSupport'));
     return;
   }
   voiceMode = true;
@@ -1758,7 +1759,7 @@ function startWakeListening() {
   const SR = getSR();
   const rec = new SR();
   voiceWakeRec = rec;
-  rec.lang = 'pl-PL';
+  rec.lang = t('speechLang');
   rec.continuous = true;
   rec.interimResults = true;
 
@@ -1793,7 +1794,7 @@ function startQueryListening() {
   const SR = getSR();
   const rec = new SR();
   voiceQueryRec = rec;
-  rec.lang = 'pl-PL';
+  rec.lang = t('speechLang');
   rec.continuous = false;
   rec.interimResults = true;
 
@@ -1829,8 +1830,8 @@ function captureVoiceFrame() {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
-const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|start)\s+(nagrywanie|nagrywa[ćc]|notatk[ęe]|dyktowanie))\b/i;
-const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae]))\b/i;
+const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|start)\s+(nagrywanie|nagrywa[ćc]|notatk[ęe]|dyktowanie)|new note|start (a )?note|start recording)\b/i;
+const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae])|(end|stop|save)\s+(note|recording))\b/i;
 
 async function handleVoiceQuery(text) {
   el.voiceTranscript.textContent = text;
@@ -1845,15 +1846,15 @@ async function handleVoiceQuery(text) {
       setVoiceState('speaking');
       if (note) {
         const ok = await kbSaveNote(note);
-        await speakText(ok ? 'Zapisałem notatkę w bazie wiedzy.' : 'Nie udało się zapisać notatki.');
+        await speakText(ok ? t('voice.noteSaved') : t('voice.noteSaveErr'));
       } else {
-        await speakText('Notatka była pusta, nic nie zapisałem.');
+        await speakText(t('voice.noteEmpty'));
       }
       if (voiceMode) startQueryListening();
       return;
     }
     voiceNoteBuffer.push(text);
-    el.voiceAnswer.textContent = '📝 ' + voiceNoteBuffer.join(' ').slice(-300);
+    el.voiceAnswer.textContent = t('voice.notePrefix') + voiceNoteBuffer.join(' ').slice(-300);
     chime(660);
     if (voiceMode) startQueryListening();
     return;
@@ -1862,16 +1863,16 @@ async function handleVoiceQuery(text) {
   if (NOTE_START_RE.test(text)) {
     voiceNoteMode = true;
     voiceNoteBuffer = [];
-    el.voiceAnswer.textContent = '📝 Tryb notatki — mów, a zakończ słowami: „koniec notatki”.';
+    el.voiceAnswer.textContent = t('voice.noteStart');
     setVoiceState('speaking');
-    await speakText('Nagrywam notatkę. Zakończ słowami: koniec notatki.');
+    await speakText(t('voice.noteStartSpoken'));
     if (voiceMode) startQueryListening();
     return;
   }
 
   if (END_RE.test(text) && text.length < 30) {
     setVoiceState('speaking');
-    await speakText('Do usłyszenia.');
+    await speakText(t('voice.bye'));
     if (voiceMode) startWakeListening();
     return;
   }
@@ -1916,7 +1917,7 @@ function applyTheme(theme) {
   const dark = theme === 'dark';
   el.themeIconDark.style.display = dark ? 'none' : '';
   el.themeIconLight.style.display = dark ? '' : 'none';
-  el.themeLabel.textContent = dark ? 'Jasny motyw' : 'Ciemny motyw';
+  el.themeLabel.textContent = dark ? t('themeLight') : t('themeDark');
   document.querySelector('meta[name="theme-color"]')
     .setAttribute('content', dark ? '#05060a' : '#fbfbfd');
 }
@@ -1927,6 +1928,19 @@ el.themeBtn.addEventListener('click', () => {
 });
 
 applyTheme(localStorage.getItem(STORAGE_KEYS.theme) || 'dark');
+
+// przełącznik języka (PL ↔ EN)
+el.langBtn = $('lang-btn');
+el.langBtn.addEventListener('click', () => {
+  setLang(getLang() === 'pl' ? 'en' : 'pl');
+  // odśwież teksty budowane dynamicznie w JS
+  applyTheme(document.documentElement.dataset.theme || 'dark');
+  buildEndpointTabs();
+  updateModelBadge();
+  renderSidebar();
+  renderMessages();
+  refreshStatus();
+});
 
 const ENDPOINT_TABS = {
   cloud: ['Chmura', '<svg viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12.4 3.5 3.5 0 0 0 6.5 19z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
@@ -1947,7 +1961,8 @@ function buildEndpointTabs() {
     btn.className = 'endpoint-tab';
     btn.dataset.endpoint = key;
     btn.setAttribute('role', 'tab');
-    btn.innerHTML = ENDPOINT_TABS[key][1] + ENDPOINT_TABS[key][0];
+    const label = key === 'cloud' ? t('tabCloud') : key === 'local' ? t('tabLocal') : ENDPOINT_TABS[key][0];
+    btn.innerHTML = ENDPOINT_TABS[key][1] + label;
     btn.addEventListener('click', () => setEndpoint(key));
     el.endpointSwitch.appendChild(btn);
   }
@@ -1982,14 +1997,14 @@ function openSettings() {
 }
 
 async function loadMemoryList() {
-  el.memoryList.innerHTML = '<span class="memory-empty">Ładowanie…</span>';
+  el.memoryList.innerHTML = `<span class="memory-empty">${t('loading')}</span>`;
   try {
     const res = await fetch('/api/memory');
     const data = await res.json();
     const items = data.memories || [];
     el.memoryCount.textContent = items.length ? `(${items.length})` : '';
     if (!items.length) {
-      el.memoryList.innerHTML = '<span class="memory-empty">Brak wpisów — użyj „✦ Zapamiętaj" pod dowolną wiadomością.</span>';
+      el.memoryList.innerHTML = `<span class="memory-empty">${t('set.memoryEmpty')}</span>`;
       return;
     }
     el.memoryList.innerHTML = '';
@@ -2003,7 +2018,7 @@ async function loadMemoryList() {
       const del = document.createElement('button');
       del.className = 'memory-del';
       del.textContent = '×';
-      del.title = 'Usuń wpis';
+      del.title = t('kb.remove');
       del.addEventListener('click', async () => {
         await fetch(`/api/memory?id=${encodeURIComponent(m.id)}`, { method: 'DELETE' });
         loadMemoryList();
@@ -2012,7 +2027,7 @@ async function loadMemoryList() {
       el.memoryList.appendChild(row);
     }
   } catch {
-    el.memoryList.innerHTML = '<span class="memory-empty">Nie udało się wczytać pamięci.</span>';
+    el.memoryList.innerHTML = `<span class="memory-empty">${t('set.memoryLoadErr')}</span>`;
   }
 }
 
@@ -2024,12 +2039,12 @@ function renderConfigInfo() {
   const c = epConfig('cloud');
   const l = epConfig('local');
   el.configInfo.innerHTML =
-    `<strong>KONFIGURACJA SERWERA (.env)</strong><br>` +
-    `chmura:  ${escapeHtml(c.baseUrl || '—')}<br>` +
-    `         model: ${escapeHtml(c.model || '—')}${c.visionModel ? ` · wizyjny: ${escapeHtml(c.visionModel)}` : ''}<br>` +
-    `         klucz API: ${c.hasApiKey ? 'ustawiony ✓' : 'BRAK — ustaw NVIDIA_API_KEY'}<br>` +
-    `lokalny: ${escapeHtml(l.baseUrl || '—')}<br>` +
-    `         model: ${escapeHtml(l.model || 'nie ustawiono — LOCAL_MODEL')}`;
+    `<strong>${t('set.cfgTitle')}</strong><br>` +
+    `${t('cfg.cloud')}  ${escapeHtml(c.baseUrl || '—')}<br>` +
+    `  ${t('cfg.model')} ${escapeHtml(c.model || '—')}${c.visionModel ? ` · ${t('cfg.vision')} ${escapeHtml(c.visionModel)}` : ''}<br>` +
+    `  ${t('cfg.apiKey')} ${c.hasApiKey ? t('set.cfgKeySet') : t('set.cfgKeyMissing')}<br>` +
+    `${t('cfg.local')}  ${escapeHtml(l.baseUrl || '—')}<br>` +
+    `  ${t('cfg.model')} ${escapeHtml(l.model || t('set.cfgModelMissing'))}`;
 }
 
 el.settingsBtn.addEventListener('click', openSettings);
@@ -2066,19 +2081,19 @@ el.settingsReset.addEventListener('click', () => {
 async function fetchModelsInto(epName, selectEl, btn) {
   btn.disabled = true;
   const prev = btn.textContent;
-  btn.textContent = 'Pobieranie…';
+  btn.textContent = t('set.fetching');
   try {
     const res = await fetch(`/api/models?endpoint=${epName}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const models = (data.data || []).map((m) => m.id).sort();
-    if (!models.length) throw new Error('Endpoint nie zwrócił żadnych modeli.');
+    if (!models.length) throw new Error(t('set.noModels'));
     selectEl.innerHTML =
-      '<option value="">— wybierz model z listy —</option>' +
+      `<option value="">${t('set.selectModel')}</option>` +
       models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
     selectEl.style.display = '';
   } catch (err) {
-    alert(`Nie udało się pobrać listy modeli:\n${err.message}`);
+    alert(t('set.fetchErr') + '\n' + err.message);
   } finally {
     btn.disabled = false;
     btn.textContent = prev;
@@ -2102,8 +2117,8 @@ el.modelSelectLocal.addEventListener('change', () => {
 // ----------------------------------------------------------------
 
 function updateModelBadge() {
-  const model = currentModel() || 'model nieustawiony';
-  const labels = { cloud: 'chmura', local: 'lokalnie', openai: 'OpenAI', claude: 'Claude' };
+  const model = currentModel() || t('chat.modelNotSet');
+  const labels = { cloud: t('tabCloud'), local: t('tabLocal'), openai: 'OpenAI', claude: 'Claude' };
   el.topbarModel.textContent = `${model} · ${labels[endpoint] || endpoint}`;
   el.welcomeModel.textContent = model;
 }
@@ -2121,19 +2136,19 @@ async function refreshStatus() {
     const st = await res.json();
     const cloudCfg = epConfig('cloud');
     if (!cloudCfg.hasApiKey) {
-      setStatusRow(el.statusCloud, 'warn', 'brak klucza');
+      setStatusRow(el.statusCloud, 'warn', t('stat.noKey'));
     } else {
-      setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? 'online' : 'offline');
+      setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? t('stat.online') : t('stat.offline'));
     }
-    setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? 'online' : 'offline');
+    setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? t('stat.online') : t('stat.offline'));
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
     if (senses.online) {
       const active = Object.entries(senses.caps).filter(([, v]) => v).map(([k]) => k);
-      setStatusRow(el.statusSenses, true, active.length ? active.length + ' aktywne' : 'online');
-      el.statusSenses.title = active.length ? 'Aktywne zmysły: ' + active.join(', ') : 'Usługa działa';
+      setStatusRow(el.statusSenses, true, active.length ? t('stat.active', { n: active.length }) : t('stat.online'));
+      el.statusSenses.title = active.length ? t('stat.sensesTip', { list: active.join(', ') }) : t('stat.online');
     } else {
-      setStatusRow(el.statusSenses, 'warn', 'offline');
-      el.statusSenses.title = 'Uruchom: python senses/service.py';
+      setStatusRow(el.statusSenses, 'warn', t('stat.offline'));
+      el.statusSenses.title = t('stat.sensesRun');
     }
   } catch {
     setStatusRow(el.statusCloud, false, '—');
@@ -2193,7 +2208,7 @@ function showLogin() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Logowanie nie powiodło się.');
+        throw new Error(d.error || t('login.failed'));
       }
       location.reload();
     } catch (ex) {
@@ -2205,6 +2220,7 @@ function showLogin() {
 }
 
 async function boot() {
+  applyI18n();
   if (!(await checkAuth())) {
     showLogin();
     return; // nie inicjalizuj reszty, dopóki użytkownik się nie zaloguje
@@ -2213,6 +2229,7 @@ async function boot() {
 }
 
 function startApp() {
+  applyI18n();
   setEndpoint(endpoint);
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();

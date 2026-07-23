@@ -25,6 +25,8 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
 - ⚙️ Osobny wybór modelu dla chmury i dla GPU, system prompt, temperatura, limit tokenów
 - 🌗 Motyw ciemny (kosmos) i jasny (sterylny), czcionki IBM Plex dołączone offline
+- 🌍 **Dwa języki interfejsu — polski i angielski** (przełącznik w panelu bocznym);
+  język steruje też instrukcją systemową modelu i rozpoznawaniem/syntezą mowy
 - 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe) i Android (PWA)
 
 ## 🚀 Szybki start (każdy system)

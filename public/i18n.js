@@ -1,0 +1,495 @@
+/* ============================================================
+   COSMOS — i18n (PL / EN)
+   Słownik + funkcje t(), applyI18n(), getLang(), setLang().
+   Polski jest domyślny. Wybór zapisywany w localStorage.
+   ============================================================ */
+
+'use strict';
+
+const I18N = {
+  pl: {
+    // — logowanie —
+    'login.sub': 'Wpisz hasło, aby uzyskać dostęp',
+    'login.password': 'Hasło',
+    'login.submit': 'Zaloguj',
+    'login.error': 'Nieprawidłowe hasło.',
+    'login.failed': 'Logowanie nie powiodło się.',
+
+    // — sidebar —
+    'collapse': 'Zwiń panel',
+    'expand': 'Pokaż panel',
+    'newChat': 'Nowa rozmowa',
+    'convList': 'Lista rozmów',
+    'studio': 'Studio',
+    'kb': 'Baza wiedzy',
+    'settings': 'Ustawienia',
+    'themeLight': 'Jasny motyw',
+    'themeDark': 'Ciemny motyw',
+    'lang': 'English',
+    'langLabel': 'Język',
+    'statusCloud': 'Chmura NVIDIA',
+    'statusLocal': 'Lokalny GPU',
+    'statusSenses': 'Zmysły',
+    'deleteConv': 'Usuń rozmowę',
+
+    // — topbar —
+    'aiEngine': 'Silnik AI',
+    'voiceMode': 'Tryb głosowy — „Hej, Kosmos”',
+    'ttsRead': 'Czytaj odpowiedzi na głos',
+    'activeModel': 'Aktywny model',
+    'tabCloud': 'Chmura',
+    'tabLocal': 'Lokalnie',
+
+    // — ekran powitalny —
+    'welcomeModelLabel': 'Aktywny model:',
+    'sug1': 'Wyjaśnij, jak działa LLM',
+    'sug1p': 'Wyjaśnij prostymi słowami, jak działa duży model językowy (LLM).',
+    'sug2': 'Napisz funkcję w Pythonie',
+    'sug2p': 'Napisz funkcję w Pythonie, która sprawdza, czy podany rok jest przestępny, i dodaj testy.',
+    'sug3': 'Architektura systemu percepcji',
+    'sug3p': 'Zaproponuj architekturę systemu, który łączy kamerę głębi, drona i lokalny model AI.',
+    'sug4': 'Fotogrametria vs kamera głębi',
+    'sug4p': 'Porównaj fotogrametrię i skanowanie kamerą głębi do tworzenia modeli 3D.',
+
+    // — composer —
+    'addImage': 'Dodaj obraz',
+    'takePhoto': 'Zrób zdjęcie kamerą',
+    'speak': 'Mów (dyktowanie)',
+    'stopRecording': 'Zatrzymaj nagrywanie',
+    'inputPh': 'Napisz wiadomość…',
+    'send': 'Wyślij',
+    'stopGen': 'Zatrzymaj generowanie',
+    'disclaimer': 'Model może popełniać błędy — zweryfikuj ważne informacje.',
+    'kbdSend': 'wyślij',
+    'kbdNewline': 'nowa linia',
+
+    // — wiadomości —
+    'copy': 'Kopiuj',
+    'copied': '✓ Skopiowano',
+    'remember': '✦ Zapamiętaj',
+    'remembered': '✓ Zapamiętano',
+    'rememberErr': '✗ Błąd zapisu',
+    'code': 'kod',
+    'emptyReply': '*(pusta odpowiedź modelu)*',
+    'convWithImage': 'Rozmowa z obrazem',
+    'newChatFallback': 'Nowa rozmowa',
+    'attachment': 'załącznik',
+
+    // — wspólne —
+    'close': 'Zamknij',
+    'loading': 'Ładowanie…',
+
+    // — ustawienia —
+    'set.modelCloud': 'Model — chmura NVIDIA',
+    'set.modelLocal': 'Model — lokalny (RTX / Ollama / vLLM)',
+    'set.fetchList': 'Pobierz listę',
+    'set.fetching': 'Pobieranie…',
+    'set.envDefault': 'domyślny z .env',
+    'set.modelHint': 'Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).',
+    'set.system': 'Instrukcja systemowa',
+    'set.systemPh': 'np. Jesteś pomocnym asystentem. Odpowiadasz po polsku.',
+    'set.temp': 'Temperatura',
+    'set.maxTokens': 'Maks. tokenów odpowiedzi',
+    'set.memory': 'Pamięć długotrwała',
+    'set.memoryHint': 'Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.',
+    'set.memoryEmpty': 'Brak wpisów — użyj „✦ Zapamiętaj" pod dowolną wiadomością.',
+    'set.memoryLoadErr': 'Nie udało się wczytać pamięci.',
+    'set.reset': 'Przywróć domyślne',
+    'set.save': 'Zapisz',
+    'set.selectModel': '— wybierz model z listy —',
+    'set.fetchErr': 'Nie udało się pobrać listy modeli:',
+    'set.cfgTitle': 'KONFIGURACJA SERWERA (.env)',
+    'set.cfgKeySet': 'ustawiony ✓',
+    'set.cfgKeyMissing': 'BRAK — ustaw NVIDIA_API_KEY',
+    'set.cfgModelMissing': 'nie ustawiono — LOCAL_MODEL',
+
+    // — studio —
+    'st.image': 'Obraz',
+    'st.sound': 'Dźwięk',
+    'st.video': 'Wideo',
+    'st.noKey': '— brak klucza',
+    'st.imagePh': 'Opisz grafikę, którą chcesz wygenerować…',
+    'st.sizeSquare': '1024 × 1024 (kwadrat)',
+    'st.sizeLandscape': '1536 × 1024 (poziomy)',
+    'st.sizePortrait': '1024 × 1536 (pionowy)',
+    'st.imageGo': 'Generuj obraz',
+    'st.speechPh': 'Tekst do przeczytania naturalnym głosem…',
+    'st.voicePh': 'voice ID (puste = domyślny)',
+    'st.voicePhDefault': 'voice ID (puste = {v})',
+    'st.speechGo': 'Generuj dźwięk',
+    'st.videoPh': 'Opisz ujęcie — ruch kamery, scenę, nastrój…',
+    'st.frameNone': 'pierwsza klatka: brak (sam prompt)',
+    'st.lastNone': 'ostatnia klatka: brak',
+    'st.ratio169': '16:9 (poziomy)',
+    'st.ratio916': '9:16 (pionowy)',
+    'st.ratio11': '1:1 (kwadrat)',
+    'st.ratio219': '21:9 (kinowy)',
+    'st.ratioAdaptive': 'adaptive (wg klatki)',
+    'st.seedPh': 'seed (opcjonalnie — powtarzalność)',
+    'st.camfix': 'stała kamera',
+    'st.videoGo': 'Generuj wideo',
+    'st.footerHint': 'Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.',
+    'st.genImage': 'Generuję obraz…',
+    'st.genSound': 'Generuję dźwięk…',
+    'st.genVideoTask': 'Zlecam zadanie wideo…',
+    'st.genVideo': 'Generuję wideo… ({min} min — to może potrwać kilka minut)',
+    'st.savedKb': '✓ zapisano w Bazie wiedzy: {name}',
+    'st.exported': '✓ wyeksportowano: {path}',
+    'st.videoTimeout': 'Przekroczono limit 20 minut oczekiwania.',
+    'st.videoFailed': 'Zadanie nie powiodło się.',
+
+    // — baza wiedzy —
+    'kb.upload': '📁 Dodaj pliki',
+    'kb.record': '🎙 Nagraj notatkę',
+    'kb.recordStop': '⏹ Zakończ i zapisz',
+    'kb.urlPh': 'https://adres-strony.pl — dodaj link do bazy',
+    'kb.addLink': 'Dodaj link',
+    'kb.drop': '…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)',
+    'kb.hint': '☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.',
+    'kb.empty': 'Baza jest pusta — dodaj pliki, linki albo nagraj notatkę.',
+    'kb.loadErr': 'Nie udało się wczytać bazy wiedzy.',
+    'kb.include': 'Dołączaj do rozmowy',
+    'kb.remove': 'Usuń z bazy',
+    'kb.confirmDel': 'Usunąć „{name}" z bazy wiedzy?',
+    'kb.processing': 'Przetwarzam {i}/{n}: {name}',
+    'kb.transcribing': ' (transkrypcja może chwilę potrwać)…',
+    'kb.tooBig': '„{name}" jest większy niż 50 MB — pomijam.',
+    'kb.addErr': 'Nie udało się dodać „{name}":',
+    'kb.fetchingPage': 'Pobieram stronę: {url}…',
+    'kb.linkErr': 'Nie udało się dodać linku:',
+    'kb.transcribingNote': 'Transkrybuję nagranie (Whisper)…',
+    'kb.recording': 'Nagrywam… kliknij ⏹, aby zakończyć i zapisać.',
+    'kb.noSpeech': 'Nie rozpoznano mowy w nagraniu.',
+    'kb.transcribeErr': 'Transkrypcja nie powiodła się:',
+    'kb.micErr': 'Brak dostępu do mikrofonu:',
+    'kb.noStt': 'Nagrywanie notatki wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.',
+    'kb.textLabel': 'tekst: {n} zn.',
+    'kb.noText': 'bez tekstu',
+
+    // — kamera —
+    'cam.title': 'Kamera',
+    'cam.capture': 'Zrób zdjęcie',
+    'cam.err': 'Brak dostępu do kamery:',
+    'cam.maxImages': 'Maksymalnie 4 obrazy na wiadomość.',
+    'cam.readErr': 'Nie udało się wczytać obrazu.',
+
+    // — tryb głosowy —
+    'voice.wake': 'POWIEDZ „HEJ, KOSMOS”',
+    'voice.listening': 'SŁUCHAM…',
+    'voice.thinking': 'MYŚLĘ…',
+    'voice.speaking': 'MÓWIĘ…',
+    'voice.camLabel': '👁 podgląd',
+    'voice.hint': 'Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta',
+    'voice.close': 'Zakończ tryb głosowy',
+    'voice.noSupport': 'Tryb głosowy wymaga przeglądarki Chrome lub Edge (Web Speech API).',
+    'voice.searching': 'Sprawdzam w internecie.',
+    'voice.generatingImage': 'Generuję obraz.',
+    'voice.bye': 'Do usłyszenia.',
+    'voice.noteStart': '📝 Tryb notatki — mów, a zakończ słowami: „koniec notatki”.',
+    'voice.noteStartSpoken': 'Nagrywam notatkę. Zakończ słowami: koniec notatki.',
+    'voice.noteSaved': 'Zapisałem notatkę w bazie wiedzy.',
+    'voice.noteSaveErr': 'Nie udało się zapisać notatki.',
+    'voice.noteEmpty': 'Notatka była pusta, nic nie zapisałem.',
+    'voice.errReply': 'Przepraszam, wystąpił błąd połączenia z modelem.',
+    'voice.notePrefix': '📝 ',
+    'voice.micDenied': 'Brak dostępu do mikrofonu: {msg}',
+
+    // — czat / narzędzia —
+    'chat.searching': '🔍 *Szukam w internecie: „{q}"…*',
+    'chat.genImage': '🎨 *Generuję obraz…*',
+    'chat.imageSaved': 'Gotowe — obraz zapisany w Bazie wiedzy.',
+    'chat.imageDone': 'Wygenerowałem obraz i zapisałem go w bazie wiedzy.',
+    'chat.imageErr': '⚠ Generowanie obrazu nie powiodło się: {msg}',
+    'chat.imageErrVoice': 'Nie udało się wygenerować obrazu.',
+    'chat.searchResults': '🔍 Wyniki wyszukiwania: „{q}"',
+    'chat.dictating': 'Rozpoznawanie mowy…',
+    'chat.sttErr': 'Rozpoznawanie mowy nie powiodło się:\n{msg}',
+    'chat.modelNotSet': 'model nieustawiony',
+
+    // — status —
+    'stat.online': 'online',
+    'stat.offline': 'offline',
+    'stat.noKey': 'brak klucza',
+    'stat.active': '{n} aktywne',
+    'stat.sensesTip': 'Aktywne zmysły: {list}',
+    'stat.sensesRun': 'Uruchom: python senses/service.py',
+    'stat.connected': 'Połączono: {host}',
+
+    'confirmDelConv': 'Usunąć „{name}"?',
+    'removeAttachment': 'Usuń załącznik',
+    'dictNoStt': 'Dyktowanie wymaga usługi Cosmos Senses (Whisper) albo przeglądarki Chrome/Edge.',
+    'fileReadErr': 'Nie udało się odczytać pliku.',
+    'set.noModels': 'Endpoint nie zwrócił żadnych modeli.',
+    'search.err': 'WYNIKI WYSZUKIWANIA („{q}"): błąd — {e}\nOdpowiedz na podstawie własnej wiedzy i zaznacz, że nie udało się sprawdzić internetu.',
+    'search.none': 'WYNIKI WYSZUKIWANIA („{q}"): brak wyników.\nOdpowiedz na podstawie własnej wiedzy i zaznacz brak wyników.',
+    'search.results': 'WYNIKI WYSZUKIWANIA („{q}"):\n{lines}\n\nOdpowiedz teraz na pytanie użytkownika na podstawie tych wyników i podaj źródła.',
+    'search.netErr': 'WYNIKI WYSZUKIWANIA („{q}"): błąd sieci ({e}).',
+    'cfg.cloud': 'chmura:',
+    'cfg.local': 'lokalny:',
+    'cfg.model': 'model:',
+    'cfg.vision': 'wizyjny:',
+    'cfg.apiKey': 'klucz API:',
+
+    // — domyślna instrukcja systemowa —
+    'systemPromptDefault': 'Jesteś pomocnym asystentem AI o imieniu Cosmos. Masz zmysły: możesz otrzymywać obrazy z kamery oraz zdarzenia z czujników (sekcja KONTEKST PERCEPCJI). Odpowiadasz po polsku, chyba że użytkownik pisze w innym języku.',
+
+    // język rozpoznawania/syntezy mowy
+    'speechLang': 'pl-PL',
+  },
+
+  en: {
+    'login.sub': 'Enter password to access',
+    'login.password': 'Password',
+    'login.submit': 'Log in',
+    'login.error': 'Incorrect password.',
+    'login.failed': 'Login failed.',
+
+    'collapse': 'Collapse panel',
+    'expand': 'Show panel',
+    'newChat': 'New chat',
+    'convList': 'Conversation list',
+    'studio': 'Studio',
+    'kb': 'Knowledge base',
+    'settings': 'Settings',
+    'themeLight': 'Light theme',
+    'themeDark': 'Dark theme',
+    'lang': 'Polski',
+    'langLabel': 'Language',
+    'statusCloud': 'NVIDIA Cloud',
+    'statusLocal': 'Local GPU',
+    'statusSenses': 'Senses',
+    'deleteConv': 'Delete conversation',
+
+    'aiEngine': 'AI engine',
+    'voiceMode': 'Voice mode — “Hey Cosmos”',
+    'ttsRead': 'Read answers aloud',
+    'activeModel': 'Active model',
+    'tabCloud': 'Cloud',
+    'tabLocal': 'Local',
+
+    'welcomeModelLabel': 'Active model:',
+    'sug1': 'Explain how an LLM works',
+    'sug1p': 'Explain in simple terms how a large language model (LLM) works.',
+    'sug2': 'Write a Python function',
+    'sug2p': 'Write a Python function that checks whether a given year is a leap year, and add tests.',
+    'sug3': 'Perception system architecture',
+    'sug3p': 'Propose an architecture for a system combining a depth camera, a drone and a local AI model.',
+    'sug4': 'Photogrammetry vs depth camera',
+    'sug4p': 'Compare photogrammetry and depth-camera scanning for creating 3D models.',
+
+    'addImage': 'Add image',
+    'takePhoto': 'Take a photo',
+    'speak': 'Speak (dictation)',
+    'stopRecording': 'Stop recording',
+    'inputPh': 'Type a message…',
+    'send': 'Send',
+    'stopGen': 'Stop generating',
+    'disclaimer': 'The model can make mistakes — verify important information.',
+    'kbdSend': 'send',
+    'kbdNewline': 'new line',
+
+    'copy': 'Copy',
+    'copied': '✓ Copied',
+    'remember': '✦ Remember',
+    'remembered': '✓ Remembered',
+    'rememberErr': '✗ Save error',
+    'code': 'code',
+    'emptyReply': '*(empty model response)*',
+    'convWithImage': 'Conversation with image',
+    'newChatFallback': 'New chat',
+    'attachment': 'attachment',
+
+    'close': 'Close',
+    'loading': 'Loading…',
+
+    'set.modelCloud': 'Model — NVIDIA cloud',
+    'set.modelLocal': 'Model — local (RTX / Ollama / vLLM)',
+    'set.fetchList': 'Fetch list',
+    'set.fetching': 'Fetching…',
+    'set.envDefault': 'default from .env',
+    'set.modelHint': 'Leave the fields empty to use the models from the server config (.env).',
+    'set.system': 'System prompt',
+    'set.systemPh': 'e.g. You are a helpful assistant. You reply in English.',
+    'set.temp': 'Temperature',
+    'set.maxTokens': 'Max response tokens',
+    'set.memory': 'Long-term memory',
+    'set.memoryHint': 'Save facts with the “Remember” button under a message. Cosmos recalls matching entries during the conversation.',
+    'set.memoryEmpty': 'No entries — use “✦ Remember” under any message.',
+    'set.memoryLoadErr': 'Failed to load memory.',
+    'set.reset': 'Restore defaults',
+    'set.save': 'Save',
+    'set.selectModel': '— choose a model from the list —',
+    'set.fetchErr': 'Failed to fetch the model list:',
+    'set.cfgTitle': 'SERVER CONFIG (.env)',
+    'set.cfgKeySet': 'set ✓',
+    'set.cfgKeyMissing': 'MISSING — set NVIDIA_API_KEY',
+    'set.cfgModelMissing': 'not set — LOCAL_MODEL',
+
+    'st.image': 'Image',
+    'st.sound': 'Sound',
+    'st.video': 'Video',
+    'st.noKey': '— no key',
+    'st.imagePh': 'Describe the image you want to generate…',
+    'st.sizeSquare': '1024 × 1024 (square)',
+    'st.sizeLandscape': '1536 × 1024 (landscape)',
+    'st.sizePortrait': '1024 × 1536 (portrait)',
+    'st.imageGo': 'Generate image',
+    'st.speechPh': 'Text to read in a natural voice…',
+    'st.voicePh': 'voice ID (empty = default)',
+    'st.voicePhDefault': 'voice ID (empty = {v})',
+    'st.speechGo': 'Generate sound',
+    'st.videoPh': 'Describe the shot — camera movement, scene, mood…',
+    'st.frameNone': 'first frame: none (prompt only)',
+    'st.lastNone': 'last frame: none',
+    'st.ratio169': '16:9 (landscape)',
+    'st.ratio916': '9:16 (portrait)',
+    'st.ratio11': '1:1 (square)',
+    'st.ratio219': '21:9 (cinematic)',
+    'st.ratioAdaptive': 'adaptive (from frame)',
+    'st.seedPh': 'seed (optional — reproducibility)',
+    'st.camfix': 'fixed camera',
+    'st.videoGo': 'Generate video',
+    'st.footerHint': 'Every result is automatically added to the Knowledge base — you can refer to it in the conversation. Generation uses credits from your API keys.',
+    'st.genImage': 'Generating image…',
+    'st.genSound': 'Generating sound…',
+    'st.genVideoTask': 'Submitting video task…',
+    'st.genVideo': 'Generating video… ({min} min — this may take a few minutes)',
+    'st.savedKb': '✓ saved to Knowledge base: {name}',
+    'st.exported': '✓ exported: {path}',
+    'st.videoTimeout': 'Exceeded the 20-minute wait limit.',
+    'st.videoFailed': 'The task failed.',
+
+    'kb.upload': '📁 Add files',
+    'kb.record': '🎙 Record note',
+    'kb.recordStop': '⏹ Finish and save',
+    'kb.urlPh': 'https://website.com — add a link to the base',
+    'kb.addLink': 'Add link',
+    'kb.drop': '…or drag and drop files here (documents, Excel, images, audio, video)',
+    'kb.hint': '☑ Selected items are <strong>always</strong> added to the conversation. From the rest, Cosmos recalls matching fragments on its own. Audio and video are transcribed (Whisper), documents read by the senses service.',
+    'kb.empty': 'The base is empty — add files, links or record a note.',
+    'kb.loadErr': 'Failed to load the knowledge base.',
+    'kb.include': 'Include in conversation',
+    'kb.remove': 'Remove from base',
+    'kb.confirmDel': 'Remove “{name}” from the knowledge base?',
+    'kb.processing': 'Processing {i}/{n}: {name}',
+    'kb.transcribing': ' (transcription may take a moment)…',
+    'kb.tooBig': '“{name}” is larger than 50 MB — skipping.',
+    'kb.addErr': 'Failed to add “{name}”:',
+    'kb.fetchingPage': 'Fetching page: {url}…',
+    'kb.linkErr': 'Failed to add the link:',
+    'kb.transcribingNote': 'Transcribing recording (Whisper)…',
+    'kb.recording': 'Recording… click ⏹ to finish and save.',
+    'kb.noSpeech': 'No speech recognized in the recording.',
+    'kb.transcribeErr': 'Transcription failed:',
+    'kb.micErr': 'No microphone access:',
+    'kb.noStt': 'Recording a note requires the Cosmos Senses service (Whisper) or the Chrome/Edge browser.',
+    'kb.textLabel': 'text: {n} ch.',
+    'kb.noText': 'no text',
+
+    'cam.title': 'Camera',
+    'cam.capture': 'Take photo',
+    'cam.err': 'No camera access:',
+    'cam.maxImages': 'Maximum 4 images per message.',
+    'cam.readErr': 'Failed to load the image.',
+
+    'voice.wake': 'SAY “HEY COSMOS”',
+    'voice.listening': 'LISTENING…',
+    'voice.thinking': 'THINKING…',
+    'voice.speaking': 'SPEAKING…',
+    'voice.camLabel': '👁 preview',
+    'voice.hint': 'Say “stop” to return to listening · “Hey Cosmos” wakes the assistant',
+    'voice.close': 'End voice mode',
+    'voice.noSupport': 'Voice mode requires the Chrome or Edge browser (Web Speech API).',
+    'voice.searching': 'Searching the internet.',
+    'voice.generatingImage': 'Generating an image.',
+    'voice.bye': 'Talk to you later.',
+    'voice.noteStart': '📝 Note mode — speak, then finish with: “end note”.',
+    'voice.noteStartSpoken': 'Recording a note. Finish with: end note.',
+    'voice.noteSaved': 'I saved the note to the knowledge base.',
+    'voice.noteSaveErr': 'Failed to save the note.',
+    'voice.noteEmpty': 'The note was empty, nothing was saved.',
+    'voice.errReply': 'Sorry, there was an error connecting to the model.',
+    'voice.notePrefix': '📝 ',
+    'voice.micDenied': 'No microphone access: {msg}',
+
+    'chat.searching': '🔍 *Searching the internet: “{q}”…*',
+    'chat.genImage': '🎨 *Generating image…*',
+    'chat.imageSaved': 'Done — image saved to the Knowledge base.',
+    'chat.imageDone': 'I generated the image and saved it to the knowledge base.',
+    'chat.imageErr': '⚠ Image generation failed: {msg}',
+    'chat.imageErrVoice': 'Failed to generate the image.',
+    'chat.searchResults': '🔍 Search results: “{q}”',
+    'chat.dictating': 'Recognizing speech…',
+    'chat.sttErr': 'Speech recognition failed:\n{msg}',
+    'chat.modelNotSet': 'model not set',
+
+    'stat.online': 'online',
+    'stat.offline': 'offline',
+    'stat.noKey': 'no key',
+    'stat.active': '{n} active',
+    'stat.sensesTip': 'Active senses: {list}',
+    'stat.sensesRun': 'Run: python senses/service.py',
+    'stat.connected': 'Connected: {host}',
+
+    'confirmDelConv': 'Delete “{name}”?',
+    'removeAttachment': 'Remove attachment',
+    'dictNoStt': 'Dictation requires the Cosmos Senses service (Whisper) or the Chrome/Edge browser.',
+    'fileReadErr': 'Failed to read the file.',
+    'set.noModels': 'The endpoint returned no models.',
+    'search.err': 'SEARCH RESULTS (“{q}”): error — {e}\nAnswer from your own knowledge and note that the internet could not be checked.',
+    'search.none': 'SEARCH RESULTS (“{q}”): no results.\nAnswer from your own knowledge and note that there were no results.',
+    'search.results': 'SEARCH RESULTS (“{q}”):\n{lines}\n\nNow answer the user\'s question based on these results and cite the sources.',
+    'search.netErr': 'SEARCH RESULTS (“{q}”): network error ({e}).',
+    'cfg.cloud': 'cloud:',
+    'cfg.local': 'local:',
+    'cfg.model': 'model:',
+    'cfg.vision': 'vision:',
+    'cfg.apiKey': 'API key:',
+
+    'systemPromptDefault': 'You are a helpful AI assistant named Cosmos. You have senses: you can receive images from the camera and events from sensors (the PERCEPTION CONTEXT section). You reply in English unless the user writes in another language.',
+
+    'speechLang': 'en-US',
+  },
+};
+
+let _lang = localStorage.getItem('cosmos.lang') || 'pl';
+if (!I18N[_lang]) _lang = 'pl';
+
+function getLang() { return _lang; }
+
+function t(key, vars) {
+  let s = (I18N[_lang] && I18N[_lang][key]) ?? (I18N.pl[key] ?? key);
+  if (vars) {
+    for (const k of Object.keys(vars)) s = s.replaceAll('{' + k + '}', vars[k]);
+  }
+  return s;
+}
+
+function setLang(lang) {
+  if (!I18N[lang]) return;
+  _lang = lang;
+  localStorage.setItem('cosmos.lang', lang);
+  applyI18n();
+}
+
+// Podmienia teksty w DOM na podstawie atrybutów data-i18n*.
+function applyI18n(root = document) {
+  document.documentElement.lang = _lang;
+  root.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  root.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    el.innerHTML = t(el.getAttribute('data-i18n-html'));
+  });
+  root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph')));
+  });
+  root.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    const v = t(el.getAttribute('data-i18n-title'));
+    el.setAttribute('title', v);
+    el.setAttribute('aria-label', v);
+  });
+  root.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+  });
+}

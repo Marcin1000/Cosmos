@@ -20,9 +20,9 @@
         <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
       </svg>
       <h1 class="login-title">COSMOS</h1>
-      <p class="login-sub">Wpisz hasło, aby uzyskać dostęp</p>
-      <input type="password" id="login-password" placeholder="Hasło" autocomplete="current-password" autofocus>
-      <button type="submit" class="btn-primary" id="login-submit">Zaloguj</button>
+      <p class="login-sub" data-i18n="login.sub">Wpisz hasło, aby uzyskać dostęp</p>
+      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password" autofocus>
+      <button type="submit" class="btn-primary" id="login-submit" data-i18n="login.submit">Zaloguj</button>
       <p class="login-error" id="login-error"></p>
     </form>
   </div>
@@ -39,50 +39,54 @@
           </svg>
           <span class="brand-name">COSMOS</span>
         </div>
-        <button class="icon-btn" id="collapse-btn" title="Zwiń panel" aria-label="Zwiń panel">
+        <button class="icon-btn" id="collapse-btn" data-i18n-title="collapse" title="Zwiń panel" aria-label="Zwiń panel">
           <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
 
       <button class="new-chat-btn" id="new-chat-btn">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Nowa rozmowa
+        <span data-i18n="newChat">Nowa rozmowa</span>
       </button>
 
-      <nav class="conversations" id="conversations" aria-label="Lista rozmów"></nav>
+      <nav class="conversations" id="conversations" data-i18n-aria="convList" aria-label="Lista rozmów"></nav>
 
       <div class="sidebar-footer">
         <button class="footer-btn" id="studio-btn">
           <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="19" cy="17" r="1.4" fill="currentColor"/><circle cx="6" cy="19" r="1" fill="currentColor"/></svg>
-          Studio
+          <span data-i18n="studio">Studio</span>
         </button>
         <button class="footer-btn" id="kb-btn">
           <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 4.5v15zM20 17v5H6.5a2.5 2.5 0 0 1 0-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Baza wiedzy <span class="kb-badge mono" id="kb-badge"></span>
+          <span data-i18n="kb">Baza wiedzy</span> <span class="kb-badge mono" id="kb-badge"></span>
         </button>
         <button class="footer-btn" id="settings-btn">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Ustawienia
+          <span data-i18n="settings">Ustawienia</span>
         </button>
         <button class="footer-btn" id="theme-btn">
           <svg id="theme-icon-dark" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <svg id="theme-icon-light" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           <span id="theme-label">Jasny motyw</span>
         </button>
+        <button class="footer-btn" id="lang-btn" title="Język / Language">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span id="lang-label" data-i18n="lang">English</span>
+        </button>
         <div class="status-block">
           <div class="status-row" id="status-cloud">
             <span class="status-dot"></span>
-            <span class="status-name">Chmura NVIDIA</span>
+            <span class="status-name" data-i18n="statusCloud">Chmura NVIDIA</span>
             <span class="status-state">—</span>
           </div>
           <div class="status-row" id="status-local">
             <span class="status-dot"></span>
-            <span class="status-name">Lokalny GPU</span>
+            <span class="status-name" data-i18n="statusLocal">Lokalny GPU</span>
             <span class="status-state">—</span>
           </div>
           <div class="status-row" id="status-senses">
             <span class="status-dot"></span>
-            <span class="status-name">Zmysły</span>
+            <span class="status-name" data-i18n="statusSenses">Zmysły</span>
             <span class="status-state">—</span>
           </div>
         </div>
@@ -93,19 +97,19 @@
     <main class="main">
       <div class="stars" aria-hidden="true"></div>
       <header class="topbar">
-        <button class="icon-btn" id="expand-btn" title="Pokaż panel" aria-label="Pokaż panel">
+        <button class="icon-btn" id="expand-btn" data-i18n-title="expand" title="Pokaż panel" aria-label="Pokaż panel">
           <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
 
-        <div class="endpoint-switch" id="endpoint-switch" role="tablist" aria-label="Silnik AI"></div>
+        <div class="endpoint-switch" id="endpoint-switch" role="tablist" data-i18n-aria="aiEngine" aria-label="Silnik AI"></div>
 
-        <button class="icon-btn" id="voice-btn" title="Tryb głosowy — „Hej, Kosmos”" aria-label="Tryb głosowy">
+        <button class="icon-btn" id="voice-btn" data-i18n-title="voiceMode" title="Tryb głosowy — „Hej, Kosmos”" aria-label="Tryb głosowy">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 10v4M12 7.5v9M16 10v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         </button>
-        <button class="icon-btn tts-toggle" id="tts-toggle" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
+        <button class="icon-btn tts-toggle" id="tts-toggle" data-i18n-title="ttsRead" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
           <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
         </button>
-        <div class="topbar-model" id="topbar-model" title="Aktywny model">—</div>
+        <div class="topbar-model" id="topbar-model" data-i18n-title="activeModel" title="Aktywny model">—</div>
       </header>
 
       <div class="chat-scroll" id="chat-scroll">
@@ -117,12 +121,12 @@
             <circle cx="41" cy="17" r="1.6" fill="currentColor"/>
           </svg>
           <h1>Cosmos</h1>
-          <p class="welcome-sub">Aktywny model: <span class="mono" id="welcome-model">—</span></p>
+          <p class="welcome-sub"><span data-i18n="welcomeModelLabel">Aktywny model:</span> <span class="mono" id="welcome-model">—</span></p>
           <div class="suggestions" id="suggestions">
-            <button class="suggestion" data-prompt="Wyjaśnij prostymi słowami, jak działa duży model językowy (LLM).">Wyjaśnij, jak działa LLM</button>
-            <button class="suggestion" data-prompt="Napisz funkcję w Pythonie, która sprawdza, czy podany rok jest przestępny, i dodaj testy.">Napisz funkcję w Pythonie</button>
-            <button class="suggestion" data-prompt="Zaproponuj architekturę systemu, który łączy kamerę głębi, drona i lokalny model AI.">Architektura systemu percepcji</button>
-            <button class="suggestion" data-prompt="Porównaj fotogrametrię i skanowanie kamerą głębi do tworzenia modeli 3D.">Fotogrametria vs kamera głębi</button>
+            <button class="suggestion" data-prompt-key="sug1p" data-i18n="sug1">Wyjaśnij, jak działa LLM</button>
+            <button class="suggestion" data-prompt-key="sug2p" data-i18n="sug2">Napisz funkcję w Pythonie</button>
+            <button class="suggestion" data-prompt-key="sug3p" data-i18n="sug3">Architektura systemu percepcji</button>
+            <button class="suggestion" data-prompt-key="sug4p" data-i18n="sug4">Fotogrametria vs kamera głębi</button>
           </div>
         </div>
         <div class="messages" id="messages"></div>
@@ -132,25 +136,25 @@
       <div class="composer-wrap">
         <div class="attachments" id="attachments"></div>
         <div class="composer" id="composer">
-          <button class="attach-btn" id="attach-btn" title="Dodaj obraz" aria-label="Dodaj obraz">
+          <button class="attach-btn" id="attach-btn" data-i18n-title="addImage" title="Dodaj obraz" aria-label="Dodaj obraz">
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <input type="file" id="file-input" accept="image/*" multiple style="display:none">
-          <button class="attach-btn" id="camera-btn" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
+          <button class="attach-btn" id="camera-btn" data-i18n-title="takePhoto" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
             <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
           </button>
-          <button class="attach-btn" id="mic-btn" title="Mów (dyktowanie)" aria-label="Mów">
+          <button class="attach-btn" id="mic-btn" data-i18n-title="speak" title="Mów (dyktowanie)" aria-label="Mów">
             <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           </button>
-          <textarea id="input" rows="1" placeholder="Napisz wiadomość…"></textarea>
-          <button class="send-btn" id="send-btn" title="Wyślij" aria-label="Wyślij">
+          <textarea id="input" rows="1" data-i18n-ph="inputPh" placeholder="Napisz wiadomość…"></textarea>
+          <button class="send-btn" id="send-btn" data-i18n-title="send" title="Wyślij" aria-label="Wyślij">
             <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button class="stop-btn" id="stop-btn" title="Zatrzymaj generowanie" aria-label="Zatrzymaj" style="display:none">
+          <button class="stop-btn" id="stop-btn" data-i18n-title="stopGen" title="Zatrzymaj generowanie" aria-label="Zatrzymaj" style="display:none">
             <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
           </button>
         </div>
-        <p class="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje. <kbd>Enter</kbd> wyślij · <kbd>Shift+Enter</kbd> nowa linia</p>
+        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span></p>
       </div>
     </main>
   </div>
@@ -159,58 +163,58 @@
   <div class="modal-overlay" id="settings-modal" style="display:none">
     <div class="modal" role="dialog" aria-labelledby="settings-title">
       <div class="modal-header">
-        <h2 id="settings-title">Ustawienia</h2>
-        <button class="icon-btn" id="settings-close" aria-label="Zamknij">
+        <h2 id="settings-title" data-i18n="settings">Ustawienia</h2>
+        <button class="icon-btn" id="settings-close" data-i18n-aria="close" aria-label="Zamknij">
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="modal-body">
         <label class="field">
-          <span class="field-label">Model — chmura NVIDIA</span>
+          <span class="field-label" data-i18n="set.modelCloud">Model — chmura NVIDIA</span>
           <div class="field-row">
-            <input type="text" id="set-model-cloud" placeholder="domyślny z .env" class="mono">
-            <button class="btn-secondary" id="fetch-models-cloud">Pobierz listę</button>
+            <input type="text" id="set-model-cloud" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-cloud" data-i18n="set.fetchList">Pobierz listę</button>
           </div>
           <select id="model-select-cloud" style="display:none" class="mono"></select>
         </label>
 
         <label class="field">
-          <span class="field-label">Model — lokalny (RTX / Ollama / vLLM)</span>
+          <span class="field-label" data-i18n="set.modelLocal">Model — lokalny (RTX / Ollama / vLLM)</span>
           <div class="field-row">
-            <input type="text" id="set-model-local" placeholder="domyślny z .env" class="mono">
-            <button class="btn-secondary" id="fetch-models-local">Pobierz listę</button>
+            <input type="text" id="set-model-local" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-local" data-i18n="set.fetchList">Pobierz listę</button>
           </div>
           <select id="model-select-local" style="display:none" class="mono"></select>
-          <span class="field-hint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
+          <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
         </label>
 
         <label class="field">
-          <span class="field-label">Instrukcja systemowa</span>
-          <textarea id="set-system" rows="3" placeholder="np. Jesteś pomocnym asystentem. Odpowiadasz po polsku."></textarea>
+          <span class="field-label" data-i18n="set.system">Instrukcja systemowa</span>
+          <textarea id="set-system" rows="3" data-i18n-ph="set.systemPh" placeholder="np. Jesteś pomocnym asystentem. Odpowiadasz po polsku."></textarea>
         </label>
 
         <div class="field-grid">
           <label class="field">
-            <span class="field-label">Temperatura <span class="mono" id="temp-value">0.6</span></span>
+            <span class="field-label"><span data-i18n="set.temp">Temperatura</span> <span class="mono" id="temp-value">0.6</span></span>
             <input type="range" id="set-temp" min="0" max="1" step="0.05" value="0.6">
           </label>
           <label class="field">
-            <span class="field-label">Maks. tokenów odpowiedzi</span>
+            <span class="field-label" data-i18n="set.maxTokens">Maks. tokenów odpowiedzi</span>
             <input type="number" id="set-maxtokens" min="16" max="32768" step="16" value="2048" class="mono">
           </label>
         </div>
 
         <div class="field">
-          <span class="field-label">Pamięć długotrwała <span class="mono" id="memory-count"></span></span>
-          <div class="memory-list" id="memory-list"><span class="field-hint">Ładowanie…</span></div>
-          <span class="field-hint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
+          <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
+          <div class="memory-list" id="memory-list"><span class="field-hint" data-i18n="loading">Ładowanie…</span></div>
+          <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
         </div>
 
         <div class="config-info mono" id="config-info"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" id="settings-reset">Przywróć domyślne</button>
-        <button class="btn-primary" id="settings-save">Zapisz</button>
+        <button class="btn-secondary" id="settings-reset" data-i18n="set.reset">Przywróć domyślne</button>
+        <button class="btn-primary" id="settings-save" data-i18n="set.save">Zapisz</button>
       </div>
     </div>
   </div>
@@ -219,47 +223,47 @@
   <div class="modal-overlay" id="studio-modal" style="display:none">
     <div class="modal studio-modal" role="dialog" aria-labelledby="studio-title">
       <div class="modal-header">
-        <h2 id="studio-title">Studio</h2>
-        <button class="icon-btn" id="studio-close" aria-label="Zamknij">
+        <h2 id="studio-title" data-i18n="studio">Studio</h2>
+        <button class="icon-btn" id="studio-close" data-i18n-aria="close" aria-label="Zamknij">
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="modal-body">
 
         <div class="studio-section" id="studio-sec-image">
-          <div class="studio-sec-title">🖼️ Obraz <span class="mono studio-provider">OpenAI</span>
-            <span class="studio-off mono" style="display:none">— brak klucza (OPENAI_API_KEY)</span></div>
-          <textarea id="studio-image-prompt" rows="2" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
+          <div class="studio-sec-title">🖼️ <span data-i18n="st.image">Obraz</span> <span class="mono studio-provider">OpenAI</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (OPENAI_API_KEY)</span></div>
+          <textarea id="studio-image-prompt" rows="2" data-i18n-ph="st.imagePh" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
           <div class="field-row">
             <select id="studio-image-provider" class="mono" style="display:none"></select>
             <select id="studio-image-size" class="mono">
-              <option value="1024x1024">1024 × 1024 (kwadrat)</option>
-              <option value="1536x1024">1536 × 1024 (poziomy)</option>
-              <option value="1024x1536">1024 × 1536 (pionowy)</option>
+              <option value="1024x1024" data-i18n="st.sizeSquare">1024 × 1024 (kwadrat)</option>
+              <option value="1536x1024" data-i18n="st.sizeLandscape">1536 × 1024 (poziomy)</option>
+              <option value="1024x1536" data-i18n="st.sizePortrait">1024 × 1536 (pionowy)</option>
             </select>
-            <button class="btn-primary" id="studio-image-go">Generuj obraz</button>
+            <button class="btn-primary" id="studio-image-go" data-i18n="st.imageGo">Generuj obraz</button>
           </div>
           <div class="studio-out" id="studio-image-out"></div>
         </div>
 
         <div class="studio-section" id="studio-sec-speech">
-          <div class="studio-sec-title">🔊 Dźwięk <span class="mono studio-provider">ElevenLabs</span>
-            <span class="studio-off mono" style="display:none">— brak klucza (ELEVENLABS_API_KEY)</span></div>
-          <textarea id="studio-speech-text" rows="2" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
+          <div class="studio-sec-title">🔊 <span data-i18n="st.sound">Dźwięk</span> <span class="mono studio-provider">ElevenLabs</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (ELEVENLABS_API_KEY)</span></div>
+          <textarea id="studio-speech-text" rows="2" data-i18n-ph="st.speechPh" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
           <div class="field-row">
-            <input type="text" id="studio-speech-voice" class="mono" placeholder="voice ID (puste = domyślny)">
-            <button class="btn-primary" id="studio-speech-go">Generuj dźwięk</button>
+            <input type="text" id="studio-speech-voice" class="mono" data-i18n-ph="st.voicePh" placeholder="voice ID (puste = domyślny)">
+            <button class="btn-primary" id="studio-speech-go" data-i18n="st.speechGo">Generuj dźwięk</button>
           </div>
           <div class="studio-out" id="studio-speech-out"></div>
         </div>
 
         <div class="studio-section" id="studio-sec-video">
-          <div class="studio-sec-title">🎬 Wideo <span class="mono studio-provider">Seedance</span>
-            <span class="studio-off mono" style="display:none">— brak klucza (SEEDANCE_API_KEY)</span></div>
-          <textarea id="studio-video-prompt" rows="2" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
+          <div class="studio-sec-title">🎬 <span data-i18n="st.video">Wideo</span> <span class="mono studio-provider">Seedance</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (SEEDANCE_API_KEY)</span></div>
+          <textarea id="studio-video-prompt" rows="2" data-i18n-ph="st.videoPh" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
           <div class="field-row">
-            <select id="studio-video-image" class="mono"><option value="">pierwsza klatka: brak (sam prompt)</option></select>
-            <select id="studio-video-last" class="mono"><option value="">ostatnia klatka: brak</option></select>
+            <select id="studio-video-image" class="mono"><option value="" data-i18n="st.frameNone">pierwsza klatka: brak (sam prompt)</option></select>
+            <select id="studio-video-last" class="mono"><option value="" data-i18n="st.lastNone">ostatnia klatka: brak</option></select>
           </div>
           <div class="field-row">
             <select id="studio-video-duration" class="mono">
@@ -277,24 +281,24 @@
               <option value="1080p">1080p</option>
             </select>
             <select id="studio-video-ratio" class="mono">
-              <option value="16:9" selected>16:9 (poziomy)</option>
-              <option value="9:16">9:16 (pionowy)</option>
-              <option value="1:1">1:1 (kwadrat)</option>
+              <option value="16:9" selected data-i18n="st.ratio169">16:9 (poziomy)</option>
+              <option value="9:16" data-i18n="st.ratio916">9:16 (pionowy)</option>
+              <option value="1:1" data-i18n="st.ratio11">1:1 (kwadrat)</option>
               <option value="4:3">4:3</option>
               <option value="3:4">3:4</option>
-              <option value="21:9">21:9 (kinowy)</option>
-              <option value="adaptive">adaptive (wg klatki)</option>
+              <option value="21:9" data-i18n="st.ratio219">21:9 (kinowy)</option>
+              <option value="adaptive" data-i18n="st.ratioAdaptive">adaptive (wg klatki)</option>
             </select>
           </div>
           <div class="field-row">
-            <input type="text" id="studio-video-seed" class="mono" placeholder="seed (opcjonalnie — powtarzalność)">
-            <label class="studio-check"><input type="checkbox" id="studio-video-camfix"> stała kamera</label>
-            <button class="btn-primary" id="studio-video-go">Generuj wideo</button>
+            <input type="text" id="studio-video-seed" class="mono" data-i18n-ph="st.seedPh" placeholder="seed (opcjonalnie — powtarzalność)">
+            <label class="studio-check"><input type="checkbox" id="studio-video-camfix"> <span data-i18n="st.camfix">stała kamera</span></label>
+            <button class="btn-primary" id="studio-video-go" data-i18n="st.videoGo">Generuj wideo</button>
           </div>
           <div class="studio-out" id="studio-video-out"></div>
         </div>
 
-        <span class="field-hint" id="studio-footer-hint">Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.</span>
+        <span class="field-hint" id="studio-footer-hint" data-i18n="st.footerHint">Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.</span>
       </div>
     </div>
   </div>
@@ -303,51 +307,51 @@
   <div class="modal-overlay" id="kb-modal" style="display:none">
     <div class="modal kb-modal" role="dialog" aria-labelledby="kb-title">
       <div class="modal-header">
-        <h2 id="kb-title">Baza wiedzy</h2>
-        <button class="icon-btn" id="kb-close" aria-label="Zamknij">
+        <h2 id="kb-title" data-i18n="kb">Baza wiedzy</h2>
+        <button class="icon-btn" id="kb-close" data-i18n-aria="close" aria-label="Zamknij">
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="modal-body">
         <div class="kb-add-row">
-          <button class="btn-secondary" id="kb-upload-btn">📁 Dodaj pliki</button>
+          <button class="btn-secondary" id="kb-upload-btn" data-i18n="kb.upload">📁 Dodaj pliki</button>
           <input type="file" id="kb-file-input" multiple style="display:none">
-          <button class="btn-secondary" id="kb-record-btn">🎙 Nagraj notatkę</button>
+          <button class="btn-secondary" id="kb-record-btn" data-i18n="kb.record">🎙 Nagraj notatkę</button>
         </div>
         <div class="field-row">
-          <input type="text" id="kb-url" placeholder="https://adres-strony.pl — dodaj link do bazy" class="mono">
-          <button class="btn-secondary" id="kb-add-link">Dodaj link</button>
+          <input type="text" id="kb-url" data-i18n-ph="kb.urlPh" placeholder="https://adres-strony.pl — dodaj link do bazy" class="mono">
+          <button class="btn-secondary" id="kb-add-link" data-i18n="kb.addLink">Dodaj link</button>
         </div>
-        <div class="kb-drop" id="kb-drop">…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)</div>
+        <div class="kb-drop" id="kb-drop" data-i18n="kb.drop">…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)</div>
         <div class="field-hint" id="kb-status"></div>
         <div class="kb-list" id="kb-list"></div>
-        <span class="field-hint">☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.</span>
+        <span class="field-hint" data-i18n-html="kb.hint">☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.</span>
       </div>
     </div>
   </div>
 
   <!-- ================= TRYB GŁOSOWY ================= -->
   <div class="voice-overlay" id="voice-overlay" style="display:none">
-    <button class="icon-btn voice-close" id="voice-close" aria-label="Zakończ tryb głosowy">
+    <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
       <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
     <div class="voice-orb" id="voice-orb"></div>
-    <div class="voice-status mono" id="voice-status">POWIEDZ „HEJ, KOSMOS”</div>
+    <div class="voice-status mono" id="voice-status" data-i18n="voice.wake">POWIEDZ „HEJ, KOSMOS”</div>
     <div class="voice-transcript" id="voice-transcript"></div>
     <div class="voice-answer" id="voice-answer"></div>
     <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
       <video id="voice-camera" autoplay playsinline muted></video>
-      <span class="voice-camera-label mono">👁 podgląd</span>
+      <span class="voice-camera-label mono" data-i18n="voice.camLabel">👁 podgląd</span>
     </div>
-    <p class="voice-hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta</p>
+    <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta</p>
   </div>
 
   <!-- ================= MODAL: KAMERA ================= -->
   <div class="modal-overlay" id="camera-modal" style="display:none">
-    <div class="modal camera-modal" role="dialog" aria-label="Kamera">
+    <div class="modal camera-modal" role="dialog" data-i18n-aria="cam.title" aria-label="Kamera">
       <div class="modal-header">
-        <h2>Kamera</h2>
-        <button class="icon-btn" id="camera-close" aria-label="Zamknij">
+        <h2 data-i18n="cam.title">Kamera</h2>
+        <button class="icon-btn" id="camera-close" data-i18n-aria="close" aria-label="Zamknij">
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
@@ -355,11 +359,12 @@
         <video id="camera-video" autoplay playsinline muted></video>
       </div>
       <div class="modal-footer">
-        <button class="btn-primary" id="camera-capture">Zrób zdjęcie</button>
+        <button class="btn-primary" id="camera-capture" data-i18n="cam.capture">Zrób zdjęcie</button>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
