@@ -37,7 +37,7 @@ app = FastAPI(title="Cosmos Senses")
 # Wykrywanie dostępnych zmysłów (leniwa inicjalizacja modeli)
 # ---------------------------------------------------------------------------
 
-CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False, "embed": False}
+CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False, "embed": False, "upscale": False}
 
 try:
     import faster_whisper  # noqa: F401
@@ -66,6 +66,12 @@ except ImportError:
 try:
     import sentence_transformers  # noqa: F401
     CAPS["embed"] = True
+except ImportError:
+    pass
+
+try:
+    import realesrgan  # noqa: F401
+    CAPS["upscale"] = True
 except ImportError:
     pass
 
@@ -283,6 +289,33 @@ async def extract(request: Request):
         )
     except Exception as e:
         return JSONResponse({"error": f"Błąd ekstrakcji: {e}"}, status_code=400)
+
+
+@app.post("/upscale")
+async def upscale(request: Request):
+    """{"image": dataURL, "scale": 4} -> {"image": dataURL} — powiększanie Real-ESRGAN.
+    Opcjonalne: pip install realesrgan basicsr  (wymaga GPU dla sensownej szybkości)."""
+    try:
+        from realesrgan import RealESRGANer  # noqa: F401
+        from basicsr.archs.rrdbnet_arch import RRDBNet
+    except ImportError:
+        return JSONResponse(
+            {"error": "Upscale niedostępny — pip install realesrgan basicsr (senses/README.md)."},
+            status_code=501,
+        )
+    import cv2
+    import numpy as np
+    payload = await request.json()
+    img = decode_image(payload)
+    if img is None:
+        return JSONResponse({"error": "Nieprawidłowy obraz."}, status_code=400)
+    scale = int(payload.get("scale", 4))
+    model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+    up = RealESRGANer(scale=4, model_path=os.environ.get("REALESRGAN_MODEL", "RealESRGAN_x4plus.pth"), model=model)
+    out, _ = up.enhance(img, outscale=scale)
+    ok, buf = cv2.imencode(".png", out)
+    b64 = base64.b64encode(buf.tobytes()).decode()
+    return {"image": f"data:image/png;base64,{b64}"}
 
 
 @app.post("/embed")

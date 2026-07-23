@@ -965,6 +965,55 @@ async function fireflyGenerateImage(prompt, size) {
   return Buffer.from(await (await fetch(url, { signal: AbortSignal.timeout(120000) })).arrayBuffer());
 }
 
+// Niestreamowane wywołanie modelu (Storyboard, streszczenia itp.)
+async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = {}) {
+  const ep = pickEndpoint(endpoint);
+  const model = ep.model;
+  if (!ep.apiKey && ep.baseUrl.includes('integrate.api.nvidia.com')) {
+    throw new Error('Brak klucza API dla chmury NVIDIA.');
+  }
+  const r = await fetch(`${ep.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: authHeaders(ep),
+    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: maxTokens, stream: false }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error?.message || d.error || `HTTP ${r.status}`);
+  return d.choices?.[0]?.message?.content || '';
+}
+
+// Wygeneruj jeden obraz (dowolny skonfigurowany silnik) → wpis w bazie wiedzy.
+async function studioGenImage(prompt, size, provider) {
+  const providers = imageProviders();
+  const prov = providers.some((p) => p.id === provider) ? provider : providers[0]?.id;
+  let buf; let engineLabel;
+  if (prov === 'firefly') {
+    buf = await fireflyGenerateImage(prompt, size); engineLabel = 'Adobe Firefly';
+  } else {
+    const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
+    if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
+    const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(180000),
+    });
+    const resp = await r.json();
+    if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+    const first = resp.data?.[0] || {};
+    if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
+    else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+    else throw new Error('API nie zwróciło obrazu.');
+    engineLabel = STUDIO.openai.imageModel;
+  }
+  const name = tsName('obraz', 'png');
+  const item = await kbAddFile(name, 'image/png', buf,
+    `Grafika wygenerowana w Studiu (silnik: ${engineLabel}). Prompt: ${prompt}`);
+  exportToStudioDir(name, buf);
+  return { item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` };
+}
+
 async function handleStudio(req, res, pathname) {
   if (pathname === '/api/studio/providers' && req.method === 'GET') {
     return sendJson(res, 200, {
@@ -1037,6 +1086,121 @@ async function handleStudio(req, res, pathname) {
       });
     } catch (err) {
       return sendJson(res, 502, { error: `Generowanie obrazu nie powiodło się: ${err.message}` });
+    }
+  }
+
+  // --- STORYBOARD (scena → ujęcia → obraz na ujęcie) ---
+  if (pathname === '/api/studio/storyboard' && req.method === 'POST') {
+    if (!imageProviders().length) {
+      return sendJson(res, 400, { error: 'Brak silnika obrazów (OPENAI_API_KEY / Firefly).' });
+    }
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const scene = String(data.scene || '').trim();
+    if (!scene) return sendJson(res, 400, { error: 'Puste pole scene.' });
+    const shots = Math.min(6, Math.max(2, parseInt(data.shots, 10) || 4));
+    const size = data.size || '1536x1024';
+    try {
+      const raw = await llmComplete([
+        { role: 'system', content: 'Jesteś reżyserem. Rozpisz scenę na ujęcia filmowe. ' +
+          'Zwróć WYŁĄCZNIE tablicę JSON stringów — po jednym szczegółowym opisie kadru po angielsku na ujęcie, ' +
+          'gotowym jako prompt do generatora obrazów. Bez komentarza, bez numeracji.' },
+        { role: 'user', content: `Scena: ${scene}\nLiczba ujęć: ${shots}` },
+      ], { maxTokens: 900 });
+      let prompts;
+      try {
+        const m = raw.match(/\[[\s\S]*\]/);
+        prompts = JSON.parse(m ? m[0] : raw);
+      } catch {
+        prompts = raw.split('\n').map((l) => l.replace(/^\s*[-*\d.)\]]+\s*/, '').trim()).filter(Boolean);
+      }
+      prompts = (prompts || []).filter((p) => typeof p === 'string' && p.trim()).slice(0, shots);
+      if (!prompts.length) throw new Error('Model nie zwrócił opisów ujęć.');
+
+      const frames = [];
+      for (let i = 0; i < prompts.length; i++) {
+        const img = await studioGenImage(prompts[i], size, data.provider);
+        frames.push({ shot: i + 1, prompt: prompts[i], ...img });
+      }
+      addEvent('studio', `storyboard: „${scene.slice(0, 60)}" → ${frames.length} ujęć`);
+      return sendJson(res, 200, { ok: true, scene, frames });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Storyboard nie powiódł się: ${err.message}` });
+    }
+  }
+
+  // --- INPAINTING (obraz z bazy + maska + prompt → OpenAI images/edit) ---
+  if (pathname === '/api/studio/edit' && req.method === 'POST') {
+    if (!STUDIO.openai.key) {
+      return sendJson(res, 400, { error: 'Edycja obrazu wymaga OPENAI_API_KEY.' });
+    }
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const prompt = String(data.prompt || '').trim();
+    const imageId = String(data.imageId || '');
+    if (!prompt || !imageId) return sendJson(res, 400, { error: 'Wymagane: imageId i prompt.' });
+    let maskBuf = null;
+    try { if (data.mask) maskBuf = Buffer.from(String(data.mask).split(',').pop(), 'base64'); } catch { /* brak maski */ }
+    let srcBuf;
+    try { srcBuf = fs.readFileSync(path.join(KB_FILES, imageId.replace(/[^a-z0-9]/gi, ''))); }
+    catch { return sendJson(res, 404, { error: 'Nie znaleziono obrazu w bazie.' }); }
+
+    try {
+      const form = new FormData();
+      form.append('model', STUDIO.openai.imageModel);
+      form.append('prompt', prompt);
+      form.append('image', new Blob([srcBuf], { type: 'image/png' }), 'image.png');
+      if (maskBuf) form.append('mask', new Blob([maskBuf], { type: 'image/png' }), 'mask.png');
+      const r = await fetch(`${STUDIO.openai.base}/images/edits`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${STUDIO.openai.key}` },
+        body: form,
+        signal: AbortSignal.timeout(180000),
+      });
+      const resp = await r.json();
+      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+      const first = resp.data?.[0] || {};
+      let buf;
+      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
+      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+      else throw new Error('API nie zwróciło obrazu.');
+      const name = tsName('edycja', 'png');
+      const item = await kbAddFile(name, 'image/png', buf, `Edycja obrazu (inpainting). Prompt: ${prompt}`);
+      exportToStudioDir(name, buf);
+      addEvent('studio', `edycja obrazu (inpainting): „${prompt.slice(0, 60)}"`);
+      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Edycja obrazu nie powiodła się: ${err.message}` });
+    }
+  }
+
+  // --- UPSCALE (przez usługę zmysłów, jeśli dostępny model Real-ESRGAN) ---
+  if (pathname === '/api/studio/upscale' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const imageId = String(data.imageId || '').replace(/[^a-z0-9]/gi, '');
+    let srcBuf;
+    try { srcBuf = fs.readFileSync(path.join(KB_FILES, imageId)); }
+    catch { return sendJson(res, 404, { error: 'Nie znaleziono obrazu.' }); }
+    try {
+      const r = await fetch(`${SENSES_URL}/upscale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: `data:image/png;base64,${srcBuf.toString('base64')}`, scale: data.scale || 4 }),
+        signal: AbortSignal.timeout(180000),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        return sendJson(res, r.status, { error: e.error || 'Upscale niedostępny — zainstaluj Real-ESRGAN w usłudze zmysłów (senses/README.md).' });
+      }
+      const d = await r.json();
+      const buf = Buffer.from(String(d.image).split(',').pop(), 'base64');
+      const name = tsName('upscale', 'png');
+      const item = await kbAddFile(name, 'image/png', buf, 'Obraz powiększony (upscale).');
+      exportToStudioDir(name, buf);
+      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Upscale niedostępny: ${err.message} (uruchom usługę zmysłów z Real-ESRGAN).` });
     }
   }
 

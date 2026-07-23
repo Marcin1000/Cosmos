@@ -1388,6 +1388,7 @@ async function openStudio() {
       `<option value="">${t('st.frameNone')}</option>` + opts;
     $('studio-video-last').innerHTML =
       `<option value="">${t('st.lastNone')}</option>` + opts;
+    $('studio-edit-img').innerHTML = `<option value="">${t('st.editPick')}</option>` + opts;
     // klatka wybrana wcześniej w Galerii
     if (pendingVideoFrameId) {
       $('studio-video-image').value = pendingVideoFrameId;
@@ -1455,6 +1456,109 @@ $('studio-image-tpl-save').addEventListener('click', () => {
   renderPromptTemplates();
 });
 
+// --- Storyboard: scena → ujęcia → kadry ---
+$('studio-sb-go').addEventListener('click', async () => {
+  const scene = $('studio-sb-scene').value.trim();
+  if (!scene) return;
+  studioOut('sb', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genStoryboard')}</span>`);
+  try {
+    const res = await fetch('/api/studio/storyboard', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scene, shots: Number($('studio-sb-shots').value) || 4,
+        size: $('studio-image-size').value, provider: $('studio-image-provider').value || undefined,
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    studioOut('sb', d.frames.map((f) =>
+      `<div class="sb-frame"><span class="sb-num">${f.shot}</span><img src="${escapeHtml(f.url)}" title="${escapeHtml(f.prompt)}"></div>`).join(''));
+  } catch (err) {
+    studioOut('sb', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
+  }
+});
+
+// --- Inpainting: malowanie maski na obrazie z bazy ---
+const editState = { imageId: null, paint: null, ctx: null, painting: false };
+
+async function loadEditImage(id) {
+  editState.imageId = id;
+  if (!id) { $('studio-edit-canvas-wrap').style.display = 'none'; return; }
+  const canvas = $('studio-edit-canvas');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; img.src = `/api/kb/raw?id=${encodeURIComponent(id)}`; });
+  canvas.width = img.naturalWidth || 1024;
+  canvas.height = img.naturalHeight || 1024;
+  editState.ctx = canvas.getContext('2d');
+  editState.ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  editState.base = img;
+  // offscreen do maski
+  editState.paint = document.createElement('canvas');
+  editState.paint.width = canvas.width; editState.paint.height = canvas.height;
+  $('studio-edit-canvas-wrap').style.display = '';
+}
+
+function editRedraw() {
+  const c = $('studio-edit-canvas'); const ctx = editState.ctx;
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (editState.base) ctx.drawImage(editState.base, 0, 0, c.width, c.height);
+  ctx.save();
+  ctx.globalAlpha = 0.45; ctx.drawImage(editState.paint, 0, 0);
+  ctx.restore();
+}
+
+function editPointerPos(e) {
+  const c = $('studio-edit-canvas'); const r = c.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+}
+function editPaintAt(p) {
+  const pc = editState.paint.getContext('2d');
+  pc.fillStyle = '#ff3b6b';
+  pc.beginPath();
+  pc.arc(p.x, p.y, Math.max(12, editState.paint.width / 40), 0, Math.PI * 2);
+  pc.fill();
+  editRedraw();
+}
+(() => {
+  const c = $('studio-edit-canvas');
+  const down = (e) => { if (!editState.paint) return; editState.painting = true; editPaintAt(editPointerPos(e)); };
+  const move = (e) => { if (editState.painting) editPaintAt(editPointerPos(e)); };
+  const up = () => { editState.painting = false; };
+  c.addEventListener('pointerdown', down);
+  c.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+})();
+
+$('studio-edit-img').addEventListener('change', (e) => loadEditImage(e.target.value));
+$('studio-edit-clear').addEventListener('click', () => {
+  if (editState.paint) { editState.paint.getContext('2d').clearRect(0, 0, editState.paint.width, editState.paint.height); editRedraw(); }
+});
+$('studio-edit-go').addEventListener('click', async () => {
+  if (!editState.imageId) { alert(t('st.editNoImg')); return; }
+  const prompt = $('studio-edit-prompt').value.trim();
+  if (!prompt) return;
+  // maska: obszar zamalowany → przezroczysty (do edycji), reszta nieprzezroczysta (zachowana)
+  const mask = document.createElement('canvas');
+  mask.width = editState.paint.width; mask.height = editState.paint.height;
+  const mctx = mask.getContext('2d');
+  mctx.fillStyle = '#ffffff'; mctx.fillRect(0, 0, mask.width, mask.height);
+  mctx.globalCompositeOperation = 'destination-out';
+  mctx.drawImage(editState.paint, 0, 0);
+  studioOut('edit', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genEdit')}</span>`);
+  try {
+    const res = await fetch('/api/studio/edit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageId: editState.imageId, prompt, mask: mask.toDataURL('image/png') }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    studioOut('edit', `<img src="${escapeHtml(d.url)}">` + studioNote(d.item, d.exported));
+  } catch (err) {
+    studioOut('edit', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
+  }
+});
+
 // ----------------------------------------------------------------
 // GALERIA — przegląd wygenerowanych mediów (z bazy wiedzy)
 // ----------------------------------------------------------------
@@ -1497,12 +1601,14 @@ async function renderGallery() {
 
     const frameBtn = k === 'image'
       ? `<button data-frame="${escapeHtml(it.id)}" title="${t('gallery.useFrame')}">🎬</button>` : '';
+    const upBtn = k === 'image'
+      ? `<button data-up="${escapeHtml(it.id)}" title="${t('gallery.upscale')}">⤢</button>` : '';
     cell.innerHTML =
       media +
       `<div class="gallery-meta" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</div>` +
       `<div class="gallery-actions">` +
       `<a href="${url}" download="${escapeHtml(it.name)}" style="flex:1"><button style="width:100%">${t('gallery.download')}</button></a>` +
-      frameBtn +
+      frameBtn + upBtn +
       `<button class="danger" data-del="${escapeHtml(it.id)}">✕</button>` +
       `</div>`;
     grid.appendChild(cell);
@@ -1516,6 +1622,21 @@ async function renderGallery() {
     pendingVideoFrameId = b.dataset.frame;
     b.textContent = '✓';
     setTimeout(() => { b.textContent = '🎬'; }, 1200);
+  }));
+  grid.querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', async () => {
+    const prev = b.textContent; b.textContent = '…'; b.disabled = true;
+    try {
+      const r = await fetch('/api/studio/upscale', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: b.dataset.up }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      renderGallery();
+    } catch (err) {
+      alert(err.message);
+      b.textContent = prev; b.disabled = false;
+    }
   }));
 }
 

@@ -332,6 +332,34 @@
           <div class="studio-out" id="studio-video-out"></div>
         </div>
 
+        <div class="studio-section" id="studio-sec-storyboard">
+          <div class="studio-sec-title">🎞️ <span data-i18n="st.storyboard">Storyboard</span> <span class="mono studio-provider">AI</span></div>
+          <textarea id="studio-sb-scene" rows="2" data-i18n-ph="st.storyboardPh" placeholder="Opisz scenę…"></textarea>
+          <div class="field-row">
+            <select id="studio-sb-shots" class="mono" title="Ujęcia">
+              <option value="3">3</option><option value="4" selected>4</option>
+              <option value="5">5</option><option value="6">6</option>
+            </select>
+            <button class="btn-primary" id="studio-sb-go" data-i18n="st.storyboardGo">Generuj storyboard</button>
+          </div>
+          <div class="studio-out" id="studio-sb-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-edit">
+          <div class="studio-sec-title">🩹 <span data-i18n="st.edit">Edycja obrazu (inpainting)</span> <span class="mono studio-provider">OpenAI</span></div>
+          <select id="studio-edit-img" class="mono"><option value="" data-i18n="st.editPick">Wybierz obraz z bazy…</option></select>
+          <div class="edit-canvas-wrap" id="studio-edit-canvas-wrap" style="display:none">
+            <canvas id="studio-edit-canvas"></canvas>
+          </div>
+          <textarea id="studio-edit-prompt" rows="2" data-i18n-ph="st.editPrompt" placeholder="Co zmienić…"></textarea>
+          <div class="field-row">
+            <button class="btn-secondary" id="studio-edit-clear" data-i18n="st.editClear">Wyczyść maskę</button>
+            <button class="btn-primary" id="studio-edit-go" data-i18n="st.editGo">Generuj edycję</button>
+          </div>
+          <span class="field-hint" data-i18n="st.editHint">Zamaluj obszar do zmiany, wpisz opis i kliknij Generuj.</span>
+          <div class="studio-out" id="studio-edit-out"></div>
+        </div>
+
         <span class="field-hint" id="studio-footer-hint" data-i18n="st.footerHint">Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.</span>
       </div>
     </div>

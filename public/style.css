@@ -984,6 +984,20 @@ kbd {
   color: var(--text-faint);
 }
 .studio-out .studio-error { color: var(--danger); font-size: 12.5px; font-family: var(--font-mono); }
+.studio-out .sb-frame { position: relative; }
+.studio-out .sb-frame .sb-num {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(0,0,0,.6); color: #fff; font-family: var(--font-mono);
+  font-size: 10px; padding: 2px 7px; border-radius: 5px;
+}
+.edit-canvas-wrap {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 100%;
+  align-self: flex-start;
+}
+.edit-canvas-wrap canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; touch-action: none; }
 
 .studio-check {
   display: inline-flex;

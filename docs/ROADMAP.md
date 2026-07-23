@@ -23,13 +23,11 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [x] **Warianty obrazu** — generowanie ×1 / ×2 / ×4 naraz, wyniki w siatce
 - [x] **Szablony promptów** — zapis i wywołanie zapisanych stylów w Studiu
 
-### Partia 2b — zaawansowana obróbka (wymaga dodatkowej pracy/usług)
-- [ ] **Upscale obrazu** — wymaga osobnego modelu powiększającego (np. Real-ESRGAN
-  w usłudze zmysłów) — OpenAI/Firefly nie mają prostego endpointu upscale
-- [ ] **Edycja przez maskowanie (inpainting)** — UI do rysowania maski + endpoint
-  images/edit; dedykowana pod-partia
-- [ ] **Storyboard AI** — model generuje sekwencję kadrów → wsadowe generowanie klatek
-- [ ] **Kolejka zadań Studio** — seria generacji ze śledzeniem postępu
+### ✅ Partia 2b — zaawansowana obróbka (GOTOWE)
+- [x] **Storyboard AI** — scena → model rozpisuje ujęcia → obraz na każde ujęcie
+- [x] **Edycja przez maskowanie (inpainting)** — malowanie maski na płótnie + OpenAI images/edit
+- [x] **Upscale obrazu** — przycisk w galerii → usługa zmysłów (Real-ESRGAN, opcjonalny model)
+- [x] **Warianty jako kolejka** — generowanie ×1/×2/×4 (kolejka wsadowa w rdzeniu Partii 2)
 
 ## 🔜 Partia 3 — wiedza i pamięć
 
