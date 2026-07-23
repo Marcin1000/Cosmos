@@ -37,6 +37,10 @@
       <nav class="conversations" id="conversations" aria-label="Lista rozmów"></nav>
 
       <div class="sidebar-footer">
+        <button class="footer-btn" id="studio-btn">
+          <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="19" cy="17" r="1.4" fill="currentColor"/><circle cx="6" cy="19" r="1" fill="currentColor"/></svg>
+          Studio
+        </button>
         <button class="footer-btn" id="kb-btn">
           <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 4.5v15zM20 17v5H6.5a2.5 2.5 0 0 1 0-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Baza wiedzy <span class="kb-badge mono" id="kb-badge"></span>
@@ -78,16 +82,7 @@
           <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
 
-        <div class="endpoint-switch" role="tablist" aria-label="Źródło modelu">
-          <button class="endpoint-tab" id="tab-cloud" role="tab" data-endpoint="cloud">
-            <svg viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12.4 3.5 3.5 0 0 0 6.5 19z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Chmura
-          </button>
-          <button class="endpoint-tab" id="tab-local" role="tab" data-endpoint="local">
-            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            Lokalnie
-          </button>
-        </div>
+        <div class="endpoint-switch" id="endpoint-switch" role="tablist" aria-label="Silnik AI"></div>
 
         <button class="icon-btn" id="voice-btn" title="Tryb głosowy — „Hej, Kosmos”" aria-label="Tryb głosowy">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 10v4M12 7.5v9M16 10v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
@@ -201,6 +196,63 @@
       <div class="modal-footer">
         <button class="btn-secondary" id="settings-reset">Przywróć domyślne</button>
         <button class="btn-primary" id="settings-save">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: STUDIO ================= -->
+  <div class="modal-overlay" id="studio-modal" style="display:none">
+    <div class="modal studio-modal" role="dialog" aria-labelledby="studio-title">
+      <div class="modal-header">
+        <h2 id="studio-title">Studio</h2>
+        <button class="icon-btn" id="studio-close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <div class="studio-section" id="studio-sec-image">
+          <div class="studio-sec-title">🖼️ Obraz <span class="mono studio-provider">OpenAI</span>
+            <span class="studio-off mono" style="display:none">— brak klucza (OPENAI_API_KEY)</span></div>
+          <textarea id="studio-image-prompt" rows="2" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
+          <div class="field-row">
+            <select id="studio-image-size" class="mono">
+              <option value="1024x1024">1024 × 1024 (kwadrat)</option>
+              <option value="1536x1024">1536 × 1024 (poziomy)</option>
+              <option value="1024x1536">1024 × 1536 (pionowy)</option>
+            </select>
+            <button class="btn-primary" id="studio-image-go">Generuj obraz</button>
+          </div>
+          <div class="studio-out" id="studio-image-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-speech">
+          <div class="studio-sec-title">🔊 Dźwięk <span class="mono studio-provider">ElevenLabs</span>
+            <span class="studio-off mono" style="display:none">— brak klucza (ELEVENLABS_API_KEY)</span></div>
+          <textarea id="studio-speech-text" rows="2" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
+          <div class="field-row">
+            <input type="text" id="studio-speech-voice" class="mono" placeholder="voice ID (puste = domyślny)">
+            <button class="btn-primary" id="studio-speech-go">Generuj dźwięk</button>
+          </div>
+          <div class="studio-out" id="studio-speech-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-video">
+          <div class="studio-sec-title">🎬 Wideo <span class="mono studio-provider">Seedance</span>
+            <span class="studio-off mono" style="display:none">— brak klucza (SEEDANCE_API_KEY)</span></div>
+          <textarea id="studio-video-prompt" rows="2" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
+          <div class="field-row">
+            <select id="studio-video-image" class="mono"><option value="">pierwsza klatka: brak (sam prompt)</option></select>
+            <select id="studio-video-duration" class="mono">
+              <option value="5">5 s</option>
+              <option value="10">10 s</option>
+            </select>
+            <button class="btn-primary" id="studio-video-go">Generuj wideo</button>
+          </div>
+          <div class="studio-out" id="studio-video-out"></div>
+        </div>
+
+        <span class="field-hint" id="studio-footer-hint">Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.</span>
       </div>
     </div>
   </div>

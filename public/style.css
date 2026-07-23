@@ -867,6 +867,90 @@ kbd {
   background: #000;
 }
 
+/* ============================ STUDIO ============================ */
+
+.studio-modal { max-width: 720px; }
+
+.studio-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.studio-section.disabled { opacity: .55; }
+.studio-section.disabled .btn-primary { pointer-events: none; opacity: .4; }
+
+.studio-sec-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.studio-provider {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  border-radius: 999px;
+  letter-spacing: .06em;
+}
+.studio-off { font-size: 11px; color: #f5b544; }
+
+.studio-section textarea,
+.studio-section input[type="text"],
+.studio-section select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  padding: 9px 12px;
+  outline: none;
+  resize: vertical;
+}
+.studio-section select.mono, .studio-section input.mono { font-family: var(--font-mono); font-size: 12px; }
+.studio-section textarea:focus, .studio-section input:focus, .studio-section select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.studio-section .field-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.studio-section .field-row select, .studio-section .field-row input { flex: 1; min-width: 140px; }
+
+.studio-out { display: none; flex-direction: column; gap: 8px; }
+.studio-out.show { display: flex; }
+.studio-out img, .studio-out video {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  align-self: flex-start;
+}
+.studio-out audio { width: 100%; }
+.studio-out .studio-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.studio-out .studio-error { color: var(--danger); font-size: 12.5px; font-family: var(--font-mono); }
+
+.studio-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent-glow);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ============================ BAZA WIEDZY ============================ */
 
 .kb-badge { color: var(--accent); font-size: 11px; }

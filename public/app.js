@@ -75,8 +75,7 @@ const el = {
   themeIconDark: $('theme-icon-dark'),
   themeIconLight: $('theme-icon-light'),
   topbarModel: $('topbar-model'),
-  tabCloud: $('tab-cloud'),
-  tabLocal: $('tab-local'),
+  endpointSwitch: $('endpoint-switch'),
   statusCloud: $('status-cloud'),
   statusLocal: $('status-local'),
   statusSenses: $('status-senses'),
@@ -126,6 +125,9 @@ const el = {
   kbDrop: $('kb-drop'),
   kbStatus: $('kb-status'),
   kbList: $('kb-list'),
+  studioBtn: $('studio-btn'),
+  studioModal: $('studio-modal'),
+  studioClose: $('studio-close'),
 };
 
 const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
@@ -174,7 +176,8 @@ function epConfig(name = endpoint) {
 }
 
 function currentModel() {
-  const override = endpoint === 'local' ? settings.modelLocal : settings.modelCloud;
+  const override = endpoint === 'local' ? settings.modelLocal
+    : endpoint === 'cloud' ? settings.modelCloud : '';
   return override || epConfig().model || '';
 }
 
@@ -410,6 +413,10 @@ function messageElement(m) {
   }
 
   body.innerHTML = renderMarkdown(text);
+  if (images.length) {
+    const imgs = imagesHtml(images);
+    body.prepend(imgs);
+  }
 
   const col = document.createElement('div');
   col.style.flex = '1';
@@ -620,11 +627,13 @@ function toApiMessages(conv) {
     if (m.error) continue;
     const text = msgText(m);
     const images = msgImages(m);
-    if (images.length) {
+    if (images.length && m.role === 'user') {
       const parts = images.map((src) => ({ type: 'image_url', image_url: { url: src } }));
       if (text) parts.push({ type: 'text', text });
       api.push({ role: m.role, content: parts });
     } else {
+      // obrazy w wiadomościach asystenta (np. wygenerowane w Studiu)
+      // nie wracają do API — wysyłamy sam tekst
       api.push({ role: m.role, content: text });
     }
   }
@@ -679,7 +688,8 @@ async function streamOnce(conv) {
   };
 
   try {
-    const modelOverride = endpoint === 'local' ? settings.modelLocal : settings.modelCloud;
+    const modelOverride = endpoint === 'local' ? settings.modelLocal
+      : endpoint === 'cloud' ? settings.modelCloud : '';
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -762,6 +772,7 @@ async function webSearch(query) {
 }
 
 const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
+const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
 
 async function runGeneration(conv) {
   isGenerating = true;
@@ -793,6 +804,46 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         continue;
+      }
+
+      const imgMarker = acc.match(IMAGE_MARKER_RE);
+      if (imgMarker) {
+        const prompt = imgMarker[1].trim();
+        const before = acc.replace(imgMarker[0], '').trim();
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + '🎨 *Generuję obraz…*',
+        });
+        saveConversations();
+        renderMessages();
+        if (voiceMode) {
+          setVoiceState('speaking');
+          await speakText('Generuję obraz.');
+          setVoiceState('thinking');
+        }
+        try {
+          const r = await fetch('/api/studio/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+          conv.messages.push({
+            role: 'assistant',
+            content: { text: 'Gotowe — obraz zapisany w Bazie wiedzy.', images: [d.url] },
+          });
+          finalText = 'Wygenerowałem obraz i zapisałem go w bazie wiedzy.';
+        } catch (err) {
+          conv.messages.push({
+            role: 'assistant',
+            content: `⚠ Generowanie obrazu nie powiodło się: ${err.message}`,
+            error: true,
+          });
+          if (voiceMode) finalText = 'Nie udało się wygenerować obrazu.';
+        }
+        saveConversations();
+        break;
       }
 
       finalText = acc || '*(pusta odpowiedź modelu)*';
@@ -1097,6 +1148,120 @@ el.cameraCapture.addEventListener('click', () => {
   }
   closeCamera();
   el.input.focus();
+});
+
+// ----------------------------------------------------------------
+// STUDIO — obraz (OpenAI) · dźwięk (ElevenLabs) · wideo (Seedance)
+// ----------------------------------------------------------------
+
+function studioOut(section, html) {
+  const out = $(`studio-${section}-out`);
+  out.innerHTML = html;
+  out.classList.add('show');
+}
+
+function studioNote(item, exported) {
+  return `<span class="studio-note">✓ zapisano w Bazie wiedzy: ${escapeHtml(item.name)}` +
+         (exported ? `<br>✓ wyeksportowano: ${escapeHtml(exported)}` : '') + '</span>';
+}
+
+async function openStudio() {
+  el.studioModal.style.display = '';
+  try {
+    const res = await fetch('/api/studio/providers');
+    const prov = await res.json();
+    for (const [sec, on] of [['image', prov.image], ['speech', prov.speech], ['video', prov.video]]) {
+      const box = $(`studio-sec-${sec}`);
+      box.classList.toggle('disabled', !on);
+      box.querySelector('.studio-off').style.display = on ? 'none' : '';
+    }
+    if (prov.voice) $('studio-speech-voice').placeholder = `voice ID (puste = ${prov.voice})`;
+    // obrazy z bazy wiedzy jako pierwsza klatka wideo
+    const kb = await (await fetch('/api/kb')).json();
+    const sel = $('studio-video-image');
+    sel.innerHTML = '<option value="">pierwsza klatka: brak (sam prompt)</option>' +
+      (kb.items || []).filter((i) => (i.mime || '').startsWith('image/'))
+        .map((i) => `<option value="${escapeHtml(i.id)}">klatka: ${escapeHtml(i.name)}</option>`).join('');
+  } catch { /* sekcje zostają w stanie domyślnym */ }
+}
+
+el.studioBtn.addEventListener('click', openStudio);
+el.studioClose.addEventListener('click', () => { el.studioModal.style.display = 'none'; });
+el.studioModal.addEventListener('click', (e) => {
+  if (e.target === el.studioModal) el.studioModal.style.display = 'none';
+});
+
+$('studio-image-go').addEventListener('click', async () => {
+  const prompt = $('studio-image-prompt').value.trim();
+  if (!prompt) return;
+  studioOut('image', '<span class="studio-note"><span class="studio-spinner"></span>Generuję obraz…</span>');
+  try {
+    const res = await fetch('/api/studio/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, size: $('studio-image-size').value }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    studioOut('image', `<img src="${escapeHtml(d.url)}" alt="wygenerowany obraz">` + studioNote(d.item, d.exported));
+  } catch (err) {
+    studioOut('image', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
+  }
+});
+
+$('studio-speech-go').addEventListener('click', async () => {
+  const text = $('studio-speech-text').value.trim();
+  if (!text) return;
+  studioOut('speech', '<span class="studio-note"><span class="studio-spinner"></span>Generuję dźwięk…</span>');
+  try {
+    const res = await fetch('/api/studio/speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voiceId: $('studio-speech-voice').value.trim() || undefined }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    studioOut('speech', `<audio controls src="${escapeHtml(d.url)}"></audio>` + studioNote(d.item, d.exported));
+  } catch (err) {
+    studioOut('speech', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
+  }
+});
+
+$('studio-video-go').addEventListener('click', async () => {
+  const prompt = $('studio-video-prompt').value.trim();
+  if (!prompt) return;
+  studioOut('video', '<span class="studio-note"><span class="studio-spinner"></span>Zlecam zadanie wideo…</span>');
+  try {
+    const res = await fetch('/api/studio/video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        duration: Number($('studio-video-duration').value),
+        imageId: $('studio-video-image').value || undefined,
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+
+    const started = Date.now();
+    while (true) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const min = Math.round((Date.now() - started) / 60000 * 10) / 10;
+      studioOut('video', `<span class="studio-note"><span class="studio-spinner"></span>Generuję wideo… (${min} min — to może potrwać kilka minut)</span>`);
+      const st = await (await fetch(`/api/studio/video/status?id=${encodeURIComponent(d.taskId)}`)).json();
+      if (st.status === 'done') {
+        studioOut('video', `<video controls src="${escapeHtml(st.url)}"></video>` + studioNote(st.item, st.exported));
+        break;
+      }
+      if (st.status === 'failed' || st.error) {
+        throw new Error(st.error || 'Zadanie nie powiodło się.');
+      }
+      if (Date.now() - started > 20 * 60000) throw new Error('Przekroczono limit 20 minut oczekiwania.');
+    }
+  } catch (err) {
+    studioOut('video', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
+  }
 });
 
 // ----------------------------------------------------------------
@@ -1656,16 +1821,40 @@ el.themeBtn.addEventListener('click', () => {
 
 applyTheme(localStorage.getItem(STORAGE_KEYS.theme) || 'dark');
 
+const ENDPOINT_TABS = {
+  cloud: ['Chmura', '<svg viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12.4 3.5 3.5 0 0 0 6.5 19z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
+  local: ['Lokalnie', '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'],
+  openai: ['OpenAI', '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'],
+  claude: ['Claude', '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 6.8H21l-5.4 4 2 6.9-5.6-4.2-5.6 4.2 2-6.9-5.4-4h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'],
+};
+
+function buildEndpointTabs() {
+  el.endpointSwitch.innerHTML = '';
+  const available = [];
+  for (const key of Object.keys(ENDPOINT_TABS)) {
+    const ep = serverConfig.endpoints?.[key];
+    if (!ep) continue;
+    if ((key === 'openai' || key === 'claude') && !ep.hasApiKey) continue;
+    available.push(key);
+    const btn = document.createElement('button');
+    btn.className = 'endpoint-tab';
+    btn.dataset.endpoint = key;
+    btn.setAttribute('role', 'tab');
+    btn.innerHTML = ENDPOINT_TABS[key][1] + ENDPOINT_TABS[key][0];
+    btn.addEventListener('click', () => setEndpoint(key));
+    el.endpointSwitch.appendChild(btn);
+  }
+  setEndpoint(available.includes(endpoint) ? endpoint : 'cloud');
+}
+
 function setEndpoint(name) {
   endpoint = name;
   localStorage.setItem(STORAGE_KEYS.endpoint, name);
-  el.tabCloud.classList.toggle('active', name === 'cloud');
-  el.tabLocal.classList.toggle('active', name === 'local');
+  document.querySelectorAll('.endpoint-tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.endpoint === name);
+  });
   updateModelBadge();
 }
-
-el.tabCloud.addEventListener('click', () => setEndpoint('cloud'));
-el.tabLocal.addEventListener('click', () => setEndpoint('local'));
 
 // ----------------------------------------------------------------
 // Ustawienia (modal)
@@ -1807,8 +1996,8 @@ el.modelSelectLocal.addEventListener('change', () => {
 
 function updateModelBadge() {
   const model = currentModel() || 'model nieustawiony';
-  const label = endpoint === 'local' ? 'lokalnie' : 'chmura';
-  el.topbarModel.textContent = `${model} · ${label}`;
+  const labels = { cloud: 'chmura', local: 'lokalnie', openai: 'OpenAI', claude: 'Claude' };
+  el.topbarModel.textContent = `${model} · ${labels[endpoint] || endpoint}`;
   el.welcomeModel.textContent = model;
 }
 
@@ -1851,6 +2040,7 @@ async function loadServerConfig() {
     const res = await fetch('/api/config');
     serverConfig = await res.json();
   } catch { /* serwer nieosiągalny — UI dalej działa */ }
+  buildEndpointTabs();
   updateModelBadge();
   refreshStatus();
 }

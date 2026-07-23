@@ -191,6 +191,56 @@ zainstalowany jest **COLMAP** (CUDA na RTX 3080), buduje model 3D automatycznie
 (`--dense` = gęsta chmura punktów `.ply` do Blendera/MeshLaba). Wynik skanu
 trafia do Cosmosa jako zdarzenie.
 
+### 🎨 Studio i silniki komercyjne (Twoje klucze API)
+
+Po wpisaniu kluczy w `.env` Cosmos zyskuje dodatkowe moce (płacisz tylko za to,
+czego użyjesz — środkami ze swoich kont):
+
+- **OpenAI** (`OPENAI_API_KEY`) — nowa zakładka czatu **OpenAI** obok Chmura/Lokalnie
+  oraz **generowanie obrazów** w Studiu (gpt-image-1). W rozmowie wystarczy poprosić:
+  *„wygeneruj grafikę…"* — model użyje narzędzia `[OBRAZ:]` i obraz pojawi się w czacie.
+- **Claude** (`ANTHROPIC_API_KEY`) — zakładka czatu **Claude** (przez warstwę
+  zgodności Anthropic z API OpenAI). Świetny do pracy nad kodem.
+- **ElevenLabs** (`ELEVENLABS_API_KEY`) — **Studio → Dźwięk**: naturalny lektor
+  z dowolnego tekstu (mp3).
+- **Seedance** (`SEEDANCE_API_KEY`) — **Studio → Wideo**: generowanie klipów
+  z promptu, także **z wygenerowaną wcześniej grafiką jako pierwszą klatką**
+  (wybierasz obraz z bazy wiedzy). Zadania są asynchroniczne — Cosmos sam
+  odpytuje o status i pobiera gotowy plik.
+
+**Wszystko spina baza wiedzy:** każdy wygenerowany obraz, dźwięk i wideo trafia
+do niej automatycznie (z promptem jako opisem), więc możesz się do nich odnosić
+w rozmowie i używać ich w kolejnych krokach (obraz z OpenAI → wideo w Seedance).
+
+### 🎬 Adobe Creative Cloud
+
+Ustaw `STUDIO_EXPORT_DIR` w `.env` na folder swojego projektu (np.
+`C:\Projekty\Premiere\assets`) — każdy plik ze Studia zapisze się tam
+automatycznie. W Premiere/After Effects podepnij ten folder w Media Browser,
+a w Photoshopie otwieraj bez szukania. (Adobe nie udostępnia publicznego API
+do zdalnego sterowania aplikacjami desktopowymi, więc most działa przez pliki —
+to standardowy, niezawodny workflow.)
+
+### 🖱️ Cursor (i inne narzędzia MCP)
+
+Cosmos wystawia mostek **MCP** (`mcp/cosmos-mcp.js`) — agent w Cursorze może
+przeszukiwać Twoją bazę wiedzy, czytać pamięć i zdarzenia percepcji, dopisywać
+notatki i generować obrazy przez Studio. W Cursorze: *Settings → MCP → Add server*:
+
+```json
+{
+  "mcpServers": {
+    "cosmos": {
+      "command": "node",
+      "args": ["C:/sciezka/do/Bear/mcp/cosmos-mcp.js"],
+      "env": { "COSMOS_URL": "http://localhost:3000" }
+    }
+  }
+}
+```
+
+Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomiony.
+
 ### Pozostałe elementy orkiestry
 
 | Zadanie | Narzędzie | Jak podłączyć |

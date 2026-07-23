@@ -59,6 +59,51 @@ const ENDPOINTS = {
   },
 };
 
+// Dodatkowe silniki komercyjne — pojawiają się jako zakładki, gdy podasz klucz.
+if (process.env.OPENAI_API_KEY) {
+  ENDPOINTS.openai = {
+    label: 'OpenAI',
+    baseUrl: (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    apiKey: process.env.OPENAI_API_KEY,
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    visionModel: '', // gpt-4o widzi obrazy natywnie
+  };
+}
+if (process.env.ANTHROPIC_API_KEY) {
+  ENDPOINTS.claude = {
+    label: 'Claude',
+    // Warstwa zgodności Anthropic z API OpenAI (chat/completions)
+    baseUrl: (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1').replace(/\/+$/, ''),
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
+    visionModel: '',
+    anthropic: true,
+  };
+}
+
+// Studio — generowanie mediów z komercyjnych API (płatne kluczem użytkownika)
+const STUDIO = {
+  openai: {
+    key: process.env.OPENAI_API_KEY || '',
+    base: (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    imageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+  },
+  eleven: {
+    key: process.env.ELEVENLABS_API_KEY || '',
+    base: (process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io').replace(/\/+$/, ''),
+    voice: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
+    model: process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
+  },
+  seedance: {
+    key: process.env.SEEDANCE_API_KEY || '',
+    base: (process.env.SEEDANCE_BASE_URL || 'https://ark.ap-southeast.bytepluses.com/api/v3').replace(/\/+$/, ''),
+    model: process.env.SEEDANCE_MODEL || 'seedance-2-0',
+  },
+  exportDir: process.env.STUDIO_EXPORT_DIR || '',
+};
+
+const studioTasks = new Map(); // taskId -> { prompt } (zadania wideo w toku)
+
 const SENSES_URL = (process.env.SENSES_URL || 'http://localhost:7060').replace(/\/+$/, '');
 
 // Wyszukiwarka internetowa (bez klucza API). Domyślnie DuckDuckGo HTML;
@@ -379,6 +424,20 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
     .map((s) => ({ name: s.c.name, text: s.c.text }));
 }
 
+async function kbAddFile(name, mime, buf, presetText = null) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  fs.mkdirSync(KB_FILES, { recursive: true });
+  fs.writeFileSync(path.join(KB_FILES, id), buf);
+  const text = presetText !== null ? presetText : await extractKbText(name, mime, buf);
+  const item = {
+    id, type: 'file', name, mime, size: buf.length, time: Date.now(),
+    text, chunks: await buildChunks(text),
+  };
+  kbItems.push(item);
+  saveKb();
+  return item;
+}
+
 async function handleKb(req, res, pathname) {
   if (pathname === '/api/kb' && req.method === 'GET') {
     return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
@@ -409,6 +468,12 @@ async function handleKb(req, res, pathname) {
     } catch { res.writeHead(404); return res.end(); }
   }
 
+  if (pathname === '/api/kb/search' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://localhost').searchParams.get('q') || '';
+    const results = await kbSearch(q, [], 5);
+    return sendJson(res, 200, { query: q, results });
+  }
+
   if (pathname === '/api/kb/file' && req.method === 'POST') {
     let data;
     try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -418,18 +483,8 @@ async function handleKb(req, res, pathname) {
     try { buf = Buffer.from(String(data.data || ''), 'base64'); } catch { buf = null; }
     if (!buf || !buf.length) return sendJson(res, 400, { error: 'Brak danych pliku.' });
 
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    fs.mkdirSync(KB_FILES, { recursive: true });
-    fs.writeFileSync(path.join(KB_FILES, id), buf);
-
-    const text = await extractKbText(name, mime, buf);
-    const item = {
-      id, type: 'file', name, mime, size: buf.length, time: Date.now(),
-      text, chunks: await buildChunks(text),
-    };
-    kbItems.push(item);
-    saveKb();
-    addEvent('baza-wiedzy', `dodano plik: ${name}${text ? ` (${text.length} znaków tekstu)` : ''}`);
+    const item = await kbAddFile(name, mime, buf);
+    addEvent('baza-wiedzy', `dodano plik: ${name}${item.text ? ` (${item.text.length} znaków tekstu)` : ''}`);
     return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
   }
 
@@ -522,12 +577,16 @@ async function readJson(req) {
 }
 
 function pickEndpoint(name) {
-  return ENDPOINTS[name === 'local' ? 'local' : 'cloud'];
+  return ENDPOINTS[name] || ENDPOINTS.cloud;
 }
 
 function authHeaders(ep) {
   const headers = { 'Content-Type': 'application/json' };
   if (ep.apiKey) headers.Authorization = `Bearer ${ep.apiKey}`;
+  if (ep.anthropic) {
+    headers['x-api-key'] = ep.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  }
   return headers;
 }
 
@@ -536,25 +595,26 @@ function authHeaders(ep) {
 // ---------------------------------------------------------------------------
 
 function handleConfig(res) {
+  const endpoints = {};
+  for (const [name, ep] of Object.entries(ENDPOINTS)) {
+    endpoints[name] = {
+      label: ep.label,
+      baseUrl: ep.baseUrl,
+      model: ep.model,
+      visionModel: ep.visionModel || '',
+      hasApiKey: name === 'local' ? true : Boolean(ep.apiKey),
+    };
+  }
   sendJson(res, 200, {
     app: 'Cosmos',
-    endpoints: {
-      cloud: {
-        label: ENDPOINTS.cloud.label,
-        baseUrl: ENDPOINTS.cloud.baseUrl,
-        model: ENDPOINTS.cloud.model,
-        visionModel: ENDPOINTS.cloud.visionModel,
-        hasApiKey: Boolean(ENDPOINTS.cloud.apiKey),
-      },
-      local: {
-        label: ENDPOINTS.local.label,
-        baseUrl: ENDPOINTS.local.baseUrl,
-        model: ENDPOINTS.local.model,
-        visionModel: ENDPOINTS.local.visionModel,
-        hasApiKey: true,
-      },
-    },
+    endpoints,
     senses: { baseUrl: SENSES_URL },
+    studio: {
+      image: Boolean(STUDIO.openai.key),
+      speech: Boolean(STUDIO.eleven.key),
+      video: Boolean(STUDIO.seedance.key),
+      exportDir: STUDIO.exportDir,
+    },
   });
 }
 
@@ -631,6 +691,199 @@ async function proxySenses(req, res, targetPath, { json = false } = {}) {
   const buf = Buffer.from(await upstream.arrayBuffer());
   res.writeHead(upstream.status, { 'Content-Type': contentType, 'Content-Length': buf.length });
   res.end(buf);
+}
+
+// ---------------------------------------------------------------------------
+// API: Studio — generowanie mediów (OpenAI / ElevenLabs / Seedance)
+// Każdy wynik trafia do bazy wiedzy i (opcjonalnie) do folderu eksportu
+// (STUDIO_EXPORT_DIR — np. folder projektu Adobe).
+// ---------------------------------------------------------------------------
+
+function exportToStudioDir(name, buf) {
+  if (!STUDIO.exportDir) return '';
+  try {
+    fs.mkdirSync(STUDIO.exportDir, { recursive: true });
+    const p = path.join(STUDIO.exportDir, name);
+    fs.writeFileSync(p, buf);
+    return p;
+  } catch (err) {
+    console.error('Eksport nie powiódł się:', err.message);
+    return '';
+  }
+}
+
+function tsName(prefix, ext) {
+  const t = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  return `${prefix}-${t}.${ext}`;
+}
+
+async function handleStudio(req, res, pathname) {
+  if (pathname === '/api/studio/providers' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      image: Boolean(STUDIO.openai.key),
+      speech: Boolean(STUDIO.eleven.key),
+      video: Boolean(STUDIO.seedance.key),
+      imageModel: STUDIO.openai.imageModel,
+      voice: STUDIO.eleven.voice,
+      videoModel: STUDIO.seedance.model,
+      exportDir: STUDIO.exportDir,
+    });
+  }
+
+  // --- OBRAZ (OpenAI Images) ---
+  if (pathname === '/api/studio/image' && req.method === 'POST') {
+    if (!STUDIO.openai.key) {
+      return sendJson(res, 400, { error: 'Brak klucza OpenAI. Ustaw OPENAI_API_KEY w .env i zrestartuj serwer.' });
+    }
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const prompt = String(data.prompt || '').trim();
+    if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
+    const size = ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
+      .includes(data.size) ? data.size : '1024x1024';
+
+    const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
+    if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
+
+    try {
+      const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(180000),
+      });
+      const resp = await r.json();
+      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+      let buf;
+      const first = resp.data?.[0] || {};
+      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
+      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+      else throw new Error('API nie zwróciło obrazu.');
+
+      const name = tsName('obraz', 'png');
+      const item = await kbAddFile(name, 'image/png', buf,
+        `Grafika wygenerowana w Studiu (model: ${STUDIO.openai.imageModel}). Prompt: ${prompt}`);
+      const exported = exportToStudioDir(name, buf);
+      addEvent('studio', `wygenerowano obraz: „${prompt.slice(0, 80)}”`);
+      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Generowanie obrazu nie powiodło się: ${err.message}` });
+    }
+  }
+
+  // --- DŹWIĘK (ElevenLabs) ---
+  if (pathname === '/api/studio/speech' && req.method === 'POST') {
+    if (!STUDIO.eleven.key) {
+      return sendJson(res, 400, { error: 'Brak klucza ElevenLabs. Ustaw ELEVENLABS_API_KEY w .env.' });
+    }
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const text = String(data.text || '').trim();
+    if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
+    const voice = String(data.voiceId || STUDIO.eleven.voice);
+
+    try {
+      const r = await fetch(`${STUDIO.eleven.base}/v1/text-to-speech/${encodeURIComponent(voice)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'xi-api-key': STUDIO.eleven.key },
+        body: JSON.stringify({ text, model_id: STUDIO.eleven.model }),
+        signal: AbortSignal.timeout(120000),
+      });
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try { msg = (await r.json()).detail?.message || msg; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      const buf = Buffer.from(await r.arrayBuffer());
+      const name = tsName('glos', 'mp3');
+      const item = await kbAddFile(name, 'audio/mpeg', buf,
+        `Nagranie głosowe (ElevenLabs, głos: ${voice}). Tekst: ${text.slice(0, 800)}`);
+      const exported = exportToStudioDir(name, buf);
+      addEvent('studio', `wygenerowano dźwięk: „${text.slice(0, 60)}”`);
+      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Generowanie dźwięku nie powiodło się: ${err.message}` });
+    }
+  }
+
+  // --- WIDEO (Seedance przez API zgodne z BytePlus/Ark: zadania asynchroniczne) ---
+  if (pathname === '/api/studio/video' && req.method === 'POST') {
+    if (!STUDIO.seedance.key) {
+      return sendJson(res, 400, { error: 'Brak klucza Seedance. Ustaw SEEDANCE_API_KEY w .env.' });
+    }
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const prompt = String(data.prompt || '').trim();
+    if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
+    const duration = [5, 10].includes(Number(data.duration)) ? Number(data.duration) : 5;
+
+    const content = [{ type: 'text', text: `${prompt} --resolution 720p --duration ${duration}` }];
+    if (data.imageId) {
+      const kbItem = kbItems.find((it) => it.id === data.imageId && /^image\//.test(it.mime || ''));
+      if (kbItem) {
+        try {
+          const buf = fs.readFileSync(path.join(KB_FILES, kbItem.id));
+          content.push({ type: 'image_url', image_url: { url: `data:${kbItem.mime};base64,${buf.toString('base64')}` } });
+        } catch { /* obraz zniknął — generujemy z samego promptu */ }
+      }
+    }
+
+    try {
+      const r = await fetch(`${STUDIO.seedance.base}/contents/generations/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.seedance.key}` },
+        body: JSON.stringify({ model: STUDIO.seedance.model, content }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const resp = await r.json();
+      if (!r.ok) throw new Error(resp.error?.message || resp.message || `HTTP ${r.status}`);
+      const taskId = resp.id || resp.data?.id;
+      if (!taskId) throw new Error('API nie zwróciło identyfikatora zadania.');
+      studioTasks.set(String(taskId), { prompt });
+      addEvent('studio', `rozpoczęto generowanie wideo: „${prompt.slice(0, 60)}”`);
+      return sendJson(res, 200, { ok: true, taskId });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Nie udało się zlecić wideo: ${err.message}` });
+    }
+  }
+
+  if (pathname === '/api/studio/video/status' && req.method === 'GET') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
+    try {
+      const r = await fetch(`${STUDIO.seedance.base}/contents/generations/tasks/${encodeURIComponent(id)}`, {
+        headers: { Authorization: `Bearer ${STUDIO.seedance.key}` },
+        signal: AbortSignal.timeout(20000),
+      });
+      const resp = await r.json();
+      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+      const status = resp.status || resp.data?.status || 'running';
+
+      if (['succeeded', 'success', 'completed'].includes(status)) {
+        const videoUrl = resp.content?.video_url || resp.video_url ||
+                         resp.data?.content?.video_url || resp.data?.video_url;
+        if (!videoUrl) throw new Error('Zadanie ukończone, ale brak adresu wideo w odpowiedzi.');
+        const buf = Buffer.from(await (await fetch(videoUrl, { signal: AbortSignal.timeout(300000) })).arrayBuffer());
+        const meta = studioTasks.get(id) || {};
+        const name = tsName('wideo', 'mp4');
+        const item = await kbAddFile(name, 'video/mp4', buf,
+          `Wideo wygenerowane w Studiu (model: ${STUDIO.seedance.model}). Prompt: ${meta.prompt || ''}`);
+        const exported = exportToStudioDir(name, buf);
+        studioTasks.delete(id);
+        addEvent('studio', `ukończono wideo: „${(meta.prompt || '').slice(0, 60)}”`);
+        return sendJson(res, 200, { status: 'done', item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
+      }
+      if (['failed', 'error', 'cancelled'].includes(status)) {
+        studioTasks.delete(id);
+        return sendJson(res, 200, { status: 'failed', error: resp.error?.message || 'Zadanie nie powiodło się.' });
+      }
+      return sendJson(res, 200, { status: 'running' });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Sprawdzenie zadania nie powiodło się: ${err.message}` });
+    }
+  }
+
+  res.writeHead(405);
+  res.end();
 }
 
 // ---------------------------------------------------------------------------
@@ -745,6 +998,17 @@ async function handleChat(req, res) {
         'Otrzymasz wtedy wiadomość „WYNIKI WYSZUKIWANIA” i na jej podstawie udzielisz pełnej ' +
         'odpowiedzi, podając źródła. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
         'odpowiadaj normalnie, bez [SZUKAJ:].',
+    });
+  }
+
+  if (STUDIO.openai.key && payload.useStudio !== false) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — GENEROWANIE OBRAZÓW: gdy użytkownik prosi o wygenerowanie grafiki, obrazu, ' +
+        'ilustracji lub loga, odpowiedz krótko i zakończ osobną linią dokładnie w formacie: ' +
+        '[OBRAZ: szczegółowy opis sceny po angielsku]. Obraz zostanie wygenerowany i pokazany. ' +
+        'Nie używaj [OBRAZ:] w innych sytuacjach.',
     });
   }
 
@@ -949,6 +1213,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
+    if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
@@ -974,6 +1239,12 @@ function start(port = PORT) {
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
       console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
+      const extraTabs = ['openai', 'claude'].filter((k) => ENDPOINTS[k]);
+      if (extraTabs.length) console.log(`  → Silniki dodatkowe: ${extraTabs.join(', ')}`);
+      const studioOn = [STUDIO.openai.key && 'obraz(OpenAI)', STUDIO.eleven.key && 'dźwięk(ElevenLabs)',
+        STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
+      console.log(`  → Studio:  ${studioOn.length ? studioOn.join(', ') : 'brak kluczy (opcjonalne)'}` +
+        (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
       console.log('');
       resolve(server);
     });
