@@ -92,6 +92,8 @@ const el = {
   modelSelectCloud: $('model-select-cloud'),
   modelSelectLocal: $('model-select-local'),
   configInfo: $('config-info'),
+  memoryList: $('memory-list'),
+  memoryCount: $('memory-count'),
 };
 
 const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
@@ -350,41 +352,73 @@ function messageElement(m) {
   const body = document.createElement('div');
   body.className = 'msg-content' + (role === 'assistant' && !isError ? ' md' : '');
 
-  if (role === 'user') {
-    const imgs = imagesHtml(images);
-    if (imgs) body.appendChild(imgs);
-    if (text) body.appendChild(document.createTextNode(text));
-    msg.appendChild(body);
-    return msg;
-  }
-
   if (isError) {
     body.textContent = text;
     msg.appendChild(body);
     return msg;
   }
 
-  body.innerHTML = renderMarkdown(text);
+  if (role === 'user') {
+    const imgs = imagesHtml(images);
+    if (imgs) body.appendChild(imgs);
+    if (text) body.appendChild(document.createTextNode(text));
+    const col = document.createElement('div');
+    col.className = 'user-col';
+    col.append(body, messageActions(text, { copy: false }));
+    msg.appendChild(col);
+    return msg;
+  }
 
-  const actions = document.createElement('div');
-  actions.className = 'msg-actions';
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'msg-action-btn';
-  copyBtn.innerHTML = COPY_SVG + ' Kopiuj';
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(text).then(() => {
-      copyBtn.textContent = '✓ Skopiowano';
-      setTimeout(() => { copyBtn.innerHTML = COPY_SVG + ' Kopiuj'; }, 1500);
-    });
-  });
-  actions.appendChild(copyBtn);
+  body.innerHTML = renderMarkdown(text);
 
   const col = document.createElement('div');
   col.style.flex = '1';
   col.style.minWidth = '0';
-  col.append(body, actions);
+  col.append(body, messageActions(text, { copy: true }));
   msg.appendChild(col);
   return msg;
+}
+
+function messageActions(text, { copy }) {
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+
+  if (copy) {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-action-btn';
+    copyBtn.innerHTML = COPY_SVG + ' Kopiuj';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = '✓ Skopiowano';
+        setTimeout(() => { copyBtn.innerHTML = COPY_SVG + ' Kopiuj'; }, 1500);
+      });
+    });
+    actions.appendChild(copyBtn);
+  }
+
+  if (text.trim()) {
+    const remBtn = document.createElement('button');
+    remBtn.className = 'msg-action-btn';
+    remBtn.innerHTML = '✦ Zapamiętaj';
+    remBtn.addEventListener('click', async () => {
+      remBtn.disabled = true;
+      try {
+        const res = await fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.trim() }),
+        });
+        if (!res.ok) throw new Error();
+        remBtn.textContent = '✓ Zapamiętano';
+      } catch {
+        remBtn.textContent = '✗ Błąd zapisu';
+        remBtn.disabled = false;
+      }
+    });
+    actions.appendChild(remBtn);
+  }
+
+  return actions;
 }
 
 function renderMessages() {
@@ -999,7 +1033,43 @@ function openSettings() {
   el.modelSelectCloud.style.display = 'none';
   el.modelSelectLocal.style.display = 'none';
   renderConfigInfo();
+  loadMemoryList();
   el.settingsModal.style.display = '';
+}
+
+async function loadMemoryList() {
+  el.memoryList.innerHTML = '<span class="memory-empty">Ładowanie…</span>';
+  try {
+    const res = await fetch('/api/memory');
+    const data = await res.json();
+    const items = data.memories || [];
+    el.memoryCount.textContent = items.length ? `(${items.length})` : '';
+    if (!items.length) {
+      el.memoryList.innerHTML = '<span class="memory-empty">Brak wpisów — użyj „✦ Zapamiętaj" pod dowolną wiadomością.</span>';
+      return;
+    }
+    el.memoryList.innerHTML = '';
+    for (const m of [...items].reverse()) {
+      const row = document.createElement('div');
+      row.className = 'memory-item';
+      const txt = document.createElement('span');
+      txt.className = 'memory-text';
+      txt.textContent = m.text;
+      txt.title = m.text;
+      const del = document.createElement('button');
+      del.className = 'memory-del';
+      del.textContent = '×';
+      del.title = 'Usuń wpis';
+      del.addEventListener('click', async () => {
+        await fetch(`/api/memory?id=${encodeURIComponent(m.id)}`, { method: 'DELETE' });
+        loadMemoryList();
+      });
+      row.append(txt, del);
+      el.memoryList.appendChild(row);
+    }
+  } catch {
+    el.memoryList.innerHTML = '<span class="memory-empty">Nie udało się wczytać pamięci.</span>';
+  }
 }
 
 function closeSettings() {

@@ -105,6 +105,137 @@ function sceneContext() {
 }
 
 // ---------------------------------------------------------------------------
+// Pamięć długotrwała (RAG) — fakty zapisane przez użytkownika.
+// Embeddingi liczy usługa zmysłów (/embed); bez niej działa
+// wyszukiwanie słów kluczowych.
+// ---------------------------------------------------------------------------
+
+const DATA_DIR = path.join(__dirname, 'data');
+const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
+
+let memories = [];
+try { memories = JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8')); } catch { /* brak pliku */ }
+
+function saveMemories() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(MEMORY_FILE, JSON.stringify(memories, null, 2));
+  } catch (err) {
+    console.error('Nie udało się zapisać pamięci:', err.message);
+  }
+}
+
+async function embedTexts(texts) {
+  try {
+    const r = await fetch(`${SENSES_URL}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return Array.isArray(d.vectors) ? d.vectors : null;
+  } catch {
+    return null;
+  }
+}
+
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+}
+
+function keywords(text) {
+  return new Set(
+    text.toLowerCase().split(/[^a-ząćęłńóśźż0-9]+/i).filter((w) => w.length >= 4)
+  );
+}
+
+function keywordScore(query, text) {
+  const q = keywords(query);
+  if (!q.size) return 0;
+  const t = keywords(text);
+  let hits = 0;
+  for (const w of q) if (t.has(w)) hits++;
+  return hits / Math.sqrt(q.size * Math.max(t.size, 1));
+}
+
+async function searchMemory(query, limit = 4) {
+  if (!memories.length || !query || !query.trim()) return [];
+
+  let qvec = null;
+  const vecs = await embedTexts([query]);
+  if (vecs) {
+    qvec = vecs[0];
+    // uzupełnij embeddingi wpisów dodanych, gdy zmysły były offline
+    const missing = memories.filter((m) => !m.embedding);
+    if (missing.length) {
+      const embs = await embedTexts(missing.map((m) => m.text));
+      if (embs) {
+        missing.forEach((m, i) => { m.embedding = embs[i]; });
+        saveMemories();
+      }
+    }
+  }
+
+  const threshold = qvec ? 0.35 : 0.15;
+  return memories
+    .map((m) => ({
+      m,
+      score: (qvec && m.embedding) ? cosine(qvec, m.embedding) : keywordScore(query, m.text),
+    }))
+    .filter((s) => s.score > threshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.m);
+}
+
+function memoryContextLines(items) {
+  if (!items.length) return '';
+  const lines = items.map((m) => {
+    const d = new Date(m.time).toLocaleDateString('pl-PL');
+    return `- [zapisano ${d}] ${m.text}`;
+  });
+  return 'PAMIĘĆ DŁUGOTRWAŁA — fakty, które użytkownik kazał Ci wcześniej zapamiętać ' +
+         '(przywołane, bo pasują do bieżącej rozmowy):\n' + lines.join('\n');
+}
+
+async function handleMemory(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  if (req.method === 'GET') {
+    return sendJson(res, 200, {
+      memories: memories.map(({ id, text, time, embedding }) => ({
+        id, text, time, hasEmbedding: Boolean(embedding),
+      })),
+    });
+  }
+  if (req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const text = String(data.text || '').trim().slice(0, 2000);
+    if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
+    const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, time: Date.now(), embedding: null };
+    const vecs = await embedTexts([text]);
+    if (vecs) item.embedding = vecs[0];
+    memories.push(item);
+    saveMemories();
+    return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding), total: memories.length });
+  }
+  if (req.method === 'DELETE') {
+    const id = url.searchParams.get('id');
+    const before = memories.length;
+    memories = memories.filter((m) => m.id !== id);
+    if (memories.length !== before) saveMemories();
+    return sendJson(res, 200, { ok: true, total: memories.length });
+  }
+  res.writeHead(405);
+  res.end();
+}
+
+// ---------------------------------------------------------------------------
 // Pomocnicze
 // ---------------------------------------------------------------------------
 
@@ -290,13 +421,30 @@ async function handleChat(req, res) {
     });
   }
 
-  // Kontekst percepcji: doklejamy jako dodatkową wiadomość systemową,
-  // zaraz po instrukcji systemowej użytkownika (jeśli jest).
+  // Kontekst percepcji + pamięć długotrwała: doklejamy jako dodatkowe
+  // wiadomości systemowe, zaraz po instrukcji systemowej użytkownika.
   const messages = [...payload.messages];
+  const extras = [];
+
   const scene = payload.useSenses === false ? '' : sceneContext();
-  if (scene) {
+  if (scene) extras.push({ role: 'system', content: scene });
+
+  if (payload.useMemory !== false) {
+    const lastUser = [...payload.messages].reverse().find((m) => m.role === 'user');
+    let queryText = '';
+    if (lastUser) {
+      queryText = typeof lastUser.content === 'string'
+        ? lastUser.content
+        : (lastUser.content.find?.((p) => p.type === 'text')?.text || '');
+    }
+    const recalled = await searchMemory(queryText);
+    const memCtx = memoryContextLines(recalled);
+    if (memCtx) extras.push({ role: 'system', content: memCtx });
+  }
+
+  if (extras.length) {
     const insertAt = messages[0]?.role === 'system' ? 1 : 0;
-    messages.splice(insertAt, 0, { role: 'system', content: scene });
+    messages.splice(insertAt, 0, ...extras);
   }
 
   const body = {
@@ -419,6 +567,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
+    if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
@@ -442,6 +591,7 @@ function start(port = PORT) {
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
+      console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
       console.log('');
       resolve(server);
     });

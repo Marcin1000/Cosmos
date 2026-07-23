@@ -37,7 +37,7 @@ app = FastAPI(title="Cosmos Senses")
 # Wykrywanie dostępnych zmysłów (leniwa inicjalizacja modeli)
 # ---------------------------------------------------------------------------
 
-CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False}
+CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False, "embed": False}
 
 try:
     import faster_whisper  # noqa: F401
@@ -63,9 +63,16 @@ try:
 except ImportError:
     pass
 
+try:
+    import sentence_transformers  # noqa: F401
+    CAPS["embed"] = True
+except ImportError:
+    pass
+
 _whisper_model = None
 _piper_voice = None
 _yolo_model = None
+_embed_model = None
 
 
 def get_whisper():
@@ -96,6 +103,17 @@ def get_yolo():
         from ultralytics import YOLO
         _yolo_model = YOLO(os.environ.get("YOLO_MODEL", "yolo11n.pt"))
     return _yolo_model
+
+
+def get_embedder():
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        # bge-m3: bardzo dobre wielojęzyczne embeddingi (ok. 2 GB).
+        # Lżejsza alternatywa: paraphrase-multilingual-MiniLM-L12-v2 (~120 MB).
+        name = os.environ.get("EMBED_MODEL", "BAAI/bge-m3")
+        _embed_model = SentenceTransformer(name)
+    return _embed_model
 
 
 def decode_image(payload: dict):
@@ -205,6 +223,19 @@ async def pose(request: Request):
     hip_y = (lm[23].y + lm[24].y) / 2
     posture = "stoi" if (hip_y - nose_y) > 0.45 else "siedzi lub jest blisko kamery"
     return {"present": True, "summary": f"widoczna sylwetka, osoba prawdopodobnie {posture}"}
+
+
+@app.post("/embed")
+async def embed(request: Request):
+    """{"texts": ["...", ...]} -> {"vectors": [[...], ...]} (pamięć długotrwała)"""
+    if not CAPS["embed"]:
+        return JSONResponse({"error": "Embeddingi niedostępne (pip install sentence-transformers)."}, status_code=501)
+    payload = await request.json()
+    texts = payload.get("texts") or []
+    if not isinstance(texts, list) or not texts:
+        return JSONResponse({"error": "Pole texts (lista) jest wymagane."}, status_code=400)
+    vectors = get_embedder().encode([str(t)[:4000] for t in texts], normalize_embeddings=True)
+    return {"vectors": [v.tolist() for v in vectors]}
 
 
 if __name__ == "__main__":

@@ -46,6 +46,41 @@ i wysyła do Cosmosa **tylko zmiany** („w kadrze pojawiło się: person”).
 Cosmos dokleja je do kontekstu rozmowy — możesz zapytać „co się zmieniło
 w pokoju?” i model odpowie na podstawie prawdziwych obserwacji.
 
+## Pamięć długotrwała (embeddingi)
+
+```bash
+pip install sentence-transformers
+```
+
+Domyślny model to **bge-m3** (~2 GB, bardzo dobre wielojęzyczne wyniki).
+Lżejsza alternatywa (~120 MB): `set EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2`.
+Bez tego zmysłu pamięć w Cosmosie nadal działa — używa wtedy słów kluczowych.
+
+## Zmysł głębi — Kinect 360
+
+```bash
+python kinect_watcher.py
+```
+
+Czyta mapę głębi przez **libfreenect** i wysyła do Cosmosa zdarzenia:
+obecność w zasięgu, ruch, dystans najbliższego obiektu. Instalacja libfreenect:
+https://github.com/OpenKinect/libfreenect (na Windows wymaga zbudowania;
+na Linuksie `sudo apt install freenect`). Kinect RGB działa równolegle jako
+zwykła kamera dla `watcher.py` (YOLO) i MediaPipe — głębia i obraz to dwa
+niezależne zmysły z jednego urządzenia.
+
+## Fotogrametria — Cosmos PhotoScan
+
+```bash
+python photoscan.py C:\zdjecia\zamek           # analiza jakości + model 3D
+python photoscan.py C:\zdjecia\zamek --dense   # + gęsta chmura punktów (.ply)
+```
+
+Copilot ocenia zestaw zdjęć (liczba, ostrość, ekspozycja) i radzi, co dokręcić,
+a jeśli w PATH jest **COLMAP** (https://colmap.github.io, wersja CUDA dla RTX),
+buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie —
+możesz zapytać w czacie „jak poszedł skan?".
+
 ## Endpointy
 
 | Endpoint | Wejście | Wyjście |
@@ -55,6 +90,7 @@ w pokoju?” i model odpowie na podstawie prawdziwych obserwacji.
 | `POST /tts` | `{text}` | audio WAV |
 | `POST /detect` | `{image: dataURL}` | `{objects[], summary}` |
 | `POST /pose` | `{image: dataURL}` | `{present, summary}` |
+| `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
 
 ## Wydajność na RTX 3080
 

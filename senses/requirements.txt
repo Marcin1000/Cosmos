@@ -20,5 +20,13 @@ opencv-python
 # CIAŁO — sylwetka i pozy (MediaPipe)
 mediapipe
 
-# Obserwator kamery (watcher.py)
+# PAMIĘĆ — embeddingi do pamięci długotrwałej (RAG)
+# bge-m3 (~2 GB, domyślny) lub lżejszy: ustaw EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+sentence-transformers
+
+# Obserwatory (watcher.py, kinect_watcher.py, photoscan.py)
 requests
+numpy
+
+# GŁĘBIA — Kinect 360 przez libfreenect (kinect_watcher.py):
+# moduł "freenect" instaluje się razem z libfreenect — patrz senses/README.md

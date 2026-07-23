@@ -130,23 +130,44 @@ obserwacji, niezależnie od tego, czy działa lokalnie, czy w chmurze.
 Instalacja zmysłów: **[senses/README.md](senses/README.md)** (każdy jest opcjonalny —
 Cosmos działa też bez żadnego z nich).
 
+### Pamięć długotrwała (RAG)
+
+Pod każdą wiadomością jest przycisk **„✦ Zapamiętaj"** — zapisany fakt trafia do
+`data/memory.json` na serwerze. Podczas rozmowy Cosmos **sam przywołuje pasujące
+wpisy** (wyszukiwanie semantyczne przez embeddingi **bge-m3** z usługi zmysłów;
+gdy zmysły są offline — wyszukiwanie po słowach kluczowych) i dokleja je do
+kontekstu jako sekcję „PAMIĘĆ DŁUGOTRWAŁA". Wpisami zarządzasz w **Ustawieniach**.
+
+### Zmysł głębi — Kinect 360
+
+`python senses/kinect_watcher.py` — czyta mapę głębi (libfreenect) i melduje:
+obecność w zasięgu, ruch, dystans najbliższego obiektu. Działa równolegle
+z `watcher.py` (Kinect RGB = zwykła kamera dla YOLO). Szczegóły: `senses/README.md`.
+
+### Fotogrametria — Cosmos PhotoScan
+
+`python senses/photoscan.py <folder-ze-zdjęciami>` — copilot ocenia zestaw
+(liczba ujęć, ostrość, ekspozycja) i radzi po polsku, co poprawić, a gdy
+zainstalowany jest **COLMAP** (CUDA na RTX 3080), buduje model 3D automatycznie
+(`--dense` = gęsta chmura punktów `.ply` do Blendera/MeshLaba). Wynik skanu
+trafia do Cosmosa jako zdarzenie.
+
 ### Pozostałe elementy orkiestry
 
 | Zadanie | Narzędzie | Jak podłączyć |
 |---|---|---|
 | Widzenie (opis obrazu) | Nemotron VL (chmura) lub **Qwen2.5-VL** (Ollama) | `NEMOTRON_VISION_MODEL` / `LOCAL_VISION_MODEL` w `.env` |
-| Pamięć długoterminowa (RAG) | **bge-m3** | planowany moduł `senses/memory` |
-| Fotogrametria | **COLMAP**, Meshroom | zdjęcia z Canona/Mavica → model 3D (workflow w docs) |
 
 ## 🏗️ API serwera
 
 | Endpoint | Metoda | Opis |
 |---|---|---|
-| `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji, strumień SSE |
+| `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji i pamięci, strumień SSE |
 | `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
-| `/api/events` | POST/GET | Zdarzenia percepcji (od watchera/czujników) |
+| `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
+| `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe) |
 
 ## 💰 Koszty
