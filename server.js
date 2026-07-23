@@ -895,17 +895,43 @@ async function handleStudio(req, res, pathname) {
     try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
     const prompt = String(data.prompt || '').trim();
     if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
-    const duration = [5, 10].includes(Number(data.duration)) ? Number(data.duration) : 5;
 
-    const content = [{ type: 'text', text: `${prompt} --resolution 720p --duration ${duration}` }];
-    if (data.imageId) {
-      const kbItem = kbItems.find((it) => it.id === data.imageId && /^image\//.test(it.mime || ''));
-      if (kbItem) {
-        try {
-          const buf = fs.readFileSync(path.join(KB_FILES, kbItem.id));
-          content.push({ type: 'image_url', image_url: { url: `data:${kbItem.mime};base64,${buf.toString('base64')}` } });
-        } catch { /* obraz zniknął — generujemy z samego promptu */ }
-      }
+    // Parametry w formacie komend tekstowych Ark (--resolution, --ratio, …)
+    const duration = Math.min(15, Math.max(2, parseInt(data.duration, 10) || 5));
+    const resolution = ['480p', '720p', '1080p'].includes(data.resolution) ? data.resolution : '720p';
+    const ratio = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'].includes(data.ratio)
+      ? data.ratio : '16:9';
+    let cmd = ` --resolution ${resolution} --ratio ${ratio} --duration ${duration}`;
+    if (data.seed !== undefined && String(data.seed).trim() !== '' && Number.isInteger(Number(data.seed))) {
+      cmd += ` --seed ${Number(data.seed)}`;
+    }
+    if (data.camerafixed === true) cmd += ' --camerafixed true';
+    if (data.watermark === true) cmd += ' --watermark true';
+
+    const content = [{ type: 'text', text: `${prompt}${cmd}` }];
+
+    const frameFor = (id) => {
+      const kbItem = kbItems.find((it) => it.id === id && /^image\//.test(it.mime || ''));
+      if (!kbItem) return null;
+      try {
+        const buf = fs.readFileSync(path.join(KB_FILES, kbItem.id));
+        return `data:${kbItem.mime};base64,${buf.toString('base64')}`;
+      } catch { return null; }
+    };
+
+    // pierwsza/ostatnia klatka (i2v first–last frame; imageId = stara nazwa pola)
+    const firstUrl = frameFor(data.firstFrameId || data.imageId);
+    const lastUrl = frameFor(data.lastFrameId);
+    if (lastUrl && !firstUrl) {
+      return sendJson(res, 400, {
+        error: 'Ostatnia klatka wymaga podania także pierwszej klatki (wymóg API Seedance).',
+      });
+    }
+    if (firstUrl) {
+      content.push({ type: 'image_url', image_url: { url: firstUrl }, role: 'first_frame' });
+    }
+    if (lastUrl) {
+      content.push({ type: 'image_url', image_url: { url: lastUrl }, role: 'last_frame' });
     }
 
     try {

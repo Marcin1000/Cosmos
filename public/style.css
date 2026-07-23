@@ -938,6 +938,17 @@ kbd {
 }
 .studio-out .studio-error { color: var(--danger); font-size: 12.5px; font-family: var(--font-mono); }
 
+.studio-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+.studio-check input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+
 .studio-spinner {
   display: inline-block;
   width: 14px;

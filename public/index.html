@@ -244,10 +244,36 @@
           <textarea id="studio-video-prompt" rows="2" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
           <div class="field-row">
             <select id="studio-video-image" class="mono"><option value="">pierwsza klatka: brak (sam prompt)</option></select>
+            <select id="studio-video-last" class="mono"><option value="">ostatnia klatka: brak</option></select>
+          </div>
+          <div class="field-row">
             <select id="studio-video-duration" class="mono">
-              <option value="5">5 s</option>
+              <option value="3">3 s</option>
+              <option value="4">4 s</option>
+              <option value="5" selected>5 s</option>
+              <option value="6">6 s</option>
+              <option value="8">8 s</option>
               <option value="10">10 s</option>
+              <option value="12">12 s</option>
             </select>
+            <select id="studio-video-resolution" class="mono">
+              <option value="480p">480p</option>
+              <option value="720p" selected>720p</option>
+              <option value="1080p">1080p</option>
+            </select>
+            <select id="studio-video-ratio" class="mono">
+              <option value="16:9" selected>16:9 (poziomy)</option>
+              <option value="9:16">9:16 (pionowy)</option>
+              <option value="1:1">1:1 (kwadrat)</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="21:9">21:9 (kinowy)</option>
+              <option value="adaptive">adaptive (wg klatki)</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="text" id="studio-video-seed" class="mono" placeholder="seed (opcjonalnie — powtarzalność)">
+            <label class="studio-check"><input type="checkbox" id="studio-video-camfix"> stała kamera</label>
             <button class="btn-primary" id="studio-video-go">Generuj wideo</button>
           </div>
           <div class="studio-out" id="studio-video-out"></div>

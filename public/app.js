@@ -1186,12 +1186,15 @@ async function openStudio() {
     } else {
       provSel.style.display = 'none';
     }
-    // obrazy z bazy wiedzy jako pierwsza klatka wideo
+    // obrazy z bazy wiedzy jako pierwsza / ostatnia klatka wideo
     const kb = await (await fetch('/api/kb')).json();
-    const sel = $('studio-video-image');
-    sel.innerHTML = '<option value="">pierwsza klatka: brak (sam prompt)</option>' +
-      (kb.items || []).filter((i) => (i.mime || '').startsWith('image/'))
-        .map((i) => `<option value="${escapeHtml(i.id)}">klatka: ${escapeHtml(i.name)}</option>`).join('');
+    const images = (kb.items || []).filter((i) => (i.mime || '').startsWith('image/'));
+    const opts = images.map((i) =>
+      `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
+    $('studio-video-image').innerHTML =
+      '<option value="">pierwsza klatka: brak (sam prompt)</option>' + opts;
+    $('studio-video-last').innerHTML =
+      '<option value="">ostatnia klatka: brak</option>' + opts;
   } catch { /* sekcje zostają w stanie domyślnym */ }
 }
 
@@ -1252,7 +1255,12 @@ $('studio-video-go').addEventListener('click', async () => {
       body: JSON.stringify({
         prompt,
         duration: Number($('studio-video-duration').value),
-        imageId: $('studio-video-image').value || undefined,
+        resolution: $('studio-video-resolution').value,
+        ratio: $('studio-video-ratio').value,
+        seed: $('studio-video-seed').value.trim() || undefined,
+        camerafixed: $('studio-video-camfix').checked || undefined,
+        firstFrameId: $('studio-video-image').value || undefined,
+        lastFrameId: $('studio-video-last').value || undefined,
       }),
     });
     const d = await res.json();
