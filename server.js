@@ -191,13 +191,16 @@ function saveMemories() {
   }
 }
 
-async function embedTexts(texts) {
+// timeoutMs: przy indeksowaniu (upload) dajemy modelowi czas na start (60 s),
+// ale przy wyszukiwaniu w trakcie rozmowy czekamy krótko (5 s), żeby
+// niedostępna usługa zmysłów nie opóźniała odpowiedzi czatu.
+async function embedTexts(texts, timeoutMs = 60000) {
   try {
     const r = await fetch(`${SENSES_URL}/embed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texts }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!r.ok) return null;
     const d = await r.json();
@@ -233,7 +236,7 @@ async function searchMemory(query, limit = 4) {
   if (!memories.length || !query || !query.trim()) return [];
 
   let qvec = null;
-  const vecs = await embedTexts([query]);
+  const vecs = await embedTexts([query], 5000);
   if (vecs) {
     qvec = vecs[0];
     // uzupełnij embeddingi wpisów dodanych, gdy zmysły były offline
@@ -426,7 +429,7 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
   if (!pool.length) return [];
 
   let qvec = null;
-  const vecs = await embedTexts([query]);
+  const vecs = await embedTexts([query], 5000);
   if (vecs) qvec = vecs[0];
 
   const threshold = qvec ? 0.35 : 0.18;
@@ -571,7 +574,8 @@ function sendJson(res, status, data) {
   res.end(body);
 }
 
-function readBodyBuffer(req, limit = 64 * 1024 * 1024) {
+// 128 MB: plik 50 MB po zakodowaniu base64 w JSON rośnie do ~67 MB
+function readBodyBuffer(req, limit = 128 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
