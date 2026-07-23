@@ -2982,6 +2982,7 @@ function startApp() {
   // Nauka: harmonogram rutyn
   try { scheduleControls(); } catch { /* ignore */ }
   loadProcedures();
+  loadAutomationStatus();
   updateLearnBadge();
   pollDueRoutines();
   setInterval(pollDueRoutines, 60000);
@@ -3003,6 +3004,20 @@ function openLearn() {
   loadLessons();
   loadProcedures();
   loadRoutines();
+  loadAutomationStatus();
+}
+async function loadAutomationStatus() {
+  try {
+    window.__automation = await (await fetch('/api/automation/status')).json();
+  } catch { window.__automation = { available: false }; }
+  const on = window.__automation && window.__automation.available;
+  $('routine-auto-wrap').style.display = on ? '' : 'none';
+  updateRunAutoBtn();
+}
+function updateRunAutoBtn() {
+  const on = window.__automation && window.__automation.available;
+  const p = procEditing && (window.__procedures || []).find((x) => x.id === procEditing);
+  $('proc-run-auto').style.display = (on && p && p.readOnly) ? '' : 'none';
 }
 function closeLearn() {
   learnModal.style.display = 'none';
@@ -3137,8 +3152,37 @@ async function loadProcedures() {
     const rp = $('routine-proc');
     rp.innerHTML = procedures.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
     updateLearnBadge();
+    updateRunAutoBtn();
   } catch { /* offline */ }
 }
+async function runReadonly(procId, statusEl, resultsEl) {
+  if (!window.__automation || !window.__automation.available) {
+    if (statusEl) statusEl.textContent = t('learn.autoNoModule'); return null;
+  }
+  if (statusEl) statusEl.textContent = t('learn.autoRunning');
+  try {
+    const r = await fetch('/api/procedures/run-readonly', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: procId }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      if (statusEl) statusEl.textContent = d.error === 'not-readonly' ? t('learn.autoNotReadonly')
+        : t('learn.autoErr', { e: d.reason || d.message || d.error || '?' });
+      return d;
+    }
+    if (statusEl) statusEl.textContent = t('learn.autoDone', { n: d.results.length });
+    if (resultsEl) {
+      resultsEl.innerHTML = `<div class="field-hint">${t('learn.autoResults')}</div>` +
+        d.results.map((x) => `<div class="learn-item"><div class="learn-item-main"><strong>${escapeHtml(x.label)}</strong>` +
+          `<span class="learn-item-meta">${escapeHtml(x.value)}</span></div></div>`).join('');
+    }
+    return d;
+  } catch (e) { if (statusEl) statusEl.textContent = t('learn.autoErr', { e: String(e) }); return null; }
+}
+$('proc-run-auto').addEventListener('click', () => {
+  if (!procEditing) return;
+  runReadonly(procEditing, $('learn-proc-status'), $('proc-results'));
+});
 $('proc-picker').addEventListener('change', (e) => {
   const id = e.target.value;
   if (!id) { resetProcForm(); return; }
@@ -3148,7 +3192,9 @@ $('proc-picker').addEventListener('change', (e) => {
   $('proc-name').value = p.name; $('proc-desc').value = p.description || '';
   procStepsData = (p.steps || []).map((s) => ({ ...s }));
   $('proc-delete').style.display = '';
+  $('proc-results').innerHTML = '';
   renderProcSteps();
+  updateRunAutoBtn();
 });
 $('proc-save').addEventListener('click', async () => {
   const name = $('proc-name').value.trim();
@@ -3238,11 +3284,15 @@ function scheduleControls() {
   }
 }
 $('routine-type').addEventListener('change', scheduleControls);
+$('routine-auto').addEventListener('change', (e) => {
+  if (e.target.checked && window.Notification && Notification.permission === 'default') Notification.requestPermission();
+});
 $('routine-add').addEventListener('click', async () => {
   const procId = $('routine-proc').value;
   if (!procId) { $('learn-routine-status').textContent = t('learn.needProc'); return; }
   const type = $('routine-type').value;
-  const body = { procedureId: procId, type, time: $('routine-time').value, day: Number($('routine-day').value || 0), everyMinutes: Number($('routine-mins').value || 60) };
+  const autoOn = window.__automation && window.__automation.available && $('routine-auto').checked;
+  const body = { procedureId: procId, type, time: $('routine-time').value, day: Number($('routine-day').value || 0), everyMinutes: Number($('routine-mins').value || 60), mode: autoOn ? 'auto-read' : 'prepare' };
   try {
     const r = await fetch('/api/routines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) throw 0;
@@ -3258,9 +3308,10 @@ async function loadRoutines() {
     const freq = { daily: t('learn.freqDaily'), weekly: t('learn.freqWeekly'), monthly: t('learn.freqMonthly'), interval: t('learn.freqInterval') };
     box.innerHTML = routines.map((r) => {
       const sched = r.schedule.type === 'interval' ? `${freq.interval} (${r.schedule.everyMinutes})` : `${freq[r.schedule.type]} ${r.schedule.time}`;
+      const autoTag = r.mode === 'auto-read' ? ' · ⚡auto' : '';
       return `<div class="learn-item" data-id="${r.id}">` +
         `<div class="learn-item-main"><strong>${escapeHtml(r.procedureName)}</strong>` +
-        `<span class="learn-item-meta mono">${sched} · ${t('learn.nextRun', { when: new Date(r.nextRun).toLocaleString() })}</span></div>` +
+        `<span class="learn-item-meta mono">${sched}${autoTag} · ${t('learn.nextRun', { when: new Date(r.nextRun).toLocaleString() })}</span></div>` +
         `<button class="btn-ghost r-toggle">${r.enabled ? t('learn.on') : t('learn.off')}</button>` +
         `<button class="btn-ghost r-run">${t('learn.runNow')}</button>` +
         `<button class="icon-btn r-del" title="✕">✕</button></div>`;
@@ -3305,11 +3356,24 @@ async function pollDueRoutines() {
     for (const r of (due || [])) {
       if (dueShownIds.has(r.id)) continue;
       dueShownIds.add(r.id);
+      const ack = () => fetch('/api/routines', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, pending: false }) });
+      // Tryb auto (tylko odczyt): wykonaj w tle bez pytania, wynik jako powiadomienie
+      if (r.mode === 'auto-read' && window.__automation && window.__automation.available) {
+        const d = await runReadonly(r.procedureId, null, null);
+        ack();
+        if (d && d.ok) {
+          const summary = d.results.map((x) => `${x.label}: ${x.value}`).join(' · ');
+          if (window.Notification && Notification.permission === 'granted') {
+            new Notification(r.procedureName, { body: summary.slice(0, 200) });
+          }
+        }
+        continue;
+      }
       if (confirm(t('learn.dueBody', { name: r.procedureName }))) {
         if (!window.__procedures) await loadProcedures();
         runRoutineNow(r);
       } else {
-        fetch('/api/routines', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, pending: false }) });
+        ack();
       }
     }
   } catch { /* offline */ }

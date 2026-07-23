@@ -93,9 +93,13 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   co N minut) dla procedury. Scheduler na serwerze zgłasza, że nadszedł czas (nic
   nieodwracalnego nie dzieje się samo); interfejs proponuje uruchomienie z bramką
   potwierdzeń. Endpointy: `/api/routines`, `/api/routines/due`.
-- [ ] **Automatyczne odtwarzanie web (Playwright)** — świadomie odłożone: pełne bezobsługowe
-  odtwarzanie kroków w przeglądarce jako osobny, opcjonalny moduł wykonawczy z twardą bramką
-  przed każdym krokiem wrażliwym. Obecnie runner prowadzi krok po kroku (asystent z bramką).
+- [x] **Automatyczne odtwarzanie web — TYLKO DO ODCZYTU (Playwright)** — opcjonalny moduł
+  `automation/runner.js`: Cosmos sam wykonuje kroki nie zmieniające stanu (open/wait/read/
+  click) w prawdziwej przeglądarce i zwraca odczytane wartości. Twarda bramka: każdy krok
+  wrażliwy lub zmieniający stan (type/confirm) jest odrzucany. Rutyny mają „tryb auto" dla
+  procedur do odczytu. Endpointy: `/api/automation/status`, `/api/procedures/run-readonly`.
+- [ ] **Automatyczne odtwarzanie web ZMIENIAJĄCE STAN** — świadomie odłożone: kroki
+  type/confirm/płatność wymagałyby menedżera sekretów i pozostają w ręcznym runnerze z bramką.
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
   systemowej poza przeglądarką (osobne narzędzia/uprawnienia).
 

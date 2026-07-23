@@ -490,9 +490,11 @@
           <div class="field-row" style="margin-top:10px">
             <button class="btn-primary" id="proc-save" data-i18n="learn.saveProc">Zapisz procedurę</button>
             <button class="btn-secondary" id="proc-run" data-i18n="learn.runProc">Uruchom (z potwierdzeniem)</button>
+            <button class="btn-secondary" id="proc-run-auto" data-i18n="learn.runAuto" style="display:none">⚡ Uruchom auto (tylko odczyt)</button>
             <button class="btn-ghost" id="proc-delete" data-i18n="learn.deleteProc" style="display:none">Usuń</button>
           </div>
           <div class="field-hint" id="learn-proc-status"></div>
+          <div class="learn-list" id="proc-results"></div>
         </div>
 
         <!-- Rutyny -->
@@ -513,6 +515,7 @@
             <input type="number" id="routine-mins" min="1" value="60" style="display:none" data-i18n-ph="learn.minsPh" placeholder="minuty">
             <button class="btn-primary" id="routine-add" data-i18n="learn.addRoutine">Dodaj rutynę</button>
           </div>
+          <label class="ps-sens" id="routine-auto-wrap" style="display:none"><input type="checkbox" id="routine-auto"> <span data-i18n="learn.autoMode">Tryb auto — wykonaj sam (tylko procedury do odczytu)</span></label>
           <div class="field-hint" id="learn-routine-status"></div>
           <div class="learn-list" id="routine-list"></div>
         </div>

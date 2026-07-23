@@ -36,7 +36,9 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**
 - 🎓 **Nauka** — uczysz Cosmosa rozpoznawania (pokaż w kamerze i nazwij),
   nagrywasz **procedury** (czynności krok po kroku) i planujesz je jako **rutyny**
-  cykliczne; kroki wrażliwe (płatność, wysłanie) zawsze wymagają potwierdzenia
+  cykliczne; kroki wrażliwe (płatność, wysłanie) zawsze wymagają potwierdzenia.
+  Opcjonalnie **automatyzacja web tylko-do-odczytu** (Playwright) wykonuje same
+  bezpieczne odczyty (sprawdź cenę / saldo / status)
 - 🕰️ **Digital Time Machine** (włączana w Ustawieniach) — automatyczny zapis migawek
   sceny do osi czasu, ze wskaźnikiem „REC"
 - 💾 **Kopie zapasowe i statystyki** danych, **tryb offline**, uwierzytelnianie hasłem
@@ -241,9 +243,18 @@ wartości. Nemotron może sam zaproponować uruchomienie: *„odpal sprawdzenie 
 minut. O wyznaczonej porze Cosmos **przygotowuje** czynność i pyta, czy uruchomić (z bramką
 na krokach wrażliwych). Licznik przy „Nauce" pokazuje, ile rutyn czeka.
 
-> **Bezpieczeństwo pieniędzy:** domyślnie żadna rutyna nie wykonuje płatności automatycznie.
-> Pełne bezobsługowe odtwarzanie kroków w przeglądarce (Playwright) jest świadomie odłożone
-> jako osobny, opcjonalny moduł — z twardą bramką przed każdym nieodwracalnym krokiem.
+**Automatyzacja web tylko-do-odczytu (opcjonalny moduł Playwright).** Dla procedur
+zawierających wyłącznie kroki nie zmieniające stanu (otwórz / poczekaj / odczytaj /
+nawigacja) pojawia się przycisk **„⚡ Uruchom auto (tylko odczyt)"** — Cosmos sam otwiera
+stronę w prawdziwej przeglądarce i zwraca odczytane wartości (np. saldo z publicznej strony,
+cena, status), a wynik trafia do kontekstu rozmowy. Rutyna z **trybem auto** zrobi to sama
+o wyznaczonej porze i przyśle powiadomienie. **Twarda bramka:** jeśli procedura ma choć jeden
+krok wrażliwy lub zmieniający stan (wpisywanie danych, potwierdzenie, płatność), moduł
+odmawia i odsyła do ręcznego runnera z potwierdzeniem. Włączenie: `npm install playwright`
+(szczegóły: **[automation/README.md](automation/README.md)**).
+
+> **Bezpieczeństwo pieniędzy:** żadna rutyna nie wykonuje płatności automatycznie. Tryb auto
+> obsługuje wyłącznie odczyt; kroki zmieniające stan zawsze wymagają Twojego potwierdzenia.
 
 ### Zmysł głębi — Kinect 360
 
@@ -353,6 +364,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/lessons` `/api/lessons/match` | GET/POST/DELETE | Nauka: wzorce rozpoznawania i dopasowanie |
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
+| `/api/automation/status` `/api/procedures/run-readonly` | GET / POST | Nauka: automatyzacja web tylko-do-odczytu (Playwright) |
 
 ## 💰 Koszty
 

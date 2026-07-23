@@ -18,6 +18,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawn } = require('node:child_process');
 
 // ---------------------------------------------------------------------------
 // Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
@@ -875,7 +876,7 @@ function sanitizeStep(s) {
 async function handleProcedures(req, res, pathname) {
   const url = new URL(req.url, 'http://localhost');
   if (pathname === '/api/procedures' && req.method === 'GET') {
-    return sendJson(res, 200, { procedures });
+    return sendJson(res, 200, { procedures: procedures.map((p) => ({ ...p, readOnly: isReadOnlyProcedure(p) })) });
   }
   if (pathname === '/api/procedures' && req.method === 'POST') {
     let data;
@@ -1033,6 +1034,69 @@ function startScheduler() {
   tickRoutines();
   schedulerTimer = setInterval(tickRoutines, 30 * 1000);
   if (schedulerTimer.unref) schedulerTimer.unref();
+}
+
+// --- Automatyzacja web TYLKO DO ODCZYTU (opcjonalny moduł Playwright) ---
+const READONLY_ACTIONS = new Set(['open', 'wait', 'read', 'click']);
+const AUTOMATION_RUNNER = path.join(__dirname, 'automation', 'runner.js');
+
+// Procedura kwalifikuje się do trybu auto tylko, gdy KAŻDY krok jest
+// bezpieczny do odczytu i żaden nie jest wrażliwy.
+function isReadOnlyProcedure(proc) {
+  return Boolean(proc) && proc.steps.length > 0 &&
+    proc.steps.every((s) => READONLY_ACTIONS.has(s.action) && !s.sensitive);
+}
+
+function runReadonlyAutomation(proc, timeoutMs = 90000) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(process.execPath, [AUTOMATION_RUNNER], { stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch (err) {
+      return resolve({ ok: false, error: 'spawn-failed', reason: err.message });
+    }
+    let out = '', errOut = '';
+    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, timeoutMs);
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { errOut += d; });
+    child.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, error: 'spawn-failed', reason: err.message }); });
+    child.on('close', () => {
+      clearTimeout(timer);
+      try { resolve(JSON.parse(out)); }
+      catch { resolve({ ok: false, error: 'no-output', reason: (errOut || out).slice(0, 300) }); }
+    });
+    child.stdin.write(JSON.stringify({ name: proc.name, steps: proc.steps }));
+    child.stdin.end();
+  });
+}
+
+async function handleAutomation(req, res, pathname) {
+  if (pathname === '/api/automation/status' && req.method === 'GET') {
+    // czy moduł Playwright jest zainstalowany?
+    let available = false;
+    try { require.resolve('playwright'); available = true; } catch { /* brak */ }
+    return sendJson(res, 200, { available, runner: fs.existsSync(AUTOMATION_RUNNER) });
+  }
+  if (pathname === '/api/procedures/run-readonly' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const proc = procedures.find((p) => p.id === data.id);
+    if (!proc) return sendJson(res, 404, { error: 'Nie znaleziono procedury.' });
+    if (!isReadOnlyProcedure(proc)) {
+      return sendJson(res, 400, {
+        error: 'not-readonly',
+        message: 'Ta procedura zawiera kroki zmieniające stan lub wrażliwe (wpisywanie, ' +
+                 'potwierdzenie, płatność). Uruchom ją ręcznym runnerem z potwierdzeniem.',
+      });
+    }
+    const result = await runReadonlyAutomation(proc);
+    if (result.ok) {
+      const summary = result.results.map((r) => `${r.label}: ${r.value}`).join(' | ').slice(0, 400);
+      addEvent('automatyzacja', `odczyt „${proc.name}": ${summary || '(brak wyników)'}`);
+    }
+    return sendJson(res, result.ok ? 200 : 502, result);
+  }
+  res.writeHead(405); res.end();
 }
 
 async function handleKb(req, res, pathname) {
@@ -2187,6 +2251,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/timeline') return await handleTimeline(req, res);
     if (p === '/api/lessons' || p === '/api/lessons/match') return await handleLessons(req, res, p);
     if (p === '/api/procedures') return await handleProcedures(req, res, p);
+    if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
     if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
