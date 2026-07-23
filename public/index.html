@@ -131,6 +131,9 @@
         <button class="icon-btn tts-toggle" id="tts-toggle" data-i18n-title="ttsRead" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
           <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
         </button>
+        <button class="icon-btn" id="summarize-btn" data-i18n-title="summarize" title="Streść rozmowę" aria-label="Streść" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
         <button class="icon-btn" id="export-btn" data-i18n-title="exportConv" title="Eksportuj (Markdown)" aria-label="Eksportuj" style="display:none">
           <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -179,7 +182,7 @@
             <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
           </button>
         </div>
-        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span></p>
+        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
       </div>
     </main>
   </div>
@@ -228,6 +231,12 @@
             <input type="number" id="set-maxtokens" min="16" max="32768" step="16" value="2048" class="mono">
           </label>
         </div>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.profile">Profil (pamięć profilowa)</span>
+          <textarea id="set-profile" rows="3" placeholder="np. Marcin — twórca wideo. Sprzęt: Canon R6 II, Mavic 3, RTX 3080. Lubi ciepłą kolorystykę i 50 mm."></textarea>
+          <span class="field-hint" data-i18n="set.profileHint">Stałe fakty o Tobie…</span>
+        </label>
 
         <div class="field">
           <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>

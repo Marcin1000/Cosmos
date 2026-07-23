@@ -416,6 +416,38 @@ function sortConvIndex() {
   convIndex.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
 }
 
+// Wyszukiwanie po TREŚCI rozmów (skan plików) — zwraca dopasowania z fragmentem.
+function searchConversationsContent(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out = [];
+  for (const meta of convIndex) {
+    try {
+      const conv = JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8'));
+      let snippet = '';
+      for (const m of conv.messages || []) {
+        const text = typeof m.content === 'string' ? m.content
+          : (Array.isArray(m.content) ? (m.content.find((p) => p.type === 'text')?.text || '') : (m.content?.text || ''));
+        const at = text.toLowerCase().indexOf(q);
+        if (at >= 0) { snippet = text.slice(Math.max(0, at - 40), at + 80); break; }
+      }
+      const inTitle = (meta.title || '').toLowerCase().includes(q);
+      if (snippet || inTitle) out.push({ id: meta.id, title: meta.title, snippet: snippet.trim() });
+    } catch { /* pomiń uszkodzony plik */ }
+  }
+  return out.slice(0, 30);
+}
+
+// Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
+const PROFILE_FILE = path.join(DATA_DIR, 'profile.txt');
+let userProfile = '';
+try { userProfile = fs.readFileSync(PROFILE_FILE, 'utf8'); } catch { /* brak */ }
+function saveProfile(text) {
+  userProfile = String(text || '').slice(0, 4000);
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(PROFILE_FILE, userProfile); }
+  catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
+}
+
 async function handleConversations(req, res, pathname) {
   const rawId = new URL(req.url, 'http://localhost').searchParams.get('id');
   // ta sama sanityzacja co convPath — indeks i nazwa pliku zawsze zgodne
@@ -439,6 +471,11 @@ async function handleConversations(req, res, pathname) {
     sortConvIndex();
     saveConvIndex();
     return sendJson(res, 200, { ok: true, meta: entry });
+  }
+
+  if (pathname === '/api/conversations/search' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://localhost').searchParams.get('q') || '';
+    return sendJson(res, 200, { results: searchConversationsContent(q) });
   }
 
   if (req.method === 'GET' && !id) {
@@ -1444,6 +1481,11 @@ async function handleChat(req, res) {
         ? lastUser.content
         : (lastUser.content.find?.((p) => p.type === 'text')?.text || ''));
 
+  // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
+  if (userProfile.trim()) {
+    extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
+  }
+
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });
 
@@ -1489,7 +1531,8 @@ async function handleChat(req, res) {
         `${(it.text || '(plik binarny — brak wyodrębnionego tekstu)').slice(0, 6000)}`);
       extras.push({
         role: 'system',
-        content: 'BAZA WIEDZY — materiały wybrane przez użytkownika do tej rozmowy. ' +
+        content: 'Gdy korzystasz z poniższych materiałów, podaj źródło w formacie [źródło: nazwa]. ' +
+                 'BAZA WIEDZY — materiały wybrane przez użytkownika do tej rozmowy. ' +
                  'Odpowiadając, opieraj się na nich w pierwszej kolejności:\n\n' + parts.join('\n\n'),
       });
     }
@@ -1523,7 +1566,8 @@ async function handleChat(req, res) {
     if (found.length) {
       extras.push({
         role: 'system',
-        content: 'BAZA WIEDZY — fragmenty pasujące do bieżącego pytania:\n\n' +
+        content: 'Gdy korzystasz z poniższych fragmentów, podaj źródło w formacie [źródło: nazwa]. ' +
+                 'BAZA WIEDZY — fragmenty pasujące do bieżącego pytania:\n\n' +
                  found.map((f) => `### ${f.name}\n${f.text}`).join('\n\n'),
       });
     }
@@ -1682,7 +1726,29 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
-    if (p === '/api/conversations' || p === '/api/conversations/meta') return await handleConversations(req, res, p);
+    if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
+    if (p === '/api/profile') {
+      if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });
+      if (req.method === 'POST') {
+        try { saveProfile((await readJson(req)).profile); return sendJson(res, 200, { ok: true }); }
+        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      }
+    }
+    if (p === '/api/summarize' && req.method === 'POST') {
+      let data;
+      try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      const text = String(data.text || '').slice(0, 40000);
+      if (!text.trim()) return sendJson(res, 400, { error: 'Brak treści do streszczenia.' });
+      try {
+        const summary = await llmComplete([
+          { role: 'system', content: 'Streść poniższą rozmowę zwięźle w punktach, w języku rozmowy. Zwróć samo streszczenie.' },
+          { role: 'user', content: text },
+        ], { endpoint: data.endpoint || 'cloud', maxTokens: 600 });
+        return sendJson(res, 200, { ok: true, summary });
+      } catch (err) {
+        return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
+      }
+    }
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');

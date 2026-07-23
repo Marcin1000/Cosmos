@@ -367,7 +367,7 @@ function renderSidebar() {
   el.conversations.innerHTML = '';
   const q = convSearchQuery.trim().toLowerCase();
   const list = q
-    ? conversations.filter((c) => (c.title || '').toLowerCase().includes(q))
+    ? conversations.filter((c) => (c.title || '').toLowerCase().includes(q) || convContentMatchIds.has(c.id))
     : conversations;
 
   if (!list.length) {
@@ -608,6 +608,9 @@ function renderMessages() {
   el.welcome.style.display = hasMessages ? 'none' : '';
   const exportBtn = $('export-btn');
   if (exportBtn) exportBtn.style.display = hasMessages ? '' : 'none';
+  const sumBtn = $('summarize-btn');
+  if (sumBtn) sumBtn.style.display = hasMessages ? '' : 'none';
+  updateTokenEstimate();
   if (!hasMessages) return;
 
   conv.messages.forEach((m, idx) => {
@@ -1099,6 +1102,7 @@ function autosizeInput() {
 el.input.addEventListener('input', () => {
   autosizeInput();
   updateSendButton();
+  updateTokenEstimate();
 });
 
 el.input.addEventListener('keydown', (e) => {
@@ -2252,10 +2256,23 @@ el.expandBtn.addEventListener('click', () => {
   document.querySelector('.app').classList.remove('sidebar-hidden');
 });
 
-// wyszukiwarka rozmów
+// wyszukiwarka rozmów — po tytule (natychmiast) i po treści (z serwera)
+let convContentMatchIds = new Set();
+let convSearchTimer = null;
 $('conv-search').addEventListener('input', (e) => {
   convSearchQuery = e.target.value;
   renderSidebar();
+  clearTimeout(convSearchTimer);
+  const q = convSearchQuery.trim();
+  if (q.length < 2) { convContentMatchIds = new Set(); return; }
+  convSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(q)}`);
+      const d = await res.json();
+      convContentMatchIds = new Set((d.results || []).map((r) => r.id));
+      renderSidebar();
+    } catch { /* offline — zostaje filtr po tytule */ }
+  }, 300);
 });
 
 // eksport aktywnej rozmowy do Markdown
@@ -2281,6 +2298,42 @@ function exportConversation() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $('export-btn').addEventListener('click', exportConversation);
+
+// streszczenie aktywnej rozmowy → dopisane jako wiadomość asystenta
+$('summarize-btn').addEventListener('click', async () => {
+  const conv = activeConv();
+  if (!conv || !conv.messages.length || isGenerating) return;
+  const text = conv.messages.filter((m) => !m.error && !m.search)
+    .map((m) => `${m.role === 'user' ? t('exportYou') : 'Cosmos'}: ${msgText(m)}`).join('\n');
+  const btn = $('summarize-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/summarize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, endpoint }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    conv.messages.push({ role: 'assistant', content: `**${t('summarize')}:**\n\n${d.summary}` });
+    saveConversations();
+    renderMessages();
+    if (settings.speak) speakText(d.summary);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// szacunkowy licznik tokenów w kontekście (~znaki/4)
+function updateTokenEstimate() {
+  const conv = activeConv();
+  let chars = el.input.value.length + (settings.systemPrompt || '').length;
+  if (conv) for (const m of conv.messages) chars += msgText(m).length;
+  const est = Math.round(chars / 4);
+  const node = $('token-estimate');
+  if (node) node.textContent = est > 0 ? t('tokensCtx', { n: est }) : '';
+}
 
 // skróty klawiszowe
 document.addEventListener('keydown', (e) => {
@@ -2378,6 +2431,7 @@ function openSettings() {
   el.modelSelectLocal.style.display = 'none';
   renderConfigInfo();
   loadMemoryList();
+  fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   el.settingsModal.style.display = '';
 }
 
@@ -2452,6 +2506,11 @@ el.settingsSave.addEventListener('click', () => {
   settings.temperature = parseFloat(el.setTemp.value);
   settings.maxTokens = parseInt(el.setMaxTokens.value, 10) || DEFAULT_SETTINGS.maxTokens;
   saveSettings();
+  // profil zapisywany na serwerze (wspólny dla urządzeń)
+  fetch('/api/profile', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile: $('set-profile').value }),
+  }).catch(() => {});
   updateModelBadge();
   closeSettings();
 });

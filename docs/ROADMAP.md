@@ -29,14 +29,14 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [x] **Upscale obrazu** — przycisk w galerii → usługa zmysłów (Real-ESRGAN, opcjonalny model)
 - [x] **Warianty jako kolejka** — generowanie ×1/×2/×4 (kolejka wsadowa w rdzeniu Partii 2)
 
-## 🔜 Partia 3 — wiedza i pamięć
+## ✅ Partia 3 — wiedza i pamięć (GOTOWE)
 
-- [ ] **Cytowanie źródeł** — odpowiedź pokazuje plik/fragment z bazy wiedzy
-- [ ] **Wyszukiwanie po treści rozmów** (nie tylko tytule)
-- [ ] **Automatyczne streszczenia** dokumentów i długich rozmów
-- [ ] **Foldery / tagi rozmów**
-- [ ] **Pamięć profilowa** — Cosmos uczy się preferencji (sprzęt, styl, projekty)
-- [ ] **Wskaźnik kosztu/tokenów** przy modelach z chmury
+- [x] **Cytowanie źródeł** — model dostaje instrukcję podawania `[źródło: nazwa]` przy użyciu bazy wiedzy
+- [x] **Wyszukiwanie po treści rozmów** — skan plików po stronie serwera, wpięte w wyszukiwarkę
+- [x] **Automatyczne streszczenia** — przycisk „Streść rozmowę" w pasku górnym
+- [x] **Pamięć profilowa** — trwały profil (Ustawienia) wstrzykiwany do każdej rozmowy, zapisany na serwerze (cross-device)
+- [x] **Wskaźnik tokenów** — szacunkowy licznik kontekstu przy polu wiadomości
+- [ ] **Foldery / tagi rozmów** — do rozważenia; obecnie mamy wyszukiwarkę + przypinanie, co pokrywa większość potrzeb
 
 ## 🔜 Partia 4 — percepcja i robotyka
 
