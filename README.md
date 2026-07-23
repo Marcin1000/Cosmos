@@ -212,14 +212,27 @@ czego użyjesz — środkami ze swoich kont):
 do niej automatycznie (z promptem jako opisem), więc możesz się do nich odnosić
 w rozmowie i używać ich w kolejnych krokach (obraz z OpenAI → wideo w Seedance).
 
-### 🎬 Adobe Creative Cloud
+### 🎬 Adobe: Firefly + Creative Cloud
 
-Ustaw `STUDIO_EXPORT_DIR` w `.env` na folder swojego projektu (np.
-`C:\Projekty\Premiere\assets`) — każdy plik ze Studia zapisze się tam
-automatycznie. W Premiere/After Effects podepnij ten folder w Media Browser,
-a w Photoshopie otwieraj bez szukania. (Adobe nie udostępnia publicznego API
-do zdalnego sterowania aplikacjami desktopowymi, więc most działa przez pliki —
-to standardowy, niezawodny workflow.)
+**Adobe Firefly** działa w Studiu jako drugi silnik obrazów (obok OpenAI —
+wybierasz z listy przy generowaniu). Jak zdobyć dane dostępowe:
+
+1. Wejdź na [developer.adobe.com/console](https://developer.adobe.com/console)
+   i zaloguj się kontem Adobe.
+2. *Create new project → Add API → Firefly Services → OAuth Server-to-Server*.
+3. Skopiuj **Client ID** i **Client Secret** do `.env`
+   (`FIREFLY_CLIENT_ID`, `FIREFLY_CLIENT_SECRET`).
+
+Cosmos sam pobiera i odświeża token Adobe IMS. Uwaga: dostęp do Firefly API
+bywa rozliczany osobno od subskrypcji Creative Cloud (kredyty generatywne /
+plan Firefly Services) — sprawdź warunki w konsoli developerskiej.
+
+**Aplikacje Creative Cloud (Premiere, Photoshop…):** ustaw `STUDIO_EXPORT_DIR`
+w `.env` na folder swojego projektu (np. `C:\Projekty\Premiere\assets`) — każdy
+plik ze Studia zapisze się tam automatycznie; w Premiere podpinasz folder
+w Media Browser. (Adobe nie udostępnia publicznego API do zdalnego sterowania
+aplikacjami desktopowymi, więc most działa przez pliki — standardowy,
+niezawodny workflow.)
 
 ### 🖱️ Cursor (i inne narzędzia MCP)
 

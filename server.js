@@ -99,8 +99,25 @@ const STUDIO = {
     base: (process.env.SEEDANCE_BASE_URL || 'https://ark.ap-southeast.bytepluses.com/api/v3').replace(/\/+$/, ''),
     model: process.env.SEEDANCE_MODEL || 'seedance-2-0',
   },
+  firefly: {
+    clientId: process.env.FIREFLY_CLIENT_ID || '',
+    clientSecret: process.env.FIREFLY_CLIENT_SECRET || '',
+    base: (process.env.FIREFLY_BASE_URL || 'https://firefly-api.adobe.io').replace(/\/+$/, ''),
+    imsUrl: (process.env.FIREFLY_IMS_URL || 'https://ims-na1.adobelogin.com').replace(/\/+$/, ''),
+  },
   exportDir: process.env.STUDIO_EXPORT_DIR || '',
 };
+
+function fireflyEnabled() {
+  return Boolean(STUDIO.firefly.clientId && STUDIO.firefly.clientSecret);
+}
+
+function imageProviders() {
+  const list = [];
+  if (STUDIO.openai.key) list.push({ id: 'openai', label: `OpenAI (${STUDIO.openai.imageModel})` });
+  if (fireflyEnabled()) list.push({ id: 'firefly', label: 'Adobe Firefly' });
+  return list;
+}
 
 const studioTasks = new Map(); // taskId -> { prompt } (zadania wideo w toku)
 
@@ -610,7 +627,7 @@ function handleConfig(res) {
     endpoints,
     senses: { baseUrl: SENSES_URL },
     studio: {
-      image: Boolean(STUDIO.openai.key),
+      image: imageProviders().length > 0,
       speech: Boolean(STUDIO.eleven.key),
       video: Boolean(STUDIO.seedance.key),
       exportDir: STUDIO.exportDir,
@@ -717,10 +734,61 @@ function tsName(prefix, ext) {
   return `${prefix}-${t}.${ext}`;
 }
 
+// --- Adobe Firefly: token IMS (server-to-server) z pamięcią podręczną ---
+
+let fireflyTokenCache = { token: '', exp: 0 };
+
+async function getFireflyToken() {
+  if (fireflyTokenCache.token && Date.now() < fireflyTokenCache.exp) return fireflyTokenCache.token;
+  const r = await fetch(`${STUDIO.firefly.imsUrl}/ims/token/v3`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: STUDIO.firefly.clientId,
+      client_secret: STUDIO.firefly.clientSecret,
+      scope: 'openid,AdobeID,firefly_api,ff_apis',
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const d = await r.json();
+  if (!r.ok || !d.access_token) {
+    throw new Error(d.error_description || d.error || 'Nie udało się pobrać tokenu Adobe IMS.');
+  }
+  fireflyTokenCache = {
+    token: d.access_token,
+    exp: Date.now() + Math.max(60, (d.expires_in || 3600) - 300) * 1000,
+  };
+  return d.access_token;
+}
+
+async function fireflyGenerateImage(prompt, size) {
+  const token = await getFireflyToken();
+  const dims = size === '1536x1024' ? { width: 2304, height: 1792 }
+    : size === '1024x1536' ? { width: 1792, height: 2304 }
+    : { width: 2048, height: 2048 };
+  const r = await fetch(`${STUDIO.firefly.base}/v3/images/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'x-api-key': STUDIO.firefly.clientId,
+    },
+    body: JSON.stringify({ prompt, size: dims, numVariations: 1 }),
+    signal: AbortSignal.timeout(180000),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.message || d.error_code || `HTTP ${r.status}`);
+  const url = d.outputs?.[0]?.image?.url;
+  if (!url) throw new Error('Firefly nie zwrócił obrazu.');
+  return Buffer.from(await (await fetch(url, { signal: AbortSignal.timeout(120000) })).arrayBuffer());
+}
+
 async function handleStudio(req, res, pathname) {
   if (pathname === '/api/studio/providers' && req.method === 'GET') {
     return sendJson(res, 200, {
-      image: Boolean(STUDIO.openai.key),
+      image: imageProviders().length > 0,
+      imageProviders: imageProviders(),
       speech: Boolean(STUDIO.eleven.key),
       video: Boolean(STUDIO.seedance.key),
       imageModel: STUDIO.openai.imageModel,
@@ -730,10 +798,13 @@ async function handleStudio(req, res, pathname) {
     });
   }
 
-  // --- OBRAZ (OpenAI Images) ---
+  // --- OBRAZ (OpenAI lub Adobe Firefly) ---
   if (pathname === '/api/studio/image' && req.method === 'POST') {
-    if (!STUDIO.openai.key) {
-      return sendJson(res, 400, { error: 'Brak klucza OpenAI. Ustaw OPENAI_API_KEY w .env i zrestartuj serwer.' });
+    const providers = imageProviders();
+    if (!providers.length) {
+      return sendJson(res, 400, {
+        error: 'Brak silnika obrazów. Ustaw OPENAI_API_KEY albo FIREFLY_CLIENT_ID + FIREFLY_CLIENT_SECRET w .env.',
+      });
     }
     let data;
     try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -741,31 +812,40 @@ async function handleStudio(req, res, pathname) {
     if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
     const size = ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
       .includes(data.size) ? data.size : '1024x1024';
-
-    const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
-    if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
+    const provider = providers.some((p) => p.id === data.provider) ? data.provider : providers[0].id;
 
     try {
-      const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(180000),
-      });
-      const resp = await r.json();
-      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
       let buf;
-      const first = resp.data?.[0] || {};
-      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
-      else throw new Error('API nie zwróciło obrazu.');
+      let engineLabel;
+      if (provider === 'firefly') {
+        buf = await fireflyGenerateImage(prompt, size);
+        engineLabel = 'Adobe Firefly';
+      } else {
+        const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
+        if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
+        const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(180000),
+        });
+        const resp = await r.json();
+        if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
+        const first = resp.data?.[0] || {};
+        if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
+        else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+        else throw new Error('API nie zwróciło obrazu.');
+        engineLabel = STUDIO.openai.imageModel;
+      }
 
       const name = tsName('obraz', 'png');
       const item = await kbAddFile(name, 'image/png', buf,
-        `Grafika wygenerowana w Studiu (model: ${STUDIO.openai.imageModel}). Prompt: ${prompt}`);
+        `Grafika wygenerowana w Studiu (silnik: ${engineLabel}). Prompt: ${prompt}`);
       const exported = exportToStudioDir(name, buf);
-      addEvent('studio', `wygenerowano obraz: „${prompt.slice(0, 80)}”`);
-      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
+      addEvent('studio', `wygenerowano obraz (${engineLabel}): „${prompt.slice(0, 80)}”`);
+      return sendJson(res, 200, {
+        ok: true, provider, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported,
+      });
     } catch (err) {
       return sendJson(res, 502, { error: `Generowanie obrazu nie powiodło się: ${err.message}` });
     }
@@ -1001,7 +1081,7 @@ async function handleChat(req, res) {
     });
   }
 
-  if (STUDIO.openai.key && payload.useStudio !== false) {
+  if (imageProviders().length && payload.useStudio !== false) {
     extras.push({
       role: 'system',
       content:
@@ -1241,8 +1321,8 @@ function start(port = PORT) {
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
       const extraTabs = ['openai', 'claude'].filter((k) => ENDPOINTS[k]);
       if (extraTabs.length) console.log(`  → Silniki dodatkowe: ${extraTabs.join(', ')}`);
-      const studioOn = [STUDIO.openai.key && 'obraz(OpenAI)', STUDIO.eleven.key && 'dźwięk(ElevenLabs)',
-        STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
+      const studioOn = [STUDIO.openai.key && 'obraz(OpenAI)', fireflyEnabled() && 'obraz(Firefly)',
+        STUDIO.eleven.key && 'dźwięk(ElevenLabs)', STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
       console.log(`  → Studio:  ${studioOn.length ? studioOn.join(', ') : 'brak kluczy (opcjonalne)'}` +
         (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
       console.log('');

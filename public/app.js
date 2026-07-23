@@ -1176,6 +1176,16 @@ async function openStudio() {
       box.querySelector('.studio-off').style.display = on ? 'none' : '';
     }
     if (prov.voice) $('studio-speech-voice').placeholder = `voice ID (puste = ${prov.voice})`;
+    // wybór silnika obrazów (OpenAI / Adobe Firefly), gdy jest więcej niż jeden
+    const provSel = $('studio-image-provider');
+    const imgProv = prov.imageProviders || [];
+    if (imgProv.length > 1) {
+      provSel.innerHTML = imgProv.map((p) =>
+        `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`).join('');
+      provSel.style.display = '';
+    } else {
+      provSel.style.display = 'none';
+    }
     // obrazy z bazy wiedzy jako pierwsza klatka wideo
     const kb = await (await fetch('/api/kb')).json();
     const sel = $('studio-video-image');
@@ -1199,7 +1209,11 @@ $('studio-image-go').addEventListener('click', async () => {
     const res = await fetch('/api/studio/image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: $('studio-image-size').value }),
+      body: JSON.stringify({
+        prompt,
+        size: $('studio-image-size').value,
+        provider: $('studio-image-provider').value || undefined,
+      }),
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
