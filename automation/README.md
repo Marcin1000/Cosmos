@@ -42,6 +42,31 @@ a przy rutynach — opcja **„Tryb auto"**.
 - Wynik trafia do Cosmosa jako zdarzenie percepcji, więc możesz o nim rozmawiać
   (np. *„ile mam do zapłaty według ostatniego sprawdzenia?"*).
 
+## Logowanie z menedżera haseł
+
+Aby auto‑odczyt działał też **za logowaniem** (np. panel klienta), procedura może
+mieć kroki **„logowanie"** (`auth`): wpisanie loginu i hasła oraz klik „Zaloguj".
+Zasady:
+
+- Zaznacz w kroku `type`/`click` opcję **„logowanie (menedżer haseł)"**.
+- W polu wartości hasła wpisz **odwołanie**, nie samo hasło: `{{secret:bank_pw}}`.
+  Login (nie‑tajny) możesz wpisać wprost.
+- Hasła **nigdy** nie ma w procedurze. Serwer pobiera je z menedżera **w chwili
+  uruchomienia** i podaje runnerowi przez potok (stdin) — nie przez dysk, nie
+  przez argumenty procesu, nie do przeglądarki‑klienta. Wartości nie są logowane.
+- Logowanie jest dozwolone w trybie auto, ale **każdy** krok wrażliwy lub
+  zmieniający stan poza logowaniem (płatność, wysłanie, potwierdzenie) nadal
+  wraca do ręcznego runnera z bramką.
+
+Skonfiguruj menedżer w `.env` (`SECRETS_PROVIDER` + ewentualne pola):
+Bitwarden (`bw`), 1Password (`op`), `pass`, KeePassXC (`keepassxc-cli`), zmienne
+środowiskowe (`env`) albo własne polecenie (`command`). Szczegóły i przykłady —
+w `.env.example`.
+
+> **Nienadzorowane rutyny + logowanie:** vault musi być odblokowany w momencie
+> uruchomienia (np. `BW_SESSION` w środowisku serwera). Dla rutyn cyklicznych na
+> VPS rozważ dedykowany, ograniczony dostęp tylko do potrzebnych pozycji.
+
 ## Rutyny w trybie auto
 
 Rutyna z włączonym **trybem auto** i procedurą tylko-do-odczytu wykona się sama

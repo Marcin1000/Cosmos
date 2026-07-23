@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /* Cosmos — moduł automatyzacji web (TYLKO DO ODCZYTU).
  *
- * Uruchamia kroki nauczonej procedury w prawdziwej przeglądarce (Playwright),
- * ale WYŁĄCZNIE takie, które NIE zmieniają stanu: otwórz stronę, poczekaj,
- * odczytaj, kliknij (nawigacja). Kroki, które coś zmieniają lub są wrażliwe
- * (wpisywanie danych, potwierdzenie, płatność, wysłanie) są ODRZUCANE —
- * moduł zatrzymuje się i zgłasza, że wymagają ręcznego runnera z bramką.
+ * Uruchamia kroki nauczonej procedury w prawdziwej przeglądarce (Playwright).
+ * Dozwolone: otwórz stronę, poczekaj, odczytaj, kliknij (nawigacja) ORAZ
+ * logowanie (kroki oznaczone auth: wpisanie loginu/hasła z menedżera haseł,
+ * klik "Zaloguj"). ODRZUCANE: kroki wrażliwe (płatność, wysłanie, potwierdzenie)
+ * oraz zwykłe wpisywanie danych (type bez auth) — te wymagają ręcznego runnera.
+ *
+ * Wartości sekretów są już podmienione przez serwer (z menedżera haseł) i
+ * docierają tu przez stdin — runner nie zna vaulta i nie zapisuje niczego.
  *
  * Zależność opcjonalna: `npm install playwright` (przeglądarka Chromium).
  * Bez niej reszta Cosmosa działa; ten moduł zwraca wtedy błąd „playwright-missing".
@@ -17,6 +20,14 @@
 
 // akcje bezpieczne dla trybu tylko-do-odczytu
 const READONLY_ACTIONS = new Set(['open', 'wait', 'read', 'click']);
+// krok dozwolony w trybie auto: odczyt zawsze; type/click jako logowanie (auth);
+// nigdy krok wrażliwy ani confirm.
+function stepAllowed(s) {
+  if (s.sensitive || s.action === 'confirm') return false;
+  if (READONLY_ACTIONS.has(s.action)) return true;
+  if (s.action === 'type' && s.auth) return true;
+  return false;
+}
 const TIMEOUT_MS = 20000;
 const MAX_STEPS = 40;
 
@@ -43,10 +54,10 @@ async function main() {
   const steps = Array.isArray(input.steps) ? input.steps.slice(0, MAX_STEPS) : [];
   if (!steps.length) return out({ ok: false, error: 'no-steps' });
 
-  // twarda bramka: żaden krok wrażliwy ani zmieniający stan nie przejdzie
+  // twarda bramka: żaden krok wrażliwy ani zmieniający stan (poza logowaniem) nie przejdzie
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
-    if (s.sensitive || !READONLY_ACTIONS.has(s.action)) {
+    if (!stepAllowed(s)) {
       return out({
         ok: false, error: 'not-readonly', stoppedAt: i + 1,
         reason: `Krok ${i + 1} (${s.action}${s.sensitive ? ', wrażliwy' : ''}) zmienia stan — ` +
@@ -74,6 +85,9 @@ async function main() {
         else await page.waitForTimeout(Math.min(10000, Number(s.value) || 1500));
       } else if (s.action === 'click') {
         if (s.target) await page.click(s.target, { timeout: TIMEOUT_MS }).catch(() => {});
+      } else if (s.action === 'type' && s.auth) {
+        // logowanie: wpisz wartość (login/hasło z menedżera) do pola
+        if (s.target) await page.fill(s.target, String(s.value || ''), { timeout: TIMEOUT_MS }).catch(() => {});
       } else if (s.action === 'read') {
         let value = '';
         try {

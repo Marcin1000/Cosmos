@@ -129,6 +129,14 @@ const SENSES_URL = (process.env.SENSES_URL || 'http://localhost:7060').replace(/
 // można podmienić na własny SearXNG itp. (format HTML zgodny z DDG).
 const SEARCH_URL = process.env.SEARCH_URL || 'https://html.duckduckgo.com/html/';
 
+// Menedżer haseł — źródło sekretów dla automatyzacji (nazwa → wartość, w locie).
+// Sekrety NIGDY nie są zapisywane w procedurach ani wysyłane do przeglądarki-klienta.
+const SECRETS = {
+  provider: (process.env.SECRETS_PROVIDER || 'none').toLowerCase(), // none|env|bitwarden|onepassword|pass|keepassxc|command
+  command: process.env.SECRETS_COMMAND || '',   // szablon z {name}; dla provider=command
+  keepassDb: process.env.KEEPASSXC_DB || '',
+};
+
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -869,6 +877,8 @@ function sanitizeStep(s) {
     value: String(s.value || '').slice(0, 500),
     // krok wrażliwy = nieodwracalny (płatność, wysłanie, potwierdzenie); zawsze wymaga zgody
     sensitive: Boolean(s.sensitive) || action === 'confirm',
+    // krok logowania (type/click) — może użyć sekretu z menedżera haseł; dozwolony w trybie auto
+    auth: Boolean(s.auth) && (action === 'type' || action === 'click'),
     note: String(s.note || '').slice(0, 300),
   };
 }
@@ -876,7 +886,7 @@ function sanitizeStep(s) {
 async function handleProcedures(req, res, pathname) {
   const url = new URL(req.url, 'http://localhost');
   if (pathname === '/api/procedures' && req.method === 'GET') {
-    return sendJson(res, 200, { procedures: procedures.map((p) => ({ ...p, readOnly: isReadOnlyProcedure(p) })) });
+    return sendJson(res, 200, { procedures: procedures.map((p) => ({ ...p, readOnly: autoEligibility(p).eligible, needsAuth: autoEligibility(p).needsAuth })) });
   }
   if (pathname === '/api/procedures' && req.method === 'POST') {
     let data;
@@ -1036,18 +1046,85 @@ function startScheduler() {
   if (schedulerTimer.unref) schedulerTimer.unref();
 }
 
-// --- Automatyzacja web TYLKO DO ODCZYTU (opcjonalny moduł Playwright) ---
+// --- Automatyzacja web (opcjonalny moduł Playwright) ---
+// Tryb auto obejmuje: odczyt (open/wait/read/click) ORAZ logowanie z menedżera
+// haseł (kroki oznaczone auth: type/click). NIGDY kroków wrażliwych ani
+// zmieniających stan poza logowaniem (płatność, wysłanie, potwierdzenie).
 const READONLY_ACTIONS = new Set(['open', 'wait', 'read', 'click']);
 const AUTOMATION_RUNNER = path.join(__dirname, 'automation', 'runner.js');
 
-// Procedura kwalifikuje się do trybu auto tylko, gdy KAŻDY krok jest
-// bezpieczny do odczytu i żaden nie jest wrażliwy.
-function isReadOnlyProcedure(proc) {
-  return Boolean(proc) && proc.steps.length > 0 &&
-    proc.steps.every((s) => READONLY_ACTIONS.has(s.action) && !s.sensitive);
+function secretsEnabled() { return SECRETS.provider && SECRETS.provider !== 'none'; }
+
+// Menedżer haseł — pobranie jednego sekretu po nazwie. Uruchamiane w procesie
+// serwera (ma dostęp do sesji vaulta przez env), wartość leci do runnera przez
+// stdin. Nigdy nie logujemy wartości ani nie zwracamy jej do klienta.
+function resolveSecret(name) {
+  return new Promise((resolve) => {
+    const safe = String(name).replace(/[^\w.@:/-]/g, ''); // bez metaznaków powłoki
+    if (!safe) return resolve(null);
+    let cmd, args;
+    switch (SECRETS.provider) {
+      case 'env':
+        return resolve(process.env['COSMOS_SECRET_' + safe.toUpperCase().replace(/[^A-Z0-9]/g, '_')] || null);
+      case 'bitwarden': cmd = 'bw'; args = ['get', 'password', safe]; break;
+      case 'onepassword': cmd = 'op'; args = ['read', safe]; break;
+      case 'pass': cmd = 'pass'; args = ['show', safe]; break;
+      case 'keepassxc':
+        if (!SECRETS.keepassDb) return resolve(null);
+        cmd = 'keepassxc-cli'; args = ['show', '-a', 'Password', '-q', SECRETS.keepassDb, safe]; break;
+      case 'command': {
+        if (!SECRETS.command) return resolve(null);
+        const full = SECRETS.command.replaceAll('{name}', safe);
+        cmd = '/bin/sh'; args = ['-c', full]; break;
+      }
+      default: return resolve(null);
+    }
+    let out = '';
+    try {
+      const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+      const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, 15000);
+      child.stdout.on('data', (d) => { out += d; });
+      child.on('error', () => { clearTimeout(timer); resolve(null); });
+      child.on('close', () => { clearTimeout(timer); resolve(out.split('\n')[0].trim() || null); });
+    } catch { resolve(null); }
+  });
 }
 
-function runReadonlyAutomation(proc, timeoutMs = 90000) {
+// Podmiana wzorców {{secret:NAZWA}} w wartościach kroków na prawdziwe sekrety.
+// Zwraca {steps, missing[]}. Wywoływane WYŁĄCZNIE po stronie serwera (auto).
+async function materializeSecrets(steps) {
+  const missing = [];
+  const out = [];
+  for (const s of steps) {
+    let value = s.value || '';
+    const refs = [...value.matchAll(/\{\{\s*secret:\s*([^}]+?)\s*\}\}/gi)];
+    for (const m of refs) {
+      const val = secretsEnabled() ? await resolveSecret(m[1]) : null;
+      if (val == null) { missing.push(m[1]); }
+      else value = value.replace(m[0], val);
+    }
+    out.push({ ...s, value });
+  }
+  return { steps: out, missing };
+}
+
+// Krok kwalifikuje się do trybu auto: odczyt zawsze; type/click tylko jako
+// logowanie (auth); nigdy krok wrażliwy ani confirm.
+function stepAutoEligible(s) {
+  if (s.sensitive || s.action === 'confirm') return false;
+  if (READONLY_ACTIONS.has(s.action)) return true;
+  if (s.action === 'type' && s.auth) return true;
+  return false;
+}
+function autoEligibility(proc) {
+  if (!proc || !proc.steps.length) return { eligible: false, needsAuth: false };
+  const eligible = proc.steps.every(stepAutoEligible);
+  const needsAuth = proc.steps.some((s) => s.auth ||
+    /\{\{\s*secret:/i.test(s.value || ''));
+  return { eligible, needsAuth };
+}
+
+function runAutomation(name, steps, timeoutMs = 120000) {
   return new Promise((resolve) => {
     let child;
     try {
@@ -1065,31 +1142,47 @@ function runReadonlyAutomation(proc, timeoutMs = 90000) {
       try { resolve(JSON.parse(out)); }
       catch { resolve({ ok: false, error: 'no-output', reason: (errOut || out).slice(0, 300) }); }
     });
-    child.stdin.write(JSON.stringify({ name: proc.name, steps: proc.steps }));
+    child.stdin.write(JSON.stringify({ name, steps }));
     child.stdin.end();
   });
 }
 
 async function handleAutomation(req, res, pathname) {
   if (pathname === '/api/automation/status' && req.method === 'GET') {
-    // czy moduł Playwright jest zainstalowany?
     let available = false;
     try { require.resolve('playwright'); available = true; } catch { /* brak */ }
-    return sendJson(res, 200, { available, runner: fs.existsSync(AUTOMATION_RUNNER) });
+    return sendJson(res, 200, {
+      available, runner: fs.existsSync(AUTOMATION_RUNNER),
+      secrets: secretsEnabled() ? SECRETS.provider : null,
+    });
   }
   if (pathname === '/api/procedures/run-readonly' && req.method === 'POST') {
     let data;
     try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
     const proc = procedures.find((p) => p.id === data.id);
     if (!proc) return sendJson(res, 404, { error: 'Nie znaleziono procedury.' });
-    if (!isReadOnlyProcedure(proc)) {
+    const { eligible, needsAuth } = autoEligibility(proc);
+    if (!eligible) {
       return sendJson(res, 400, {
         error: 'not-readonly',
-        message: 'Ta procedura zawiera kroki zmieniające stan lub wrażliwe (wpisywanie, ' +
-                 'potwierdzenie, płatność). Uruchom ją ręcznym runnerem z potwierdzeniem.',
+        message: 'Ta procedura zawiera kroki wrażliwe lub zmieniające stan poza logowaniem ' +
+                 '(płatność, wysłanie, potwierdzenie). Uruchom ją ręcznym runnerem z potwierdzeniem.',
       });
     }
-    const result = await runReadonlyAutomation(proc);
+    // logowanie wymaga skonfigurowanego menedżera haseł
+    if (needsAuth && !secretsEnabled()) {
+      return sendJson(res, 400, {
+        error: 'no-secrets',
+        message: 'Ta procedura loguje się z menedżera haseł, ale żaden nie jest skonfigurowany. ' +
+                 'Ustaw SECRETS_PROVIDER w .env (patrz automation/README.md).',
+      });
+    }
+    // podmień {{secret:...}} na prawdziwe wartości tuż przed uruchomieniem
+    const { steps, missing } = await materializeSecrets(proc.steps);
+    if (missing.length) {
+      return sendJson(res, 400, { error: 'secret-missing', message: `Nie znaleziono w menedżerze haseł: ${[...new Set(missing)].join(', ')}` });
+    }
+    const result = await runAutomation(proc.name, steps);
     if (result.ok) {
       const summary = result.results.map((r) => `${r.label}: ${r.value}`).join(' | ').slice(0, 400);
       addEvent('automatyzacja', `odczyt „${proc.name}": ${summary || '(brak wyników)'}`);
@@ -2293,6 +2386,9 @@ function start(port = PORT) {
         (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
       if (procedures.length || routines.length) {
         console.log(`  → Nauka:   ${lessons.length} wzorców, ${procedures.length} procedur, ${routines.length} rutyn`);
+      }
+      if (secretsEnabled()) {
+        console.log(`  → Sekrety: menedżer haseł „${SECRETS.provider}" (automatyzacja z logowaniem)`);
       }
       console.log('');
       startScheduler();

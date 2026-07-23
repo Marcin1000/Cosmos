@@ -3115,18 +3115,22 @@ function renderProcSteps() {
   const box = $('proc-steps');
   box.innerHTML = procStepsData.map((s, i) => {
     const opts = STEP_ACTIONS.map((a) => `<option value="${a}"${a === s.action ? ' selected' : ''}>${stepActionLabel(a)}</option>`).join('');
+    const authable = s.action === 'type' || s.action === 'click';
     return `<div class="proc-step" data-i="${i}">` +
       `<div class="proc-step-top"><span class="proc-step-n mono">${i + 1}</span>` +
       `<select class="ps-action">${opts}</select>` +
+      (authable ? `<label class="ps-sens"><input type="checkbox" class="ps-auth"${s.auth ? ' checked' : ''}> ${t('learn.stAuth')}</label>` : '') +
       `<label class="ps-sens"><input type="checkbox" class="ps-sensitive"${s.sensitive ? ' checked' : ''}> ${t('learn.stSensitive')}</label>` +
       `<button class="icon-btn ps-del" title="✕">✕</button></div>` +
       `<input class="ps-target" placeholder="${t('learn.stTarget')}" value="${escapeHtml(s.target || '')}">` +
-      `<input class="ps-value" placeholder="${t('learn.stValue')}" value="${escapeHtml(s.value || '')}">` +
+      `<input class="ps-value" placeholder="${s.auth ? t('learn.stSecret') : t('learn.stValue')}" value="${escapeHtml(s.value || '')}">` +
       `<input class="ps-note" placeholder="${t('learn.stNote')}" value="${escapeHtml(s.note || '')}"></div>`;
   }).join('');
   box.querySelectorAll('.proc-step').forEach((el2) => {
     const i = Number(el2.dataset.i);
-    el2.querySelector('.ps-action').addEventListener('change', (e) => { procStepsData[i].action = e.target.value; if (e.target.value === 'confirm') { procStepsData[i].sensitive = true; renderProcSteps(); } });
+    el2.querySelector('.ps-action').addEventListener('change', (e) => { procStepsData[i].action = e.target.value; if (e.target.value === 'confirm') { procStepsData[i].sensitive = true; } renderProcSteps(); });
+    const authBox = el2.querySelector('.ps-auth');
+    if (authBox) authBox.addEventListener('change', (e) => { procStepsData[i].auth = e.target.checked; renderProcSteps(); });
     el2.querySelector('.ps-sensitive').addEventListener('change', (e) => { procStepsData[i].sensitive = e.target.checked; });
     el2.querySelector('.ps-target').addEventListener('input', (e) => { procStepsData[i].target = e.target.value; });
     el2.querySelector('.ps-value').addEventListener('input', (e) => { procStepsData[i].value = e.target.value; });
@@ -3166,8 +3170,11 @@ async function runReadonly(procId, statusEl, resultsEl) {
     });
     const d = await r.json();
     if (!r.ok || !d.ok) {
-      if (statusEl) statusEl.textContent = d.error === 'not-readonly' ? t('learn.autoNotReadonly')
-        : t('learn.autoErr', { e: d.reason || d.message || d.error || '?' });
+      if (statusEl) {
+        statusEl.textContent = d.error === 'not-readonly' ? t('learn.autoNotReadonly')
+          : (d.error === 'no-secrets' || d.error === 'secret-missing') ? d.message
+          : t('learn.autoErr', { e: d.reason || d.message || d.error || '?' });
+      }
       return d;
     }
     if (statusEl) statusEl.textContent = t('learn.autoDone', { n: d.results.length });

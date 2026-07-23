@@ -98,8 +98,12 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   click) w prawdziwej przeglądarce i zwraca odczytane wartości. Twarda bramka: każdy krok
   wrażliwy lub zmieniający stan (type/confirm) jest odrzucany. Rutyny mają „tryb auto" dla
   procedur do odczytu. Endpointy: `/api/automation/status`, `/api/procedures/run-readonly`.
-- [ ] **Automatyczne odtwarzanie web ZMIENIAJĄCE STAN** — świadomie odłożone: kroki
-  type/confirm/płatność wymagałyby menedżera sekretów i pozostają w ręcznym runnerze z bramką.
+- [x] **Logowanie z menedżera haseł** — kroki „auth" (type/click) pobierają sekret przez
+  `{{secret:nazwa}}` z Bitwarden / 1Password / pass / KeePassXC / env / własnego polecenia,
+  w locie po stronie serwera (nigdy w procedurze ani w przeglądarce-kliencie). Dzięki temu
+  auto-odczyt działa też za logowaniem. Endpoint: `/api/automation/status` (pole `secrets`).
+- [ ] **Automatyczne odtwarzanie web ZMIENIAJĄCE STAN (płatność/wysłanie)** — świadomie
+  odłożone: kroki wrażliwe (confirm/płatność) pozostają w ręcznym runnerze z bramką.
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
   systemowej poza przeglądarką (osobne narzędzia/uprawnienia).
 

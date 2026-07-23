@@ -253,8 +253,17 @@ krok wrażliwy lub zmieniający stan (wpisywanie danych, potwierdzenie, płatno�
 odmawia i odsyła do ręcznego runnera z potwierdzeniem. Włączenie: `npm install playwright`
 (szczegóły: **[automation/README.md](automation/README.md)**).
 
+**Logowanie z menedżera haseł.** Aby auto‑odczyt działał też za logowaniem, krok możesz
+oznaczyć jako **„logowanie"** i podać hasło jako odwołanie `{{secret:nazwa}}` — Cosmos
+pobierze je z Twojego menedżera (Bitwarden / 1Password / pass / KeePassXC / zmienne
+środowiskowe / własne polecenie) **w chwili uruchomienia**. Hasło **nigdy** nie trafia do
+procedury, plików ani przeglądarki‑klienta; leci do runnera przez potok. Konfiguracja:
+`SECRETS_PROVIDER` w `.env`. Logowanie jest dozwolone w trybie auto — ale każdy krok
+płatności/wysłania/potwierdzenia i tak wraca do ręcznego runnera z bramką.
+
 > **Bezpieczeństwo pieniędzy:** żadna rutyna nie wykonuje płatności automatycznie. Tryb auto
-> obsługuje wyłącznie odczyt; kroki zmieniające stan zawsze wymagają Twojego potwierdzenia.
+> obsługuje odczyt (i ewentualnie logowanie); kroki zmieniające stan zawsze wymagają Twojego
+> potwierdzenia.
 
 ### Zmysł głębi — Kinect 360
 
