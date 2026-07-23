@@ -310,6 +310,76 @@ async function handleMemory(req, res) {
 // (PDF/Office → /extract, audio/wideo → /stt, obrazy → /detect).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Historia rozmów — jeden plik JSON na rozmowę + lekki indeks metadanych.
+// Współdzielona między urządzeniami (PC, Android, Electron), bez limitu
+// localStorage. Bez bazy danych — rozmowy to dokumenty, nie dane relacyjne.
+// ---------------------------------------------------------------------------
+
+const CONV_DIR = path.join(DATA_DIR, 'conversations');
+const CONV_INDEX = path.join(CONV_DIR, 'index.json');
+
+let convIndex = [];
+try { convIndex = JSON.parse(fs.readFileSync(CONV_INDEX, 'utf8')); } catch { /* brak pliku */ }
+
+function saveConvIndex() {
+  try {
+    fs.mkdirSync(CONV_DIR, { recursive: true });
+    fs.writeFileSync(CONV_INDEX, JSON.stringify(convIndex));
+  } catch (err) {
+    console.error('Nie udało się zapisać indeksu rozmów:', err.message);
+  }
+}
+
+// Sanityzacja ID → tylko nasz alfabet uid; blokuje path traversal.
+function convPath(id) {
+  return path.join(CONV_DIR, `${String(id).replace(/[^a-z0-9]/gi, '')}.json`);
+}
+
+async function handleConversations(req, res) {
+  const rawId = new URL(req.url, 'http://localhost').searchParams.get('id');
+  // ta sama sanityzacja co convPath — indeks i nazwa pliku zawsze zgodne
+  const id = rawId ? String(rawId).replace(/[^a-z0-9]/gi, '') : rawId;
+
+  if (req.method === 'GET' && !id) {
+    return sendJson(res, 200, { conversations: convIndex });
+  }
+  if (req.method === 'GET' && id) {
+    try {
+      return sendJson(res, 200, JSON.parse(fs.readFileSync(convPath(id), 'utf8')));
+    } catch {
+      return sendJson(res, 404, { error: 'Nie znaleziono rozmowy.' });
+    }
+  }
+  if (req.method === 'PUT' && id) {
+    let conv;
+    try { conv = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    conv.id = id;
+    conv.updatedAt = Date.now();
+    if (!conv.createdAt) conv.createdAt = conv.updatedAt;
+    try {
+      fs.mkdirSync(CONV_DIR, { recursive: true });
+      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+    } catch (err) {
+      return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
+    }
+    const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt, updatedAt: conv.updatedAt };
+    const i = convIndex.findIndex((c) => c.id === id);
+    if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
+    convIndex.sort((a, b) => b.updatedAt - a.updatedAt);
+    saveConvIndex();
+    return sendJson(res, 200, { ok: true, meta });
+  }
+  if (req.method === 'DELETE' && id) {
+    convIndex = convIndex.filter((c) => c.id !== id);
+    saveConvIndex();
+    try { fs.unlinkSync(convPath(id)); } catch { /* już nie ma */ }
+    return sendJson(res, 200, { ok: true });
+  }
+  res.writeHead(405);
+  res.end();
+}
+
 const KB_DIR = path.join(DATA_DIR, 'kb');
 const KB_FILES = path.join(KB_DIR, 'files');
 const KB_INDEX = path.join(KB_DIR, 'index.json');
@@ -1322,6 +1392,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+    if (p === '/api/conversations') return await handleConversations(req, res);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
@@ -1349,6 +1420,7 @@ function start(port = PORT) {
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
       console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
+      console.log(`  → Rozmowy: ${convIndex.length} (data/conversations/)`);
       const extraTabs = ['openai', 'claude'].filter((k) => ENDPOINTS[k]);
       if (extraTabs.length) console.log(`  → Silniki dodatkowe: ${extraTabs.join(', ')}`);
       const studioOn = [STUDIO.openai.key && 'obraz(OpenAI)', fireflyEnabled() && 'obraz(Firefly)',

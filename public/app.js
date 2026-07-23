@@ -24,7 +24,8 @@ const DEFAULT_SETTINGS = {
   speak: false,
 };
 
-let conversations = loadJson(STORAGE_KEYS.conversations, []);
+let conversations = [];          // INDEKS rozmów: [{id, title, createdAt, updatedAt}]
+let activeConversation = null;   // pełna aktywna rozmowa {id, title, messages, …}
 let settings = { ...DEFAULT_SETTINGS, ...loadJson(STORAGE_KEYS.settings, {}) };
 let endpoint = localStorage.getItem(STORAGE_KEYS.endpoint) || 'cloud';
 let activeId = null;
@@ -146,17 +147,44 @@ function loadJson(key, fallback) {
   }
 }
 
+// Zapis aktywnej rozmowy na serwer (data/conversations/) — wspólny dla
+// wszystkich urządzeń. Zapis serwerowy jest debounce'owany; kopia w
+// localStorage służy tylko jako podgląd offline, gdy serwer jest niedostępny.
+let convSaveTimer = null;
+
 function saveConversations() {
-  try {
-    localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(conversations));
-  } catch {
-    // limit localStorage (zwykle 5 MB) — usuwamy najstarsze rozmowy z obrazami
-    const trimmed = conversations.slice(0, Math.max(1, Math.floor(conversations.length / 2)));
-    try {
-      localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(trimmed));
-      conversations = trimmed;
-    } catch { /* poddajemy się — sesja działa dalej w pamięci */ }
-  }
+  if (!activeConversation) return;
+  activeConversation.updatedAt = Date.now();
+
+  // odśwież metadane w indeksie (pasek boczny) i wypłyń na górę
+  const meta = {
+    id: activeConversation.id,
+    title: activeConversation.title,
+    createdAt: activeConversation.createdAt,
+    updatedAt: activeConversation.updatedAt,
+  };
+  const i = conversations.findIndex((c) => c.id === activeConversation.id);
+  if (i >= 0) conversations[i] = meta; else conversations.unshift(meta);
+  conversations.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  renderSidebar();
+  cacheConvIndex();
+
+  try { localStorage.setItem('cosmos.conv.' + activeConversation.id, JSON.stringify(activeConversation)); } catch { /* limit */ }
+
+  const snapshot = JSON.stringify(activeConversation);
+  const id = activeConversation.id;
+  clearTimeout(convSaveTimer);
+  convSaveTimer = setTimeout(() => {
+    fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: snapshot,
+    }).catch(() => { /* offline — zostaje kopia w localStorage */ });
+  }, 400);
+}
+
+function cacheConvIndex() {
+  try { localStorage.setItem('cosmos.convIndex', JSON.stringify(conversations)); } catch { /* limit */ }
 }
 
 function saveSettings() {
@@ -168,7 +196,7 @@ function uid() {
 }
 
 function activeConv() {
-  return conversations.find((c) => c.id === activeId) || null;
+  return activeConversation;
 }
 
 function epConfig(name = endpoint) {
@@ -494,15 +522,25 @@ function scrollToBottom(force = false) {
 function newConversation() {
   if (isGenerating) stopGeneration();
   activeId = null;
+  activeConversation = null;
   renderSidebar();
   renderMessages();
   el.input.focus();
 }
 
-function selectConversation(id) {
+async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
   renderSidebar();
+  el.messages.innerHTML = '';
+  el.welcome.style.display = 'none';
+  try {
+    const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error();
+    activeConversation = await res.json();
+  } catch {
+    activeConversation = loadJson('cosmos.conv.' + id, null); // podgląd offline
+  }
   renderMessages();
 }
 
@@ -511,28 +549,75 @@ function deleteConversation(id) {
   const name = conv?.title || 'tę rozmowę';
   if (!confirm(`Usunąć „${name}”?`)) return;
   conversations = conversations.filter((c) => c.id !== id);
-  saveConversations();
+  cacheConvIndex();
+  fetch(`/api/conversations?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+  try { localStorage.removeItem('cosmos.conv.' + id); } catch { /* ignore */ }
   if (activeId === id) {
     activeId = null;
+    activeConversation = null;
     renderMessages();
   }
   renderSidebar();
 }
 
 function ensureConversation(firstUserText) {
-  let conv = activeConv();
-  if (!conv) {
+  if (!activeConversation) {
     const base = firstUserText || 'Rozmowa z obrazem';
-    conv = {
+    const now = Date.now();
+    activeConversation = {
       id: uid(),
       title: base.slice(0, 48) + (base.length > 48 ? '…' : ''),
       messages: [],
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
-    conversations.unshift(conv);
-    activeId = conv.id;
+    activeId = activeConversation.id;
+    conversations.unshift({
+      id: activeConversation.id,
+      title: activeConversation.title,
+      createdAt: now,
+      updatedAt: now,
+    });
   }
-  return conv;
+  return activeConversation;
+}
+
+async function loadConversations() {
+  try {
+    const res = await fetch('/api/conversations');
+    const data = await res.json();
+    conversations = data.conversations || [];
+    cacheConvIndex();
+    await migrateLegacyConversations();
+  } catch {
+    conversations = loadJson('cosmos.convIndex', []); // serwer offline
+  }
+  renderSidebar();
+}
+
+// Jednorazowa migracja rozmów ze starego localStorage na serwer.
+async function migrateLegacyConversations() {
+  if (localStorage.getItem('cosmos.migrated')) return;
+  const legacy = loadJson(STORAGE_KEYS.conversations, []);
+  for (const conv of legacy) {
+    if (!conv || !conv.id) continue;
+    try {
+      await fetch(`/api/conversations?id=${encodeURIComponent(conv.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...conv, updatedAt: conv.updatedAt || conv.createdAt || Date.now() }),
+      });
+    } catch { /* pominąć — serwer offline, spróbujemy następnym razem */ }
+  }
+  if (legacy.length) {
+    try {
+      const res = await fetch('/api/conversations');
+      conversations = (await res.json()).conversations || conversations;
+      cacheConvIndex();
+    } catch { /* ignore */ }
+  }
+  localStorage.setItem('cosmos.migrated', '1');
+  try { localStorage.removeItem(STORAGE_KEYS.conversations); } catch { /* ignore */ }
 }
 
 // ----------------------------------------------------------------
@@ -2084,7 +2169,7 @@ if ('serviceWorker' in navigator) {
 setEndpoint(endpoint);
 el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
 updateKbBadge();
-renderSidebar();
+loadConversations();
 renderMessages();
 updateSendButton();
 loadServerConfig();
