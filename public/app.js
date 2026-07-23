@@ -666,12 +666,21 @@ function scrollToBottom(force = false) {
 // Operacje na rozmowach
 // ----------------------------------------------------------------
 
+// Na wąskich ekranach panel boczny to nakładka — zwiń go po akcji nawigacyjnej.
+function collapseSidebarOnMobile() {
+  if (window.innerWidth <= 720) {
+    el.sidebar.classList.add('collapsed');
+    document.querySelector('.app').classList.add('sidebar-hidden');
+  }
+}
+
 function newConversation() {
   if (isGenerating) stopGeneration();
   activeId = null;
   activeConversation = null;
   renderSidebar();
   renderMessages();
+  collapseSidebarOnMobile();
   el.input.focus();
 }
 
@@ -679,6 +688,7 @@ async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
   renderSidebar();
+  collapseSidebarOnMobile();
   el.messages.innerHTML = '';
   el.welcome.style.display = 'none';
   try {
@@ -2934,6 +2944,7 @@ async function boot() {
 
 function startApp() {
   applyI18n();
+  collapseSidebarOnMobile(); // na telefonie zacznij z ukrytym panelem, widoczny czat
   setEndpoint(endpoint);
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();
