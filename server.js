@@ -1734,6 +1734,59 @@ const server = http.createServer(async (req, res) => {
         catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
       }
     }
+    if (p === '/api/admin/stats' && req.method === 'GET') {
+      let kbBytes = 0;
+      try {
+        for (const f of fs.readdirSync(KB_FILES)) {
+          try { kbBytes += fs.statSync(path.join(KB_FILES, f)).size; } catch { /* skip */ }
+        }
+      } catch { /* brak katalogu */ }
+      return sendJson(res, 200, {
+        conversations: convIndex.length,
+        memories: memories.length,
+        kbItems: kbItems.length,
+        kbBytes,
+        profileChars: userProfile.length,
+        events: events.length,
+        engines: Object.keys(ENDPOINTS),
+        studio: { image: imageProviders().length > 0, speech: Boolean(STUDIO.eleven.key), video: Boolean(STUDIO.seedance.key) },
+        auth: authEnabled(),
+      });
+    }
+    if (p === '/api/backup' && req.method === 'GET') {
+      const convs = convIndex.map((meta) => {
+        try { return JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { return null; }
+      }).filter(Boolean);
+      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories, profile: userProfile };
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+      });
+      return res.end(JSON.stringify(bundle));
+    }
+    if (p === '/api/backup' && req.method === 'POST') {
+      let bundle;
+      try { bundle = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      let restored = 0;
+      if (Array.isArray(bundle.conversations)) {
+        for (const conv of bundle.conversations) {
+          if (!conv || !conv.id) continue;
+          const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
+          try {
+            fs.mkdirSync(CONV_DIR, { recursive: true });
+            fs.writeFileSync(convPath(id), JSON.stringify(conv));
+            const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt || Date.now(), updatedAt: conv.updatedAt || Date.now(), pinned: conv.pinned || false };
+            const i = convIndex.findIndex((c) => c.id === id);
+            if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
+            restored++;
+          } catch { /* skip */ }
+        }
+        sortConvIndex(); saveConvIndex();
+      }
+      if (Array.isArray(bundle.memories)) { memories = bundle.memories; saveMemories(); }
+      if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
+      return sendJson(res, 200, { ok: true, restored });
+    }
     if (p === '/api/summarize' && req.method === 'POST') {
       let data;
       try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }

@@ -51,13 +51,18 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
 - [ ] **Sterowanie gestami** — wymaga biblioteki MediaPipe w przeglądarce (zewnętrzna,
   do rozważenia offline); alternatywnie gesty z endpointu /pose usługi zmysłów
 
-## 🔜 Partia 5 — platforma i infrastruktura
+## ✅ Partia 5 — platforma i infrastruktura (GOTOWE / częściowo)
 
-- [ ] **Kopie zapasowe** danych (auto-eksport na dysk/chmurę)
-- [ ] **Panel administracyjny** — statystyki, status usług, koszty
-- [ ] **Streaming głosu w czasie rzeczywistym** (WebRTC)
-- [ ] **Profile / wielu użytkowników** (opcjonalne)
-- [ ] **Pełny tryb offline** na RTX bez internetu
+- [x] **Kopie zapasowe** — pobieranie całej kopii (rozmowy + pamięć + profil) do pliku JSON
+  i przywracanie z pliku (Ustawienia → Kopia zapasowa)
+- [x] **Panel statystyk** — liczba rozmów, wpisów pamięci, pozycji bazy wiedzy i rozmiar
+  (Ustawienia); status silników i usług już w panelu bocznym
+- [x] **Pełny tryb offline** — przełącznik wyłączający wyszukiwanie w internecie; z modelem
+  lokalnym + lokalnymi zmysłami Cosmos działa bez sieci (PWA cache’uje interfejs)
+- [ ] **Streaming głosu (WebRTC)** — tryb głosowy już działa (Web Speech); pełny WebRTC do
+  serwerowego STT to osobny, duży projekt infrastrukturalny
+- [ ] **Profile / wielu użytkowników** — obecnie logowanie jednym hasłem + profil osobisty;
+  konta wielu użytkowników to osobny moduł
 
 ## 🔭 Partia 6 — kierunki ambitne
 

@@ -896,6 +896,7 @@ async function streamOnce(conv) {
         temperature: settings.temperature,
         max_tokens: settings.maxTokens,
         kbSelected: [...kbSelected],
+        useSearch: settings.offline ? false : undefined,
       }),
       signal: abortController.signal,
     });
@@ -2520,7 +2521,19 @@ function openSettings() {
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
+  $('set-offline').checked = Boolean(settings.offline);
+  loadStats();
   el.settingsModal.style.display = '';
+}
+
+async function loadStats() {
+  try {
+    const s = await (await fetch('/api/admin/stats')).json();
+    const mb = (s.kbBytes / 1024 / 1024).toFixed(1);
+    $('stats-info').innerHTML =
+      `${t('stats.conv')}: ${s.conversations} · ${t('stats.mem')}: ${s.memories} · ` +
+      `${t('stats.kb')}: ${s.kbItems} (${mb} MB)`;
+  } catch { $('stats-info').textContent = '—'; }
 }
 
 async function loadMemoryList() {
@@ -2593,6 +2606,7 @@ el.settingsSave.addEventListener('click', () => {
   settings.systemPrompt = el.setSystem.value;
   settings.temperature = parseFloat(el.setTemp.value);
   settings.maxTokens = parseInt(el.setMaxTokens.value, 10) || DEFAULT_SETTINGS.maxTokens;
+  settings.offline = $('set-offline').checked;
   saveSettings();
   // profil zapisywany na serwerze (wspólny dla urządzeń)
   fetch('/api/profile', {
@@ -2601,6 +2615,34 @@ el.settingsSave.addEventListener('click', () => {
   }).catch(() => {});
   updateModelBadge();
   closeSettings();
+});
+
+// kopia zapasowa — pobieranie i przywracanie
+$('backup-download').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = '/api/backup';
+  a.download = `cosmos-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+});
+$('backup-restore-btn').addEventListener('click', () => $('backup-file').click());
+$('backup-file').addEventListener('change', async () => {
+  const file = $('backup-file').files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/backup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text,
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || '');
+    alert(t('backupRestored', { n: d.restored }));
+    await loadConversations();
+    loadStats();
+  } catch {
+    alert(t('backupErr'));
+  } finally {
+    $('backup-file').value = '';
+  }
 });
 
 el.settingsReset.addEventListener('click', () => {

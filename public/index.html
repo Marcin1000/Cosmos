@@ -247,6 +247,24 @@
           <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
         </div>
 
+        <label class="field">
+          <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline — bez wyszukiwania w internecie</span></span>
+        </label>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.stats">Statystyki</span>
+          <div class="config-info mono" id="stats-info">—</div>
+        </div>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.backup">Kopia zapasowa</span>
+          <div class="field-row">
+            <button class="btn-secondary" id="backup-download" data-i18n="backupDownload">Pobierz kopię</button>
+            <button class="btn-secondary" id="backup-restore-btn" data-i18n="backupRestore">Przywróć z pliku</button>
+            <input type="file" id="backup-file" accept="application/json" style="display:none">
+          </div>
+        </div>
+
         <div class="config-info mono" id="config-info"></div>
       </div>
       <div class="modal-footer">
