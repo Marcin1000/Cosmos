@@ -118,6 +118,26 @@ zdarzenia do **kontekstu każdej rozmowy** (sekcja „KONTEKST PERCEPCJI"), wię
 zapytać *„co się zmieniło w pokoju?"* — a Nemotron odpowie na podstawie prawdziwych
 obserwacji, niezależnie od tego, czy działa lokalnie, czy w chmurze.
 
+### 🎙️ Asystent głosowy — „Hej, Kosmos"
+
+Kliknij ikonę fal dźwiękowych w pasku górnym — Cosmos przechodzi w tryb asystenta
+głosowego (jak Asystent Google na Androidzie):
+
+1. **Nasłuch**: orb oddycha, czekając na słowa **„Hej, Kosmos"** (możesz też od razu
+   dokończyć: *„Hej, Kosmos, co mam w ręku?"*).
+2. **Rozmowa**: po sygnale mówisz pytanie; odpowiedź jest czytana na głos, a Cosmos
+   od razu słucha pytania uzupełniającego — rozmowa płynie bez powtarzania wake word.
+   Cisza albo „koniec" wraca do nasłuchu.
+3. **Wzrok**: przy pytaniach typu *„co mam w ręku?"*, *„co widzisz?"* Cosmos sam
+   robi klatkę z kamery i wysyła ją do modelu wizyjnego (podgląd w rogu ekranu).
+4. **Internet**: gdy pytasz np. *„jaki to telefon?"*, model może zarządzić
+   wyszukiwanie — Cosmos mówi „Sprawdzam w internecie", pobiera wyniki
+   (DuckDuckGo, bez klucza API) i odpowiada z podaniem źródeł.
+
+Wymagania trybu głosowego: przeglądarka **Chrome lub Edge** (Web Speech API; działa
+też w PWA na Androidzie). Rozpoznawanie wake word wymaga otwartej aplikacji.
+Wyszukiwarkę można podmienić na własną (np. SearXNG): `SEARCH_URL` w `.env`.
+
 **W interfejsie:**
 - 🎤 przycisk mikrofonu — dyktowanie: Whisper (lokalnie, przez Senses), a gdy usługa
   nie działa, rozpoznawanie wbudowane w Chrome/Edge,

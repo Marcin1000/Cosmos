@@ -85,6 +85,9 @@
           </button>
         </div>
 
+        <button class="icon-btn" id="voice-btn" title="Tryb głosowy — „Hej, Kosmos”" aria-label="Tryb głosowy">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 10v4M12 7.5v9M16 10v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
         <button class="icon-btn tts-toggle" id="tts-toggle" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
           <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
         </button>
@@ -196,6 +199,22 @@
         <button class="btn-primary" id="settings-save">Zapisz</button>
       </div>
     </div>
+  </div>
+
+  <!-- ================= TRYB GŁOSOWY ================= -->
+  <div class="voice-overlay" id="voice-overlay" style="display:none">
+    <button class="icon-btn voice-close" id="voice-close" aria-label="Zakończ tryb głosowy">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <div class="voice-orb" id="voice-orb"></div>
+    <div class="voice-status mono" id="voice-status">POWIEDZ „HEJ, KOSMOS”</div>
+    <div class="voice-transcript" id="voice-transcript"></div>
+    <div class="voice-answer" id="voice-answer"></div>
+    <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
+      <video id="voice-camera" autoplay playsinline muted></video>
+      <span class="voice-camera-label mono">👁 podgląd</span>
+    </div>
+    <p class="voice-hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta</p>
   </div>
 
   <!-- ================= MODAL: KAMERA ================= -->

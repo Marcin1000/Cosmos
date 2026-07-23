@@ -61,6 +61,10 @@ const ENDPOINTS = {
 
 const SENSES_URL = (process.env.SENSES_URL || 'http://localhost:7060').replace(/\/+$/, '');
 
+// Wyszukiwarka internetowa (bez klucza API). Domyślnie DuckDuckGo HTML;
+// można podmienić na własny SearXNG itp. (format HTML zgodny z DDG).
+const SEARCH_URL = process.env.SEARCH_URL || 'https://html.duckduckgo.com/html/';
+
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -383,6 +387,69 @@ async function proxySenses(req, res, targetPath, { json = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// API: wyszukiwanie w internecie (DuckDuckGo HTML — bez klucza API)
+// ---------------------------------------------------------------------------
+
+function decodeEntities(s) {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ');
+}
+
+function stripTags(s) {
+  return decodeEntities(s.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+}
+
+function resolveDdgUrl(href) {
+  // DDG opakowuje linki: //duckduckgo.com/l/?uddg=<zakodowany-url>&...
+  const m = href.match(/[?&]uddg=([^&]+)/);
+  if (m) {
+    try { return decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
+  }
+  return href.startsWith('//') ? 'https:' + href : href;
+}
+
+async function handleSearch(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
+  if (!q) return sendJson(res, 400, { error: 'Brak zapytania (parametr q).' });
+
+  try {
+    const upstream = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    const html = await upstream.text();
+
+    const results = [];
+    const linkRe = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+    const links = [...html.matchAll(linkRe)];
+    const snips = [...html.matchAll(snipRe)];
+    for (let i = 0; i < Math.min(links.length, 5); i++) {
+      results.push({
+        title: stripTags(links[i][2]),
+        url: resolveDdgUrl(decodeEntities(links[i][1])),
+        snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
+      });
+    }
+    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników)`);
+    sendJson(res, 200, { query: q, results });
+  } catch (err) {
+    sendJson(res, 200, {
+      query: q,
+      results: [],
+      error: `Wyszukiwarka niedostępna (${err.message}). Sprawdź połączenie z internetem.`,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // API: czat (streaming SSE) z kontekstem percepcji
 // ---------------------------------------------------------------------------
 
@@ -428,6 +495,19 @@ async function handleChat(req, res) {
 
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });
+
+  if (payload.useSearch !== false) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — WYSZUKIWANIE W INTERNECIE: gdy pytanie wymaga aktualnych lub zewnętrznych ' +
+        'informacji (modele urządzeń, ceny, specyfikacje, wiadomości, fakty, których nie znasz), ' +
+        'NIE zgaduj — zakończ swoją odpowiedź osobną linią dokładnie w formacie: [SZUKAJ: zapytanie]. ' +
+        'Otrzymasz wtedy wiadomość „WYNIKI WYSZUKIWANIA” i na jej podstawie udzielisz pełnej ' +
+        'odpowiedzi, podając źródła. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
+        'odpowiadaj normalnie, bez [SZUKAJ:].',
+    });
+  }
 
   if (payload.useMemory !== false) {
     const lastUser = [...payload.messages].reverse().find((m) => m.role === 'user');
@@ -568,6 +648,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
+    if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });

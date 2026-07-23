@@ -37,6 +37,11 @@ let mediaRecorder = null;
 let speechRec = null;
 let isRecording = false;
 let cameraStream = null;
+let voiceMode = false;        // tryb asystenta głosowego („Hej, Kosmos”)
+let voiceState = 'off';       // wake | listening | thinking | speaking
+let voiceWakeRec = null;
+let voiceQueryRec = null;
+let voiceCameraStream = null;
 
 // ----------------------------------------------------------------
 // Elementy DOM
@@ -94,6 +99,15 @@ const el = {
   configInfo: $('config-info'),
   memoryList: $('memory-list'),
   memoryCount: $('memory-count'),
+  voiceBtn: $('voice-btn'),
+  voiceOverlay: $('voice-overlay'),
+  voiceClose: $('voice-close'),
+  voiceOrb: $('voice-orb'),
+  voiceStatus: $('voice-status'),
+  voiceTranscript: $('voice-transcript'),
+  voiceAnswer: $('voice-answer'),
+  voiceCameraWrap: $('voice-camera-wrap'),
+  voiceCamera: $('voice-camera'),
 };
 
 const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
@@ -352,6 +366,14 @@ function messageElement(m) {
   const body = document.createElement('div');
   body.className = 'msg-content' + (role === 'assistant' && !isError ? ' md' : '');
 
+  if (m.search) {
+    msg.className = 'msg msg-search';
+    msg.innerHTML =
+      `<details class="search-results"><summary>🔍 Wyniki wyszukiwania: „${escapeHtml(m.searchQuery || '')}”</summary>` +
+      `<pre>${escapeHtml(text)}</pre></details>`;
+    return msg;
+  }
+
   if (isError) {
     body.textContent = text;
     msg.appendChild(body);
@@ -607,13 +629,11 @@ async function sendMessage() {
   renderSidebar();
   renderMessages();
 
-  await generate(conv);
+  await runGeneration(conv);
 }
 
-async function generate(conv) {
-  isGenerating = true;
-  setGeneratingUI(true);
-
+// jedno przejście streamingu — zwraca zebrany tekst odpowiedzi
+async function streamOnce(conv) {
   const msg = document.createElement('div');
   msg.className = 'msg msg-assistant';
   msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
@@ -694,27 +714,100 @@ async function generate(conv) {
         }
       }
     }
-
-    if (!acc) acc = '*(pusta odpowiedź modelu)*';
-    conv.messages.push({ role: 'assistant', content: acc });
-    saveConversations();
-    if (settings.speak) speakText(acc);
+    return acc;
   } catch (err) {
     if (err.name === 'AbortError') {
-      if (acc) {
-        conv.messages.push({ role: 'assistant', content: acc });
+      err.partial = acc;
+    }
+    throw err;
+  }
+}
+
+async function webSearch(query) {
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if (data.error && !data.results.length) {
+      return `WYNIKI WYSZUKIWANIA („${query}”): błąd — ${data.error}\nOdpowiedz na podstawie własnej wiedzy i zaznacz, że nie udało się sprawdzić internetu.`;
+    }
+    if (!data.results.length) {
+      return `WYNIKI WYSZUKIWANIA („${query}”): brak wyników.\nOdpowiedz na podstawie własnej wiedzy i zaznacz brak wyników.`;
+    }
+    const lines = data.results.map((r, i) =>
+      `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`);
+    return `WYNIKI WYSZUKIWANIA („${query}”):\n${lines.join('\n')}\n\n` +
+           'Odpowiedz teraz na pytanie użytkownika na podstawie tych wyników i podaj źródła.';
+  } catch (err) {
+    return `WYNIKI WYSZUKIWANIA („${query}”): błąd sieci (${err.message}).`;
+  }
+}
+
+const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
+
+async function runGeneration(conv) {
+  isGenerating = true;
+  setGeneratingUI(true);
+  if (voiceMode) setVoiceState('thinking');
+  let finalText = '';
+
+  try {
+    for (let depth = 0; depth < 3; depth++) {
+      const acc = await streamOnce(conv);
+      const marker = acc.match(SEARCH_MARKER_RE);
+
+      if (marker && depth < 2) {
+        const q = marker[1].trim();
+        const before = acc.replace(marker[0], '').trim();
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + `🔍 *Szukam w internecie: „${q}”…*`,
+        });
+        saveConversations();
+        renderMessages();
+        if (voiceMode) {
+          setVoiceState('speaking');
+          await speakText('Sprawdzam w internecie.');
+          setVoiceState('thinking');
+        }
+        const resultsText = await webSearch(q);
+        conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      finalText = acc || '*(pusta odpowiedź modelu)*';
+      conv.messages.push({ role: 'assistant', content: finalText });
+      saveConversations();
+      break;
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      if (err.partial) {
+        conv.messages.push({ role: 'assistant', content: err.partial });
         saveConversations();
       }
     } else {
       conv.messages.push({ role: 'assistant', content: `⚠ ${err.message}`, error: true });
       saveConversations();
+      if (voiceMode) finalText = 'Przepraszam, wystąpił błąd połączenia z modelem.';
     }
   } finally {
     isGenerating = false;
     abortController = null;
     setGeneratingUI(false);
     renderMessages();
-    el.input.focus();
+    if (voiceMode) {
+      if (finalText) {
+        el.voiceAnswer.textContent = stripForSpeech(finalText);
+        setVoiceState('speaking');
+        await speakText(finalText);
+      }
+      if (voiceMode) startQueryListening(); // rozmowa trwa — pytanie uzupełniające bez wake word
+    } else {
+      if (settings.speak && finalText) speakText(finalText);
+      el.input.focus();
+    }
   }
 }
 
@@ -784,6 +877,7 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
 
 function stripForSpeech(text) {
   return text
+    .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
     .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
@@ -796,6 +890,8 @@ function stripForSpeech(text) {
 
 let currentAudio = null;
 
+// Zwraca Promise kończącą się wraz z końcem mówienia —
+// tryb głosowy czeka, zanim znów zacznie słuchać (brak sprzężenia).
 async function speakText(text) {
   const clean = stripForSpeech(text);
   if (!clean) return;
@@ -811,8 +907,12 @@ async function speakText(text) {
       });
       if (res.ok) {
         const blob = await res.blob();
-        currentAudio = new Audio(URL.createObjectURL(blob));
-        currentAudio.play();
+        await new Promise((resolve) => {
+          currentAudio = new Audio(URL.createObjectURL(blob));
+          currentAudio.onended = resolve;
+          currentAudio.onerror = resolve;
+          currentAudio.play().catch(resolve);
+        });
         return;
       }
     } catch { /* fallback niżej */ }
@@ -820,11 +920,15 @@ async function speakText(text) {
 
   // 2. Głos systemowy przeglądarki
   if ('speechSynthesis' in window) {
-    const u = new SpeechSynthesisUtterance(clean);
-    u.lang = 'pl-PL';
-    const plVoice = speechSynthesis.getVoices().find((v) => v.lang.startsWith('pl'));
-    if (plVoice) u.voice = plVoice;
-    speechSynthesis.speak(u);
+    await new Promise((resolve) => {
+      const u = new SpeechSynthesisUtterance(clean);
+      u.lang = 'pl-PL';
+      const plVoice = speechSynthesis.getVoices().find((v) => v.lang.startsWith('pl'));
+      if (plVoice) u.voice = plVoice;
+      u.onend = resolve;
+      u.onerror = resolve;
+      speechSynthesis.speak(u);
+    });
   }
 }
 
@@ -974,6 +1078,205 @@ el.cameraCapture.addEventListener('click', () => {
   }
   closeCamera();
   el.input.focus();
+});
+
+// ----------------------------------------------------------------
+// ASYSTENT GŁOSOWY — „Hej, Kosmos” (jak Asystent Google)
+// Wake word i rozmowa: Web Speech API (Chrome/Edge, także Android).
+// ----------------------------------------------------------------
+
+const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)\b/i;
+const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop)\b/i;
+const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;
+
+function getSR() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function setVoiceState(state) {
+  voiceState = state;
+  el.voiceOrb.className = 'voice-orb ' + state;
+  el.voiceStatus.textContent = {
+    wake: 'POWIEDZ „HEJ, KOSMOS”',
+    listening: 'SŁUCHAM…',
+    thinking: 'MYŚLĘ…',
+    speaking: 'MÓWIĘ…',
+  }[state] || '';
+}
+
+function chime(freq = 880) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+    osc.onended = () => ctx.close();
+  } catch { /* dźwięk to tylko ozdoba */ }
+}
+
+function stopVoiceRecognizers() {
+  for (const rec of [voiceWakeRec, voiceQueryRec]) {
+    if (rec) {
+      rec.onend = null;
+      rec.onresult = null;
+      rec.onerror = null;
+      try { rec.stop(); } catch { /* już zatrzymany */ }
+    }
+  }
+  voiceWakeRec = null;
+  voiceQueryRec = null;
+}
+
+async function enterVoiceMode() {
+  const SR = getSR();
+  if (!SR) {
+    alert('Tryb głosowy wymaga przeglądarki Chrome lub Edge (Web Speech API).');
+    return;
+  }
+  voiceMode = true;
+  el.voiceOverlay.style.display = '';
+  el.voiceTranscript.textContent = '';
+  el.voiceAnswer.textContent = '';
+
+  // kamera dla pytań „co widzisz / co mam w ręku” (cicha zgoda = brak wizji)
+  try {
+    voiceCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
+    el.voiceCamera.srcObject = voiceCameraStream;
+    el.voiceCameraWrap.style.display = '';
+  } catch { /* tryb głosowy działa też bez kamery */ }
+
+  startWakeListening();
+}
+
+function exitVoiceMode() {
+  voiceMode = false;
+  stopVoiceRecognizers();
+  stopSpeaking();
+  el.voiceOverlay.style.display = 'none';
+  if (voiceCameraStream) {
+    voiceCameraStream.getTracks().forEach((t) => t.stop());
+    voiceCameraStream = null;
+  }
+  el.voiceCamera.srcObject = null;
+  el.voiceCameraWrap.style.display = 'none';
+  setVoiceState('off');
+}
+
+function startWakeListening() {
+  if (!voiceMode) return;
+  stopVoiceRecognizers();
+  setVoiceState('wake');
+  el.voiceTranscript.textContent = '';
+
+  const SR = getSR();
+  const rec = new SR();
+  voiceWakeRec = rec;
+  rec.lang = 'pl-PL';
+  rec.continuous = true;
+  rec.interimResults = true;
+
+  rec.onresult = (e) => {
+    const latest = [...e.results].slice(-3).map((r) => r[0].transcript).join(' ');
+    const match = latest.match(WAKE_RE);
+    if (!match) return;
+    // wszystko po „hej, kosmos” traktujemy od razu jako pytanie
+    const after = latest.slice(latest.search(WAKE_RE) + match[0].length).trim();
+    rec.onend = null;
+    try { rec.stop(); } catch { /* ignorujemy */ }
+    voiceWakeRec = null;
+    chime(880);
+    if (after.length > 5) handleVoiceQuery(after);
+    else startQueryListening();
+  };
+  rec.onend = () => {
+    // Chrome ucina sesję co ~60 s — wznawiamy nasłuch
+    if (voiceMode && voiceState === 'wake') {
+      setTimeout(() => { if (voiceMode && voiceState === 'wake') startWakeListening(); }, 300);
+    }
+  };
+  rec.onerror = () => { /* onend zrobi restart */ };
+  try { rec.start(); } catch { /* podwójny start — ignorujemy */ }
+}
+
+function startQueryListening() {
+  if (!voiceMode) return;
+  stopVoiceRecognizers();
+  setVoiceState('listening');
+
+  const SR = getSR();
+  const rec = new SR();
+  voiceQueryRec = rec;
+  rec.lang = 'pl-PL';
+  rec.continuous = false;
+  rec.interimResults = true;
+
+  let finalText = '';
+  rec.onresult = (e) => {
+    let interim = '';
+    for (const r of e.results) {
+      if (r.isFinal) finalText += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    el.voiceTranscript.textContent = (finalText + ' ' + interim).trim();
+  };
+  rec.onend = () => {
+    voiceQueryRec = null;
+    if (!voiceMode) return;
+    const text = finalText.trim();
+    if (text) handleVoiceQuery(text);
+    else startWakeListening(); // cisza — wracamy do nasłuchu wake word
+  };
+  rec.onerror = () => { /* onend obsłuży powrót */ };
+  try { rec.start(); } catch { /* ignorujemy */ }
+}
+
+function captureVoiceFrame() {
+  const video = el.voiceCamera;
+  if (!voiceCameraStream || !video.videoWidth) return null;
+  const canvas = document.createElement('canvas');
+  const maxDim = 1024;
+  const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+async function handleVoiceQuery(text) {
+  el.voiceTranscript.textContent = text;
+
+  if (END_RE.test(text) && text.length < 30) {
+    setVoiceState('speaking');
+    await speakText('Do usłyszenia.');
+    if (voiceMode) startWakeListening();
+    return;
+  }
+
+  // pytanie „wizualne” → dołącz klatkę z kamery (model wizyjny sam się dobierze)
+  let frame = null;
+  if (VISUAL_RE.test(text)) frame = captureVoiceFrame();
+
+  const conv = ensureConversation(text);
+  const content = frame ? { text, images: [frame] } : text;
+  conv.messages.push({ role: 'user', content });
+  saveConversations();
+  renderSidebar();
+  renderMessages();
+
+  await runGeneration(conv); // po odpowiedzi wróci do słuchania (finally)
+}
+
+el.voiceBtn.addEventListener('click', enterVoiceMode);
+el.voiceClose.addEventListener('click', exitVoiceMode);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && voiceMode) exitVoiceMode();
 });
 
 // ----------------------------------------------------------------
