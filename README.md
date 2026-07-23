@@ -1,148 +1,149 @@
-# 🐻 Bear Chat — interfejs czatu dla NVIDIA Nemotron
+# ✦ COSMOS
 
-Kompletne środowisko czatu z UI/UX w stylu ChatGPT / Claude, gotowe do podłączenia
-modeli **NVIDIA Nemotron** (w tym Nemotron 3) przez dowolny endpoint zgodny
-z API OpenAI — chmurowy lub lokalny.
+Osobiste środowisko AI klasy premium — czysty, kosmiczny interfejs (IBM Plex) dla modeli
+**NVIDIA Nemotron** i innych modeli open source. Działa **hybrydowo**: lokalnie na Twoim
+GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięciem.
 
-**Zero zależności** — wystarczy Node.js ≥ 18. Bez `npm install`, bez budowania.
-
-![Bear Chat](docs/screenshot.png)
+![Cosmos](docs/screenshot.png)
 
 ## ✨ Funkcje
 
 - 💬 Czat ze streamingiem odpowiedzi w czasie rzeczywistym (SSE)
-- 🗂️ Wiele rozmów z historią zapisywaną w przeglądarce (localStorage)
-- 📝 Renderowanie Markdown: bloki kodu z przyciskiem „Kopiuj”, tabele, listy, cytaty
-- ⚙️ Panel ustawień: model, instrukcja systemowa, temperatura, limit tokenów
-- 📋 Pobieranie listy dostępnych modeli bezpośrednio z endpointu
-- 🌗 Motyw ciemny i jasny
-- ⏹️ Zatrzymywanie generowania w trakcie
-- 📱 Responsywny układ (desktop i mobile)
+- 🖼️ **Obsługa obrazów** — załącz lub wklej zdjęcie, odpowie model wizyjny (Nemotron VL i in.)
+- ☁️ / 🖥️ **Tryb hybrydowy** — przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym
+- 🛰️ Monitor statusu obu endpointów na żywo
+- 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
+- ⚙️ Osobny wybór modelu dla chmury i dla GPU, system prompt, temperatura, limit tokenów
+- 🌗 Motyw ciemny (kosmos) i jasny (sterylny), czcionki IBM Plex dołączone offline
+- 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe) i Android (PWA)
 
-## 🚀 Szybki start
+## 🚀 Szybki start (każdy system)
 
-### 1. Sklonuj repozytorium
-
-```bash
-git clone https://github.com/marcin1000/bear.git
-cd bear
-```
-
-### 2. Skonfiguruj połączenie z modelem
+Wymagany tylko [Node.js ≥ 18](https://nodejs.org). Bez `npm install`, bez budowania.
 
 ```bash
-cp .env.example .env
+git clone https://github.com/Marcin1000/Bear.git
+cd Bear
+cp .env.example .env    # Windows: copy .env.example .env
+npm start               # otwórz http://localhost:3000
 ```
 
-Otwórz `.env` i uzupełnij wartości (szczegóły niżej).
+## 📲 Instalacja jako aplikacja
 
-### 3. Uruchom
+### Windows — wariant 1: PWA (najprostszy)
+
+1. Uruchom serwer (`npm start`) i otwórz `http://localhost:3000` w **Chrome lub Edge**.
+2. Kliknij ikonę **„Zainstaluj aplikację"** w pasku adresu (albo menu ⋯ → *Zainstaluj Cosmos*).
+3. Cosmos pojawi się w menu Start jako osobna aplikacja z własnym oknem i ikoną.
+
+### Windows — wariant 2: aplikacja natywna (Electron)
 
 ```bash
-npm start        # lub: node server.js
+npm install        # jednorazowo (pobiera Electrona)
+npm run desktop    # uruchamia Cosmos jako aplikację okienkową
+npm run dist       # (opcjonalnie) buduje instalator .exe w katalogu dist/
 ```
 
-Otwórz **http://localhost:3000** w przeglądarce. Gotowe! 🎉
+Wariant Electron sam startuje serwer — nie musisz nic uruchamiać osobno.
 
-## 🔌 Podłączenie NVIDIA Nemotron
+### Android — PWA
 
-Serwer rozmawia z modelem przez standardowe API `POST /v1/chat/completions`
-(format OpenAI), więc działa z każdym z poniższych wariantów.
+1. Upewnij się, że telefon jest **w tej samej sieci Wi-Fi** co komputer z serwerem.
+2. Sprawdź adres IP komputera (Windows: `ipconfig` → IPv4, np. `192.168.1.20`).
+3. Na telefonie otwórz w Chrome: `http://192.168.1.20:3000`.
+4. Menu ⋮ → **„Dodaj do ekranu głównego"** / **„Zainstaluj aplikację"**.
 
-### Wariant A — chmura NVIDIA (najprostszy, bez GPU)
+Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona). Telefon łączy się
+z serwerem na Twoim PC — tam jest klucz API i tam wykonuje się cała logika.
 
-1. Wejdź na **[build.nvidia.com](https://build.nvidia.com)** i załóż darmowe konto.
-2. Wyszukaj model z rodziny **Nemotron** (np. Nemotron 3) i kliknij **Get API Key**.
-3. W pliku `.env` ustaw:
+> 💡 Chcesz używać Cosmos poza domem? Wystaw serwer przez [Tailscale](https://tailscale.com)
+> (darmowy VPN między Twoimi urządzeniami) — bez otwierania portów na routerze.
+
+## 🔌 Konfiguracja modeli (`.env`)
+
+### Profil „Chmura" — NVIDIA build.nvidia.com
 
 ```ini
-NVIDIA_API_KEY=nvapi-...twój-klucz...
+NVIDIA_API_KEY=nvapi-...            # klucz z build.nvidia.com (darmowa rejestracja)
 NEMOTRON_BASE_URL=https://integrate.api.nvidia.com/v1
-NEMOTRON_MODEL=nvidia/nemotron-nano-9b-v2   # podmień na wybrany model
+NEMOTRON_MODEL=nvidia/nemotron-nano-9b-v2   # podmień na wybrany model Nemotron
+NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 ```
 
-> 💡 Nie znasz dokładnego identyfikatora modelu? Uruchom aplikację, otwórz
-> **Ustawienia → Pobierz listę** — zobaczysz wszystkie modele dostępne na Twoim
-> kluczu i wybierzesz Nemotrona 3 z listy.
+Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
 
-### Wariant B — lokalnie przez vLLM (własne GPU)
+### Profil „Lokalnie" — Twój RTX 3080
+
+Najprościej przez [Ollama](https://ollama.com) (Windows/Linux/macOS):
 
 ```bash
-pip install vllm
-vllm serve <model-nemotron-z-huggingface> --port 8000
+# po zainstalowaniu Ollama:
+ollama pull nemotron-mini      # albo inny model z biblioteki Ollama
 ```
-
-W `.env`:
 
 ```ini
-NEMOTRON_BASE_URL=http://localhost:8000/v1
-NEMOTRON_MODEL=<model-nemotron-z-huggingface>
-NVIDIA_API_KEY=
+LOCAL_BASE_URL=http://localhost:11434/v1
+LOCAL_MODEL=nemotron-mini
+LOCAL_VISION_MODEL=qwen2.5vl   # lokalny model wizyjny (opcjonalnie)
 ```
 
-### Wariant C — lokalnie przez Ollama
+Alternatywy dla Ollama: **vLLM** (`http://localhost:8000/v1`) albo kontener **NVIDIA NIM**.
 
-```bash
-ollama pull nemotron    # lub inny wariant nemotron-* z biblioteki Ollama
-```
+> **Co zmieści się na RTX 3080 (10 GB)?** Modele do ~9–14 mld parametrów w kwantyzacji
+> 4-bit (np. Nemotron Nano 9B, Qwen 7B/14B, Mistral 7B). Większe modele (49B+) używaj
+> przez profil „Chmura".
 
-W `.env`:
+## 🧩 Modele wspomagające (open source)
 
-```ini
-NEMOTRON_BASE_URL=http://localhost:11434/v1
-NEMOTRON_MODEL=nemotron
-NVIDIA_API_KEY=
-```
+Nemotron to „mózg" — do pełnego systemu percepcji warto dołożyć wyspecjalizowane modele.
+Wszystkie poniższe są darmowe i działają lokalnie na RTX 3080:
 
-### Wariant D — kontener NVIDIA NIM (produkcyjnie, własna infrastruktura)
+| Zadanie | Model | Uwagi |
+|---|---|---|
+| Widzenie (opis obrazu) | **Qwen2.5-VL 7B**, LLaVA | przez Ollama; lub Nemotron VL w chmurze |
+| Rozpoznawanie mowy | **Whisper** (faster-whisper) | świetna polszczyzna, działa offline |
+| Synteza mowy (głos) | **Piper** | lekki, polskie głosy, czas rzeczywisty |
+| Detekcja obiektów | **YOLO** (v8/11) | kamera/Kinect → „co jest w kadrze" |
+| Śledzenie sylwetki | **MediaPipe** | szkielet/gesty z RGB (alternatywa dla SDK Kinecta) |
+| Wyszukiwanie w wiedzy (RAG) | **bge-m3**, multilingual-e5 | pamięć długoterminowa, dokumenty |
+| Fotogrametria | **COLMAP**, Meshroom | zdjęcia z Canona/Mavica → model 3D |
 
-Uruchom kontener NIM z wybranym modelem Nemotron zgodnie z instrukcją na
-[build.nvidia.com](https://build.nvidia.com) (zakładka „Deploy" przy modelu), a następnie:
-
-```ini
-NEMOTRON_BASE_URL=http://localhost:8000/v1
-NEMOTRON_MODEL=<nazwa-modelu-w-nim>
-```
+Architektura Cosmos (endpoint zgodny z API OpenAI) pozwala podłączyć każdy z modeli
+językowych/wizyjnych bez zmian w kodzie — wystarczy wpis w `.env`.
 
 ## 🏗️ Architektura
 
 ```
-przeglądarka (public/)                serwer (server.js)              model
-┌────────────────────┐   POST /api/chat   ┌──────────────┐   /v1/chat/completions
-│  index.html        │ ─────────────────▶ │  proxy + SSE │ ─────────────────────▶
-│  app.js  style.css │ ◀───── stream ──── │  klucz API   │ ◀──── stream ────────
-└────────────────────┘                    └──────────────┘   (NVIDIA / vLLM / …)
+przeglądarka / PWA / Electron          server.js                     modele
+┌──────────────────────────┐   POST /api/chat   ┌──────────────┐
+│ index.html  app.js       │ ─────────────────▶ │  proxy + SSE │ ──▶ ☁ chmura NVIDIA
+│ style.css   sw.js (PWA)  │ ◀───── stream ──── │  klucz API   │ ──▶ 🖥 lokalny GPU
+└──────────────────────────┘                    └──────────────┘     (Ollama/vLLM/NIM)
 ```
-
-- **`server.js`** — serwer HTTP bez zależności: serwuje frontend, trzyma klucz API
-  po stronie serwera (nigdy nie trafia do przeglądarki) i przekazuje strumień
-  odpowiedzi 1:1 do UI.
-- **`public/`** — frontend w czystym HTML/CSS/JS, bez frameworków i bez etapu
-  budowania.
-
-### Endpointy API
 
 | Endpoint | Metoda | Opis |
 |---|---|---|
-| `/api/chat` | POST | Wysyła rozmowę do modelu, zwraca strumień SSE |
-| `/api/models` | GET | Lista modeli dostępnych na endpointzie |
-| `/api/config` | GET | Aktualna konfiguracja (bez klucza API) |
+| `/api/chat` | POST | Rozmowa (tekst + obrazy), strumień SSE; pole `endpoint: cloud\|local` |
+| `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
+| `/api/status` | GET | Dostępność obu endpointów |
+| `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
 
-## ⚙️ Konfiguracja (`.env`)
+## 💰 Koszty
 
-| Zmienna | Domyślnie | Opis |
-|---|---|---|
-| `PORT` | `3000` | Port interfejsu |
-| `NVIDIA_API_KEY` | — | Klucz API (dla chmury NVIDIA, `nvapi-...`) |
-| `NEMOTRON_BASE_URL` | `https://integrate.api.nvidia.com/v1` | Endpoint zgodny z API OpenAI |
-| `NEMOTRON_MODEL` | `nvidia/nemotron-nano-9b-v2` | Domyślny identyfikator modelu |
+- **Lokalnie (RTX 3080):** 0 zł za tokeny — płacisz tylko za prąd (~0,3–0,5 zł za godzinę
+  intensywnego generowania).
+- **Chmura NVIDIA (build.nvidia.com):** rejestracja darmowa, konto deweloperskie dostaje
+  pulę darmowych zapytań; przy większym użyciu obowiązuje cennik NVIDIA. Do prototypowania
+  zwykle wystarcza pula darmowa.
+- **Aplikacja Cosmos:** open source, bez opłat; czcionki IBM Plex na licencji OFL.
 
 ## 🛠️ Rozwiązywanie problemów
 
 | Problem | Rozwiązanie |
 |---|---|
-| „Brak klucza API" | Skopiuj `.env.example` do `.env`, wklej klucz z build.nvidia.com i zrestartuj serwer |
-| Błąd HTTP 401/403 | Klucz jest nieprawidłowy lub wygasł — wygeneruj nowy |
-| Błąd HTTP 404 przy czacie | Zły identyfikator modelu — sprawdź go przez **Ustawienia → Pobierz listę** |
-| „Nie udało się połączyć…" | Sprawdź, czy lokalny serwer modelu (vLLM/Ollama/NIM) działa i czy `NEMOTRON_BASE_URL` jest poprawny |
-| Odpowiedzi ucinane | Zwiększ „Maks. tokenów odpowiedzi" w Ustawieniach |
+| „Brak klucza API dla chmury NVIDIA" | Uzupełnij `NVIDIA_API_KEY` w `.env` i zrestartuj serwer |
+| „Nie udało się połączyć z lokalnym modelem" | Uruchom Ollama/vLLM; sprawdź `LOCAL_BASE_URL` |
+| Lokalny status „offline" | Ollama nie działa lub inny port — `ollama serve` i sprawdź `.env` |
+| Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
+| Obraz bez odpowiedzi „wizyjnej" | Ustaw `NEMOTRON_VISION_MODEL` / `LOCAL_VISION_MODEL` na model VL |
+| Telefon nie łączy się z serwerem | Ta sama sieć Wi-Fi + zapora Windows: zezwól Node.js na sieć prywatną |

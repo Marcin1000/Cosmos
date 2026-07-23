@@ -1,13 +1,37 @@
 {
-  "name": "bear-chat",
-  "version": "1.0.0",
-  "description": "Interfejs czatu (UI/UX w stylu ChatGPT/Claude) dla modeli NVIDIA Nemotron przez dowolny endpoint zgodny z API OpenAI.",
-  "main": "server.js",
+  "name": "cosmos",
+  "version": "2.0.0",
+  "description": "Cosmos — osobiste środowisko AI (UI premium) dla modeli NVIDIA Nemotron: lokalnie (RTX) i w chmurze NVIDIA. PWA + aplikacja desktopowa.",
+  "main": "desktop/main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "desktop": "electron .",
+    "dist": "electron-builder --win"
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "app.cosmos.chat",
+    "productName": "Cosmos",
+    "files": [
+      "server.js",
+      "desktop/**",
+      "public/**",
+      ".env.example"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icons/icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "license": "MIT"
 }

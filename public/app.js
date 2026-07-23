@@ -1,5 +1,5 @@
 /* ============================================================
-   Bear Chat — logika interfejsu
+   COSMOS — logika interfejsu
    ============================================================ */
 
 'use strict';
@@ -9,13 +9,15 @@
 // ----------------------------------------------------------------
 
 const STORAGE_KEYS = {
-  conversations: 'bear.conversations',
-  settings: 'bear.settings',
-  theme: 'bear.theme',
+  conversations: 'cosmos.conversations',
+  settings: 'cosmos.settings',
+  theme: 'cosmos.theme',
+  endpoint: 'cosmos.endpoint',
 };
 
 const DEFAULT_SETTINGS = {
-  model: '',            // puste = model z konfiguracji serwera
+  modelCloud: '',       // puste = model z konfiguracji serwera
+  modelLocal: '',
   systemPrompt: 'Jesteś pomocnym asystentem AI. Odpowiadasz po polsku, chyba że użytkownik pisze w innym języku.',
   temperature: 0.6,
   maxTokens: 2048,
@@ -23,10 +25,12 @@ const DEFAULT_SETTINGS = {
 
 let conversations = loadJson(STORAGE_KEYS.conversations, []);
 let settings = { ...DEFAULT_SETTINGS, ...loadJson(STORAGE_KEYS.settings, {}) };
+let endpoint = localStorage.getItem(STORAGE_KEYS.endpoint) || 'cloud';
 let activeId = null;
-let serverConfig = { model: '', baseUrl: '', hasApiKey: false };
+let serverConfig = { endpoints: { cloud: {}, local: {} } };
 let abortController = null;
 let isGenerating = false;
+let pendingImages = []; // dataURL-e załączników czekających na wysłanie
 
 // ----------------------------------------------------------------
 // Elementy DOM
@@ -46,28 +50,38 @@ const el = {
   input: $('input'),
   sendBtn: $('send-btn'),
   stopBtn: $('stop-btn'),
+  attachBtn: $('attach-btn'),
+  fileInput: $('file-input'),
+  attachments: $('attachments'),
   themeBtn: $('theme-btn'),
   themeLabel: $('theme-label'),
   themeIconDark: $('theme-icon-dark'),
   themeIconLight: $('theme-icon-light'),
   topbarModel: $('topbar-model'),
-  statusDot: $('status-dot'),
-  statusText: $('status-text'),
-  // modal
+  tabCloud: $('tab-cloud'),
+  tabLocal: $('tab-local'),
+  statusCloud: $('status-cloud'),
+  statusLocal: $('status-local'),
   settingsBtn: $('settings-btn'),
   settingsModal: $('settings-modal'),
   settingsClose: $('settings-close'),
   settingsSave: $('settings-save'),
   settingsReset: $('settings-reset'),
-  setModel: $('set-model'),
+  setModelCloud: $('set-model-cloud'),
+  setModelLocal: $('set-model-local'),
   setSystem: $('set-system'),
   setTemp: $('set-temp'),
   tempValue: $('temp-value'),
   setMaxTokens: $('set-maxtokens'),
-  fetchModelsBtn: $('fetch-models-btn'),
-  modelSelect: $('model-select'),
+  fetchModelsCloud: $('fetch-models-cloud'),
+  fetchModelsLocal: $('fetch-models-local'),
+  modelSelectCloud: $('model-select-cloud'),
+  modelSelectLocal: $('model-select-local'),
   configInfo: $('config-info'),
 };
+
+const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
+const COPY_SVG = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 
 // ----------------------------------------------------------------
 // Narzędzia
@@ -83,7 +97,16 @@ function loadJson(key, fallback) {
 }
 
 function saveConversations() {
-  localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(conversations));
+  try {
+    localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(conversations));
+  } catch {
+    // limit localStorage (zwykle 5 MB) — usuwamy najstarsze rozmowy z obrazami
+    const trimmed = conversations.slice(0, Math.max(1, Math.floor(conversations.length / 2)));
+    try {
+      localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(trimmed));
+      conversations = trimmed;
+    } catch { /* poddajemy się — sesja działa dalej w pamięci */ }
+  }
 }
 
 function saveSettings() {
@@ -98,13 +121,26 @@ function activeConv() {
   return conversations.find((c) => c.id === activeId) || null;
 }
 
+function epConfig(name = endpoint) {
+  return serverConfig.endpoints[name] || {};
+}
+
 function currentModel() {
-  return settings.model || serverConfig.model || '';
+  const override = endpoint === 'local' ? settings.modelLocal : settings.modelCloud;
+  return override || epConfig().model || '';
 }
 
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// treść wiadomości: string albo { text, images: [dataURL] }
+function msgText(m) {
+  return typeof m.content === 'string' ? m.content : (m.content.text || '');
+}
+function msgImages(m) {
+  return typeof m.content === 'string' ? [] : (m.content.images || []);
 }
 
 // ----------------------------------------------------------------
@@ -151,13 +187,11 @@ function renderMarkdown(text) {
       const code = [];
       i++;
       while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
-      i++; // pomiń zamykające ```
+      i++;
       html.push(
         `<div class="code-block">` +
         `<div class="code-block-header"><span>${escapeHtml(lang || 'kod')}</span>` +
-        `<button class="code-copy-btn" data-copy>` +
-        `<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/></svg>` +
-        `Kopiuj</button></div>` +
+        `<button class="code-copy-btn" data-copy>${COPY_SVG}Kopiuj</button></div>` +
         `<pre><code>${escapeHtml(code.join('\n'))}</code></pre></div>`
       );
       continue;
@@ -191,7 +225,7 @@ function renderMarkdown(text) {
       continue;
     }
 
-    // tabela (wiersz z | oraz separator w kolejnej linii)
+    // tabela
     if (line.includes('|') && i + 1 < lines.length &&
         /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
       flushPara(); closeList();
@@ -259,7 +293,7 @@ function renderSidebar() {
     const del = document.createElement('button');
     del.className = 'conv-delete';
     del.title = 'Usuń rozmowę';
-    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       deleteConversation(conv.id);
@@ -270,47 +304,72 @@ function renderSidebar() {
   }
 }
 
-function messageElement(role, content, isError = false) {
+function imagesHtml(images) {
+  if (!images.length) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-images';
+  for (const src of images) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = 'załącznik';
+    wrap.appendChild(img);
+  }
+  return wrap;
+}
+
+function messageElement(m) {
+  const role = m.role;
+  const text = msgText(m);
+  const images = msgImages(m);
+  const isError = Boolean(m.error);
+
   const msg = document.createElement('div');
   msg.className = `msg msg-${role}` + (isError ? ' msg-error' : '');
 
   if (role === 'assistant') {
     const avatar = document.createElement('div');
     avatar.className = 'msg-avatar';
-    avatar.textContent = '🐻';
+    avatar.innerHTML = AVATAR_SVG;
     msg.appendChild(avatar);
   }
 
   const body = document.createElement('div');
   body.className = 'msg-content' + (role === 'assistant' && !isError ? ' md' : '');
-  if (role === 'assistant' && !isError) body.innerHTML = renderMarkdown(content);
-  else body.textContent = content;
-  msg.appendChild(body);
 
-  if (role === 'assistant' && !isError) {
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'msg-action-btn';
-    copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/></svg> Kopiuj';
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(content).then(() => {
-        copyBtn.innerHTML = '✓ Skopiowano';
-        setTimeout(() => {
-          copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/></svg> Kopiuj';
-        }, 1500);
-      });
-    });
-    actions.appendChild(copyBtn);
-    body.after(actions);
-    // actions muszą być w kolumnie z treścią
-    const col = document.createElement('div');
-    col.style.flex = '1';
-    col.style.minWidth = '0';
-    col.append(body, actions);
-    msg.appendChild(col);
+  if (role === 'user') {
+    const imgs = imagesHtml(images);
+    if (imgs) body.appendChild(imgs);
+    if (text) body.appendChild(document.createTextNode(text));
+    msg.appendChild(body);
+    return msg;
   }
 
+  if (isError) {
+    body.textContent = text;
+    msg.appendChild(body);
+    return msg;
+  }
+
+  body.innerHTML = renderMarkdown(text);
+
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'msg-action-btn';
+  copyBtn.innerHTML = COPY_SVG + ' Kopiuj';
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.textContent = '✓ Skopiowano';
+      setTimeout(() => { copyBtn.innerHTML = COPY_SVG + ' Kopiuj'; }, 1500);
+    });
+  });
+  actions.appendChild(copyBtn);
+
+  const col = document.createElement('div');
+  col.style.flex = '1';
+  col.style.minWidth = '0';
+  col.append(body, actions);
+  msg.appendChild(col);
   return msg;
 }
 
@@ -322,7 +381,7 @@ function renderMessages() {
   if (!hasMessages) return;
 
   for (const m of conv.messages) {
-    el.messages.appendChild(messageElement(m.role, m.content, m.error));
+    el.messages.appendChild(messageElement(m));
   }
   scrollToBottom(true);
 }
@@ -368,9 +427,10 @@ function deleteConversation(id) {
 function ensureConversation(firstUserText) {
   let conv = activeConv();
   if (!conv) {
+    const base = firstUserText || 'Rozmowa z obrazem';
     conv = {
       id: uid(),
-      title: firstUserText.slice(0, 48) + (firstUserText.length > 48 ? '…' : ''),
+      title: base.slice(0, 48) + (base.length > 48 ? '…' : ''),
       messages: [],
       createdAt: Date.now(),
     };
@@ -381,15 +441,117 @@ function ensureConversation(firstUserText) {
 }
 
 // ----------------------------------------------------------------
+// Załączniki obrazów
+// ----------------------------------------------------------------
+
+function resizeImage(file, maxDim = 1024, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Nie udało się wczytać obrazu.')); };
+    img.src = url;
+  });
+}
+
+function renderAttachments() {
+  el.attachments.innerHTML = '';
+  pendingImages.forEach((src, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'attachment';
+    const img = document.createElement('img');
+    img.src = src;
+    const rm = document.createElement('button');
+    rm.className = 'attachment-remove';
+    rm.textContent = '×';
+    rm.title = 'Usuń załącznik';
+    rm.addEventListener('click', () => {
+      pendingImages.splice(idx, 1);
+      renderAttachments();
+      updateSendButton();
+    });
+    wrap.append(img, rm);
+    el.attachments.appendChild(wrap);
+  });
+}
+
+el.attachBtn.addEventListener('click', () => el.fileInput.click());
+
+el.fileInput.addEventListener('change', async () => {
+  for (const file of el.fileInput.files) {
+    if (!file.type.startsWith('image/')) continue;
+    if (pendingImages.length >= 4) { alert('Maksymalnie 4 obrazy na wiadomość.'); break; }
+    try {
+      pendingImages.push(await resizeImage(file));
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+  el.fileInput.value = '';
+  renderAttachments();
+  updateSendButton();
+});
+
+// wklejanie obrazów ze schowka
+el.input.addEventListener('paste', async (e) => {
+  const items = [...(e.clipboardData?.items || [])].filter((it) => it.type.startsWith('image/'));
+  if (!items.length) return;
+  e.preventDefault();
+  for (const it of items) {
+    if (pendingImages.length >= 4) break;
+    const file = it.getAsFile();
+    if (file) pendingImages.push(await resizeImage(file));
+  }
+  renderAttachments();
+  updateSendButton();
+});
+
+// ----------------------------------------------------------------
 // Wysyłanie wiadomości + streaming SSE
 // ----------------------------------------------------------------
 
+function toApiMessages(conv) {
+  const api = [];
+  if (settings.systemPrompt.trim()) {
+    api.push({ role: 'system', content: settings.systemPrompt.trim() });
+  }
+  for (const m of conv.messages) {
+    if (m.error) continue;
+    const text = msgText(m);
+    const images = msgImages(m);
+    if (images.length) {
+      const parts = images.map((src) => ({ type: 'image_url', image_url: { url: src } }));
+      if (text) parts.push({ type: 'text', text });
+      api.push({ role: m.role, content: parts });
+    } else {
+      api.push({ role: m.role, content: text });
+    }
+  }
+  return api;
+}
+
 async function sendMessage() {
   const text = el.input.value.trim();
-  if (!text || isGenerating) return;
+  if ((!text && !pendingImages.length) || isGenerating) return;
 
   const conv = ensureConversation(text);
-  conv.messages.push({ role: 'user', content: text });
+  const content = pendingImages.length ? { text, images: [...pendingImages] } : text;
+  conv.messages.push({ role: 'user', content });
+  pendingImages = [];
+  renderAttachments();
   saveConversations();
 
   el.input.value = '';
@@ -404,24 +566,15 @@ async function generate(conv) {
   isGenerating = true;
   setGeneratingUI(true);
 
-  // element odpowiedzi asystenta (streaming)
   const msg = document.createElement('div');
   msg.className = 'msg msg-assistant';
-  msg.innerHTML = '<div class="msg-avatar">🐻</div>';
+  msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
   const body = document.createElement('div');
   body.className = 'msg-content md';
   body.innerHTML = '<span class="cursor-blink"></span>';
   msg.appendChild(body);
   el.messages.appendChild(msg);
   scrollToBottom(true);
-
-  const apiMessages = [];
-  if (settings.systemPrompt.trim()) {
-    apiMessages.push({ role: 'system', content: settings.systemPrompt.trim() });
-  }
-  for (const m of conv.messages) {
-    if (!m.error) apiMessages.push({ role: m.role, content: m.content });
-  }
 
   abortController = new AbortController();
   let acc = '';
@@ -440,12 +593,14 @@ async function generate(conv) {
   };
 
   try {
+    const modelOverride = endpoint === 'local' ? settings.modelLocal : settings.modelCloud;
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: apiMessages,
-        model: settings.model || undefined,
+        endpoint,
+        messages: toApiMessages(conv),
+        model: modelOverride || undefined,
         temperature: settings.temperature,
         max_tokens: settings.maxTokens,
       }),
@@ -461,7 +616,6 @@ async function generate(conv) {
       throw new Error(errText);
     }
 
-    // parsowanie strumienia SSE (format OpenAI: data: {...}\n\n)
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -472,7 +626,7 @@ async function generate(conv) {
       buffer += decoder.decode(value, { stream: true });
 
       const events = buffer.split('\n\n');
-      buffer = events.pop(); // niepełny fragment zostaje w buforze
+      buffer = events.pop();
 
       for (const event of events) {
         for (const line of event.split('\n')) {
@@ -488,7 +642,7 @@ async function generate(conv) {
               acc += delta;
               schedulePaint();
             }
-          } catch { /* niepełny/nieznany fragment — pomijamy */ }
+          } catch { /* niepełny fragment — pomijamy */ }
         }
       }
     }
@@ -503,7 +657,7 @@ async function generate(conv) {
         saveConversations();
       }
     } else {
-      conv.messages.push({ role: 'assistant', content: `⚠️ ${err.message}`, error: true });
+      conv.messages.push({ role: 'assistant', content: `⚠ ${err.message}`, error: true });
       saveConversations();
     }
   } finally {
@@ -522,12 +676,11 @@ function stopGeneration() {
 function setGeneratingUI(generating) {
   el.sendBtn.style.display = generating ? 'none' : '';
   el.stopBtn.style.display = generating ? '' : 'none';
-  el.input.disabled = false;
   updateSendButton();
 }
 
 function updateSendButton() {
-  el.sendBtn.disabled = el.input.value.trim() === '' || isGenerating;
+  el.sendBtn.disabled = (el.input.value.trim() === '' && pendingImages.length === 0) || isGenerating;
 }
 
 // ----------------------------------------------------------------
@@ -577,7 +730,7 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
 });
 
 // ----------------------------------------------------------------
-// Sidebar / motyw
+// Sidebar / motyw / endpoint
 // ----------------------------------------------------------------
 
 el.newChatBtn.addEventListener('click', newConversation);
@@ -597,6 +750,8 @@ function applyTheme(theme) {
   el.themeIconDark.style.display = dark ? 'none' : '';
   el.themeIconLight.style.display = dark ? '' : 'none';
   el.themeLabel.textContent = dark ? 'Jasny motyw' : 'Ciemny motyw';
+  document.querySelector('meta[name="theme-color"]')
+    .setAttribute('content', dark ? '#05060a' : '#fbfbfd');
 }
 
 el.themeBtn.addEventListener('click', () => {
@@ -606,17 +761,30 @@ el.themeBtn.addEventListener('click', () => {
 
 applyTheme(localStorage.getItem(STORAGE_KEYS.theme) || 'dark');
 
+function setEndpoint(name) {
+  endpoint = name;
+  localStorage.setItem(STORAGE_KEYS.endpoint, name);
+  el.tabCloud.classList.toggle('active', name === 'cloud');
+  el.tabLocal.classList.toggle('active', name === 'local');
+  updateModelBadge();
+}
+
+el.tabCloud.addEventListener('click', () => setEndpoint('cloud'));
+el.tabLocal.addEventListener('click', () => setEndpoint('local'));
+
 // ----------------------------------------------------------------
 // Ustawienia (modal)
 // ----------------------------------------------------------------
 
 function openSettings() {
-  el.setModel.value = settings.model;
+  el.setModelCloud.value = settings.modelCloud;
+  el.setModelLocal.value = settings.modelLocal;
   el.setSystem.value = settings.systemPrompt;
   el.setTemp.value = settings.temperature;
   el.tempValue.textContent = settings.temperature;
   el.setMaxTokens.value = settings.maxTokens;
-  el.modelSelect.style.display = 'none';
+  el.modelSelectCloud.style.display = 'none';
+  el.modelSelectLocal.style.display = 'none';
   renderConfigInfo();
   el.settingsModal.style.display = '';
 }
@@ -626,13 +794,15 @@ function closeSettings() {
 }
 
 function renderConfigInfo() {
+  const c = epConfig('cloud');
+  const l = epConfig('local');
   el.configInfo.innerHTML =
-    `<strong>Konfiguracja serwera</strong><br>` +
-    `Endpoint: <code>${escapeHtml(serverConfig.baseUrl || '—')}</code><br>` +
-    `Model domyślny: <code>${escapeHtml(serverConfig.model || '—')}</code><br>` +
-    `Klucz API: ${serverConfig.hasApiKey
-      ? '✅ ustawiony'
-      : '⚠️ brak — ustaw <code>NVIDIA_API_KEY</code> w pliku <code>.env</code> i zrestartuj serwer'}`;
+    `<strong>KONFIGURACJA SERWERA (.env)</strong><br>` +
+    `chmura:  ${escapeHtml(c.baseUrl || '—')}<br>` +
+    `         model: ${escapeHtml(c.model || '—')}${c.visionModel ? ` · wizyjny: ${escapeHtml(c.visionModel)}` : ''}<br>` +
+    `         klucz API: ${c.hasApiKey ? 'ustawiony ✓' : 'BRAK — ustaw NVIDIA_API_KEY'}<br>` +
+    `lokalny: ${escapeHtml(l.baseUrl || '—')}<br>` +
+    `         model: ${escapeHtml(l.model || 'nie ustawiono — LOCAL_MODEL')}`;
 }
 
 el.settingsBtn.addEventListener('click', openSettings);
@@ -649,7 +819,8 @@ el.setTemp.addEventListener('input', () => {
 });
 
 el.settingsSave.addEventListener('click', () => {
-  settings.model = el.setModel.value.trim();
+  settings.modelCloud = el.setModelCloud.value.trim();
+  settings.modelLocal = el.setModelLocal.value.trim();
   settings.systemPrompt = el.setSystem.value;
   settings.temperature = parseFloat(el.setTemp.value);
   settings.maxTokens = parseInt(el.setMaxTokens.value, 10) || DEFAULT_SETTINGS.maxTokens;
@@ -665,65 +836,102 @@ el.settingsReset.addEventListener('click', () => {
   updateModelBadge();
 });
 
-el.fetchModelsBtn.addEventListener('click', async () => {
-  el.fetchModelsBtn.disabled = true;
-  el.fetchModelsBtn.textContent = 'Pobieranie…';
+async function fetchModelsInto(epName, selectEl, btn) {
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Pobieranie…';
   try {
-    const res = await fetch('/api/models');
+    const res = await fetch(`/api/models?endpoint=${epName}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const models = (data.data || []).map((m) => m.id).sort();
     if (!models.length) throw new Error('Endpoint nie zwrócił żadnych modeli.');
-    el.modelSelect.innerHTML =
+    selectEl.innerHTML =
       '<option value="">— wybierz model z listy —</option>' +
       models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
-    el.modelSelect.style.display = '';
+    selectEl.style.display = '';
   } catch (err) {
     alert(`Nie udało się pobrać listy modeli:\n${err.message}`);
   } finally {
-    el.fetchModelsBtn.disabled = false;
-    el.fetchModelsBtn.textContent = 'Pobierz listę';
+    btn.disabled = false;
+    btn.textContent = prev;
   }
-});
+}
 
-el.modelSelect.addEventListener('change', () => {
-  if (el.modelSelect.value) el.setModel.value = el.modelSelect.value;
+el.fetchModelsCloud.addEventListener('click', () =>
+  fetchModelsInto('cloud', el.modelSelectCloud, el.fetchModelsCloud));
+el.fetchModelsLocal.addEventListener('click', () =>
+  fetchModelsInto('local', el.modelSelectLocal, el.fetchModelsLocal));
+
+el.modelSelectCloud.addEventListener('change', () => {
+  if (el.modelSelectCloud.value) el.setModelCloud.value = el.modelSelectCloud.value;
+});
+el.modelSelectLocal.addEventListener('change', () => {
+  if (el.modelSelectLocal.value) el.setModelLocal.value = el.modelSelectLocal.value;
 });
 
 // ----------------------------------------------------------------
-// Status połączenia i konfiguracja serwera
+// Status i konfiguracja serwera
 // ----------------------------------------------------------------
 
 function updateModelBadge() {
   const model = currentModel() || 'model nieustawiony';
-  el.topbarModel.textContent = model;
+  const label = endpoint === 'local' ? 'lokalnie' : 'chmura';
+  el.topbarModel.textContent = `${model} · ${label}`;
   el.welcomeModel.textContent = model;
+}
+
+function setStatusRow(rowEl, online, extra) {
+  const dot = rowEl.querySelector('.status-dot');
+  const state = rowEl.querySelector('.status-state');
+  dot.className = 'status-dot ' + (online === true ? 'ok' : online === 'warn' ? 'warn' : 'err');
+  state.textContent = extra;
+}
+
+async function refreshStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const st = await res.json();
+    const cloudCfg = epConfig('cloud');
+    if (!cloudCfg.hasApiKey) {
+      setStatusRow(el.statusCloud, 'warn', 'brak klucza');
+    } else {
+      setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? 'online' : 'offline');
+    }
+    setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? 'online' : 'offline');
+  } catch {
+    setStatusRow(el.statusCloud, false, '—');
+    setStatusRow(el.statusLocal, false, '—');
+  }
 }
 
 async function loadServerConfig() {
   try {
     const res = await fetch('/api/config');
     serverConfig = await res.json();
-    updateModelBadge();
-    if (serverConfig.hasApiKey || !serverConfig.baseUrl.includes('integrate.api.nvidia.com')) {
-      el.statusDot.className = 'status-dot ok';
-      el.statusText.textContent = `Połączono: ${new URL(serverConfig.baseUrl).host}`;
-    } else {
-      el.statusDot.className = 'status-dot warn';
-      el.statusText.textContent = 'Brak klucza API (.env)';
-    }
-  } catch {
-    el.statusDot.className = 'status-dot err';
-    el.statusText.textContent = 'Brak połączenia z serwerem';
-  }
+  } catch { /* serwer nieosiągalny — UI dalej działa */ }
+  updateModelBadge();
+  refreshStatus();
+}
+
+// ----------------------------------------------------------------
+// PWA
+// ----------------------------------------------------------------
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline dev */ });
+  });
 }
 
 // ----------------------------------------------------------------
 // Start
 // ----------------------------------------------------------------
 
+setEndpoint(endpoint);
 renderSidebar();
 renderMessages();
 updateSendButton();
 loadServerConfig();
+setInterval(refreshStatus, 30000);
 el.input.focus();
