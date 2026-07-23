@@ -167,7 +167,54 @@ kbd {
 .new-chat-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
 .new-chat-btn svg { color: var(--accent); width: 16px; height: 16px; }
 
+.conv-search-wrap {
+  position: relative;
+  margin: 0 14px 8px;
+  display: flex;
+  align-items: center;
+}
+.conv-search-wrap svg {
+  position: absolute;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.conv-search {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px 8px 32px;
+  outline: none;
+}
+.conv-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
 .conversations { flex: 1; overflow-y: auto; padding: 0 10px; }
+
+.conv-pin-mark { color: var(--accent); flex-shrink: 0; margin-left: 8px; display: flex; }
+.conv-pin-mark svg { width: 12px; height: 12px; }
+
+.conv-action {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.conv-item:hover .conv-action { display: inline-flex; }
+.conv-action:hover { color: var(--text); background: var(--bg); }
+.conv-action.danger:hover { color: var(--danger); }
+.conv-action.pinned { display: inline-flex; color: var(--accent); }
+.conv-action svg { width: 14px; height: 14px; }
+.conv-empty { padding: 14px; font-size: 12.5px; color: var(--text-faint); text-align: center; }
 
 .conv-item {
   display: flex;

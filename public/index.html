@@ -63,6 +63,10 @@
         <span data-i18n="newChat">Nowa rozmowa</span>
       </button>
 
+      <div class="conv-search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input type="text" id="conv-search" class="conv-search" data-i18n-ph="convSearch" placeholder="Szukaj rozmów…">
+      </div>
       <nav class="conversations" id="conversations" data-i18n-aria="convList" aria-label="Lista rozmów"></nav>
 
       <div class="sidebar-footer">
@@ -122,6 +126,9 @@
         </button>
         <button class="icon-btn tts-toggle" id="tts-toggle" data-i18n-title="ttsRead" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
           <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
+        </button>
+        <button class="icon-btn" id="export-btn" data-i18n-title="exportConv" title="Eksportuj (Markdown)" aria-label="Eksportuj" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="topbar-model" id="topbar-model" data-i18n-title="activeModel" title="Aktywny model">—</div>
       </header>

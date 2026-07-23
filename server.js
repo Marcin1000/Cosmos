@@ -411,10 +411,35 @@ function convPath(id) {
   return path.join(CONV_DIR, `${String(id).replace(/[^a-z0-9]/gi, '')}.json`);
 }
 
-async function handleConversations(req, res) {
+function sortConvIndex() {
+  // przypięte na górze, potem wg czasu modyfikacji
+  convIndex.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
+}
+
+async function handleConversations(req, res, pathname) {
   const rawId = new URL(req.url, 'http://localhost').searchParams.get('id');
   // ta sama sanityzacja co convPath — indeks i nazwa pliku zawsze zgodne
   const id = rawId ? String(rawId).replace(/[^a-z0-9]/gi, '') : rawId;
+
+  // zmiana nazwy / przypięcie — bez nadpisywania treści rozmowy
+  if (pathname === '/api/conversations/meta' && req.method === 'POST' && id) {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const entry = convIndex.find((c) => c.id === id);
+    if (!entry) return sendJson(res, 404, { error: 'Nie znaleziono rozmowy.' });
+    if (typeof data.title === 'string' && data.title.trim()) entry.title = data.title.trim().slice(0, 120);
+    if (typeof data.pinned === 'boolean') entry.pinned = data.pinned;
+    // zapisz też do pliku (trwałość tytułu/przypięcia)
+    try {
+      const conv = JSON.parse(fs.readFileSync(convPath(id), 'utf8'));
+      conv.title = entry.title;
+      conv.pinned = entry.pinned || false;
+      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+    } catch { /* plik mógł zniknąć — indeks i tak zaktualizowany */ }
+    sortConvIndex();
+    saveConvIndex();
+    return sendJson(res, 200, { ok: true, meta: entry });
+  }
 
   if (req.method === 'GET' && !id) {
     return sendJson(res, 200, { conversations: convIndex });
@@ -438,10 +463,17 @@ async function handleConversations(req, res) {
     } catch (err) {
       return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
     }
-    const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt, updatedAt: conv.updatedAt };
+    const prev = convIndex.find((c) => c.id === id);
+    const meta = {
+      id,
+      title: conv.title || 'Rozmowa',
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt,
+      pinned: (typeof conv.pinned === 'boolean' ? conv.pinned : prev?.pinned) || false,
+    };
     const i = convIndex.findIndex((c) => c.id === id);
     if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
-    convIndex.sort((a, b) => b.updatedAt - a.updatedAt);
+    sortConvIndex();
     saveConvIndex();
     return sendJson(res, 200, { ok: true, meta });
   }
@@ -1478,7 +1510,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
-    if (p === '/api/conversations') return await handleConversations(req, res);
+    if (p === '/api/conversations' || p === '/api/conversations/meta') return await handleConversations(req, res, p);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');

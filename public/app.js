@@ -357,9 +357,28 @@ function renderMarkdown(text) {
 // Renderowanie rozmów i wiadomości
 // ----------------------------------------------------------------
 
+let convSearchQuery = '';
+
+const SVG_PIN = '<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5zM12 14v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const SVG_RENAME = '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const SVG_TRASH = '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
 function renderSidebar() {
   el.conversations.innerHTML = '';
-  for (const conv of conversations) {
+  const q = convSearchQuery.trim().toLowerCase();
+  const list = q
+    ? conversations.filter((c) => (c.title || '').toLowerCase().includes(q))
+    : conversations;
+
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'conv-empty';
+    empty.textContent = q ? t('noConvsFound') : '';
+    el.conversations.appendChild(empty);
+    return;
+  }
+
+  for (const conv of list) {
     const item = document.createElement('div');
     item.className = 'conv-item' + (conv.id === activeId ? ' active' : '');
 
@@ -369,18 +388,59 @@ function renderSidebar() {
     title.title = conv.title || t('newChatFallback');
     title.addEventListener('click', () => selectConversation(conv.id));
 
-    const del = document.createElement('button');
-    del.className = 'conv-delete';
-    del.title = t('deleteConv');
-    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-    del.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteConversation(conv.id);
-    });
+    const pin = document.createElement('button');
+    pin.className = 'conv-action' + (conv.pinned ? ' pinned' : '');
+    pin.title = conv.pinned ? t('unpin') : t('pin');
+    pin.innerHTML = SVG_PIN;
+    pin.addEventListener('click', (e) => { e.stopPropagation(); togglePin(conv.id, !conv.pinned); });
 
-    item.append(title, del);
+    const rename = document.createElement('button');
+    rename.className = 'conv-action';
+    rename.title = t('rename');
+    rename.innerHTML = SVG_RENAME;
+    rename.addEventListener('click', (e) => { e.stopPropagation(); renameConversation(conv.id, conv.title); });
+
+    const del = document.createElement('button');
+    del.className = 'conv-action danger';
+    del.title = t('deleteConv');
+    del.innerHTML = SVG_TRASH;
+    del.addEventListener('click', (e) => { e.stopPropagation(); deleteConversation(conv.id); });
+
+    item.append(title, pin, rename, del);
     el.conversations.appendChild(item);
   }
+}
+
+async function togglePin(id, pinned) {
+  const entry = conversations.find((c) => c.id === id);
+  if (entry) entry.pinned = pinned;
+  conversations.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0));
+  renderSidebar();
+  cacheConvIndex();
+  try {
+    await fetch(`/api/conversations/meta?id=${encodeURIComponent(id)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned }),
+    });
+  } catch { /* offline — indeks lokalny już zaktualizowany */ }
+}
+
+async function renameConversation(id, current) {
+  const name = prompt(t('renamePrompt'), current || '');
+  if (name === null) return;
+  const title = name.trim();
+  if (!title) return;
+  const entry = conversations.find((c) => c.id === id);
+  if (entry) entry.title = title;
+  if (activeConversation && activeConversation.id === id) activeConversation.title = title;
+  renderSidebar();
+  cacheConvIndex();
+  try {
+    await fetch(`/api/conversations/meta?id=${encodeURIComponent(id)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+  } catch { /* offline */ }
 }
 
 function imagesHtml(images) {
@@ -396,7 +456,7 @@ function imagesHtml(images) {
   return wrap;
 }
 
-function messageElement(m) {
+function messageElement(m, idx = -1) {
   const role = m.role;
   const text = msgText(m);
   const images = msgImages(m);
@@ -435,7 +495,7 @@ function messageElement(m) {
     if (text) body.appendChild(document.createTextNode(text));
     const col = document.createElement('div');
     col.className = 'user-col';
-    col.append(body, messageActions(text, { copy: false }));
+    col.append(body, messageActions(text, { copy: false, role: 'user', idx }));
     msg.appendChild(col);
     return msg;
   }
@@ -449,12 +509,12 @@ function messageElement(m) {
   const col = document.createElement('div');
   col.style.flex = '1';
   col.style.minWidth = '0';
-  col.append(body, messageActions(text, { copy: true }));
+  col.append(body, messageActions(text, { copy: true, role: 'assistant', idx }));
   msg.appendChild(col);
   return msg;
 }
 
-function messageActions(text, { copy }) {
+function messageActions(text, { copy, role, idx = -1 }) {
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
 
@@ -493,7 +553,52 @@ function messageActions(text, { copy }) {
     actions.appendChild(remBtn);
   }
 
+  // Regeneruj — dla wiadomości asystenta (usuwa ją i generuje na nowo)
+  if (role === 'assistant' && idx >= 0) {
+    const regen = document.createElement('button');
+    regen.className = 'msg-action-btn';
+    regen.innerHTML = '↻ ' + t('regenerate');
+    regen.addEventListener('click', () => regenerateFrom(idx));
+    actions.appendChild(regen);
+  }
+
+  // Edytuj — dla wiadomości użytkownika (wczytuje do pola, obcina dalej)
+  if (role === 'user' && idx >= 0) {
+    const edit = document.createElement('button');
+    edit.className = 'msg-action-btn';
+    edit.innerHTML = '✎ ' + t('editMsg');
+    edit.addEventListener('click', () => editFrom(idx));
+    actions.appendChild(edit);
+  }
+
   return actions;
+}
+
+function regenerateFrom(idx) {
+  const conv = activeConv();
+  if (!conv || isGenerating) return;
+  conv.messages = conv.messages.slice(0, idx); // usuń tę odpowiedź i wszystko po niej
+  saveConversations();
+  renderMessages();
+  runGeneration(conv);
+}
+
+function editFrom(idx) {
+  const conv = activeConv();
+  if (!conv || isGenerating) return;
+  const m = conv.messages[idx];
+  if (!m) return;
+  const text = msgText(m);
+  const images = msgImages(m);
+  conv.messages = conv.messages.slice(0, idx); // usuń tę wiadomość i wszystko po niej
+  pendingImages = images.length ? [...images] : pendingImages;
+  saveConversations();
+  renderAttachments();
+  renderMessages();
+  el.input.value = text;
+  autosizeInput();
+  updateSendButton();
+  el.input.focus();
 }
 
 function renderMessages() {
@@ -501,11 +606,13 @@ function renderMessages() {
   el.messages.innerHTML = '';
   const hasMessages = conv && conv.messages.length > 0;
   el.welcome.style.display = hasMessages ? 'none' : '';
+  const exportBtn = $('export-btn');
+  if (exportBtn) exportBtn.style.display = hasMessages ? '' : 'none';
   if (!hasMessages) return;
 
-  for (const m of conv.messages) {
-    el.messages.appendChild(messageElement(m));
-  }
+  conv.messages.forEach((m, idx) => {
+    el.messages.appendChild(messageElement(m, idx));
+  });
   scrollToBottom(true);
 }
 
@@ -1909,6 +2016,50 @@ el.collapseBtn.addEventListener('click', () => {
 el.expandBtn.addEventListener('click', () => {
   el.sidebar.classList.remove('collapsed');
   document.querySelector('.app').classList.remove('sidebar-hidden');
+});
+
+// wyszukiwarka rozmów
+$('conv-search').addEventListener('input', (e) => {
+  convSearchQuery = e.target.value;
+  renderSidebar();
+});
+
+// eksport aktywnej rozmowy do Markdown
+function exportConversation() {
+  const conv = activeConv();
+  if (!conv || !conv.messages.length) return;
+  const lines = [`# ${conv.title || 'Cosmos'}`, ''];
+  for (const m of conv.messages) {
+    if (m.error) continue;
+    const who = m.role === 'user' ? t('exportYou') : 'Cosmos';
+    if (m.search) continue;
+    lines.push(`**${who}:**`, '', msgText(m), '');
+    const imgs = msgImages(m);
+    if (imgs.length) lines.push(`_(${imgs.length} × ${t('attachment')})_`, '');
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safe = (conv.title || 'cosmos').replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 40).replace(/^-|-$/g, '') || 'cosmos';
+  a.href = url;
+  a.download = `${safe}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$('export-btn').addEventListener('click', exportConversation);
+
+// skróty klawiszowe
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'k') {           // Ctrl/Cmd+K — szukaj rozmów
+    e.preventDefault();
+    if (el.sidebar.classList.contains('collapsed')) el.expandBtn.click();
+    $('conv-search').focus();
+    $('conv-search').select();
+  } else if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { // Ctrl/Cmd+Shift+O — nowa rozmowa
+    e.preventDefault();
+    newConversation();
+  }
 });
 
 function applyTheme(theme) {
