@@ -17,6 +17,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // ---------------------------------------------------------------------------
 // Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
@@ -129,6 +130,80 @@ const SEARCH_URL = process.env.SEARCH_URL || 'https://html.duckduckgo.com/html/'
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// ---------------------------------------------------------------------------
+// Uwierzytelnianie (konieczne przy wystawieniu na VPS/publicznie).
+//   COSMOS_PASSWORD    — hasło do logowania w przeglądarce.
+//   COSMOS_API_TOKEN   — stały token dla klientów programowych (MCP, skrypty).
+// Gdy żadne nie jest ustawione, auth jest wyłączone (tryb domowy/localhost)
+// i zachowuje się jak dotychczas.
+// ---------------------------------------------------------------------------
+
+const AUTH = {
+  password: process.env.COSMOS_PASSWORD || '',
+  apiToken: process.env.COSMOS_API_TOKEN || '',
+  cookieSecure: process.env.COSMOS_COOKIE_SECURE === '1', // ustaw przy publicznym HTTPS
+};
+
+const sessions = new Set(); // aktywne tokeny sesji (w pamięci)
+
+function authEnabled() {
+  return Boolean(AUTH.password || AUTH.apiToken);
+}
+
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+function parseCookies(req) {
+  const out = {};
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+  }
+  return out;
+}
+
+function isAuthed(req) {
+  if (!authEnabled()) return true;
+  const header = req.headers.authorization || '';
+  const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (bearer) {
+    if (AUTH.apiToken && safeEqual(bearer, AUTH.apiToken)) return true;
+    if (sessions.has(bearer)) return true;
+  }
+  const cookie = parseCookies(req).cosmos_auth;
+  if (cookie && sessions.has(cookie)) return true;
+  return false;
+}
+
+async function handleLogin(req, res) {
+  let data;
+  try { data = JSON.parse((await readBodyBuffer(req)).toString('utf8')); }
+  catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  if (!AUTH.password || !safeEqual(String(data.password || ''), AUTH.password)) {
+    return sendJson(res, 401, { error: 'Nieprawidłowe hasło.' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.add(token);
+  const cookie = `cosmos_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}` +
+    (AUTH.cookieSecure ? '; Secure' : '');
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': cookie });
+  res.end(JSON.stringify({ ok: true, token }));
+}
+
+function handleLogout(req, res) {
+  const token = parseCookies(req).cosmos_auth;
+  if (token) sessions.delete(token);
+  res.writeHead(200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Set-Cookie': 'cosmos_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
+  });
+  res.end('{"ok":true}');
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -1385,6 +1460,17 @@ function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
   try {
     const p = new URL(req.url, 'http://localhost').pathname;
+
+    // --- uwierzytelnianie ---
+    if (p === '/api/auth' && req.method === 'GET') {
+      return sendJson(res, 200, { required: authEnabled(), authed: isAuthed(req) });
+    }
+    if (p === '/api/login' && req.method === 'POST') return await handleLogin(req, res);
+    if (p === '/api/logout' && req.method === 'POST') return handleLogout(req, res);
+    if (p.startsWith('/api/') && !isAuthed(req)) {
+      return sendJson(res, 401, { error: 'Wymagane logowanie.' });
+    }
+
     if (p === '/api/config' && req.method === 'GET') return handleConfig(res);
     if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
@@ -1421,6 +1507,10 @@ function start(port = PORT) {
       console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
       console.log(`  → Rozmowy: ${convIndex.length} (data/conversations/)`);
+      console.log(`  → Logowanie: ${authEnabled() ? 'WŁĄCZONE' : 'wyłączone (tryb domowy/localhost)'}`);
+      if (!authEnabled()) {
+        console.log('               ⚠  Nie wystawiaj tego serwera do internetu bez COSMOS_PASSWORD!');
+      }
       const extraTabs = ['openai', 'claude'].filter((k) => ENDPOINTS[k]);
       if (extraTabs.length) console.log(`  → Silniki dodatkowe: ${extraTabs.join(', ')}`);
       const studioOn = [STUDIO.openai.key && 'obraz(OpenAI)', fireflyEnabled() && 'obraz(Firefly)',

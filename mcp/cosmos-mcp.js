@@ -24,6 +24,10 @@
 const readline = require('node:readline');
 
 const COSMOS_URL = (process.env.COSMOS_URL || 'http://localhost:3000').replace(/\/+$/, '');
+// Gdy Cosmos wymaga logowania (VPS): ustaw COSMOS_TOKEN = wartość COSMOS_API_TOKEN z .env serwera.
+const COSMOS_TOKEN = process.env.COSMOS_TOKEN || '';
+
+const authHeaders = COSMOS_TOKEN ? { Authorization: `Bearer ${COSMOS_TOKEN}` } : {};
 
 const TOOLS = [
   {
@@ -76,13 +80,13 @@ const TOOLS = [
 async function callTool(name, args = {}) {
   switch (name) {
     case 'cosmos_kb_search': {
-      const r = await fetch(`${COSMOS_URL}/api/kb/search?q=${encodeURIComponent(args.query || '')}`);
+      const r = await fetch(`${COSMOS_URL}/api/kb/search?q=${encodeURIComponent(args.query || '')}`, { headers: authHeaders });
       const d = await r.json();
       if (!d.results?.length) return 'Brak pasujących fragmentów w bazie wiedzy.';
       return d.results.map((f) => `### ${f.name}\n${f.text}`).join('\n\n');
     }
     case 'cosmos_kb_list': {
-      const r = await fetch(`${COSMOS_URL}/api/kb`);
+      const r = await fetch(`${COSMOS_URL}/api/kb`, { headers: authHeaders });
       const d = await r.json();
       if (!d.items?.length) return 'Baza wiedzy jest pusta.';
       return d.items.map((i) =>
@@ -92,7 +96,7 @@ async function callTool(name, args = {}) {
     case 'cosmos_kb_add_note': {
       const r = await fetch(`${COSMOS_URL}/api/kb/note`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ text: args.text, title: args.title }),
       });
       const d = await r.json();
@@ -100,13 +104,13 @@ async function callTool(name, args = {}) {
       return `Zapisano notatkę: ${d.item.name}`;
     }
     case 'cosmos_memory_list': {
-      const r = await fetch(`${COSMOS_URL}/api/memory`);
+      const r = await fetch(`${COSMOS_URL}/api/memory`, { headers: authHeaders });
       const d = await r.json();
       if (!d.memories?.length) return 'Pamięć długotrwała jest pusta.';
       return d.memories.map((m) => `- ${m.text}`).join('\n');
     }
     case 'cosmos_events': {
-      const r = await fetch(`${COSMOS_URL}/api/events`);
+      const r = await fetch(`${COSMOS_URL}/api/events`, { headers: authHeaders });
       const d = await r.json();
       if (!d.events?.length) return 'Brak zdarzeń percepcji.';
       return d.events.map((e) =>
@@ -116,7 +120,7 @@ async function callTool(name, args = {}) {
     case 'cosmos_generate_image': {
       const r = await fetch(`${COSMOS_URL}/api/studio/image`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ prompt: args.prompt }),
       });
       const d = await r.json();

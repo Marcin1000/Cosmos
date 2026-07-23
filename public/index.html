@@ -12,6 +12,21 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
+  <!-- ================= LOGOWANIE ================= -->
+  <div class="login-overlay" id="login-overlay" style="display:none">
+    <form class="login-box" id="login-form">
+      <svg class="login-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/>
+        <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
+      </svg>
+      <h1 class="login-title">COSMOS</h1>
+      <p class="login-sub">Wpisz hasło, aby uzyskać dostęp</p>
+      <input type="password" id="login-password" placeholder="Hasło" autocomplete="current-password" autofocus>
+      <button type="submit" class="btn-primary" id="login-submit">Zaloguj</button>
+      <p class="login-error" id="login-error"></p>
+    </form>
+  </div>
+
   <div class="app">
     <!-- ================= SIDEBAR ================= -->
     <aside class="sidebar" id="sidebar">

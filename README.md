@@ -11,6 +11,8 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 >   na komputerze i telefonie, prostym językiem).
 > - **[docs/ANDROID-I-KOMPUTER.md](docs/ANDROID-I-KOMPUTER.md)** — czy komputer musi być
 >   cały czas włączony? (odpowiedź + rozwiązania).
+> - **[docs/VPS-SERWER-W-CHMURZE.md](docs/VPS-SERWER-W-CHMURZE.md)** — postaw Cosmosa
+>   w chmurze (zawsze dostępny z telefonu i Surface), z RTX 3080 w domu na żądanie.
 >
 > Poniżej znajduje się dokumentacja techniczna każdego elementu.
 

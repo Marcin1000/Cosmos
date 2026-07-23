@@ -2163,15 +2163,69 @@ if ('serviceWorker' in navigator) {
 }
 
 // ----------------------------------------------------------------
+// Logowanie (gdy serwer wymaga hasła — np. na VPS)
+// ----------------------------------------------------------------
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth');
+    const d = await res.json();
+    return d.required && !d.authed ? false : true;
+  } catch {
+    return true; // serwer nieosiągalny — nie blokuj UI (offline)
+  }
+}
+
+function showLogin() {
+  const overlay = $('login-overlay');
+  overlay.style.display = '';
+  const form = $('login-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('login-error');
+    err.textContent = '';
+    $('login-submit').disabled = true;
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: $('login-password').value }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Logowanie nie powiodło się.');
+      }
+      location.reload();
+    } catch (ex) {
+      err.textContent = ex.message;
+      $('login-submit').disabled = false;
+      $('login-password').select();
+    }
+  });
+}
+
+async function boot() {
+  if (!(await checkAuth())) {
+    showLogin();
+    return; // nie inicjalizuj reszty, dopóki użytkownik się nie zaloguje
+  }
+  startApp();
+}
+
+function startApp() {
+  setEndpoint(endpoint);
+  el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
+  updateKbBadge();
+  loadConversations();
+  renderMessages();
+  updateSendButton();
+  loadServerConfig();
+  setInterval(refreshStatus, 30000);
+  el.input.focus();
+}
+
+// ----------------------------------------------------------------
 // Start
 // ----------------------------------------------------------------
 
-setEndpoint(endpoint);
-el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
-updateKbBadge();
-loadConversations();
-renderMessages();
-updateSendButton();
-loadServerConfig();
-setInterval(refreshStatus, 30000);
-el.input.focus();
+boot();
