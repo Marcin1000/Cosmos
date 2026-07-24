@@ -813,6 +813,8 @@ kbd {
   transition: background .15s, box-shadow .15s;
 }
 .btn-primary:hover { background: var(--accent-strong); box-shadow: 0 0 16px var(--accent-glow); }
+.btn-primary:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.btn-primary:disabled:hover { background: var(--accent); box-shadow: none; }
 
 .btn-secondary {
   border: 1px solid var(--border-strong);
@@ -1476,6 +1478,9 @@ kbd {
   padding: 9px 11px;
   width: 100%;
 }
+/* w wierszach flex select i input dzielą szerokość równo (bez zgniatania inputu) */
+.learn-pane .field-row select,
+.learn-pane .field-row input { flex: 1; min-width: 0; width: auto; }
 .learn-pane textarea { resize: vertical; }
 
 .learn-capture {

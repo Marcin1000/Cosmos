@@ -75,6 +75,49 @@ dotrenowujesz → wpinasz lokalnie.
   fine-tuningu NVIDIA daje też framework **NeMo / NeMo Customizer** (LoRA na
   infrastrukturze NVIDII). Największe warianty trenuj w chmurze, nie na 3080.
 
+---
+
+## LoRA w chmurze na *większym* modelu (gdy 3080 to za mało)
+
+Gdy lokalny model ~7B okaże się za słaby, **nie rób pełnego fine-tuningu** — to drogo
+i daje marginalny zysk. Złoty środek to **QLoRA/LoRA na większym modelu** (np. 70B)
+na wynajętym GPU. To ten **sam skrypt**, tylko na mocniejszej maszynie na kilka godzin.
+
+**Ile to kosztuje (orientacyjnie):**
+
+| GPU | Chmura „community" (RunPod/Vast/Lambda) | Hyperscaler |
+|---|---|---|
+| A100 80 GB | ~1,2–2,0 $/h | ~3–4 $/h |
+| H100 | ~2–3,5 $/h | ~8–12 $/h |
+
+QLoRA 70B to zwykle kilka godzin → **~10–30 $ za przebieg** na community A100/H100.
+(Pełny fine-tuning byłby kilkukrotnie droższy i bardziej skomplikowany — pomiń go.)
+
+**Krok po kroku:**
+
+1. **Wyeksportuj dane** w Cosmosie (Ustawienia → Dane treningowe → „Eksport JSONL (chat)")
+   i skopiuj plik na wynajętą maszynę (`scp` albo upload w panelu dostawcy).
+2. **Wynajmij GPU** (RunPod / Vast.ai / Lambda) — wybierz obraz z CUDA/PyTorch,
+   A100 80 GB (7B–13B QLoRA) lub H100 (30B–70B QLoRA).
+3. **Na maszynie:**
+   ```bash
+   git clone <adres-repo-Cosmos> && cd Bear/training
+   pip install "unsloth[cu121] @ git+https://github.com/unslothai/unsloth.git"
+   python qlora_example.py --data <twoj-plik>.jsonl \
+     --model unsloth/Meta-Llama-3.1-70B-Instruct-bnb-4bit --epochs 2 --gguf
+   ```
+4. **Pobierz wynik** (`cosmos-model-gguf/`) na swój komputer, zaimportuj do Ollamy
+   (`ollama create cosmos-ft -f Modelfile`) i wpnij jako profil „Lokalnie" — jak wyżej.
+5. **Wyłącz maszynę** zaraz po pobraniu — płacisz za każdą godzinę.
+
+> **Prywatność:** dane rozmów trafiają na wynajętą maszynę na czas treningu. Wybieraj
+> zaufanych dostawców, usuwaj pliki i wyłączaj instancję po zakończeniu. Sekrety/hasła
+> i tak nie są częścią eksportu.
+
+**Alternatywa bez wynajmu GPU:** zarządzane fine-tuning API (OpenAI, NVIDIA NeMo
+Customizer, Together, Fireworks) — płacisz za tokeny treningu + hosting modelu;
+prościej, ale koszt jest cykliczny i dane idą do dostawcy.
+
 ## Uwaga o prywatności
 Eksport zawiera treść Twoich rozmów. Trzymaj plik JSONL i wytrenowany model
 lokalnie; jeśli wynajmujesz GPU w chmurze, pamiętaj, że dane trafiają na tę maszynę
