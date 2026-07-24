@@ -1563,6 +1563,17 @@ kbd {
 .runner-btns { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
 .runner-done { text-align: center; font-size: 15px; color: var(--accent); padding: 24px 0; }
 
+/* Nagrywanie procedury */
+.rec-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-input);
+}
+
 /* Trening — „Dotrenuj" */
 .train-run { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
 .train-log {

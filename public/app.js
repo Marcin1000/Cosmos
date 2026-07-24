@@ -3076,6 +3076,7 @@ async function loadAutomationStatus() {
   } catch { window.__automation = { available: false }; }
   const on = window.__automation && window.__automation.available;
   $('routine-auto-wrap').style.display = on ? '' : 'none';
+  $('rec-box').style.display = on ? '' : 'none';
   updateRunAutoBtn();
 }
 function updateRunAutoBtn() {
@@ -3254,6 +3255,50 @@ $('proc-run-auto').addEventListener('click', () => {
   if (!procEditing) return;
   runReadonly(procEditing, $('learn-proc-status'), $('proc-results'));
 });
+
+// --- Nagrywanie procedury ---
+let recPollTimer = null;
+$('rec-start').addEventListener('click', async () => {
+  try {
+    const r = await fetch('/api/procedures/record/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: $('rec-url').value.trim() }),
+    });
+    const d = await r.json();
+    if (!r.ok) { $('rec-status').textContent = d.message || d.error || t('rec.startErr'); return; }
+    $('rec-start').style.display = 'none';
+    $('rec-stop').style.display = '';
+    $('rec-status').textContent = t('rec.recording');
+    if (!recPollTimer) recPollTimer = setInterval(refreshRecStatus, 3000);
+  } catch { $('rec-status').textContent = t('rec.startErr'); }
+});
+$('rec-stop').addEventListener('click', async () => {
+  $('rec-stop').disabled = true;
+  try {
+    const r = await fetch('/api/procedures/record/stop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+    });
+    const d = await r.json();
+    if (recPollTimer) { clearInterval(recPollTimer); recPollTimer = null; }
+    $('rec-start').style.display = ''; $('rec-stop').style.display = 'none'; $('rec-stop').disabled = false;
+    if (!d.ok || !d.id) { $('rec-status').textContent = d.message || t('rec.empty'); return; }
+    $('rec-status').textContent = t('rec.saved', { n: d.steps.length });
+    await loadProcedures();
+    // wczytaj nagraną procedurę do edytora do przejrzenia
+    procEditing = d.id; $('proc-picker').value = d.id;
+    $('proc-name').value = d.name || ''; procStepsData = (d.steps || []).map((s) => ({ ...s }));
+    $('proc-delete').style.display = ''; renderProcSteps(); updateRunAutoBtn();
+  } catch { $('rec-status').textContent = t('rec.startErr'); $('rec-stop').disabled = false; }
+});
+async function refreshRecStatus() {
+  try {
+    const s = await (await fetch('/api/procedures/record/status')).json();
+    if (!s.recording && recPollTimer) {
+      // przeglądarka zamknięta ręcznie — pozwól zapisać przez „Zakończ"
+      $('rec-status').textContent = t('rec.closed');
+    }
+  } catch { /* offline */ }
+}
 $('proc-picker').addEventListener('change', (e) => {
   const id = e.target.value;
   if (!id) { resetProcForm(); return; }

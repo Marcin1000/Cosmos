@@ -1336,6 +1336,67 @@ async function startTraining(opts) {
   return { ok: true, startedAt: trainJob.startedAt };
 }
 
+// --- Nagrywanie procedur (opcjonalny moduł Playwright, wymaga ekranu) ---
+const RECORDER_SCRIPT = path.join(__dirname, 'automation', 'recorder.js');
+let recordJob = null; // { child, status, outFile, startedAt, log:[] }
+const RECORD_OUT = path.join(TRAIN_DIR, 'recording.json');
+
+function recLog(line) {
+  if (!recordJob) return;
+  for (const l of String(line).split('\n')) { const s = l.replace(/\s+$/, ''); if (s) recordJob.log.push(s); }
+  if (recordJob.log.length > 100) recordJob.log = recordJob.log.slice(-100);
+}
+
+async function handleRecord(req, res, pathname) {
+  if (pathname === '/api/procedures/record/status' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      recording: Boolean(recordJob && recordJob.status === 'recording'),
+      status: recordJob ? recordJob.status : 'idle',
+      log: recordJob ? recordJob.log.slice(-20) : [],
+    });
+  }
+  if (pathname === '/api/procedures/record/start' && req.method === 'POST') {
+    let available = false; try { require.resolve('playwright'); available = true; } catch { /* */ }
+    if (!available) return sendJson(res, 400, { error: 'no-playwright', message: 'Moduł automatyzacji nie jest zainstalowany (npm install playwright).' });
+    if (recordJob && recordJob.status === 'recording') return sendJson(res, 409, { error: 'busy', message: 'Nagrywanie już trwa.' });
+    let data = {}; try { data = await readJson(req); } catch { /* */ }
+    const url = String(data.url || '').slice(0, 500);
+    fs.mkdirSync(TRAIN_DIR, { recursive: true });
+    try { fs.unlinkSync(RECORD_OUT); } catch { /* */ }
+    const args = [RECORDER_SCRIPT];
+    if (/^https?:\/\//i.test(url)) { args.push('--url', url); }
+    recordJob = { status: 'recording', startedAt: Date.now(), outFile: RECORD_OUT, log: [], child: null };
+    let child;
+    try { child = spawn('node', args, { cwd: path.join(__dirname, 'automation'), env: { ...process.env, COSMOS_RECORD_OUT: RECORD_OUT }, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch (err) { recordJob.status = 'error'; return sendJson(res, 500, { error: 'spawn-failed', message: err.message }); }
+    recordJob.child = child;
+    child.stdout.on('data', (d) => recLog(d));
+    child.stderr.on('data', (d) => recLog(d));
+    child.on('close', () => { if (recordJob && recordJob.status === 'recording') recordJob.status = 'ready'; });
+    addEvent('nauka', 'rozpoczęto nagrywanie procedury');
+    return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/procedures/record/stop' && req.method === 'POST') {
+    if (!recordJob) return sendJson(res, 400, { error: 'not-recording' });
+    let data = {}; try { data = await readJson(req); } catch { /* */ }
+    // zatrzymaj proces (nagrywarka flushuje kroki przy SIGTERM/zamknięciu okna)
+    if (recordJob.child && recordJob.status === 'recording') { try { recordJob.child.kill('SIGTERM'); } catch { /* */ } }
+    await new Promise((r) => setTimeout(r, 600)); // daj czas na flush
+    let parsed = { steps: [] };
+    try { parsed = JSON.parse(fs.readFileSync(RECORD_OUT, 'utf8')); } catch { /* brak */ }
+    recordJob.status = 'idle';
+    if (parsed.error) return sendJson(res, 400, { error: parsed.error, message: 'Nagrywanie nie powiodło się (brak ekranu lub przeglądarki).' });
+    const steps = Array.isArray(parsed.steps) ? parsed.steps.slice(0, 60).map(sanitizeStep) : [];
+    if (!steps.length) return sendJson(res, 200, { ok: true, id: null, steps: [], message: 'Nie zarejestrowano żadnych kroków.' });
+    const name = String(data.name || '').trim().slice(0, 120) || `Nagranie ${new Date().toLocaleString('pl-PL')}`;
+    const item = { id: genId(), name, description: 'Nagrana automatycznie.', scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now() };
+    procedures.push(item); saveProcedures();
+    addEvent('nauka', `zapisano nagraną procedurę: ${name} (${steps.length} kroków)`);
+    return sendJson(res, 200, { ok: true, id: item.id, steps, name });
+  }
+  res.writeHead(405); res.end();
+}
+
 async function handleTrainRun(req, res, pathname) {
   if (pathname === '/api/train/env' && req.method === 'GET') {
     return sendJson(res, 200, {
@@ -2538,6 +2599,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/lessons' || p === '/api/lessons/match') return await handleLessons(req, res, p);
     if (p === '/api/procedures') return await handleProcedures(req, res, p);
     if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
+    if (p.startsWith('/api/procedures/record/')) return await handleRecord(req, res, p);
     if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);

@@ -501,6 +501,14 @@
         <!-- Procedury -->
         <div class="learn-pane" id="learn-pane-proc" style="display:none">
           <p class="field-hint" data-i18n-html="learn.procIntro">Naucz Cosmosa czynności krok po kroku (np. „sprawdź rachunek za prąd”). Kroki <strong>wrażliwe</strong> (płatność, wysłanie, potwierdzenie) zawsze wymagają Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty <strong>nie są</strong> zapisywane w procedurze.</p>
+          <div class="rec-box" id="rec-box" style="display:none">
+            <div class="field-row">
+              <input type="text" id="rec-url" class="mono" data-i18n-ph="rec.urlPh" placeholder="adres startowy (opcjonalnie), np. https://ebok...">
+              <button class="btn-secondary" id="rec-start" data-i18n="rec.start">🔴 Nagraj procedurę</button>
+              <button class="btn-ghost" id="rec-stop" data-i18n="rec.stop" style="display:none">⏹ Zakończ nagrywanie</button>
+            </div>
+            <div class="field-hint" id="rec-status" data-i18n="rec.hint">Otworzy się przeglądarka na tym komputerze — zrób zadanie (klikaj, wpisuj), potem „Zakończ". Nagrywane są kliknięcia, wpisany tekst i nawigacja; hasła nie są zapisywane. Nie nagrywa ruchów myszki ani innych aplikacji.</div>
+          </div>
           <div class="field-row">
             <input type="text" id="proc-name" data-i18n-ph="learn.procNamePh" placeholder="Nazwa procedury">
             <select id="proc-picker"></select>

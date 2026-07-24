@@ -42,6 +42,28 @@ a przy rutynach — opcja **„Tryb auto"**.
 - Wynik trafia do Cosmosa jako zdarzenie percepcji, więc możesz o nim rozmawiać
   (np. *„ile mam do zapłaty według ostatniego sprawdzenia?"*).
 
+## Nagrywanie procedury z ekranu
+
+Zamiast wpisywać kroki ręcznie, możesz je **nagrać**: w panelu **Nauka → Procedury**
+kliknij **„🔴 Nagraj procedurę"**. Na maszynie z serwerem otworzy się przeglądarka —
+wykonaj zadanie (klikaj, wpisuj, przechodź między stronami), a potem kliknij **„Zakończ"**.
+Procedura zapisze się automatycznie i będzie gotowa do odtworzenia oraz wyboru w rutynach.
+
+Co dokładnie się dzieje (`recorder.js`):
+- Nagrywane są **semantyczne** kroki — *który element* (stabilny selektor: `id`, `name`,
+  `placeholder`, `aria-label`, a w ostateczności ścieżka `nth-of-type`), a nie współrzędne
+  myszki. Dzięki temu odtwarzanie działa też przy innej rozdzielczości/układzie.
+- **Hasła nie są zapisywane** — pole typu `password` staje się krokiem „logowanie" (`auth`)
+  z wartością `{{secret:haslo}}` (podmienianą z menedżera haseł przy odtwarzaniu).
+- Kliknięcia w przyciski typu **„Zapłać/Wyślij/Potwierdź/Kup/Przelew"** są automatycznie
+  oznaczane jako **wrażliwe** → nigdy nie pójdą w tryb auto, zawsze wymagają potwierdzenia.
+
+**Ograniczenia (uczciwie):** nagrywa tylko to, co dzieje się **w przeglądarce**. Nie
+rejestruje ruchów myszki/współrzędnych (są zawodne przy odtwarzaniu) ani działań w innych
+programach czy uruchamiania aplikacji (przeglądarka nie widzi reszty systemu — to wymagałoby
+osobnego natywnego agenta). Wymaga Playwright **i ekranu** — działa na Twoim desktopie/RTX,
+nie na bezgłowym VPS. Po nagraniu przejrzyj kroki w edytorze przed użyciem.
+
 ## Logowanie z menedżera haseł
 
 Aby auto‑odczyt działał też **za logowaniem** (np. panel klienta), procedura może

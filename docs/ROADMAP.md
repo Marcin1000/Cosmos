@@ -84,11 +84,17 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   rozpoznaje to na żywo w panelu kamery. Nauka przez przykład, lokalnie — nie zmienia wag
   modelu. Bez usługi zmysłów działa wariant na słowach kluczowych.
   Endpointy: `/api/lessons`, `/api/lessons/match`.
-- [x] **Procedury (nauka czynności)** — nagrywasz czynność jako listę kroków (otwórz / kliknij /
+- [x] **Procedury (nauka czynności)** — budujesz czynność jako listę kroków (otwórz / kliknij /
   wpisz / odczytaj / poczekaj / potwierdź / notatka). Kroki **wrażliwe** (płatność, wysłanie,
   potwierdzenie) są oznaczane i **zawsze** wymagają Twojego kliknięcia w runnerze. Hasła/dane
   karty nie są zapisywane. Endpointy: `/api/procedures`. Nemotron może zaproponować
   uruchomienie procedury przez `[AKCJA: procedura | nazwa]`.
+- [x] **Nagrywanie procedury z ekranu** — „🔴 Nagraj procedurę" otwiera przeglądarkę na
+  maszynie z serwerem; Twoje kliknięcia, wpisywany tekst i nawigacja są zapisywane jako
+  semantyczne kroki (stabilne selektory, nie współrzędne). Po „Zakończ" procedura zapisuje
+  się i jest gotowa do odtworzenia oraz wyboru w rutynach. Hasła → krok „logowanie" z
+  `{{secret:...}}`; przyciski „Zapłać/Wyślij" → automatycznie wrażliwe. Wymaga Playwright +
+  ekranu (desktop, nie bezgłowy VPS). Endpointy: `/api/procedures/record/{start,stop,status}`.
 - [x] **Rutyny (cykliczne odpalanie)** — harmonogram (codziennie / co tydzień / co miesiąc /
   co N minut) dla procedury. Scheduler na serwerze zgłasza, że nadszedł czas (nic
   nieodwracalnego nie dzieje się samo); interfejs proponuje uruchomienie z bramką

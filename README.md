@@ -233,7 +233,13 @@ lokalnie — nie dotrenowuje wag Nemotrona. Bez usługi zmysłów działa dopaso
 kluczowych.
 
 **2. Procedury (nauka czynności).** Rozpisz czynność (np. *„sprawdź rachunek za prąd"*) na
-kroki: otwórz stronę, kliknij, wpisz, odczytaj, poczekaj, **potwierdź**, notatka. Kroki
+kroki — ręcznie **albo nagraj z ekranu**: przycisk **„🔴 Nagraj procedurę"** (gdy masz
+zainstalowany Playwright) otwiera przeglądarkę na komputerze z serwerem, a Twoje kliknięcia,
+wpisywany tekst i nawigacja zapisują się jako kroki (stabilne selektory elementów, nie
+współrzędne — dlatego odtwarzają się wiernie). Po „Zakończ" procedura jest gotowa. Nagrywarka
+**nie** zapisuje haseł (pole → krok „logowanie" z `{{secret:...}}`), nie rejestruje ruchów
+myszki ani innych aplikacji (przeglądarka nie widzi reszty systemu). Dostępne akcje kroku:
+otwórz stronę, kliknij, wpisz, odczytaj, poczekaj, **potwierdź**, notatka. Kroki
 oznaczone jako **wrażliwe** (płatność, wysłanie, potwierdzenie) w runnerze **zawsze** wymagają
 Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty **nie są** zapisywane
 w procedurze (wartość kroku możesz zostawić jako wskazówkę „z menedżera haseł"). Uruchomienie
@@ -396,6 +402,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
 | `/api/automation/status` `/api/procedures/run-readonly` | GET / POST | Nauka: automatyzacja web tylko-do-odczytu (Playwright) |
+| `/api/procedures/record/{start,stop,status}` | GET/POST | Nauka: nagrywanie procedury z ekranu (Playwright) |
 | `/api/train/dataset?format=` `/api/train/stats` | GET | Eksport danych treningowych (JSONL: chat/instrukcje) i licznik przykładów |
 | `/api/train/env` `/api/train/start` `/api/train/status` `/api/train/stop` | GET/POST | Trening w aplikacji: wykrycie wymagań, start/stop, log |
 
