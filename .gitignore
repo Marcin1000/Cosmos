@@ -1,0 +1,18 @@
+# Sekrety — nigdy nie commituj klucza API!
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# System
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Dane użytkownika (pamięć długotrwała itp.)
+data/

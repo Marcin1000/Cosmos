@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#05060a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+  <title>Cosmos</title>
+  <link rel="stylesheet" href="fonts/fonts.css">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- PWA (Windows, Android, macOS/Chrome) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+  <meta name="application-name" content="Cosmos">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- iOS / iPadOS / macOS Safari (Dodaj do ekranu głównego / Zainstaluj) -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="mask-icon" href="icons/mask-icon.svg" color="#9db9ff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cosmos">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <!-- ================= LOGOWANIE ================= -->
+  <div class="login-overlay" id="login-overlay" style="display:none">
+    <form class="login-box" id="login-form">
+      <svg class="login-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/>
+        <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
+      </svg>
+      <h1 class="login-title">COSMOS</h1>
+      <p class="login-sub" data-i18n="login.sub">Wpisz hasło, aby uzyskać dostęp</p>
+      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password" autofocus>
+      <button type="submit" class="btn-primary" id="login-submit" data-i18n="login.submit">Zaloguj</button>
+      <p class="login-error" id="login-error"></p>
+      <button type="button" class="login-lang" id="login-lang" data-i18n="lang">English</button>
+    </form>
+  </div>
+
+  <div class="app">
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/>
+            <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
+            <circle cx="41" cy="17" r="1.8" fill="currentColor"/>
+          </svg>
+          <span class="brand-name">COSMOS</span>
+        </div>
+        <button class="icon-btn" id="collapse-btn" data-i18n-title="collapse" title="Zwiń panel" aria-label="Zwiń panel">
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <button class="new-chat-btn" id="new-chat-btn">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span data-i18n="newChat">Nowa rozmowa</span>
+      </button>
+
+      <div class="conv-search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input type="text" id="conv-search" class="conv-search" data-i18n-ph="convSearch" placeholder="Szukaj rozmów…">
+      </div>
+      <nav class="conversations" id="conversations" data-i18n-aria="convList" aria-label="Lista rozmów"></nav>
+
+      <div class="sidebar-footer">
+        <button class="footer-btn" id="studio-btn">
+          <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="19" cy="17" r="1.4" fill="currentColor"/><circle cx="6" cy="19" r="1" fill="currentColor"/></svg>
+          <span data-i18n="studio">Studio</span>
+        </button>
+        <button class="footer-btn" id="learn-btn">
+          <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 9.5V15c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5V9.5M21 7v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="learn">Nauka</span> <span class="kb-badge mono" id="learn-badge"></span>
+        </button>
+        <button class="footer-btn" id="timeline-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span data-i18n="timeMachine">Oś czasu</span>
+        </button>
+        <button class="footer-btn" id="gallery-btn">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8.5" cy="8.5" r="1.8" fill="currentColor"/><path d="M21 15l-5-5L5 21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="gallery">Galeria</span>
+        </button>
+        <button class="footer-btn" id="kb-btn">
+          <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 4.5v15zM20 17v5H6.5a2.5 2.5 0 0 1 0-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="kb">Baza wiedzy</span> <span class="kb-badge mono" id="kb-badge"></span>
+        </button>
+        <button class="footer-btn" id="settings-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="settings">Ustawienia</span>
+        </button>
+        <button class="footer-btn" id="theme-btn">
+          <svg id="theme-icon-dark" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg id="theme-icon-light" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span id="theme-label">Jasny motyw</span>
+        </button>
+        <button class="footer-btn" id="lang-btn" title="Język / Language">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span id="lang-label" data-i18n="lang">English</span>
+        </button>
+        <div class="status-block">
+          <div class="status-row" id="status-cloud">
+            <span class="status-dot"></span>
+            <span class="status-name" data-i18n="statusCloud">Chmura NVIDIA</span>
+            <span class="status-state">—</span>
+          </div>
+          <div class="status-row" id="status-local">
+            <span class="status-dot"></span>
+            <span class="status-name" data-i18n="statusLocal">Lokalny GPU</span>
+            <span class="status-state">—</span>
+          </div>
+          <div class="status-row" id="status-senses">
+            <span class="status-dot"></span>
+            <span class="status-name" data-i18n="statusSenses">Zmysły</span>
+            <span class="status-state">—</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ================= MAIN ================= -->
+    <main class="main">
+      <div class="stars" aria-hidden="true"></div>
+      <header class="topbar">
+        <button class="icon-btn" id="expand-btn" data-i18n-title="expand" title="Pokaż panel" aria-label="Pokaż panel">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+
+        <div class="endpoint-switch" id="endpoint-switch" role="tablist" data-i18n-aria="aiEngine" aria-label="Silnik AI"></div>
+
+        <button class="icon-btn" id="voice-btn" data-i18n-title="voiceMode" title="Tryb głosowy — „Hej, Kosmos”" aria-label="Tryb głosowy">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 10v4M12 7.5v9M16 10v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn tts-toggle" id="tts-toggle" data-i18n-title="ttsRead" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos">
+          <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/></svg>
+        </button>
+        <button class="icon-btn" id="live-btn" data-i18n-title="liveView" title="Podgląd kamery na żywo" aria-label="Podgląd kamery na żywo">
+          <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+        </button>
+        <button class="icon-btn" id="summarize-btn" data-i18n-title="summarize" title="Streść rozmowę" aria-label="Streść" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn" id="export-btn" data-i18n-title="exportConv" title="Eksportuj (Markdown)" aria-label="Eksportuj" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="topbar-model" id="topbar-model" data-i18n-title="activeModel" title="Aktywny model">—</div>
+      </header>
+
+      <div class="chat-scroll" id="chat-scroll">
+        <!-- Ekran powitalny -->
+        <div class="welcome" id="welcome">
+          <svg class="welcome-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/>
+            <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-24 24 24)" opacity="0.5"/>
+            <circle cx="41" cy="17" r="1.6" fill="currentColor"/>
+          </svg>
+          <h1>Cosmos</h1>
+          <p class="welcome-sub"><span data-i18n="welcomeModelLabel">Aktywny model:</span> <span class="mono" id="welcome-model">—</span></p>
+          <div class="suggestions" id="suggestions">
+            <button class="suggestion" data-prompt-key="sug1p" data-i18n="sug1">Wyjaśnij, jak działa LLM</button>
+            <button class="suggestion" data-prompt-key="sug2p" data-i18n="sug2">Napisz funkcję w Pythonie</button>
+            <button class="suggestion" data-prompt-key="sug3p" data-i18n="sug3">Architektura systemu percepcji</button>
+            <button class="suggestion" data-prompt-key="sug4p" data-i18n="sug4">Fotogrametria vs kamera głębi</button>
+          </div>
+        </div>
+        <div class="messages" id="messages"></div>
+      </div>
+
+      <!-- ================= COMPOSER ================= -->
+      <div class="composer-wrap">
+        <div class="attachments" id="attachments"></div>
+        <div class="composer" id="composer">
+          <button class="attach-btn" id="attach-btn" data-i18n-title="addImage" title="Dodaj obraz" aria-label="Dodaj obraz">
+            <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+          <button class="attach-btn" id="camera-btn" data-i18n-title="takePhoto" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
+            <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
+          <button class="attach-btn" id="mic-btn" data-i18n-title="speak" title="Mów (dyktowanie)" aria-label="Mów">
+            <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+          <textarea id="input" rows="1" data-i18n-ph="inputPh" placeholder="Napisz wiadomość…"></textarea>
+          <button class="send-btn" id="send-btn" data-i18n-title="send" title="Wyślij" aria-label="Wyślij">
+            <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="stop-btn" id="stop-btn" data-i18n-title="stopGen" title="Zatrzymaj generowanie" aria-label="Zatrzymaj" style="display:none">
+            <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
+      </div>
+    </main>
+  </div>
+
+  <!-- ================= MODAL: USTAWIENIA ================= -->
+  <div class="modal-overlay" id="settings-modal" style="display:none">
+    <div class="modal" role="dialog" aria-labelledby="settings-title">
+      <div class="modal-header">
+        <h2 id="settings-title" data-i18n="settings">Ustawienia</h2>
+        <button class="icon-btn" id="settings-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span class="field-label" data-i18n="set.modelCloud">Model — chmura NVIDIA</span>
+          <div class="field-row">
+            <input type="text" id="set-model-cloud" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-cloud" data-i18n="set.fetchList">Pobierz listę</button>
+          </div>
+          <select id="model-select-cloud" style="display:none" class="mono"></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.modelLocal">Model — lokalny (RTX / Ollama / vLLM)</span>
+          <div class="field-row">
+            <input type="text" id="set-model-local" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-local" data-i18n="set.fetchList">Pobierz listę</button>
+          </div>
+          <select id="model-select-local" style="display:none" class="mono"></select>
+          <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.system">Instrukcja systemowa</span>
+          <textarea id="set-system" rows="3" data-i18n-ph="set.systemPh" placeholder="np. Jesteś pomocnym asystentem. Odpowiadasz po polsku."></textarea>
+        </label>
+
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label"><span data-i18n="set.temp">Temperatura</span> <span class="mono" id="temp-value">0.6</span></span>
+            <input type="range" id="set-temp" min="0" max="1" step="0.05" value="0.6">
+          </label>
+          <label class="field">
+            <span class="field-label" data-i18n="set.maxTokens">Maks. tokenów odpowiedzi</span>
+            <input type="number" id="set-maxtokens" min="16" max="32768" step="16" value="2048" class="mono">
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.profile">Profil (pamięć profilowa)</span>
+          <textarea id="set-profile" rows="3" placeholder="np. Marcin — twórca wideo. Sprzęt: Canon R6 II, Mavic 3, RTX 3080. Lubi ciepłą kolorystykę i 50 mm."></textarea>
+          <span class="field-hint" data-i18n="set.profileHint">Stałe fakty o Tobie…</span>
+        </label>
+
+        <div class="field">
+          <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
+          <div class="memory-list" id="memory-list"><span class="field-hint" data-i18n="loading">Ładowanie…</span></div>
+          <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
+        </div>
+
+        <label class="field">
+          <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline — bez wyszukiwania w internecie</span></span>
+        </label>
+
+        <label class="field">
+          <span class="field-label"><input type="checkbox" id="set-timemachine" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="tm.enable">Digital Time Machine — automatyczny zapis otoczenia</span></span>
+          <span class="field-hint" data-i18n="tm.enableHint">Gdy włączone, panel kamery na żywo sam zapisuje migawki przy zmianie sceny.</span>
+        </label>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.stats">Statystyki</span>
+          <div class="config-info mono" id="stats-info">—</div>
+        </div>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.backup">Kopia zapasowa</span>
+          <div class="field-row">
+            <button class="btn-secondary" id="backup-download" data-i18n="backupDownload">Pobierz kopię</button>
+            <button class="btn-secondary" id="backup-restore-btn" data-i18n="backupRestore">Przywróć z pliku</button>
+            <input type="file" id="backup-file" accept="application/json" style="display:none">
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.train">Dane treningowe (fine-tuning)</span>
+          <span class="field-hint" id="train-stats" data-i18n="train.hint">Wyeksportuj swoje rozmowy jako zbiór JSONL do dotrenowania własnego modelu (QLoRA). Przewodnik: training/README.md.</span>
+          <div class="field-row">
+            <button class="btn-secondary" id="train-export-chat" data-i18n="train.exportChat">Eksport JSONL (chat)</button>
+            <button class="btn-secondary" id="train-export-inst" data-i18n="train.exportInst">Eksport JSONL (instrukcje)</button>
+          </div>
+          <div class="train-run" id="train-run" style="display:none">
+            <div class="field-row">
+              <input type="text" id="train-model" class="mono" value="unsloth/Qwen2.5-7B-Instruct-bnb-4bit" data-i18n-ph="train.modelPh" placeholder="model bazowy (4-bit)">
+              <input type="text" id="train-ollama" class="mono" value="cosmos-ft" data-i18n-ph="train.ollamaPh" placeholder="nazwa w Ollamie" style="max-width:150px">
+            </div>
+            <div class="field-row">
+              <button class="btn-primary" id="train-start" data-i18n="train.start">🎓 Dotrenuj teraz</button>
+              <button class="btn-ghost" id="train-stop" data-i18n="train.stop" style="display:none">Zatrzymaj</button>
+            </div>
+            <div class="field-hint" id="train-env"></div>
+            <pre class="train-log mono" id="train-log" style="display:none"></pre>
+          </div>
+        </div>
+
+        <div class="config-info mono" id="config-info"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="settings-reset" data-i18n="set.reset">Przywróć domyślne</button>
+        <button class="btn-primary" id="settings-save" data-i18n="set.save">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: STUDIO ================= -->
+  <div class="modal-overlay" id="studio-modal" style="display:none">
+    <div class="modal studio-modal" role="dialog" aria-labelledby="studio-title">
+      <div class="modal-header">
+        <h2 id="studio-title" data-i18n="studio">Studio</h2>
+        <button class="icon-btn" id="studio-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <div class="studio-section" id="studio-sec-image">
+          <div class="studio-sec-title">🖼️ <span data-i18n="st.image">Obraz</span> <span class="mono studio-provider">OpenAI</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (OPENAI_API_KEY)</span></div>
+          <textarea id="studio-image-prompt" rows="2" data-i18n-ph="st.imagePh" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
+          <div class="field-row">
+            <select id="studio-image-tpl" class="mono"><option value="" data-i18n="st.tplSelect">Szablony promptów…</option></select>
+            <button class="btn-secondary" id="studio-image-tpl-save" data-i18n="st.tplSave">Zapisz jako szablon</button>
+          </div>
+          <div class="field-row">
+            <select id="studio-image-provider" class="mono" style="display:none"></select>
+            <select id="studio-image-size" class="mono">
+              <option value="1024x1024" data-i18n="st.sizeSquare">1024 × 1024 (kwadrat)</option>
+              <option value="1536x1024" data-i18n="st.sizeLandscape">1536 × 1024 (poziomy)</option>
+              <option value="1024x1536" data-i18n="st.sizePortrait">1024 × 1536 (pionowy)</option>
+            </select>
+            <select id="studio-image-count" class="mono" title="Warianty">
+              <option value="1">×1</option>
+              <option value="2">×2</option>
+              <option value="4">×4</option>
+            </select>
+            <button class="btn-primary" id="studio-image-go" data-i18n="st.imageGo">Generuj obraz</button>
+          </div>
+          <div class="studio-out" id="studio-image-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-speech">
+          <div class="studio-sec-title">🔊 <span data-i18n="st.sound">Dźwięk</span> <span class="mono studio-provider">ElevenLabs</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (ELEVENLABS_API_KEY)</span></div>
+          <textarea id="studio-speech-text" rows="2" data-i18n-ph="st.speechPh" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
+          <div class="field-row">
+            <input type="text" id="studio-speech-voice" class="mono" data-i18n-ph="st.voicePh" placeholder="voice ID (puste = domyślny)">
+            <button class="btn-primary" id="studio-speech-go" data-i18n="st.speechGo">Generuj dźwięk</button>
+          </div>
+          <div class="studio-out" id="studio-speech-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-video">
+          <div class="studio-sec-title">🎬 <span data-i18n="st.video">Wideo</span> <span class="mono studio-provider">Seedance</span>
+            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (SEEDANCE_API_KEY)</span></div>
+          <textarea id="studio-video-prompt" rows="2" data-i18n-ph="st.videoPh" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
+          <div class="field-row">
+            <select id="studio-video-image" class="mono"><option value="" data-i18n="st.frameNone">pierwsza klatka: brak (sam prompt)</option></select>
+            <select id="studio-video-last" class="mono"><option value="" data-i18n="st.lastNone">ostatnia klatka: brak</option></select>
+          </div>
+          <div class="field-row">
+            <select id="studio-video-duration" class="mono">
+              <option value="3">3 s</option>
+              <option value="4">4 s</option>
+              <option value="5" selected>5 s</option>
+              <option value="6">6 s</option>
+              <option value="8">8 s</option>
+              <option value="10">10 s</option>
+              <option value="12">12 s</option>
+            </select>
+            <select id="studio-video-resolution" class="mono">
+              <option value="480p">480p</option>
+              <option value="720p" selected>720p</option>
+              <option value="1080p">1080p</option>
+            </select>
+            <select id="studio-video-ratio" class="mono">
+              <option value="16:9" selected data-i18n="st.ratio169">16:9 (poziomy)</option>
+              <option value="9:16" data-i18n="st.ratio916">9:16 (pionowy)</option>
+              <option value="1:1" data-i18n="st.ratio11">1:1 (kwadrat)</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="21:9" data-i18n="st.ratio219">21:9 (kinowy)</option>
+              <option value="adaptive" data-i18n="st.ratioAdaptive">adaptive (wg klatki)</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="text" id="studio-video-seed" class="mono" data-i18n-ph="st.seedPh" placeholder="seed (opcjonalnie — powtarzalność)">
+            <label class="studio-check"><input type="checkbox" id="studio-video-camfix"> <span data-i18n="st.camfix">stała kamera</span></label>
+            <button class="btn-primary" id="studio-video-go" data-i18n="st.videoGo">Generuj wideo</button>
+          </div>
+          <div class="studio-out" id="studio-video-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-storyboard">
+          <div class="studio-sec-title">🎞️ <span data-i18n="st.storyboard">Storyboard</span> <span class="mono studio-provider">AI</span></div>
+          <textarea id="studio-sb-scene" rows="2" data-i18n-ph="st.storyboardPh" placeholder="Opisz scenę…"></textarea>
+          <div class="field-row">
+            <select id="studio-sb-shots" class="mono" title="Ujęcia">
+              <option value="3">3</option><option value="4" selected>4</option>
+              <option value="5">5</option><option value="6">6</option>
+            </select>
+            <button class="btn-primary" id="studio-sb-go" data-i18n="st.storyboardGo">Generuj storyboard</button>
+          </div>
+          <div class="studio-out" id="studio-sb-out"></div>
+        </div>
+
+        <div class="studio-section" id="studio-sec-edit">
+          <div class="studio-sec-title">🩹 <span data-i18n="st.edit">Edycja obrazu (inpainting)</span> <span class="mono studio-provider">OpenAI</span></div>
+          <select id="studio-edit-img" class="mono"><option value="" data-i18n="st.editPick">Wybierz obraz z bazy…</option></select>
+          <div class="edit-canvas-wrap" id="studio-edit-canvas-wrap" style="display:none">
+            <canvas id="studio-edit-canvas"></canvas>
+          </div>
+          <textarea id="studio-edit-prompt" rows="2" data-i18n-ph="st.editPrompt" placeholder="Co zmienić…"></textarea>
+          <div class="field-row">
+            <button class="btn-secondary" id="studio-edit-clear" data-i18n="st.editClear">Wyczyść maskę</button>
+            <button class="btn-primary" id="studio-edit-go" data-i18n="st.editGo">Generuj edycję</button>
+          </div>
+          <span class="field-hint" data-i18n="st.editHint">Zamaluj obszar do zmiany, wpisz opis i kliknij Generuj.</span>
+          <div class="studio-out" id="studio-edit-out"></div>
+        </div>
+
+        <span class="field-hint" id="studio-footer-hint" data-i18n="st.footerHint">Każdy wynik trafia automatycznie do Bazy wiedzy — możesz się do niego odnosić w rozmowie. Generowanie zużywa środki z Twoich kluczy API.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: BAZA WIEDZY ================= -->
+  <div class="modal-overlay" id="kb-modal" style="display:none">
+    <div class="modal kb-modal" role="dialog" aria-labelledby="kb-title">
+      <div class="modal-header">
+        <h2 id="kb-title" data-i18n="kb">Baza wiedzy</h2>
+        <button class="icon-btn" id="kb-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="kb-add-row">
+          <button class="btn-secondary" id="kb-upload-btn" data-i18n="kb.upload">📁 Dodaj pliki</button>
+          <input type="file" id="kb-file-input" multiple style="display:none">
+          <button class="btn-secondary" id="kb-record-btn" data-i18n="kb.record">🎙 Nagraj notatkę</button>
+        </div>
+        <div class="field-row">
+          <input type="text" id="kb-url" data-i18n-ph="kb.urlPh" placeholder="https://adres-strony.pl — dodaj link do bazy" class="mono">
+          <button class="btn-secondary" id="kb-add-link" data-i18n="kb.addLink">Dodaj link</button>
+        </div>
+        <div class="kb-drop" id="kb-drop" data-i18n="kb.drop">…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)</div>
+        <div class="field-hint" id="kb-status"></div>
+        <div class="kb-list" id="kb-list"></div>
+        <span class="field-hint" data-i18n-html="kb.hint">☑ Zaznaczone pozycje są <strong>zawsze</strong> dołączane do rozmowy. Z pozostałych Cosmos sam przywołuje pasujące fragmenty. Audio i wideo są transkrybowane (Whisper), dokumenty czytane przez usługę zmysłów.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: NAUKA ================= -->
+  <div class="modal-overlay" id="learn-modal" style="display:none">
+    <div class="modal studio-modal" role="dialog" aria-labelledby="learn-title">
+      <div class="modal-header">
+        <h2 id="learn-title" data-i18n="learn">Nauka</h2>
+        <button class="icon-btn" id="learn-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="studio-tabs" role="tablist">
+          <button class="studio-tab active" data-learn-tab="recog" data-i18n="learn.tabRecog">Rozpoznawanie</button>
+          <button class="studio-tab" data-learn-tab="proc" data-i18n="learn.tabProc">Procedury</button>
+          <button class="studio-tab" data-learn-tab="routine" data-i18n="learn.tabRoutine">Rutyny</button>
+        </div>
+
+        <!-- Rozpoznawanie -->
+        <div class="learn-pane" id="learn-pane-recog">
+          <p class="field-hint" data-i18n="learn.recogIntro">Pokaż Cosmosowi coś w kamerze i nazwij to — nauczy się to rozpoznawać (obiekt, gest, poza). Uczy się przez przykład, lokalnie; nie zmienia wag modelu.</p>
+          <div class="field-row">
+            <input type="text" id="learn-label" data-i18n-ph="learn.labelPh" placeholder="Nazwa, np. „Mój klucz do domu”, „gest STOP”">
+            <select id="learn-kind">
+              <option value="object" data-i18n="learn.kindObject">Obiekt</option>
+              <option value="gesture" data-i18n="learn.kindGesture">Gest</option>
+              <option value="pose" data-i18n="learn.kindPose">Poza</option>
+              <option value="scene" data-i18n="learn.kindScene">Scena</option>
+            </select>
+          </div>
+          <textarea id="learn-note" rows="2" data-i18n-ph="learn.notePh" placeholder="Opis (opcjonalnie) — pomaga rozpoznawaniu"></textarea>
+          <div class="learn-capture">
+            <video id="learn-video" autoplay playsinline muted></video>
+            <img id="learn-thumb" alt="" style="display:none">
+          </div>
+          <div class="field-row">
+            <button class="btn-secondary" id="learn-cam-btn" data-i18n="learn.openCam">📷 Włącz kamerę</button>
+            <button class="btn-secondary" id="learn-shot-btn" data-i18n="learn.capture" disabled>Zrób zdjęcie wzorca</button>
+            <button class="btn-primary" id="learn-save" data-i18n="learn.teach">Naucz</button>
+          </div>
+          <div class="field-hint" id="learn-recog-status"></div>
+          <div class="learn-list" id="learn-lessons"></div>
+        </div>
+
+        <!-- Procedury -->
+        <div class="learn-pane" id="learn-pane-proc" style="display:none">
+          <p class="field-hint" data-i18n-html="learn.procIntro">Naucz Cosmosa czynności krok po kroku (np. „sprawdź rachunek za prąd”). Kroki <strong>wrażliwe</strong> (płatność, wysłanie, potwierdzenie) zawsze wymagają Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty <strong>nie są</strong> zapisywane w procedurze.</p>
+          <div class="rec-box" id="rec-box" style="display:none">
+            <div class="field-row">
+              <input type="text" id="rec-url" class="mono" data-i18n-ph="rec.urlPh" placeholder="adres startowy (opcjonalnie), np. https://ebok...">
+              <button class="btn-secondary" id="rec-start" data-i18n="rec.start">🔴 Nagraj procedurę</button>
+              <button class="btn-ghost" id="rec-stop" data-i18n="rec.stop" style="display:none">⏹ Zakończ nagrywanie</button>
+            </div>
+            <div class="field-hint" id="rec-status" data-i18n="rec.hint">Otworzy się przeglądarka na tym komputerze — zrób zadanie (klikaj, wpisuj), potem „Zakończ". Nagrywane są kliknięcia, wpisany tekst i nawigacja; hasła nie są zapisywane. Nie nagrywa ruchów myszki ani innych aplikacji.</div>
+          </div>
+          <div class="field-row">
+            <input type="text" id="proc-name" data-i18n-ph="learn.procNamePh" placeholder="Nazwa procedury">
+            <select id="proc-picker"></select>
+          </div>
+          <textarea id="proc-desc" rows="2" data-i18n-ph="learn.procDescPh" placeholder="Krótki opis, co ta procedura robi"></textarea>
+          <div class="proc-steps" id="proc-steps"></div>
+          <button class="btn-secondary" id="proc-add-step" data-i18n="learn.addStep">+ Dodaj krok</button>
+          <div class="field-row" style="margin-top:10px">
+            <button class="btn-primary" id="proc-save" data-i18n="learn.saveProc">Zapisz procedurę</button>
+            <button class="btn-secondary" id="proc-run" data-i18n="learn.runProc">Uruchom (z potwierdzeniem)</button>
+            <button class="btn-secondary" id="proc-run-auto" data-i18n="learn.runAuto" style="display:none">⚡ Uruchom auto (tylko odczyt)</button>
+            <button class="btn-ghost" id="proc-delete" data-i18n="learn.deleteProc" style="display:none">Usuń</button>
+          </div>
+          <div class="field-hint" id="learn-proc-status"></div>
+          <div class="learn-list" id="proc-results"></div>
+        </div>
+
+        <!-- Rutyny -->
+        <div class="learn-pane" id="learn-pane-routine" style="display:none">
+          <p class="field-hint" data-i18n="learn.routineIntro">Odpalaj nauczone procedury cyklicznie. O wyznaczonej porze Cosmos przygotuje czynność i poprosi o potwierdzenie — nic nieodwracalnego nie dzieje się samo.</p>
+          <div class="field-row">
+            <select id="routine-proc"></select>
+            <select id="routine-type">
+              <option value="daily" data-i18n="learn.freqDaily">Codziennie</option>
+              <option value="weekly" data-i18n="learn.freqWeekly">Co tydzień</option>
+              <option value="monthly" data-i18n="learn.freqMonthly">Co miesiąc</option>
+              <option value="interval" data-i18n="learn.freqInterval">Co N minut</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="time" id="routine-time" value="09:00">
+            <select id="routine-day" style="display:none"></select>
+            <input type="number" id="routine-mins" min="1" value="60" style="display:none" data-i18n-ph="learn.minsPh" placeholder="minuty">
+            <button class="btn-primary" id="routine-add" data-i18n="learn.addRoutine">Dodaj rutynę</button>
+          </div>
+          <label class="ps-sens" id="routine-auto-wrap" style="display:none"><input type="checkbox" id="routine-auto"> <span data-i18n="learn.autoMode">Tryb auto — wykonaj sam (tylko procedury do odczytu)</span></label>
+          <div class="field-hint" id="learn-routine-status"></div>
+          <div class="learn-list" id="routine-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PANEL: KAMERA NA ŻYWO ================= -->
+  <div class="live-panel" id="live-panel" style="display:none">
+    <div class="live-head">
+      <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
+      <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
+      <button class="icon-btn" id="live-close" data-i18n-aria="close" aria-label="Zamknij">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="live-stage">
+      <video id="live-video" autoplay playsinline muted></video>
+      <canvas id="live-overlay"></canvas>
+    </div>
+    <div class="live-status mono" id="live-status">—</div>
+    <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
+  </div>
+
+  <!-- ================= MODAL: OŚ CZASU ================= -->
+  <div class="modal-overlay" id="timeline-modal" style="display:none">
+    <div class="modal gallery-modal" role="dialog" aria-labelledby="timeline-title">
+      <div class="modal-header">
+        <h2 id="timeline-title" data-i18n="timeMachine">Oś czasu</h2>
+        <button class="icon-btn" id="timeline-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="timeline-list" id="timeline-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: GALERIA ================= -->
+  <div class="modal-overlay" id="gallery-modal" style="display:none">
+    <div class="modal gallery-modal" role="dialog" aria-labelledby="gallery-title">
+      <div class="modal-header">
+        <h2 id="gallery-title" data-i18n="gallery">Galeria</h2>
+        <button class="icon-btn" id="gallery-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="gallery-filters" id="gallery-filters">
+          <button class="gallery-filter active" data-filter="all" data-i18n="gallery.all">Wszystko</button>
+          <button class="gallery-filter" data-filter="image" data-i18n="gallery.images">Obrazy</button>
+          <button class="gallery-filter" data-filter="audio" data-i18n="gallery.audio">Dźwięk</button>
+          <button class="gallery-filter" data-filter="video" data-i18n="gallery.video">Wideo</button>
+        </div>
+        <div class="gallery-grid" id="gallery-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TRYB GŁOSOWY ================= -->
+  <div class="voice-overlay" id="voice-overlay" style="display:none">
+    <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <div class="voice-orb" id="voice-orb"></div>
+    <div class="voice-status mono" id="voice-status" data-i18n="voice.wake">POWIEDZ „HEJ, KOSMOS”</div>
+    <div class="voice-transcript" id="voice-transcript"></div>
+    <div class="voice-answer" id="voice-answer"></div>
+    <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
+      <video id="voice-camera" autoplay playsinline muted></video>
+      <span class="voice-camera-label mono" data-i18n="voice.camLabel">👁 podgląd</span>
+    </div>
+    <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta</p>
+  </div>
+
+  <!-- ================= MODAL: KAMERA ================= -->
+  <div class="modal-overlay" id="camera-modal" style="display:none">
+    <div class="modal camera-modal" role="dialog" data-i18n-aria="cam.title" aria-label="Kamera">
+      <div class="modal-header">
+        <h2 data-i18n="cam.title">Kamera</h2>
+        <button class="icon-btn" id="camera-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="camera-body">
+        <video id="camera-video" autoplay playsinline muted></video>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="camera-capture" data-i18n="cam.capture">Zrób zdjęcie</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

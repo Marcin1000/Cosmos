@@ -1,0 +1,41 @@
+{
+  "name": "cosmos",
+  "version": "2.0.0",
+  "description": "Cosmos — osobiste środowisko AI (UI premium) dla modeli NVIDIA Nemotron: lokalnie (RTX) i w chmurze NVIDIA. PWA + aplikacja desktopowa.",
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "app.cosmos.chat",
+    "productName": "Cosmos",
+    "files": [
+      "server.js",
+      "desktop/**",
+      "automation/**",
+      "public/**",
+      ".env.example"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icons/icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "license": "MIT",
+  "optionalDependencies": {
+    "playwright": "^1.61.1"
+  }
+}
