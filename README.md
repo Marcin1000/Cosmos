@@ -7,12 +7,15 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 ![Cosmos](docs/screenshot.png)
 
 > ### 👉 Pierwszy raz? Zacznij tutaj:
-> - **[docs/START-TUTAJ.md](docs/START-TUTAJ.md)** — instrukcja krok po kroku (instalacja
->   na komputerze i telefonie, prostym językiem).
-> - **[docs/ANDROID-I-KOMPUTER.md](docs/ANDROID-I-KOMPUTER.md)** — czy komputer musi być
->   cały czas włączony? (odpowiedź + rozwiązania).
-> - **[docs/VPS-SERWER-W-CHMURZE.md](docs/VPS-SERWER-W-CHMURZE.md)** — postaw Cosmosa
->   w chmurze (zawsze dostępny z telefonu i Surface), z RTX 3080 w domu na żądanie.
+> **[docs/START-TUTAJ.md](docs/START-TUTAJ.md)** — jedna instrukcja od zera do działania,
+> prostym językiem. Na początku wybierasz ścieżkę:
+> - **Ścieżka A** — serwer na Twoim komputerze (0 zł, maksymalna prywatność; działa,
+>   gdy komputer jest włączony) — wraz z wariantem mini-PC 24/7 i dostępem przez Tailscale,
+> - **Ścieżka B** — serwer w chmurze (VPS): Cosmos **zawsze dostępny** z telefonu
+>   i Surface Pro, z RTX 3080 w domu podłączaną na żądanie.
+>
+> Dalej: instalacja jako aplikacja (Windows/Android/iOS/macOS), zmysły, Cursor,
+> przegląd funkcji i rozwiązywanie problemów.
 >
 > Poniżej znajduje się dokumentacja techniczna każdego elementu.
 

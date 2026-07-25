@@ -1,38 +1,70 @@
-# 🚀 Cosmos — instrukcja krok po kroku (zacznij tutaj)
+# 🚀 Cosmos — jedna instrukcja od zera do działania (zacznij tutaj)
 
-Ten plik prowadzi Cię od zera do działającego Cosmosa — na komputerze i na telefonie.
-Rób punkty po kolei. Nie musisz znać się na programowaniu; wszystko jest opisane
-dokładnie, słowo po słowie.
+Ten plik prowadzi Cię od zera do działającego Cosmosa — na komputerze, telefonie
+i Surface Pro. Rób punkty po kolei. Nie musisz znać się na programowaniu; wszystko
+jest opisane słowo po słowie.
 
 > **Ile to zajmie?** Podstawowe uruchomienie (czat) — około 15 minut.
 > Pełna wersja z głosem, wzrokiem i aplikacją na telefonie — około godziny.
+> Wariant „zawsze dostępny" w chmurze — dodatkowe 30–40 minut.
 
 ---
 
 ## Co będziesz miał na końcu
 
-- Własnego asystenta AI (jak ChatGPT) działającego na Twoim komputerze.
-- Ten sam asystent na telefonie z Androidem, ze wspólną historią rozmów.
-- Przełącznik: model lokalny (Twoja karta RTX 3080) albo chmura NVIDIA.
-- Opcjonalnie: rozmowę głosem, „widzenie" przez kamerę, generowanie grafik,
-  dźwięku i wideo, oraz bazę wiedzy na Twoje pliki.
+- Własnego asystenta AI (jak ChatGPT), ale **prywatnego** — Twoje dane, Twoje klucze.
+- Ten sam asystent na telefonie z Androidem, iPhonie, Macu i Surface Pro — ze **wspólną
+  historią rozmów**.
+- Przełącznik: model lokalny (Twoja karta RTX 3080) albo chmura (NVIDIA / OpenAI / Claude).
+- Opcjonalnie: rozmowę głosem, „widzenie" przez kamerę, generowanie grafik, dźwięku
+  i wideo, bazę wiedzy na Twoje pliki, naukę procedur i trening własnego modelu.
 
 ---
 
-## Zanim zaczniesz — jedna ważna rzecz
+# ⚠️ NAJPIERW: wybierz, gdzie ma stać serwer
 
-Cosmos składa się z **serwera** (działa na Twoim komputerze stacjonarnym) i
-**aplikacji** (otwierasz ją w przeglądarce lub na telefonie). Aplikacja na telefonie
-łączy się z serwerem na komputerze.
+To **najważniejsza decyzja** i od niej zależy wszystko dalej. Przeczytaj tę sekcję,
+zanim zaczniesz cokolwiek instalować.
 
-**To znaczy, że gdy komputer jest wyłączony, telefon nie ma się z czym połączyć.**
-Szczegółowe wyjaśnienie i rozwiązania znajdziesz w pliku
-**[ANDROID-I-KOMPUTER.md](ANDROID-I-KOMPUTER.md)** — przeczytaj go, bo to ważne dla
-tego, jak będziesz używać Cosmosa na co dzień.
+Cosmos składa się z dwóch części:
+- **serwer** — mózg-dyrygent: trzyma Twoje dane (rozmowy, pamięć, bazę wiedzy) i klucze API,
+- **aplikacja** — to, co widzisz (przeglądarka / ikona na telefonie / okno na Windows).
+
+Aplikacja zawsze łączy się z serwerem. **Cosmos działa dokładnie wtedy, kiedy działa
+jego serwer.** Dlatego to, gdzie postawisz serwer, decyduje o tym, kiedy masz dostęp:
+
+| | **Ścieżka A** — serwer na Twoim komputerze | **Ścieżka B** — serwer w chmurze (VPS) |
+|---|---|---|
+| Kiedy działa | tylko gdy komputer jest **włączony** | **zawsze**, 24/7 |
+| Koszt | 0 zł (tylko prąd) | ~kilkanaście–kilkadziesiąt zł/mies. |
+| Gdzie są Twoje dane | u Ciebie na dysku (maksymalna prywatność) | na wynajętym serwerze |
+| Dostęp poza domem | przez Tailscale (gdy PC włączony) | z każdego miejsca |
+| Lokalna RTX 3080 | natychmiast | gdy włączysz domowy PC (przez Tailscale) |
+| Dla kogo | start, nauka, maksymalna prywatność | „chcę Cosmosa zawsze pod ręką" |
+
+### Moja rekomendacja
+
+- **Zacznij od Ścieżki A.** Jest darmowa, prosta i pozwala poznać Cosmosa. Jeśli
+  komputer jest włączony wtedy, kiedy chcesz z niego korzystać — to Ci wystarczy.
+- **Przejdź na Ścieżkę B**, gdy poczujesz, że chcesz mieć Cosmosa dostępnego z telefonu
+  także wtedy, gdy komputer jest wyłączony (bo np. nie chcesz trzymać PC włączonego
+  całą dobę — to i koszt prądu, i zużycie sprzętu).
+- **Wariant pośredni (mini-PC)** — opisany w [Części 2C](#część-2c--wariant-pośredni-mały-komputer-247).
+  Serwer i dane na małym, cichym urządzeniu włączonym 24/7 u Ciebie w domu; duży komputer
+  z RTX budzisz tylko do liczenia. Najlepszy balans prywatności, kosztu i wygody.
+
+> **Dobra wiadomość:** ścieżki nie są na zawsze. Możesz zacząć od A, a później przenieść
+> wszystko na VPS — dane przenosisz kopią zapasową (Ustawienia → Pobierz kopię, potem
+> Przywróć z pliku na nowym serwerze).
+
+**Jak czytać dalej:**
+1. **Część 1** — podstawy (robią ją WSZYSCY, niezależnie od ścieżki).
+2. Potem **Część 2** (Ścieżka A) **albo Część 3** (Ścieżka B) — tylko jedną z nich.
+3. Dalej Części 4–7 — wspólne dla obu ścieżek.
 
 ---
 
-# CZĘŚĆ 1 — Podstawy (czat na komputerze)
+# CZĘŚĆ 1 — Podstawy (dla wszystkich)
 
 ## KROK 1 — Zainstaluj Node.js
 
@@ -90,8 +122,8 @@ Od teraz zakładam, że Cosmos jest w folderze `C:\Cosmos`.
 
 4. Zapisz plik (`Ctrl+S`) i zamknij.
 
-> 🔒 **Bezpieczeństwo:** plik `.env` z Twoimi kluczami zostaje tylko na Twoim
-> komputerze. Nigdy nie trafia do internetu ani na GitHub.
+> 🔒 **Bezpieczeństwo:** plik `.env` z Twoimi kluczami zostaje tylko tam, gdzie stoi
+> serwer. Nigdy nie trafia do przeglądarki ani na GitHub.
 
 ## KROK 4 — Uruchom Cosmos po raz pierwszy
 
@@ -108,25 +140,315 @@ Od teraz zakładam, że Cosmos jest w folderze `C:\Cosmos`.
    ```
 5. Powinieneś zobaczyć Cosmos. Napisz coś w polu na dole i naciśnij Enter. 🎉
 
-> Aby zatrzymać serwer: w oknie `cmd` naciśnij `Ctrl + C`.
-> Aby uruchomić ponownie: znów `npm start`.
+> Aby zatrzymać serwer: w oknie `cmd` naciśnij `Ctrl + C`. Aby uruchomić ponownie: `npm start`.
+
+✅ **Cosmos działa.** Teraz wybierz swoją ścieżkę: **Część 2** (serwer u Ciebie)
+albo **Część 3** (serwer w chmurze).
 
 ---
 
-# CZĘŚĆ 2 — Aplikacja na Windows
+# CZĘŚĆ 2 — ŚCIEŻKA A: serwer na Twoim komputerze
 
-Masz dwie możliwości. **Wariant A jest prostszy — zacznij od niego.**
+Wybierasz ją, jeśli chcesz zacząć bez kosztów i trzymać wszystkie dane u siebie.
 
-## Wariant A — jako aplikacja z przeglądarki (PWA)
+## Część 2A — Prawda o włączonym komputerze (przeczytaj)
 
-1. Uruchom serwer (`npm start`) i otwórz `http://localhost:3000` w Chrome lub Edge.
-2. Po prawej stronie paska adresu zobaczysz małą ikonę **„Zainstaluj"**
+**Gdy komputer z serwerem jest wyłączony, telefon nie ma się z czym połączyć.**
+To zasadnicza różnica między Cosmosem a ChatGPT:
+
+- **ChatGPT** działa w centrach danych OpenAI włączonych 24 godziny na dobę.
+- **Cosmos** to Twój prywatny system — „centrum danych" to Twój komputer. Jest włączony
+  wtedy, kiedy Ty go włączysz.
+
+To **cena suwerenności**: Twoje dane, modele i klucze są u Ciebie, nikt inny ich nie
+widzi — ale to Ty odpowiadasz za to, żeby serwer działał.
+
+Na komputerze działają trzy rzeczy naraz:
+1. **Mózg lokalny** — modele AI na Twojej RTX 3080 (bez komputera = brak karty).
+2. **Twoje dane** — rozmowy, pamięć, baza wiedzy (folder `data` na dysku).
+3. **Serwer** — pośrednik, przez który telefon rozmawia z modelami i sięga po dane.
+
+Telefon nie ma ani Twojej karty graficznej, ani Twoich plików. On tylko wyświetla
+i wysyła pytania do komputera.
+
+**Co działa, gdy komputer jest wyłączony:**
+
+| Na telefonie | Komputer włączony | Komputer wyłączony |
+|---|---|---|
+| Otwarcie aplikacji Cosmos | ✅ | ✅ (sama aplikacja jest zapamiętana) |
+| Podejrzenie ostatnio otwartych rozmów | ✅ | ✅ (kopia offline, tylko do czytania) |
+| Nowa rozmowa / odpowiedź AI | ✅ | ❌ |
+| Dostęp do pełnej historii i bazy wiedzy | ✅ | ❌ |
+| Głos, generowanie grafik/wideo | ✅ | ❌ |
+
+## Część 2B — Automatyczny start serwera (Windows)
+
+Żeby nie wpisywać `npm start` za każdym razem:
+
+1. W folderze `C:\Cosmos` utwórz plik tekstowy **`start-cosmos.bat`** o treści:
+   ```bat
+   cd /d C:\Cosmos
+   npm start
+   ```
+2. Naciśnij `Windows + R`, wpisz `shell:startup`, Enter — otworzy się folder „Autostart".
+3. Wrzuć do niego skrót do `start-cosmos.bat`.
+
+Od teraz serwer uruchomi się sam przy każdym włączeniu komputera.
+
+> Chcesz, żeby serwer działał, nawet gdy nikt nie jest zalogowany (np. na mini-PC)?
+> Użyj darmowego narzędzia **NSSM**, które uruchamia Cosmos jako usługę Windows w tle.
+
+## Część 2C — Wariant pośredni: mały komputer 24/7
+
+Najlepszy kompromis między kosztem prądu a wygodą, **bez oddawania danych w chmurę**:
+
+- Weź tani mini-PC (albo stary laptop) i uruchom na nim **tylko serwer Cosmosa**
+  (jest lekki — nie potrzebuje mocnej karty).
+- Twoje rozmowy, pamięć i baza wiedzy leżą na tym małym, cichym urządzeniu włączonym 24/7.
+- Do rozmów używa **chmury** (NVIDIA / OpenAI / Claude) — tam jest moc obliczeniowa.
+- Duży komputer z RTX 3080 włączasz **tylko wtedy**, gdy chcesz liczyć lokalnie.
+
+To wzorzec „mały mózg zawsze czuwa, wielki mózg budzi się na żądanie". Mini PC pobiera
+kilka watów — prąd to grosze miesięcznie. Konfiguracja jak w Części 1 + autostart (2B).
+
+## Część 2D — Budzenie komputera zdalnie (Wake-on-LAN)
+
+Komputer śpi (nie zużywa prądu), a gdy chcesz go użyć, „budzisz" go z telefonu:
+
+- Włącz **Wake-on-LAN** w BIOS komputera i w ustawieniach karty sieciowej Windows.
+- Na telefonie zainstaluj aplikację typu „Wake on LAN".
+- Efekt: klikasz w telefonie, komputer budzi się w kilkanaście sekund, Cosmos działa.
+- Działa najlepiej w sieci domowej; poza domem wymaga dodatkowej konfiguracji.
+
+## Część 2E — Dostęp poza domem (Tailscale)
+
+Domyślnie telefon łączy się z komputerem tylko w tej samej sieci Wi-Fi. Żeby mieć dostęp
+z dowolnego miejsca **bez otwierania portów na routerze**:
+
+1. Załóż darmowe konto na **https://tailscale.com**.
+2. Zainstaluj Tailscale na komputerze **i** na telefonie, zaloguj się tym samym kontem.
+3. Tailscale nada komputerowi stały prywatny adres (np. `100.x.x.x`).
+4. Na telefonie otwieraj Cosmos pod tym adresem: `http://100.x.x.x:3000`.
+
+To prywatny, szyfrowany tunel tylko między Twoimi urządzeniami. Nikt z zewnątrz nie ma
+dostępu. (Komputer i tak musi być włączony — Tailscale tylko łączy, nie budzi.)
+
+> 🔒 Jeśli wystawiasz Cosmosa gdziekolwiek poza `localhost`, ustaw hasło
+> `COSMOS_PASSWORD` w `.env` (patrz Część 3, KROK 4 — zasada jest ta sama).
+
+➡️ Teraz przejdź do **Części 4** (aplikacje na urządzeniach).
+
+---
+
+# CZĘŚĆ 3 — ŚCIEŻKA B: serwer w chmurze (VPS), zawsze dostępny
+
+Wybierasz ją, jeśli chcesz mieć Cosmosa dostępnego **zawsze** — także gdy Twój komputer
+jest wyłączony. Układ docelowy:
+
+```
+   Telefon · Surface Pro · dowolne miejsce
+                  │  (szyfrowany tunel Tailscale)
+                  ▼
+        VPS — ZAWSZE WŁĄCZONY
+        serwer Cosmos + dane (rozmowy, pamięć, baza wiedzy)
+          │                                    │
+          │ chmura AI (zawsze)                 │ Tailscale (gdy PC w domu włączony)
+          ▼                                    ▼
+   NVIDIA / OpenAI / Claude          Stacjonarny RTX 3080 (Ollama)
+```
+
+> ⚠️ **Zasada numer jeden:** serwer wystawiony do internetu **musi** mieć ustawione
+> hasło (`COSMOS_PASSWORD`). Bez tego każdy, kto pozna adres, użyje Twoich kluczy API
+> (Twoje pieniądze) i przeczyta Twoje dane. Ustawiamy je w KROKU 4.
+
+**Co będziesz potrzebował:**
+- Konto u dostawcy VPS (np. Hetzner, DigitalOcean, Mikr.us, OVH). Wystarczy najtańszy
+  plan: 1–2 rdzenie, 2 GB RAM, ~20 GB dysku.
+- Konto **Tailscale** (darmowe) — łączy VPS, telefon i komputer w prywatną sieć.
+- Około 30–40 minut.
+
+> **Dlaczego Tailscale, a nie publiczny adres?** Nie otwierasz żadnych portów na świat,
+> nie potrzebujesz domeny ani certyfikatów, a masz dostęp z każdego miejsca. VPS jest
+> widoczny tylko dla Twoich urządzeń. (Wariant z domeną i HTTPS — na końcu tej części.)
+
+## KROK 1 — Załóż VPS
+
+1. U dostawcy utwórz nowy serwer z systemem **Ubuntu 24.04 LTS**.
+2. Zapisz jego adres IP i hasło do użytkownika `root` (albo skonfiguruj klucz SSH).
+3. Połącz się z serwerem z komputera (w `cmd` na Windows):
+   ```
+   ssh root@ADRES-IP-SERWERA
+   ```
+
+## KROK 2 — Zainstaluj Node.js i Gita na VPS
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs git
+node --version
+```
+
+## KROK 3 — Pobierz Cosmosa na VPS
+
+```bash
+git clone <adres-repozytorium> /opt/cosmos
+cd /opt/cosmos
+```
+
+## KROK 4 — Ustaw konfigurację i HASŁO
+
+```bash
+cp .env.example .env
+nano .env
+```
+Uzupełnij **koniecznie**:
+```ini
+# HASŁO do logowania w przeglądarce — WYMAGANE na VPS!
+COSMOS_PASSWORD=wybierz-dlugie-trudne-haslo
+
+# Stały token dla Cursora/MCP (wygeneruj losowy ciąg, same litery i cyfry)
+COSMOS_API_TOKEN=wklej-tu-losowy-ciag-znakow
+
+# Chmura NVIDIA (mózg dostępny 24/7 z VPS)
+NVIDIA_API_KEY=nvapi-twój-klucz
+
+# pozostałe klucze (OpenAI, ElevenLabs, Seedance, Firefly) — wedle potrzeb
+```
+Zapisz: `Ctrl+O`, Enter, `Ctrl+X`.
+
+> 🔑 Losowy token wygenerujesz na serwerze poleceniem:
+> `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`
+
+## KROK 5 — Połącz VPS z Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+Pojawi się link — otwórz go w przeglądarce i zaloguj na swoje konto Tailscale.
+Zapisz adres, który VPS dostanie (np. `100.101.102.103`) — pod nim będziesz się łączyć.
+
+## KROK 6 — Uruchom Cosmosa jako usługę (żeby działał zawsze)
+
+```bash
+sudo tee /etc/systemd/system/cosmos.service > /dev/null <<'EOF'
+[Unit]
+Description=Cosmos
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/cosmos
+ExecStart=/usr/bin/node server.js
+Restart=always
+User=root
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable cosmos
+sudo systemctl start cosmos
+sudo systemctl status cosmos
+```
+Jeśli widzisz `active (running)` — Cosmos działa i będzie działał zawsze.
+
+## KROK 7 — Wejdź z telefonu i Surface Pro
+
+1. Zainstaluj **Tailscale** na telefonie i na Surface Pro, zaloguj tym samym kontem.
+2. Otwórz w przeglądarce: `http://100.101.102.103:3000` (adres VPS z Tailscale).
+3. Pojawi się ekran logowania Cosmosa — wpisz `COSMOS_PASSWORD`.
+4. Zainstaluj jako aplikację (szczegóły w **Części 4**). Gotowe. 🎉
+
+## KROK 8 — Podłącz domowy komputer z RTX 3080
+
+Aby z VPS korzystać z lokalnego modelu na Twojej karcie (gdy komputer jest włączony):
+
+**Na komputerze stacjonarnym (Windows):**
+1. Zainstaluj **Ollama** (https://ollama.com) i pobierz model, np.:
+   ```
+   ollama pull nemotron-mini
+   ```
+2. Zainstaluj **Tailscale** na tym komputerze, zaloguj tym samym kontem. Zapisz jego
+   adres Tailscale (np. `100.88.88.88`).
+3. Pozwól Ollamie słuchać w sieci Tailscale — ustaw zmienną środowiskową
+   `OLLAMA_HOST=0.0.0.0` (Windows: Zmienne środowiskowe → nowa zmienna) i uruchom
+   Ollamę ponownie.
+
+**Na VPS** — w pliku `.env` wpisz adres domowego komputera:
+```ini
+LOCAL_BASE_URL=http://100.88.88.88:11434/v1
+LOCAL_MODEL=nemotron-mini
+```
+Zrestartuj usługę: `sudo systemctl restart cosmos`.
+
+**Efekt:**
+- Gdy komputer w domu jest **włączony** → przełącznik „Lokalnie" świeci na zielono,
+  rozmowy idą na Twoją RTX 3080 (za darmo, prywatnie).
+- Gdy komputer jest **wyłączony** → „Lokalnie" pokazuje offline, używasz zakładki
+  „Chmura". Cosmos działa dalej, bez przerwy.
+
+> To samo dotyczy zmysłów: jeśli chcesz ich używać, uruchom `senses/service.py` na
+> domowym komputerze i w `.env` na VPS ustaw `SENSES_URL=http://100.88.88.88:7060`.
+> Gdy komputer śpi, Cosmos używa zapasowo rozpoznawania mowy z przeglądarki, a
+> wyszukiwanie w bazie wiedzy przechodzi na tryb słów kluczowych. Nic się nie psuje —
+> część funkcji po prostu czeka na PC.
+
+## Aktualizacja Cosmosa na VPS
+
+```bash
+cd /opt/cosmos
+git pull
+sudo systemctl restart cosmos
+```
+
+## Alternatywa: publiczna domena + HTTPS (bez Tailscale)
+
+Jeśli wolisz zwykły adres `https://cosmos.twojadomena.pl`:
+
+1. Skieruj domenę na IP VPS (rekord A w panelu domeny).
+2. Zainstaluj Caddy (automatyczny, darmowy certyfikat HTTPS):
+   ```bash
+   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+   sudo apt update && sudo apt install caddy
+   ```
+3. Ustaw Caddy jako pośrednika:
+   ```bash
+   echo 'cosmos.twojadomena.pl {
+       reverse_proxy localhost:3000
+   }' | sudo tee /etc/caddy/Caddyfile
+   sudo systemctl restart caddy
+   ```
+4. W `.env` dodaj `COSMOS_COOKIE_SECURE=1` (cookie tylko po HTTPS) i zrestartuj Cosmosa.
+
+Caddy sam pobierze certyfikat. Hasło (`COSMOS_PASSWORD`) jest tu jeszcze ważniejsze —
+adres jest publiczny.
+
+➡️ Teraz przejdź do **Części 4** (aplikacje na urządzeniach).
+
+---
+
+# CZĘŚĆ 4 — Zainstaluj jako aplikację (obie ścieżki)
+
+Wszędzie poniżej **ADRES-SERWERA** to:
+- Ścieżka A: `localhost:3000` (na tym komputerze) albo `192.168.x.x:3000` (w sieci Wi-Fi),
+  albo adres Tailscale `100.x.x.x:3000` (poza domem),
+- Ścieżka B: adres VPS z Tailscale, np. `100.101.102.103:3000` (albo Twoja domena).
+
+## Windows — wariant 1: PWA (najprostszy)
+
+1. Otwórz `http://ADRES-SERWERA` w **Chrome lub Edge**.
+2. Po prawej stronie paska adresu zobaczysz ikonę **„Zainstaluj"**
    (albo: menu ⋮ → *„Zainstaluj Cosmos…"*).
 3. Kliknij ją. Cosmos pojawi się w menu Start jako osobna aplikacja z własną ikoną.
 
-## Wariant B — prawdziwa aplikacja (Electron, z instalatorem)
+Działa tak samo na **Surface Pro**.
 
-W oknie `cmd` w folderze Cosmosa:
+## Windows — wariant 2: aplikacja natywna (Electron)
+
+Tylko dla Ścieżki A (serwer na tym samym komputerze). W oknie `cmd` w folderze Cosmosa:
 ```
 npm install
 npm run desktop
@@ -134,69 +456,55 @@ npm run desktop
 Cosmos otworzy się we własnym oknie i **sam uruchomi serwer** — nie musisz osobno
 wpisywać `npm start`.
 
-Aby zbudować instalator `.exe` (do zainstalowania jak zwykłego programu):
+Aby zbudować instalator `.exe`:
 ```
 npm run dist
 ```
 Gotowy instalator znajdziesz w folderze `dist`.
 
----
+## Android
 
-# CZĘŚĆ 3 — Aplikacja na Androidzie
+1. Upewnij się, że masz dostęp do serwera (ta sama sieć Wi-Fi — Ścieżka A, albo
+   Tailscale / VPS — Ścieżka B).
+   - Adres komputera w sieci sprawdzisz tak: w `cmd` wpisz `ipconfig`, znajdź
+     **„Adres IPv4"** — coś jak `192.168.1.20`.
+2. Na telefonie otwórz w Chrome: `http://ADRES-SERWERA`
+3. Menu ⋮ → **„Dodaj do ekranu głównego"** / **„Zainstaluj aplikację"**.
 
-> ⚠️ **Najpierw przeczytaj [ANDROID-I-KOMPUTER.md](ANDROID-I-KOMPUTER.md)** — wyjaśnia,
-> kiedy telefon zadziała, a kiedy nie (bo komputer musi być włączony).
+Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona).
 
-Najkrótsza droga (gdy telefon i komputer są w tej samej sieci Wi-Fi):
+## iPhone / iPad (iOS, iPadOS)
 
-1. Na komputerze sprawdź jego adres w sieci: w `cmd` wpisz `ipconfig`, znajdź
-   **„Adres IPv4"** — coś jak `192.168.1.20`.
-2. Uruchom serwer na komputerze (`npm start`).
-3. Na telefonie otwórz w Chrome adres: `http://192.168.1.20:3000`
-   (wpisz swój adres z punktu 1).
-4. Menu ⋮ → **„Dodaj do ekranu głównego"**. Cosmos pojawi się jak zwykła aplikacja.
-
-Żeby działało też poza domem — patrz [ANDROID-I-KOMPUTER.md](ANDROID-I-KOMPUTER.md)
-(sekcja o Tailscale).
-
----
-
-# CZĘŚĆ 3b — Aplikacja na iPhone / iPad (iOS, iPadOS)
-
-1. Na iPhonie/iPadzie otwórz Cosmosa w przeglądarce **Safari** (nie Chrome — na iOS
-   tylko Safari potrafi instalować aplikacje). Adres jak przy Androidzie:
-   `http://ADRES-KOMPUTERA:3000` (ta sama sieć Wi-Fi), albo adres z Tailscale.
+1. Otwórz Cosmosa w przeglądarce **Safari** (na iOS tylko Safari potrafi instalować
+   aplikacje): `http://ADRES-SERWERA`
 2. Dotknij ikony **Udostępnij** (kwadrat ze strzałką w górę).
 3. Wybierz **„Dodaj do ekranu początkowego"**.
-4. Cosmos pojawi się na ekranie z własną ikoną i będzie działał pełnoekranowo,
-   jak natywna aplikacja.
 
 > Ikona i pasek stanu są już przygotowane pod iOS — nie musisz nic ustawiać.
 
----
+## Mac (macOS)
 
-# CZĘŚĆ 3c — Aplikacja na Mac (macOS)
+Safari (macOS Sonoma lub nowszy): otwórz `http://ADRES-SERWERA`, potem w menu górnym
+**Plik → Dodaj do Docka**. W Chrome/Edge działa zwykła instalacja PWA (ikona
+„Zainstaluj" w pasku adresu).
 
-Na Macu z przeglądarką **Safari** (wersja z macOS Sonoma lub nowszą):
-1. Otwórz Cosmosa: `http://localhost:3000` (jeśli serwer jest na tym Macu) albo
-   adres komputera/serwera w sieci.
-2. W menu górnym: **Plik → Dodaj do Docka** (lub przycisk **Udostępnij → Dodaj do Docka**).
-3. Cosmos pojawi się w Docku jako osobna aplikacja z własnym oknem i ikoną.
-
-W przeglądarce **Chrome/Edge** na Macu działa też zwykła instalacja PWA
-(ikona „Zainstaluj" w pasku adresu) — tak samo jak na Windows.
+**Ikony aplikacji** są dołączone dla wszystkich platform: Windows/Android (192, 512,
+maskable), iOS (`apple-touch-icon` 180), macOS Safari (`mask-icon`) oraz 1024 px.
 
 ---
 
-# CZĘŚĆ 4 — Zmysły: głos, wzrok, pamięć (opcjonalnie)
+# CZĘŚĆ 5 — Zmysły: głos, wzrok, pamięć (opcjonalnie)
 
 To dodatkowa usługa w Pythonie. Bez niej Cosmos działa (czat, obrazy), ale nie ma
 lokalnego rozpoznawania mowy, naturalnego głosu ani analizy obrazu na Twoim GPU.
 
+> **Gdzie to uruchomić?** Tam, gdzie jest kamera, mikrofon i GPU — czyli na Twoim
+> komputerze z RTX 3080 (nawet jeśli serwer stoi na VPS; wtedy patrz Część 3, KROK 8).
+
 ## KROK 1 — Zainstaluj Pythona
 1. Wejdź na **https://python.org/downloads**, pobierz najnowszą wersję.
-2. **WAŻNE:** podczas instalacji zaznacz na dole okna
-   **„Add Python to PATH"**, dopiero potem klikaj instaluj.
+2. **WAŻNE:** podczas instalacji zaznacz na dole okna **„Add Python to PATH"**,
+   dopiero potem klikaj instaluj.
 
 ## KROK 2 — Zainstaluj zmysły
 W oknie `cmd`:
@@ -224,40 +532,36 @@ Zostaw to okno otwarte. W Cosmosie w panelu bocznym „Zmysły" zaświeci się n
 
 ---
 
-# CZĘŚĆ 5 — Cursor (opcjonalnie)
+# CZĘŚĆ 6 — Cursor i inne narzędzia MCP (opcjonalnie)
 
 Aby Twój edytor kodu Cursor widział bazę wiedzy i pamięć Cosmosa:
 
 1. W Cursorze: *Settings → MCP → Add server*.
-2. Wklej (podmieniając ścieżkę na swoją):
+2. Wklej (podmieniając ścieżkę i adres na swoje):
    ```json
    {
      "mcpServers": {
        "cosmos": {
          "command": "node",
          "args": ["C:/Cosmos/mcp/cosmos-mcp.js"],
-         "env": { "COSMOS_URL": "http://localhost:3000" }
+         "env": {
+           "COSMOS_URL": "http://localhost:3000",
+           "COSMOS_TOKEN": "ten-sam-token-co-COSMOS_API_TOKEN-w-env"
+         }
        }
      }
    }
    ```
-3. Cosmos musi być uruchomiony (`npm start`).
+   - Ścieżka A: `COSMOS_URL` to `http://localhost:3000`; `COSMOS_TOKEN` możesz pominąć,
+     jeśli nie ustawiałeś hasła.
+   - Ścieżka B: `COSMOS_URL` to adres VPS, a `COSMOS_TOKEN` jest **wymagany**.
+3. Cosmos musi być uruchomiony.
+
+Ten sam wpis działa w Claude Desktop i Claude Code.
 
 ---
 
-# Codzienne używanie — najkrótsza ścieżka
-
-1. Włącz komputer.
-2. Uruchom Cosmos (`npm start` w folderze, albo aplikacja Electron sama startuje serwer).
-3. (Opcjonalnie) w drugim oknie uruchom zmysły: `python service.py` w folderze `senses`.
-4. Otwórz aplikację Cosmos na komputerze lub telefonie.
-
-> 💡 Chcesz, żeby serwer startował sam po włączeniu komputera? Patrz
-> [ANDROID-I-KOMPUTER.md](ANDROID-I-KOMPUTER.md) — sekcja „Automatyczny start".
-
----
-
-# Co możesz robić w Cosmosie (przegląd)
+# CZĘŚĆ 7 — Co możesz robić w Cosmosie (przegląd)
 
 Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 
@@ -272,17 +576,42 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
 - **Kamera na żywo** — panel z detekcją obiektów i trybem głosowym „Hej, Kosmos".
 - **Nauka** (przycisk w panelu bocznym) — naucz Cosmosa rozpoznawania (pokaż w kamerze
-  i nazwij), nagraj **procedury** (czynności krok po kroku, np. sprawdzenie rachunku)
+  i nazwij), **nagraj procedury** z ekranu (klikasz i wpisujesz, a Cosmos zapisuje kroki)
   i zaplanuj je jako **rutyny** cykliczne. Kroki wrażliwe (płatność, wysłanie) zawsze
   wymagają Twojego potwierdzenia — Cosmos nigdy nie płaci sam.
 - **Digital Time Machine** — włącz w Ustawieniach, a Cosmos zapisuje migawki sceny
   do osi czasu (wskaźnik „REC"); wyłączona domyślnie dla prywatności.
 - **Kopie zapasowe, statystyki i tryb offline** — w Ustawieniach.
 - **Trening własnego modelu** (dla zaawansowanych) — w Ustawieniach wyeksportujesz swoje
-  rozmowy jako dane treningowe (JSONL), a w `training/` znajdziesz gotowy skrypt QLoRA
-  i przewodnik, jak dotrenować model i wpiąć go z powrotem jako profil „Lokalnie".
+  rozmowy jako dane treningowe (JSONL) albo klikniesz **„🎓 Dotrenuj teraz"**;
+  w `training/` jest skrypt QLoRA i przewodnik, jak wpiąć model jako profil „Lokalnie".
 
 > Pełny opis każdej funkcji: **[../README.md](../README.md)**.
+
+---
+
+# Codzienne używanie
+
+**Ścieżka A (serwer u Ciebie):**
+1. Włącz komputer (serwer wstanie sam, jeśli ustawiłeś autostart — Część 2B).
+2. (Opcjonalnie) uruchom zmysły: `python service.py` w folderze `senses`.
+3. Otwórz aplikację Cosmos na komputerze lub telefonie.
+
+**Ścieżka B (VPS):**
+1. Otwórz aplikację Cosmos — działa zawsze, nic nie musisz włączać.
+2. Chcesz liczyć na RTX 3080? Włącz domowy komputer (Ollama + Tailscale) i przełącz
+   w Cosmosie na „Lokalnie".
+
+---
+
+# Bezpieczeństwo — krótka lista
+
+- ✅ **Zawsze** ustaw `COSMOS_PASSWORD`, jeśli serwer jest dostępny z internetu (VPS).
+- ✅ Używaj długiego, unikalnego hasła (nie tego samego co gdzie indziej).
+- ✅ Token `COSMOS_API_TOKEN` traktuj jak hasło — nie wklejaj go publicznie.
+- ✅ Tailscale = brak otwartych portów na świat (najbezpieczniej).
+- ✅ Klucze API są tylko w `.env` na serwerze — nie trafiają do przeglądarki ani do repozytorium.
+- ✅ Rób kopie zapasowe (Ustawienia → Pobierz kopię) i aktualizuj (`git pull` + restart).
 
 ---
 
@@ -290,13 +619,17 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 
 | Objaw | Co zrobić |
 |---|---|
-| `node` nie jest rozpoznawany | Zainstaluj Node.js (Krok 1) i uruchom `cmd` na nowo |
-| „Brak klucza API dla chmury NVIDIA" | Uzupełnij `NVIDIA_API_KEY` w `.env`, zrestartuj `npm start` |
+| `node` nie jest rozpoznawany | Zainstaluj Node.js (Część 1, Krok 1) i uruchom `cmd` na nowo |
+| „Brak klucza API dla chmury NVIDIA" | Uzupełnij `NVIDIA_API_KEY` w `.env` i zrestartuj serwer |
 | Strona `localhost:3000` się nie otwiera | Sprawdź, czy okno `cmd` z `npm start` nadal działa |
-| Telefon nie łączy się | Ten sam Wi-Fi? Dobry adres IP? Zapora Windows — zezwól Node.js na sieć prywatną |
-| „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses` |
+| Telefon nie łączy się (Ścieżka A) | Ten sam Wi-Fi? Dobry adres IP? Zapora Windows — zezwól Node.js na sieć prywatną |
+| Telefon nie łączy się (Ścieżka B) | Tailscale włączony na telefonie i VPS? `sudo systemctl status cosmos` pokazuje `active (running)`? |
+| Ekran logowania nie przyjmuje hasła | Sprawdź `COSMOS_PASSWORD` w `.env` na serwerze i zrestartuj (`sudo systemctl restart cosmos`) |
+| „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
+| „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses` (przy VPS ustaw `SENSES_URL`) |
+| Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
-| Chcę zacząć od zera | Zatrzymaj serwer (`Ctrl+C`), usuń folder `data`, uruchom ponownie |
+| Chcę zacząć od zera | Zatrzymaj serwer, usuń folder `data`, uruchom ponownie |
 
 Nadal problem? Otwórz `README.md` w głównym folderze — jest tam pełna dokumentacja
 techniczna każdego elementu.
