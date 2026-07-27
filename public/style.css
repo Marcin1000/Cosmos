@@ -417,7 +417,7 @@ kbd {
   padding: 14px 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  text-align: left;
+  text-align: center;
   font-size: 13.5px;
   color: var(--text-dim);
   background: var(--bg-elevated);
