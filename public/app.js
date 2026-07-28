@@ -480,6 +480,7 @@ function messageElement(m, idx = -1) {
     const done = m.done;
     const label = (m.actionType === 'zapamiętaj' || m.actionType === 'remember') ? t('remember')
       : (m.actionType === 'procedura' || m.actionType === 'procedure') ? t('learn.runProc')
+      : (m.actionType === 'urządzenie' || m.actionType === 'device') ? t('dev.action')
       : t('kb.record');
     msg.innerHTML =
       `<div class="action-card">` +
@@ -600,6 +601,15 @@ async function runAction(m, msgEl) {
   const btn = msgEl.querySelector('.act-do');
   if (btn) btn.disabled = true;
   try {
+    if (m.actionType === 'urządzenie' || m.actionType === 'device') {
+      const r = await fetch('/api/devices/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: (m.actionText || '').trim() }),
+      });
+      m.done = r.ok ? true : 'skip';
+      saveConversations(); renderMessages();
+      return;
+    }
     if (m.actionType === 'procedura' || m.actionType === 'procedure') {
       if (!window.__procedures) await loadProcedures();
       const want = (m.actionText || '').trim().toLowerCase();
@@ -2684,6 +2694,9 @@ function openSettings() {
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
   loadTrainStats();
+  loadDevices();
+  $('brief-auto').checked = Boolean(settings.briefAuto);
+  $('brief-time').value = settings.briefTime || '08:00';
   el.settingsModal.style.display = '';
 }
 
@@ -2787,6 +2800,85 @@ $('backup-download').addEventListener('click', () => {
   a.download = `cosmos-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
 });
+// ---------------- Urządzenia (smart home) ----------------
+async function loadDevices() {
+  try {
+    const { devices } = await (await fetch('/api/devices')).json();
+    const box = $('dev-list');
+    if (!devices.length) { box.innerHTML = `<div class="field-hint">${t('dev.empty')}</div>`; return; }
+    box.innerHTML = devices.map((d) =>
+      `<div class="learn-item" data-id="${d.id}">` +
+      `<div class="learn-item-main"><strong>${escapeHtml(d.name)}</strong>` +
+      `<span class="learn-item-meta mono">${d.method} ${escapeHtml(d.url)}</span></div>` +
+      `<button class="btn-ghost dev-test">${t('dev.test')}</button>` +
+      `<button class="icon-btn dev-del" title="✕">✕</button></div>`).join('');
+    box.querySelectorAll('.learn-item').forEach((item) => {
+      const id = item.dataset.id;
+      item.querySelector('.dev-test').addEventListener('click', async () => {
+        $('dev-status').textContent = t('dev.testing');
+        try {
+          const r = await fetch('/api/devices/run', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+          });
+          const d = await r.json();
+          $('dev-status').textContent = d.ok ? t('dev.ok') : t('dev.err', { e: d.reason || d.error || r.status });
+        } catch { $('dev-status').textContent = t('dev.err', { e: '?' }); }
+      });
+      item.querySelector('.dev-del').addEventListener('click', async () => {
+        await fetch('/api/devices?id=' + id, { method: 'DELETE' });
+        loadDevices();
+      });
+    });
+  } catch { /* offline */ }
+}
+$('dev-add').addEventListener('click', async () => {
+  const name = $('dev-name').value.trim();
+  const url = $('dev-url').value.trim();
+  if (!name || !url) { $('dev-status').textContent = t('dev.need'); return; }
+  try {
+    const r = await fetch('/api/devices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url, method: $('dev-method').value, body: $('dev-body').value.trim() }),
+    });
+    const d = await r.json();
+    if (!r.ok) { $('dev-status').textContent = d.error || t('dev.need'); return; }
+    $('dev-name').value = ''; $('dev-url').value = ''; $('dev-body').value = '';
+    $('dev-status').textContent = t('dev.added');
+    loadDevices();
+  } catch { $('dev-status').textContent = t('dev.err', { e: '?' }); }
+});
+
+// ---------------- Poranna odprawa ----------------
+async function runBriefing(speak) {
+  const out = $('brief-out');
+  out.style.display = ''; out.textContent = t('brief.loading');
+  try {
+    const r = await fetch('/api/briefing', { headers: { 'X-Cosmos-Lang': getLang() } });
+    const d = await r.json();
+    out.textContent = d.text || t('brief.none');
+    if (speak && d.text) speakText(d.text);
+  } catch { out.textContent = t('brief.none'); }
+}
+$('brief-now').addEventListener('click', () => runBriefing(true));
+$('brief-auto').addEventListener('change', (e) => {
+  settings.briefAuto = e.target.checked; saveSettings();
+});
+$('brief-time').addEventListener('change', (e) => {
+  settings.briefTime = e.target.value; saveSettings();
+});
+// sprawdzaj co minutę, czy nadeszła pora odprawy (gdy aplikacja jest otwarta)
+let lastBriefDay = '';
+setInterval(() => {
+  if (!settings.briefAuto) return;
+  const now = new Date();
+  const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const day = now.toDateString();
+  if (hhmm === (settings.briefTime || '08:00') && lastBriefDay !== day) {
+    lastBriefDay = day;
+    runBriefing(true);
+  }
+}, 60000);
+
 function downloadDataset(fmt) {
   const a = document.createElement('a');
   a.href = '/api/train/dataset?format=' + fmt;

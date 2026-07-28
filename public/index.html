@@ -279,6 +279,35 @@
         </div>
 
         <div class="field">
+          <span class="field-label" data-i18n="set.devices">Urządzenia (smart home)</span>
+          <span class="field-hint" data-i18n="dev.hint">Dowolne urządzenie sterowane przez HTTP (Home Assistant, Shelly, Hue, Tasmota). Cosmos może zaproponować użycie w rozmowie — wykonanie zawsze wymaga Twojego kliknięcia.</span>
+          <div class="field-row">
+            <input type="text" id="dev-name" data-i18n-ph="dev.namePh" placeholder="Nazwa, np. „światło klucz”">
+            <select id="dev-method" style="max-width:100px">
+              <option>POST</option><option>GET</option><option>PUT</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <input type="text" id="dev-url" class="mono" data-i18n-ph="dev.urlPh" placeholder="http://adres-urzadzenia/...">
+            <button class="btn-secondary" id="dev-add" data-i18n="dev.add">Dodaj</button>
+          </div>
+          <input type="text" id="dev-body" class="mono" data-i18n-ph="dev.bodyPh" placeholder='treść żądania (opcjonalnie), np. {"state":"ON"}'>
+          <div class="field-hint" id="dev-status"></div>
+          <div class="learn-list" id="dev-list"></div>
+        </div>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.briefing">Poranna odprawa</span>
+          <span class="field-hint" data-i18n="brief.hint">Pogoda, kalendarz i zaplanowane czynności streszczone i czytane na głos. Wymaga BRIEFING_LAT/BRIEFING_LON w .env (pogoda) — kalendarz opcjonalnie przez CALENDAR_ICS.</span>
+          <div class="field-row">
+            <button class="btn-secondary" id="brief-now" data-i18n="brief.now">☀ Odpraw mnie teraz</button>
+            <label class="ps-sens"><input type="checkbox" id="brief-auto"> <span data-i18n="brief.auto">Automatycznie o</span></label>
+            <input type="time" id="brief-time" value="08:00" style="max-width:120px">
+          </div>
+          <div class="briefing-box" id="brief-out" style="display:none"></div>
+        </div>
+
+        <div class="field">
           <span class="field-label" data-i18n="set.train">Dane treningowe (fine-tuning)</span>
           <span class="field-hint" id="train-stats" data-i18n="train.hint">Wyeksportuj swoje rozmowy jako zbiór JSONL do dotrenowania własnego modelu (QLoRA). Przewodnik: training/README.md.</span>
           <div class="field-row">

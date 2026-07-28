@@ -308,6 +308,42 @@ Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe
 obecność w zasięgu, ruch, dystans najbliższego obiektu. Działa równolegle
 z `watcher.py` (Kinect RGB = zwykła kamera dla YOLO). Szczegóły: `senses/README.md`.
 
+### 🏡 Analiza terenu — Cosmos Terrain (dron → pomiary)
+
+`senses/terrain.py` zamienia model 3D z `photoscan.py` w **realne pomiary** — czysta
+geometria, bez AI i bez internetu:
+
+```bash
+python senses/terrain.py selftest                     # sprawdź poprawność obliczeń
+python senses/terrain.py sun model.ply --lat 52.23 --lon 21.01 --date 2026-06-21
+python senses/terrain.py shadow model.ply --lat 52.23 --lon 21.01 --time "2026-06-15 17:30"
+python senses/terrain.py view model.ply --eye 4.5     # co widać z okna na piętrze
+python senses/terrain.py volume halda.ply             # kubatura pryzmy
+python senses/terrain.py compare styczen.ply maj.ply  # co się zmieniło
+```
+
+- **`sun`** — mapa godzin bezpośredniego słońca na każdy metr kwadratowy w danym dniu
+  (+ JSON: długość dnia, maks. wysokość słońca, **jaki % terenu ma ≥6 h** — próg dla
+  warzywnika i paneli PV). Gdzie postawić dom, taras, panele, grządki.
+- **`shadow`** — cień o konkretnej godzinie („sun scouting" przed zdjęciami).
+- **`view`** — analiza widoku: co zobaczysz z danego punktu i czy sąsiad widzi Twój taras.
+- **`volume`** / **`compare`** — kubatura hałd i wykopów, postęp budowy, erozja.
+
+Pozycja słońca liczona algorytmem NOAA (offline), zapis map PNG bez zewnętrznych
+bibliotek — wymagane tylko `numpy`. Wyniki są poprawne **tylko dla modelu w metrach
+i zorientowanego na północ** (ENU) — flagi `--scale`, `--north`, `--up` pozwalają
+doprowadzić do tego chmurę bez georeferencji.
+
+### 🏠 Urządzenia i poranna odprawa (Jarvis)
+
+- **Urządzenia** (Ustawienia → Urządzenia): dowolny sprzęt sterowany przez HTTP —
+  Home Assistant, Shelly, Hue, Tasmota. W rozmowie powiesz *„przygaś światło"*,
+  a Cosmos zaproponuje `[AKCJA: urządzenie | …]` — **wykonanie zawsze po Twoim kliknięciu**.
+- **Poranna odprawa** (Ustawienia → Poranna odprawa): pogoda (open-meteo, bez klucza API),
+  wydarzenia z kalendarza `.ics`, czekające rutyny i ostatnie zdarzenia — streszczone
+  modelem i **czytane na głos**. Ręcznie albo automatycznie o wybranej godzinie.
+  Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, opcjonalnie `CALENDAR_ICS`.
+
 ### Fotogrametria — Cosmos PhotoScan
 
 `python senses/photoscan.py <folder-ze-zdjęciami>` — copilot ocenia zestaw
@@ -414,6 +450,8 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/procedures/record/{start,stop,status}` | GET/POST | Nauka: nagrywanie procedury z ekranu (Playwright) |
 | `/api/train/dataset?format=` `/api/train/stats` | GET | Eksport danych treningowych (JSONL: chat/instrukcje) i licznik przykładów |
 | `/api/train/env` `/api/train/start` `/api/train/status` `/api/train/stop` | GET/POST | Trening w aplikacji: wykrycie wymagań, start/stop, log |
+| `/api/devices` `/api/devices/run` | GET/POST/DELETE | Urządzenia smart home (HTTP) i ich uruchamianie za zgodą |
+| `/api/briefing` | GET | Poranna odprawa: pogoda + kalendarz + zadania, streszczone |
 
 ## 💰 Koszty
 

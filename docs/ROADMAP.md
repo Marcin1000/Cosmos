@@ -121,6 +121,25 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
   systemowej poza przeglądarką (osobne narzędzia/uprawnienia).
 
+
+## ✅ Partia 8 — Teren, urządzenia i odprawa (GOTOWE)
+
+- [x] **Analiza terenu z drona** — `senses/terrain.py`: nasłonecznienie (mapa godzin słońca
+  w dniu), cień o konkretnej godzinie („sun scouting"), analiza widoku (viewshed), pomiar
+  objętości/wysokości i porównanie dwóch skanów w czasie. Pozycja słońca liczona
+  algorytmem NOAA offline; zapis PNG bez zewnętrznych bibliotek; `selftest` weryfikuje
+  astronomię, kierunki cieni i objętość.
+- [x] **Mostek do urządzeń (smart home)** — dowolny sprzęt sterowany przez HTTP
+  (Home Assistant, Shelly, Hue, Tasmota) w Ustawieniach; model może zaproponować użycie
+  przez `[AKCJA: urządzenie | nazwa]`, wykonanie zawsze za zgodą użytkownika.
+  Endpointy: `/api/devices`, `/api/devices/run`.
+- [x] **Poranna odprawa** — pogoda (open-meteo, bez klucza), kalendarz z pliku/adresu
+  `.ics`, czekające rutyny i ostatnie zdarzenia; streszczenie modelem i czytanie na głos.
+  Endpoint: `/api/briefing`. Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, `CALENDAR_ICS`.
+- [ ] **Powiadomienia push (Web Push/VAPID)** — dziś powiadomienia działają przy otwartej
+  aplikacji; tło wymaga kluczy VAPID i obsługi w service workerze.
+- [ ] **Sceny urządzeń i reguły „powiadom, gdy…"** — rozszerzenia mostka i zdarzeń.
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane

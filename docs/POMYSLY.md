@@ -51,23 +51,33 @@ Podstawa jest już w repo: `senses/photoscan.py` → COLMAP → gęsta chmura pu
 > zakazane, zgoda właściciela terenu, RODO przy nagrywaniu ludzi). Analiza jest legalna;
 > lot bywa regulowany.
 
-## 🌞 Nasłonecznienie działki — flagowy projekt 🔧
+> ✅ **Narzędzie jest już w repo:** `senses/terrain.py` — komendy `sun`, `shadow`,
+> `view`, `volume`, `compare`. Sprawdź poprawność obliczeń: `python terrain.py selftest`.
+
+## 🌞 Nasłonecznienie działki — flagowy projekt ✅
 
 **To jest realna analiza inżynierska, nie zgadywanie.** Fizyka jest po Twojej stronie:
 pozycja słońca (azymut + wysokość) jest **deterministyczna** — liczy się ją ze
 współrzędnych, daty i godziny (algorytm NOAA), offline, bez AI i bez API.
 
-**Jak to działa — cztery kroki:**
+**Jak to zrobić — dwie komendy:**
 
-1. **Skan terenu** ✅ — oblatujesz działkę Mavikiem (siatka zdjęć, ~70–80% pokrycia),
-   `photoscan.py --dense` buduje chmurę punktów **wraz z drzewami, budynkami i rzeźbą terenu**.
-2. **Współrzędne** ✅ — szerokość i długość geograficzną Cosmos odczyta z EXIF-u zdjęć
-   z drona (GPS jest w każdym pliku).
-3. **Pozycja słońca** 🔧 — dla każdej godziny każdego dnia roku liczysz azymut i wysokość
-   słońca dla tej lokalizacji.
-4. **Rzut cienia** 🔧 — chmurę punktów zamieniasz w mapę wysokości (DSM), a potem dla
-   każdego metra kwadratowego sprawdzasz, czy promień w stronę słońca jest przez coś
-   zasłonięty. Sumujesz po dniu/sezonie → **mapa godzin bezpośredniego słońca**.
+```bash
+# 1. Zbuduj model 3D z przelotu dronem (siatka zdjęć, ~70–80% pokrycia)
+python senses/photoscan.py C:\zdjecia\dzialka --dense
+
+# 2. Policz nasłonecznienie dla swojej lokalizacji i daty
+python senses/terrain.py sun C:\zdjecia\dzialka\cosmos-scan\dense\fused.ply \
+    --lat 52.23 --lon 21.01 --date 2026-06-21
+```
+
+Dostajesz mapę PNG (godziny słońca na każdy metr) + plik JSON ze statystykami:
+długość dnia, maksymalna wysokość słońca, średnia liczba godzin i **jaki procent terenu
+ma ponad 6 godzin** — to próg dla warzywnika i opłacalności paneli PV.
+
+Pod spodem: pozycja słońca liczona algorytmem NOAA (czysta astronomia, offline),
+chmura punktów zamieniana na mapę wysokości, a potem dla każdego metra i każdego
+kroku czasowego sprawdzenie, czy promień do słońca jest przez coś zasłonięty.
 
 **Co z tego realnie masz:**
 - 🏡 **Gdzie postawić dom / taras** — który narożnik ma poranne słońce, a który zachodnie
@@ -88,7 +98,7 @@ współrzędnych, daty i godziny (algorytm NOAA), offline, bez AI i bez API.
 prawdziwe cienie z tymi wyliczonymi przez model. Zgodność = masz dowód, że narzędzie działa.
 To jest ten krok, który odróżnia zabawkę od przyrządu.
 
-## 🎬 „Sun scouting" — ta sama technologia dla filmowca 🔧
+## 🎬 „Sun scouting" — ta sama technologia dla filmowca ✅
 
 Ten sam model 3D lokacji + pozycja słońca = **odpowiedź na pytanie, o której godzinie
 światło będzie tam, gdzie chcesz**:
@@ -97,20 +107,99 @@ Ten sam model 3D lokacji + pozycja słońca = **odpowiedź na pytanie, o której
 - *„O której złota godzina oświetli tę ścianę od frontu?"*
 - *„Czy w listopadzie o 14:00 ta uliczka będzie jeszcze w słońcu?"*
 
+```bash
+python senses/terrain.py shadow model.ply --lat 52.23 --lon 21.01 --time "2026-06-15 17:30"
+```
+
 Aplikacje typu Sun Seeker robią to na płaskim modelu. Ty robisz to na **swoim skanie
 prawdziwej lokacji z prawdziwymi drzewami**. To jest przewaga, której nie kupisz.
+
+## 👁 Analiza widoku — co widać, i kto widzi Ciebie ✅
+
+```bash
+python senses/terrain.py view model.ply --eye 4.5   # okno na piętrze
+```
+
+Z tego samego modelu: **co zobaczysz z okna na pierwszym piętrze**, zanim je wybudujesz.
+Odwrotnie też działa — ustaw punkt obserwacji na tarasie sąsiada i sprawdź, **czy widzi
+Twój ogród**. Do tego: gdzie postawić maszt/antenę, żeby miała czystą linię widzenia.
+
+## 📦 Objętość i zmiany w czasie ✅
+
+```bash
+python senses/terrain.py volume haldа.ply                 # kubatura pryzmy
+python senses/terrain.py compare styczen.ply czerwiec.ply # co przybyło / ubyło
+```
+
+Pomiar kubatury pryzmy kruszywa albo wykopu (realna usługa dla firm budowlanych)
+i porównanie dwóch przelotów: postęp budowy, erozja skarpy, przyrost roślinności,
+zaleganie śniegu. Dostajesz mapę zmian (zielone = przybyło, czerwone = ubyło)
+i bilans w metrach sześciennych.
 
 ## Pozostałe pomiary z drona
 
 | Pomysł | Status | O co chodzi |
 |---|---|---|
-| **Zmiany w czasie** | 🔧 | Ten sam przelot co miesiąc → porównanie: postęp budowy, erozja, przyrost roślinności, zaleganie śniegu. To „Time Machine" wyniesiona na zewnątrz |
-| **Objętość hałd** | 🔧 | Z modelu 3D liczysz kubaturę pryzmy piasku/kruszywa/ziemi. Realna usługa komercyjna |
+| **Dendrometria** | 🔧 | Z modelu 3D: wysokość drzew i średnica koron → wycena drzewostanu, ocena zagrożenia (które drzewo sięgnie dachu przy wywrocie) |
+| **Spływ wody i podtopienia** | 🔧 | Z mapy wysokości: gdzie woda spływa i gdzie się zbiera po ulewie. Kluczowe przy kupnie działki i projekcie drenażu |
+| **Zaleganie śniegu i sople** | 🔧 | Połączenie zacienienia z nachyleniem dachu → gdzie śnieg zostaje najdłużej i gdzie rosną sople |
+| **Osłona od wiatru** | 🔧 | Z modelu: gdzie jest zacisznie (taras, ogród, miejsce na nasadzenia) |
+| **Mapa hałasu** | 🔧 | Spacer po działce z telefonem/mikrofonem + zapis poziomu dźwięku → gdzie jest cicho. Bezcenne przy zakupie działki przy drodze |
+| **Zasięg Wi-Fi / LTE** | 🔧 | Ten sam spacer, tylko mierzysz sygnał → gdzie postawić access point albo wzmacniacz |
+| **Nocne niebo** | 🔧 | Długie ekspozycje + mapa zaświetlenia → gdzie ustawić teleskop albo kręcić astro-timelapse |
 | **Inwentaryzacja** | ✅🔧 | YOLO liczy drzewa, auta, panele; z fotogrametrii mierzysz wysokości |
 | **Inspekcja dachu/elewacji** | ✅ | Naucz Cosmosa (przez „Naukę") jak wygląda pęknięta dachówka czy odparzony tynk → potem tylko pokazujesz zdjęcia |
 | **Dokumentacja zabytku** | ✅ | Fotogrametria obiektu → archiwalny model 3D. Wartość rośnie z czasem |
 | **Wskaźniki roślinności** | 🔧 | ⚠️ **Uczciwie:** NDVI wymaga kanału podczerwonego (Mavic 3 **Multispectral**). Zwykłym Mavikiem policzysz indeksy z kanałów RGB (VARI, ExG) — słabsze, ale realne i publikowane |
 | **Termowizja** | ❌ | Wymaga Mavica 3T. Bez kamery termalnej nie da się — nie próbuj tego udawać |
+
+---
+
+# CZĘŚĆ II½ — Materiał filmowy i zdjęciowy: rzeczy, które robią się same
+
+**1. Auto-katalog całego materiału** ✅🔧
+YOLO przechodzi po Twoim archiwum i taguje każdy klip: czy to dron, wywiad, b-roll,
+ile osób w kadrze, jakie obiekty. Do tego transkrypcja Whisper. Efekt: **biblioteka,
+którą przeszukujesz zdaniem** — *„ujęcia z drona nad wodą, bez ludzi"* — zamiast
+klikania po folderach. Podstawa (detekcja + transkrypcja + baza wiedzy) już działa;
+brakuje wsadowego przelotu po katalogu.
+
+**2. Culling zdjęć w minutę** ✅
+`photoscan.py` **już liczy** ostrość i ekspozycję każdego zdjęcia. Puść to na sesję
+zdjęciową, nie tylko na fotogrametrię — dostajesz listę ujęć nieostrych i prześwietlonych,
+zanim otworzysz Lightrooma.
+
+**3. Timelapse budowy z powtarzalnych przelotów** 🔧
+Ten sam plan lotu co miesiąc → zdjęcia z tych samych punktów → wyrównane wideo
+postępu prac. Klient dostaje film „od wykopu do kluczy", którego nikt inny nie ma.
+
+**4. Druga para oczu do kadru** ✅💰
+Model wizyjny ocenia kompozycję Twoich ujęć (linie, balans, horyzont, światło).
+Nie po to, żeby Cię zastąpił — po to, żeby złapać to, co przeoczyłeś przy 300 kadrach.
+
+**5. Zabezpieczenie sprzętu przed wyjazdem** ✅
+Naucz go swojego sprzętu przez „Naukę", rozłóż wszystko na stole, pokaż kamerze:
+*„czego brakuje?"*. Najprostsza rzecz z tej listy i chyba najczęściej używana.
+
+---
+
+# CZĘŚĆ II¾ — Z tego da się zrobić usługę
+
+Poniższe nie są fantazją — to nisze, w których **ludzie płacą**, a Ty masz już
+i sprzęt, i narzędzia. Wszystkie opierają się na tym samym łańcuchu: przelot → model 3D
+→ analiza → raport PDF/mapa.
+
+| Usługa | Dla kogo | Dlaczego Ty |
+|---|---|---|
+| **Analiza nasłonecznienia działki** | kupujący działkę, architekci, inwestorzy | Nikt im tego nie policzy na *ich* drzewach i *ich* sąsiadach. Raport: mapy dla czerwca i grudnia + wnioski |
+| **Dobór i wycena paneli PV** | właściciele domów, instalatorzy | Instalator sprzedaje panele; Ty sprzedajesz **niezależną ocenę**, ile ten dach realnie da i co zabiera drzewo sąsiada |
+| **Dokumentacja postępu budowy** | wykonawcy, inwestorzy, banki | Comiesięczny przelot + porównanie + kubatura. Abonament, nie zlecenie jednorazowe |
+| **Pomiar hałd i wykopów** | firmy budowlane, kruszywa | `terrain.py volume` — pomiar w kilkanaście minut zamiast geodety na pół dnia |
+| **Skany 3D obiektów** | architekci, nieruchomości, konserwatorzy | Model 3D + wizualizacja; przy zabytkach wartość archiwalna rośnie z każdym rokiem |
+| **Sun scouting dla produkcji** | ekipy filmowe, fotografowie ślubni | „O której słońce wejdzie w tę uliczkę 12 sierpnia" — na skanie prawdziwej lokacji |
+
+> Zacznij od jednej: **nasłonecznienie działki**. Zrób ją najpierw dla siebie albo
+> znajomego, zbuduj z tego wzorzec raportu — i masz gotowy produkt do pokazania.
 
 ---
 
@@ -166,13 +255,30 @@ system wie, co się dzieje, i odzywa się pierwszy.
 
 **Pomysły do złożenia z tych klocków:**
 
-**1. Poranna odprawa** 🔧
-Rutyna o 8:00: Cosmos zbiera pogodę, plan dnia i statusy, streszcza i **czyta na głos**
-(Piper), gdy wchodzisz do studia. Klasyczny jarvisowy moment.
+**1. Poranna odprawa** ✅
+**Gotowe.** Ustawienia → „Poranna odprawa": Cosmos pobiera pogodę (open-meteo, bez klucza),
+wydarzenia z kalendarza (`.ics`), czekające rutyny i ostatnie zdarzenia, streszcza to
+modelem i **czyta na głos**. Możesz odpalić ręcznie albo ustawić godzinę.
+Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, opcjonalnie `CALENDAR_ICS` w `.env`.
 
-**2. Powitanie przy biurku** 🔧
+**2. Sterowanie światłem i sprzętem** ✅
+**Gotowe.** Ustawienia → „Urządzenia": dodajesz cokolwiek, co przyjmuje HTTP
+(Home Assistant, Shelly, Hue, Tasmota). Potem w rozmowie: *„przygaś światło"* →
+Cosmos proponuje `[AKCJA: urządzenie | …]`, Ty zatwierdzasz jednym kliknięciem.
+Nic nie dzieje się bez Twojej zgody.
+
+**3. Sceny: „nagrywam" / „wychodzę"** 🔧
+Kilka urządzeń naraz jednym poleceniem: *„tryb nagrywania"* = światło kluczowe,
+gaśnie górne, wyłączony dzwonek. *„Wychodzę"* = wszystko gaśnie + podsumowanie dnia.
+Mechanizm urządzeń już jest — brakuje grupowania w sceny.
+
+**4. Powitanie przy biurku** 🔧
 Kamera wykrywa, że usiadłeś → Cosmos wita się i melduje stan („zmysły online,
 2 rutyny czekają"). Krótko, bez gadulstwa.
+
+**5. Strażnik studia** 🔧
+Kamera + oś czasu: powiadom, gdy w studiu **coś zniknie albo się pojawi** pod Twoją
+nieobecność. Wykrywanie zmian już działa — brakuje reguły „powiadom, gdy…".
 
 **3. Checklista sprzętu przed wyjazdem** ✅
 Naucz go rozpoznawać *Twoje* rzeczy (obiektywy, akumulatory, filtry ND, nadajniki).
@@ -198,19 +304,30 @@ push zamiast czekania, aż zapytasz.
 
 ---
 
-# CZĘŚĆ V — Co dopisać, żeby to odblokować
+# CZĘŚĆ V — Stan modułów
 
-Uczciwa lista rzeczy, których dziś **nie ma**, uszeregowana wg tego, ile dają w stosunku
-do pracy:
+**Dopisane i przetestowane** (te pozycje były wcześniej na liście braków):
 
-| Moduł | Odblokowuje | Skala pracy |
+| Moduł | Co daje | Gdzie |
 |---|---|---|
-| **Kalkulator słońca + cieni** (DSM z chmury punktów + pozycja słońca) | Nasłonecznienie działki, sun scouting, plan PV, plan ogrodu | średnia — jeden skrypt Pythona |
-| **Porównywarka skanów w czasie** | Postęp budowy, erozja, przyrost roślinności | mała–średnia |
-| **Mostek do smart home (MQTT/HTTP)** | Prawdziwy „Jarvis" — sterowanie światłem, sprzętem | mała (wzorzec akcji już jest) |
-| **Powiadomienia push z rutyn** | Proaktywność zamiast odpytywania | mała |
-| **Pomiary z modelu 3D (objętość, wysokość)** | Usługi komercyjne dla firm | średnia |
-| **Kalendarz / poczta** | Poranna odprawa z prawdziwym planem dnia | średnia (OAuth) |
+| ✅ **Kalkulator słońca i cieni** | Nasłonecznienie działki, sun scouting, plan PV i ogrodu | `senses/terrain.py sun` / `shadow` |
+| ✅ **Analiza widoku (viewshed)** | Co widać z okna; czy sąsiad widzi taras; lokalizacja masztu | `senses/terrain.py view` |
+| ✅ **Pomiary z modelu 3D** | Kubatura pryzm i wykopów, wysokości obiektów | `senses/terrain.py volume` |
+| ✅ **Porównywarka skanów w czasie** | Postęp budowy, erozja, przyrost roślinności | `senses/terrain.py compare` |
+| ✅ **Mostek do urządzeń (HTTP)** | Sterowanie światłem i sprzętem z rozmowy, za zgodą | Ustawienia → Urządzenia |
+| ✅ **Poranna odprawa** | Pogoda + kalendarz + zadania, streszczone i czytane na głos | Ustawienia → Poranna odprawa |
+| ✅ **Kalendarz** | Wydarzenia na dziś w odprawie (przez `.ics`, bez OAuth) | `CALENDAR_ICS` w `.env` |
+
+**Nadal do zrobienia** — uczciwie, wraz z powodem:
+
+| Moduł | Odblokowuje | Dlaczego jeszcze nie |
+|---|---|---|
+| **Powiadomienia push (Web Push)** | Alerty, gdy aplikacja jest zamknięta | Wymaga kluczy VAPID i obsługi w service workerze — dziś powiadomienia działają tylko przy otwartej aplikacji |
+| **Sceny urządzeń** | „tryb nagrywania", „wychodzę" — kilka urządzeń naraz | Drobne rozszerzenie mostka: grupa zamiast pojedynczego urządzenia |
+| **Reguły „powiadom, gdy…"** | Strażnik studia, alerty ze zmian w otoczeniu | Potrzebny prosty silnik reguł na zdarzeniach |
+| **Wsadowe tagowanie archiwum** | Auto-katalog całego materiału filmowego | Detekcja i transkrypcja są — brakuje przelotu po katalogu i zapisu tagów |
+| **Poczta (OAuth)** | Odprawa z pocztą | Świadomie odłożone: OAuth + przechowywanie tokenów to poważny temat prywatnościowy; kalendarz przez `.ics` daje 80% wartości bez tego |
+| **MQTT** | Urządzenia bez HTTP API | Mostek HTTP pokrywa Home Assistant, Shelly, Hue i Tasmotę — MQTT dopiero gdy trafisz na sprzęt bez REST-a |
 
 ---
 
@@ -223,6 +340,15 @@ Nie rzucaj się na wszystko. **Trzy rzeczy na ten tydzień:**
 3. **Naucz go pięciu przedmiotów ze swojego sprzętu** i zrób jedną checklistę przed wyjazdem.
 
 **A gdy zechcesz projekt z prawdziwego zdarzenia** — bierz **nasłonecznienie działki**.
-Masz do niego wszystko oprócz jednego skryptu: drona, fotogrametrię, GPU i model 3D.
-To pomysł, który łączy Twój sprzęt, Twoje umiejętności i realną wartość — dla Ciebie,
-a gdybyś chciał, także jako usługa dla innych.
+Narzędzie jest gotowe i przetestowane; potrzebujesz tylko jednego przelotu dronem:
+
+```bash
+python senses/terrain.py selftest                  # sprawdź, że liczy poprawnie
+python senses/photoscan.py <folder-ze-zdjęciami> --dense
+python senses/terrain.py sun <...>/fused.ply --lat TWOJA --lon TWOJA --date 2026-06-21
+python senses/terrain.py sun <...>/fused.ply --lat TWOJA --lon TWOJA --date 2026-12-21
+```
+
+Dwie mapy — czerwiec i grudzień — i już widzisz o tej działce więcej niż jej właściciel.
+To pomysł, który łączy Twój sprzęt, Twoje umiejętności i realną wartość: najpierw
+dla siebie, a gdy zechcesz — jako usługa dla innych.
