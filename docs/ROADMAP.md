@@ -140,6 +140,26 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   aplikacji; tło wymaga kluczy VAPID i obsługi w service workerze.
 - [ ] **Sceny urządzeń i reguły „powiadom, gdy…"** — rozszerzenia mostka i zdarzeń.
 
+
+## ✅ Partia 9 — Samoświadomość i samodoskonalenie (GOTOWE)
+
+- [x] **Manifest zdolności** — Cosmos wie, czym jest i co REALNIE potrafi w tej chwili:
+  manifest generowany z żywego stanu (dostępne mózgi, zmysły online, klucze Studia, liczba
+  rozmów/faktów/wzorców/procedur/rutyn/urządzeń, obecność modułów terenu i treningu) jest
+  wstrzykiwany do kontekstu każdej rozmowy. Model nie obiecuje rzeczy niedostępnych —
+  wymienia je wraz z instrukcją, jak je włączyć. Endpoint: `/api/capabilities`.
+- [x] **Propozycje własnych zastosowań** — „✨ Co jeszcze możesz dla mnie zrobić?"
+  (Nauka → Pomysły): model dostaje swój manifest, profil użytkownika, tematy ostatnich
+  rozmów i zawartość bazy wiedzy, po czym proponuje konkretne, szyte na miarę zastosowania
+  wraz z krokami wdrożenia. Endpoint: `/api/suggest`.
+- [x] **Backlog usprawnień z akceptacją** — pomysły (własne i od modelu) trafiają na listę
+  ze statusami nowy → zaakceptowany → zrobione. Model może zaproponować usprawnienie
+  w rozmowie przez `[AKCJA: pomysł | opis]`, ale zapis następuje dopiero po Twoim
+  kliknięciu. Endpoint: `/api/improvements`.
+- [ ] **Automatyczne wdrażanie zaakceptowanych pomysłów** — świadomie odłożone: tworzenie
+  procedur/rutyn z opisu wymaga precyzji, której nie chcemy zgadywać; dziś akceptacja
+  oznacza wpis na listę, a wykonanie prowadzisz sam (często jednym poleceniem w czacie).
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane

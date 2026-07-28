@@ -481,6 +481,7 @@ function messageElement(m, idx = -1) {
     const label = (m.actionType === 'zapamiętaj' || m.actionType === 'remember') ? t('remember')
       : (m.actionType === 'procedura' || m.actionType === 'procedure') ? t('learn.runProc')
       : (m.actionType === 'urządzenie' || m.actionType === 'device') ? t('dev.action')
+      : (m.actionType === 'pomysł' || m.actionType === 'pomysl' || m.actionType === 'idea') ? t('imp.action')
       : t('kb.record');
     msg.innerHTML =
       `<div class="action-card">` +
@@ -601,6 +602,14 @@ async function runAction(m, msgEl) {
   const btn = msgEl.querySelector('.act-do');
   if (btn) btn.disabled = true;
   try {
+    if (m.actionType === 'pomysł' || m.actionType === 'pomysl' || m.actionType === 'idea') {
+      await fetch('/api/improvements', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: m.actionText, zrodlo: 'model' }),
+      });
+      m.done = true; saveConversations(); renderMessages();
+      return;
+    }
     if (m.actionType === 'urządzenie' || m.actionType === 'device') {
       const r = await fetch('/api/devices/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3186,8 +3195,75 @@ function switchLearnTab(tab) {
   $('learn-pane-recog').style.display = tab === 'recog' ? '' : 'none';
   $('learn-pane-proc').style.display = tab === 'proc' ? '' : 'none';
   $('learn-pane-routine').style.display = tab === 'routine' ? '' : 'none';
+  $('learn-pane-ideas').style.display = tab === 'ideas' ? '' : 'none';
+  if (tab === 'ideas') loadImprovements();
   if (tab !== 'recog') stopLearnCam();
 }
+
+// --- Pomysły / samodoskonalenie ---
+async function loadImprovements() {
+  try {
+    const { improvements } = await (await fetch('/api/improvements')).json();
+    const box = $('imp-list');
+    if (!improvements.length) { box.innerHTML = `<div class="field-hint">${t('imp.empty')}</div>`; return; }
+    const badge = { nowy: t('imp.new'), zaakceptowany: t('imp.accepted'),
+      odrzucony: t('imp.rejected'), zrobione: t('imp.done') };
+    box.innerHTML = improvements.slice().reverse().map((i) =>
+      `<div class="learn-item" data-id="${i.id}">` +
+      `<div class="learn-item-main"><strong>${escapeHtml(i.text)}</strong>` +
+      `<span class="learn-item-meta mono">${i.zrodlo === 'model' ? '✦ Cosmos' : t('imp.mine')} · ` +
+      `${badge[i.status] || i.status}</span></div>` +
+      (i.status === 'nowy'
+        ? `<button class="btn-ghost imp-ok">${t('imp.accept')}</button>`
+        : `<button class="btn-ghost imp-fin">${t('imp.markDone')}</button>`) +
+      `<button class="icon-btn imp-del" title="✕">✕</button></div>`).join('');
+    box.querySelectorAll('.learn-item').forEach((item) => {
+      const id = item.dataset.id;
+      const set = async (status) => {
+        await fetch('/api/improvements', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status }) });
+        loadImprovements();
+      };
+      item.querySelector('.imp-ok')?.addEventListener('click', () => set('zaakceptowany'));
+      item.querySelector('.imp-fin')?.addEventListener('click', () => set('zrobione'));
+      item.querySelector('.imp-del').addEventListener('click', async () => {
+        await fetch('/api/improvements?id=' + id, { method: 'DELETE' });
+        loadImprovements();
+      });
+    });
+  } catch { /* offline */ }
+}
+$('imp-suggest').addEventListener('click', async () => {
+  const out = $('imp-out');
+  out.style.display = ''; out.textContent = t('imp.thinking');
+  $('imp-suggest').disabled = true;
+  try {
+    const r = await fetch('/api/suggest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Cosmos-Lang': getLang() },
+      body: JSON.stringify({}),
+    });
+    const d = await r.json();
+    out.textContent = d.ok ? d.text : (d.message || t('imp.failed'));
+  } catch { out.textContent = t('imp.failed'); }
+  $('imp-suggest').disabled = false;
+});
+$('imp-caps').addEventListener('click', async () => {
+  const out = $('imp-out');
+  out.style.display = ''; out.textContent = t('imp.thinking');
+  try {
+    const d = await (await fetch('/api/capabilities')).json();
+    out.textContent = d.opis || t('imp.failed');
+  } catch { out.textContent = t('imp.failed'); }
+});
+$('imp-add').addEventListener('click', async () => {
+  const text = $('imp-text').value.trim();
+  if (!text) return;
+  await fetch('/api/improvements', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }) });
+  $('imp-text').value = '';
+  $('imp-status').textContent = t('imp.added');
+  loadImprovements();
+});
 
 $('learn-btn').addEventListener('click', openLearn);
 $('learn-close').addEventListener('click', closeLearn);

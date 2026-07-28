@@ -499,6 +499,7 @@
           <button class="studio-tab active" data-learn-tab="recog" data-i18n="learn.tabRecog">Rozpoznawanie</button>
           <button class="studio-tab" data-learn-tab="proc" data-i18n="learn.tabProc">Procedury</button>
           <button class="studio-tab" data-learn-tab="routine" data-i18n="learn.tabRoutine">Rutyny</button>
+          <button class="studio-tab" data-learn-tab="ideas" data-i18n="imp.tab">Pomysły</button>
         </div>
 
         <!-- Rozpoznawanie -->
@@ -576,6 +577,21 @@
           <label class="ps-sens" id="routine-auto-wrap" style="display:none"><input type="checkbox" id="routine-auto"> <span data-i18n="learn.autoMode">Tryb auto — wykonaj sam (tylko procedury do odczytu)</span></label>
           <div class="field-hint" id="learn-routine-status"></div>
           <div class="learn-list" id="routine-list"></div>
+        </div>
+        <!-- Pomysły / samodoskonalenie -->
+        <div class="learn-pane" id="learn-pane-ideas" style="display:none">
+          <p class="field-hint" data-i18n="imp.intro">Cosmos wie, czym jest i co realnie potrafi — na podstawie swojego stanu, Twojego profilu i tematów rozmów potrafi zaproponować, jak jeszcze mógłby Ci pomóc. Nic nie dzieje się bez Twojej zgody: pomysły trafiają tutaj do akceptacji.</p>
+          <div class="field-row">
+            <button class="btn-primary" id="imp-suggest" data-i18n="imp.suggest">✨ Co jeszcze możesz dla mnie zrobić?</button>
+            <button class="btn-secondary" id="imp-caps" data-i18n="imp.caps">Pokaż, co potrafisz</button>
+          </div>
+          <div class="briefing-box" id="imp-out" style="display:none"></div>
+          <div class="field-row">
+            <input type="text" id="imp-text" data-i18n-ph="imp.addPh" placeholder="Własny pomysł — co Cosmos ma umieć?">
+            <button class="btn-secondary" id="imp-add" data-i18n="imp.add">Dodaj</button>
+          </div>
+          <div class="field-hint" id="imp-status"></div>
+          <div class="learn-list" id="imp-list"></div>
         </div>
       </div>
     </div>

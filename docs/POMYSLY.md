@@ -203,7 +203,111 @@ i sprzęt, i narzędzia. Wszystkie opierają się na tym samym łańcuchu: przel
 
 ---
 
-# CZĘŚĆ III — Kierunek badawczy
+# CZĘŚĆ III — Zupełnie inne zastosowania (poza pracą i działką)
+
+Cosmos nie wie, że jest „do wideo". To pamięć, zmysły i narzędzia — działają wszędzie tam,
+gdzie masz dane i powtarzalność.
+
+## 🏠 Dom i rzeczy
+
+**Inwentarz domowy** ✅ — sfotografuj sprzęt, meble, elektronikę → baza wiedzy z opisami.
+Wartość widać dopiero, gdy jest potrzebna: zgłoszenie do ubezpieczenia, przeprowadzka,
+sprzedaż, albo zwykłe „gdzie ja to położyłem".
+
+**Gwarancje, paragony, instrukcje** ✅ — wrzuć PDF-y i zdjęcia paragonów →
+*„kiedy kończy się gwarancja pralki?"*, *„jak zresetować piec?"*. Rutyna może pilnować
+terminów kończących się gwarancji.
+
+**Auto** ✅ — przeglądy, ubezpieczenie, wymiany oleju, przebieg, spalanie. Rutyna
+przypomina o terminach, baza wiedzy trzyma historię serwisową.
+
+**Spiżarnia i lodówka** ✅🔧 — zdjęcie półki → YOLO rozpoznaje, co masz → *„co ugotuję
+z tego, co jest?"*. Naucz go swoich stałych produktów przez „Naukę".
+
+**Rośliny** ✅ — zdjęcie liścia → diagnoza problemu; harmonogram podlewania i nawożenia
+jako rutyny. Historia „co jej dolegało" w bazie wiedzy.
+
+## 💰 Pieniądze — prywatnie, bez wysyłania do cudzej aplikacji
+
+**Analiza wydatków** ✅ — wrzuć wyciągi PDF → *„na co poszło najwięcej w marcu?"*,
+*„ile wydałem na sprzęt w zeszłym roku?"*. **To jest ten przypadek, gdzie prywatność
+naprawdę robi różnicę** — Twoje finanse nie trafiają do żadnej firmy.
+
+**Terminy płatności** ✅ — rutyna sprawdza i przypomina; z automatyzacją tylko-do-odczytu
+może sprawdzić stan (płacisz zawsze Ty).
+
+**Decyzje zakupowe** ✅ — historia cen i notatek: *„czy ten obiektyw był kiedyś tańszy?"*
+
+## 🧠 Zdrowie i codzienność
+
+**Dziennik zdrowia głosem** ✅ — codziennie 20 sekund notatki głosowej (sen, samopoczucie,
+ból, leki) → transkrypcja → po miesiącach widzisz **wzorce**, których nie zauważysz na bieżąco.
+
+**Wyniki badań** ✅ — PDF-y z lat w bazie wiedzy → *„jak zmieniało się moje żelazo?"*.
+Dokumentacja w jednym miejscu, gdy idziesz do lekarza. *(To narzędzie do porządkowania
+informacji, nie do diagnozowania — decyzje zostawiaj lekarzowi.)*
+
+**Trening i technika** ✅ — kamera + MediaPipe: liczenie powtórzeń, kontrola techniki
+przysiadu czy martwego ciągu. Nagraj serię, obejrzyj z komentarzem.
+
+**Ergonomia przy biurku** 🔧 — kamera wykrywa, że się garbisz od 40 minut → delikatne
+przypomnienie. Wymaga prostej reguły na zdarzeniach.
+
+## 👨‍👩‍👧 Rodzina i pamięć
+
+**Historia mówiona** ✅ — nagraj wspomnienia rodziców i dziadków → transkrypcja Whisper →
+**przeszukiwalne archiwum rodzinne**. Za dwadzieścia lat to będzie najcenniejsza rzecz
+w całym systemie. Zacznij od jednej rozmowy przy stole.
+
+**Stare zdjęcia** ✅ — skan → upscale (Real-ESRGAN) → opis i datowanie w bazie wiedzy →
+*„pokaż zdjęcia z wakacji nad morzem"*.
+
+**Rocznik dziecka** ✅ — zdjęcia + notatki głosowe → po roku masz gotowy materiał
+na album albo film, którego nikt nie musiał świadomie „prowadzić".
+
+## 📚 Nauka i rozwój
+
+**Język obcy** ✅ — rozmowa głosem z korektą; Cosmos zapamiętuje Twoje **powtarzające się
+błędy** i wraca do nich. To coś, czego aplikacja z fiszkami nie zrobi.
+
+**Notatki z książek i kursów** ✅ — zdjęcia stron albo dyktowane wnioski → baza wiedzy →
+*„co czytałem o zarządzaniu ryzykiem?"*. Po roku masz własną encyklopedię tego,
+przez co przeszedłeś.
+
+**Aktywne przypominanie** 🔧 — z materiałów w bazie Cosmos układa pytania sprawdzające
+i zadaje je w rutynie. Nauka oparta na przypominaniu, nie na czytaniu.
+
+## 🤝 Praca z ludźmi
+
+**Przygotowanie do spotkania** ✅ — *„z kim się dziś spotykam i o czym rozmawialiśmy
+ostatnio?"* — z bazy wiedzy i notatek. Wchodzisz przygotowany bez grzebania w mailach.
+
+**Notatki ze spotkań** ✅ — nagranie → transkrypcja → streszczenie → lista zadań.
+
+**Lekki CRM** ✅ — klienci, historia współpracy, follow-upy jako rutyny. Bez abonamentu
+i bez oddawania listy klientów cudzemu serwerowi.
+
+## 🌿 Ciekawe i nietypowe
+
+**Karmnik z rozpoznawaniem ptaków** ✅ — kamera + YOLO → jakie gatunki, o której,
+jak zmienia się przez rok. Prawdziwa nauka obywatelska na własnym balkonie.
+
+**Kto był pod domem** ✅ — kamera + oś czasu: wykrycie zmian pod nieobecność.
+
+**Katalog kolekcji** ✅ — płyty, książki, klocki, narzędzia: kamera + „Nauka" →
+przeszukiwalny katalog bez wpisywania niczego ręcznie.
+
+**Pamięć o bliskich** ✅ — preferencje, rozmiary, marzenia rzucone mimochodem →
+rutyna przed świętami i urodzinami przypomina i podpowiada.
+
+**Podróże** ✅ — dokumenty i rezerwacje w bazie wiedzy, checklisty jako procedury,
+*„co pakuję na tydzień w góry zimą?"* z pamięcią poprzednich wyjazdów.
+
+**Gotowanie** ✅ — zdjęcia przepisów z książek → baza → *„coś z kurczaka do 30 minut"*.
+
+---
+
+# CZĘŚĆ IV — Kierunek badawczy
 
 Rzeczy, w których jesteś **badaczem**, a nie użytkownikiem. Wszystkie mają wspólną cechę:
 mierzalny wynik.
@@ -240,7 +344,7 @@ gdzie się sypie (połysk, ciemność, cienkie elementy).
 
 ---
 
-# CZĘŚĆ IV — Jarvis: obecność, nie czat
+# CZĘŚĆ V — Jarvis: obecność, nie czat
 
 Różnica między „mam asystenta AI" a „mam Jarvisa" polega na **inicjatywie i obecności** —
 system wie, co się dzieje, i odzywa się pierwszy.
@@ -304,7 +408,7 @@ push zamiast czekania, aż zapytasz.
 
 ---
 
-# CZĘŚĆ V — Stan modułów
+# CZĘŚĆ VI — Stan modułów
 
 **Dopisane i przetestowane** (te pozycje były wcześniej na liście braków):
 

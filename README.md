@@ -334,6 +334,25 @@ bibliotek — wymagane tylko `numpy`. Wyniki są poprawne **tylko dla modelu w m
 i zorientowanego na północ** (ENU) — flagi `--scale`, `--north`, `--up` pozwalają
 doprowadzić do tego chmurę bez georeferencji.
 
+### 🧭 Samoświadomość — Cosmos wie, czym jest i co potrafi
+
+Do kontekstu każdej rozmowy trafia **manifest zdolności** budowany z żywego stanu systemu:
+które mózgi są gotowe, czy zmysły są online, jakie silniki Studia masz opłacone, ile masz
+rozmów, faktów, wzorców, procedur, rutyn i urządzeń, czy są moduły terenu i treningu.
+Dzięki temu Cosmos **nie obiecuje rzeczy, których nie ma** — wymienia je i mówi, jak je
+włączyć („wideo Seedance — ustaw SEEDANCE_API_KEY").
+
+**Nauka → Pomysły** to jego własna inicjatywa, zawsze za Twoją zgodą:
+- **„✨ Co jeszcze możesz dla mnie zrobić?"** — model dostaje swój manifest, Twój profil,
+  tematy ostatnich rozmów i zawartość bazy wiedzy, po czym proponuje konkretne
+  zastosowania **szyte pod Ciebie**, z krokami wdrożenia.
+- **„Pokaż, co potrafisz"** — pełny, uczciwy stan systemu w jednym miejscu.
+- **Backlog usprawnień** — pomysły (Twoje i jego) ze statusami *nowy → zaakceptowany →
+  zrobione*. W rozmowie model może zaproponować `[AKCJA: pomysł | …]`, ale zapis następuje
+  dopiero po Twoim kliknięciu.
+
+Endpointy: `/api/capabilities`, `/api/suggest`, `/api/improvements`.
+
 ### 🏠 Urządzenia i poranna odprawa (Jarvis)
 
 - **Urządzenia** (Ustawienia → Urządzenia): dowolny sprzęt sterowany przez HTTP —
@@ -452,6 +471,9 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/train/env` `/api/train/start` `/api/train/status` `/api/train/stop` | GET/POST | Trening w aplikacji: wykrycie wymagań, start/stop, log |
 | `/api/devices` `/api/devices/run` | GET/POST/DELETE | Urządzenia smart home (HTTP) i ich uruchamianie za zgodą |
 | `/api/briefing` | GET | Poranna odprawa: pogoda + kalendarz + zadania, streszczone |
+| `/api/capabilities` | GET | Manifest zdolności — czym Cosmos jest i co realnie potrafi teraz |
+| `/api/suggest` | POST | Propozycje zastosowań szyte pod użytkownika (z manifestu + profilu) |
+| `/api/improvements` | GET/POST/PUT/DELETE | Backlog usprawnień z akceptacją |
 
 ## 💰 Koszty
 
