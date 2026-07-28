@@ -17,6 +17,12 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 > Dalej: instalacja jako aplikacja (Windows/Android/iOS/macOS), zmysły, Cursor,
 > przegląd funkcji i rozwiązywanie problemów.
 >
+> ### 💡 Masz już Cosmosa i szukasz zastosowań?
+> **[docs/POMYSLY.md](docs/POMYSLY.md)** — pomysły od praktycznych (archiwum wideo,
+> checklista sprzętu) przez **pomiary z drona** (nasłonecznienie działki, sun scouting,
+> zmiany w czasie) po projekty badawcze i kierunek „Jarvis". Każdy pomysł oznaczony:
+> ✅ działa dziś / 🔧 wymaga dopisania / 💰 kosztuje.
+>
 > Poniżej znajduje się dokumentacja techniczna każdego elementu.
 
 ## ✨ Funkcje
