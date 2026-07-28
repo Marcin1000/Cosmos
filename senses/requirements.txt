@@ -36,3 +36,10 @@ numpy
 
 # GŁĘBIA — Kinect 360 przez libfreenect (kinect_watcher.py):
 # moduł "freenect" instaluje się razem z libfreenect — patrz senses/README.md
+
+# BADANIA I SPRZĘT — nowe moduły (numpy wystarcza do większości):
+#   terrain.py, flightplan.py, pantilt.py  — bez dodatkowych zależności
+#   soundloc.py  — nasłuch na żywo wymaga: sounddevice
+#   lowlight.py  — odczyt JPG wymaga: opencv-python (PNG czyta sam)
+#   tether.py    — wymaga programu gphoto2 (nie pakietu pip)
+sounddevice

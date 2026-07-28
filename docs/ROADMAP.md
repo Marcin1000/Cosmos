@@ -160,6 +160,29 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
   procedur/rutyn z opisu wymaga precyzji, której nie chcemy zgadywać; dziś akceptacja
   oznacza wpis na listę, a wykonanie prowadzisz sam (często jednym poleceniem w czacie).
 
+
+## ✅ Partia 10 — Narzędzia badawcze i sprzęt (GOTOWE)
+
+- [x] **Walidacja nasłonecznienia** — `terrain.py validate`: porównanie mapy z pomiarem
+  luksomierza, procent zgodności i oszacowanie światła rozproszonego z nieba.
+- [x] **Komfort termiczny** — `terrain.py comfort`: nasłonecznienie + osłona od wiatru
+  (model osłony liczony jak cień, ale „światłem" jest wiatr), osobne kryteria dla lata i zimy.
+- [x] **Słuch przestrzenny** — `senses/soundloc.py`: kierunek źródła dźwięku z macierzy
+  4 mikrofonów Kinecta (GCC-PHAT z ograniczeniem pasma i nadpróbkowaniem korelacji).
+  Samotest odtwarza zadane kierunki z błędem 0,0° także przy SNR 10 dB.
+- [x] **Planer lotu** — `senses/flightplan.py`: GSD, kadr, liczba zdjęć, czas i baterie;
+  tryb `matrix` generuje macierz eksperymentu wysokość × pokrycie.
+- [x] **Granica widzenia** — `senses/lowlight.py`: krzywa wykrywalności w funkcji luksów,
+  pomiar jasności i szumu; `synth` generuje serię testową z szumem fotonowym.
+- [x] **Głowica pan/tilt** — `senses/pantilt.py`: wzorce ruchu (gigapanorama wężykiem,
+  motion timelapse, śledzenie obiektu z YOLO, skan 360°) + backendy sim/serial.
+- [x] **Tethering aparatu** — `senses/tether.py`: focus stacking, bracketing HDR,
+  zdjęcie wyzwalane zdarzeniem percepcji; przez gPhoto2, z jasnym komunikatem przy braku.
+- [x] **Protokoły badawcze** — `docs/BADANIA.md`: dla każdego eksperymentu procedura,
+  kryterium sukcesu i sposób zapisu wyników.
+- [ ] **Backend `ronin`** — wymaga oficjalnego SDK DJI, którego nie można dołączyć do
+  repozytorium; wzorce ruchu i punkt wejścia są gotowe, brakuje samego połączenia.
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane

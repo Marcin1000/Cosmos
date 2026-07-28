@@ -528,6 +528,126 @@ def cmd_view(args) -> None:
     send_event(f"analiza widoku: z wysokości {args.eye} m widać {pct:.0f}% obszaru")
 
 
+def cmd_validate(args) -> None:
+    """Porównanie przewidywań modelu z pomiarem czujnika światła (telefon = luksomierz).
+
+    Plik CSV: czas,wiersz,kolumna,lux   (czas jako 'RRRR-MM-DD GG:MM' UTC albo 'GG:MM')
+    Nagłówek opcjonalny. To jest eksperyment, który zamienia ładną mapę w dowód.
+    """
+    print("\n✦ Cosmos Terrain — walidacja modelu czujnikiem światła")
+    rows = []
+    for raw in Path(args.readings).read_text(encoding="utf-8").splitlines():
+        raw = raw.strip()
+        if not raw or raw.lower().startswith(("czas", "time", "#")):
+            continue
+        parts = [c.strip() for c in raw.replace(";", ",").split(",")]
+        if len(parts) < 4:
+            continue
+        stamp, r, c, lux = parts[0], parts[1], parts[2], parts[3]
+        when = (datetime.strptime(stamp, "%Y-%m-%d %H:%M") if len(stamp) > 5
+                else datetime.strptime(f"{args.date} {stamp}", "%Y-%m-%d %H:%M"))
+        rows.append((when.replace(tzinfo=timezone.utc), int(r), int(c), float(lux)))
+    if not rows:
+        sys.exit("  ✗ Brak poprawnych pomiarów w pliku.")
+    print(f"  Wczytano pomiarów: {len(rows)}")
+
+    dsm = build_dsm(args)
+    lit_vals, shade_vals, agree = [], [], 0
+    detail = []
+    for when, r, c, lux in rows:
+        az, el = solar_position(args.lat, args.lon, when)
+        if el <= 0:
+            continue
+        lit = sun_lit(dsm, az, el, args.max_dist)
+        r = max(0, min(dsm.shape[0] - 1, r))
+        c = max(0, min(dsm.shape[1] - 1, c))
+        pred_sun = bool(lit[r, c])
+        meas_sun = lux >= args.threshold
+        if pred_sun == meas_sun:
+            agree += 1
+        (lit_vals if meas_sun else shade_vals).append(lux)
+        detail.append((when.strftime("%H:%M"), r, c, lux, pred_sun, meas_sun))
+
+    n = len(detail)
+    if not n:
+        sys.exit("  ✗ Wszystkie pomiary są sprzed wschodu / po zachodzie słońca.")
+    acc = 100.0 * agree / n
+    print(f"\n  Zgodność modelu z pomiarem: {acc:.1f}%  ({agree}/{n} punktów)")
+    if shade_vals:
+        diffuse = sum(shade_vals) / len(shade_vals)
+        print(f"  Średnie światło w cieniu:   {diffuse:.0f} lx  ← to jest światło rozproszone z nieba")
+        if lit_vals:
+            direct = sum(lit_vals) / len(lit_vals)
+            share = 100.0 * diffuse / direct if direct else 0
+            print(f"  Średnie światło w słońcu:   {direct:.0f} lx")
+            print(f"  Udział rozproszonego:       {share:.0f}% wartości pełnego słońca")
+            print("\n  Wniosek: model liczy TYLKO światło bezpośrednie. Miejsca oznaczone jako")
+            print(f"  zacienione i tak dostają około {diffuse:.0f} lx — przy planowaniu ogrodu czy")
+            print("  paneli warto to doliczyć.")
+    print("\n  Rozbieżności (model ≠ pomiar):")
+    wrong = [d for d in detail if d[4] != d[5]]
+    for t, r, c, lux, p, m in wrong[:10]:
+        print(f"    {t}  ({r},{c})  {lux:>7.0f} lx  model={'słońce' if p else 'cień'}, "
+              f"pomiar={'słońce' if m else 'cień'}")
+    if not wrong:
+        print("    brak — model zgadza się z rzeczywistością we wszystkich punktach")
+    send_event(f"walidacja nasłonecznienia: zgodność {acc:.0f}% na {n} pomiarach")
+
+
+def wind_shelter(dsm: DSM, wind_from: float, max_dist: float = 100.0) -> np.ndarray:
+    """0 = całkowicie wystawione na wiatr, 1 = w pełni osłonięte.
+    Liczone jak cień, tylko „światłem" jest wiatr wiejący z zadanego kierunku."""
+    az = math.radians(wind_from)
+    de, dn = math.sin(az), math.cos(az)
+    steps = max(1, int(max_dist / dsm.cell))
+    shelter = np.zeros(dsm.shape, dtype=np.float32)
+    for k in range(1, steps + 1):
+        d = k * dsm.cell
+        dr = int(round(k * dn))
+        dc = int(round(-k * de))
+        if dr == 0 and dc == 0:
+            continue
+        neigh = shift2d(dsm.grid, dr, dc, -np.inf)
+        # przeszkoda osłania tym lepiej, im wyższa i bliższa (kąt osłony)
+        ang = np.arctan2(np.maximum(neigh - dsm.grid, 0), d)
+        shelter = np.maximum(shelter, (ang / (math.pi / 2)).astype(np.float32))
+    return np.clip(shelter, 0, 1)
+
+
+def cmd_comfort(args) -> None:
+    """Gdzie będzie przyjemnie: nasłonecznienie + osłona od wiatru, bez kamery termalnej."""
+    print(f"\n✦ Cosmos Terrain — komfort ({args.season}, wiatr z {args.wind}°)")
+    dsm = build_dsm(args)
+    day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    hours, meta = insolation(dsm, args.lat, args.lon, day, args.step, args.max_dist)
+    shelter = wind_shelter(dsm, args.wind, min(args.max_dist, 100.0))
+
+    sun_n = hours / max(1e-6, float(hours.max()))
+    if args.season == "zima":
+        # zimą chcemy słońca I osłony od wiatru
+        score = 0.6 * sun_n + 0.4 * shelter
+        opis = "ciepło = dużo słońca + zacisznie"
+    else:
+        # latem chcemy cienia, ale lekkiego przewiewu
+        score = 0.6 * (1 - sun_n) + 0.4 * (1 - shelter)
+        opis = "chłodno = cień + przewiew"
+
+    out = Path(args.out or Path(args.cloud).with_name("naslonecznienie"))
+    out.mkdir(parents=True, exist_ok=True)
+    save_map(out / f"komfort-{args.season}.png", score, 0, 1)
+    save_map(out / "oslona-od-wiatru.png", shelter, 0, 1)
+    best = np.unravel_index(int(np.argmax(score)), score.shape)
+    print(f"  Kryterium: {opis}")
+    print(f"  Średnia ocena komfortu: {float(score.mean()):.2f} (0–1)")
+    print(f"  Najlepsze miejsce: wiersz {best[0]}, kolumna {best[1]} "
+          f"(słońce {float(hours[best]):.1f} h, osłona {float(shelter[best]):.2f})")
+    print(f"  Powierzchnia dobra (≥0,7): {float((score >= 0.7).mean()) * 100:.1f}%")
+    print(f"\n  ✓ Mapy: {out}")
+    print("  Zwaliduj zwykłym termometrem — postaw go w miejscu najlepszym i najgorszym.")
+    send_event(f"analiza komfortu ({args.season}): najlepsze miejsce ma "
+               f"{float(hours[best]):.1f} h słońca i osłonę {float(shelter[best]):.2f}")
+
+
 def cmd_volume(args) -> None:
     print("\n✦ Cosmos Terrain — objętość i wysokości")
     dsm = build_dsm(args)
@@ -641,12 +761,22 @@ def cmd_selftest(_args) -> None:
     print(f"  5. Objętość bryły 10×10×2 m: {vol:.1f} m³ (oczekiwane 200.0)")
     ok &= abs(vol - 200.0) < 0.01
 
-    # 6) Zapis PNG
+    # 6) Osłona od wiatru: ściana od zachodu osłania to, co na wschód od niej
+    grid = np.zeros((41, 41))
+    grid[:, 20] = 8.0                          # ściana z północy na południe
+    dsm = DSM(grid, 1.0, 0.0, 41.0)
+    sh = wind_shelter(dsm, wind_from=270.0, max_dist=30.0)   # wiatr z zachodu
+    lee, windward = sh[20, 25], sh[20, 15]     # za ścianą (wschód) / przed nią (zachód)
+    print(f"  6. Wiatr z zachodu: osłona za ścianą={lee:.2f}, przed ścianą={windward:.2f} "
+          f"(oczekiwane: wysoka / zerowa)")
+    ok &= lee > 0.3 and windward < 0.05
+
+    # 7) Zapis PNG
     tmp = Path("_terrain_selftest.png")
     save_map(tmp, np.linspace(0, 1, 64).reshape(8, 8), 0, 1)
     good = tmp.exists() and tmp.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     tmp.unlink(missing_ok=True)
-    print(f"  6. Zapis PNG: {'OK' if good else 'BŁĄD'}")
+    print(f"  7. Zapis PNG: {'OK' if good else 'BŁĄD'}")
     ok &= good
 
     print("\n  " + ("✓ Wszystkie testy przeszły." if ok else "✗ Któryś test nie przeszedł."))
@@ -701,6 +831,27 @@ def main() -> None:
     p.add_argument("cloud_b", help="drugi (nowszy) plik .ply")
     p.add_argument("--threshold", type=float, default=0.2, help="próg istotnej zmiany w metrach")
     p.set_defaults(func=cmd_compare)
+
+    p = sub.add_parser("validate", help="porównaj model z pomiarem czujnika światła")
+    common(p)
+    p.add_argument("readings", help="plik CSV: czas,wiersz,kolumna,lux")
+    p.add_argument("--lat", type=float, required=True)
+    p.add_argument("--lon", type=float, required=True)
+    p.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"),
+                   help="dzień pomiarów, gdy w CSV są same godziny")
+    p.add_argument("--threshold", type=float, default=15000.0,
+                   help="próg lx uznawany za pełne słońce (15000)")
+    p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser("comfort", help="gdzie będzie przyjemnie (słońce + osłona od wiatru)")
+    common(p)
+    p.add_argument("--lat", type=float, required=True)
+    p.add_argument("--lon", type=float, required=True)
+    p.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"))
+    p.add_argument("--step", type=int, default=20)
+    p.add_argument("--wind", type=float, default=270.0, help="kierunek, z którego wieje (270 = zachód)")
+    p.add_argument("--season", choices=["zima", "lato"], default="lato")
+    p.set_defaults(func=cmd_comfort)
 
     p = sub.add_parser("selftest", help="sprawdź poprawność obliczeń (bez plików)")
     p.set_defaults(func=cmd_selftest)

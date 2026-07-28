@@ -18,6 +18,10 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 > przegląd funkcji i rozwiązywanie problemów.
 >
 > ### 💡 Masz już Cosmosa i szukasz zastosowań?
+> **[docs/BADANIA.md](docs/BADANIA.md)** — sześć protokołów badawczych z mierzalnym
+> wynikiem (walidacja nasłonecznienia, krzywa fotogrametrii, granica widzenia kamer,
+> słuch przestrzenny, macierz lotu, komfort termiczny).
+>
 > **[docs/POMYSLY.md](docs/POMYSLY.md)** — pomysły od praktycznych (archiwum wideo,
 > checklista sprzętu) przez **pomiary z drona** (nasłonecznienie działki, sun scouting,
 > zmiany w czasie) po projekty badawcze i kierunek „Jarvis". Każdy pomysł oznaczony:
