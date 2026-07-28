@@ -1574,6 +1574,20 @@ kbd {
   background: var(--bg-input);
 }
 
+/* Poranna odprawa */
+.briefing-box {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+
 /* Trening — „Dotrenuj" */
 .train-run { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
 .train-log {

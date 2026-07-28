@@ -81,6 +81,100 @@ a jeśli w PATH jest **COLMAP** (https://colmap.github.io, wersja CUDA dla RTX),
 buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie —
 możesz zapytać w czacie „jak poszedł skan?".
 
+
+## Słowo aktywujące — „Hej, Kosmos" w tle
+
+`wake_listener.py` nasłuchuje mikrofonu **nawet przy zamkniętej przeglądarce** i po
+wykryciu słowa aktywującego wysyła zdarzenie do Cosmosa. Tryb głosowy w przeglądarce
+(Web Speech) działa tylko przy otwartej karcie — ten moduł zdejmuje to ograniczenie.
+
+```bash
+pip install openwakeword sounddevice numpy requests
+python wake_listener.py
+```
+
+Domyślnie używa gotowych modeli openWakeWord; własne „Hej Kosmos" trzeba wytrenować
+(instrukcja w nagłówku pliku).
+
+## Analiza terenu — Cosmos Terrain
+
+`terrain.py` zamienia model 3D z PhotoScana w pomiary (tylko numpy, zapis PNG własny):
+
+```bash
+python terrain.py selftest                                   # sprawdź poprawność obliczeń
+python terrain.py sun model.ply --lat 52.23 --lon 21.01 --date 2026-06-21
+python terrain.py shadow model.ply --lat .. --lon .. --time "2026-06-15 17:30"
+python terrain.py view model.ply --eye 4.5                   # co widać z okna
+python terrain.py volume halda.ply                           # kubatura
+python terrain.py compare styczen.ply maj.ply                # zmiany w czasie
+python terrain.py comfort model.ply --lat .. --lon .. --wind 270 --season lato
+python terrain.py validate model.ply pomiary.csv --lat .. --lon ..
+```
+
+Wyniki mają sens **tylko dla modelu w metrach i zorientowanego na północ** (ENU).
+Dla chmur bez georeferencji użyj `--scale`, `--north`, `--up`.
+
+## Słuch przestrzenny — macierz mikrofonów Kinecta
+
+`soundloc.py` liczy kierunek źródła dźwięku z 4 mikrofonów (GCC-PHAT + TDOA,
+z ograniczeniem pasma i nadpróbkowaniem korelacji — bez tego przy kilkucentymetrowych
+odstępach mikrofonów wynik jest bezużyteczny).
+
+```bash
+python soundloc.py --selftest        # odtwarza zadane kierunki na syntetyku
+python soundloc.py --wav nagranie.wav
+python soundloc.py --listen          # nasłuch (wymaga: pip install sounddevice)
+```
+
+## Planer lotu — Cosmos FlightPlan
+
+`flightplan.py` liczy parametry przelotu z optyki (bez zależności):
+
+```bash
+python flightplan.py plan --altitude 50 --width 120 --length 80
+python flightplan.py target --gsd 2.0        # jaka wysokość dla 2 cm/px
+python flightplan.py matrix                  # macierz eksperymentu
+```
+
+## Granica widzenia — Cosmos LowLight
+
+`lowlight.py` mierzy, przy jakim świetle detekcja przestaje działać:
+
+```bash
+python lowlight.py synth -o test             # seria testowa z szumem fotonowym
+python lowlight.py measure folder --csv lux.csv
+```
+
+## Głowica pan/tilt — Ronin-S i inne
+
+`pantilt.py` generuje wzorce ruchu i wysyła je do sterownika:
+
+```bash
+python pantilt.py selftest
+python pantilt.py gigapano --span-h 180 --span-v 60 --fov-h 30 --fov-v 20
+python pantilt.py scan --tilts -15,0,15      # skan wnętrza do fotogrametrii
+```
+
+Backendy: `sim` (podgląd, domyślny), `serial` (własny sterownik, np. Arduino/ESP),
+`ronin` — **wymaga oficjalnego SDK DJI**, którego nie wolno dołączyć do repozytorium;
+wzorce ruchu i punkt wejścia (`Head.goto`) są gotowe do podpięcia.
+
+## Sterowanie aparatem — Cosmos Tether
+
+`tether.py` steruje Canonem R6 II (i innymi) przez gPhoto2:
+
+```bash
+python tether.py selftest                    # logika bez aparatu
+python tether.py info                        # wykryj aparat
+python tether.py stack --frames 12           # focus stacking (makro)
+python tether.py bracket --frames 5          # HDR
+python tether.py watch --trigger ptak        # zdjęcie na zdarzenie percepcji
+```
+
+Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
+
+> Protokoły badawcze wykorzystujące te narzędzia: **[../docs/BADANIA.md](../docs/BADANIA.md)**
+
 ## Endpointy
 
 | Endpoint | Wejście | Wyjście |

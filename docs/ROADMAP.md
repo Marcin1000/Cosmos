@@ -121,6 +121,68 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
 - [ ] **Automatyzacja aplikacji desktop** — świadomie odłożone: wymaga natywnej automatyzacji
   systemowej poza przeglądarką (osobne narzędzia/uprawnienia).
 
+
+## ✅ Partia 8 — Teren, urządzenia i odprawa (GOTOWE)
+
+- [x] **Analiza terenu z drona** — `senses/terrain.py`: nasłonecznienie (mapa godzin słońca
+  w dniu), cień o konkretnej godzinie („sun scouting"), analiza widoku (viewshed), pomiar
+  objętości/wysokości i porównanie dwóch skanów w czasie. Pozycja słońca liczona
+  algorytmem NOAA offline; zapis PNG bez zewnętrznych bibliotek; `selftest` weryfikuje
+  astronomię, kierunki cieni i objętość.
+- [x] **Mostek do urządzeń (smart home)** — dowolny sprzęt sterowany przez HTTP
+  (Home Assistant, Shelly, Hue, Tasmota) w Ustawieniach; model może zaproponować użycie
+  przez `[AKCJA: urządzenie | nazwa]`, wykonanie zawsze za zgodą użytkownika.
+  Endpointy: `/api/devices`, `/api/devices/run`.
+- [x] **Poranna odprawa** — pogoda (open-meteo, bez klucza), kalendarz z pliku/adresu
+  `.ics`, czekające rutyny i ostatnie zdarzenia; streszczenie modelem i czytanie na głos.
+  Endpoint: `/api/briefing`. Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, `CALENDAR_ICS`.
+- [ ] **Powiadomienia push (Web Push/VAPID)** — dziś powiadomienia działają przy otwartej
+  aplikacji; tło wymaga kluczy VAPID i obsługi w service workerze.
+- [ ] **Sceny urządzeń i reguły „powiadom, gdy…"** — rozszerzenia mostka i zdarzeń.
+
+
+## ✅ Partia 9 — Samoświadomość i samodoskonalenie (GOTOWE)
+
+- [x] **Manifest zdolności** — Cosmos wie, czym jest i co REALNIE potrafi w tej chwili:
+  manifest generowany z żywego stanu (dostępne mózgi, zmysły online, klucze Studia, liczba
+  rozmów/faktów/wzorców/procedur/rutyn/urządzeń, obecność modułów terenu i treningu) jest
+  wstrzykiwany do kontekstu każdej rozmowy. Model nie obiecuje rzeczy niedostępnych —
+  wymienia je wraz z instrukcją, jak je włączyć. Endpoint: `/api/capabilities`.
+- [x] **Propozycje własnych zastosowań** — „✨ Co jeszcze możesz dla mnie zrobić?"
+  (Nauka → Pomysły): model dostaje swój manifest, profil użytkownika, tematy ostatnich
+  rozmów i zawartość bazy wiedzy, po czym proponuje konkretne, szyte na miarę zastosowania
+  wraz z krokami wdrożenia. Endpoint: `/api/suggest`.
+- [x] **Backlog usprawnień z akceptacją** — pomysły (własne i od modelu) trafiają na listę
+  ze statusami nowy → zaakceptowany → zrobione. Model może zaproponować usprawnienie
+  w rozmowie przez `[AKCJA: pomysł | opis]`, ale zapis następuje dopiero po Twoim
+  kliknięciu. Endpoint: `/api/improvements`.
+- [ ] **Automatyczne wdrażanie zaakceptowanych pomysłów** — świadomie odłożone: tworzenie
+  procedur/rutyn z opisu wymaga precyzji, której nie chcemy zgadywać; dziś akceptacja
+  oznacza wpis na listę, a wykonanie prowadzisz sam (często jednym poleceniem w czacie).
+
+
+## ✅ Partia 10 — Narzędzia badawcze i sprzęt (GOTOWE)
+
+- [x] **Walidacja nasłonecznienia** — `terrain.py validate`: porównanie mapy z pomiarem
+  luksomierza, procent zgodności i oszacowanie światła rozproszonego z nieba.
+- [x] **Komfort termiczny** — `terrain.py comfort`: nasłonecznienie + osłona od wiatru
+  (model osłony liczony jak cień, ale „światłem" jest wiatr), osobne kryteria dla lata i zimy.
+- [x] **Słuch przestrzenny** — `senses/soundloc.py`: kierunek źródła dźwięku z macierzy
+  4 mikrofonów Kinecta (GCC-PHAT z ograniczeniem pasma i nadpróbkowaniem korelacji).
+  Samotest odtwarza zadane kierunki z błędem 0,0° także przy SNR 10 dB.
+- [x] **Planer lotu** — `senses/flightplan.py`: GSD, kadr, liczba zdjęć, czas i baterie;
+  tryb `matrix` generuje macierz eksperymentu wysokość × pokrycie.
+- [x] **Granica widzenia** — `senses/lowlight.py`: krzywa wykrywalności w funkcji luksów,
+  pomiar jasności i szumu; `synth` generuje serię testową z szumem fotonowym.
+- [x] **Głowica pan/tilt** — `senses/pantilt.py`: wzorce ruchu (gigapanorama wężykiem,
+  motion timelapse, śledzenie obiektu z YOLO, skan 360°) + backendy sim/serial.
+- [x] **Tethering aparatu** — `senses/tether.py`: focus stacking, bracketing HDR,
+  zdjęcie wyzwalane zdarzeniem percepcji; przez gPhoto2, z jasnym komunikatem przy braku.
+- [x] **Protokoły badawcze** — `docs/BADANIA.md`: dla każdego eksperymentu procedura,
+  kryterium sukcesu i sposób zapisu wyników.
+- [ ] **Backend `ronin`** — wymaga oficjalnego SDK DJI, którego nie można dołączyć do
+  repozytorium; wzorce ruchu i punkt wejścia są gotowe, brakuje samego połączenia.
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane

@@ -17,6 +17,16 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 > Dalej: instalacja jako aplikacja (Windows/Android/iOS/macOS), zmysły, Cursor,
 > przegląd funkcji i rozwiązywanie problemów.
 >
+> ### 💡 Masz już Cosmosa i szukasz zastosowań?
+> **[docs/BADANIA.md](docs/BADANIA.md)** — sześć protokołów badawczych z mierzalnym
+> wynikiem (walidacja nasłonecznienia, krzywa fotogrametrii, granica widzenia kamer,
+> słuch przestrzenny, macierz lotu, komfort termiczny).
+>
+> **[docs/POMYSLY.md](docs/POMYSLY.md)** — pomysły od praktycznych (archiwum wideo,
+> checklista sprzętu) przez **pomiary z drona** (nasłonecznienie działki, sun scouting,
+> zmiany w czasie) po projekty badawcze i kierunek „Jarvis". Każdy pomysł oznaczony:
+> ✅ działa dziś / 🔧 wymaga dopisania / 💰 kosztuje.
+>
 > Poniżej znajduje się dokumentacja techniczna każdego elementu.
 
 ## ✨ Funkcje
@@ -302,6 +312,61 @@ Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe
 obecność w zasięgu, ruch, dystans najbliższego obiektu. Działa równolegle
 z `watcher.py` (Kinect RGB = zwykła kamera dla YOLO). Szczegóły: `senses/README.md`.
 
+### 🏡 Analiza terenu — Cosmos Terrain (dron → pomiary)
+
+`senses/terrain.py` zamienia model 3D z `photoscan.py` w **realne pomiary** — czysta
+geometria, bez AI i bez internetu:
+
+```bash
+python senses/terrain.py selftest                     # sprawdź poprawność obliczeń
+python senses/terrain.py sun model.ply --lat 52.23 --lon 21.01 --date 2026-06-21
+python senses/terrain.py shadow model.ply --lat 52.23 --lon 21.01 --time "2026-06-15 17:30"
+python senses/terrain.py view model.ply --eye 4.5     # co widać z okna na piętrze
+python senses/terrain.py volume halda.ply             # kubatura pryzmy
+python senses/terrain.py compare styczen.ply maj.ply  # co się zmieniło
+```
+
+- **`sun`** — mapa godzin bezpośredniego słońca na każdy metr kwadratowy w danym dniu
+  (+ JSON: długość dnia, maks. wysokość słońca, **jaki % terenu ma ≥6 h** — próg dla
+  warzywnika i paneli PV). Gdzie postawić dom, taras, panele, grządki.
+- **`shadow`** — cień o konkretnej godzinie („sun scouting" przed zdjęciami).
+- **`view`** — analiza widoku: co zobaczysz z danego punktu i czy sąsiad widzi Twój taras.
+- **`volume`** / **`compare`** — kubatura hałd i wykopów, postęp budowy, erozja.
+
+Pozycja słońca liczona algorytmem NOAA (offline), zapis map PNG bez zewnętrznych
+bibliotek — wymagane tylko `numpy`. Wyniki są poprawne **tylko dla modelu w metrach
+i zorientowanego na północ** (ENU) — flagi `--scale`, `--north`, `--up` pozwalają
+doprowadzić do tego chmurę bez georeferencji.
+
+### 🧭 Samoświadomość — Cosmos wie, czym jest i co potrafi
+
+Do kontekstu każdej rozmowy trafia **manifest zdolności** budowany z żywego stanu systemu:
+które mózgi są gotowe, czy zmysły są online, jakie silniki Studia masz opłacone, ile masz
+rozmów, faktów, wzorców, procedur, rutyn i urządzeń, czy są moduły terenu i treningu.
+Dzięki temu Cosmos **nie obiecuje rzeczy, których nie ma** — wymienia je i mówi, jak je
+włączyć („wideo Seedance — ustaw SEEDANCE_API_KEY").
+
+**Nauka → Pomysły** to jego własna inicjatywa, zawsze za Twoją zgodą:
+- **„✨ Co jeszcze możesz dla mnie zrobić?"** — model dostaje swój manifest, Twój profil,
+  tematy ostatnich rozmów i zawartość bazy wiedzy, po czym proponuje konkretne
+  zastosowania **szyte pod Ciebie**, z krokami wdrożenia.
+- **„Pokaż, co potrafisz"** — pełny, uczciwy stan systemu w jednym miejscu.
+- **Backlog usprawnień** — pomysły (Twoje i jego) ze statusami *nowy → zaakceptowany →
+  zrobione*. W rozmowie model może zaproponować `[AKCJA: pomysł | …]`, ale zapis następuje
+  dopiero po Twoim kliknięciu.
+
+Endpointy: `/api/capabilities`, `/api/suggest`, `/api/improvements`.
+
+### 🏠 Urządzenia i poranna odprawa (Jarvis)
+
+- **Urządzenia** (Ustawienia → Urządzenia): dowolny sprzęt sterowany przez HTTP —
+  Home Assistant, Shelly, Hue, Tasmota. W rozmowie powiesz *„przygaś światło"*,
+  a Cosmos zaproponuje `[AKCJA: urządzenie | …]` — **wykonanie zawsze po Twoim kliknięciu**.
+- **Poranna odprawa** (Ustawienia → Poranna odprawa): pogoda (open-meteo, bez klucza API),
+  wydarzenia z kalendarza `.ics`, czekające rutyny i ostatnie zdarzenia — streszczone
+  modelem i **czytane na głos**. Ręcznie albo automatycznie o wybranej godzinie.
+  Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, opcjonalnie `CALENDAR_ICS`.
+
 ### Fotogrametria — Cosmos PhotoScan
 
 `python senses/photoscan.py <folder-ze-zdjęciami>` — copilot ocenia zestaw
@@ -408,6 +473,21 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/procedures/record/{start,stop,status}` | GET/POST | Nauka: nagrywanie procedury z ekranu (Playwright) |
 | `/api/train/dataset?format=` `/api/train/stats` | GET | Eksport danych treningowych (JSONL: chat/instrukcje) i licznik przykładów |
 | `/api/train/env` `/api/train/start` `/api/train/status` `/api/train/stop` | GET/POST | Trening w aplikacji: wykrycie wymagań, start/stop, log |
+| `/api/devices` `/api/devices/run` | GET/POST/DELETE | Urządzenia smart home (HTTP) i ich uruchamianie za zgodą |
+| `/api/briefing` | GET | Poranna odprawa: pogoda + kalendarz + zadania, streszczone |
+| `/api/capabilities` | GET | Manifest zdolności — czym Cosmos jest i co realnie potrafi teraz |
+| `/api/suggest` | POST | Propozycje zastosowań szyte pod użytkownika (z manifestu + profilu) |
+| `/api/improvements` | GET/POST/PUT/DELETE | Backlog usprawnień z akceptacją |
+| `/api/auth` `/api/login` `/api/logout` | GET/POST | Stan logowania, logowanie hasłem, wylogowanie |
+| `/api/conversations` `/api/conversations/meta` `/api/conversations/search` | GET/PUT/POST/DELETE | Rozmowy: treść, metadane (tytuł, przypięcie), szukanie po treści |
+| `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
+| `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
+| `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
+| `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
+| `/api/summarize` | POST | Streszczenie rozmowy |
+| `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
+| `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
+| `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
 
 ## 💰 Koszty
 

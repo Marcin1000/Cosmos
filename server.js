@@ -1336,6 +1336,367 @@ async function startTraining(opts) {
   return { ok: true, startedAt: trainJob.startedAt };
 }
 
+// ---------------------------------------------------------------------------
+// JARVIS — urządzenia (smart home) i poranna odprawa.
+//   Urządzenia: prosty mostek HTTP. Definiujesz je w data/devices.json albo
+//   w Ustawieniach; Cosmos może zaproponować użycie, ale WYKONANIE zawsze
+//   wymaga Twojego kliknięcia (ten sam wzorzec co inne akcje).
+//   Działa z Home Assistant, Shelly, Philips Hue, Tasmota i czymkolwiek,
+//   co przyjmuje żądanie HTTP.
+// ---------------------------------------------------------------------------
+
+const DEVICES_FILE = path.join(DATA_DIR, 'devices.json');
+let devices = [];
+try { devices = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')); } catch { /* brak */ }
+const saveDevices = () => saveJsonFile(DEVICES_FILE, devices);
+
+function sanitizeDevice(d) {
+  const method = ['GET', 'POST', 'PUT'].includes(String(d.method || '').toUpperCase())
+    ? String(d.method).toUpperCase() : 'POST';
+  let headers = {};
+  if (d.headers && typeof d.headers === 'object') {
+    for (const [k, v] of Object.entries(d.headers)) headers[String(k).slice(0, 80)] = String(v).slice(0, 500);
+  }
+  return {
+    id: d.id || genId(),
+    name: String(d.name || '').trim().slice(0, 60),
+    url: String(d.url || '').trim().slice(0, 500),
+    method, headers,
+    body: typeof d.body === 'string' ? d.body.slice(0, 2000) : '',
+    note: String(d.note || '').slice(0, 200),
+  };
+}
+
+async function runDevice(dev) {
+  if (!/^https?:\/\//i.test(dev.url)) return { ok: false, error: 'bad-url' };
+  try {
+    const opts = { method: dev.method, headers: { ...dev.headers }, signal: AbortSignal.timeout(10000) };
+    if (dev.method !== 'GET' && dev.body) {
+      if (!Object.keys(opts.headers).some((h) => h.toLowerCase() === 'content-type')) {
+        opts.headers['Content-Type'] = 'application/json';
+      }
+      opts.body = dev.body;
+    }
+    const r = await fetch(dev.url, opts);
+    const text = (await r.text()).slice(0, 300);
+    addEvent('urządzenie', `${dev.name}: ${r.ok ? 'wykonano' : 'błąd ' + r.status}`);
+    return { ok: r.ok, status: r.status, response: text };
+  } catch (err) {
+    return { ok: false, error: 'request-failed', reason: err.message };
+  }
+}
+
+async function handleDevices(req, res, pathname) {
+  if (pathname === '/api/devices' && req.method === 'GET') {
+    return sendJson(res, 200, { devices });
+  }
+  if (pathname === '/api/devices' && req.method === 'POST') {
+    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const dev = sanitizeDevice(data);
+    if (!dev.name || !dev.url) return sendJson(res, 400, { error: 'Podaj nazwę i adres URL urządzenia.' });
+    const i = devices.findIndex((d) => d.id === dev.id);
+    if (i >= 0) devices[i] = dev; else devices.push(dev);
+    saveDevices();
+    return sendJson(res, 200, { ok: true, id: dev.id });
+  }
+  if (pathname === '/api/devices' && req.method === 'DELETE') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    devices = devices.filter((d) => d.id !== id);
+    saveDevices();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/devices/run' && req.method === 'POST') {
+    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const want = String(data.id || data.name || '').trim().toLowerCase();
+    const dev = devices.find((d) => d.id === data.id)
+      || devices.find((d) => d.name.toLowerCase() === want)
+      || devices.find((d) => d.name.toLowerCase().includes(want));
+    if (!dev) return sendJson(res, 404, { error: 'Nie znaleziono urządzenia.' });
+    const result = await runDevice(dev);
+    return sendJson(res, result.ok ? 200 : 502, result);
+  }
+  res.writeHead(405); res.end();
+}
+
+// --- Poranna odprawa ---
+const BRIEFING = {
+  lat: process.env.BRIEFING_LAT || '',
+  lon: process.env.BRIEFING_LON || '',
+  ics: process.env.CALENDAR_ICS || '',
+};
+
+async function fetchWeather() {
+  if (!BRIEFING.lat || !BRIEFING.lon) return null;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(BRIEFING.lat)}` +
+      `&longitude=${encodeURIComponent(BRIEFING.lon)}&current=temperature_2m,weather_code,wind_speed_10m` +
+      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset` +
+      `&forecast_days=1&timezone=auto`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return {
+      teraz: d.current?.temperature_2m, wiatr: d.current?.wind_speed_10m,
+      max: d.daily?.temperature_2m_max?.[0], min: d.daily?.temperature_2m_min?.[0],
+      opady: d.daily?.precipitation_probability_max?.[0],
+      wschod: (d.daily?.sunrise?.[0] || '').slice(11), zachod: (d.daily?.sunset?.[0] || '').slice(11),
+    };
+  } catch { return null; }
+}
+
+// Minimalny czytnik ICS — wydarzenia na dziś (plik lokalny albo adres URL).
+async function fetchCalendar() {
+  if (!BRIEFING.ics) return [];
+  let text = '';
+  try {
+    if (/^https?:\/\//i.test(BRIEFING.ics)) {
+      const r = await fetch(BRIEFING.ics, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return [];
+      text = await r.text();
+    } else {
+      text = fs.readFileSync(BRIEFING.ics, 'utf8');
+    }
+  } catch { return []; }
+
+  const unfolded = text.replace(/\r?\n[ \t]/g, '');
+  const today = new Date();
+  const stamp = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+  const out = [];
+  for (const block of unfolded.split('BEGIN:VEVENT').slice(1)) {
+    const get = (k) => (block.match(new RegExp(`^${k}[^:]*:(.*)$`, 'm')) || [])[1]?.trim() || '';
+    const start = get('DTSTART');
+    if (!start.startsWith(stamp)) continue;
+    const time = start.length > 8 ? `${start.slice(9, 11)}:${start.slice(11, 13)}` : 'cały dzień';
+    out.push({ czas: time, tytul: get('SUMMARY').slice(0, 120) });
+    if (out.length >= 12) break;
+  }
+  return out.sort((a, b) => a.czas.localeCompare(b.czas));
+}
+
+async function handleBriefing(req, res) {
+  const [weather, calendar] = await Promise.all([fetchWeather(), fetchCalendar()]);
+  const due = routines.filter((r) => r.pending).map((r) => routineView(r).procedureName);
+  const recent = recentEvents(12 * 60 * 60 * 1000, 12).map((e) => e.summary);
+
+  const facts = [];
+  if (weather) {
+    facts.push(`Pogoda: teraz ${weather.teraz}°C, dziś ${weather.min}–${weather.max}°C, ` +
+      `szansa opadów ${weather.opady}%, wiatr ${weather.wiatr} km/h, ` +
+      `wschód ${weather.wschod}, zachód ${weather.zachod}.`);
+  }
+  if (calendar.length) {
+    facts.push('Kalendarz na dziś:\n' + calendar.map((c) => `- ${c.czas} ${c.tytul}`).join('\n'));
+  }
+  if (due.length) facts.push(`Zaplanowane czynności czekające na uruchomienie: ${due.join(', ')}.`);
+  if (recent.length) facts.push('Ostatnie zdarzenia:\n' + recent.map((s) => `- ${s}`).join('\n'));
+  if (!facts.length) {
+    return sendJson(res, 200, {
+      ok: true, text: 'Brak danych do odprawy. Ustaw BRIEFING_LAT/BRIEFING_LON (pogoda) ' +
+        'i opcjonalnie CALENDAR_ICS (kalendarz) w pliku .env.', facts: {},
+    });
+  }
+
+  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
+  const prompt = lang === 'en'
+    ? 'Give a short spoken morning briefing (max 6 sentences) from the facts below. Be concrete, no filler, no greeting formulas beyond one short opener.'
+    : 'Przygotuj krótką poranną odprawę do przeczytania na głos (maks. 6 zdań) na podstawie poniższych faktów. ' +
+      'Konkretnie, bez lania wody, bez powtarzania liczb, które nic nie wnoszą.';
+  try {
+    const text = await llmComplete([
+      { role: 'system', content: prompt },
+      { role: 'user', content: facts.join('\n\n') },
+    ], { endpoint: 'cloud', maxTokens: 400 });
+    addEvent('odprawa', 'przygotowano poranną odprawę');
+    return sendJson(res, 200, { ok: true, text, facts: { weather, calendar, due, recent } });
+  } catch (err) {
+    // bez modelu i tak zwróć surowe fakty — odprawa ma działać zawsze
+    return sendJson(res, 200, { ok: true, text: facts.join('\n\n'), facts: { weather, calendar, due, recent }, raw: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SAMOŚWIADOMOŚĆ — manifest zdolności.
+//   Cosmos musi wiedzieć, czym JEST i co REALNIE potrafi w tej chwili — nie
+//   z wyuczonej formułki, tylko z żywego stanu systemu. Dzięki temu nie obiecuje
+//   rzeczy, których nie ma skonfigurowanych, i potrafi powiedzieć, jak je włączyć.
+// ---------------------------------------------------------------------------
+
+let sensesCache = { at: 0, online: false, caps: {} };
+
+async function sensesState() {
+  if (Date.now() - sensesCache.at < 60000) return sensesCache;
+  try {
+    const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    const caps = r.ok ? await r.json() : {};
+    sensesCache = { at: Date.now(), online: r.ok, caps: caps.caps || caps || {} };
+  } catch {
+    sensesCache = { at: Date.now(), online: false, caps: {} };
+  }
+  return sensesCache;
+}
+
+function moduleExists(...parts) {
+  return fs.existsSync(path.join(__dirname, ...parts));
+}
+
+async function capabilityManifest() {
+  const senses = await sensesState();
+  const imgs = imageProviders().map((p) => p.label);
+  let playwright = false;
+  try { require.resolve('playwright'); playwright = true; } catch { /* brak */ }
+
+  const missing = [];
+  if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA — ustaw NVIDIA_API_KEY w .env');
+  if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX — uruchom Ollamę i ustaw LOCAL_MODEL');
+  if (!senses.online) missing.push('zmysły (mowa, wzrok, embeddingi) — uruchom python senses/service.py');
+  if (!imgs.length) missing.push('generowanie obrazów — ustaw OPENAI_API_KEY lub FIREFLY_CLIENT_ID');
+  if (!STUDIO.eleven.key) missing.push('lektor ElevenLabs — ustaw ELEVENLABS_API_KEY');
+  if (!STUDIO.seedance.key) missing.push('wideo Seedance — ustaw SEEDANCE_API_KEY');
+  if (!playwright) missing.push('nagrywanie i automatyzacja stron — npm install playwright');
+  if (!secretsEnabled()) missing.push('logowanie z menedżera haseł — ustaw SECRETS_PROVIDER');
+  if (!BRIEFING.lat || !BRIEFING.lon) missing.push('poranna odprawa (pogoda) — ustaw BRIEFING_LAT i BRIEFING_LON');
+  if (!BRIEFING.ics) missing.push('kalendarz w odprawie — ustaw CALENDAR_ICS');
+  if (!devices.length) missing.push('sterowanie urządzeniami — dodaj je w Ustawieniach → Urządzenia');
+
+  return {
+    tozsamosc: 'Cosmos — osobiste, prywatne środowisko AI użytkownika. Mózgiem jest model '
+      + 'językowy (domyślnie NVIDIA Nemotron), ale Cosmos to całość: pamięć, zmysły, '
+      + 'narzędzia i zdolność uczenia się. Wszystko działa na sprzęcie użytkownika '
+      + 'albo na jego serwerze; dane i klucze nie należą do nikogo innego.',
+    mozgi: Object.entries(ENDPOINTS).map(([id, ep]) => ({
+      id, model: ep.model || '(nie ustawiono)', gotowy: Boolean(ep.apiKey || ep.model),
+    })),
+    zmysly: { online: senses.online, ...senses.caps },
+    studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
+      eksport: STUDIO.exportDir || null },
+    wiedza: { rozmowy: convIndex.length, pamiec: memories.length, bazaWiedzy: kbItems.length,
+      profil: userProfile.trim().length > 0, migawki: timeline.length },
+    nauka: { wzorce: lessons.length, procedury: procedures.length, rutyny: routines.length,
+      nagrywanieEkranu: playwright, automatyzacjaOdczytu: playwright,
+      menedzerHasel: secretsEnabled() ? SECRETS.provider : null },
+    dom: { urzadzenia: devices.map((d) => d.name), odprawa: Boolean(BRIEFING.lat && BRIEFING.lon),
+      kalendarz: Boolean(BRIEFING.ics) },
+    teren: { photoscan: moduleExists('senses', 'photoscan.py'),
+      terrain: moduleExists('senses', 'terrain.py') },
+    trening: { przykladyChat: buildTrainingDataset('chat').count,
+      skrypt: moduleExists('training', 'qlora_example.py') },
+    brakujace: missing,
+  };
+}
+
+/** Zwięzły opis do wstrzyknięcia w kontekst rozmowy (model musi to zrozumieć od razu). */
+function capabilityText(m) {
+  const yes = (v) => (v ? 'tak' : 'nie');
+  const z = m.zmysly;
+  const lines = [
+    'KIM JESTEŚ — TWOJE REALNE MOŻLIWOŚCI (stan na teraz, nie ogólniki):',
+    m.tozsamosc,
+    '',
+    'Mózgi: ' + m.mozgi.map((b) => `${b.id}=${b.model}${b.gotowy ? '' : ' (niegotowy)'}`).join(', '),
+    `Zmysły: ${z.online ? 'online' : 'offline'} — mowa(Whisper)=${yes(z.whisper)}, `
+      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, sylwetka=${yes(z.mediapipe)}, `
+      + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
+    `Studio: obraz=${m.studio.obraz.join('/') || 'brak'}, lektor=${yes(m.studio.dzwiek)}, `
+      + `wideo=${yes(m.studio.wideo)}`,
+    `Wiedza: rozmów=${m.wiedza.rozmowy}, faktów w pamięci=${m.wiedza.pamiec}, `
+      + `pozycji w bazie wiedzy=${m.wiedza.bazaWiedzy}, profil użytkownika=${yes(m.wiedza.profil)}`,
+    `Nauka: nauczone wzorce=${m.nauka.wzorce}, procedury=${m.nauka.procedury}, `
+      + `rutyny=${m.nauka.rutyny}, nagrywanie ekranu=${yes(m.nauka.nagrywanieEkranu)}, `
+      + `menedżer haseł=${m.nauka.menedzerHasel || 'brak'}`,
+    `Dom: urządzenia=${m.dom.urzadzenia.join(', ') || 'brak'}, odprawa=${yes(m.dom.odprawa)}`,
+    `Teren z drona: analiza nasłonecznienia/cieni/widoku/objętości=${yes(m.teren.terrain)} `
+      + `(senses/terrain.py), fotogrametria=${yes(m.teren.photoscan)}`,
+    `Trening własnego modelu: przykładów=${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}`,
+    '',
+    'JAK SIĘ UCZYSZ (za zgodą użytkownika): możesz zapamiętywać fakty, zapisywać notatki, '
+      + 'uczyć się rozpoznawania obiektów z kamery, uczyć się procedur (także nagranych z ekranu), '
+      + 'planować rutyny, a z zebranych rozmów można dotrenować lokalny model.',
+    'WAŻNE: nie obiecuj rzeczy oznaczonych wyżej jako niedostępne. Jeśli czegoś brakuje, '
+      + 'powiedz wprost, czego i jak to włączyć.',
+  ];
+  if (m.brakujace.length) {
+    lines.push('Obecnie niedostępne (i jak włączyć): ' + m.brakujace.join('; ') + '.');
+  }
+  return lines.join('\n');
+}
+
+// --- Backlog usprawnień: pomysły Cosmosa na samego siebie, zatwierdzane przez Ciebie ---
+const IMPROVE_FILE = path.join(DATA_DIR, 'improvements.json');
+let improvements = [];
+try { improvements = JSON.parse(fs.readFileSync(IMPROVE_FILE, 'utf8')); } catch { /* brak */ }
+const saveImprovements = () => saveJsonFile(IMPROVE_FILE, improvements);
+
+async function handleImprovements(req, res, pathname) {
+  if (pathname === '/api/improvements' && req.method === 'GET') {
+    return sendJson(res, 200, { improvements });
+  }
+  if (pathname === '/api/improvements' && req.method === 'POST') {
+    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const text = String(data.text || '').trim().slice(0, 1000);
+    if (!text) return sendJson(res, 400, { error: 'Pusty pomysł.' });
+    const item = { id: genId(), text, zrodlo: data.zrodlo === 'model' ? 'model' : 'ja',
+      status: 'nowy', createdAt: Date.now() };
+    improvements.push(item);
+    saveImprovements();
+    addEvent('rozwój', `nowy pomysł na usprawnienie: ${text.slice(0, 80)}`);
+    return sendJson(res, 200, { ok: true, id: item.id });
+  }
+  if (pathname === '/api/improvements' && req.method === 'PUT') {
+    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const it = improvements.find((x) => x.id === data.id);
+    if (!it) return sendJson(res, 404, { error: 'Nie znaleziono.' });
+    if (['nowy', 'zaakceptowany', 'odrzucony', 'zrobione'].includes(data.status)) it.status = data.status;
+    saveImprovements();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (pathname === '/api/improvements' && req.method === 'DELETE') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    improvements = improvements.filter((x) => x.id !== id);
+    saveImprovements();
+    return sendJson(res, 200, { ok: true });
+  }
+  res.writeHead(405); res.end();
+}
+
+/** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
+async function handleSuggest(req, res) {
+  const m = await capabilityManifest();
+  const titles = convIndex.slice(0, 25).map((c) => c.title).filter(Boolean);
+  const kbNames = kbItems.slice(-25).map((it) => it.name).filter(Boolean);
+  const known = improvements.map((i) => i.text.slice(0, 60));
+
+  const context = [
+    capabilityText(m),
+    userProfile.trim() ? '\nPROFIL UŻYTKOWNIKA:\n' + userProfile.trim() : '',
+    titles.length ? '\nOSTATNIE TEMATY ROZMÓW:\n- ' + titles.join('\n- ') : '',
+    kbNames.length ? '\nCO JEST W BAZIE WIEDZY:\n- ' + kbNames.join('\n- ') : '',
+    known.length ? '\nJUŻ ZAPROPONOWANE (nie powtarzaj):\n- ' + known.join('\n- ') : '',
+  ].filter(Boolean).join('\n');
+
+  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
+  const instruction = lang === 'en'
+    ? 'You are Cosmos. Based on your real capabilities and this user\'s context, propose 4 concrete, '
+      + 'personal ways they could use you that they probably have not thought of. Skip anything already '
+      + 'listed. For each: a bold one-line title, two sentences on the value, and a short "How:" line with '
+      + 'the exact steps or what to enable. Only propose things your listed capabilities actually allow.'
+    : 'Jesteś Cosmosem. Na podstawie swoich REALNYCH możliwości i kontekstu tego użytkownika zaproponuj '
+      + '4 konkretne, osobiste sposoby wykorzystania siebie, na które on prawdopodobnie nie wpadł. '
+      + 'Pomiń to, co już zaproponowane. Każdy pomysł: pogrubiony tytuł w jednej linii, dwa zdania '
+      + 'o wartości, oraz krótka linia „Jak:" z dokładnymi krokami albo co włączyć. '
+      + 'Proponuj wyłącznie rzeczy, na które pozwalają wymienione możliwości. Bez lania wody.';
+
+  try {
+    const text = await llmComplete([
+      { role: 'system', content: instruction },
+      { role: 'user', content: context },
+    ], { endpoint: 'cloud', maxTokens: 900 });
+    addEvent('rozwój', 'Cosmos zaproponował nowe zastosowania');
+    return sendJson(res, 200, { ok: true, text });
+  } catch (err) {
+    return sendJson(res, 502, { error: 'suggest-failed', message: err.message });
+  }
+}
+
 // --- Nagrywanie procedur (opcjonalny moduł Playwright, wymaga ekranu) ---
 const RECORDER_SCRIPT = path.join(__dirname, 'automation', 'recorder.js');
 let recordJob = null; // { child, status, outFile, startedAt, log:[] }
@@ -2236,6 +2597,13 @@ async function handleChat(req, res) {
         ? lastUser.content
         : (lastUser.content.find?.((p) => p.type === 'text')?.text || ''));
 
+  // Samoświadomość — czym Cosmos jest i co realnie potrafi w tej chwili
+  if (payload.useCapabilities !== false) {
+    try {
+      extras.push({ role: 'system', content: capabilityText(await capabilityManifest()) });
+    } catch { /* manifest nie może blokować rozmowy */ }
+  }
+
   // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
   if (userProfile.trim()) {
     extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
@@ -2265,14 +2633,26 @@ async function handleChat(req, res) {
         'Uruchomienie tylko przygotowuje kroki — każdy krok wrażliwy (płatność, wysłanie) ' +
         'i tak wymaga osobnego potwierdzenia użytkownika.'
       : '';
+    const devList = devices.length
+      ? ' Podłączone urządzenia (światło, sprzęt, scena): ' +
+        devices.map((d) => `"${d.name}"`).join(', ') +
+        '. Aby użyć urządzenia, napisz [AKCJA: urządzenie | dokładna nazwa]. ' +
+        'Użytkownik zatwierdza jednym kliknięciem.'
+      : '';
     extras.push({
       role: 'system',
       content:
         'NARZĘDZIE — AKCJE (za zgodą użytkownika): gdy użytkownik prosi o zapisanie lub ' +
         'zapamiętanie czegoś, zakończ odpowiedź osobną linią w formacie ' +
         '[AKCJA: typ | treść]. Dozwolone typy: "zapamiętaj" (trwały fakt do pamięci), ' +
-        '"notatka" (notatka do bazy wiedzy)' + (procList ? ', "procedura" (uruchom nauczoną czynność)' : '') +
-        '. Użytkownik ręcznie zatwierdzi akcję. Nie używaj [AKCJA:] w innych sytuacjach.' + procList,
+        '"notatka" (notatka do bazy wiedzy), "pomysł" (propozycja usprawnienia siebie — ' +
+        'nowa umiejętność, procedura, rutyna lub zastosowanie; trafia do listy do akceptacji)' +
+        (procList ? ', "procedura" (uruchom nauczoną czynność)' : '') +
+        (devList ? ', "urządzenie" (użyj podłączonego urządzenia)' : '') +
+        '. Użytkownik ręcznie zatwierdzi akcję. Nie używaj [AKCJA:] w innych sytuacjach. ' +
+        'Gdy zauważysz, że mógłbyś się czegoś nauczyć albo coś zautomatyzować dla ' +
+        'użytkownika — zaproponuj to przez [AKCJA: pomysł | konkretny opis].' +
+        procList + devList,
     });
   }
 
@@ -2600,6 +2980,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/procedures') return await handleProcedures(req, res, p);
     if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
     if (p.startsWith('/api/procedures/record/')) return await handleRecord(req, res, p);
+    if (p === '/api/devices' || p === '/api/devices/run') return await handleDevices(req, res, p);
+    if (p === '/api/briefing' && req.method === 'GET') return await handleBriefing(req, res);
+    if (p === '/api/capabilities' && req.method === 'GET') {
+      const m = await capabilityManifest();
+      return sendJson(res, 200, { manifest: m, opis: capabilityText(m) });
+    }
+    if (p === '/api/suggest' && req.method === 'POST') return await handleSuggest(req, res);
+    if (p === '/api/improvements') return await handleImprovements(req, res, p);
     if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
