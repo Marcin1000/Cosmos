@@ -474,6 +474,16 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/capabilities` | GET | Manifest zdolności — czym Cosmos jest i co realnie potrafi teraz |
 | `/api/suggest` | POST | Propozycje zastosowań szyte pod użytkownika (z manifestu + profilu) |
 | `/api/improvements` | GET/POST/PUT/DELETE | Backlog usprawnień z akceptacją |
+| `/api/auth` `/api/login` `/api/logout` | GET/POST | Stan logowania, logowanie hasłem, wylogowanie |
+| `/api/conversations` `/api/conversations/meta` `/api/conversations/search` | GET/PUT/POST/DELETE | Rozmowy: treść, metadane (tytuł, przypięcie), szukanie po treści |
+| `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
+| `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
+| `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
+| `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
+| `/api/summarize` | POST | Streszczenie rozmowy |
+| `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
+| `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
+| `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
 
 ## 💰 Koszty
 
