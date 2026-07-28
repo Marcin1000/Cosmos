@@ -307,7 +307,84 @@ rutyna przed świętami i urodzinami przypomina i podpowiada.
 
 ---
 
-# CZĘŚĆ IV — Kierunek badawczy
+# CZĘŚĆ IV — Twój sprzęt: co jeszcze da się z niego wycisnąć
+
+Masz kilka urządzeń, których **najciekawsze możliwości leżą odłogiem**. Nie dlatego,
+że są ukryte — po prostu nikt ich tak nie używa.
+
+## 🎛 Ronin-S jako robotyczna głowica kamery 🔧
+
+Ronin to nie tylko stabilizator — to **trzy silniki z enkoderami i IMU**, czyli gotowa
+głowica pan/tilt. Podłączony (Bluetooth/USB, SDK DJI) staje się „szyją" Cosmosa:
+
+- **Automatyczna gigapanorama** — Cosmos obraca kamerę po siatce i skleja setki kadrów
+- **Motion timelapse** — powolny najazd przez godziny, bez ślizgu i bez Twojej obecności
+- **Śledzenie obiektu** — YOLO wykrywa, Ronin obraca; kamera sama podąża za tematem
+- **Skan pomieszczenia** — obrót o 360° z kadrami do fotogrametrii wnętrza
+
+To najbardziej niedoceniony sprzęt, jaki masz: **jedyny element z napędem**. Wszystko
+inne tylko patrzy — Ronin może się poruszyć.
+
+## 📷 Canon R6 II jako sterowany przyrząd 🔧
+
+**Tethering** (gPhoto2 albo Canon SDK) zamienia aparat w urządzenie, którym Cosmos steruje:
+
+- **Focus stacking makro** — aparat ma wbudowany bracketing ostrości; Cosmos wyzwala serię
+  i składa jeden idealnie ostry kadr (biżuteria, elektronika, owady, produkty)
+- **Automatyczne zdjęcia produktowe** — obrót + seria + tło + katalog, bez dotykania aparatu
+- **HDR i bracketing** pod fotogrametrię trudnych scen (kontrastowe wnętrza)
+- **Interwał sterowany zdarzeniem** — nie „co 5 sekund", tylko „gdy YOLO zobaczy ptaka"
+
+**Czysty HDMI jako oko Cosmosa** ✅🔧 — R6 II przez kartę przechwytującą to kamera, która
+widzi tam, gdzie webcam jest ślepy. Detekcja obiektów przy świetle świecy, monitoring
+o zmierzchu, rozpoznawanie w warunkach, w których zwykła kamerka daje szum.
+
+## 🌑 Kinect 360 — dwie rzeczy, o których się zapomina
+
+**1. Widzi w całkowitej ciemności** ✅ — to czujnik na podczerwień, nie kamera. Obecność,
+ruch i sylwetka **bez jednego lumena światła**. Do tego naturalnie prywatny: dostajesz
+kształt i odległość, nie twarz. Idealny do nocnego czuwania w domu, gdzie kamera RGB
+byłaby zbyt inwazyjna.
+
+**2. Ma cztery mikrofony** 🔧 — to macierz, nie pojedynczy mik. Z różnicy czasu dotarcia
+dźwięku liczy się **kierunek źródła**: *„coś spadło po lewej"*, *„ktoś mówi od strony
+drzwi"*. Cosmos ma już świadomość pozycji z kamery — to samo dla dźwięku daje mu słuch
+przestrzenny. Klasyczny, wdzięczny projekt DSP.
+
+**3. Pomiar ciała** 🔧 — obwody, proporcje, postawa w czasie. Do zamawiania ubrań na miarę
+albo śledzenia efektów treningu obiektywnie, nie „na oko".
+
+## 📱 Telefon jako mobilna sonda pomiarowa 🔧
+
+W telefonie siedzą czujniki, których nie używasz: **światła (lux), GPS, barometr,
+magnetometr, akcelerometr**. Aplikacja logująca + spacer po terenie = mapy, których
+nie zrobisz dronem:
+
+- **Rzeczywisty lux** w różnych punktach → **walidacja modelu nasłonecznienia** (patrz niżej)
+- **Mapa hałasu** i **mapa zasięgu** — jednym spacerem
+- **Barometr** → różnice wysokości wewnątrz budynku (którym piętrem idziesz)
+
+## 🖊 Surface Pro — pióro jako wejście 🔧
+
+Naszkicuj kadr piórem → Cosmos zamienia szkic w prompt do Studia albo klatkę storyboardu.
+Rysunek jest szybszy niż opis słowami, a Ty i tak myślisz obrazami.
+
+## ⚡ RTX 3080 poza modelami AI ✅🔧
+
+- **NVENC** — nocna rutyna przekodowuje materiał na proxy do montażu, za darmo
+- **Interpolacja klatek** (RIFE) — slow motion z materiału 30p
+- **Ciągła analiza w tle** — karta i tak stoi bezczynnie w nocy; niech przetwarza archiwum
+
+## 🔭 Astrofotografia — synteza całego zestawu ✅🔧
+
+Tu wszystko schodzi się w jedno: `terrain.py view` wskazuje **gdzie horyzont jest czysty**
+(bez drzew i budynków), dron znajduje ciemne miejsce poza łuną miasta, R6 II ma czułość,
+Ronin robi powolny ruch, a RTX składa stacking. Cosmos może pilnować pogody i fazy księżyca
+w rutynie i powiedzieć: *„dziś w nocy warunki są dobre, wyjazd o 22:00"*.
+
+---
+
+# CZĘŚĆ V — Kierunek badawczy
 
 Rzeczy, w których jesteś **badaczem**, a nie użytkownikiem. Wszystkie mają wspólną cechę:
 mierzalny wynik.
@@ -342,9 +419,38 @@ swojego zestawu (w cm). Bez tego żaden pomiar z modelu nie ma wiarygodności.
 Ten sam obiekt zmierzony czujnikiem głębi i ze zdjęć. Gdzie każda metoda wygrywa,
 gdzie się sypie (połysk, ciemność, cienkie elementy).
 
+**7. Walidacja modelu nasłonecznienia czujnikiem światła** 🔧
+Najlepszy eksperyment, jaki możesz zrobić z `terrain.py`: postaw telefon (czujnik lux)
+w kilku punktach działki i loguj przez cały dzień. Porównaj z przewidywaniami modelu.
+Zgodność = masz **dowód**, że Twoje mapy są prawdziwe, a nie ładne. Rozbieżności powiedzą Ci,
+ile dokłada światło rozproszone — i to jest gotowy materiał na rozszerzenie modelu.
+
+**8. Ile zdjęć naprawdę potrzeba do fotogrametrii?** 🔧
+Zrób 200 zdjęć obiektu, potem buduj model z 30, 50, 80, 120, 200 i mierz błąd względem
+taśmy. Dostajesz **własną krzywą jakości** — i wiesz, kiedy przestać latać. Praktyczna
+wiedza, której nie ma w instrukcji drona.
+
+**9. Granica widzenia w ciemności** 🔧
+R6 II ciągnie ISO tam, gdzie webcam widzi szum. Zmierz, **przy jakim natężeniu światła
+YOLO przestaje rozpoznawać obiekty** dla każdej z Twoich kamer (webcam / R6 II / Kinect IR).
+Efekt: wiesz, którego czujnika użyć o jakiej porze — inżynierska wiedza, nie zgadywanie.
+
+**10. Lokalizacja dźwięku macierzą Kinecta** 🔧
+Cztery mikrofony + różnice czasu dotarcia = kierunek źródła. Zmierz dokładność
+w zależności od kąta i odległości. Klasyka DSP, a na końcu Cosmos zyskuje słuch przestrzenny.
+
+**11. Parametry lotu a jakość modelu** 🔧
+Macierz eksperymentu: wysokość × pokrycie × kąt kamery. Który zestaw daje najlepszy model
+przy najkrótszym locie? Odpowiedź oszczędza baterie na każdym kolejnym zleceniu.
+
+**12. Komfort termiczny bez kamery termalnej** 🔧
+Połącz mapę nasłonecznienia z osłoną od wiatru → przewidywanie, gdzie taras będzie
+przyjemny o danej porze. Zwaliduj zwykłym termometrem. Fizyka z dwóch modeli, zero
+dodatkowego sprzętu.
+
 ---
 
-# CZĘŚĆ V — Jarvis: obecność, nie czat
+# CZĘŚĆ VI — Jarvis: obecność, nie czat
 
 Różnica między „mam asystenta AI" a „mam Jarvisa" polega na **inicjatywie i obecności** —
 system wie, co się dzieje, i odzywa się pierwszy.
@@ -408,7 +514,7 @@ push zamiast czekania, aż zapytasz.
 
 ---
 
-# CZĘŚĆ VI — Stan modułów
+# CZĘŚĆ VII — Stan modułów
 
 **Dopisane i przetestowane** (te pozycje były wcześniej na liście braków):
 
