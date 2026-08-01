@@ -441,22 +441,88 @@ Jeśli widzisz `active (running)` — Cosmos działa i będzie działał zawsze.
 Aby z VPS korzystać z lokalnego modelu na Twojej karcie (gdy komputer jest włączony):
 
 **Na komputerze stacjonarnym (Windows):**
-1. Zainstaluj **Ollama** (https://ollama.com) i pobierz model, np.:
+1. Zainstaluj **Ollama** (https://ollama.com) i pobierz model:
    ```
-   ollama pull nemotron-mini
+   ollama pull rwxproject/nemotron-nano-9b-v2-q4_k_m
    ```
+   Szczegóły wyboru wersji — w ramce niżej.
 2. Zainstaluj **Tailscale** na tym komputerze, zaloguj tym samym kontem. Zapisz jego
    adres Tailscale (np. `100.88.88.88`).
-3. Pozwól Ollamie słuchać w sieci Tailscale — ustaw zmienną środowiskową
-   `OLLAMA_HOST=0.0.0.0` (Windows: Zmienne środowiskowe → nowa zmienna) i uruchom
-   Ollamę ponownie.
+3. Pozwól Ollamie słuchać w sieci Tailscale. Domyślnie przyjmuje połączenia tylko
+   z tego samego komputera, więc VPS by się nie dobił.
+
+   Windows: **Start → „zmienne środowiskowe" → Zmienne środowiskowe → Nowa** (w górnej
+   sekcji „Zmienne użytkownika"). W okienku są dwa pola:
+
+   | Pole | Wpisz |
+   |---|---|
+   | Nazwa zmiennej | `OLLAMA_HOST` |
+   | Wartość zmiennej | `0.0.0.0` |
+
+   Znaku `=` **nie wpisujesz** — pola są już rozdzieleniem. Zatwierdź **OK** we wszystkich
+   trzech okienkach, inaczej zmiana się nie zapisze.
+
+4. **Zamknij Ollamę całkowicie i uruchom ponownie.** Zmienne działają tylko dla programów
+   uruchomionych po ich ustawieniu, a Ollama siedzi w tle: prawy dolny róg ekranu →
+   strzałka „pokaż ukryte ikony" → prawy przycisk na ikonie lamy → **Quit Ollama**.
+   Potem uruchom ją z menu Start. Gdy Zapora Windows zapyta o zgodę — zaznacz
+   **sieci prywatne**.
+
+> 🔒 `0.0.0.0` znaczy „słuchaj na wszystkich kartach sieciowych", więc z modelu może
+> skorzystać też ktoś podłączony do Twojego domowego Wi-Fi (z internetu nikt nie wejdzie).
+> Aby zawęzić dostęp wyłącznie do Tailscale, wpisz zamiast tego adres z portem, np.
+> `100.88.88.88:11434` — minusem jest konieczność poprawki, gdyby adres się zmienił.
+
+**Sprawdź, czy VPS widzi Ollamę** — na VPS wpisz (podstaw swój adres Tailscale):
+```bash
+curl http://100.88.88.88:11434/api/tags
+```
+Powinna wrócić lista modeli w formacie JSON. Jeśli widzisz „connection refused", to znaczy,
+że Ollama nie została zrestartowana po ustawieniu `OLLAMA_HOST` albo blokuje ją Zapora
+Windows.
 
 **Na VPS** — w pliku `.env` wpisz adres domowego komputera:
 ```ini
 LOCAL_BASE_URL=http://100.88.88.88:11434/v1
-LOCAL_MODEL=nemotron-mini
+LOCAL_MODEL=rwxproject/nemotron-nano-9b-v2-q4_k_m
 ```
 Zrestartuj usługę: `sudo systemctl restart cosmos`.
+
+### Którą wersję modelu pobrać do Ollamy?
+
+Szukając `nemotron-nano-9b-v2` na ollama.com zobaczysz kilkanaście pozycji z **ukośnikiem
+i nazwą użytkownika** (`rwxproject/…`). To normalne: nie ma oficjalnego wpisu w bibliotece
+Ollamy, są tylko konwersje społeczności. Końcówka nazwy to stopień kompresji wag —
+im mocniejsza, tym mniej VRAM-u, ale i gorsza jakość.
+
+| Wersja | ~VRAM | Na RTX 3080 (10 GB) |
+|---|---|---|
+| `q2_k` / `q3_k_m` | 3,5–4,5 GB | ❌ zmieszczą się, ale jakość po polsku wyraźnie spada |
+| **`q4_k_m`** | **~5,5 GB** | ✅ **zalecane** — złoty środek, zostaje zapas na kontekst |
+| `q5_k_m` | ~6,4 GB | ✅ minimalnie lepszy; spróbuj, gdy `q4_k_m` działa dobrze |
+| `q8_0` | ~9,5 GB | ❌ zapcha kartę, zabraknie pamięci na rozmowę |
+| `f16` / `f32` | 18–36 GB | ❌ tylko na kartę serwerową |
+
+Omijaj warianty z dopiskiem `-japanese` (dotrenowany pod japoński) oraz `-virtuoso`
+(cudzy eksperymentalny merge o nieznanej zawartości).
+
+> ⚠️ **Sprawdź model zaraz po pobraniu.** Konwersje społeczności bywają bez szablonu
+> rozmowy, a wtedy model odpowiada bełkotem albo gada sam ze sobą:
+> ```
+> ollama run rwxproject/nemotron-nano-9b-v2-q4_k_m "Napisz dwa zdania o Warszawie."
+> ```
+> Jeśli odpowiedź jest bez sensu, weź konwersję z Hugging Face (Ollama pobiera ją wprost):
+> ```
+> ollama pull hf.co/bartowski/nvidia_NVIDIA-Nemotron-Nano-9B-v2-GGUF:Q4_K_M
+> ```
+> Gdyby ta nazwa się nie zgadzała, wyszukaj na huggingface.co „Nemotron-Nano-9B-v2 GGUF"
+> i weź plik `Q4_K_M`. Do `.env` wpisz **dokładnie** tę nazwę, którą pobrałeś.
+
+> 💡 Nemotron Nano to hybryda Transformer-Mamba — zużywa znacznie mniej pamięci na długi
+> kontekst niż zwykły transformer. Zapas po `q4_k_m` wystarczy na bardzo długie rozmowy.
+
+**Słabsza karta niż RTX 3080?** Weź `nemotron-mini` (4B) z oficjalnej biblioteki —
+`ollama pull nemotron-mini`. Zmieści się na 6 GB VRAM.
 
 **Efekt:**
 - Gdy komputer w domu jest **włączony** → przełącznik „Lokalnie" świeci na zielono,
