@@ -448,9 +448,38 @@ Aby z VPS korzystać z lokalnego modelu na Twojej karcie (gdy komputer jest wł�
    Szczegóły wyboru wersji — w ramce niżej.
 2. Zainstaluj **Tailscale** na tym komputerze, zaloguj tym samym kontem. Zapisz jego
    adres Tailscale (np. `100.88.88.88`).
-3. Pozwól Ollamie słuchać w sieci Tailscale — ustaw zmienną środowiskową
-   `OLLAMA_HOST=0.0.0.0` (Windows: Zmienne środowiskowe → nowa zmienna) i uruchom
-   Ollamę ponownie.
+3. Pozwól Ollamie słuchać w sieci Tailscale. Domyślnie przyjmuje połączenia tylko
+   z tego samego komputera, więc VPS by się nie dobił.
+
+   Windows: **Start → „zmienne środowiskowe" → Zmienne środowiskowe → Nowa** (w górnej
+   sekcji „Zmienne użytkownika"). W okienku są dwa pola:
+
+   | Pole | Wpisz |
+   |---|---|
+   | Nazwa zmiennej | `OLLAMA_HOST` |
+   | Wartość zmiennej | `0.0.0.0` |
+
+   Znaku `=` **nie wpisujesz** — pola są już rozdzieleniem. Zatwierdź **OK** we wszystkich
+   trzech okienkach, inaczej zmiana się nie zapisze.
+
+4. **Zamknij Ollamę całkowicie i uruchom ponownie.** Zmienne działają tylko dla programów
+   uruchomionych po ich ustawieniu, a Ollama siedzi w tle: prawy dolny róg ekranu →
+   strzałka „pokaż ukryte ikony" → prawy przycisk na ikonie lamy → **Quit Ollama**.
+   Potem uruchom ją z menu Start. Gdy Zapora Windows zapyta o zgodę — zaznacz
+   **sieci prywatne**.
+
+> 🔒 `0.0.0.0` znaczy „słuchaj na wszystkich kartach sieciowych", więc z modelu może
+> skorzystać też ktoś podłączony do Twojego domowego Wi-Fi (z internetu nikt nie wejdzie).
+> Aby zawęzić dostęp wyłącznie do Tailscale, wpisz zamiast tego adres z portem, np.
+> `100.88.88.88:11434` — minusem jest konieczność poprawki, gdyby adres się zmienił.
+
+**Sprawdź, czy VPS widzi Ollamę** — na VPS wpisz (podstaw swój adres Tailscale):
+```bash
+curl http://100.88.88.88:11434/api/tags
+```
+Powinna wrócić lista modeli w formacie JSON. Jeśli widzisz „connection refused", to znaczy,
+że Ollama nie została zrestartowana po ustawieniu `OLLAMA_HOST` albo blokuje ją Zapora
+Windows.
 
 **Na VPS** — w pliku `.env` wpisz adres domowego komputera:
 ```ini
