@@ -153,14 +153,18 @@ Najprościej przez [Ollama](https://ollama.com) (Windows/Linux/macOS):
 
 ```bash
 # po zainstalowaniu Ollama:
-ollama pull nemotron-mini      # albo inny model z biblioteki Ollama
+ollama pull rwxproject/nemotron-nano-9b-v2-q4_k_m
 ```
 
 ```ini
 LOCAL_BASE_URL=http://localhost:11434/v1
-LOCAL_MODEL=nemotron-mini
+LOCAL_MODEL=rwxproject/nemotron-nano-9b-v2-q4_k_m
 LOCAL_VISION_MODEL=qwen2.5vl   # lokalny model wizyjny (opcjonalnie)
 ```
+
+> Nemotron Nano 9B v2 nie ma oficjalnego wpisu w bibliotece Ollamy — dostępne są tylko
+> konwersje społeczności. Wybór wersji (`q4_k_m` vs `q8_0`…), weryfikacja po pobraniu
+> i zapasowe źródło z Hugging Face: [docs/START-TUTAJ.md](docs/START-TUTAJ.md) — KROK 8.
 
 Alternatywy dla Ollama: **vLLM** (`http://localhost:8000/v1`) albo kontener **NVIDIA NIM**.
 
