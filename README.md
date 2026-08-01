@@ -129,6 +129,24 @@ NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 
 Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
 
+**Który model wybrać?**
+
+| Do czego | Model | Uwagi |
+|---|---|---|
+| Czat w chmurze (codziennie) | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M — najlepszy balans jakości i szybkości |
+| Czat w chmurze (maksimum) | `nemotron-3-ultra-550b-a55b` | Flagowiec, wolniejszy |
+| Wzrok w chmurze | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, wideo, mowa, tekst |
+| Model lokalny (RTX 3080) | `nemotron-nano-9b-v2` | ~6 GB w 4-bit — mieści się w 10 GB |
+| Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok |
+
+> ⚠️ **`nemotron-3-nano-30b-a3b` nie zmieści się na RTX 3080** mimo opisu „3 mld
+> aktywnych" — MoE oszczędza obliczenia, nie pamięć: wszystkie 30 mld musi być
+> w VRAM (~16–18 GB). Ten i większe (super, ultra) — tylko przez chmurę.
+>
+> Po polsku lepiej radzą sobie modele większe, stąd sensowny podział: **chmura do
+> pisania i rozumowania, model lokalny do rzeczy prywatnych i pracy bez internetu**.
+> Pełny przewodnik: [docs/START-TUTAJ.md](docs/START-TUTAJ.md#który-model-nemotron-wybrać).
+
 ### Profil „Lokalnie" — Twój RTX 3080
 
 Najprościej przez [Ollama](https://ollama.com) (Windows/Linux/macOS):
