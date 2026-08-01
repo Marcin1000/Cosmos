@@ -244,6 +244,24 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 Instalacja zmysłów: **[senses/README.md](senses/README.md)** (każdy jest opcjonalny —
 Cosmos działa też bez żadnego z nich).
 
+### 🔎 Embeddingi — wyszukiwanie semantyczne, które działa zawsze
+
+Baza wiedzy i pamięć długotrwała używają wektorów semantycznych. Cosmos liczy je
+**lokalnie** (bge-m3 w zmysłach — za darmo i prywatnie), a gdy komputer domowy jest
+wyłączony, **automatycznie przechodzi na darmowy endpoint NVIDII**
+(`llama-nemotron-embed-1b-v2`, 26 języków z polskim). Dzięki temu **baza wiedzy działa
+w pełni także z VPS-a**, gdy Twój PC śpi.
+
+```ini
+EMBED_PROVIDER=auto        # domyślnie: zmysły → chmura (senses | nvidia | off)
+NVIDIA_EMBED_MODEL=nvidia/llama-nemotron-embed-1b-v2
+```
+
+> **Bezpieczeństwo wyników:** wektory z różnych modeli mają inny wymiar i znaczenie —
+> porównywanie ich dałoby bezsens. Cosmos znakuje każdy zapisany wektor modelem, który
+> go policzył, i przy zmianie **sam przelicza** wpisy (pamięć i wzorce od razu, fragmenty
+> bazy wiedzy w tle). Aktywnego dostawcę zobaczysz w `/api/status` i w manifeście zdolności.
+
 ### Pamięć długotrwała (RAG)
 
 Pod każdą wiadomością jest przycisk **„✦ Zapamiętaj"** — zapisany fakt trafia do

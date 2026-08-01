@@ -183,6 +183,23 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
 - [ ] **Backend `ronin`** — wymaga oficjalnego SDK DJI, którego nie można dołączyć do
   repozytorium; wzorce ruchu i punkt wejścia są gotowe, brakuje samego połączenia.
 
+
+## ✅ Partia 11 — Embeddingi z chmury (GOTOWE)
+
+- [x] **Embeddingi z chmury NVIDII jako zapas** — `EMBED_PROVIDER=auto` (domyślnie):
+  najpierw zmysły (bge-m3 lokalnie, za darmo i prywatnie), a gdy komputer domowy jest
+  wyłączony — darmowy endpoint NVIDII (`llama-nemotron-embed-1b-v2`, 26 języków z polskim).
+  Dzięki temu wyszukiwanie semantyczne w bazie wiedzy działa w pełni także z VPS-a.
+  Tryby: `auto` | `senses` | `nvidia` | `off`.
+- [x] **Ochrona przed mieszaniem modeli** — każdy zapisany wektor jest znakowany modelem,
+  który go policzył (`embModel`). Wektory z różnych modeli mają inny wymiar i znaczenie,
+  więc nigdy nie są porównywane; niezgodne są wykrywane i **automatycznie przeliczane**
+  (pamięć i wzorce od razu, fragmenty bazy wiedzy w tle, partiami po 40).
+- [x] **Widoczność stanu** — aktywny dostawca embeddingów w `/api/status` i w manifeście
+  zdolności; brak embeddingów zgłaszany razem z podpowiedzią, jak je włączyć.
+- [x] **`input_type`** — modele wyszukiwawcze rozróżniają pytanie od dokumentu; Cosmos
+  wysyła `query`/`passage`, a gdy model tego pola nie przyjmuje, ponawia bez niego.
+
 ---
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
