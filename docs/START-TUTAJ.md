@@ -685,12 +685,21 @@ pip install fastapi uvicorn python-multipart
 >
 > Po każdym `cd` zerknij, czy znak zachęty kończy się na `\senses`. Jeśli nie —
 > sprawdź, gdzie naprawdę leży projekt: `dir C:\Cosmos` albo `dir D:\Cosmos`.
-Teraz dołóż zmysły, których chcesz (każdy osobno, można pominąć niepotrzebne):
+Teraz zmysły. Najprościej **wszystkie naraz** (~3 GB, jedna komenda):
+```
+pip install -r requirements.txt
+```
+
+Albo **wybiórczo**, jeśli wolisz oszczędzić miejsce — każdy zmysł jest niezależny
+i można pominąć niepotrzebne:
 ```
 pip install faster-whisper        (słuch — rozpoznawanie mowy)
+pip install piper-tts             (głos — naturalna synteza mowy po polsku)
 pip install ultralytics opencv-python   (wzrok — rozpoznawanie obiektów)
+pip install mediapipe             (sylwetka i gesty)
 pip install sentence-transformers  (pamięć — inteligentne wyszukiwanie)
 pip install pypdf python-docx openpyxl python-pptx   (czytanie dokumentów do bazy wiedzy)
+pip install requests numpy        (obserwatory: kamera 24/7, Kinect, fotogrametria)
 ```
 
 ## KROK 3 — Uruchom zmysły
@@ -715,7 +724,10 @@ Jeśli środowisko `.venv` powstało gdzie indziej (np. w folderze użytkownika)
 pełną ścieżką, np. `C:\Users\"Twoja Nazwa"\.venv\Scripts\activate`. Cudzysłowy są
 potrzebne, gdy nazwa folderu zawiera spację.
 
-> Pełne szczegóły (głos Piper, kamera 24/7, Kinect): **[../senses/README.md](../senses/README.md)**
+> **Pełna dokumentacja zmysłów: [../senses/README.md](../senses/README.md)** — pobranie
+> polskiego głosu Piper, kamera 24/7, głębia z Kinecta, słowo aktywujące „Hej Kosmos",
+> fotogrametria, analiza terenu i nasłonecznienia, planer lotu drona, sterowanie
+> aparatem przez gPhoto2, słuch przestrzenny, głowica pan/tilt oraz spis endpointów.
 
 ---
 
