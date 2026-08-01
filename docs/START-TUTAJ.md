@@ -125,6 +125,36 @@ Od teraz zakładam, że Cosmos jest w folderze `C:\Cosmos`.
 > 🔒 **Bezpieczeństwo:** plik `.env` z Twoimi kluczami zostaje tylko tam, gdzie stoi
 > serwer. Nigdy nie trafia do przeglądarki ani na GitHub.
 
+### Który model Nemotron wybrać?
+
+Na start **nie musisz nic wybierać** — zostaw domyślny i wróć tutaj później.
+Gdy zechcesz dobrać świadomie:
+
+| Do czego | Model | Dlaczego |
+|---|---|---|
+| **Czat w chmurze** (codziennie) | `nemotron-3-super-120b-a12b` | Najlepszy stosunek jakości do szybkości; kontekst 1M, mocny w rozumowaniu. Darmowy endpoint |
+| Czat w chmurze (maksimum) | `nemotron-3-ultra-550b-a55b` | Flagowiec — wolniejszy, ale najlepszy w trudnych zadaniach |
+| **Wzrok w chmurze** | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, **wideo**, mowa i tekst. Idealny do kamery i „co mam w ręku?" |
+| **Model lokalny** (RTX 3080) | `nemotron-nano-9b-v2` | W 4-bit ~6 GB — mieści się w 10 GB z zapasem |
+| Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok modelu tekstowego |
+
+**⚠️ Uwaga na pułapkę:** `nemotron-3-nano-30b-a3b` reklamuje się jako „tylko 3 mld
+aktywnych parametrów", ale architektura MoE oszczędza **obliczenia, nie pamięć** —
+wszystkie 30 mld musi zmieścić się w karcie (~16–18 GB). **Na RTX 3080 nie wejdzie.**
+Tak samo `super-120b` i `ultra-550b` — te tylko przez chmurę.
+
+**Po polsku:** im większy model, tym lepsza polszczyzna. Dlatego sensowny podział to
+**chmura do pisania i rozumowania, model lokalny do rzeczy prywatnych i pracy bez
+internetu** — czyli dokładnie ten hybrydowy układ, który daje Cosmos.
+
+> 💡 **Nie przepisuj nazw ręcznie.** W aplikacji: **Ustawienia → „Pobierz listę"**
+> pobiera prawdziwe identyfikatory prosto z endpointu i wypełnia listę wyboru.
+> Nazwa w katalogu na build.nvidia.com bywa inna niż ciąg używany w API.
+
+**Warto dołożyć później** (opcjonalnie): `llama-nemotron-embed-1b-v2` — embeddingi
+w 26 językach, w tym polskim, do bazy wiedzy; `llama-nemotron-rerank-1b-v2` —
+poprawia trafność wyszukiwania; `nemotron-ocr-v2` — OCR do skanów i PDF-ów.
+
 ## KROK 4 — Uruchom Cosmos po raz pierwszy
 
 1. Otwórz folder `C:\Cosmos` w oknie `cmd`:
