@@ -4,23 +4,56 @@ Usługa percepcji w Pythonie. Daje Cosmosowi **słuch** (Whisper), **głos** (Pi
 **wzrok** (YOLO) i **rozumienie sylwetki** (MediaPipe). Wszystko działa lokalnie
 na Twoim GPU — bez wysyłania dźwięku i obrazu do chmury.
 
+> Ten plik to **pełna dokumentacja** zmysłów. Jeśli instalujesz Cosmosa od zera, prostszy
+> przewodnik krok po kroku znajdziesz w **[../docs/START-TUTAJ.md](../docs/START-TUTAJ.md)**
+> — CZĘŚĆ 5. Oba pliki opisują ten sam moduł; tutaj jest więcej szczegółów i wszystkie
+> narzędzia sprzętowe.
+
+**Gdzie to uruchomić?** Tam, gdzie masz kamerę, mikrofon i GPU — czyli na komputerze
+domowym. Serwer Cosmosa może stać gdzie indziej (np. na VPS); wtedy w jego pliku `.env`
+ustaw `SENSES_URL=http://<adres-Tailscale-komputera>:7060`. Gdy komputer jest wyłączony,
+Cosmos działa dalej — po prostu bez lokalnej percepcji.
+
 ## Szybki start
 
-```bash
-cd senses
+```bat
+cd /d C:\Cosmos\senses
 python -m venv .venv
-.venv\Scripts\activate            # Windows  (Linux/macOS: source .venv/bin/activate)
-pip install fastapi uvicorn python-multipart   # rdzeń
-pip install faster-whisper                     # + słuch
-pip install ultralytics opencv-python          # + wzrok
-pip install piper-tts                          # + głos (patrz niżej)
-pip install mediapipe                          # + sylwetka/gesty
+.venv\Scripts\activate
+```
+(Linux/macOS: `cd senses` i `source .venv/bin/activate`. Na Windowsie **nie pomijaj `/d`** —
+samo `cd` nie przełącza dysku i po cichu zostawia Cię tam, gdzie byłeś.)
 
+Dalej masz dwie drogi. **Wszystkie zmysły naraz** — najprościej, ~3 GB zależności:
+
+```bash
+pip install -r requirements.txt
+```
+
+(To pokrywa słuch, głos, wzrok, sylwetkę, pamięć, dokumenty i obserwatory. Dodatki
+opisane niżej — słowo aktywujące, `/upscale`, głębia z Kinecta — mają własne komendy,
+bo są rzadziej potrzebne albo wymagają czegoś spoza `pip`.)
+
+Albo **wybiórczo**, tylko te zmysły, których chcesz (każdy jest niezależny):
+
+```bash
+pip install fastapi uvicorn python-multipart          # rdzeń — WYMAGANY
+pip install faster-whisper                            # + słuch (rozpoznawanie mowy)
+pip install piper-tts                                 # + głos (patrz niżej)
+pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
+pip install mediapipe                                 # + sylwetka i gesty
+pip install sentence-transformers                     # + pamięć (wyszukiwanie semantyczne)
+pip install pypdf python-docx openpyxl python-pptx    # + czytanie dokumentów do bazy wiedzy
+pip install requests numpy                            # + obserwatory (watcher, kinect, photoscan)
+```
+
+Uruchomienie:
+
+```bash
 python service.py                              # port 7060
 ```
 
 Cosmos wykryje usługę automatycznie (status „Zmysły” w panelu bocznym).
-Każdy zmysł jest niezależny — zainstaluj tylko te, których potrzebujesz.
 
 ## Głos Piper (polski)
 
@@ -54,7 +87,16 @@ pip install sentence-transformers
 
 Domyślny model to **bge-m3** (~2 GB, bardzo dobre wielojęzyczne wyniki).
 Lżejsza alternatywa (~120 MB): `set EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2`.
-Bez tego zmysłu pamięć w Cosmosie nadal działa — używa wtedy słów kluczowych.
+
+Bez tego zmysłu pamięć w Cosmosie nadal działa — serwer ma dwa stopnie zapasowe:
+najpierw **embeddingi z chmury NVIDII**, a gdy i tych nie ma (brak klucza albo
+`EMBED_PROVIDER=senses`) — wyszukiwanie po słowach kluczowych. Kolejność ustawia
+`EMBED_PROVIDER` w `.env` serwera; szczegóły w sekcji „Embeddingi" w
+[README projektu](../README.md).
+
+> ⚠️ Wektory z różnych modeli są nieporównywalne. Cosmos oznacza każdy wpis nazwą modelu
+> i po zmianie (np. gdy raz liczyły się lokalnie, a raz w chmurze) przelicza je sam przy
+> najbliższym pytaniu. Nic nie musisz robić — pierwsze zapytania bywają wolniejsze.
 
 ## Zmysł głębi — Kinect 360
 
@@ -76,7 +118,7 @@ python photoscan.py C:\zdjecia\zamek           # analiza jakości + model 3D
 python photoscan.py C:\zdjecia\zamek --dense   # + gęsta chmura punktów (.ply)
 ```
 
-Copilot ocenia zestaw zdjęć (liczba, ostrość, ekspozycja) i radzi, co dokręcić,
+Cosmos ocenia zestaw zdjęć (liczba, ostrość, ekspozycja) i radzi, co dokręcić,
 a jeśli w PATH jest **COLMAP** (https://colmap.github.io, wersja CUDA dla RTX),
 buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie —
 możesz zapytać w czacie „jak poszedł skan?".
@@ -184,7 +226,13 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 | `POST /tts` | `{text}` | audio WAV |
 | `POST /detect` | `{image: dataURL}` | `{objects[], summary}` |
 | `POST /pose` | `{image: dataURL}` | `{present, summary}` |
+| `POST /extract` | `{name: "plik.pdf", data: base64}` | `{text}` — PDF/DOCX/XLSX/PPTX do bazy wiedzy |
+| `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` — Real-ESRGAN |
 | `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
+
+`/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
+szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają
+czytelnym błędem, gdy brakuje pakietu danego zmysłu — usługa startuje zawsze.
 
 ## Wydajność na RTX 3080
 

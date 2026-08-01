@@ -673,26 +673,61 @@ lokalnego rozpoznawania mowy, naturalnego głosu ani analizy obrazu na Twoim GPU
 ## KROK 2 — Zainstaluj zmysły
 W oknie `cmd`:
 ```
-cd C:\Cosmos\senses
+cd /d C:\Cosmos\senses
 python -m venv .venv
 .venv\Scripts\activate
 pip install fastapi uvicorn python-multipart
 ```
-Teraz dołóż zmysły, których chcesz (każdy osobno, można pominąć niepotrzebne):
+
+> ⚠️ **Trzymasz Cosmosa na innym dysku niż `C:`?** Podmień ścieżkę, ale **nie pomijaj `/d`** —
+> samo `cd D:\Cosmos\senses` po cichu **nie przełączy dysku** i zostaniesz tam, gdzie byłeś,
+> bez żadnego komunikatu o błędzie. Ukośniki na Windowsie są w tył (`\`), nie `//`.
+>
+> Po każdym `cd` zerknij, czy znak zachęty kończy się na `\senses`. Jeśli nie —
+> sprawdź, gdzie naprawdę leży projekt: `dir C:\Cosmos` albo `dir D:\Cosmos`.
+Teraz zmysły. Najprościej **wszystkie naraz** (~3 GB, jedna komenda):
+```
+pip install -r requirements.txt
+```
+
+Albo **wybiórczo**, jeśli wolisz oszczędzić miejsce — każdy zmysł jest niezależny
+i można pominąć niepotrzebne:
 ```
 pip install faster-whisper        (słuch — rozpoznawanie mowy)
+pip install piper-tts             (głos — naturalna synteza mowy po polsku)
 pip install ultralytics opencv-python   (wzrok — rozpoznawanie obiektów)
+pip install mediapipe             (sylwetka i gesty)
 pip install sentence-transformers  (pamięć — inteligentne wyszukiwanie)
 pip install pypdf python-docx openpyxl python-pptx   (czytanie dokumentów do bazy wiedzy)
+pip install requests numpy        (obserwatory: kamera 24/7, Kinect, fotogrametria)
 ```
 
 ## KROK 3 — Uruchom zmysły
+W tym samym oknie `cmd` (musisz być w folderze `senses`, z aktywnym `(.venv)` z przodu):
 ```
 python service.py
 ```
 Zostaw to okno otwarte. W Cosmosie w panelu bocznym „Zmysły" zaświeci się na zielono.
 
-> Pełne szczegóły (głos Piper, kamera 24/7, Kinect): **[../senses/README.md](../senses/README.md)**
+> **„can't open file … service.py: No such file or directory"** — nie jesteś w folderze
+> `senses`. Wróć do ostrzeżenia w KROKU 2: najczęściej winne jest `cd` bez `/d`.
+> Sprawdź `dir service.py` — jeśli plik się nie wypisze, jesteś w złym miejscu.
+
+**Przy kolejnym uruchomieniu komputera** wystarczą trzy linijki (podmień literę dysku,
+jeśli trzeba):
+```
+cd /d C:\Cosmos\senses
+.venv\Scripts\activate
+python service.py
+```
+Jeśli środowisko `.venv` powstało gdzie indziej (np. w folderze użytkownika), aktywuj je
+pełną ścieżką, np. `C:\Users\"Twoja Nazwa"\.venv\Scripts\activate`. Cudzysłowy są
+potrzebne, gdy nazwa folderu zawiera spację.
+
+> **Pełna dokumentacja zmysłów: [../senses/README.md](../senses/README.md)** — pobranie
+> polskiego głosu Piper, kamera 24/7, głębia z Kinecta, słowo aktywujące „Hej Kosmos",
+> fotogrametria, analiza terenu i nasłonecznienia, planer lotu drona, sterowanie
+> aparatem przez gPhoto2, słuch przestrzenny, głowica pan/tilt oraz spis endpointów.
 
 ---
 
