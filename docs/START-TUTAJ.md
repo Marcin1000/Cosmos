@@ -306,14 +306,25 @@ przechowuje pliki: nagrania, audio, grafiki ze Studia, migawki z osi czasu.
 
 | Dostawca | Cena orientacyjnie | Zalety | Wady |
 |---|---|---|---|
-| **Hetzner** ⭐ | ~4,5 €/mies (~20 zł) za 2 vCPU / 4 GB / 40 GB | Bezkonkurencyjny stosunek ceny do zasobów w Europie. Norymberga = ~25 ms z Polski. Rozliczenie godzinowe, snapshoty | Nowe konta bywają weryfikowane dokumentem. Faktura unijna (reverse charge), nie polska |
+| **Hetzner** ⭐ | ~7,4 €/mies (~31 zł) z VAT za 2 vCPU / 4 GB / 40 GB | Bezkonkurencyjny stosunek ceny do zasobów w Europie. Norymberga = ~25 ms z Polski. Rozliczenie godzinowe, snapshoty | Nowe konta bywają weryfikowane dokumentem. Faktura unijna (reverse charge), nie polska |
 | **Mikr.us** | ~15–25 zł/mies | Polska firma, **polska faktura i wsparcie po polsku**, prosty panel | Mniejsze zasoby, współdzielone — sprawdź rozmiar dysku w planie |
 | **OVH** | ~20–25 zł/mies | **Serwerownia w Warszawie**, polska faktura VAT | Panel nieprzyjemny, wsparcie bywa wolne |
 | **DigitalOcean** | ~6 $/mies (~24 zł) | Najlepsza dokumentacja i UX | Drożej za te same zasoby, rozliczenie w USD |
 
-**Moja rekomendacja: Hetzner CX22** (albo aktualny odpowiednik). Za ~20 zł miesięcznie
-dostajesz dwa razy więcej niż u konkurencji, a lokalizacja w Niemczech jest z Polski
-praktycznie nieodczuwalna przy czacie.
+**Moja rekomendacja: Hetzner CX23** (albo aktualny odpowiednik z linii CX — nazwy zmieniają
+się co rok, szukaj **2 vCPU / 4 GB / 40 GB** w zakładce *Shared Cost-Optimized*).
+Za ~31 zł miesięcznie dostajesz dwa razy więcej niż u konkurencji, a lokalizacja
+w Niemczech jest z Polski praktycznie nieodczuwalna przy czacie.
+
+**Ustawienia w kalkulatorze Hetznera — na co uważać:**
+
+| Opcja | Wybierz | Dlaczego |
+|---|---|---|
+| Zakładka | **Shared Cost-Optimized** (linia CX) | Cosmos nie potrzebuje dedykowanego CPU |
+| VCPU | **Intel/AMD**, 2 rdzenie | ⚠️ **nie bierz Ampere (ARM)** — Chromium dla automatyzacji web jest tam kłopotliwy. Oszczędność 3 € nie jest tego warta |
+| Availability Zone | NBG1 lub FSN1 (Niemcy) | Obie ~25 ms z Polski. Helsinki też zadziała |
+| Adres IP | ⚠️ **Primary IPv4**, nie „IPv6 only" | **To najczęstszy błąd.** Serwer bez IPv4 jest niewidoczny z LTE w telefonie, hoteli i wielu polskich sieci. Kosztuje ~0,60 €/mies i oszczędza godziny szukania przyczyny |
+| Expected Traffic | zostaw jak jest | 20 TB jest w cenie, zużyjesz ułamek procenta |
 
 > **Jeden wyjątek:** jeśli prowadzisz działalność i potrzebujesz **polskiej faktury VAT**
 > do kosztów, weź **OVH** (Warszawa) albo **Mikr.us**. To jedyny powód, dla którego
@@ -326,7 +337,7 @@ dodatkowych rdzeni (nic nie dadzą — model liczy się gdzie indziej) ani „VP
 > 💡 Zacznij od najmniejszego sensownego planu. RAM i CPU zwykle powiększysz później
 > jednym kliknięciem; **dysk też, ale tylko w górę i bez powrotu** — dlatego od razu 40 GB.
 
-**Włącz backupy** u dostawcy (zwykle +20% ceny, ~4 zł). Przy Twoich rozmowach i bazie
+**Włącz backupy** u dostawcy (zwykle +20% ceny, ~6 zł). Przy Twoich rozmowach i bazie
 wiedzy warte tych pieniędzy.
 
 > **Dlaczego Tailscale, a nie publiczny adres?** Nie otwierasz żadnych portów na świat,
@@ -336,6 +347,9 @@ wiedzy warte tych pieniędzy.
 ## KROK 1 — Załóż VPS
 
 1. U dostawcy utwórz nowy serwer z systemem **Ubuntu 24.04 LTS**.
+   - Zaznacz **Primary IPv4** (patrz tabela wyżej — bez tego nie wejdziesz z telefonu).
+   - Zaznacz **backupy** (+20% ceny). Przy Twojej bazie wiedzy warte tych pieniędzy.
+   - Firewall dostawcy możesz zostawić wyłączony — dostęp zamykamy przez Tailscale w KROKU 5.
 2. Zapisz jego adres IP i hasło do użytkownika `root` (albo skonfiguruj klucz SSH).
 3. Połącz się z serwerem z komputera (w `cmd` na Windows):
    ```
