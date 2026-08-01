@@ -278,7 +278,15 @@ function saveMemories() {
 // timeoutMs: przy indeksowaniu (upload) dajemy modelowi czas na start (60 s),
 // ale przy wyszukiwaniu w trakcie rozmowy czekamy krótko (5 s), żeby
 // niedostępna usługa zmysłów nie opóźniała odpowiedzi czatu.
-async function embedTexts(texts, timeoutMs = 60000) {
+// Embeddingi: lokalnie przez zmysły (bge-m3 na Twoim GPU) albo z chmury NVIDII.
+// „auto" = najpierw zmysły (za darmo, prywatnie), a gdy są offline — chmura.
+// Dzięki temu baza wiedzy działa w pełni także wtedy, gdy komputer domowy śpi.
+const EMBED = {
+  provider: (process.env.EMBED_PROVIDER || 'auto').toLowerCase(), // auto | senses | nvidia | off
+  nvidiaModel: process.env.NVIDIA_EMBED_MODEL || 'nvidia/llama-nemotron-embed-1b-v2',
+};
+
+async function embedViaSenses(texts, timeoutMs) {
   try {
     const r = await fetch(`${SENSES_URL}/embed`, {
       method: 'POST',
@@ -288,10 +296,87 @@ async function embedTexts(texts, timeoutMs = 60000) {
     });
     if (!r.ok) return null;
     const d = await r.json();
-    return Array.isArray(d.vectors) ? d.vectors : null;
+    if (!Array.isArray(d.vectors) || !d.vectors.length) return null;
+    return { vectors: d.vectors, model: `senses:${d.vectors[0].length}` };
   } catch {
     return null;
   }
+}
+
+async function embedViaNvidia(texts, timeoutMs, inputType) {
+  const ep = ENDPOINTS.cloud;
+  if (!ep.apiKey) return null;
+  // Modele wyszukiwawcze rozróżniają pytanie od dokumentu (input_type). Gdy
+  // dany model tego pola nie przyjmuje, powtarzamy żądanie bez niego.
+  for (const withType of [true, false]) {
+    try {
+      const body = { input: texts, model: EMBED.nvidiaModel, encoding_format: 'float' };
+      if (withType) {
+        body.input_type = inputType === 'query' ? 'query' : 'passage';
+        body.truncate = 'END';
+      }
+      const r = await fetch(`${ep.baseUrl}/embeddings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(ep) },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!r.ok) {
+        if (withType && (r.status === 400 || r.status === 422)) continue;  // spróbuj bez input_type
+        return null;
+      }
+      const d = await r.json();
+      const rows = Array.isArray(d.data) ? [...d.data] : [];
+      if (!rows.length) return null;
+      rows.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      const vectors = rows.map((x) => x.embedding).filter(Array.isArray);
+      if (vectors.length !== texts.length) return null;
+      return { vectors, model: `nvidia:${EMBED.nvidiaModel}` };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Zwraca { vectors, model } albo null. `model` znakuje wektory — patrz sameModel(). */
+async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
+  if (!texts || !texts.length || EMBED.provider === 'off') return null;
+  const order = EMBED.provider === 'senses' ? ['senses']
+    : EMBED.provider === 'nvidia' ? ['nvidia']
+    : ['senses', 'nvidia'];
+  for (const src of order) {
+    const out = src === 'senses'
+      ? await embedViaSenses(texts, timeoutMs)
+      : await embedViaNvidia(texts, timeoutMs, inputType);
+    if (out) return out;
+  }
+  return null;
+}
+
+/** Który dostawca embeddingów realnie zadziała przy obecnej konfiguracji. */
+function embedStatus(sensesHasEmbed) {
+  if (EMBED.provider === 'off') return { provider: 'off', model: null, opis: 'wyłączone' };
+  const cloudReady = Boolean(ENDPOINTS.cloud.apiKey);
+  if (EMBED.provider === 'nvidia') {
+    return { provider: cloudReady ? 'nvidia' : null, model: EMBED.nvidiaModel,
+      opis: cloudReady ? `chmura NVIDIA (${EMBED.nvidiaModel})` : 'brak NVIDIA_API_KEY' };
+  }
+  if (EMBED.provider === 'senses') {
+    return { provider: sensesHasEmbed ? 'senses' : null, model: 'bge-m3',
+      opis: sensesHasEmbed ? 'zmysły lokalnie' : 'zmysły offline — wyszukiwanie po słowach kluczowych' };
+  }
+  if (sensesHasEmbed) return { provider: 'senses', model: 'bge-m3', opis: 'zmysły lokalnie' };
+  if (cloudReady) {
+    return { provider: 'nvidia', model: EMBED.nvidiaModel,
+      opis: `zmysły offline → chmura NVIDIA (${EMBED.nvidiaModel})` };
+  }
+  return { provider: null, model: null, opis: 'brak — wyszukiwanie po słowach kluczowych' };
+}
+
+/** Wektory z różnych modeli są nieporównywalne — pilnujemy zgodności znacznika. */
+function sameModel(item, model) {
+  return Boolean(item.embedding) && (item.embModel || null) === model;
 }
 
 function cosine(a, b) {
@@ -319,16 +404,18 @@ function keywordScore(query, text) {
 async function searchMemory(query, limit = 4) {
   if (!memories.length || !query || !query.trim()) return [];
 
-  let qvec = null;
-  const vecs = await embedTexts([query], 5000);
-  if (vecs) {
-    qvec = vecs[0];
-    // uzupełnij embeddingi wpisów dodanych, gdy zmysły były offline
-    const missing = memories.filter((m) => !m.embedding);
+  let qvec = null, qmodel = null;
+  const q = await embedTexts([query], 5000, 'query');
+  if (q) {
+    qvec = q.vectors[0];
+    qmodel = q.model;
+    // Uzupełnij wpisy bez embeddingu ORAZ policzone innym modelem — wektory
+    // z różnych modeli są nieporównywalne, więc trzeba je przeliczyć.
+    const missing = memories.filter((m) => !sameModel(m, qmodel));
     if (missing.length) {
-      const embs = await embedTexts(missing.map((m) => m.text));
+      const embs = await embedTexts(missing.map((m) => m.text), 60000, 'passage');
       if (embs) {
-        missing.forEach((m, i) => { m.embedding = embs[i]; });
+        missing.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
         saveMemories();
       }
     }
@@ -338,7 +425,7 @@ async function searchMemory(query, limit = 4) {
   return memories
     .map((m) => ({
       m,
-      score: (qvec && m.embedding) ? cosine(qvec, m.embedding) : keywordScore(query, m.text),
+      score: (qvec && sameModel(m, qmodel)) ? cosine(qvec, m.embedding) : keywordScore(query, m.text),
     }))
     .filter((s) => s.score > threshold)
     .sort((a, b) => b.score - a.score)
@@ -371,8 +458,8 @@ async function handleMemory(req, res) {
     const text = String(data.text || '').trim().slice(0, 2000);
     if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
     const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, time: Date.now(), embedding: null };
-    const vecs = await embedTexts([text]);
-    if (vecs) item.embedding = vecs[0];
+    const vecs = await embedTexts([text], 60000, 'passage');
+    if (vecs) { item.embedding = vecs.vectors[0]; item.embModel = vecs.model; }
     memories.push(item);
     saveMemories();
     return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding), total: memories.length });
@@ -624,8 +711,12 @@ function chunkText(text, size = 1500, max = 30) {
 async function buildChunks(text) {
   const parts = chunkText(text || '');
   if (!parts.length) return [];
-  const embs = await embedTexts(parts);
-  return parts.map((t, i) => ({ text: t, embedding: embs ? embs[i] : null }));
+  const embs = await embedTexts(parts, 60000, 'passage');
+  return parts.map((t, i) => ({
+    text: t,
+    embedding: embs ? embs.vectors[i] : null,
+    embModel: embs ? embs.model : null,
+  }));
 }
 
 function kbItemMeta(it) {
@@ -642,6 +733,33 @@ function kbItemMeta(it) {
   };
 }
 
+// Przeliczenie fragmentów bazy wiedzy na aktualny model embeddingów.
+// Działa w tle i pilnuje, by nie uruchomić się dwa razy naraz.
+let reembedBusy = false;
+async function reembedKbChunks(model, budget = 40) {
+  if (reembedBusy) return;
+  const stale = [];
+  for (const it of kbItems) {
+    for (const ch of it.chunks || []) {
+      if (!sameModel(ch, model)) stale.push(ch);
+      if (stale.length >= budget) break;
+    }
+    if (stale.length >= budget) break;
+  }
+  if (!stale.length) return;
+  reembedBusy = true;
+  try {
+    const embs = await embedTexts(stale.map((c) => c.text), 60000, 'passage');
+    if (embs) {
+      stale.forEach((c, i) => { c.embedding = embs.vectors[i]; c.embModel = embs.model; });
+      saveKb();
+      console.log(`  → Przeliczono ${stale.length} fragmentów bazy wiedzy na model ${model}`);
+    }
+  } catch { /* spróbujemy przy następnym pytaniu */ } finally {
+    reembedBusy = false;
+  }
+}
+
 async function kbSearch(query, excludeIds = [], limit = 4) {
   if (!query || !query.trim()) return [];
   const pool = [];
@@ -651,15 +769,19 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
   }
   if (!pool.length) return [];
 
-  let qvec = null;
-  const vecs = await embedTexts([query], 5000);
-  if (vecs) qvec = vecs[0];
+  let qvec = null, qmodel = null;
+  const q = await embedTexts([query], 5000, 'query');
+  if (q) { qvec = q.vectors[0]; qmodel = q.model; }
+
+  // Fragmenty policzone innym modelem (albo wcale) przelicz w tle — nie
+  // blokujemy tym odpowiedzi, przy kolejnym pytaniu będą już gotowe.
+  if (qmodel) reembedKbChunks(qmodel);
 
   const threshold = qvec ? 0.35 : 0.18;
   return pool
     .map((c) => ({
       c,
-      score: (qvec && c.embedding) ? cosine(qvec, c.embedding) : keywordScore(query, c.text),
+      score: (qvec && sameModel(c, qmodel)) ? cosine(qvec, c.embedding) : keywordScore(query, c.text),
     }))
     .filter((s) => s.score > threshold)
     .sort((a, b) => b.score - a.score)
@@ -812,8 +934,8 @@ async function handleLessons(req, res, pathname) {
       objects: Array.isArray(data.objects) ? data.objects.slice(0, 40) : [],
       thumbId, createdAt: Date.now(), embedding: null,
     };
-    const vecs = await embedTexts([lessonDescriptor(item)]);
-    if (vecs) item.embedding = vecs[0];
+    const vecs = await embedTexts([lessonDescriptor(item)], 60000, 'passage');
+    if (vecs) { item.embedding = vecs.vectors[0]; item.embModel = vecs.model; }
     lessons.push(item);
     saveLessons();
     addEvent('nauka', `nauczono rozpoznawać: ${label}`);
@@ -842,21 +964,25 @@ async function matchLessons(text, objects, limit = 4) {
   if (!lessons.length) return [];
   const queryText = [text, objects.join(', ')].filter(Boolean).join('. ');
   if (!queryText.trim()) return [];
-  let qvec = null;
-  const vecs = await embedTexts([queryText], 5000);
-  if (vecs) {
-    qvec = vecs[0];
-    const missing = lessons.filter((l) => !l.embedding);
+  let qvec = null, qmodel = null;
+  const q = await embedTexts([queryText], 5000, 'query');
+  if (q) {
+    qvec = q.vectors[0];
+    qmodel = q.model;
+    const missing = lessons.filter((l) => !sameModel(l, qmodel));
     if (missing.length) {
-      const embs = await embedTexts(missing.map(lessonDescriptor));
-      if (embs) { missing.forEach((l, i) => { l.embedding = embs[i]; }); saveLessons(); }
+      const embs = await embedTexts(missing.map(lessonDescriptor), 60000, 'passage');
+      if (embs) {
+        missing.forEach((l, i) => { l.embedding = embs.vectors[i]; l.embModel = embs.model; });
+        saveLessons();
+      }
     }
   }
   const objSet = new Set(objects.map((o) => String(o).toLowerCase()));
   const threshold = qvec ? 0.4 : 0.2;
   return lessons
     .map((l) => {
-      let score = (qvec && l.embedding) ? cosine(qvec, l.embedding) : keywordScore(queryText, lessonDescriptor(l));
+      let score = (qvec && sameModel(l, qmodel)) ? cosine(qvec, l.embedding) : keywordScore(queryText, lessonDescriptor(l));
       // premia, gdy wykryte obiekty pokrywają się z obiektami wzorca
       const overlap = (l.objects || []).filter((o) => objSet.has(String(o).toLowerCase())).length;
       if (overlap) score += 0.15 * overlap;
@@ -1548,7 +1674,11 @@ async function capabilityManifest() {
   const missing = [];
   if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA — ustaw NVIDIA_API_KEY w .env');
   if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX — uruchom Ollamę i ustaw LOCAL_MODEL');
-  if (!senses.online) missing.push('zmysły (mowa, wzrok, embeddingi) — uruchom python senses/service.py');
+  if (!senses.online) missing.push('zmysły (mowa, wzrok) — uruchom python senses/service.py');
+  if (!embedStatus(senses.caps && senses.caps.embed).provider) {
+    missing.push('wyszukiwanie semantyczne — uruchom zmysły albo ustaw NVIDIA_API_KEY '
+      + '(embeddingi z chmury działają też przy wyłączonym komputerze domowym)');
+  }
   if (!imgs.length) missing.push('generowanie obrazów — ustaw OPENAI_API_KEY lub FIREFLY_CLIENT_ID');
   if (!STUDIO.eleven.key) missing.push('lektor ElevenLabs — ustaw ELEVENLABS_API_KEY');
   if (!STUDIO.seedance.key) missing.push('wideo Seedance — ustaw SEEDANCE_API_KEY');
@@ -1567,6 +1697,7 @@ async function capabilityManifest() {
       id, model: ep.model || '(nie ustawiono)', gotowy: Boolean(ep.apiKey || ep.model),
     })),
     zmysly: { online: senses.online, ...senses.caps },
+    embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
       eksport: STUDIO.exportDir || null },
     wiedza: { rozmowy: convIndex.length, pamiec: memories.length, bazaWiedzy: kbItems.length,
@@ -1596,6 +1727,7 @@ function capabilityText(m) {
     `Zmysły: ${z.online ? 'online' : 'offline'} — mowa(Whisper)=${yes(z.whisper)}, `
       + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, sylwetka=${yes(z.mediapipe)}, `
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
+    `Wyszukiwanie semantyczne (embeddingi): ${m.embeddingi.opis}`,
     `Studio: obraz=${m.studio.obraz.join('/') || 'brak'}, lektor=${yes(m.studio.dzwiek)}, `
       + `wideo=${yes(m.studio.wideo)}`,
     `Wiedza: rozmów=${m.wiedza.rozmowy}, faktów w pamięci=${m.wiedza.pamiec}, `
@@ -1993,6 +2125,7 @@ async function handleStatus(req, res) {
       }
     })(),
   ]);
+  results.embeddings = embedStatus(results.senses?.caps?.embed);
   sendJson(res, 200, results);
 }
 

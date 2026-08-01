@@ -292,10 +292,42 @@ jest wyłączony. Układ docelowy:
 > (Twoje pieniądze) i przeczyta Twoje dane. Ustawiamy je w KROKU 4.
 
 **Co będziesz potrzebował:**
-- Konto u dostawcy VPS (np. Hetzner, DigitalOcean, Mikr.us, OVH). Wystarczy najtańszy
-  plan: 1–2 rdzenie, 2 GB RAM, ~20 GB dysku.
+- Konto u dostawcy VPS (rekomendacja niżej) — **2 GB RAM i 40 GB dysku**.
 - Konto **Tailscale** (darmowe) — łączy VPS, telefon i komputer w prywatną sieć.
 - Około 30–40 minut.
+
+### Którego dostawcę VPS wybrać?
+
+**Najpierw zrozum, czego Cosmos naprawdę potrzebuje.** Nie potrzebuje mocy obliczeniowej —
+modele liczą się w chmurze NVIDII albo na Twoim RTX w domu. VPS uruchamia tylko serwer
+Node.js i trzyma dane, co zajmuje ~200 MB RAM. **Krytyczny jest dysk**, bo baza wiedzy
+przechowuje pliki: nagrania, audio, grafiki ze Studia, migawki z osi czasu.
+**Bierz 40 GB, nie 20** — 20 GB skończy się po kilku dłuższych nagraniach.
+
+| Dostawca | Cena orientacyjnie | Zalety | Wady |
+|---|---|---|---|
+| **Hetzner** ⭐ | ~4,5 €/mies (~20 zł) za 2 vCPU / 4 GB / 40 GB | Bezkonkurencyjny stosunek ceny do zasobów w Europie. Norymberga = ~25 ms z Polski. Rozliczenie godzinowe, snapshoty | Nowe konta bywają weryfikowane dokumentem. Faktura unijna (reverse charge), nie polska |
+| **Mikr.us** | ~15–25 zł/mies | Polska firma, **polska faktura i wsparcie po polsku**, prosty panel | Mniejsze zasoby, współdzielone — sprawdź rozmiar dysku w planie |
+| **OVH** | ~20–25 zł/mies | **Serwerownia w Warszawie**, polska faktura VAT | Panel nieprzyjemny, wsparcie bywa wolne |
+| **DigitalOcean** | ~6 $/mies (~24 zł) | Najlepsza dokumentacja i UX | Drożej za te same zasoby, rozliczenie w USD |
+
+**Moja rekomendacja: Hetzner CX22** (albo aktualny odpowiednik). Za ~20 zł miesięcznie
+dostajesz dwa razy więcej niż u konkurencji, a lokalizacja w Niemczech jest z Polski
+praktycznie nieodczuwalna przy czacie.
+
+> **Jeden wyjątek:** jeśli prowadzisz działalność i potrzebujesz **polskiej faktury VAT**
+> do kosztów, weź **OVH** (Warszawa) albo **Mikr.us**. To jedyny powód, dla którego
+> odradzałbym Hetznera.
+
+**Czego nie kupować:** planu z 1 GB RAM (zabraknie zapasu przy imporcie do bazy wiedzy),
+dodatkowych rdzeni (nic nie dadzą — model liczy się gdzie indziej) ani „VPS z GPU"
+(kosztuje kilkanaście razy więcej, a masz RTX 3080 w domu).
+
+> 💡 Zacznij od najmniejszego sensownego planu. RAM i CPU zwykle powiększysz później
+> jednym kliknięciem; **dysk też, ale tylko w górę i bez powrotu** — dlatego od razu 40 GB.
+
+**Włącz backupy** u dostawcy (zwykle +20% ceny, ~4 zł). Przy Twoich rozmowach i bazie
+wiedzy warte tych pieniędzy.
 
 > **Dlaczego Tailscale, a nie publiczny adres?** Nie otwierasz żadnych portów na świat,
 > nie potrzebujesz domeny ani certyfikatów, a masz dostęp z każdego miejsca. VPS jest
@@ -420,9 +452,31 @@ Zrestartuj usługę: `sudo systemctl restart cosmos`.
 
 > To samo dotyczy zmysłów: jeśli chcesz ich używać, uruchom `senses/service.py` na
 > domowym komputerze i w `.env` na VPS ustaw `SENSES_URL=http://100.88.88.88:7060`.
-> Gdy komputer śpi, Cosmos używa zapasowo rozpoznawania mowy z przeglądarki, a
-> wyszukiwanie w bazie wiedzy przechodzi na tryb słów kluczowych. Nic się nie psuje —
-> część funkcji po prostu czeka na PC.
+> Gdy komputer śpi, Cosmos używa zapasowo rozpoznawania mowy z przeglądarki.
+> Nic się nie psuje — część funkcji po prostu czeka na PC.
+
+### Baza wiedzy działająca zawsze (embeddingi z chmury)
+
+Wyszukiwanie semantyczne w bazie wiedzy domyślnie liczy się na Twoim GPU (model bge-m3
+w zmysłach). Na VPS-ie z wyłączonym komputerem domowym oznaczałoby to zejście do
+prostego szukania po słowach kluczowych.
+
+**Cosmos radzi sobie z tym sam.** Domyślne ustawienie `EMBED_PROVIDER=auto` działa tak:
+
+- komputer domowy **włączony** → embeddingi liczą się lokalnie (za darmo i prywatnie),
+- komputer **wyłączony** → Cosmos automatycznie przechodzi na **darmowy endpoint NVIDII**
+  (`llama-nemotron-embed-1b-v2`, 26 języków z polskim).
+
+Nie musisz nic ustawiać — wystarczy, że masz `NVIDIA_API_KEY`. Jeśli VPS w ogóle nie ma
+łączyć się z domowym GPU, możesz wymusić chmurę na stałe: `EMBED_PROVIDER=nvidia`.
+
+> **Dlaczego to bezpieczne:** wektory z różnych modeli mają inny wymiar i znaczenie, więc
+> ich mieszanie dałoby bezsensowne wyniki. Cosmos znakuje każdy zapisany wektor modelem,
+> który go policzył, i przy zmianie **automatycznie przelicza** wpisy. Przy dużej bazie
+> pierwsze zapytania po zmianie mogą być nieco wolniejsze — potem wszystko wraca do normy.
+>
+> Sprawdzisz aktualny stan w **Ustawieniach → statystyki** albo pytając Cosmosa
+> „pokaż, co potrafisz" (Nauka → Pomysły).
 
 ## Aktualizacja Cosmosa na VPS
 
