@@ -2514,14 +2514,17 @@ document.addEventListener('keydown', (e) => {
 // ----------------------------------------------------------------
 
 el.newChatBtn.addEventListener('click', newConversation);
-el.collapseBtn.addEventListener('click', () => {
+function closeSidebar() {
   el.sidebar.classList.add('collapsed');
   document.querySelector('.app').classList.add('sidebar-hidden');
-});
+}
+el.collapseBtn.addEventListener('click', closeSidebar);
 el.expandBtn.addEventListener('click', () => {
   el.sidebar.classList.remove('collapsed');
   document.querySelector('.app').classList.remove('sidebar-hidden');
 });
+// na telefonie panel przykrywa czat — dotknięcie przyciemnionego tła go zamyka
+$('sidebar-scrim').addEventListener('click', closeSidebar);
 
 // wyszukiwarka rozmów — po tytule (natychmiast) i po treści (z serwera)
 let convContentMatchIds = new Set();

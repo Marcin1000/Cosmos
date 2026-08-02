@@ -110,6 +110,10 @@ kbd {
 
 /* ============================ SIDEBAR ============================ */
 
+/* Na szerokim ekranie panel boczny stoi obok treści — przyciemnienie zbędne.
+   Włącza je dopiero reguła mobilna, gdzie panel nakłada się na czat. */
+.sidebar-scrim { display: none; }
+
 .sidebar {
   width: 272px;
   min-width: 272px;
@@ -1433,12 +1437,75 @@ kbd {
   }
   .sidebar.collapsed { margin-left: -288px; }
   #expand-btn { display: inline-flex; }
+
+  /* Panel boczny nakłada się na czat, więc tło musi zgasnąć — inaczej obie
+     warstwy czyta się naraz. Dotknięcie przyciemnienia zamyka panel. */
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(2, 3, 6, .6);
+    backdrop-filter: blur(2px);
+    opacity: 1;
+    transition: opacity .25s ease;
+  }
+  .app.sidebar-hidden .sidebar-scrim { opacity: 0; pointer-events: none; }
   .field-grid { grid-template-columns: 1fr; }
   .msg-user .msg-content { max-width: 90%; }
   .endpoint-tab { padding: 6px 10px; }
   .topbar-model { display: none; }
   .composer-wrap { padding: 8px 12px 12px; }
   .messages { padding: 12px 14px 20px; }
+
+  /* Chrome na Androidzie (i Safari na iOS) przybliża stronę po dotknięciu pola
+     z czcionką < 16px — i zoom zostaje po zamknięciu klawiatury. 16px wyłącza
+     ten mechanizm; wielkość dotyczy tylko pól tekstowych. */
+  .composer textarea,
+  .conv-search,
+  .field input[type="text"], .field input[type="number"],
+  .field textarea, .field select,
+  .field input.mono, .field select.mono { font-size: 16px; }
+
+  /* Pasek górny: zakładki przewijane palcem zamiast rozpychania szerokości */
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .endpoint-switch {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .endpoint-switch::-webkit-scrollbar { display: none; }
+  .endpoint-tab { flex-shrink: 0; }
+
+  /* Modale: prawie pełny ekran, przewijanie w środku */
+  .modal-overlay { padding: 8px; }
+  .modal { max-height: calc(100dvh - 16px); }
+  .modal-header { padding: 14px 16px; }
+  .modal-body { padding: 16px; }
+
+  /* „Pobierz listę" i podobne przyciski schodzą pod pole zamiast je zwężać */
+  .field-row { flex-wrap: wrap; }
+  .field-row input { min-width: 180px; }
+
+  /* Listy w Studiu zawijają się na osobne wiersze, zamiast ucinać etykiety
+     w rodzaju „1024 × 1024 (kwadrat)" w połowie słowa */
+  .studio-section .field-row select,
+  .studio-section .field-row input { min-width: 190px; }
+
+  /* Ekran powitalny ciaśniej */
+  .welcome { padding: 7vh 18px 20px; }
+  .welcome h1 { font-size: 22px; }
+  .welcome-sub { margin-bottom: 28px; }
+
+  /* Tryb głosowy: podpowiedź nie dotyka krawędzi */
+  .voice-transcript, .voice-answer { max-width: calc(100vw - 40px); }
+  .voice-hint { left: 20px; right: 20px; text-align: center; }
+}
+
+/* Skróty klawiszowe pod stopką mają sens tylko przy fizycznej klawiaturze.
+   Na ekranie dotykowym to dwie linijki nieprzydatnego tekstu. */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint { display: none; }
 }
 
 /* ================= NAUKA ================= */

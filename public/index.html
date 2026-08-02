@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#05060a" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
   <title>Cosmos</title>
@@ -42,6 +42,9 @@
   </div>
 
   <div class="app">
+    <!-- przyciemnienie tła, gdy panel boczny nakłada się na treść (telefon) -->
+    <div class="sidebar-scrim" id="sidebar-scrim" aria-hidden="true"></div>
+
     <!-- ================= SIDEBAR ================= -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
@@ -193,7 +196,7 @@
             <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
           </button>
         </div>
-        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
+        <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <span class="kbd-hint"><kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span></span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
       </div>
     </main>
   </div>
