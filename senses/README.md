@@ -200,19 +200,33 @@ buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie —
 możesz zapytać w czacie „jak poszedł skan?".
 
 
-## Słowo aktywujące — „Hej, Kosmos" w tle
+## Słowo aktywujące — nasłuch w tle
 
 `wake_listener.py` nasłuchuje mikrofonu **nawet przy zamkniętej przeglądarce** i po
-wykryciu słowa aktywującego wysyła zdarzenie do Cosmosa. Tryb głosowy w przeglądarce
-(Web Speech) działa tylko przy otwartej karcie — ten moduł zdejmuje to ograniczenie.
+wykryciu słowa aktywującego wysyła zdarzenie do Cosmosa.
+
+> ⚠️ **Moduł niedokończony — przeczytaj, zanim go uruchomisz.** Dziś zdarzenie `wake`
+> trafia wyłącznie do kontekstu percepcji (model dowie się przy następnej rozmowie,
+> że o danej godzinie padło słowo aktywujące). **Nie otwiera trybu głosowego, nie
+> zaczyna rozmowy i nic nie mówi** — brakuje kanału z serwera do przeglądarki, który
+> by to uruchomił. Do rozmowy głosowej używaj trybu w przeglądarce (ikona fal
+> dźwiękowych); działa po polsku, tyle że wymaga otwartej karty.
+>
+> Drugie ograniczenie: **openWakeWord nie ma polskiego „Hej Kosmos"**. Gotowe modele
+> są angielskie (domyślnie `hey_jarvis`), więc budzisz się słowem po angielsku.
+> Polski model trzeba wytrenować samodzielnie — openWakeWord daje do tego notatnik
+> w Google Colab.
 
 ```bash
 pip install openwakeword sounddevice numpy requests
+python -c "import openwakeword.utils; openwakeword.utils.download_models()"   # raz
 python wake_listener.py
 ```
 
-Domyślnie używa gotowych modeli openWakeWord; własne „Hej Kosmos" trzeba wytrenować
-(instrukcja w nagłówku pliku).
+Pobranie modeli jest osobnym krokiem — bez niego pierwsze uruchomienie kończy się
+błędem. Mikrofon widziany przez Pythona sprawdzisz przez
+`python -c "import sounddevice; print(sounddevice.query_devices())"` — szukasz pozycji
+z niezerowym wejściem. Model zmienisz zmienną `WAKE_MODEL`.
 
 ## Analiza terenu — Cosmos Terrain
 

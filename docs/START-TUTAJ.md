@@ -791,7 +791,7 @@ pełną ścieżką, np. `C:\Users\"Twoja Nazwa"\.venv\Scripts\activate`. Cudzys�
 potrzebne, gdy nazwa folderu zawiera spację.
 
 > **Pełna dokumentacja zmysłów: [../senses/README.md](../senses/README.md)** — pobranie
-> polskiego głosu Piper, kamera 24/7, głębia z Kinecta, słowo aktywujące „Hej Kosmos",
+> polskiego głosu Piper, kamera 24/7, głębia z Kinecta, nasłuch słowa aktywującego,
 > fotogrametria, analiza terenu i nasłonecznienia, planer lotu drona, sterowanie
 > aparatem przez gPhoto2, słuch przestrzenny, głowica pan/tilt oraz spis endpointów.
 
