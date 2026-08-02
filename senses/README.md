@@ -103,10 +103,40 @@ Bez Pipera Cosmos i tak mówi — używa wtedy głosu systemowego przeglądarki.
 python watcher.py
 ```
 
-Obserwuje kamerę (webcam albo Kinect widoczny jako kamera), wykrywa obiekty
-i wysyła do Cosmosa **tylko zmiany** („w kadrze pojawiło się: person”).
-Cosmos dokleja je do kontekstu rozmowy — możesz zapytać „co się zmieniło
-w pokoju?” i model odpowie na podstawie prawdziwych obserwacji.
+Obserwuje kamerę, wykrywa obiekty i wysyła do Cosmosa **tylko zmiany**
+(„w kadrze pojawiło się: person”). Cosmos dokleja je do kontekstu rozmowy —
+możesz zapytać „co się zmieniło w pokoju?” i model odpowie na podstawie
+prawdziwych obserwacji.
+
+| Zmienna | Znaczenie |
+|---|---|
+| `COSMOS_URL` | adres serwera; **na VPS to nie jest `localhost`** |
+| `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera — bez niego `/api/events` zwraca 401 |
+| `CAMERA_INDEX` | numer kamery, domyślnie `0` |
+| `WATCH_INTERVAL` | sekundy między analizami, domyślnie `5` |
+
+Obserwator działa na komputerze z kamerą, a serwer może stać gdzie indziej.
+Wtedy trzeba mu podać jedno i drugie — adres i token:
+
+```bat
+set COSMOS_URL=http://100.101.102.103:3000
+set COSMOS_TOKEN=twój-COSMOS_API_TOKEN
+python watcher.py
+```
+
+To samo dotyczy `kinect_watcher.py`, `wake_listener.py` i pozostałych skryptów
+zgłaszających zdarzenia. Bez tokena zdarzenia po cichu nie dolatują.
+
+> ⚠️ **„Nie mogę otworzyć kamery 0" / „Camera index out of range"** — pod tym numerem
+> nie ma kamery. Sprawdź, co widzi system:
+> ```python
+> python -c "import cv2; print([i for i in range(6) if cv2.VideoCapture(i).isOpened()])"
+> ```
+> Jeśli lista jest pusta, komputer nie ma żadnej kamery dostępnej dla OpenCV.
+> **Kinect 360 się tu nie liczy**: ze sterownikiem oficjalnego SDK nie jest zwykłą
+> kamerą UVC i OpenCV go nie zobaczy (patrz „Zmysł głębi" niżej). Użyj webcama,
+> telefonu jako kamery (Iriun, DroidCam) albo aparatu przez *Canon EOS Webcam Utility*.
+> Numer z listy podajesz w `CAMERA_INDEX`.
 
 ## Pamięć długotrwała (embeddingi)
 
@@ -135,10 +165,27 @@ python kinect_watcher.py
 
 Czyta mapę głębi przez **libfreenect** i wysyła do Cosmosa zdarzenia:
 obecność w zasięgu, ruch, dystans najbliższego obiektu. Instalacja libfreenect:
-https://github.com/OpenKinect/libfreenect (na Windows wymaga zbudowania;
-na Linuksie `sudo apt install freenect`). Kinect RGB działa równolegle jako
-zwykła kamera dla `watcher.py` (YOLO) i MediaPipe — głębia i obraz to dwa
-niezależne zmysły z jednego urządzenia.
+https://github.com/OpenKinect/libfreenect (na Linuksie `sudo apt install freenect`).
+
+> ⚠️ **Na Windowsie to droga przez mękę — i nie mieszaj sterowników.** Istnieją dwa
+> niezależne stosy, które wykluczają się nawzajem:
+>
+> | Stos | Co daje | Czy działa z tym modułem |
+> |---|---|---|
+> | **Kinect for Windows SDK 1.8** (Microsoft) | oficjalny sterownik, Kinect Explorer, Kinect Studio | ❌ `kinect_watcher.py` go nie używa |
+> | **libfreenect** (OpenKinect) | otwarty sterownik + moduł `freenect` dla Pythona | ✅ wymagany, ale na Windowsie trzeba go **samodzielnie zbudować** (CMake + Visual Studio + podmiana sterownika przez Zadig) |
+>
+> Zainstalowanie SDK 1.8 **odbiera** dostęp libfreenectowi i odwrotnie. Jeśli chcesz
+> tylko sprawdzić, czy czujnik żyje, użyj **Kinect Explorer** z *Developer Toolkit
+> Browser* (SDK 1.8) — **nie** Kinect Studio, które służy do nagrywania strumieni
+> z już działającej aplikacji i samo z siebie nigdy nie połączy się z czujnikiem.
+>
+> Najmniej bolesna droga do zmysłu głębi to uruchomienie `kinect_watcher.py`
+> na Linuksie (`sudo apt install freenect python3-freenect`) i wskazanie mu
+> Cosmosa przez `COSMOS_URL` + `COSMOS_TOKEN`.
+
+Kinect RGB **nie** jest widoczny jako zwykła kamera UVC — ani ze sterownikiem SDK,
+ani z libfreenect. `watcher.py` (YOLO) i MediaPipe potrzebują osobnego webcama.
 
 ## Fotogrametria — Cosmos PhotoScan
 

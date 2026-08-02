@@ -12,6 +12,7 @@ Uruchomienie (wymaga: pip install ultralytics opencv-python requests):
 
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
+    COSMOS_TOKEN    COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
     CAMERA_INDEX    numer kamery (domyślnie 0)
     WATCH_INTERVAL  sekundy między analizami (domyślnie 5)
     YOLO_MODEL      domyślnie yolo11n.pt
@@ -25,14 +26,21 @@ import requests
 from ultralytics import YOLO
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000").rstrip("/")
+COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
 CAMERA_INDEX = int(os.environ.get("CAMERA_INDEX", 0))
 INTERVAL = float(os.environ.get("WATCH_INTERVAL", 5))
 CONF_MIN = 0.45
 
 
+def _auth() -> dict:
+    """Nagłówek logowania. Wymagany, gdy serwer ma ustawione COSMOS_API_TOKEN
+    (czyli zawsze na VPS). Bez niego /api/events odpowiada 401."""
+    return {"Authorization": f"Bearer {COSMOS_TOKEN}"} if COSMOS_TOKEN else {}
+
+
 def send_event(summary: str, type_: str = "kamera") -> None:
     try:
-        requests.post(f"{COSMOS_URL}/api/events",
+        requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
                       json={"type": type_, "summary": summary}, timeout=5)
         print(f"→ {summary}")
     except requests.RequestException as e:

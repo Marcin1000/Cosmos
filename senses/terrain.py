@@ -39,13 +39,20 @@ except ImportError:
     sys.exit("Brak numpy. Zainstaluj:  pip install numpy")
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000")
+COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
+
+
+def _auth() -> dict:
+    """Nagłówek logowania. Wymagany, gdy serwer ma ustawione COSMOS_API_TOKEN
+    (czyli zawsze na VPS). Bez niego /api/events odpowiada 401."""
+    return {"Authorization": f"Bearer {COSMOS_TOKEN}"} if COSMOS_TOKEN else {}
 
 
 def send_event(summary: str) -> None:
     """Zgłoś wynik do Cosmosa (opcjonalnie — brak serwera nic nie psuje)."""
     try:
         import requests
-        requests.post(f"{COSMOS_URL}/api/events",
+        requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
                       json={"type": "teren", "summary": summary}, timeout=3)
     except Exception:
         pass

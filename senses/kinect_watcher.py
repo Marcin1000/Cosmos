@@ -22,6 +22,7 @@ w C#/C++ — dlatego tu używamy libfreenect (głębia) + MediaPipe (szkielet z 
 
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
+    COSMOS_TOKEN    COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
     WATCH_INTERVAL  sekundy między analizami (domyślnie 2)
 """
 
@@ -42,6 +43,7 @@ except ImportError:
     )
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000").rstrip("/")
+COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
 INTERVAL = float(os.environ.get("WATCH_INTERVAL", 2))
 
 PRESENCE_MIN_MM = 500      # obecność liczymy w paśmie 0,5–3,5 m (zasięg Kinecta 360)
@@ -51,9 +53,15 @@ MOTION_THRESHOLD_MM = 25   # średnia zmiana głębi uznawana za ruch
 NEAREST_DELTA_MM = 400     # raportuj zmianę najbliższego dystansu > 40 cm
 
 
+def _auth() -> dict:
+    """Nagłówek logowania. Wymagany, gdy serwer ma ustawione COSMOS_API_TOKEN
+    (czyli zawsze na VPS). Bez niego /api/events odpowiada 401."""
+    return {"Authorization": f"Bearer {COSMOS_TOKEN}"} if COSMOS_TOKEN else {}
+
+
 def send_event(summary: str) -> None:
     try:
-        requests.post(f"{COSMOS_URL}/api/events",
+        requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
                       json={"type": "kinect", "summary": summary}, timeout=5)
         print(f"→ {summary}")
     except requests.RequestException as e:

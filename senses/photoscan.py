@@ -51,8 +51,12 @@ def send_event(summary: str) -> None:
     if not HAS_REQUESTS:
         return
     url = os.environ.get("COSMOS_URL", "http://localhost:3000").rstrip("/")
+    # Nagłówek logowania — wymagany, gdy serwer ma COSMOS_API_TOKEN (czyli na VPS).
+    token = os.environ.get("COSMOS_TOKEN", "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        requests.post(f"{url}/api/events", json={"type": "fotogrametria", "summary": summary}, timeout=5)
+        requests.post(f"{url}/api/events", headers=headers,
+                      json={"type": "fotogrametria", "summary": summary}, timeout=5)
     except requests.RequestException:
         pass
 
