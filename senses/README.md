@@ -1,13 +1,37 @@
 # ✦ Cosmos Senses — zmysły Cosmosa
 
 Usługa percepcji w Pythonie. Daje Cosmosowi **słuch** (Whisper), **głos** (Piper),
-**wzrok** (YOLO) i **rozumienie sylwetki** (MediaPipe). Wszystko działa lokalnie
+**wzrok** (YOLO) i **pamięć semantyczną** (bge-m3). Wszystko działa lokalnie
 na Twoim GPU — bez wysyłania dźwięku i obrazu do chmury.
 
 > Ten plik to **pełna dokumentacja** zmysłów. Jeśli instalujesz Cosmosa od zera, prostszy
 > przewodnik krok po kroku znajdziesz w **[../docs/START-TUTAJ.md](../docs/START-TUTAJ.md)**
 > — CZĘŚĆ 5. Oba pliki opisują ten sam moduł; tutaj jest więcej szczegółów i wszystkie
 > narzędzia sprzętowe.
+
+## Co działa, a co nie — stan na dziś
+
+Nie każdy moduł w tym folderze jest wpięty w interfejs Cosmosa. Poniższa tabela mówi
+wprost, czego się spodziewać, żeby nie tracić czasu na instalowanie czegoś, co nie
+zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
+
+| Moduł / zmysł | Stan | Uwaga |
+|---|---|---|
+| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości |
+| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej |
+| Wzrok — `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
+| Pamięć — `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
+| Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy |
+| Powiększanie — `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
+| Sylwetka — `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
+| `watcher.py` — ciągła percepcja | ✅ działa | **wymaga webcama**; Kinect się nie nadaje (patrz niżej) |
+| `wake_listener.py` — słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
+| `kinect_watcher.py` — głębia | ⚠️ tylko Linux w praktyce | na Windowsie wymaga zbudowania libfreenect |
+| `soundloc.py` — słuch przestrzenny | ✅ działa | **jedyne zastosowanie Kinecta 360 na Windowsie** — patrz niżej |
+| `photoscan.py`, `terrain.py`, `flightplan.py`, `lowlight.py`, `pantilt.py`, `tether.py` | ✅ narzędzia z wiersza poleceń | uruchamiane ręcznie, nie z interfejsu; wyniki trafiają do czatu jako zdarzenia |
+
+Moduły oznaczone ⚠️ opisane są szczegółowo w swoich sekcjach — razem z tym,
+czego dokładnie im brakuje.
 
 **Gdzie to uruchomić?** Tam, gdzie masz kamerę, mikrofon i GPU — czyli na komputerze
 domowym. Serwer Cosmosa może stać gdzie indziej (np. na VPS); wtedy w jego pliku `.env`
@@ -187,6 +211,19 @@ https://github.com/OpenKinect/libfreenect (na Linuksie `sudo apt install freenec
 Kinect RGB **nie** jest widoczny jako zwykła kamera UVC — ani ze sterownikiem SDK,
 ani z libfreenect. `watcher.py` (YOLO) i MediaPipe potrzebują osobnego webcama.
 
+### Co realnie da się zrobić Kinectem 360
+
+| Możliwość Kinecta | Windows (SDK 1.8) | Linux (libfreenect) |
+|---|---|---|
+| **4 mikrofony — kierunek dźwięku** (`soundloc.py`) | ✅ **działa od razu**, sterownik audio z SDK wystarcza | ✅ jako zwykłe wejście ALSA |
+| Głębia — obecność, ruch, dystans (`kinect_watcher.py`) | ❌ trzeba zbudować libfreenect i podmienić sterownik | ✅ `sudo apt install freenect` |
+| Kamera RGB dla YOLO (`watcher.py`) | ❌ nie jest kamerą UVC | ⚠️ przez libfreenect, wymaga mostka do OpenCV |
+
+Innymi słowy: **Kinect podłączony do Windowsa jest dziś użyteczny jako macierz
+mikrofonów** — i to nie jest nagroda pocieszenia. Kierunek dźwięku działa w ciemności,
+przez ścianę kadru i bez oświetlenia, czego żadna kamera nie potrafi. Zacznij od
+`python soundloc.py --list-devices`.
+
 ## Fotogrametria — Cosmos PhotoScan
 
 ```bash
@@ -248,15 +285,35 @@ Dla chmur bez georeferencji użyj `--scale`, `--north`, `--up`.
 
 ## Słuch przestrzenny — macierz mikrofonów Kinecta
 
-`soundloc.py` liczy kierunek źródła dźwięku z 4 mikrofonów (GCC-PHAT + TDOA,
-z ograniczeniem pasma i nadpróbkowaniem korelacji — bez tego przy kilkucentymetrowych
-odstępach mikrofonów wynik jest bezużyteczny).
+**To jedyne zastosowanie Kinecta 360 na Windowsie, które działa bez budowania
+sterowników.** Kinect for Windows SDK instaluje sterownik audio, dzięki któremu
+macierz czterech mikrofonów widoczna jest jako **zwykłe 4-kanałowe wejście audio**.
+Nie potrzeba do tego libfreenect ani niczego kompilować.
+
+`soundloc.py` liczy z niej kierunek źródła dźwięku (GCC-PHAT + TDOA, z ograniczeniem
+pasma i nadpróbkowaniem korelacji — bez tego przy kilkucentymetrowych odstępach
+mikrofonów wynik jest bezużyteczny). Cosmos dostaje zdarzenia typu
+„dźwięk po lewej (−35°)" — działa **w ciemności i poza kadrem kamery**.
 
 ```bash
-python soundloc.py --selftest        # odtwarza zadane kierunki na syntetyku
-python soundloc.py --wav nagranie.wav
-python soundloc.py --listen          # nasłuch (wymaga: pip install sounddevice)
+pip install sounddevice
+python soundloc.py --selftest         # sprawdź poprawność obliczeń, bez sprzętu
+python soundloc.py --list-devices     # znajdź numer Kinecta
+python soundloc.py --listen --device "Kinect"
+python soundloc.py --wav nagranie.wav # analiza gotowego nagrania 4-kanałowego
 ```
+
+`--list-devices` oznacza wejścia o czterech i więcej kanałach — Kinect pokaże się jako
+„Microphone Array (Kinect USB Audio)" albo podobnie. Do `--device` podajesz numer
+z listy albo fragment nazwy. Bez tej opcji moduł użyje domyślnego mikrofonu systemu,
+który zwykle ma jeden kanał i kierunku nie policzy.
+
+| Opcja | Znaczenie |
+|---|---|
+| `--channels` | liczba kanałów, domyślnie `4` (tyle ma Kinect 360) |
+| `--gate` | próg głośności RMS, poniżej niego cisza jest pomijana |
+| `--min-conf` | minimalna pewność wyniku, żeby zgłosić zdarzenie |
+| `--window` | długość okna analizy w sekundach, domyślnie `0.5` |
 
 ## Planer lotu — Cosmos FlightPlan
 
@@ -331,6 +388,9 @@ czytelnym błędem, gdy brakuje pakietu danego zmysłu — usługa startuje zaws
 | Whisper | `small` (domyślny) | transkrypcja szybsza niż czas rzeczywisty; `medium` dokładniejszy |
 | YOLO | `yolo11n.pt` (domyślny) | ~1–3 ms/klatkę; `yolo11s/m` dokładniejsze |
 | Piper | głos `medium` | synteza w ułamku sekundy, działa nawet na CPU |
-| MediaPipe | Pose | czas rzeczywisty na CPU |
+| bge-m3 | embeddingi | ~2 GB w pamięci, kilkadziesiąt ms na fragment |
+| MediaPipe | Pose | czas rzeczywisty na CPU (endpoint gotowy, nieużywany przez UI) |
 
-Wszystkie modele pobierają się automatycznie przy pierwszym użyciu.
+Modele Whispera, YOLO i bge-m3 pobierają się **automatycznie** przy pierwszym użyciu.
+Dwa wyjątki wymagają ręcznego kroku: **głos Pipera** (pobranie pliku `.onnx` i ustawienie
+`PIPER_VOICE`) oraz **openWakeWord** (`openwakeword.utils.download_models()`).

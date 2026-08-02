@@ -756,6 +756,7 @@ pip install mediapipe             (sylwetka i gesty)
 pip install sentence-transformers  (pamięć — inteligentne wyszukiwanie)
 pip install pypdf python-docx openpyxl python-pptx   (czytanie dokumentów do bazy wiedzy)
 pip install requests numpy        (obserwatory: kamera 24/7, Kinect, fotogrametria)
+pip install sounddevice           (słuch przestrzenny z macierzy mikrofonów Kinecta)
 ```
 
 > 🔊 **Sam `piper-tts` nie wystarczy do naturalnego głosu** — trzeba jeszcze pobrać plik
@@ -839,7 +840,9 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 - **Studio** — generowanie obrazów (OpenAI / Adobe Firefly) z wariantami, szablonami,
   storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
-- **Kamera na żywo** — panel z detekcją obiektów i trybem głosowym „Hej, Kosmos".
+- **Kamera na żywo** — panel z detekcją obiektów, oraz tryb głosowy uruchamiany
+  przyciskiem fal dźwiękowych (rozmowa po polsku przy otwartej karcie; nasłuch słowa
+  aktywującego w tle jest jeszcze niedokończony — patrz `senses/README.md`).
 - **Nauka** (przycisk w panelu bocznym) — naucz Cosmosa rozpoznawania (pokaż w kamerze
   i nazwij), **nagraj procedury** z ekranu (klikasz i wpisujesz, a Cosmos zapisuje kroki)
   i zaplanuj je jako **rutyny** cykliczne. Kroki wrażliwe (płatność, wysłanie) zawsze
