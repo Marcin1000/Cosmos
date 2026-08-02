@@ -2509,8 +2509,32 @@ async function handleVoiceQuery(text) {
 
 el.voiceBtn.addEventListener('click', enterVoiceMode);
 el.voiceClose.addEventListener('click', exitVoiceMode);
+
+// ----------------------------------------------------------------
+// Escape zamyka wierzchnią warstwę
+// ----------------------------------------------------------------
+
+// Każda nakładka zamyka się swoją funkcją, bo część z nich musi jeszcze
+// posprzątać: zwolnić kamerę, zatrzymać detekcję, zapisać stan.
+// Kolejność od wierzchu: to, co otwiera się na innych, jest wyżej.
+const overlays = [
+  { open: () => voiceMode, close: exitVoiceMode },
+  { id: 'camera-modal', close: closeCamera },
+  { id: 'live-panel', close: stopLive },
+  { id: 'gallery-modal', close: closeGallery },
+  { id: 'timeline-modal', close: () => { $('timeline-modal').style.display = 'none'; } },
+  { id: 'learn-modal', close: closeLearn },
+  { id: 'kb-modal', close: () => { el.kbModal.style.display = 'none'; } },
+  { id: 'studio-modal', close: () => { el.studioModal.style.display = 'none'; } },
+  { id: 'settings-modal', close: closeSettings },
+];
+
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && voiceMode) exitVoiceMode();
+  if (e.key !== 'Escape') return;
+  const top = overlays.find((o) => (o.open ? o.open() : $(o.id).style.display !== 'none'));
+  if (!top) return;
+  e.preventDefault();
+  top.close();
 });
 
 // ----------------------------------------------------------------
@@ -2784,9 +2808,6 @@ el.settingsBtn.addEventListener('click', openSettings);
 el.settingsClose.addEventListener('click', closeSettings);
 el.settingsModal.addEventListener('click', (e) => {
   if (e.target === el.settingsModal) closeSettings();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && el.settingsModal.style.display !== 'none') closeSettings();
 });
 
 el.setTemp.addEventListener('input', () => {
