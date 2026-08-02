@@ -186,6 +186,37 @@ def cmd_wav(path: Path) -> None:
     send_event(f"słyszę dźwięk {res['kierunek']} ({res['azymut_deg']:+.0f}°)")
 
 
+def cmd_list_devices() -> None:
+    """Wypisz wejścia audio. Macierz Kinecta widać jako urządzenie 4-kanałowe."""
+    try:
+        import sounddevice as sd
+    except ImportError:
+        sys.exit("Wymaga:  pip install sounddevice")
+    print("\n  #  kan.  nazwa")
+    for i, d in enumerate(sd.query_devices()):
+        if d["max_input_channels"] > 0:
+            mark = " ← macierz mikrofonów?" if d["max_input_channels"] >= 4 else ""
+            print(f"  {i:<3}{d['max_input_channels']:<5} {d['name']}{mark}")
+    print("\n  Numer podaj przez --device, np.:  python soundloc.py --listen --device 3\n")
+
+
+def resolve_device(spec):
+    """Numer urządzenia albo fragment nazwy (np. 'Kinect'). Puste = domyślne."""
+    if not spec:
+        return None
+    try:
+        return int(spec)
+    except ValueError:
+        pass
+    import sounddevice as sd
+    matches = [i for i, d in enumerate(sd.query_devices())
+               if d["max_input_channels"] > 0 and spec.lower() in d["name"].lower()]
+    if not matches:
+        sys.exit(f"Nie znalazłem wejścia audio pasującego do „{spec}”. "
+                 f"Lista:  python soundloc.py --list-devices")
+    return matches[0]
+
+
 def cmd_listen(args) -> None:
     try:
         import sounddevice as sd
@@ -193,10 +224,14 @@ def cmd_listen(args) -> None:
         sys.exit("Nasłuch na żywo wymaga:  pip install sounddevice")
     fs = args.rate
     block = int(fs * args.window)
-    print(f"\n✦ Cosmos SoundLoc — nasłuch ({args.channels} kanałów, {fs} Hz). Ctrl+C kończy.\n")
+    device = resolve_device(args.device)
+    name = sd.query_devices(device)["name"] if device is not None else "domyślne wejście"
+    print(f"\n✦ Cosmos SoundLoc — nasłuch ({args.channels} kanałów, {fs} Hz)")
+    print(f"  Urządzenie: {name}. Ctrl+C kończy.\n")
     try:
         while True:
-            rec = sd.rec(block, samplerate=fs, channels=args.channels, dtype="float64")
+            rec = sd.rec(block, samplerate=fs, channels=args.channels,
+                         device=device, dtype="float64")
             sd.wait()
             chans = rec.T
             level = float(np.sqrt(np.mean(chans ** 2)))
@@ -288,7 +323,11 @@ def main() -> None:
     ap.add_argument("--selftest", action="store_true", help="sprawdź poprawność bez sprzętu")
     ap.add_argument("--wav", help="plik WAV wielokanałowy (np. z Kinecta)")
     ap.add_argument("--listen", action="store_true", help="nasłuch na żywo")
-    ap.add_argument("--channels", type=int, default=4)
+    ap.add_argument("--list-devices", action="store_true", dest="list_devices",
+                    help="wypisz wejścia audio i ich numery")
+    ap.add_argument("--device", help="numer wejścia albo fragment nazwy, np. 'Kinect'")
+    ap.add_argument("--channels", type=int, default=4,
+                    help="liczba kanałów; macierz Kinecta 360 ma 4")
     ap.add_argument("--rate", type=int, default=16000)
     ap.add_argument("--window", type=float, default=0.5, help="okno analizy w sekundach")
     ap.add_argument("--gate", type=float, default=0.01, help="próg głośności (RMS)")
@@ -297,6 +336,8 @@ def main() -> None:
 
     if args.selftest:
         cmd_selftest()
+    elif args.list_devices:
+        cmd_list_devices()
     elif args.wav:
         cmd_wav(Path(args.wav))
     elif args.listen:

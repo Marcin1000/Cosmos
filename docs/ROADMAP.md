@@ -44,8 +44,11 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
   YOLO; działa na kamerze telefonu i komputera
 - [x] **Pamięć przestrzenna** — detekcja z pozycją (po lewej/na środku/po prawej) trafia
   jako zdarzenie percepcji do kontekstu → model odpowiada „gdzie coś jest"
-- [x] **Wake-word lokalny** — `senses/wake_listener.py` (openWakeWord); nasłuch mikrofonu
-  bez otwartej karty (własny model „Hej Kosmos" do wytrenowania — patrz plik)
+- [~] **Wake-word lokalny** — `senses/wake_listener.py` (openWakeWord) nasłuchuje bez
+  otwartej karty i zgłasza zdarzenie, ale **nic go po stronie przeglądarki nie odbiera**:
+  tryb głosowy się nie otwiera. Do dokończenia brakuje kanału serwer → przeglądarka
+  (SSE albo Web Push). Dodatkowo openWakeWord nie ma polskiego „Hej Kosmos" —
+  własny model trzeba wytrenować
 - [~] **Integracja z Mavic 3** — pokryta przez `senses/photoscan.py`: zdjęcia z lotu →
   model 3D (COLMAP). Sterowanie lotem z PC jest ograniczone przez DJI (patrz analiza wcześniej)
 - [ ] **Sterowanie gestami** — wymaga biblioteki MediaPipe w przeglądarce (zewnętrzna,
