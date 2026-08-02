@@ -291,6 +291,24 @@ jest wyłączony. Układ docelowy:
 > hasło (`COSMOS_PASSWORD`). Bez tego każdy, kto pozna adres, użyje Twoich kluczy API
 > (Twoje pieniądze) i przeczyta Twoje dane. Ustawiamy je w KROKU 4.
 
+### Zanim zaczniesz: dwa komputery, dwa zestawy komend
+
+Od tego miejsca pracujesz **na dwóch maszynach naraz** i to najczęstsze źródło pomyłek:
+komenda linuksowa wklejona w okno Windowsa kończy się błędem, który wygląda groźniej,
+niż jest. Zawsze patrz na **znak zachęty** — on mówi, gdzie jesteś:
+
+| Znak zachęty | Gdzie jesteś | Co tam działa |
+|---|---|---|
+| `C:\...>` lub `D:\Cosmos>` | Twój komputer (Windows) | `git pull`, `python service.py`, `ollama`, `ssh` |
+| `root@nazwa-serwera:~#` | VPS (Linux) | `sudo`, `systemctl`, `nano`, `apt`, `curl`, `git pull` |
+
+Dopóki widzisz literę dysku i ukośniki w tył — jesteś u siebie, `sudo` i `systemctl`
+nie zadziałają. Na VPS przechodzisz komendą `ssh root@ADRES`, a wracasz przez `exit`.
+
+> Windows 11 ma własne `sudo`, wyłączone domyślnie. Gdy zobaczysz *„Sudo is disabled on
+> this machine"*, **nie włączaj go** — to nie jest to samo narzędzie i nie naprawi
+> niczego w Cosmosie. Komunikat znaczy tylko tyle, że jesteś w złym oknie.
+
 **Co będziesz potrzebował:**
 - Konto u dostawcy VPS (rekomendacja niżej) — **2 GB RAM i 40 GB dysku**.
 - Konto **Tailscale** (darmowe) — łączy VPS, telefon i komputer w prywatną sieć.
@@ -530,10 +548,48 @@ Omijaj warianty z dopiskiem `-japanese` (dotrenowany pod japoński) oraz `-virtu
 - Gdy komputer jest **wyłączony** → „Lokalnie" pokazuje offline, używasz zakładki
   „Chmura". Cosmos działa dalej, bez przerwy.
 
-> To samo dotyczy zmysłów: jeśli chcesz ich używać, uruchom `senses/service.py` na
-> domowym komputerze i w `.env` na VPS ustaw `SENSES_URL=http://100.88.88.88:7060`.
-> Gdy komputer śpi, Cosmos używa zapasowo rozpoznawania mowy z przeglądarki.
-> Nic się nie psuje — część funkcji po prostu czeka na PC.
+## KROK 9 — Wskaż serwerowi zmysły na domowym komputerze
+
+**Pomiń ten krok, jeśli nie instalujesz zmysłów** (CZĘŚĆ 5 — mikrofon, kamera, pamięć
+semantyczna). Jeśli je instalujesz, zrób go — inaczej wskaźnik „Zmysły" **zostanie
+czerwony na zawsze**, mimo że usługa na Twoim komputerze działa poprawnie.
+
+Powód jest ten sam co przy Ollamie: domyślnie serwer szuka zmysłów pod `localhost:7060`,
+a dla VPS-a `localhost` to on sam. Zmysły chodzą na komputerze z kamerą i GPU, więc
+trzeba podać jego adres Tailscale — ten sam, którego użyłeś w KROKU 8.
+
+**1. Na domowym komputerze** uruchom zmysły (szczegóły: CZĘŚĆ 5):
+```
+cd /d C:\Cosmos\senses
+.venv\Scripts\activate
+python service.py
+```
+Zostaw to okno otwarte. Wypisze `✦ Cosmos Senses — port 7060` i listę aktywnych zmysłów.
+
+**2. Na VPS** sprawdź, czy dochodzi (podstaw swój adres Tailscale):
+```bash
+curl http://100.88.88.88:7060/health
+```
+Powinna wrócić lista zmysłów w JSON-ie. „Connection refused" oznacza Zaporę Windows —
+zamknij `service.py`, uruchom ponownie i zezwól Pythonowi na **sieci prywatne**.
+Sam Tailscale jest sprawny, skoro Ollama działa; Zapora przyznaje pozwolenia osobno
+każdemu programowi, a Python prosi o nie dopiero teraz.
+
+**3. Na VPS** dopisz adres do `.env`:
+```bash
+nano /opt/cosmos/.env
+```
+```ini
+SENSES_URL=http://100.88.88.88:7060
+```
+Zapis: `Ctrl+O`, `Enter`, wyjście: `Ctrl+X`. Potem `sudo systemctl restart cosmos`.
+
+Odśwież przeglądarkę — po maksymalnie 30 sekundach „Zmysły" zapalą się na zielono
+z liczbą aktywnych.
+
+> Gdy komputer śpi, Cosmos używa zapasowo rozpoznawania mowy z przeglądarki, a bazy
+> wiedzy szuka przez embeddingi z chmury. Nic się nie psuje — część funkcji po prostu
+> czeka na PC.
 
 ### Baza wiedzy działająca zawsze (embeddingi z chmury)
 
@@ -709,6 +765,11 @@ python service.py
 ```
 Zostaw to okno otwarte. W Cosmosie w panelu bocznym „Zmysły" zaświeci się na zielono.
 
+> ⚠️ **Serwer na VPS (Ścieżka B)? Zielone nie zaświeci się samo.** Serwer szuka zmysłów
+> pod `localhost:7060`, czyli u siebie, a one działają na tym komputerze. Trzeba mu podać
+> adres — patrz **CZĘŚĆ 3, KROK 9**. Przy Ścieżce A (serwer na tym samym komputerze)
+> nie musisz nic robić.
+
 > **„can't open file … service.py: No such file or directory"** — nie jesteś w folderze
 > `senses`. Wróć do ostrzeżenia w KROKU 2: najczęściej winne jest `cd` bez `/d`.
 > Sprawdź `dir service.py` — jeśli plik się nie wypisze, jesteś w złym miejscu.
@@ -825,7 +886,8 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | Telefon nie łączy się (Ścieżka B) | Tailscale włączony na telefonie i VPS? `sudo systemctl status cosmos` pokazuje `active (running)`? |
 | Ekran logowania nie przyjmuje hasła | Sprawdź `COSMOS_PASSWORD` w `.env` na serwerze i zrestartuj (`sudo systemctl restart cosmos`) |
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
-| „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses` (przy VPS ustaw `SENSES_URL`) |
+| „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
+| `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
 | Chcę zacząć od zera | Zatrzymaj serwer, usuń folder `data`, uruchom ponownie |
