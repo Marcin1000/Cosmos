@@ -36,6 +36,7 @@ except ImportError:
     sys.exit("Brak numpy. Zainstaluj:  pip install numpy")
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000")
+COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
 SPEED_OF_SOUND = 343.0          # m/s przy 20 °C
 
 # Pozycje mikrofonów Kinecta 360 na osi poziomej, w metrach względem środka.
@@ -43,10 +44,16 @@ SPEED_OF_SOUND = 343.0          # m/s przy 20 °C
 KINECT_MICS = np.array([-0.113, -0.036, 0.076, 0.113])
 
 
+def _auth() -> dict:
+    """Nagłówek logowania. Wymagany, gdy serwer ma ustawione COSMOS_API_TOKEN
+    (czyli zawsze na VPS). Bez niego /api/events odpowiada 401."""
+    return {"Authorization": f"Bearer {COSMOS_TOKEN}"} if COSMOS_TOKEN else {}
+
+
 def send_event(summary: str) -> None:
     try:
         import requests
-        requests.post(f"{COSMOS_URL}/api/events",
+        requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
                       json={"type": "słuch", "summary": summary}, timeout=3)
     except Exception:
         pass

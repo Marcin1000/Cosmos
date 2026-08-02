@@ -57,14 +57,43 @@ Cosmos wykryje usługę automatycznie (status „Zmysły” w panelu bocznym).
 
 ## Głos Piper (polski)
 
-1. Pobierz polski głos z https://huggingface.co/rhasspy/piper-voices
-   (np. `pl_PL-darkman-medium.onnx` + plik `.json`).
-2. Ustaw zmienną środowiskową przed startem:
-
 ```bash
-set PIPER_VOICE=C:\modele\pl_PL-darkman-medium.onnx    # Windows
+pip install piper-tts
+```
+
+Potrzebne są **dwa pliki**: model `.onnx` (~60 MB) i jego opis `.onnx.json` (kilka kB).
+Piper szuka opisu obok modelu, po nazwie modelu z doklejonym `.json` — dlatego
+**podwójne rozszerzenie musi zostać**. Zapisany jako `pl_PL-darkman-medium.json`
+(bez `.onnx` w środku) nie zostanie znaleziony.
+
+Pobranie prosto z `cmd` (Windows 10/11 ma wbudowane `curl`):
+
+```bat
+cd /d C:\Cosmos\senses
+mkdir voices
+curl -L -o voices\pl_PL-darkman-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/darkman/medium/pl_PL-darkman-medium.onnx
+curl -L -o voices\pl_PL-darkman-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/darkman/medium/pl_PL-darkman-medium.onnx.json
+```
+
+Sprawdź `dir voices` — `.onnx` ma ważyć kilkadziesiąt MB. Jeśli ma kilka kB, pobrała się
+strona błędu; wejdź wtedy na https://huggingface.co/rhasspy/piper-voices/tree/main/pl/pl_PL
+i pobierz pliki ręcznie. Struktura katalogów to `język / lokalizacja / głos / jakość`,
+a w `pl_PL` znajdziesz też inne polskie głosy do wyboru.
+
+Na koniec wskaż plik `.onnx` (nie folder, nie `.json`) zmienną `PIPER_VOICE`:
+
+```bat
+set PIPER_VOICE=C:\Cosmos\senses\voices\pl_PL-darkman-medium.onnx
 python service.py
 ```
+
+> ⚠️ `set` działa **tylko w tym oknie** — po jego zamknięciu głos znika. Aby ustawić
+> na stałe: *Start → „zmienne środowiskowe" → Zmienne środowiskowe → Nowa*, nazwa
+> `PIPER_VOICE`, wartość jak wyżej. Potem uruchom `service.py` w **nowym** oknie `cmd`;
+> stare nie zna nowej zmiennej. (Linux/macOS: `export PIPER_VOICE=...`.)
+
+Sukces poznasz po liście przy starcie: `→ aktywne zmysły: whisper, piper, ...`.
+Zmienna musi być ustawiona **przed** startem usługi — jest sprawdzana raz, przy imporcie.
 
 Bez Pipera Cosmos i tak mówi — używa wtedy głosu systemowego przeglądarki.
 
@@ -74,10 +103,40 @@ Bez Pipera Cosmos i tak mówi — używa wtedy głosu systemowego przeglądarki.
 python watcher.py
 ```
 
-Obserwuje kamerę (webcam albo Kinect widoczny jako kamera), wykrywa obiekty
-i wysyła do Cosmosa **tylko zmiany** („w kadrze pojawiło się: person”).
-Cosmos dokleja je do kontekstu rozmowy — możesz zapytać „co się zmieniło
-w pokoju?” i model odpowie na podstawie prawdziwych obserwacji.
+Obserwuje kamerę, wykrywa obiekty i wysyła do Cosmosa **tylko zmiany**
+(„w kadrze pojawiło się: person”). Cosmos dokleja je do kontekstu rozmowy —
+możesz zapytać „co się zmieniło w pokoju?” i model odpowie na podstawie
+prawdziwych obserwacji.
+
+| Zmienna | Znaczenie |
+|---|---|
+| `COSMOS_URL` | adres serwera; **na VPS to nie jest `localhost`** |
+| `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera — bez niego `/api/events` zwraca 401 |
+| `CAMERA_INDEX` | numer kamery, domyślnie `0` |
+| `WATCH_INTERVAL` | sekundy między analizami, domyślnie `5` |
+
+Obserwator działa na komputerze z kamerą, a serwer może stać gdzie indziej.
+Wtedy trzeba mu podać jedno i drugie — adres i token:
+
+```bat
+set COSMOS_URL=http://100.101.102.103:3000
+set COSMOS_TOKEN=twój-COSMOS_API_TOKEN
+python watcher.py
+```
+
+To samo dotyczy `kinect_watcher.py`, `wake_listener.py` i pozostałych skryptów
+zgłaszających zdarzenia. Bez tokena zdarzenia po cichu nie dolatują.
+
+> ⚠️ **„Nie mogę otworzyć kamery 0" / „Camera index out of range"** — pod tym numerem
+> nie ma kamery. Sprawdź, co widzi system:
+> ```python
+> python -c "import cv2; print([i for i in range(6) if cv2.VideoCapture(i).isOpened()])"
+> ```
+> Jeśli lista jest pusta, komputer nie ma żadnej kamery dostępnej dla OpenCV.
+> **Kinect 360 się tu nie liczy**: ze sterownikiem oficjalnego SDK nie jest zwykłą
+> kamerą UVC i OpenCV go nie zobaczy (patrz „Zmysł głębi" niżej). Użyj webcama,
+> telefonu jako kamery (Iriun, DroidCam) albo aparatu przez *Canon EOS Webcam Utility*.
+> Numer z listy podajesz w `CAMERA_INDEX`.
 
 ## Pamięć długotrwała (embeddingi)
 
@@ -106,10 +165,27 @@ python kinect_watcher.py
 
 Czyta mapę głębi przez **libfreenect** i wysyła do Cosmosa zdarzenia:
 obecność w zasięgu, ruch, dystans najbliższego obiektu. Instalacja libfreenect:
-https://github.com/OpenKinect/libfreenect (na Windows wymaga zbudowania;
-na Linuksie `sudo apt install freenect`). Kinect RGB działa równolegle jako
-zwykła kamera dla `watcher.py` (YOLO) i MediaPipe — głębia i obraz to dwa
-niezależne zmysły z jednego urządzenia.
+https://github.com/OpenKinect/libfreenect (na Linuksie `sudo apt install freenect`).
+
+> ⚠️ **Na Windowsie to droga przez mękę — i nie mieszaj sterowników.** Istnieją dwa
+> niezależne stosy, które wykluczają się nawzajem:
+>
+> | Stos | Co daje | Czy działa z tym modułem |
+> |---|---|---|
+> | **Kinect for Windows SDK 1.8** (Microsoft) | oficjalny sterownik, Kinect Explorer, Kinect Studio | ❌ `kinect_watcher.py` go nie używa |
+> | **libfreenect** (OpenKinect) | otwarty sterownik + moduł `freenect` dla Pythona | ✅ wymagany, ale na Windowsie trzeba go **samodzielnie zbudować** (CMake + Visual Studio + podmiana sterownika przez Zadig) |
+>
+> Zainstalowanie SDK 1.8 **odbiera** dostęp libfreenectowi i odwrotnie. Jeśli chcesz
+> tylko sprawdzić, czy czujnik żyje, użyj **Kinect Explorer** z *Developer Toolkit
+> Browser* (SDK 1.8) — **nie** Kinect Studio, które służy do nagrywania strumieni
+> z już działającej aplikacji i samo z siebie nigdy nie połączy się z czujnikiem.
+>
+> Najmniej bolesna droga do zmysłu głębi to uruchomienie `kinect_watcher.py`
+> na Linuksie (`sudo apt install freenect python3-freenect`) i wskazanie mu
+> Cosmosa przez `COSMOS_URL` + `COSMOS_TOKEN`.
+
+Kinect RGB **nie** jest widoczny jako zwykła kamera UVC — ani ze sterownikiem SDK,
+ani z libfreenect. `watcher.py` (YOLO) i MediaPipe potrzebują osobnego webcama.
 
 ## Fotogrametria — Cosmos PhotoScan
 

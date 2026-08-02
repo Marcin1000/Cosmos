@@ -16,3 +16,6 @@ __pycache__/
 
 # Dane użytkownika (pamięć długotrwała itp.)
 data/
+
+# Pobrane głosy Piper (duże pliki modeli)
+senses/voices/

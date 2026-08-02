@@ -15,6 +15,7 @@ Uruchomienie:
 
 Zmienne środowiskowe:
     COSMOS_URL   adres Cosmosa (domyślnie http://localhost:3000)
+    COSMOS_TOKEN COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
     WAKE_MODEL   nazwa modelu słowa aktywującego (domyślnie 'hey_jarvis' —
                  openWakeWord ma gotowe modele; własne „Hej Kosmos" możesz
                  wytrenować wg dokumentacji openWakeWord)
@@ -39,14 +40,21 @@ except ImportError:
     )
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000").rstrip("/")
+COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
 WAKE_MODEL = os.environ.get("WAKE_MODEL", "hey_jarvis")
 SAMPLE_RATE = 16000
 CHUNK = 1280  # 80 ms przy 16 kHz
 
 
+def _auth() -> dict:
+    """Nagłówek logowania. Wymagany, gdy serwer ma ustawione COSMOS_API_TOKEN
+    (czyli zawsze na VPS). Bez niego /api/events odpowiada 401."""
+    return {"Authorization": f"Bearer {COSMOS_TOKEN}"} if COSMOS_TOKEN else {}
+
+
 def notify():
     try:
-        requests.post(f"{COSMOS_URL}/api/events",
+        requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
                       json={"type": "wake", "summary": "wykryto słowo aktywujące — asystent gotowy"},
                       timeout=5)
         print("→ wake!")
