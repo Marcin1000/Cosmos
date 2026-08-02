@@ -73,6 +73,12 @@ const I18N = {
     'kbdSend': 'wyślij',
     'kbdNewline': 'nowa linia',
 
+    // — brak połączenia z serwerem —
+    'offline.title': 'Brak połączenia z serwerem Cosmosa.',
+    'offline.hint': 'Widzisz kopię zapisaną w telefonie — nowe wiadomości nie zostaną wysłane. Sprawdź, czy serwer działa i czy Tailscale jest włączony.',
+    'offline.retry': 'Spróbuj ponownie',
+    'offline.retrying': 'Sprawdzam…',
+
     // — wiadomości —
     'copy': 'Kopiuj',
     'copied': '✓ Skopiowano',
@@ -511,6 +517,11 @@ const I18N = {
     'disclaimer': 'The model can make mistakes — verify important information.',
     'kbdSend': 'send',
     'kbdNewline': 'new line',
+
+    'offline.title': 'No connection to the Cosmos server.',
+    'offline.hint': 'You are seeing a copy stored on this device — new messages will not be sent. Check that the server is running and Tailscale is on.',
+    'offline.retry': 'Try again',
+    'offline.retrying': 'Checking…',
 
     'copy': 'Copy',
     'copied': '✓ Copied',

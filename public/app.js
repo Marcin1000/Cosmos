@@ -34,6 +34,9 @@ let abortController = null;
 let isGenerating = false;
 let pendingImages = []; // dataURL-e załączników czekających na wysłanie
 let senses = { online: false, caps: {} }; // stan usługi percepcji (Python)
+// Serwer nieosiągalny: interfejs pochodzi z pamięci podręcznej, więc wygląda
+// sprawnie. Bez wyraźnego komunikatu awarię widać dopiero po wysłaniu wiadomości.
+let serverReachable = true;
 let mediaRecorder = null;
 let speechRec = null;
 let isRecording = false;
@@ -1174,7 +1177,8 @@ function setGeneratingUI(generating) {
 }
 
 function updateSendButton() {
-  el.sendBtn.disabled = (el.input.value.trim() === '' && pendingImages.length === 0) || isGenerating;
+  const empty = el.input.value.trim() === '' && pendingImages.length === 0;
+  el.sendBtn.disabled = empty || isGenerating || !serverReachable;
 }
 
 // ----------------------------------------------------------------
@@ -2525,6 +2529,9 @@ el.expandBtn.addEventListener('click', () => {
 });
 // na telefonie panel przykrywa czat — dotknięcie przyciemnionego tła go zamyka
 $('sidebar-scrim').addEventListener('click', closeSidebar);
+$('offline-retry').addEventListener('click', retryConnection);
+// powrót sieci (np. Wi-Fi/Tailscale) — sprawdź od razu, nie czekaj 30 s
+window.addEventListener('online', retryConnection);
 
 // wyszukiwarka rozmów — po tytule (natychmiast) i po treści (z serwera)
 let convContentMatchIds = new Set();
@@ -3034,10 +3041,26 @@ function setStatusRow(rowEl, online, extra) {
   state.textContent = extra;
 }
 
+function setServerReachable(ok) {
+  if (ok === serverReachable) return;
+  serverReachable = ok;
+  const bar = $('offline-bar');
+  if (bar) bar.hidden = ok;
+  updateSendButton();
+}
+
+async function retryConnection() {
+  const btn = $('offline-retry');
+  if (btn) { btn.disabled = true; btn.textContent = t('offline.retrying'); }
+  await loadServerConfig();
+  if (btn) { btn.disabled = false; btn.textContent = t('offline.retry'); }
+}
+
 async function refreshStatus() {
   try {
     const res = await fetch('/api/status');
     const st = await res.json();
+    setServerReachable(true);
     const cloudCfg = epConfig('cloud');
     if (!cloudCfg.hasApiKey) {
       setStatusRow(el.statusCloud, 'warn', t('stat.noKey'));
@@ -3058,6 +3081,7 @@ async function refreshStatus() {
     setStatusRow(el.statusCloud, false, '—');
     setStatusRow(el.statusLocal, false, '—');
     setStatusRow(el.statusSenses, false, '—');
+    setServerReachable(false);
   }
 }
 
@@ -3065,7 +3089,11 @@ async function loadServerConfig() {
   try {
     const res = await fetch('/api/config');
     serverConfig = await res.json();
-  } catch { /* serwer nieosiągalny — UI dalej działa */ }
+    setServerReachable(true);
+  } catch {
+    // interfejs działa dalej z pamięci podręcznej — pasek u góry mówi o awarii
+    setServerReachable(false);
+  }
   buildEndpointTabs();
   updateModelBadge();
   refreshStatus();
