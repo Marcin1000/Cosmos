@@ -758,6 +758,11 @@ pip install pypdf python-docx openpyxl python-pptx   (czytanie dokumentów do ba
 pip install requests numpy        (obserwatory: kamera 24/7, Kinect, fotogrametria)
 ```
 
+> 🔊 **Sam `piper-tts` nie wystarczy do naturalnego głosu** — trzeba jeszcze pobrać plik
+> polskiego głosu i wskazać go zmienną `PIPER_VOICE`. Bez tego zmysł „piper" pozostanie
+> nieaktywny, a Cosmos będzie mówił głosem systemowym przeglądarki. Komplet komend:
+> [../senses/README.md](../senses/README.md) — sekcja „Głos Piper (polski)".
+
 ## KROK 3 — Uruchom zmysły
 W tym samym oknie `cmd` (musisz być w folderze `senses`, z aktywnym `(.venv)` z przodu):
 ```

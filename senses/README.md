@@ -57,14 +57,43 @@ Cosmos wykryje usługę automatycznie (status „Zmysły” w panelu bocznym).
 
 ## Głos Piper (polski)
 
-1. Pobierz polski głos z https://huggingface.co/rhasspy/piper-voices
-   (np. `pl_PL-darkman-medium.onnx` + plik `.json`).
-2. Ustaw zmienną środowiskową przed startem:
-
 ```bash
-set PIPER_VOICE=C:\modele\pl_PL-darkman-medium.onnx    # Windows
+pip install piper-tts
+```
+
+Potrzebne są **dwa pliki**: model `.onnx` (~60 MB) i jego opis `.onnx.json` (kilka kB).
+Piper szuka opisu obok modelu, po nazwie modelu z doklejonym `.json` — dlatego
+**podwójne rozszerzenie musi zostać**. Zapisany jako `pl_PL-darkman-medium.json`
+(bez `.onnx` w środku) nie zostanie znaleziony.
+
+Pobranie prosto z `cmd` (Windows 10/11 ma wbudowane `curl`):
+
+```bat
+cd /d C:\Cosmos\senses
+mkdir voices
+curl -L -o voices\pl_PL-darkman-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/darkman/medium/pl_PL-darkman-medium.onnx
+curl -L -o voices\pl_PL-darkman-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/darkman/medium/pl_PL-darkman-medium.onnx.json
+```
+
+Sprawdź `dir voices` — `.onnx` ma ważyć kilkadziesiąt MB. Jeśli ma kilka kB, pobrała się
+strona błędu; wejdź wtedy na https://huggingface.co/rhasspy/piper-voices/tree/main/pl/pl_PL
+i pobierz pliki ręcznie. Struktura katalogów to `język / lokalizacja / głos / jakość`,
+a w `pl_PL` znajdziesz też inne polskie głosy do wyboru.
+
+Na koniec wskaż plik `.onnx` (nie folder, nie `.json`) zmienną `PIPER_VOICE`:
+
+```bat
+set PIPER_VOICE=C:\Cosmos\senses\voices\pl_PL-darkman-medium.onnx
 python service.py
 ```
+
+> ⚠️ `set` działa **tylko w tym oknie** — po jego zamknięciu głos znika. Aby ustawić
+> na stałe: *Start → „zmienne środowiskowe" → Zmienne środowiskowe → Nowa*, nazwa
+> `PIPER_VOICE`, wartość jak wyżej. Potem uruchom `service.py` w **nowym** oknie `cmd`;
+> stare nie zna nowej zmiennej. (Linux/macOS: `export PIPER_VOICE=...`.)
+
+Sukces poznasz po liście przy starcie: `→ aktywne zmysły: whisper, piper, ...`.
+Zmienna musi być ustawiona **przed** startem usługi — jest sprawdzana raz, przy imporcie.
 
 Bez Pipera Cosmos i tak mówi — używa wtedy głosu systemowego przeglądarki.
 
