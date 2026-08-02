@@ -49,6 +49,12 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
   tryb głosowy się nie otwiera. Do dokończenia brakuje kanału serwer → przeglądarka
   (SSE albo Web Push). Dodatkowo openWakeWord nie ma polskiego „Hej Kosmos" —
   własny model trzeba wytrenować
+- [x] **Kinect 360 w pełni** — `senses/kinect_win.py` mostkuje Kinect for Windows
+  SDK 1.8 przez ctypes: głębia, obraz RGB, **śledzenie szkieletu (20 stawów)** i silnik
+  pochylenia. Wcześniej zakładaliśmy, że SDK jest dostępne tylko z C#/C++, i kierowaliśmy
+  na libfreenect — który wymaga budowania i nie ma szkieletu w ogóle. `watcher.py`
+  przyjmuje Kinecta jako źródło obrazu (`CAMERA_SOURCE=kinect`), `kinect_watcher.py`
+  sam wybiera sterownik. Część sprzętowa nietestowana — brak czujnika w środowisku CI
 - [~] **Integracja z Mavic 3** — pokryta przez `senses/photoscan.py`: zdjęcia z lotu →
   model 3D (COLMAP). Sterowanie lotem z PC jest ograniczone przez DJI (patrz analiza wcześniej)
 - [ ] **Sterowanie gestami** — wymaga biblioteki MediaPipe w przeglądarce (zewnętrzna,

@@ -24,10 +24,11 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy |
 | Powiększanie — `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
 | Sylwetka — `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
-| `watcher.py` — ciągła percepcja | ✅ działa | **wymaga webcama**; Kinect się nie nadaje (patrz niżej) |
+| `watcher.py` — ciągła percepcja | ✅ działa | webcam, telefon, aparat — albo Kinect przez `CAMERA_SOURCE=kinect` |
 | `wake_listener.py` — słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
-| `kinect_watcher.py` — głębia | ⚠️ tylko Linux w praktyce | na Windowsie wymaga zbudowania libfreenect |
-| `soundloc.py` — słuch przestrzenny | ✅ działa | **jedyne zastosowanie Kinecta 360 na Windowsie** — patrz niżej |
+| `kinect_watcher.py` — głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
+| `kinect_win.py` — szkielet, RGB, głębia, silnik | ✅ działa | Windows; **cała funkcjonalność Kinecta 360** |
+| `soundloc.py` — słuch przestrzenny | ✅ działa | macierz 4 mikrofonów Kinecta — patrz niżej |
 | `photoscan.py`, `terrain.py`, `flightplan.py`, `lowlight.py`, `pantilt.py`, `tether.py` | ✅ narzędzia z wiersza poleceń | uruchamiane ręcznie, nie z interfejsu; wyniki trafiają do czatu jako zdarzenia |
 
 Moduły oznaczone ⚠️ opisane są szczegółowo w swoich sekcjach — razem z tym,
@@ -136,7 +137,8 @@ prawdziwych obserwacji.
 |---|---|
 | `COSMOS_URL` | adres serwera; **na VPS to nie jest `localhost`** |
 | `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera — bez niego `/api/events` zwraca 401 |
-| `CAMERA_INDEX` | numer kamery, domyślnie `0` |
+| `CAMERA_SOURCE` | `auto` (zwykła kamera) albo `kinect` (Kinect 360 przez SDK 1.8) |
+| `CAMERA_INDEX` | numer kamery przy `CAMERA_SOURCE=auto`, domyślnie `0` |
 | `WATCH_INTERVAL` | sekundy między analizami, domyślnie `5` |
 
 Obserwator działa na komputerze z kamerą, a serwer może stać gdzie indziej.
@@ -157,10 +159,10 @@ zgłaszających zdarzenia. Bez tokena zdarzenia po cichu nie dolatują.
 > python -c "import cv2; print([i for i in range(6) if cv2.VideoCapture(i).isOpened()])"
 > ```
 > Jeśli lista jest pusta, komputer nie ma żadnej kamery dostępnej dla OpenCV.
-> **Kinect 360 się tu nie liczy**: ze sterownikiem oficjalnego SDK nie jest zwykłą
-> kamerą UVC i OpenCV go nie zobaczy (patrz „Zmysł głębi" niżej). Użyj webcama,
-> telefonu jako kamery (Iriun, DroidCam) albo aparatu przez *Canon EOS Webcam Utility*.
-> Numer z listy podajesz w `CAMERA_INDEX`.
+> **Masz Kinecta? Ustaw `CAMERA_SOURCE=kinect`** — nie jest kamerą UVC, więc na liście
+> się nie pojawi, ale jego obraz RGB czytamy prosto z SDK (patrz sekcja o Kinekcie).
+> Inne opcje: webcam, telefon jako kamera (Iriun, DroidCam), aparat przez
+> *Canon EOS Webcam Utility*. Numer z listy podajesz w `CAMERA_INDEX`.
 
 ## Pamięć długotrwała (embeddingi)
 
@@ -181,48 +183,82 @@ najpierw **embeddingi z chmury NVIDII**, a gdy i tych nie ma (brak klucza albo
 > i po zmianie (np. gdy raz liczyły się lokalnie, a raz w chmurze) przelicza je sam przy
 > najbliższym pytaniu. Nic nie musisz robić — pierwsze zapytania bywają wolniejsze.
 
-## Zmysł głębi — Kinect 360
+## Kinect 360 — wszystkie cztery czujniki
+
+Kinect ma **kamerę RGB, czujnik głębi, cztery mikrofony i silnik pochylenia**.
+Na Windowsie z zainstalowanym **Kinect for Windows SDK 1.8** działa to wszystko —
+bez libfreenect, bez Zadiga, bez kompilatora.
+
+| Czujnik | Czym się to obsługuje | Windows (SDK 1.8) | Linux (libfreenect) |
+|---|---|---|---|
+| Głębia — obecność, ruch, dystans | `kinect_watcher.py` | ✅ | ✅ |
+| **Szkielet — 20 stawów, postawa, gesty** | `kinect_win.py skeleton` | ✅ | ❌ libfreenect tego nie ma |
+| Kamera RGB dla YOLO | `watcher.py` z `CAMERA_SOURCE=kinect` | ✅ | ⚠️ wymaga mostka |
+| 4 mikrofony — kierunek dźwięku | `soundloc.py` | ✅ | ✅ |
+| Silnik pochylenia | `kinect_win.py tilt` | ✅ | ✅ |
+
+### Skąd się to bierze
+
+SDK 1.8 instaluje `Kinect10.dll` z **płaskim API w C** (funkcje `Nui*`). Moduł
+`kinect_win.py` woła je przez `ctypes` — nie trzeba ani C#, ani C++. To ważne,
+bo daje dostęp do **śledzenia szkieletu**, którego libfreenect nie oferuje
+w ogóle: 20 stawów, z których liczymy postawę (stoi/siedzi), gesty
+(ręka podniesiona, ręce rozłożone), pozycję w kadrze i odległość.
+
+```bash
+python kinect_win.py selftest     # sprawdza układ struktur i logikę, bez sprzętu
+python kinect_win.py info         # czy czujnik jest widziany, jaki kąt, czy klatki idą
+python kinect_win.py skeleton     # postawa i gesty na żywo
+python kinect_win.py skeleton --report   # dodatkowo zgłaszaj do Cosmosa
+python kinect_win.py depth        # statystyki mapy głębi
+python kinect_win.py color -o kadr.png
+python kinect_win.py tilt 10      # kąt pochylenia (-27..27°)
+```
+
+### Zmysł głębi w tle
 
 ```bash
 python kinect_watcher.py
 ```
 
-Czyta mapę głębi przez **libfreenect** i wysyła do Cosmosa zdarzenia:
-obecność w zasięgu, ruch, dystans najbliższego obiektu. Instalacja libfreenect:
-https://github.com/OpenKinect/libfreenect (na Linuksie `sudo apt install freenect`).
+Sterownik wybiera się sam: na Windowsie SDK 1.8, na Linuksie libfreenect.
+Wymusisz go zmienną `KINECT_BACKEND` (`win` albo `freenect`). Na Windowsie
+skrypt dorzuca zdarzenia o sylwetce — wyłączysz je przez `KINECT_SKELETON=0`.
 
-> ⚠️ **Na Windowsie to droga przez mękę — i nie mieszaj sterowników.** Istnieją dwa
-> niezależne stosy, które wykluczają się nawzajem:
->
-> | Stos | Co daje | Czy działa z tym modułem |
-> |---|---|---|
-> | **Kinect for Windows SDK 1.8** (Microsoft) | oficjalny sterownik, Kinect Explorer, Kinect Studio | ❌ `kinect_watcher.py` go nie używa |
-> | **libfreenect** (OpenKinect) | otwarty sterownik + moduł `freenect` dla Pythona | ✅ wymagany, ale na Windowsie trzeba go **samodzielnie zbudować** (CMake + Visual Studio + podmiana sterownika przez Zadig) |
->
-> Zainstalowanie SDK 1.8 **odbiera** dostęp libfreenectowi i odwrotnie. Jeśli chcesz
-> tylko sprawdzić, czy czujnik żyje, użyj **Kinect Explorer** z *Developer Toolkit
-> Browser* (SDK 1.8) — **nie** Kinect Studio, które służy do nagrywania strumieni
-> z już działającej aplikacji i samo z siebie nigdy nie połączy się z czujnikiem.
->
-> Najmniej bolesna droga do zmysłu głębi to uruchomienie `kinect_watcher.py`
-> na Linuksie (`sudo apt install freenect python3-freenect`) i wskazanie mu
-> Cosmosa przez `COSMOS_URL` + `COSMOS_TOKEN`.
+Wysyła do Cosmosa: obecność w zasięgu, początek i koniec ruchu, dystans
+najbliższego obiektu oraz opis postawy („stoi, na wprost, 2,3 m, ręka prawa
+podniesiona").
 
-Kinect RGB **nie** jest widoczny jako zwykła kamera UVC — ani ze sterownikiem SDK,
-ani z libfreenect. `watcher.py` (YOLO) i MediaPipe potrzebują osobnego webcama.
+### Kinect jako kamera dla YOLO
 
-### Co realnie da się zrobić Kinectem 360
+Kinect **nie jest kamerą UVC** — OpenCV nigdy go nie zobaczy i `CAMERA_INDEX`
+tu nie pomoże. Obraz RGB bierzemy z SDK:
 
-| Możliwość Kinecta | Windows (SDK 1.8) | Linux (libfreenect) |
-|---|---|---|
-| **4 mikrofony — kierunek dźwięku** (`soundloc.py`) | ✅ **działa od razu**, sterownik audio z SDK wystarcza | ✅ jako zwykłe wejście ALSA |
-| Głębia — obecność, ruch, dystans (`kinect_watcher.py`) | ❌ trzeba zbudować libfreenect i podmienić sterownik | ✅ `sudo apt install freenect` |
-| Kamera RGB dla YOLO (`watcher.py`) | ❌ nie jest kamerą UVC | ⚠️ przez libfreenect, wymaga mostka do OpenCV |
+```bat
+set CAMERA_SOURCE=kinect
+python watcher.py
+```
 
-Innymi słowy: **Kinect podłączony do Windowsa jest dziś użyteczny jako macierz
-mikrofonów** — i to nie jest nagroda pocieszenia. Kierunek dźwięku działa w ciemności,
-przez ścianę kadru i bez oświetlenia, czego żadna kamera nie potrafi. Zacznij od
-`python soundloc.py --list-devices`.
+To rozwiązuje typowy przypadek „komputer stacjonarny bez kamery": Kinect zastępuje
+webcam, przy okazji dając 640×480 i podczerwień, która działa też po zmroku.
+
+### Zanim zadzwonisz po pomoc
+
+- **Kinect 360 musi mieć własny zasilacz.** Sam kabel USB nie wystarcza — bez
+  zasilania SDK zwraca `E_NUI_NOTPOWERED`, a dioda nie zapala się na zielono.
+- **Python musi mieć tę samą bitowość co SDK** (64-bit do 64-bit), inaczej
+  `Kinect10.dll` się nie załaduje.
+- **Kinect Studio to nie tester czujnika** — służy do nagrywania strumieni z już
+  działającej aplikacji i sam z siebie zawsze pokaże „Disconnected". Do sprawdzenia
+  sprzętu użyj `python kinect_win.py info` albo Kinect Explorer z Developer Toolkit.
+- **Nie mieszaj sterowników.** SDK 1.8 i libfreenect wykluczają się nawzajem —
+  instalacja jednego odbiera dostęp drugiemu. Na Windowsie zostań przy SDK.
+
+> ⚠️ **Uczciwie o testach:** logika `kinect_win.py` (układ struktur zgodny co do
+> bajta z nagłówkami SDK, rozpoznawanie postawy, obróbka głębi) jest pokryta
+> autotestem i sprawdzona. Sama rozmowa z `Kinect10.dll` wymaga podłączonego
+> czujnika, więc tej części nie mogliśmy przetestować przed wydaniem. Jeśli coś
+> nie zadziała, zacznij od `python kinect_win.py info` — wypisze dokładny kod błędu.
 
 ## Fotogrametria — Cosmos PhotoScan
 
