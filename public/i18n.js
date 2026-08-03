@@ -92,6 +92,8 @@ const I18N = {
     'live.srcKinectColor': 'Kinect — obraz',
     'live.srcKinectDepth': 'Kinect — głębia',
     'live.kinectErr': 'Brak obrazu z Kinecta — czy działa senses/service.py na komputerze z czujnikiem?',
+    'media.insecure': 'Przeglądarka udostępnia kamerę i mikrofon tylko przez HTTPS albo na localhost. Wchodzisz po zwykłym HTTP, więc to API jest niedostępne. Wybierz źródło „Kinect” (nie wymaga kamery przeglądarki) albo włącz HTTPS — patrz docs/START-TUTAJ.md.',
+    'media.noApi': 'Ta przeglądarka nie udostępnia kamery ani mikrofonu. Jeśli masz Kinecta, wybierz go jako źródło obrazu — nie potrzebuje kamery przeglądarki.',
 
     // — wiadomości —
     'copy': 'Kopiuj',
@@ -548,6 +550,8 @@ const I18N = {
     'live.srcKinectColor': 'Kinect — colour',
     'live.srcKinectDepth': 'Kinect — depth',
     'live.kinectErr': 'No image from the Kinect — is senses/service.py running on the machine with the sensor?',
+    'media.insecure': 'Browsers expose the camera and microphone only over HTTPS or on localhost. You are on plain HTTP, so the API is unavailable. Pick a “Kinect” source (it needs no browser camera) or enable HTTPS — see docs/START-TUTAJ.md.',
+    'media.noApi': 'This browser does not expose a camera or microphone. If you have a Kinect, pick it as the video source — it needs no browser camera.',
 
     'copy': 'Copy',
     'copied': '✓ Copied',

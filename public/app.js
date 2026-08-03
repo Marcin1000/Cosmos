@@ -1329,6 +1329,29 @@ el.ttsToggle.addEventListener('click', () => {
 // Zmysły: słuch (STT) — Whisper przez senses, fallback: przeglądarka
 // ----------------------------------------------------------------
 
+// ----------------------------------------------------------------
+// Kamera i mikrofon: wymóg bezpiecznego kontekstu
+// ----------------------------------------------------------------
+//
+// Przeglądarki udostępniają navigator.mediaDevices TYLKO w „bezpiecznym
+// kontekście": po HTTPS albo na localhost. Przy wejściu po zwykłym HTTP na
+// adres IP (typowe dla serwera na VPS w sieci Tailscale) całe API jest
+// `undefined` — nie zablokowane, tylko nieobecne. Bez tego sprawdzenia
+// użytkownik dostaje „Cannot read properties of undefined", co niczego
+// nie tłumaczy.
+
+function mediaApiAvailable() {
+  return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+/** Pobierz strumień albo rzuć wyjątkiem z czytelnym powodem. */
+async function getMedia(constraints) {
+  if (!mediaApiAvailable()) {
+    throw new Error(window.isSecureContext ? t('media.noApi') : t('media.insecure'));
+  }
+  return navigator.mediaDevices.getUserMedia(constraints);
+}
+
 function setRecordingUI(on) {
   isRecording = on;
   el.micBtn.classList.toggle('recording', on);
@@ -1336,7 +1359,7 @@ function setRecordingUI(on) {
 }
 
 async function startWhisperRecording() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await getMedia({ audio: true });
   const chunks = [];
   mediaRecorder = new MediaRecorder(stream);
   mediaRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -1417,7 +1440,7 @@ el.micBtn.addEventListener('click', async () => {
 
 async function openCamera() {
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
+    cameraStream = await getMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 } },
     });
   } catch (err) {
@@ -1775,16 +1798,24 @@ async function startLive() {
   const video = $('live-video');
   const img = $('live-image');
 
+  // Panel otwieramy ZAWSZE, zanim spróbujemy pobrać obraz. Inaczej przy
+  // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł — a to właśnie
+  // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
+  $('live-panel').style.display = '';
+  updateLiveRec();
+
   if (liveIsKinect()) {
     video.hidden = true;
     img.hidden = false;
     startKinectStream();
   } else {
     try {
-      liveStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
+      liveStream = await getMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
     } catch (err) {
-      alert(t('cam.err') + ' ' + err.message);
-      return;
+      img.hidden = true;
+      video.hidden = false;
+      $('live-status').textContent = `${t('cam.err')} ${err.message}`;
+      return;                       // panel zostaje otwarty — można zmienić źródło
     }
     img.hidden = true;
     video.hidden = false;
@@ -1792,8 +1823,6 @@ async function startLive() {
     await video.play().catch(() => {});
   }
 
-  $('live-panel').style.display = '';
-  updateLiveRec();
   $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
@@ -1879,7 +1908,12 @@ async function liveDetect() {
   }
 }
 
-$('live-btn').addEventListener('click', () => { liveStream ? stopLive() : startLive(); });
+// O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
+// strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.
+$('live-btn').addEventListener('click', () => {
+  const open = $('live-panel').style.display !== 'none';
+  open ? stopLive() : startLive();
+});
 $('live-close').addEventListener('click', stopLive);
 $('live-source').addEventListener('change', async (e) => {
   liveSource = e.target.value;
@@ -2292,7 +2326,7 @@ async function kbToggleRecording() {
   // wariant 1: Whisper przez zmysły (nagranie audio)
   if (senses.online && senses.caps.whisper) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getMedia({ audio: true });
       const chunks = [];
       kbRecorder = new MediaRecorder(stream);
       kbRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -2442,7 +2476,7 @@ async function enterVoiceMode() {
 
   // kamera dla pytań „co widzisz / co mam w ręku” (cicha zgoda = brak wizji)
   try {
-    voiceCameraStream = await navigator.mediaDevices.getUserMedia({
+    voiceCameraStream = await getMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 } },
     });
     el.voiceCamera.srcObject = voiceCameraStream;
@@ -3492,7 +3526,7 @@ document.querySelectorAll('#learn-modal [data-learn-tab]').forEach((b) =>
 // --- Rozpoznawanie ---
 async function startLearnCam() {
   try {
-    learnStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } });
+    learnStream = await getMedia({ video: { width: { ideal: 1280 } } });
     const v = $('learn-video');
     v.srcObject = learnStream;
     v.style.display = '';

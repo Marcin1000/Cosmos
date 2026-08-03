@@ -627,6 +627,44 @@ git pull
 sudo systemctl restart cosmos
 ```
 
+## ⚠️ Kamera i mikrofon wymagają HTTPS
+
+To zaskakuje każdego przy Ścieżce B, więc lepiej wiedzieć od razu.
+
+Przeglądarki udostępniają kamerę i mikrofon **wyłącznie w „bezpiecznym kontekście"**:
+po HTTPS albo na `localhost`. Wchodząc po zwykłym `http://100.x.x.x:3000` **nie masz
+zablokowanego dostępu — po prostu tego API nie ma.** Nie działają wtedy:
+
+| Funkcja | Przy `http://` na adres IP |
+|---|---|
+| Dyktowanie (ikona mikrofonu) | ❌ |
+| Zdjęcie z kamery (ikona aparatu) | ❌ |
+| Panel „Kamera na żywo" — kamera przeglądarki | ❌ |
+| Tryb głosowy | ❌ |
+| Nauka → „Pokaż" (uczenie z kamery) | ❌ |
+| **Panel na żywo — źródło Kinect** | ✅ **działa** |
+| Czat, baza wiedzy, Studio, wszystko inne | ✅ |
+
+**Kinect jest wyjątkiem**, bo jego klatki nie idą przez przeglądarkę, tylko przez usługę
+zmysłów. Jeśli masz Kinecta, wybierz go w panelu jako źródło i podgląd zadziała mimo HTTP.
+
+### Jak włączyć HTTPS w sieci Tailscale (najprościej)
+
+Tailscale wystawia darmowy, prawdziwy certyfikat dla nazwy Twojej maszyny w tailnecie —
+bez własnej domeny i bez otwierania portów:
+
+```bash
+sudo tailscale cert --help          # sprawdź nazwę swojej maszyny w tailnecie
+sudo tailscale serve --bg 3000
+```
+
+`tailscale serve` postawi HTTPS przed Cosmosem. Adres zmieni się z
+`http://100.x.x.x:3000` na `https://nazwa-maszyny.twoj-tailnet.ts.net` — i pod nim
+kamera oraz mikrofon zaczną działać. W `.env` dodaj wtedy `COSMOS_COOKIE_SECURE=1`
+i zrestartuj usługę.
+
+> Po zmianie adresu **zainstaluj PWA na nowo** — stara wskazuje na poprzedni adres.
+
 ## Alternatywa: publiczna domena + HTTPS (bez Tailscale)
 
 Jeśli wolisz zwykły adres `https://cosmos.twojadomena.pl`:
@@ -901,6 +939,7 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |
+| „Brak dostępu do kamery: Cannot read properties of undefined" | Kamera i mikrofon działają tylko po HTTPS albo na `localhost`. Wejdź przez `https://` (patrz CZĘŚĆ 3) albo — mając Kinecta — wybierz go jako źródło obrazu |
 | „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
