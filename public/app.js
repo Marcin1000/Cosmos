@@ -230,6 +230,46 @@ function msgImages(m) {
 // Mini-renderer Markdown (bez zewnętrznych bibliotek)
 // ----------------------------------------------------------------
 
+/** Zamień gołe adresy w tekście na klikalne odnośniki.
+ *
+ * Model podaje źródła raz jako `[tekst](adres)`, a raz jako sam adres w zdaniu —
+ * i ta druga postać zostawała martwym tekstem, którego nie dało się kliknąć.
+ * Pracujemy na HTML-u po `renderInline`, więc omijamy to, co już jest wewnątrz
+ * `<a>` i `<code>`: inaczej podlinkowalibyśmy adres w atrybucie href.
+ */
+function autoLink(html) {
+  const skip = /<a\b[^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>/gi;
+  const url = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*/gi;
+
+  const linkify = (chunk) => chunk.replace(url, (m) => {
+    // Znaki interpunkcyjne na końcu należą do zdania, nie do adresu.
+    // Nawias zamykający zostawiamy tylko wtedy, gdy w adresie jest otwierający.
+    let tail = '';
+    let addr = m;
+    for (;;) {
+      const last = addr.slice(-1);
+      if (/[.,;:!?…"']/.test(last)
+          || (last === ')' && (addr.match(/\(/g) || []).length < (addr.match(/\)/g) || []).length)) {
+        tail = last + tail;
+        addr = addr.slice(0, -1);
+        continue;
+      }
+      break;
+    }
+    if (!addr) return m;
+    const href = addr.startsWith('www.') ? 'https://' + addr : addr;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${addr}</a>${tail}`;
+  });
+
+  let out = '';
+  let last = 0;
+  for (const m of html.matchAll(skip)) {
+    out += linkify(html.slice(last, m.index)) + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + linkify(html.slice(last));
+}
+
 function renderInline(text) {
   let out = escapeHtml(text);
   out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
@@ -239,7 +279,7 @@ function renderInline(text) {
   out = out.replace(/(^|[\s(])_([^_\s][^_]*)_/g, '$1<em>$2</em>');
   out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  return out;
+  return autoLink(out);
 }
 
 function renderMarkdown(text) {

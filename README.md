@@ -258,6 +258,9 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
   analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
   zapamiętywany),
+- 🔗 adresy w odpowiedziach są klikalne — także te wpisane gołym tekstem, nie tylko
+  w formie `[nazwa](adres)`; otwierają się w nowej karcie,
+- 🖼 kliknięcie w obraz w rozmowie otwiera go na pełnym ekranie, z pobieraniem,
 - 🧠 przy modelach rozumujących (Nemotron 3, gpt-oss, R1) tok myślenia jest
   widoczny na żywo w zwijanym bloku. Gdy model zużyje cały budżet tokenów na
   myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi,

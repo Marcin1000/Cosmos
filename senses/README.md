@@ -468,6 +468,23 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają
 czytelnym błędem, gdy brakuje pakietu danego zmysłu — usługa startuje zawsze.
 
+## Strojenie usługi (zmienne środowiskowe)
+
+Wszystkie są opcjonalne — bez nich działają wartości domyślne. Ustawiasz je
+**przed** startem `service.py`, w tym samym oknie (`set NAZWA=wartość`) albo na
+stałe w zmiennych środowiskowych Windowsa.
+
+| Zmienna | Domyślnie | Do czego |
+|---|---|---|
+| `SENSES_PORT` | `7060` | port usługi; zmień, gdy 7060 jest zajęty (pamiętaj wtedy o `SENSES_URL` na serwerze) |
+| `WHISPER_MODEL` | `small` | rozmiar modelu mowy: `tiny`, `base`, `small`, `medium`, `large-v3`. Mniejszy = szybszy i mniej dokładny |
+| `WHISPER_DEVICE` | `auto` | `cpu` wymusza procesor. Przydatne, gdy brakuje bibliotek CUDA i nie chcesz czekać na wykrycie |
+| `WHISPER_LANG` | (wykrywa sam) | `pl` przyspiesza i poprawia rozpoznawanie, gdy zawsze mówisz po polsku |
+| `YOLO_MODEL` | `yolo11n.pt` | model rozpoznawania obiektów; `yolo11s.pt`/`yolo11m.pt` są dokładniejsze i wolniejsze |
+| `REALESRGAN_MODEL` | wbudowany | ścieżka do własnego modelu powiększania |
+| `PIPER_VOICE` | — | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
+| `COSMOS_RECORD_OUT` | — | folder na nagrania z `tether.py` (sterowanie aparatem) |
+
 ## Wydajność na RTX 3080
 
 | Zmysł | Model | Uwagi |
