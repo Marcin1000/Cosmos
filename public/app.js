@@ -1199,9 +1199,62 @@ function setGeneratingUI(generating) {
   updateSendButton();
 }
 
+/** Pokaż „dopracuj prompt", gdy jest co dopracowywać.
+ *
+ * Przy krótkich wiadomościach („dzięki", „tak") przepisywanie nie ma sensu,
+ * a przycisk tylko zaśmieca pole — stąd próg długości.
+ */
+function updatePolishButton() {
+  const btn = $('polish-btn');
+  if (!btn) return;
+  btn.hidden = el.input.value.trim().length < 25 || isGenerating;
+}
+
+/** Przepisz treść pola na precyzyjny prompt, z możliwością cofnięcia. */
+let polishPrevious = '';
+async function polishPrompt() {
+  const btn = $('polish-btn');
+  const raw = el.input.value.trim();
+  if (!raw || btn.disabled) return;
+
+  // Drugie kliknięcie po dopracowaniu przywraca oryginał — nikt nie chce
+  // stracić własnych słów przez jedno kliknięcie.
+  if (polishPrevious && raw !== polishPrevious) {
+    el.input.value = polishPrevious;
+    polishPrevious = '';
+    btn.title = t('polish.btn');
+    autosizeInput(); updateSendButton();
+    return;
+  }
+
+  btn.disabled = true;
+  const before = el.input.placeholder;
+  el.input.placeholder = t('polish.working');
+  try {
+    const res = await fetch('/api/polish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Cosmos-Lang': getLang() },
+      body: JSON.stringify({ text: raw, endpoint }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+    polishPrevious = raw;
+    el.input.value = data.text;
+    btn.title = t('polish.undo');
+    autosizeInput(); updateSendButton();
+  } catch (err) {
+    alert(t('polish.err') + ' ' + err.message);
+  } finally {
+    btn.disabled = false;
+    el.input.placeholder = before;
+    el.input.focus();
+  }
+}
+
 function updateSendButton() {
   const empty = el.input.value.trim() === '' && pendingImages.length === 0;
   el.sendBtn.disabled = empty || isGenerating || !serverReachable;
+  updatePolishButton();
 }
 
 // ----------------------------------------------------------------
@@ -1358,8 +1411,30 @@ function setRecordingUI(on) {
   el.micBtn.title = on ? t('stopRecording') : t('speak');
 }
 
+/** Ograniczenia audio z uwzględnieniem wybranego mikrofonu.
+ *
+ * Domyślny mikrofon systemu rzadko jest tym, którego chcemy: przy Kinekcie
+ * to zwykle wbudowany mikrofon laptopa, a przy słuchawkach — dopiero co
+ * podłączone urządzenie. Wybór zapamiętujemy, bo zmienia się rzadko.
+ */
+function audioConstraints() {
+  const id = localStorage.getItem('cosmos.micId') || '';
+  return id ? { audio: { deviceId: { exact: id } } } : { audio: true };
+}
+
 async function startWhisperRecording() {
-  const stream = await getMedia({ audio: true });
+  let stream;
+  try {
+    stream = await getMedia(audioConstraints());
+  } catch (err) {
+    // Zapamiętany mikrofon mógł zostać odłączony — spróbuj domyślnego.
+    if (localStorage.getItem('cosmos.micId')) {
+      localStorage.removeItem('cosmos.micId');
+      stream = await getMedia({ audio: true });
+    } else {
+      throw err;
+    }
+  }
   const chunks = [];
   mediaRecorder = new MediaRecorder(stream);
   mediaRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -1756,6 +1831,7 @@ function liveMediaSize() {
 }
 
 let liveStreaming = false;
+const liveFps = 15;
 
 function stopKinectStream() {
   liveStreaming = false;
@@ -1766,31 +1842,39 @@ function stopKinectStream() {
   img.removeAttribute('src');
 }
 
-/** Pobieraj klatki z Kinecta — kolejną dopiero po wczytaniu poprzedniej.
+/** Podłącz strumień MJPEG z Kinecta.
  *
- * Stałe `setInterval` podmieniałoby `src` w trakcie ładowania: obraz migocze,
- * a przy wolniejszym łączu (telefon przez Tailscale) żądania by się piętrzyły.
- * Pętla sterowana zdarzeniem `load` sama dopasowuje tempo do łącza.
- * Znacznik czasu w adresie omija pamięć podręczną przeglądarki.
+ * Jedno połączenie zamiast żądania na klatkę. Przy drodze telefon → VPS →
+ * Tailscale → komputer domowy sam obieg zjadał ćwierć sekundy, co dawało
+ * 3–4 klatki na sekundę niezależnie od czujnika. W strumieniu klatki lecą
+ * jedna za drugą, a przeglądarka odtwarza `multipart/x-mixed-replace`
+ * natywnie w zwykłym <img>.
+ *
+ * Gdyby strumień padł (np. stara wersja usługi zmysłów), wracamy do
+ * pojedynczych klatek — wolniej, ale działa.
  */
 function startKinectStream() {
   const stream = liveSource === 'kinect-depth' ? 'depth' : 'color';
   const img = $('live-image');
   liveStreaming = true;
+  let fellBack = false;
 
-  const next = (delay) => {
-    if (!liveStreaming) return;
-    liveImgTimer = setTimeout(() => {
-      if (liveStreaming) img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
-    }, delay);
+  const singleFrames = () => {
+    fellBack = true;
+    const next = (delay) => {
+      if (!liveStreaming) return;
+      liveImgTimer = setTimeout(() => {
+        if (liveStreaming) img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
+      }, delay);
+    };
+    img.onload = () => next(120);
+    img.onerror = () => { $('live-status').textContent = t('live.kinectErr'); next(2000); };
+    img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
   };
 
-  img.onload = () => next(120);
-  img.onerror = () => {
-    $('live-status').textContent = t('live.kinectErr');
-    next(2000);          // czujnik może się podnosić — próbuj rzadziej, ale próbuj
-  };
-  img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
+  img.onload = null;
+  img.onerror = () => { if (!fellBack) singleFrames(); };
+  img.src = `/api/kinect/stream?stream=${stream}&fps=${liveFps}&t=${Date.now()}`;
 }
 
 async function startLive() {
@@ -1802,6 +1886,7 @@ async function startLive() {
   // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł — a to właśnie
   // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
   $('live-panel').style.display = '';
+  applyLiveExpanded();
   updateLiveRec();
 
   if (liveIsKinect()) {
@@ -1915,6 +2000,18 @@ $('live-btn').addEventListener('click', () => {
   open ? stopLive() : startLive();
 });
 $('live-close').addEventListener('click', stopLive);
+
+// Powiększenie zapamiętujemy — kto raz chce duży podgląd, zwykle chce go zawsze.
+function applyLiveExpanded() {
+  const on = localStorage.getItem('cosmos.liveExpanded') === '1';
+  $('live-panel').classList.toggle('expanded', on);
+  $('live-expand').title = t(on ? 'live.shrink' : 'live.expand');
+}
+$('live-expand').addEventListener('click', () => {
+  const on = $('live-panel').classList.contains('expanded');
+  localStorage.setItem('cosmos.liveExpanded', on ? '0' : '1');
+  applyLiveExpanded();
+});
 $('live-source').addEventListener('change', async (e) => {
   liveSource = e.target.value;
   localStorage.setItem('cosmos.liveSource', liveSource);
@@ -2326,7 +2423,7 @@ async function kbToggleRecording() {
   // wariant 1: Whisper przez zmysły (nagranie audio)
   if (senses.online && senses.caps.whisper) {
     try {
-      const stream = await getMedia({ audio: true });
+      const stream = await getMedia(audioConstraints());
       const chunks = [];
       kbRecorder = new MediaRecorder(stream);
       kbRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -2867,6 +2964,7 @@ function openSettings() {
   el.modelSelectCloud.style.display = 'none';
   el.modelSelectLocal.style.display = 'none';
   refreshModelInfoBoxes();
+  loadMicList();
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
@@ -3183,6 +3281,37 @@ function renderModelInfo(boxEl, id) {
   boxEl.hidden = false;
 }
 
+/** Wypełnij listę mikrofonów.
+ *
+ * Nazwy urządzeń przeglądarka ujawnia dopiero po przyznaniu dostępu do audio —
+ * wcześniej lista jest pusta albo bezimienna. Dlatego przy pierwszym otwarciu
+ * prosimy o zgodę i od razu ją zwalniamy.
+ */
+async function loadMicList() {
+  const sel = $('set-mic');
+  if (!mediaApiAvailable()) {
+    sel.innerHTML = `<option value="">${escapeHtml(t('set.micNoApi'))}</option>`;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  try {
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    if (!devices.some((d) => d.kind === 'audioinput' && d.label)) {
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+      probe.getTracks().forEach((tr) => tr.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+    }
+    const mics = devices.filter((d) => d.kind === 'audioinput');
+    const saved = localStorage.getItem('cosmos.micId') || '';
+    sel.innerHTML = `<option value="">${escapeHtml(t('set.micDefault'))}</option>`
+      + mics.map((d, i) => `<option value="${escapeHtml(d.deviceId)}"${d.deviceId === saved ? ' selected' : ''}>`
+        + escapeHtml(d.label || `${t('set.micUnnamed')} ${i + 1}`) + '</option>').join('');
+  } catch (err) {
+    sel.innerHTML = `<option value="">${escapeHtml(err.message)}</option>`;
+  }
+}
+
 function refreshModelInfoBoxes() {
   renderModelInfo($('model-info-cloud'), el.setModelCloud.value.trim()
     || epConfig('cloud').model || '');
@@ -3242,6 +3371,11 @@ el.modelSelectLocal.addEventListener('change', () => {
 });
 // Także przy wpisywaniu z ręki — opis ma nadążać za tym, co widać w polu.
 el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
+$('set-mic').addEventListener('change', (e) => {
+  localStorage.setItem('cosmos.micId', e.target.value);
+});
+$('mic-refresh').addEventListener('click', loadMicList);
+$('polish-btn').addEventListener('click', polishPrompt);
 el.setModelLocal.addEventListener('input', refreshModelInfoBoxes);
 
 // ----------------------------------------------------------------

@@ -1172,6 +1172,23 @@ kbd {
   outline: none;
 }
 .live-source select:focus { border-color: var(--accent); }
+/* Tryb powiększony: panel na środku ekranu, obraz tak duży, jak się zmieści.
+   `object-fit: contain` zamiast `cover` — przy dużym kadrze ważniejsze jest
+   widzieć całość niż wypełnić prostokąt. */
+.live-panel.expanded {
+  right: 50%;
+  bottom: 50%;
+  transform: translate(50%, 50%);
+  /* Szerokość ogranicza też wysokość okna. Przy proporcji 4:3 samo obcięcie
+     wysokości sceny zostawiłoby czarne pasy po bokach — tu panel zwęża się
+     razem z obrazem. 220px to nagłówek, wybór źródła, status i przycisk. */
+  width: min(1100px, calc(100vw - 40px), calc((100dvh - 220px) * 4 / 3));
+  max-width: none;
+}
+.live-panel.expanded .live-stage { background: #000; }
+.live-panel.expanded .live-stage video,
+.live-panel.expanded .live-stage img { object-fit: contain; }
+
 .live-status {
   padding: 8px 14px;
   font-size: 11px;
@@ -1182,6 +1199,7 @@ kbd {
 
 @media (max-width: 720px) {
   .live-panel { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
+  .live-panel.expanded { width: min(calc(100vw - 16px), calc((100dvh - 260px) * 4 / 3)); }
 }
 
 /* ============================ GALERIA ============================ */

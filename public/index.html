@@ -197,6 +197,9 @@
           <button class="attach-btn" id="mic-btn" data-i18n-title="speak" title="Mów (dyktowanie)" aria-label="Mów">
             <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           </button>
+          <button class="attach-btn" id="polish-btn" data-i18n-title="polish.btn" title="Dopracuj prompt" aria-label="Dopracuj prompt" hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 3l1.6 4.6L18 9l-4.4 1.4L12 15l-1.6-4.6L6 9l4.4-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="currentColor"/></svg>
+          </button>
           <textarea id="input" rows="1" data-i18n-ph="inputPh" placeholder="Napisz wiadomość…"></textarea>
           <button class="send-btn" id="send-btn" data-i18n-title="send" title="Wyślij" aria-label="Wyślij">
             <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -239,6 +242,15 @@
           <select id="model-select-local" style="display:none" class="mono"></select>
           <div class="model-info" id="model-info-local" hidden></div>
           <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.mic">Mikrofon do dyktowania</span>
+          <div class="field-row">
+            <select id="set-mic" class="mono"></select>
+            <button class="btn-secondary" id="mic-refresh" data-i18n="set.micRefresh">Odśwież</button>
+          </div>
+          <span class="field-hint" data-i18n="set.micHint">Kinect, słuchawki, mikrofon telefonu — lista pokazuje wszystko, co widzi ta przeglądarka. Wymaga HTTPS.</span>
         </label>
 
         <label class="field">
@@ -616,6 +628,9 @@
     <div class="live-head">
       <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
       <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
+      <button class="icon-btn" id="live-expand" data-i18n-title="live.expand" title="Powiększ" aria-label="Powiększ">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="icon-btn" id="live-close" data-i18n-aria="close" aria-label="Zamknij">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>

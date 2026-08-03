@@ -240,7 +240,12 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 
 **W interfejsie:**
 - 🎤 przycisk mikrofonu — dyktowanie: Whisper (lokalnie, przez Senses), a gdy usługa
-  nie działa, rozpoznawanie wbudowane w Chrome/Edge,
+  nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** — wybierasz
+  w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
+  wybór jest zapamiętywany,
+- ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) — przepisuje
+  podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
+  porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
 - 🔊 przełącznik głosu (pasek górny) — odpowiedzi czytane przez Piper (naturalny polski
   głos, lokalnie), fallback: głos systemowy przeglądarki,
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
@@ -508,7 +513,8 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
-| `/api/kinect/frame` `/api/kinect/status` | GET | Klatki z Kinecta 360 (obraz / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC |
+| `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
+| `/api/polish` | POST | Przepisuje podyktowany tekst na precyzyjny prompt (`{text, endpoint}` → `{text}`) |
 | `/api/lessons` `/api/lessons/match` | GET/POST/DELETE | Nauka: wzorce rozpoznawania i dopasowanie |
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |

@@ -28,7 +28,7 @@ import os
 import tempfile
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 import uvicorn
 
 app = FastAPI(title="Cosmos Senses")
@@ -372,6 +372,72 @@ async def kinect_status():
     return {"available": True, "sensors": n, "streams": ["color", "depth"], "error": _kinect_err}
 
 
+def _render(k, stream: str):
+    """Klatka gotowa do zakodowania: obraz BGR albo pokolorowana mapa głębi.
+
+    Głębia to milimetry — dla oka mapujemy zasięg 0,5–4 m na paletę. Zera, czyli
+    „nie wiem" (cień podczerwieni, szkło, poza zasięgiem), zostają czarne, żeby
+    nie udawały pomiaru, którego nie ma.
+    """
+    if stream == "depth":
+        import cv2
+        import numpy as np
+        frame = k.depth_frame()
+        if frame is None:
+            return None
+        vis = np.clip((frame.astype(np.float32) - 500) / (4000 - 500), 0, 1)
+        vis = (vis * 255).astype(np.uint8)
+        vis = cv2.applyColorMap(vis, cv2.COLORMAP_TURBO)
+        vis[frame == 0] = 0
+        return vis
+    return k.color_frame()
+
+
+@app.get("/kinect/stream")
+async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70):
+    """Ciągły strumień MJPEG.
+
+    Pojedyncze klatki przez /kinect/frame znaczą jedno żądanie HTTP na klatkę.
+    Przy drodze telefon → VPS → Tailscale → komputer domowy sam obieg zjada
+    ćwierć sekundy, więc podgląd klatkuje niezależnie od tego, jak szybki jest
+    czujnik. Tutaj połączenie jest jedno, a klatki lecą w nim jedna za drugą —
+    przeglądarka odtwarza to natywnie w zwykłym <img>.
+    """
+    try:
+        k = get_kinect()
+    except Exception as e:
+        return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        return JSONResponse({"error": "Strumień wymaga: pip install opencv-python"},
+                            status_code=501)
+
+    delay = 1.0 / max(1, min(30, fps))
+    q = max(20, min(95, quality))
+
+    def frames():
+        import time as _t
+        while True:
+            start = _t.time()
+            try:
+                img = _render(k, stream)
+            except Exception:
+                break                       # czujnik zniknął — zamknij strumień
+            if img is not None:
+                jpg = _to_jpeg(img, q)
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n"
+                       b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n"
+                       + jpg + b"\r\n")
+            left = delay - (_t.time() - start)
+            if left > 0:
+                _t.sleep(left)
+
+    return StreamingResponse(frames(),
+                             media_type="multipart/x-mixed-replace; boundary=frame",
+                             headers={"Cache-Control": "no-store"})
+
+
 @app.get("/kinect/frame")
 async def kinect_frame(stream: str = "color"):
     """Pojedyncza klatka jako JPEG. `stream` = color albo depth."""
@@ -383,23 +449,9 @@ async def kinect_frame(stream: str = "color"):
         return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
 
     try:
-        if stream == "depth":
-            import cv2
-            import numpy as np
-            frame = k.depth_frame()
-            if frame is None:
-                return JSONResponse({"error": "Brak klatki głębi."}, status_code=503)
-            # Głębia to milimetry — dla oka mapujemy zasięg 0,5–4 m na kolory.
-            # Zera (czyli „nie wiem") zostają czarne, żeby nie udawać pomiaru.
-            vis = np.clip((frame.astype(np.float32) - 500) / (4000 - 500), 0, 1)
-            vis = (vis * 255).astype(np.uint8)
-            vis = cv2.applyColorMap(vis, cv2.COLORMAP_TURBO)
-            vis[frame == 0] = 0
-            img = vis
-        else:
-            img = k.color_frame()
-            if img is None:
-                return JSONResponse({"error": "Brak klatki obrazu."}, status_code=503)
+        img = _render(k, stream)
+        if img is None:
+            return JSONResponse({"error": "Brak klatki z Kinecta."}, status_code=503)
         return Response(content=_to_jpeg(img), media_type="image/jpeg",
                         headers={"Cache-Control": "no-store"})
     except ImportError:

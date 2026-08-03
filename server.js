@@ -1790,6 +1790,44 @@ async function handleImprovements(req, res, pathname) {
   res.writeHead(405); res.end();
 }
 
+/** Zamień surową wypowiedź w precyzyjny prompt.
+ *
+ * Dyktowana wiadomość jest z natury luźna: powtórzenia, „yyy", myśl zmieniana
+ * w połowie zdania. Model dostaje ją do przepisania — ma zachować INTENCJĘ
+ * i wszystkie szczegóły, a uporządkować formę. Zwracamy sam tekst, bez
+ * komentarzy, żeby dało się nim po prostu podmienić zawartość pola.
+ */
+async function handlePolish(req, res) {
+  let data;
+  try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const raw = String(data.text || '').trim();
+  if (!raw) return sendJson(res, 400, { error: 'Pusty tekst.' });
+  if (raw.length > 8000) return sendJson(res, 400, { error: 'Tekst za długi (max 8000 znaków).' });
+
+  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
+  const instruction = lang === 'en'
+    ? 'Rewrite the user\'s dictated text as a clear, precise prompt. Keep every requirement and '
+      + 'detail they gave; do not invent new ones and do not answer the request. Remove filler, '
+      + 'repetition and false starts. Where the intent implies it, state the desired output format, '
+      + 'and add a short bulleted list of the concrete requirements. Reply with the prompt only, '
+      + 'in the same language as the input.'
+    : 'Przepisz podyktowany tekst użytkownika jako jasny, precyzyjny prompt. Zachowaj WSZYSTKIE '
+      + 'wymagania i szczegóły, które podał; nie dopisuj nowych i nie odpowiadaj na prośbę. '
+      + 'Usuń wypełniacze, powtórzenia i urwane początki zdań. Jeśli intencja to sugeruje, dopisz '
+      + 'oczekiwany format odpowiedzi oraz krótką listę punktową konkretnych wymagań. '
+      + 'Odpowiedz samym promptem, w języku oryginału, bez komentarza i bez cudzysłowów.';
+
+  try {
+    const text = await llmComplete([
+      { role: 'system', content: instruction },
+      { role: 'user', content: raw },
+    ], { endpoint: pickEndpoint(data.endpoint) === ENDPOINTS.local ? 'local' : 'cloud', maxTokens: 1200 });
+    return sendJson(res, 200, { ok: true, text: text.trim() });
+  } catch (err) {
+    return sendJson(res, 502, { error: 'polish-failed', message: err.message });
+  }
+}
+
 /** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
 async function handleSuggest(req, res) {
   const m = await capabilityManifest();
@@ -2177,11 +2215,53 @@ async function proxySenses(req, res, targetPath, { json = false } = {}) {
   res.end(buf);
 }
 
-/** Odczyt z usługi percepcji (GET) — np. klatki z Kinecta.
+/* Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i podgląd nie może
+   użyć getUserMedia. Obraz idzie tędy: usługa zmysłów → serwer → przeglądarka. */
+
+/** Przekaż strumień MJPEG bez buforowania.
  *
- * Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i podgląd nie może
- * użyć getUserMedia. Klatki idą tędy: usługa zmysłów → serwer → przeglądarka.
+ * Zwykłe proxy czeka na całą odpowiedź — a strumień nie kończy się nigdy.
+ * Tutaj przepisujemy nagłówki i przelewamy ciało kawałek po kawałku, żeby
+ * klatki docierały na bieżąco.
  */
+async function proxySensesStream(req, res, targetPath, search = '') {
+  const ctrl = new AbortController();
+  // Gdy przeglądarka zamknie podgląd, zrywamy też połączenie do zmysłów —
+  // inaczej Kinect produkowałby klatki w nieskończoność dla nikogo.
+  res.on('close', () => ctrl.abort());
+
+  let upstream;
+  try {
+    upstream = await fetch(`${SENSES_URL}${targetPath}${search}`, { signal: ctrl.signal });
+  } catch (err) {
+    if (!res.headersSent) sendJson(res, 502, { error: `Usługa percepcji nie odpowiada: ${err.message}` });
+    return;
+  }
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => '');
+    if (!res.headersSent) {
+      res.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') || 'application/json' });
+      res.end(text);
+    }
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': upstream.headers.get('content-type') || 'multipart/x-mixed-replace',
+    'Cache-Control': 'no-store',
+    Connection: 'close',
+  });
+  try {
+    for await (const chunk of upstream.body) {
+      if (!res.write(Buffer.from(chunk))) {
+        await new Promise((r) => res.once('drain', r));
+      }
+    }
+  } catch { /* zerwane połączenie — normalne przy zamknięciu podglądu */ }
+  res.end();
+}
+
+/** Odczyt z usługi percepcji (GET) — pojedyncza klatka, status czujnika.
+ *  Zapasowa droga, gdy strumień MJPEG nie przejdzie przez proxy. */
 async function proxySensesGet(req, res, targetPath, search = '') {
   let upstream;
   try {
@@ -3037,6 +3117,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
@@ -3155,6 +3236,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
     if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
+    if (p === '/api/kinect/stream' && req.method === 'GET') {
+      return await proxySensesStream(req, res, '/kinect/stream',
+        new URL(req.url, 'http://localhost').search);
+    }
     if (p === '/api/kinect/frame' && req.method === 'GET') {
       return await proxySensesGet(req, res, '/kinect/frame',
         new URL(req.url, 'http://localhost').search);

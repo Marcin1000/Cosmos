@@ -232,9 +232,20 @@ podniesiona").
 ### Podgląd z Kinecta w interfejsie Cosmosa
 
 Panel „Kamera na żywo" ma listę wyboru źródła: **Kamera przeglądarki**,
-**Kinect — obraz**, **Kinect — głębia**. Dwie ostatnie pozycje pobierają klatki
-przez `GET /kinect/frame`, bo przeglądarka Kinecta nie widzi (nie jest kamerą UVC)
+**Kinect — obraz**, **Kinect — głębia**. Dwie ostatnie pozycje biorą obraz
+przez `GET /kinect/stream`, bo przeglądarka Kinecta nie widzi (nie jest kamerą UVC)
 i `getUserMedia` nigdy go nie zwróci.
+
+Strumień idzie w **MJPEG**: jedno połączenie HTTP, którym płyną kolejne klatki.
+Wcześniejsza wersja pobierała każdą klatkę osobnym zapytaniem i to właśnie stąd
+brało się klatkowanie — na każdą klatkę przypadał pełny cykl żądanie–odpowiedź.
+Domyślnie 15 kl./s przy jakości 70; oba parametry można zmienić w adresie.
+Gdy strumień nie zadziała (stary serwer pośredniczący, proxy bez obsługi
+`multipart/x-mixed-replace`), podgląd sam wraca do pojedynczych klatek
+z `GET /kinect/frame`.
+
+Przycisk **powiększenia** w nagłówku panelu przenosi podgląd na środek ekranu
+i rozciąga go do rozmiaru, jaki mieści się w oknie. Wybór jest zapamiętywany.
 
 Głębia jest kolorowana: zasięg 0,5–4 m rozłożony na paletę, a miejsca bez pomiaru
 (cień podczerwieni, szkło, poza zasięgiem) zostają **czarne** — żeby nie udawały
@@ -445,7 +456,8 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 | `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` — Real-ESRGAN |
 | `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
 | `GET /kinect/status` | — | czy czujnik jest dostępny |
-| `GET /kinect/frame` | `?stream=color\|depth` | klatka JPEG — podgląd Kinecta w Cosmosie |
+| `GET /kinect/frame` | `?stream=color\|depth` | pojedyncza klatka JPEG |
+| `GET /kinect/stream` | `?stream=color\|depth&fps=15&quality=70` | strumień MJPEG — tego używa podgląd w Cosmosie |
 
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają

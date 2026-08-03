@@ -638,11 +638,13 @@ zablokowanego dostępu — po prostu tego API nie ma.** Nie działają wtedy:
 | Funkcja | Przy `http://` na adres IP |
 |---|---|
 | Dyktowanie (ikona mikrofonu) | ❌ |
+| Wybór mikrofonu w Ustawieniach | ❌ (lista pusta — przeglądarka nie widzi urządzeń) |
 | Zdjęcie z kamery (ikona aparatu) | ❌ |
 | Panel „Kamera na żywo" — kamera przeglądarki | ❌ |
 | Tryb głosowy | ❌ |
 | Nauka → „Pokaż" (uczenie z kamery) | ❌ |
 | **Panel na żywo — źródło Kinect** | ✅ **działa** |
+| **✦ Dopracowanie promptu** | ✅ **działa** (wpisany tekst, bez mikrofonu) |
 | Czat, baza wiedzy, Studio, wszystko inne | ✅ |
 
 **Kinect jest wyjątkiem**, bo jego klatki nie idą przez przeglądarkę, tylko przez usługę
@@ -883,9 +885,16 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 - **Studio** — generowanie obrazów (OpenAI / Adobe Firefly) z wariantami, szablonami,
   storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
-- **Kamera na żywo** — panel z detekcją obiektów, oraz tryb głosowy uruchamiany
-  przyciskiem fal dźwiękowych (rozmowa po polsku przy otwartej karcie; nasłuch słowa
-  aktywującego w tle jest jeszcze niedokończony — patrz `senses/README.md`).
+- **Kamera na żywo** — panel z detekcją obiektów, przyciskiem powiększenia (podgląd na
+  środku ekranu) i wyborem źródła: kamera przeglądarki albo Kinect (obraz / głębia).
+  Obok tryb głosowy uruchamiany przyciskiem fal dźwiękowych (rozmowa po polsku przy
+  otwartej karcie; nasłuch słowa aktywującego w tle jest jeszcze niedokończony —
+  patrz `senses/README.md`).
+- **Dyktowanie i dopracowanie promptu** — mikrofon 🎤 zamienia mowę na tekst, a którym
+  mikrofonem — wybierasz w Ustawieniach (macierz Kinecta, Galaxy Buds, telefon,
+  laptop). Przycisk ✦ obok przepisuje podyktowaną wypowiedź na precyzyjny prompt:
+  wycina wypełniacze i powtórzenia, a wymagania układa w listę. Drugie kliknięcie
+  przywraca Twoją wersję, więc nic nie tracisz.
 - **Nauka** (przycisk w panelu bocznym) — naucz Cosmosa rozpoznawania (pokaż w kamerze
   i nazwij), **nagraj procedury** z ekranu (klikasz i wpisujesz, a Cosmos zapisuje kroki)
   i zaplanuj je jako **rutyny** cykliczne. Kroki wrażliwe (płatność, wysłanie) zawsze
@@ -940,6 +949,10 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |
 | „Brak dostępu do kamery: Cannot read properties of undefined" | Kamera i mikrofon działają tylko po HTTPS albo na `localhost`. Wejdź przez `https://` (patrz CZĘŚĆ 3) albo — mając Kinecta — wybierz go jako źródło obrazu |
+| Lista mikrofonów w Ustawieniach jest pusta | To samo ograniczenie co przy kamerze: przeglądarka pokazuje urządzenia dopiero po HTTPS albo na `localhost`. Po wejściu przez `https://` kliknij „Odśwież" obok listy |
+| Mikrofon z listy przestał działać (odłączone słuchawki) | Cosmos sam wróci do domyślnego mikrofonu przy pierwszym nagraniu. Żeby wybrać nowy — Ustawienia → „Odśwież" |
+| ✦ „Dopracuj prompt": „Brak klucza API dla chmury NVIDIA" | Przepisywanie idzie przez ten sam model co czat. Uzupełnij `NVIDIA_API_KEY` albo przełącz się na „Lokalnie" (Ollama musi działać) |
+| Podgląd z Kinecta zatrzymuje się po chwili | Sprawdź okno z `python service.py` — przy zerwanym strumieniu Cosmos przechodzi na pojedyncze klatki, więc obraz zwalnia zamiast zniknąć |
 | „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
