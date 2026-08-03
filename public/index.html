@@ -683,6 +683,7 @@
         </button>
       </div>
       <div class="modal-body">
+        <div class="gallery-note" id="gallery-note" role="status" hidden></div>
         <div class="gallery-filters" id="gallery-filters">
           <button class="gallery-filter active" data-filter="all" data-i18n="gallery.all">Wszystko</button>
           <button class="gallery-filter" data-filter="image" data-i18n="gallery.images">Obrazy</button>
@@ -711,6 +712,19 @@
       <span class="voice-camera-label mono" data-i18n="voice.camLabel">👁 podgląd</span>
     </div>
     <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta</p>
+  </div>
+
+  <!-- ============ PODGLĄD OBRAZU (pełny ekran) ============ -->
+  <div class="img-viewer" id="img-viewer" style="display:none">
+    <div class="img-viewer-bar">
+      <button class="icon-btn" id="img-viewer-download" data-i18n-title="img.download" title="Pobierz obraz" aria-label="Pobierz obraz">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" id="img-viewer-close" data-i18n-aria="close" aria-label="Zamknij">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <img id="img-viewer-img" alt="">
   </div>
 
   <!-- ================= MODAL: KAMERA ================= -->

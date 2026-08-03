@@ -118,6 +118,8 @@ const I18N = {
     'convWithImage': 'Rozmowa z obrazem',
     'newChatFallback': 'Nowa rozmowa',
     'attachment': 'załącznik',
+    'img.openHint': 'Kliknij, aby powiększyć',
+    'img.download': 'Pobierz obraz',
 
     // — wspólne —
     'close': 'Zamknij',
@@ -272,6 +274,7 @@ const I18N = {
     'gallery.video': 'Wideo',
     'gallery.download': 'Pobierz',
     'gallery.useFrame': 'Użyj jako pierwsza klatka wideo',
+    'gallery.frameIs': 'To jest teraz pierwsza klatka wideo',
     'gallery.frameSet': '✓ Ustawiono jako klatkę — otwórz Studio → Wideo',
     'gallery.upscale': 'Powiększ (upscale)',
     'st.storyboard': 'Storyboard',
@@ -354,7 +357,8 @@ const I18N = {
 
     // — czat / narzędzia —
     'chat.searching': '🔍 *Szukam w internecie: „{q}"…*',
-    'chat.genImage': '🎨 *Generuję obraz…*',
+    'chat.genImage': '🎨 *Generuję obraz — to zwykle trwa od kilkunastu sekund do minuty…*',
+    'chat.stillWorking': 'model myśli… {s} s',
     'chat.imageSaved': 'Gotowe — obraz zapisany w Bazie wiedzy.',
     'chat.imageDone': 'Wygenerowałem obraz i zapisałem go w bazie wiedzy.',
     'chat.imageErr': '⚠ Generowanie obrazu nie powiodło się: {msg}',
@@ -602,6 +606,8 @@ const I18N = {
     'convWithImage': 'Conversation with image',
     'newChatFallback': 'New chat',
     'attachment': 'attachment',
+    'img.openHint': 'Click to enlarge',
+    'img.download': 'Download image',
 
     'close': 'Close',
     'loading': 'Loading…',
@@ -753,6 +759,7 @@ const I18N = {
     'gallery.video': 'Video',
     'gallery.download': 'Download',
     'gallery.useFrame': 'Use as video first frame',
+    'gallery.frameIs': 'This is the current first video frame',
     'gallery.frameSet': '✓ Set as frame — open Studio → Video',
     'gallery.upscale': 'Upscale',
     'st.storyboard': 'Storyboard',
@@ -831,7 +838,8 @@ const I18N = {
     'voice.micDenied': 'No microphone access: {msg}',
 
     'chat.searching': '🔍 *Searching the internet: “{q}”…*',
-    'chat.genImage': '🎨 *Generating image…*',
+    'chat.genImage': '🎨 *Generating the image — this usually takes from a few seconds to a minute…*',
+    'chat.stillWorking': 'the model is thinking… {s}s',
     'chat.imageSaved': 'Done — image saved to the Knowledge base.',
     'chat.imageDone': 'I generated the image and saved it to the knowledge base.',
     'chat.imageErr': '⚠ Image generation failed: {msg}',

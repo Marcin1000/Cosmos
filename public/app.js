@@ -455,9 +455,56 @@ function imagesHtml(images) {
     const img = document.createElement('img');
     img.src = src;
     img.alt = t('attachment');
+    img.title = t('img.openHint');
+    img.addEventListener('click', () => openImageViewer(src));
     wrap.appendChild(img);
   }
   return wrap;
+}
+
+/** Podgląd obrazu na pełnym ekranie, z pobieraniem.
+ *
+ * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
+ * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
+ */
+function openImageViewer(src) {
+  const box = $('img-viewer');
+  const img = $('img-viewer-img');
+  img.src = src;
+  box.style.display = '';
+  imageViewerSrc = src;
+}
+
+function closeImageViewer() {
+  $('img-viewer').style.display = 'none';
+  $('img-viewer-img').removeAttribute('src');
+  imageViewerSrc = '';
+}
+
+let imageViewerSrc = '';
+
+/** Zapisz oglądany obraz na dysk — działa i dla dataURL, i dla adresu z serwera. */
+async function downloadViewedImage() {
+  if (!imageViewerSrc) return;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  let href = imageViewerSrc;
+  let revoke = '';
+  if (!href.startsWith('data:')) {
+    // Obraz z bazy wiedzy leci przez /api/kb/raw — `download` zadziała tylko
+    // na tym samym pochodzeniu, więc pobieramy go i zapisujemy z pamięci.
+    try {
+      const blob = await (await fetch(imageViewerSrc)).blob();
+      href = URL.createObjectURL(blob);
+      revoke = href;
+    } catch { /* zostaw oryginalny adres — przeglądarka otworzy go w karcie */ }
+  }
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = `cosmos-${stamp}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  if (revoke) setTimeout(() => URL.revokeObjectURL(revoke), 10000);
 }
 
 function messageElement(m, idx = -1) {
@@ -985,6 +1032,18 @@ async function streamOnce(conv) {
   // polu `reasoning_content`. Bez tego ekran stoi pusty przez cały czas myślenia,
   // a gdy budżet tokenów skończy się w trakcie — zostaje pusta odpowiedź.
   // Pokazujemy myślenie na żywo, zwinięte, żeby było widać, że coś się dzieje.
+  // Model rozumujący potrafi milczeć kilkadziesiąt sekund, a pusty dymek
+  // z migającym kursorem wygląda jak zawieszenie. Licznik pokazuje, że praca
+  // trwa — i ile już trwa.
+  const started = Date.now();
+  let waitNote = '';
+  const waitTimer = setInterval(() => {
+    if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
+    const s = Math.round((Date.now() - started) / 1000);
+    waitNote = `<div class="wait-note mono">${escapeHtml(t('chat.stillWorking', { s }))}</div>`;
+    schedulePaint();
+  }, 1000);
+
   const paint = () => {
     renderQueued = false;
     const head = think
@@ -992,7 +1051,7 @@ async function streamOnce(conv) {
         + `<summary>${escapeHtml(t(acc ? 'think.done' : 'think.live'))}</summary>`
         + `<pre>${escapeHtml(think)}</pre></details>`
       : '';
-    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>';
+    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>' + waitNote;
     scrollToBottom();
   };
   const schedulePaint = () => {
@@ -1064,6 +1123,7 @@ async function streamOnce(conv) {
         }
       }
     }
+    clearInterval(waitTimer);
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
     if (!acc.trim() && think.trim()) {
@@ -1075,6 +1135,7 @@ async function streamOnce(conv) {
     lastThink = think.trim();
     return acc;
   } catch (err) {
+    clearInterval(waitTimer);
     if (err.name === 'AbortError') {
       err.partial = acc;
     }
@@ -1765,6 +1826,13 @@ function closeCamera() {
   el.cameraVideo.srcObject = null;
 }
 
+$('img-viewer-close').addEventListener('click', closeImageViewer);
+$('img-viewer-download').addEventListener('click', downloadViewedImage);
+// kliknięcie w tło zamyka; kliknięcie w sam obraz albo pasek — nie
+$('img-viewer').addEventListener('click', (e) => {
+  if (e.target === $('img-viewer')) closeImageViewer();
+});
+
 el.cameraBtn.addEventListener('click', openCamera);
 $('camera-flip').addEventListener('click', flipCamera);
 el.cameraClose.addEventListener('click', closeCamera);
@@ -1836,10 +1904,14 @@ async function openStudio() {
     $('studio-video-last').innerHTML =
       `<option value="">${t('st.lastNone')}</option>` + opts;
     $('studio-edit-img').innerHTML = `<option value="">${t('st.editPick')}</option>` + opts;
-    // klatka wybrana wcześniej w Galerii
-    if (pendingVideoFrameId) {
-      $('studio-video-image').value = pendingVideoFrameId;
-      pendingVideoFrameId = null;
+    // Klatka wybrana w Galerii. Wybór jest TRWAŁY: wcześniej kasowaliśmy go po
+    // pierwszym otwarciu Studia, więc przy drugim wejściu pole było znów puste
+    // i wyglądało to tak, jakby wybór nigdy się nie zapisał.
+    const wanted = localStorage.getItem('cosmos.videoFrame') || '';
+    if (wanted && images.some((i) => i.id === wanted)) {
+      $('studio-video-image').value = wanted;
+    } else if (wanted) {
+      localStorage.removeItem('cosmos.videoFrame');   // obraz zniknął z bazy
     }
     renderPromptTemplates();
   } catch { /* sekcje zostają w stanie domyślnym */ }
@@ -2358,8 +2430,12 @@ async function renderGallery() {
     else if (k === 'video') media = `<video src="${url}" controls preload="metadata"></video>`;
     else media = `<div class="gallery-audio">🎵</div><audio src="${url}" controls></audio>`;
 
+    // Widać, który obraz jest w tej chwili pierwszą klatką — bez tego jedynym
+    // potwierdzeniem był ✓ znikający po sekundzie.
+    const isFrame = localStorage.getItem('cosmos.videoFrame') === it.id;
     const frameBtn = k === 'image'
-      ? `<button data-frame="${escapeHtml(it.id)}" title="${t('gallery.useFrame')}">🎬</button>` : '';
+      ? `<button data-frame="${escapeHtml(it.id)}" class="${isFrame ? 'frame-on' : ''}" `
+        + `title="${isFrame ? t('gallery.frameIs') : t('gallery.useFrame')}">🎬</button>` : '';
     const upBtn = k === 'image'
       ? `<button data-up="${escapeHtml(it.id)}" title="${t('gallery.upscale')}">⤢</button>` : '';
     cell.innerHTML =
@@ -2378,9 +2454,9 @@ async function renderGallery() {
     renderGallery();
   }));
   grid.querySelectorAll('[data-frame]').forEach((b) => b.addEventListener('click', () => {
-    pendingVideoFrameId = b.dataset.frame;
-    b.textContent = '✓';
-    setTimeout(() => { b.textContent = '🎬'; }, 1200);
+    localStorage.setItem('cosmos.videoFrame', b.dataset.frame);
+    renderGallery();          // odśwież oznaczenia — widać, który obraz jest wybrany
+    galleryNote(t('gallery.frameSet'));
   }));
   grid.querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', async () => {
     const prev = b.textContent; b.textContent = '…'; b.disabled = true;
@@ -2399,7 +2475,15 @@ async function renderGallery() {
   }));
 }
 
-let pendingVideoFrameId = null; // obraz wybrany w galerii jako pierwsza klatka wideo
+/** Krótki komunikat w nagłówku Galerii — potwierdzenie, które nie znika po chwili. */
+function galleryNote(text) {
+  const n = $('gallery-note');
+  if (!n) return;
+  n.textContent = text;
+  n.hidden = false;
+  clearTimeout(galleryNote._t);
+  galleryNote._t = setTimeout(() => { n.hidden = true; }, 4000);
+}
 
 $('gallery-btn').addEventListener('click', openGallery);
 $('gallery-close').addEventListener('click', closeGallery);
@@ -3051,6 +3135,8 @@ el.voiceClose.addEventListener('click', exitVoiceMode);
 // posprzątać: zwolnić kamerę, zatrzymać detekcję, zapisać stan.
 // Kolejność od wierzchu: to, co otwiera się na innych, jest wyżej.
 const overlays = [
+  // podgląd obrazu jest na samym wierzchu — otwiera się z galerii i z rozmowy
+  { id: 'img-viewer', close: closeImageViewer },
   { open: () => voiceMode, close: exitVoiceMode },
   { id: 'camera-modal', close: closeCamera },
   { id: 'live-panel', close: stopLive },
