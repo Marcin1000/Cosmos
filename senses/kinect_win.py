@@ -45,12 +45,18 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import faulthandler
 import math
 import os
 import sys
 import time
 from ctypes import (POINTER, byref, c_int, c_int32, c_uint, c_uint32, c_void_p,
                     c_float, c_ubyte)
+
+# Błąd w wywołaniu do Kinect10.dll (zły typ argumentu, zły indeks w vtable)
+# nie jest wyjątkiem Pythona — proces po prostu znika, bez śladu i bez kodu
+# wyjścia. faulthandler zamienia to w ślad stosu wskazujący dokładne miejsce.
+faulthandler.enable()
 
 # Windows API: DWORD to zawsze 32 bity bez znaku, LONG to 32 bity ze znakiem.
 # c_ulong/c_long idą za platformą (8 bajtów na Linuksie 64-bit), więc rozjechałyby
@@ -298,10 +304,43 @@ def _vtable_call(iface: int, index: int, restype, *argtypes):
     `INuiFrameTexture` jest interfejsem COM, więc bufor obrazu zdobywa się
     przez `LockRect` z jego vtable. Nie potrzeba do tego biblioteki COM —
     wystarczy odczytać wskaźnik z tablicy i zbudować prototyp funkcji.
+
+    Zwracamy zwykły `c_int32`, a nie `ctypes.HRESULT`: ten drugi sam rzuca
+    OSError przy błędnym kodzie, przez co zamiast czytelnego komunikatu
+    dostalibyśmy ślad stosu w środku pętli pobierania klatek.
     """
     vtbl = ctypes.cast(iface, POINTER(POINTER(c_void_p))).contents
     proto = ctypes.WINFUNCTYPE(restype, c_void_p, *argtypes)
     return proto(vtbl[index])
+
+
+def _declare(dll) -> None:
+    """Opisz sygnatury funkcji SDK.
+
+    Bez tego ctypes zgaduje: zwracany HRESULT bierze za `int`, a argumenty
+    przekazuje po typie obiektu Pythona. Na 64-bitowym Windowsie uchwyt
+    strumienia to 64-bitowy wskaźnik i przy zgadywaniu łatwo go obciąć —
+    a obcięty uchwyt to nie błąd, tylko odczyt z przypadkowego adresu.
+    """
+    HANDLE = c_void_p
+    sig = [
+        ("NuiGetSensorCount", [POINTER(c_int)]),
+        ("NuiInitialize", [DWORD]),
+        ("NuiShutdown", []),
+        ("NuiImageStreamOpen", [c_int, c_int, DWORD, DWORD, HANDLE, POINTER(HANDLE)]),
+        ("NuiImageStreamGetNextFrame", [HANDLE, DWORD, POINTER(NuiImageFrame)]),
+        ("NuiImageStreamReleaseFrame", [HANDLE, POINTER(NuiImageFrame)]),
+        ("NuiSkeletonTrackingEnable", [HANDLE, DWORD]),
+        ("NuiSkeletonGetNextFrame", [DWORD, POINTER(NuiSkeletonFrame)]),
+        ("NuiCameraElevationGetAngle", [POINTER(LONG)]),
+        ("NuiCameraElevationSetAngle", [LONG]),
+    ]
+    for name, argtypes in sig:
+        fn = getattr(dll, name, None)
+        if fn is None:
+            continue
+        fn.argtypes = argtypes
+        fn.restype = None if name == "NuiShutdown" else c_int32
 
 
 class Kinect:
@@ -327,11 +366,14 @@ class Kinect:
                 f"Szczegóły: {e}"
             ) from e
 
+        _declare(self.dll)
+
         self.want_color = color
         self.want_depth = depth
         self.want_skeleton = skeleton
         self.resolution = resolution
         self.width, self.height = RESOLUTIONS[resolution]
+        self.last_error = 0
         self._color_stream = c_void_p()
         self._depth_stream = c_void_p()
         self._open = False
@@ -393,10 +435,15 @@ class Kinect:
     # -- klatki -----------------------------------------------------------
 
     def _grab(self, stream, timeout_ms: int):
-        """Pobierz klatkę i zwróć jej bufor jako kopię (bajty + krok)."""
+        """Pobierz klatkę i zwróć jej bufor jako kopię (bajty + krok).
+
+        Ostatni kod błędu zapamiętujemy w `last_error` — bez tego „brak klatki"
+        nie odróżnia czujnika, który się jeszcze rozgrzewa, od realnej awarii.
+        """
         frame = NuiImageFrame()
         hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), byref(frame))
         if hr != 0:
+            self.last_error = hr
             return None
         try:
             texture = frame.pFrameTexture
@@ -489,6 +536,7 @@ def sensor_count() -> int:
         dll = ctypes.WinDLL("Kinect10.dll")
     except (OSError, AttributeError):
         return -1
+    _declare(dll)
     count = c_int()
     if dll.NuiGetSensorCount(byref(count)) != 0:
         return 0
@@ -516,6 +564,31 @@ def send_event(summary: str, type_: str = "kinect") -> None:
 # Polecenia
 # ---------------------------------------------------------------------------
 
+def _try_frames(k, label: str, grab, settle_s: float = 4.0):
+    """Poczekaj na pierwszą klatkę, raportując, co się dzieje.
+
+    Po `NuiInitialize` czujnik potrzebuje chwili, zanim ruszą strumienie —
+    pojedyncza próba z sekundowym limitem potrafi wypaść tuż przed tym momentem
+    i skłamać, że klatek nie ma wcale.
+    """
+    deadline = time.time() + settle_s
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        try:
+            frame = grab()
+        except Exception as e:                      # noqa: BLE001 — chcemy pokazać wszystko
+            print(f"  {label:<9} BŁĄD: {type(e).__name__}: {e}")
+            return None
+        if frame is not None:
+            print(f"  {label:<9} OK — {frame.shape} (próba {attempt})")
+            return frame
+        time.sleep(0.3)
+    powod = _hr_text(k.last_error) if k.last_error else "limit czasu bez błędu"
+    print(f"  {label:<9} brak klatki po {settle_s:.0f}s — {powod}")
+    return None
+
+
 def cmd_info() -> None:
     n = sensor_count()
     if n < 0:
@@ -526,15 +599,31 @@ def cmd_info() -> None:
     if n == 0:
         print("  Podłącz Kinecta i upewnij się, że ma osobne zasilanie (sam USB nie wystarcza).\n")
         sys.exit(1)
-    with Kinect() as k:
+
+    # Każdy etap osobno: gdyby coś się wysypało, widać dokładnie na czym.
+    print("  Otwieram strumienie…", flush=True)
+    k = Kinect()
+    try:
+        k.open()
         print(f"  Rozdzielczość strumieni: {k.width}×{k.height}")
-        print(f"  Kąt pochylenia: {k.tilt()}°")
-        d = k.depth_frame()
-        c = k.color_frame()
-        s = k.skeletons()
-        print(f"  Głębia:   {'OK — ' + str(d.shape) if d is not None else 'brak klatki'}")
-        print(f"  Obraz:    {'OK — ' + str(c.shape) if c is not None else 'brak klatki'}")
-        print(f"  Szkielet: {len(s)} śledzonych sylwetek")
+        try:
+            print(f"  Kąt pochylenia: {k.tilt()}°", flush=True)
+        except KinectError as e:
+            print(f"  Kąt pochylenia: nieodczytany ({e})", flush=True)
+
+        _try_frames(k, "Głębia:", k.depth_frame)
+        _try_frames(k, "Obraz:", k.color_frame)
+
+        try:
+            people = k.skeletons(timeout_ms=1000)
+            print(f"  Szkielet: {len(people)} śledzonych sylwetek"
+                  + ("" if people else " — stań 1,5–3 m przed czujnikiem"))
+            for p in people:
+                print(f"            [{p['id']}] {posture_summary(p['opis'])}")
+        except Exception as e:                      # noqa: BLE001
+            print(f"  Szkielet: BŁĄD: {type(e).__name__}: {e}")
+    finally:
+        k.close()
     print()
 
 
