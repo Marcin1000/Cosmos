@@ -46,6 +46,7 @@ let voiceState = 'off';       // wake | listening | thinking | speaking
 let voiceWakeRec = null;
 let voiceQueryRec = null;
 let voiceCameraStream = null;
+let voiceMicKeepAlive = null;  // mikrofon trzymany na czas sesji głosowej
 let voiceNoteMode = false;    // dyktowanie notatki do bazy wiedzy
 let voiceNoteBuffer = [];
 let kbSelected = new Set(loadJson('cosmos.kbSelected', []));
@@ -527,7 +528,12 @@ function messageElement(m, idx = -1) {
     return msg;
   }
 
-  body.innerHTML = renderMarkdown(text);
+  // Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
+  // odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
+  body.innerHTML = (m.think
+    ? `<details class="think-block"><summary>${escapeHtml(t('think.done'))}</summary>`
+      + `<pre>${escapeHtml(m.think)}</pre></details>`
+    : '') + renderMarkdown(text);
   if (images.length) {
     const imgs = imagesHtml(images);
     body.prepend(imgs);
@@ -972,11 +978,21 @@ async function streamOnce(conv) {
 
   abortController = new AbortController();
   let acc = '';
+  let think = '';
   let renderQueued = false;
 
+  // Modele rozumujące (Nemotron 3, gpt-oss, R1) wysyłają tok myślenia w osobnym
+  // polu `reasoning_content`. Bez tego ekran stoi pusty przez cały czas myślenia,
+  // a gdy budżet tokenów skończy się w trakcie — zostaje pusta odpowiedź.
+  // Pokazujemy myślenie na żywo, zwinięte, żeby było widać, że coś się dzieje.
   const paint = () => {
     renderQueued = false;
-    body.innerHTML = renderMarkdown(acc) + '<span class="cursor-blink"></span>';
+    const head = think
+      ? `<details class="think-block"${acc ? '' : ' open'}>`
+        + `<summary>${escapeHtml(t(acc ? 'think.done' : 'think.live'))}</summary>`
+        + `<pre>${escapeHtml(think)}</pre></details>`
+      : '';
+    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>';
     scrollToBottom();
   };
   const schedulePaint = () => {
@@ -1032,9 +1048,14 @@ async function streamOnce(conv) {
           if (data === '[DONE]') continue;
           try {
             const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta?.content
-                       ?? json.choices?.[0]?.text
-                       ?? '';
+            const d = json.choices?.[0]?.delta || {};
+            const delta = d.content ?? json.choices?.[0]?.text ?? '';
+            // różni dostawcy nazywają to pole inaczej
+            const reason = d.reasoning_content ?? d.reasoning ?? '';
+            if (reason) {
+              think += reason;
+              schedulePaint();
+            }
             if (delta) {
               acc += delta;
               schedulePaint();
@@ -1043,6 +1064,15 @@ async function streamOnce(conv) {
         }
       }
     }
+    // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
+    // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
+    if (!acc.trim() && think.trim()) {
+      lastReasoning = think.trim();
+      lastThink = '';               // myślenie JEST odpowiedzią, nie dopiskiem
+      return '';
+    }
+    lastReasoning = '';
+    lastThink = think.trim();
     return acc;
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -1051,6 +1081,13 @@ async function streamOnce(conv) {
     throw err;
   }
 }
+
+// Tok myślenia z ostatniej tury — awaryjne źródło treści, gdy `content` był pusty.
+let lastReasoning = '';
+// Tok myślenia towarzyszący normalnej odpowiedzi. Trzymamy go przy wiadomości,
+// żeby nie znikał po przerysowaniu listy, ale NIE wraca do modelu:
+// `toApiMessages` czyta wyłącznie `content`.
+let lastThink = '';
 
 async function webSearch(query) {
   try {
@@ -1062,8 +1099,11 @@ async function webSearch(query) {
     if (!data.results.length) {
       return t('search.none', { q: query });
     }
+    // Treść strony (gdy serwer zdążył ją pobrać) jest tym, z czego model
+    // faktycznie wyczyta odpowiedź — zajawka to zwykle sam opis serwisu.
     const lines = data.results.map((r, i) =>
-      `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`);
+      `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
+      + (r.text ? `\n   TREŚĆ STRONY:\n   ${r.text.replace(/\n/g, '\n   ')}` : ''));
     return t('search.results', { q: query, lines: lines.join('\n') });
   } catch (err) {
     return t('search.netErr', { q: query, e: err.message });
@@ -1071,6 +1111,12 @@ async function webSearch(query) {
 }
 
 const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
+
+/** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
+ *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran. */
+function stripSearchMarker(s) {
+  return String(s || '').replace(/\[SZUKAJ:[^\]]*\]/gi, '').trim();
+}
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
@@ -1080,12 +1126,28 @@ async function runGeneration(conv) {
   if (voiceMode) setVoiceState('thinking');
   let finalText = '';
 
+  const MAX_SEARCHES = 3;
   try {
-    for (let depth = 0; depth < 3; depth++) {
+    for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       const acc = await streamOnce(conv);
       const marker = acc.match(SEARCH_MARKER_RE);
 
-      if (marker && depth < 2) {
+      // Ostatnia runda: model nadal chce szukać, ale limit wyczerpany. Zamiast
+      // pokazać użytkownikowi surowe [SZUKAJ: …] — a tak działo się wcześniej —
+      // każemy mu odpowiedzieć tym, co już zebrał.
+      if (marker && depth === MAX_SEARCHES) {
+        conv.messages.push({ role: 'user', content: t('search.enough'), search: true,
+          searchQuery: marker[1].trim() });
+        saveConversations();
+        renderMessages();
+        const last = await streamOnce(conv);
+        finalText = stripSearchMarker(last) || lastReasoning || t('emptyReply');
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink });
+        saveConversations();
+        break;
+      }
+
+      if (marker && depth < MAX_SEARCHES) {
         const q = marker[1].trim();
         const before = acc.replace(marker[0], '').trim();
         conv.messages.push({
@@ -1146,15 +1208,17 @@ async function runGeneration(conv) {
         break;
       }
 
-      finalText = acc || t('emptyReply');
+      // Pusta treść przy modelu rozumującym znaczy zwykle „budżet tokenów poszedł
+      // na myślenie” — wtedy tok myślenia jest jedyną odpowiedzią, jaką mamy.
+      finalText = stripSearchMarker(acc) || lastReasoning || t('emptyReply');
       const actMarker = finalText.match(ACTION_RE);
       if (actMarker) {
         const shown = finalText.replace(actMarker[0], '').trim();
-        conv.messages.push({ role: 'assistant', content: shown || '…' });
+        conv.messages.push({ role: 'assistant', content: shown || '…', think: lastThink });
         conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
         finalText = shown;
       } else {
-        conv.messages.push({ role: 'assistant', content: finalText });
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink });
       }
       saveConversations();
       break;
@@ -1513,17 +1577,54 @@ el.micBtn.addEventListener('click', async () => {
 // Zmysły: wzrok — zdjęcie z kamery (webcam / Kinect RGB)
 // ----------------------------------------------------------------
 
+/** Która kamera telefonu: „user" = przednia, „environment" = tylna.
+ *  Zapamiętana, bo do fotografowania sprzętu prawie zawsze chce się tylna. */
+let cameraFacing = localStorage.getItem('cosmos.cameraFacing') || 'environment';
+
+function videoConstraints(facing) {
+  // `ideal`, nie `exact` — na laptopie z jedną kamerą `exact` po prostu rzuca
+  // błędem, a chcemy wtedy dostać tę jedyną, jaka jest.
+  return { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: facing } } };
+}
+
+/** Czy urządzenie ma więcej niż jedną kamerę — tylko wtedy przełącznik ma sens. */
+async function hasMultipleCameras() {
+  if (!mediaApiAvailable() || !navigator.mediaDevices.enumerateDevices) return false;
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    return devs.filter((d) => d.kind === 'videoinput').length > 1;
+  } catch { return false; }
+}
+
 async function openCamera() {
   try {
-    cameraStream = await getMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
+    cameraStream = await getMedia(videoConstraints(cameraFacing));
   } catch (err) {
     alert(`Brak dostępu do kamery: ${err.message}`);
     return;
   }
   el.cameraVideo.srcObject = cameraStream;
   el.cameraModal.style.display = '';
+  $('camera-flip').hidden = !(await hasMultipleCameras());
+}
+
+/** Przełącz przód/tył bez zamykania okna. */
+async function flipCamera() {
+  const next = cameraFacing === 'environment' ? 'user' : 'environment';
+  let stream;
+  try {
+    // Stary strumień zwalniamy dopiero po udanym otwarciu nowego — inaczej
+    // przy odmowie zostalibyśmy z czarnym oknem i bez obrazu.
+    stream = await getMedia(videoConstraints(next));
+  } catch (err) {
+    alert(`Nie udało się przełączyć kamery: ${err.message}`);
+    return;
+  }
+  if (cameraStream) cameraStream.getTracks().forEach((tr) => tr.stop());
+  cameraStream = stream;
+  cameraFacing = next;
+  localStorage.setItem('cosmos.cameraFacing', next);
+  el.cameraVideo.srcObject = stream;
 }
 
 function closeCamera() {
@@ -1536,6 +1637,7 @@ function closeCamera() {
 }
 
 el.cameraBtn.addEventListener('click', openCamera);
+$('camera-flip').addEventListener('click', flipCamera);
 el.cameraClose.addEventListener('click', closeCamera);
 el.cameraModal.addEventListener('click', (e) => {
   if (e.target === el.cameraModal) closeCamera();
@@ -1895,7 +1997,7 @@ async function startLive() {
     startKinectStream();
   } else {
     try {
-      liveStream = await getMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
+      liveStream = await getMedia(videoConstraints(cameraFacing));
     } catch (err) {
       img.hidden = true;
       video.hidden = false;
@@ -1907,6 +2009,9 @@ async function startLive() {
     video.srcObject = liveStream;
     await video.play().catch(() => {});
   }
+  // Przełącznik przód/tył tylko przy kamerze przeglądarki i tylko wtedy,
+  // gdy jest co przełączać. Kinect ma jeden obiektyw.
+  $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
 
   $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
   liveTimer = setInterval(liveDetect, 3000);
@@ -2007,6 +2112,23 @@ function applyLiveExpanded() {
   $('live-panel').classList.toggle('expanded', on);
   $('live-expand').title = t(on ? 'live.shrink' : 'live.expand');
 }
+$('live-flip').addEventListener('click', async () => {
+  const next = cameraFacing === 'environment' ? 'user' : 'environment';
+  let stream;
+  try {
+    stream = await getMedia(videoConstraints(next));
+  } catch (err) {
+    $('live-status').textContent = `${t('cam.err')} ${err.message}`;
+    return;
+  }
+  if (liveStream) liveStream.getTracks().forEach((tr) => tr.stop());
+  liveStream = stream;
+  cameraFacing = next;
+  localStorage.setItem('cosmos.cameraFacing', next);
+  const video = $('live-video');
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+});
 $('live-expand').addEventListener('click', () => {
   const on = $('live-panel').classList.contains('expanded');
   localStorage.setItem('cosmos.liveExpanded', on ? '0' : '1');
@@ -2532,18 +2654,23 @@ function setVoiceState(state) {
   }[state] || '';
 }
 
+// Jeden kontekst audio na całą stronę. Tworzenie i zamykanie go przy każdym
+// sygnale przełączało wyjście dźwięku w Androidzie — słychać to było jako
+// ciągłe „podłączanie i odłączanie” sprzętu w trakcie nasłuchu.
+let audioCtx = null;
+
 function chime(freq = 880) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    osc.connect(gain).connect(ctx.destination);
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    osc.connect(gain).connect(audioCtx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.25);
-    osc.onended = () => ctx.close();
+    osc.stop(audioCtx.currentTime + 0.25);
   } catch { /* dźwięk to tylko ozdoba */ }
 }
 
@@ -2571,17 +2698,62 @@ async function enterVoiceMode() {
   el.voiceTranscript.textContent = '';
   el.voiceAnswer.textContent = '';
 
-  // kamera dla pytań „co widzisz / co mam w ręku” (cicha zgoda = brak wizji)
+  // Rozpoznawanie mowy przejmuje mikrofon na nowo przy każdym cyklu
+  // nasłuch → pytanie → odpowiedź, a Android sygnalizuje każde takie przejęcie
+  // dźwiękiem. Trzymamy więc własny strumień otwarty przez całą sesję: mikrofon
+  // pozostaje „zajęty”, więc system nie odgrywa podłączania w kółko.
   try {
-    voiceCameraStream = await getMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
-    el.voiceCamera.srcObject = voiceCameraStream;
-    el.voiceCameraWrap.style.display = '';
-  } catch { /* tryb głosowy działa też bez kamery */ }
+    voiceMicKeepAlive = await getMedia(audioConstraints());
+  } catch { /* bez tego działa, tylko głośniej */ }
+
+  // Kamera NIE włącza się sama. Wcześniej tak było i na telefonie podgląd
+  // zasłaniał pół ekranu przy każdym nasłuchu — a wizji potrzeba tylko przy
+  // pytaniach w rodzaju „co trzymam w ręku”. Teraz to świadome kliknięcie.
+  if (localStorage.getItem('cosmos.voiceCam') === '1') await startVoiceCamera();
+  updateVoiceCamButton();
 
   startWakeListening();
 }
+
+async function startVoiceCamera() {
+  if (voiceCameraStream) return true;
+  try {
+    voiceCameraStream = await getMedia(videoConstraints(cameraFacing));
+  } catch {
+    return false;                     // tryb głosowy działa też bez kamery
+  }
+  el.voiceCamera.srcObject = voiceCameraStream;
+  el.voiceCameraWrap.style.display = '';
+  return true;
+}
+
+function stopVoiceCamera() {
+  if (voiceCameraStream) {
+    voiceCameraStream.getTracks().forEach((tr) => tr.stop());
+    voiceCameraStream = null;
+  }
+  el.voiceCamera.srcObject = null;
+  el.voiceCameraWrap.style.display = 'none';
+}
+
+function updateVoiceCamButton() {
+  const on = Boolean(voiceCameraStream);
+  const btn = $('voice-cam-btn');
+  btn.classList.toggle('active', on);
+  btn.title = t(on ? 'voice.camOff' : 'voice.camOn');
+}
+
+$('voice-cam-btn').addEventListener('click', async () => {
+  if (voiceCameraStream) {
+    stopVoiceCamera();
+    localStorage.setItem('cosmos.voiceCam', '0');
+  } else {
+    const ok = await startVoiceCamera();
+    localStorage.setItem('cosmos.voiceCam', ok ? '1' : '0');
+    if (!ok) $('voice-status').textContent = t('voice.camFail');
+  }
+  updateVoiceCamButton();
+});
 
 function exitVoiceMode() {
   voiceMode = false;
@@ -2590,12 +2762,11 @@ function exitVoiceMode() {
   stopVoiceRecognizers();
   stopSpeaking();
   el.voiceOverlay.style.display = 'none';
-  if (voiceCameraStream) {
-    voiceCameraStream.getTracks().forEach((t) => t.stop());
-    voiceCameraStream = null;
+  stopVoiceCamera();
+  if (voiceMicKeepAlive) {
+    voiceMicKeepAlive.getTracks().forEach((tr) => tr.stop());
+    voiceMicKeepAlive = null;
   }
-  el.voiceCamera.srcObject = null;
-  el.voiceCameraWrap.style.display = 'none';
   setVoiceState('off');
 }
 
@@ -3349,7 +3520,12 @@ async function fetchModelsInto(epName, selectEl, btn) {
           + rest.map(option).join('') + '</optgroup>' : '');
     selectEl.style.display = '';
   } catch (err) {
-    alert(t('set.fetchErr') + '\n' + err.message);
+    // Nie alert: przy modelu lokalnym komunikat ma kilka linijek podpowiedzi,
+    // a systemowe okienko na telefonie ucina je i nie da się z nich skopiować.
+    const box = $(epName === 'local' ? 'model-info-local' : 'model-info-cloud');
+    box.hidden = false;
+    box.innerHTML = `<div class="model-info-warn">⚠ ${escapeHtml(t('set.fetchErr'))}</div>`
+      + `<pre class="model-info-err">${escapeHtml(err.message)}</pre>`;
   } finally {
     btn.disabled = false;
     btn.textContent = prev;

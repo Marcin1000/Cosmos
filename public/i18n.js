@@ -206,7 +206,9 @@ const I18N = {
     'liveView': 'Podgląd kamery na żywo (detekcja)',
     'liveTitle': 'Kamera na żywo',
     'liveNothing': 'nic nie wykryto',
-    'liveNoSenses': 'Detekcja wymaga usługi zmysłów (YOLO). Podgląd działa, ale bez rozpoznawania obiektów.',
+    'liveNoSenses': 'Podgląd działa, ale bez rozpoznawania obiektów. Rozpoznawanie liczy komputer '
+      + 'z GPU, nie telefon — uruchom tam `python service.py` w folderze senses. Obraz z telefonu '
+      + 'i tak trafi do niego przez serwer.',
     'posLeft': 'po lewej',
     'posRight': 'po prawej',
     'posCenter': 'na środku',
@@ -379,6 +381,16 @@ const I18N = {
     'search.err': 'WYNIKI WYSZUKIWANIA („{q}"): błąd — {e}\nOdpowiedz na podstawie własnej wiedzy i zaznacz, że nie udało się sprawdzić internetu.',
     'search.none': 'WYNIKI WYSZUKIWANIA („{q}"): brak wyników.\nOdpowiedz na podstawie własnej wiedzy i zaznacz brak wyników.',
     'search.results': 'WYNIKI WYSZUKIWANIA („{q}"):\n{lines}\n\nOdpowiedz teraz na pytanie użytkownika na podstawie tych wyników i podaj źródła.',
+    'search.enough': 'LIMIT WYSZUKIWAŃ WYCZERPANY. Nie szukaj więcej — nie użyjesz już [SZUKAJ:]. '
+      + 'Odpowiedz teraz najlepiej, jak potrafisz, na podstawie zebranych wyników i własnej wiedzy. '
+      + 'Jeśli czegoś nie udało się ustalić, napisz wprost czego i podaj adresy, pod którymi '
+      + 'użytkownik to sprawdzi.',
+    'think.live': '🧠 Myślę…',
+    'think.done': '🧠 Tok myślenia (kliknij, aby rozwinąć)',
+    'cam.flip': 'Przełącz kamerę (przód / tył)',
+    'voice.camOn': 'Włącz podgląd kamery',
+    'voice.camOff': 'Wyłącz podgląd kamery',
+    'voice.camFail': 'Nie udało się włączyć kamery — tryb głosowy działa dalej.',
     'search.netErr': 'WYNIKI WYSZUKIWANIA („{q}"): błąd sieci ({e}).',
     'cfg.cloud': 'chmura:',
     'cfg.local': 'lokalny:',
@@ -673,7 +685,9 @@ const I18N = {
     'liveView': 'Live camera view (detection)',
     'liveTitle': 'Live camera',
     'liveNothing': 'nothing detected',
-    'liveNoSenses': 'Detection requires the senses service (YOLO). Preview works, but without object recognition.',
+    'liveNoSenses': 'Preview works, but without object recognition. Recognition runs on the machine '
+      + 'with the GPU, not on the phone — start `python service.py` in the senses folder there. '
+      + 'The phone\'s image still reaches it through the server.',
     'posLeft': 'on the left',
     'posRight': 'on the right',
     'posCenter': 'in the center',
@@ -840,6 +854,16 @@ const I18N = {
     'search.err': 'SEARCH RESULTS (“{q}”): error — {e}\nAnswer from your own knowledge and note that the internet could not be checked.',
     'search.none': 'SEARCH RESULTS (“{q}”): no results.\nAnswer from your own knowledge and note that there were no results.',
     'search.results': 'SEARCH RESULTS (“{q}”):\n{lines}\n\nNow answer the user\'s question based on these results and cite the sources.',
+    'search.enough': 'SEARCH LIMIT REACHED. Do not search again — [SEARCH:] will not be honoured. '
+      + 'Answer now as best you can from the results gathered and your own knowledge. '
+      + 'If something could not be established, say plainly what, and give the addresses '
+      + 'where the user can check it.',
+    'think.live': '🧠 Thinking…',
+    'think.done': '🧠 Chain of thought (click to expand)',
+    'cam.flip': 'Switch camera (front / back)',
+    'voice.camOn': 'Turn on camera preview',
+    'voice.camOff': 'Turn off camera preview',
+    'voice.camFail': 'Could not turn the camera on — voice mode keeps working.',
     'search.netErr': 'SEARCH RESULTS (“{q}”): network error ({e}).',
     'cfg.cloud': 'cloud:',
     'cfg.local': 'local:',

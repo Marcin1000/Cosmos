@@ -2373,7 +2373,21 @@ async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = 
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error?.message || d.error || `HTTP ${r.status}`);
-  return d.choices?.[0]?.message?.content || '';
+  const msg = d.choices?.[0]?.message || {};
+  const text = (msg.content || '').trim();
+  if (text) return text;
+
+  // Model rozumujący (Nemotron 3, gpt-oss, R1) potrafi zużyć cały budżet tokenów
+  // na myślenie i zwrócić puste `content`. Bez tego streszczenia i dopracowanie
+  // promptu po cichu zwracały pusty tekst — wyglądało to na zepsutą funkcję.
+  const reasoning = (msg.reasoning_content || msg.reasoning || '').trim();
+  if (reasoning) return reasoning;
+
+  const why = d.choices?.[0]?.finish_reason;
+  throw new Error(why === 'length'
+    ? 'Model zużył cały budżet tokenów na myślenie i nie zdążył odpowiedzieć. '
+      + 'Zwiększ „Maks. tokenów odpowiedzi” albo wybierz szybszy model.'
+    : 'Model zwrócił pustą odpowiedź.');
 }
 
 // Wygeneruj jeden obraz (dowolny skonfigurowany silnik) → wpis w bazie wiedzy.
@@ -2742,12 +2756,34 @@ async function handleStudio(req, res, pathname) {
 // API: wyszukiwanie w internecie (DuckDuckGo HTML — bez klucza API)
 // ---------------------------------------------------------------------------
 
+// Nazwane encje, które realnie sypią się ze stron — stopnie przy pogodzie,
+// polskie znaki, myślniki i cudzysłowy. Bez tego model dostawał „7&deg;C”
+// zamiast „7°C” i nie umiał odczytać liczby, o którą pytał użytkownik.
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', deg: '°',
+  hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»',
+  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', bdquo: '„', sbquo: '‚',
+  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', middot: '·',
+  times: '×', divide: '÷', plusmn: '±', frac12: '½', frac14: '¼', sup2: '²', sup3: '³',
+  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú',
+  agrave: 'à', egrave: 'è', ccedil: 'ç', ntilde: 'ñ',
+  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß', aring: 'å', oslash: 'ø',
+};
+
 function decodeEntities(s) {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ');
+    .replace(/&([a-z][a-z0-9]{1,9});/gi, (whole, name) => {
+      const lower = name.toLowerCase();
+      if (NAMED_ENTITIES[name]) return NAMED_ENTITIES[name];
+      // wielkość liter rozróżnia tylko litery akcentowane (&Ouml; vs &ouml;)
+      if (NAMED_ENTITIES[lower]) {
+        const v = NAMED_ENTITIES[lower];
+        return name[0] === name[0].toUpperCase() && /[a-zà-ÿ]/i.test(v) ? v.toUpperCase() : v;
+      }
+      return whole;                 // nieznana encja — zostaw, nie zgaduj
+    });
 }
 
 function stripTags(s) {
@@ -2761,6 +2797,39 @@ function resolveDdgUrl(href) {
     try { return decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
   }
   return href.startsWith('//') ? 'https:' + href : href;
+}
+
+/** Pobierz czytelny tekst ze strony wyniku.
+ *
+ * Bez tego model dostawał wyłącznie tytuły, adresy i zajawki z wyszukiwarki —
+ * a w zajawce nie ma liczby, o którą pytał użytkownik („ile jest stopni”).
+ * Skutek: model szukał znowu i znowu, aż wyczerpał limit rund i nic nie podał.
+ * Tutaj wchodzimy na stronę i wyciągamy sam tekst.
+ */
+async function fetchPageText(pageUrl, maxChars = 2500) {
+  try {
+    const r = await fetch(pageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
+      },
+      signal: AbortSignal.timeout(7000),
+      redirect: 'follow',
+    });
+    if (!r.ok) return '';
+    const type = r.headers.get('content-type') || '';
+    if (!/text\/html|text\/plain/i.test(type)) return '';
+
+    // Czytamy z górnym limitem — nie chcemy wciągnąć kilkumegabajtowej strony.
+    const raw = (await r.text()).slice(0, 400000);
+    const body = raw
+      .replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)>/gi, '\n');
+    return stripTags(body.replace(/\n\s*\n+/g, '\n')).slice(0, maxChars);
+  } catch {
+    return '';                        // strona niedostępna — zostają zajawki
+  }
 }
 
 async function handleSearch(req, res) {
@@ -2790,7 +2859,12 @@ async function handleSearch(req, res) {
         snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
       });
     }
-    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników)`);
+    // Treść dwóch pierwszych trafień — równolegle, żeby nie sumować opóźnień.
+    const texts = await Promise.all(results.slice(0, 2).map((r) => fetchPageText(r.url)));
+    texts.forEach((txt, i) => { if (txt) results[i].text = txt; });
+
+    const withText = texts.filter(Boolean).length;
+    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników, ${withText} z treścią)`);
     sendJson(res, 200, { query: q, results });
   } catch (err) {
     sendJson(res, 200, {
@@ -3027,7 +3101,15 @@ async function handleChat(req, res) {
     } catch {
       if (detail) message = `${message} ${detail.slice(0, 300)}`;
     }
-    return sendJson(res, upstream.status, { error: message });
+    // Bez tego widać sam komunikat dostawcy i nie wiadomo nawet, którą zakładkę
+    // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
+    const where = `[${ep.label} · ${model}]`;
+    const hint = upstream.status === 404
+      ? ' Taki model nie istnieje pod tym adresem — wybierz go przez Ustawienia → Pobierz listę.'
+      : (upstream.status === 401 || upstream.status === 403)
+        ? ' Klucz API jest nieprawidłowy albo nie ma dostępu do tego modelu.'
+        : upstream.status === 429 ? ' Limit zapytań u dostawcy — spróbuj za chwilę.' : '';
+    return sendJson(res, upstream.status, { error: `${where} ${message}${hint}` });
   }
 
   res.writeHead(200, {
@@ -3062,7 +3144,20 @@ async function handleModels(req, res) {
     const data = await upstream.json();
     sendJson(res, upstream.status, data);
   } catch (err) {
-    sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
+    // „fetch failed” samo w sobie nie mówi nic. Najczęstszy powód przy modelu
+    // lokalnym to wyłączona Ollama albo nasłuch tylko na 127.0.0.1 — i to
+    // właśnie trzeba napisać, zamiast zostawiać użytkownika z komunikatem sieci.
+    const local = ep === ENDPOINTS.local;
+    const hint = local
+      ? `\n\nNajczęstsze przyczyny:\n`
+        + `• Ollama nie działa na komputerze domowym — uruchom ją (\`ollama serve\` albo ikona w zasobniku).\n`
+        + `• Ollama słucha tylko lokalnie — ustaw OLLAMA_HOST=0.0.0.0 i zrestartuj.\n`
+        + `• Komputer domowy jest wyłączony albo poza Tailscale.\n`
+        + `Sprawdź z serwera: curl ${ep.baseUrl}/models`
+      : '';
+    sendJson(res, 502, {
+      error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}${hint}`,
+    });
   }
 }
 

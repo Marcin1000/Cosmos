@@ -209,11 +209,18 @@ głosowego (jak Asystent Google na Androidzie):
 2. **Rozmowa**: po sygnale mówisz pytanie; odpowiedź jest czytana na głos, a Cosmos
    od razu słucha pytania uzupełniającego — rozmowa płynie bez powtarzania wake word.
    Cisza albo „koniec" wraca do nasłuchu.
-3. **Wzrok**: przy pytaniach typu *„co mam w ręku?"*, *„co widzisz?"* Cosmos sam
-   robi klatkę z kamery i wysyła ją do modelu wizyjnego (podgląd w rogu ekranu).
+3. **Wzrok**: przy pytaniach typu *„co mam w ręku?"*, *„co widzisz?"* Cosmos może
+   dołożyć klatkę z kamery. Podgląd **włączasz świadomie** ikoną kamery w oknie
+   głosowym — nie startuje sam, bo na telefonie zasłaniał pół ekranu.
 4. **Internet**: gdy pytasz np. *„jaki to telefon?"*, model może zarządzić
    wyszukiwanie — Cosmos mówi „Sprawdzam w internecie", pobiera wyniki
    (DuckDuckGo, bez klucza API) i odpowiada z podaniem źródeł.
+
+Wyszukiwanie pobiera **treść dwóch pierwszych stron**, nie same tytuły i zajawki.
+Zajawka wyszukiwarki to zwykle opis serwisu („Radar temperatury pokazuje aktualne
+wartości…"), a nie odpowiedź — model nie znajdował w niej liczby, o którą pytano,
+i szukał w kółko. Rundy są ograniczone; po wyczerpaniu limitu model dostaje
+polecenie odpowiedzieć tym, co zebrał, i podać adresy do sprawdzenia.
 
 Wymagania trybu głosowego: przeglądarka **Chrome lub Edge** (Web Speech API; działa
 też w PWA na Androidzie). Rozpoznawanie wake word wymaga otwartej aplikacji.
@@ -249,7 +256,11 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 🔊 przełącznik głosu (pasek górny) — odpowiedzi czytane przez Piper (naturalny polski
   głos, lokalnie), fallback: głos systemowy przeglądarki,
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
-  analizowane przez model wizyjny,
+  analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
+  zapamiętywany),
+- 🧠 przy modelach rozumujących (Nemotron 3, gpt-oss, R1) tok myślenia jest
+  widoczny na żywo w zwijanym bloku. Gdy model zużyje cały budżet tokenów na
+  myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi,
 - 🛰️ status „Zmysły" w panelu bocznym pokazuje, które zmysły są aktywne.
 
 Instalacja zmysłów: **[senses/README.md](senses/README.md)** (każdy jest opcjonalny —
