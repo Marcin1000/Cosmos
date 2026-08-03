@@ -33,8 +33,14 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
 
 - 💬 Czat ze streamingiem odpowiedzi w czasie rzeczywistym (SSE)
 - 🖼️ **Obsługa obrazów** — załącz lub wklej zdjęcie, odpowie model wizyjny (Nemotron VL i in.)
-- ☁️ / 🖥️ **Tryb hybrydowy** — przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym
-- 🛰️ Monitor statusu obu endpointów na żywo
+- ☁️ / 🖥️ **Tryb hybrydowy** — przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym.
+  Po dodaniu klucza dochodzą osobne zakładki **OpenAI** i **Claude** (`OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY`) — każda z własnym modelem
+- 🛰️ Monitor statusu silników i zmysłów na żywo w panelu bocznym
+- 🧠 **Modele rozumujące** — tok myślenia widoczny na żywo w zwijanym bloku; gdy model
+  zużyje cały budżet na myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi
+- ✦ **Dopracowanie promptu** — przycisk obok mikrofonu przepisuje podyktowaną wypowiedź
+  na precyzyjny prompt; drugie kliknięcie przywraca Twoją wersję
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
 - 🔎 **Zarządzanie rozmowami**: wyszukiwarka (po tytule i treści), przypinanie, zmiana
   nazwy, eksport, regeneracja odpowiedzi, edycja własnej wiadomości, skróty klawiszowe
@@ -46,7 +52,13 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   i na ekranie logowania); język steruje też instrukcją systemową modelu
   i rozpoznawaniem/syntezą mowy
 - 📸 **Panel kamery na żywo** z detekcją YOLO na podglądzie, zdarzeniami pozycji
-  (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**
+  (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**. Źródłem może być
+  kamera przeglądarki (na telefonie z przełącznikiem przód/tył) albo **Kinect 360** —
+  obraz i mapa głębi. Przycisk powiększenia przenosi podgląd na środek ekranu
+- 🎤 **Wybór mikrofonu** (Ustawienia) — macierz Kinecta, słuchawki Bluetooth, telefon
+  albo mikrofon laptopa; wybór zapamiętywany, z powrotem do domyślnego przy odłączeniu
+- 🦴 **Kinect 360 w pełni** — głębia, obraz RGB, **szkielet 20 stawów**, postawa, gesty
+  i silnik pochylenia przez `senses/kinect_win.py` (Windows, SDK 1.8)
 - 🎓 **Nauka** — uczysz Cosmosa rozpoznawania (pokaż w kamerze i nazwij),
   nagrywasz **procedury** (czynności krok po kroku) i planujesz je jako **rutyny**
   cykliczne; kroki wrażliwe (płatność, wysłanie) zawsze wymagają potwierdzenia.
@@ -123,13 +135,22 @@ maskable 192/512, SVG), iOS (`apple-touch-icon` 180, nieprzezroczysta), macOS Sa
 ```ini
 NVIDIA_API_KEY=nvapi-...            # klucz z build.nvidia.com (darmowa rejestracja)
 NEMOTRON_BASE_URL=https://integrate.api.nvidia.com/v1
-NEMOTRON_MODEL=nvidia/nemotron-nano-9b-v2   # podmień na wybrany model Nemotron
+NEMOTRON_MODEL=nvidia/nvidia-nemotron-nano-9b-v2   # podmień na wybrany model
 NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 ```
+
+> ⚠️ **NVIDIA zmienia identyfikatory modeli** — ten sam model bywa dostępny raz jako
+> `nvidia/nemotron-nano-9b-v2`, a po jakimś czasie jako `nvidia/nvidia-nemotron-nano-9b-v2`.
+> Nieaktualny wpis kończy się błędem **404 „page not found"**. Nie przepisuj więc nazw
+> z dokumentacji w ciemno — sprawdź aktualną listę w aplikacji.
 
 Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
 Pod polem wyboru pojawia się opis modelu — do czego się nadaje, czy widzi obrazy,
 jaki ma kontekst i na co uważać. Katalog opisów: `public/models.js`.
+
+Model wybrany w Ustawieniach jest **ważniejszy niż `.env`** i obowiązuje wszędzie:
+w czacie, przy dopracowywaniu promptu i przy streszczeniach. `.env` to wartość
+domyślna dla urządzeń, które niczego nie wybrały.
 
 **Który model wybrać?**
 
@@ -187,11 +208,17 @@ Cosmos to nie czat + osobne narzędzia, tylko **jeden organizm**:
                  │                  │                    │
         ☁ chmura NVIDIA      🖥 lokalny GPU        🐍 COSMOS SENSES (Python)
         Nemotron / VL        Ollama / vLLM         słuch  — Whisper (STT)
-        (build.nvidia.com)   (RTX 3080)            głos   — Piper (TTS)
-                                                   wzrok  — YOLO (detekcja)
-                                                   ciało  — MediaPipe (pozy)
+        OpenAI · Claude      (RTX 3080)            głos   — Piper (TTS)
+        (opcjonalnie)                              wzrok  — YOLO (detekcja)
+                                                   głębia — Kinect 360 (SDK 1.8)
+                                                   szkielet — 20 stawów, gesty
+                                                   słuch³ — macierz 4 mikrofonów
                                                    oczy²  — watcher.py (kamera 24/7)
 ```
+
+> `ciało — MediaPipe (pozy)` jest zainstalowane i wystawione jako `/pose`, ale
+> **żadna funkcja interfejsu go jeszcze nie wywołuje** — sylwetkę czyta się dziś
+> z Kinecta. Stan każdego modułu: [`senses/README.md`](senses/README.md).
 
 **Jak zmysły współgrają z mózgiem:** obserwator kamery (`senses/watcher.py`) wykrywa
 zmiany w otoczeniu i wysyła je do Cosmosa (`POST /api/events`). Serwer dokleja ostatnie
@@ -367,11 +394,33 @@ Wymaga zainstalowanych zależności (patrz `training/README.md`); trening korzys
 Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe:
 **[training/README.md](training/README.md)**.
 
-### Zmysł głębi — Kinect 360
+### 🦴 Kinect 360 — cztery czujniki w jednym
 
-`python senses/kinect_watcher.py` — czyta mapę głębi (libfreenect) i melduje:
-obecność w zasięgu, ruch, dystans najbliższego obiektu. Działa równolegle
-z `watcher.py` (Kinect RGB = zwykła kamera dla YOLO). Szczegóły: `senses/README.md`.
+Kinect nie jest kamerą UVC: przeglądarka go nie widzi, a `getUserMedia` nigdy go nie
+zwróci. Dlatego obraz idzie inną drogą — usługa zmysłów → serwer → przeglądarka.
+
+Na **Windowsie** `senses/kinect_win.py` mostkuje oficjalne Kinect for Windows SDK 1.8
+przez `ctypes` — bez C# i bez C++. Potwierdzone na sprzęcie:
+
+| Czujnik | Polecenie | Co daje |
+|---|---|---|
+| Mapa głębi | `python kinect_win.py depth` | dystans, obecność, ruch |
+| Obraz RGB | `python kinect_win.py color -o kadr.png` | zwykła kamera dla YOLO |
+| **Szkielet — 20 stawów** | `python kinect_win.py skeleton` | postawa, gesty, kierunek zwrócenia |
+| Silnik pochylenia | `python kinect_win.py tilt 10` | zakres −27…27° |
+| Macierz 4 mikrofonów | `python soundloc.py --listen` | kierunek źródła dźwięku |
+
+Zanim podłączysz czujnik: `python kinect_win.py selftest` sprawdza układ struktur
+i logikę **bez sprzętu** (22 kontrole).
+
+**W interfejsie Cosmosa** panel „Kamera na żywo" ma wybór źródła: kamera przeglądarki,
+**Kinect — obraz**, **Kinect — głębia**. Obraz leci strumieniem MJPEG (jedno połączenie,
+klatki jedna za drugą), więc podgląd jest płynny także przez Tailscale. Detekcja YOLO
+działa na obu źródłach tak samo.
+
+Na **Linuksie** `kinect_watcher.py` używa libfreenect — daje głębię, ale **nie ma
+szkieletu**; ten jest wyłącznie w SDK Microsoftu. Pełny opis, z pułapkami dwóch różnych
+konwencji wywołań w jednym API: [`senses/README.md`](senses/README.md).
 
 ### 🏡 Analiza terenu — Cosmos Terrain (dron → pomiary)
 
@@ -568,6 +617,11 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | „Brak klucza API dla chmury NVIDIA" | Uzupełnij `NVIDIA_API_KEY` w `.env` i zrestartuj serwer |
 | „Nie udało się połączyć z lokalnym modelem" | Uruchom Ollama/vLLM; sprawdź `LOCAL_BASE_URL` |
 | Lokalny status „offline" | Ollama nie działa lub inny port — `ollama serve` i sprawdź `.env` |
-| Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
+| Błąd 404 przy czacie / „404 page not found" | Zły identyfikator modelu. Komunikat podaje w nawiasie kwadratowym silnik i model, który poleciał. NVIDIA zmienia nazwy — sprawdź **Ustawienia → Pobierz listę** i popraw `NEMOTRON_MODEL` w `.env` |
+| „(pusta odpowiedź modelu)" | Model rozumujący zużył cały budżet na myślenie. Zwiększ **Maks. tokenów odpowiedzi** albo weź szybszy model; Cosmos pokaże wtedy przynajmniej tok myślenia |
+| „Model oddał odpowiedź, której nie da się odczytać" | Dostawca zwrócił coś innego niż JSON — strumień mimo `stream: false` albo stronę błędu proxy. Komunikat zawiera status HTTP i początek odpowiedzi |
+| Czytanie na głos milczy, w oknie zmysłów `wave.Error: # channels not specified` | Stare API Pipera. Zaktualizuj zmysły (`git pull` na komputerze z czujnikami) |
+| Dyktowanie nie działa, `Library cublas64_12.dll is not found` | Brak bibliotek CUDA 12 dla `faster-whisper`. Usługa sama przechodzi na procesor; żeby pominąć próbę — `WHISPER_DEVICE=cpu` |
+| Dyktowanie urywa się w pół zdania | Chrome kończy sesję rozpoznawania po pauzie. Naprawione — nasłuch wznawia się do kliknięcia „stop" |
 | Obraz bez odpowiedzi „wizyjnej" | Ustaw `NEMOTRON_VISION_MODEL` / `LOCAL_VISION_MODEL` na model VL |
 | Telefon nie łączy się z serwerem | Ta sama sieć Wi-Fi + zapora Windows: zezwól Node.js na sieć prywatną |
