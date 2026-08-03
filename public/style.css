@@ -807,6 +807,33 @@ kbd {
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field-label { font-size: 12.5px; font-weight: 500; color: var(--text-dim); letter-spacing: .02em; }
 .field-hint { font-size: 11.5px; color: var(--text-faint); }
+/* Opis wybranego modelu. Sam identyfikator nie mówi, do czego model się
+   nadaje — ta ramka dokłada to, co trzeba wiedzieć przed wyborem. */
+.model-info {
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg-input);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.model-info[hidden] { display: none; }
+.model-info-name { color: var(--text); font-weight: 600; }
+.model-info-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.model-info-tag {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.model-info-good { margin-top: 6px; font-size: 12px; }
+.model-info-warn { margin-top: 7px; color: #f5b544; font-size: 12px; }
+.model-info-guess { margin-top: 6px; color: var(--text-faint); font-size: 11.5px; }
+
 .field-row { display: flex; gap: 8px; }
 .field-row input { flex: 1; min-width: 0; }
 
@@ -1496,15 +1523,21 @@ kbd {
   .field textarea, .field select,
   .field input.mono, .field select.mono { font-size: 16px; }
 
-  /* Pasek górny: zakładki przewijane palcem zamiast rozpychania szerokości */
-  .topbar { padding: 10px 12px; gap: 8px; }
+  /* Pasek górny. Cztery silniki + trzy ikony nie mieszczą się na telefonie
+     w pełnych rozmiarach, więc chowamy ikonki wewnątrz zakładek i ścieśniamy
+     resztę — dzięki temu komplet mieści się bez ucinania nazw w pół słowa. */
+  .topbar { padding: 8px 10px; gap: 6px; }
   .endpoint-switch {
     max-width: 100%;
     overflow-x: auto;
     scrollbar-width: none;
+    padding: 2px;
   }
   .endpoint-switch::-webkit-scrollbar { display: none; }
-  .endpoint-tab { flex-shrink: 0; }
+  .endpoint-tab { flex-shrink: 0; padding: 5px 9px; font-size: 12px; gap: 0; }
+  .endpoint-tab svg { display: none; }
+  .topbar .icon-btn { width: 30px; height: 30px; }
+  .topbar .icon-btn svg { width: 16px; height: 16px; }
 
   /* Modale: prawie pełny ekran, przewijanie w środku */
   .modal-overlay { padding: 8px; }
@@ -1524,14 +1557,42 @@ kbd {
   .offline-bar { padding: 9px 12px; font-size: 12px; flex-wrap: wrap; }
   .offline-retry { margin-left: 0; }
 
-  /* Ekran powitalny ciaśniej */
-  .welcome { padding: 7vh 18px 20px; }
-  .welcome h1 { font-size: 22px; }
-  .welcome-sub { margin-bottom: 28px; }
+  /* Pole wiadomości dostaje własny wiersz. Cztery przyciski po 38 px zjadały
+     większość szerokości, przez co placeholder łamał się i był ucinany. */
+  .composer { flex-wrap: wrap; padding: 8px; gap: 4px; }
+  .composer textarea {
+    flex: 1 0 100%;
+    order: -1;
+    max-height: 140px;
+    padding: 6px 4px;
+  }
+  .send-btn, .stop-btn { margin-left: auto; }
+  .attach-btn, .send-btn, .stop-btn { width: 34px; height: 34px; }
+
+  /* Ekran powitalny ciaśniej — inaczej ostatnia podpowiedź chowa się
+     za polem wiadomości i wygląda na uciętą. */
+  .welcome { padding: 4vh 16px 16px; }
+  .welcome-icon { width: 44px; height: 44px; margin-bottom: 12px; }
+  .welcome h1 { font-size: 21px; letter-spacing: .3em; padding-left: .3em; }
+  .welcome-sub { margin-bottom: 20px; font-size: 12px; }
+  /* Identyfikatory modeli bywają dłuższe niż ekran — łamiemy je w dowolnym
+     miejscu, zamiast rozpychać stronę albo zawijać na dwa nierówne wiersze. */
+  .welcome-sub .mono { font-size: 11px; overflow-wrap: anywhere; }
+  .suggestions { gap: 8px; }
+  .suggestion { padding: 11px 14px; font-size: 13px; }
 
   /* Tryb głosowy: podpowiedź nie dotyka krawędzi */
   .voice-transcript, .voice-answer { max-width: calc(100vw - 40px); }
   .voice-hint { left: 20px; right: 20px; text-align: center; }
+}
+
+/* Wąskie telefony (Galaxy S, iPhone mini): cztery silniki mieszczą się
+   dopiero po jeszcze mocniejszym ścieśnieniu zakładek. */
+@media (max-width: 380px) {
+  .topbar { padding: 8px 8px; gap: 5px; }
+  .endpoint-tab { padding: 4px 6px; font-size: 11px; }
+  .topbar .icon-btn { width: 28px; height: 28px; }
+  .topbar .icon-btn svg { width: 15px; height: 15px; }
 }
 
 /* Skróty klawiszowe pod stopką mają sens tylko przy fizycznej klawiaturze.

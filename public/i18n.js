@@ -79,6 +79,13 @@ const I18N = {
     'offline.retry': 'Spróbuj ponownie',
     'offline.retrying': 'Sprawdzam…',
 
+    // — opis modelu —
+    'model.known': 'Rozpoznane modele',
+    'model.other': 'Pozostałe',
+    'model.bestFor': 'Najlepszy do:',
+    'model.guessed': 'Model spoza katalogu — poniższe cechy odczytane z nazwy, mogą być niepełne.',
+    'model.blindWarn': 'Wybrany model nie widzi obrazów, a nie masz ustawionego modelu wizyjnego. Zdjęcie zostanie pominięte — wybierz model z oznaczeniem „widzi obrazy” albo ustaw NEMOTRON_VISION_MODEL w .env.',
+
     // — wiadomości —
     'copy': 'Kopiuj',
     'copied': '✓ Skopiowano',
@@ -522,6 +529,12 @@ const I18N = {
     'offline.hint': 'You are seeing a copy stored on this device — new messages will not be sent. Check that the server is running and Tailscale is on.',
     'offline.retry': 'Try again',
     'offline.retrying': 'Checking…',
+
+    'model.known': 'Recognised models',
+    'model.other': 'Others',
+    'model.bestFor': 'Best for:',
+    'model.guessed': 'Model not in the catalogue — the traits below are read from its name and may be incomplete.',
+    'model.blindWarn': 'The selected model cannot see images and no vision model is configured. The photo will be ignored — pick a model tagged “sees images” or set NEMOTRON_VISION_MODEL in .env.',
 
     'copy': 'Copy',
     'copied': '✓ Copied',

@@ -150,6 +150,11 @@ internetu** — czyli dokładnie ten hybrydowy układ, który daje Cosmos.
 > 💡 **Nie przepisuj nazw ręcznie.** W aplikacji: **Ustawienia → „Pobierz listę"**
 > pobiera prawdziwe identyfikatory prosto z endpointu i wypełnia listę wyboru.
 > Nazwa w katalogu na build.nvidia.com bywa inna niż ciąg używany w API.
+>
+> Pod polem wyboru Cosmos pokazuje **opis wybranego modelu**: do czego się nadaje,
+> czy widzi obrazy, czy potrafi rozumować, jaki ma kontekst i na co uważać. Rozpoznane
+> modele są w liście na górze, z czytelną nazwą obok identyfikatora. Katalog opisów
+> siedzi w `public/models.js` — możesz go rozszerzać o własne wpisy.
 
 **Warto dołożyć później** (opcjonalnie): `llama-nemotron-embed-1b-v2` — embeddingi
 w 26 językach, w tym polskim, do bazy wiedzy; `llama-nemotron-rerank-1b-v2` —

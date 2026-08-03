@@ -2,8 +2,10 @@
 """
 Cosmos Watcher — ciągła percepcja otoczenia.
 
-Obserwuje kamerę (webcam / Kinect RGB przez sterownik kamery), wykrywa
-obiekty YOLO i wysyła do Cosmosa TYLKO ZMIANY (pojawiło się / zniknęło).
+Obserwuje kamerę, wykrywa obiekty YOLO i wysyła do Cosmosa TYLKO ZMIANY
+(pojawiło się / zniknęło). Źródłem obrazu może być zwykła kamera przez OpenCV
+albo Kinect 360 — ten drugi nie jest kamerą UVC, więc obraz bierzemy z SDK
+(CAMERA_SOURCE=kinect).
 Cosmos dokleja te zdarzenia do kontekstu rozmowy — dzięki temu Nemotron
 „wie”, co dzieje się w pokoju, zanim o cokolwiek zapytasz.
 
@@ -13,7 +15,8 @@ Uruchomienie (wymaga: pip install ultralytics opencv-python requests):
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
     COSMOS_TOKEN    COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
-    CAMERA_INDEX    numer kamery (domyślnie 0)
+    CAMERA_SOURCE   auto (domyślnie, zwykła kamera) | kinect (Kinect 360 przez SDK 1.8)
+    CAMERA_INDEX    numer kamery przy CAMERA_SOURCE=auto (domyślnie 0)
     WATCH_INTERVAL  sekundy między analizami (domyślnie 5)
     YOLO_MODEL      domyślnie yolo11n.pt
 """
@@ -47,19 +50,77 @@ def send_event(summary: str, type_: str = "kamera") -> None:
         print(f"! nie wysłano zdarzenia: {e}")
 
 
+class CvCamera:
+    """Zwykła kamera przez OpenCV (webcam, telefon, aparat jako webcam)."""
+
+    def __init__(self, index: int):
+        self._cap = cv2.VideoCapture(index)
+        if not self._cap.isOpened():
+            raise SystemExit(
+                f"Nie mogę otworzyć kamery {index}.\n"
+                "Sprawdź, co widzi system:\n"
+                '  python -c "import cv2; print([i for i in range(6) '
+                'if cv2.VideoCapture(i).isOpened()])"\n'
+                "Pusta lista = brak kamery dla OpenCV. Masz Kinecta? Ustaw CAMERA_SOURCE=kinect\n"
+                "— Kinect nie jest kamerą UVC, ale jego obraz RGB czyta kinect_win.py."
+            )
+        self.name = f"kamera {index}"
+
+    def read(self):
+        ok, frame = self._cap.read()
+        return frame if ok else None
+
+    def close(self):
+        self._cap.release()
+
+
+class KinectCamera:
+    """Obraz RGB z Kinecta 360 przez Kinect for Windows SDK 1.8.
+
+    Kinect nie jest kamerą UVC, więc OpenCV go nie zobaczy — ale SDK oddaje
+    ten sam obraz 640×480, tylko inną drogą. Dla YOLO to bez różnicy.
+    """
+
+    def __init__(self):
+        import kinect_win
+        self._k = kinect_win.Kinect(color=True, depth=False, skeleton=False)
+        self._k.open()
+        self.name = "Kinect 360 (RGB przez SDK 1.8)"
+
+    def read(self):
+        return self._k.color_frame()
+
+    def close(self):
+        self._k.close()
+
+
+def open_camera():
+    source = os.environ.get("CAMERA_SOURCE", "auto").lower()
+    if source == "kinect":
+        return KinectCamera()
+    if source in ("cv", "opencv", "auto"):
+        return CvCamera(CAMERA_INDEX)
+    raise SystemExit(f"Nieznane CAMERA_SOURCE: {source} (dozwolone: auto, cv, kinect)")
+
+
 def main() -> None:
     model = YOLO(os.environ.get("YOLO_MODEL", "yolo11n.pt"))
-    cap = cv2.VideoCapture(CAMERA_INDEX)
-    if not cap.isOpened():
-        raise SystemExit(f"Nie mogę otworzyć kamery {CAMERA_INDEX}.")
+    cam = open_camera()
 
-    print(f"✦ Cosmos Watcher — kamera {CAMERA_INDEX}, analiza co {INTERVAL}s, cel: {COSMOS_URL}")
+    print(f"✦ Cosmos Watcher — {cam.name}, analiza co {INTERVAL}s, cel: {COSMOS_URL}")
     send_event("obserwator kamery uruchomiony")
 
+    try:
+        _loop(model, cam)
+    finally:
+        cam.close()
+
+
+def _loop(model, cam) -> None:
     prev: set[str] = set()
     while True:
-        ok, frame = cap.read()
-        if not ok:
+        frame = cam.read()
+        if frame is None:
             time.sleep(2)
             continue
 
@@ -78,4 +139,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n  Zatrzymano.")

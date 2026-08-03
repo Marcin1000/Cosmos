@@ -128,6 +128,8 @@ NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 ```
 
 Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
+Pod polem wyboru pojawia się opis modelu — do czego się nadaje, czy widzi obrazy,
+jaki ma kontekst i na co uważać. Katalog opisów: `public/models.js`.
 
 **Który model wybrać?**
 

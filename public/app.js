@@ -856,6 +856,29 @@ function renderAttachments() {
     wrap.append(img, rm);
     el.attachments.appendChild(wrap);
   });
+  renderBlindModelWarning();
+}
+
+/** Ostrzeż, gdy do modelu bez wzroku dołączamy obraz.
+
+   Serwer sam przełącza się na model wizyjny, ale tylko jeśli jest ustawiony
+   (NEMOTRON_VISION_MODEL / LOCAL_VISION_MODEL). Bez niego zdjęcie poleci do
+   modelu, który go nie zobaczy, a odpowiedź będzie zmyślona — lepiej powiedzieć
+   o tym przed wysłaniem niż tłumaczyć potem, skąd wzięła się bzdura. */
+function renderBlindModelWarning() {
+  const old = $('blind-model-warn');
+  if (old) old.remove();
+  if (!pendingImages.length) return;
+  const cfg = epConfig();
+  const sees = typeof modelSeesImages === 'function' && modelSeesImages(currentModel());
+  if (sees || cfg.visionModel) return;
+
+  const note = document.createElement('div');
+  note.id = 'blind-model-warn';
+  note.className = 'model-info-warn';
+  note.style.padding = '0 4px 6px';
+  note.textContent = '⚠ ' + t('model.blindWarn');
+  el.attachments.appendChild(note);
 }
 
 el.attachBtn.addEventListener('click', () => el.fileInput.click());
@@ -2730,6 +2753,7 @@ function openSettings() {
   el.setMaxTokens.value = settings.maxTokens;
   el.modelSelectCloud.style.display = 'none';
   el.modelSelectLocal.style.display = 'none';
+  refreshModelInfoBoxes();
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
@@ -3010,6 +3034,49 @@ el.settingsReset.addEventListener('click', () => {
   updateModelBadge();
 });
 
+// ----------------------------------------------------------------
+// Opis wybranego modelu
+// ----------------------------------------------------------------
+
+/** Wypisz, do czego dany model się nadaje. Pusty identyfikator chowa ramkę. */
+function renderModelInfo(boxEl, id) {
+  const info = typeof modelInfo === 'function' ? modelInfo(id) : null;
+  if (!id || !info) { boxEl.hidden = true; return; }
+
+  const lang = getLang();
+  const tags = (info.cechy || [])
+    .map((c) => CECHA_OPIS[c])
+    .filter(Boolean)
+    .map((c) => `<span class="model-info-tag">${c.ikona} ${escapeHtml(c[lang] || c.pl)}</span>`);
+  if (info.kontekst) {
+    tags.push(`<span class="model-info-tag">📏 ${escapeHtml(info.kontekst)}</span>`);
+  }
+
+  const parts = [];
+  if (info.zgadywane) {
+    parts.push(`<div class="model-info-guess">${t('model.guessed')}</div>`);
+  } else {
+    parts.push(`<div class="model-info-name">${escapeHtml(info.nazwa)}</div>`);
+    if (info.opis) parts.push(`<div>${escapeHtml(info.opis)}</div>`);
+  }
+  if (tags.length) parts.push(`<div class="model-info-tags">${tags.join('')}</div>`);
+  if (info.mocne && info.mocne.length) {
+    parts.push(`<div class="model-info-good">${t('model.bestFor')} `
+      + escapeHtml(info.mocne.join(' · ')) + '</div>');
+  }
+  if (info.uwaga) parts.push(`<div class="model-info-warn">⚠ ${escapeHtml(info.uwaga)}</div>`);
+
+  boxEl.innerHTML = parts.join('');
+  boxEl.hidden = false;
+}
+
+function refreshModelInfoBoxes() {
+  renderModelInfo($('model-info-cloud'), el.setModelCloud.value.trim()
+    || epConfig('cloud').model || '');
+  renderModelInfo($('model-info-local'), el.setModelLocal.value.trim()
+    || epConfig('local').model || '');
+}
+
 async function fetchModelsInto(epName, selectEl, btn) {
   btn.disabled = true;
   const prev = btn.textContent;
@@ -3020,9 +3087,24 @@ async function fetchModelsInto(epName, selectEl, btn) {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const models = (data.data || []).map((m) => m.id).sort();
     if (!models.length) throw new Error(t('set.noModels'));
+    // Znane modele na górę i z etykietą — inaczej wybiera się z listy
+    // kilkudziesięciu identyfikatorów, nie wiedząc, czym się różnią.
+    const described = [];
+    const rest = [];
+    for (const m of models) {
+      const info = typeof modelInfo === 'function' ? modelInfo(m) : null;
+      (info && !info.zgadywane ? described : rest).push([m, info]);
+    }
+    const option = ([m, info]) =>
+      `<option value="${escapeHtml(m)}">${escapeHtml(m)}`
+      + (info && !info.zgadywane ? ` — ${escapeHtml(info.nazwa)}` : '')
+      + '</option>';
     selectEl.innerHTML =
-      `<option value="">${t('set.selectModel')}</option>` +
-      models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+      `<option value="">${t('set.selectModel')}</option>`
+      + (described.length ? `<optgroup label="${t('model.known')}">`
+          + described.map(option).join('') + '</optgroup>' : '')
+      + (rest.length ? `<optgroup label="${t('model.other')}">`
+          + rest.map(option).join('') + '</optgroup>' : '');
     selectEl.style.display = '';
   } catch (err) {
     alert(t('set.fetchErr') + '\n' + err.message);
@@ -3039,10 +3121,15 @@ el.fetchModelsLocal.addEventListener('click', () =>
 
 el.modelSelectCloud.addEventListener('change', () => {
   if (el.modelSelectCloud.value) el.setModelCloud.value = el.modelSelectCloud.value;
+  refreshModelInfoBoxes();
 });
 el.modelSelectLocal.addEventListener('change', () => {
   if (el.modelSelectLocal.value) el.setModelLocal.value = el.modelSelectLocal.value;
+  refreshModelInfoBoxes();
 });
+// Także przy wpisywaniu z ręki — opis ma nadążać za tym, co widać w polu.
+el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
+el.setModelLocal.addEventListener('input', refreshModelInfoBoxes);
 
 // ----------------------------------------------------------------
 // Status i konfiguracja serwera
