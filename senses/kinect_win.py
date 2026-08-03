@@ -404,6 +404,30 @@ def _out_struct(struct_type, slack: int = 512):
     return raw, ctypes.cast(raw, POINTER(struct_type))
 
 
+# Sygnatury funkcji SDK — na zewnątrz _declare, żeby autotest mógł je
+# sprawdzić bez ładowania biblioteki.
+_HANDLE = c_void_p
+_SIGNATURES = [
+        ("NuiGetSensorCount", [POINTER(c_int)]),
+        ("NuiInitialize", [DWORD]),
+        ("NuiShutdown", []),
+        ("NuiImageStreamOpen", [c_int, c_int, DWORD, DWORD, _HANDLE, POINTER(_HANDLE)]),
+        # UWAGA: dwie różne konwencje w jednym API.
+        #   NuiImageStreamGetNextFrame  → CONST NUI_IMAGE_FRAME **  (podwójny
+        #       wskaźnik: klatka należy do SDK, my dostajemy jej adres)
+        #   NuiSkeletonGetNextFrame     → NUI_SKELETON_FRAME *      (pojedynczy:
+        #       to my alokujemy strukturę, SDK ją wypełnia)
+        # Pomylenie ich kończy się tym, że SDK wpisuje 8 bajtów w nasz bufor,
+        # a my czytamy pola z pustego miejsca.
+        ("NuiImageStreamGetNextFrame", [_HANDLE, DWORD, POINTER(c_void_p)]),
+        ("NuiImageStreamReleaseFrame", [_HANDLE, c_void_p]),
+        ("NuiSkeletonTrackingEnable", [_HANDLE, DWORD]),
+        ("NuiSkeletonGetNextFrame", [DWORD, POINTER(NuiSkeletonFrame)]),
+        ("NuiCameraElevationGetAngle", [POINTER(LONG)]),
+        ("NuiCameraElevationSetAngle", [LONG]),
+]
+
+
 def _declare(dll) -> None:
     """Opisz sygnatury funkcji SDK.
 
@@ -412,20 +436,7 @@ def _declare(dll) -> None:
     strumienia to 64-bitowy wskaźnik i przy zgadywaniu łatwo go obciąć —
     a obcięty uchwyt to nie błąd, tylko odczyt z przypadkowego adresu.
     """
-    HANDLE = c_void_p
-    sig = [
-        ("NuiGetSensorCount", [POINTER(c_int)]),
-        ("NuiInitialize", [DWORD]),
-        ("NuiShutdown", []),
-        ("NuiImageStreamOpen", [c_int, c_int, DWORD, DWORD, HANDLE, POINTER(HANDLE)]),
-        ("NuiImageStreamGetNextFrame", [HANDLE, DWORD, POINTER(NuiImageFrame)]),
-        ("NuiImageStreamReleaseFrame", [HANDLE, POINTER(NuiImageFrame)]),
-        ("NuiSkeletonTrackingEnable", [HANDLE, DWORD]),
-        ("NuiSkeletonGetNextFrame", [DWORD, POINTER(NuiSkeletonFrame)]),
-        ("NuiCameraElevationGetAngle", [POINTER(LONG)]),
-        ("NuiCameraElevationSetAngle", [LONG]),
-    ]
-    for name, argtypes in sig:
+    for name, argtypes in _SIGNATURES:
         fn = getattr(dll, name, None)
         if fn is None:
             continue
@@ -527,16 +538,19 @@ class Kinect:
 
     # -- klatki -----------------------------------------------------------
 
-    def _texture_from(self, keep):
-        """Wyłuskaj wskaźnik na INuiFrameTexture z bufora klatki.
+    def _texture_from(self, frame_addr: int):
+        """Wyłuskaj wskaźnik na INuiFrameTexture z klatki należącej do SDK.
 
-        Przesunięcie ustalamy raz, przy pierwszej klatce, i zapamiętujemy —
-        w kolejnych klatkach jest już tylko odczyt spod znanego adresu.
+        Klatki nie posiadamy — mamy tylko jej adres — więc czytamy ją przez
+        ReadProcessMemory. Przesunięcie pola ustalamy raz, przy pierwszej
+        klatce; dalej jest to już zwykły odczyt spod znanego miejsca.
         """
-        raw = keep.raw
+        if self._reader is None:
+            return None
+        raw = self._reader(frame_addr, 96)
+        if raw is None:
+            return None
         if self.texture_offset is None:
-            if self._reader is None:
-                return None
             self.texture_offset = find_texture_offset(raw, self._reader)
             if self.texture_offset is None:
                 return None
@@ -549,16 +563,20 @@ class Kinect:
         Ostatni kod błędu zapamiętujemy w `last_error` — bez tego „brak klatki"
         nie odróżnia czujnika, który się jeszcze rozgrzewa, od realnej awarii.
         """
-        keep, frame_p = _out_struct(NuiImageFrame)
-        hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), frame_p)
+        # SDK oddaje adres SWOJEJ klatki — my dostarczamy tylko miejsce na ten adres.
+        frame_ptr = c_void_p()
+        hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), byref(frame_ptr))
         if hr != 0:
             self.last_error = hr
             return None
+        if not frame_ptr.value:
+            self.last_error = 0
+            return None
         try:
-            texture = self._texture_from(keep)
+            texture = self._texture_from(frame_ptr.value)
             if texture is None:
                 self.last_error = 0
-                self.last_note = ("Nie znalazłem wskaźnika na teksturę w buforze klatki. "
+                self.last_note = ("Nie znalazłem wskaźnika na teksturę w klatce SDK. "
                                   "Uruchom:  python kinect_win.py dump")
                 return None
             lock = _vtable_call(texture, self.LOCK_RECT_INDEX, c_int32,
@@ -576,13 +594,9 @@ class Kinect:
             del rect_keep
             return data, rect.Pitch
         finally:
-            # Klatkę oddajemy tylko wtedy, gdy udało się ją zrozumieć.
-            # Jeśli nie znaleźliśmy w buforze tekstury, to znaczy, że jego układ
-            # jest inny, niż sądzimy — a wtedy ReleaseFrame czyta wskaźnik spod
-            # swojego przesunięcia i wywraca proces. Lepiej zostawić klatkę
-            # nieoddaną (pula ma kilka sztuk) niż zginąć przy sprzątaniu.
-            if self.texture_offset is not None:
-                self.dll.NuiImageStreamReleaseFrame(stream, frame_p)
+            # Oddajemy dokładnie ten adres, który dostaliśmy — nie adres naszej
+            # zmiennej. Pomyłka tutaj to natychmiastowa awaria w sterowniku.
+            self.dll.NuiImageStreamReleaseFrame(stream, frame_ptr)
 
     def color_frame(self, timeout_ms: int = 1000):
         """Obraz RGB jako tablica (wysokość × szerokość × 3) w kolejności BGR.
@@ -827,12 +841,17 @@ def cmd_dump(args) -> None:
     try:
         k.open()
         time.sleep(1.5)                       # daj strumieniowi ruszyć
-        keep, frame_p = _out_struct(NuiImageFrame)
-        hr = k.dll.NuiImageStreamGetNextFrame(k._depth_stream, DWORD(2000), frame_p)
+        frame_ptr = c_void_p()
+        hr = k.dll.NuiImageStreamGetNextFrame(k._depth_stream, DWORD(2000), byref(frame_ptr))
         if hr != 0:
             sys.exit(f"\n  Nie dostałem klatki: {_hr_text(hr)}\n")
-        raw = keep.raw
+        if not frame_ptr.value:
+            sys.exit("\n  SDK nie zwróciło adresu klatki.\n")
+        print(f"\n  Adres klatki od SDK: 0x{frame_ptr.value:016X}")
         span = 128
+        raw = reader(frame_ptr.value, span) if reader else None
+        if raw is None:
+            sys.exit("\n  Nie mogę odczytać klatki spod tego adresu.\n")
         print(f"\n✦ Surowy bufor klatki — pierwsze {span} B\n")
         print("  Bajty (po 16 w wierszu):")
         for off in range(0, span, 16):
@@ -999,7 +1018,17 @@ def cmd_selftest() -> None:
     ok = ok and good
     print(f"  {'OK ' if good else 'ZLE'} 17. wskaźnik pod innym przesunięciem: +{off3} B")
 
-    # 18–20. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
+    # 18. Konwencja wywołania: obraz i szkielet różnią się i pomylenie ich
+    #     kosztowało kilka awarii. Test pilnuje, żeby nie wróciły.
+    from ctypes import POINTER as _P
+    img_arg = dict(_SIGNATURES)["NuiImageStreamGetNextFrame"][2]
+    skel_arg = dict(_SIGNATURES)["NuiSkeletonGetNextFrame"][1]
+    good = img_arg is _P(c_void_p) and skel_arg is _P(NuiSkeletonFrame)
+    ok = ok and good
+    print(f"  {'OK ' if good else 'ZLE'} 18. konwencje: obraz = wskaźnik na wskaźnik, "
+          "szkielet = wskaźnik na strukturę")
+
+    # 19–21. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
     #     bez niego jedno dodatkowe pole w nagłówku SDK niszczy stertę procesu.
     for i, (typ, nazwa) in enumerate(((NuiImageFrame, "NUI_IMAGE_FRAME"),
                                       (NuiSkeletonFrame, "NUI_SKELETON_FRAME"),
@@ -1008,15 +1037,15 @@ def cmd_selftest() -> None:
         zapas = len(buf.raw) - ctypes.sizeof(typ)
         good = zapas >= 256
         ok = ok and good
-        print(f"  {'OK ' if good else 'ZLE'} {18 + i}. zapas bufora {nazwa}: {zapas} B")
+        print(f"  {'OK ' if good else 'ZLE'} {19 + i}. zapas bufora {nazwa}: {zapas} B")
 
     # 16. Na Windowsie sprawdź jeszcze, czy DLL w ogóle jest.
     if os.name == "nt":
         n = sensor_count()
-        print(f"  {'OK ' if n >= 0 else 'ZLE'} 21. Kinect10.dll: "
+        print(f"  {'OK ' if n >= 0 else 'ZLE'} 22. Kinect10.dll: "
               + (f"znaleziona, czujników: {n}" if n >= 0 else "brak — zainstaluj SDK 1.8"))
     else:
-        print("  --  21. Kinect10.dll: pominięte (nie Windows)")
+        print("  --  22. Kinect10.dll: pominięte (nie Windows)")
 
     print("\n  " + ("✓ Wszystkie testy przeszły." if ok else "✗ Któryś test nie przeszedł."))
     sys.exit(0 if ok else 1)
