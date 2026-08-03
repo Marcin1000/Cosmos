@@ -33,10 +33,31 @@ import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+def _dep_error(pakiety: str) -> str:
+    """Komunikat o brakującej zależności.
+
+    Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
+    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
+    """
+    msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
+    venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
+    in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+    if os.path.isdir(venv) and not in_venv:
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+               "tylko nie w tym Pythonie.\n\n"
+               "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
+               "  Windows:      .venv\\Scripts\\activate\n"
+               "  Linux/macOS:  source .venv/bin/activate\n\n"
+               "Znak zachęty powinien zacząć się od (.venv). Potem uruchom skrypt ponownie.\n\n"
+               f"Gdyby to nie pomogło:  pip install {pakiety}")
+    return msg
+
+
 try:
     import numpy as np
 except ImportError:
-    sys.exit("Brak numpy. Zainstaluj:  pip install numpy")
+    sys.exit(_dep_error("numpy"))
 
 COSMOS_URL = os.environ.get("COSMOS_URL", "http://localhost:3000")
 COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
