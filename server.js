@@ -1725,8 +1725,17 @@ function capabilityText(m) {
     '',
     'Mózgi: ' + m.mozgi.map((b) => `${b.id}=${b.model}${b.gotowy ? '' : ' (niegotowy)'}`).join(', '),
     `Zmysły: ${z.online ? 'online' : 'offline'} — mowa(Whisper)=${yes(z.whisper)}, `
-      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, sylwetka=${yes(z.mediapipe)}, `
+      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, `
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
+    // MediaPipe bywa zainstalowany, ale żadna funkcja interfejsu go nie wywołuje.
+    // Bez tego zastrzeżenia model obiecywał odczyt sylwetki, którego nie ma.
+    `Sylwetka (MediaPipe): ${z.mediapipe ? 'biblioteka zainstalowana, ale ŻADNA funkcja '
+      + 'Cosmosa jej nie wywołuje — nie obiecuj odczytu sylwetki z kamery przeglądarki' : 'nie'}`,
+    `Kinect 360: ${z.kinect
+      ? 'podłączony — masz podgląd obrazu i mapy głębi w panelu „Kamera na żywo”, '
+        + 'a z wiersza poleceń (senses/kinect_win.py) szkielet 20 stawów, postawę, gesty, '
+        + 'dystans i sterowanie silnikiem pochylenia'
+      : 'niepodłączony albo zmysły nie działają'}`,
     `Wyszukiwanie semantyczne (embeddingi): ${m.embeddingi.opis}`,
     `Studio: obraz=${m.studio.obraz.join('/') || 'brak'}, lektor=${yes(m.studio.dzwiek)}, `
       + `wideo=${yes(m.studio.wideo)}`,
@@ -3081,6 +3090,29 @@ async function handleChat(req, res) {
       body: JSON.stringify(body),
       signal: abort.signal,
     });
+    // Modele rozumujące OpenAI (o1, o3, gpt-5) odrzucają `max_tokens` i własną
+    // temperaturę — trzeba `max_completion_tokens` i temperatury domyślnej.
+    // Bez tego cała zakładka silnika po prostu nie działa, a użytkownik widzi
+    // tylko surowy błąd 400. Jedna ponowna próba z poprawionym żądaniem.
+    if (upstream.status === 400) {
+      const raw = await upstream.clone().text().catch(() => '');
+      const fixed = { ...body };
+      let changed = false;
+      if (/max_completion_tokens/.test(raw)) {
+        fixed.max_completion_tokens = fixed.max_tokens;
+        delete fixed.max_tokens;
+        changed = true;
+      }
+      if (/temperature/.test(raw)) { delete fixed.temperature; delete fixed.top_p; changed = true; }
+      if (changed) {
+        upstream = await fetch(`${ep.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: authHeaders(ep),
+          body: JSON.stringify(fixed),
+          signal: abort.signal,
+        });
+      }
+    }
   } catch (err) {
     if (abort.signal.aborted) return;
     return sendJson(res, 502, {

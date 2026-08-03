@@ -120,6 +120,12 @@ Od teraz zakładam, że Cosmos jest w folderze `C:\Cosmos`.
    | Wideo | `SEEDANCE_API_KEY=` i `SEEDANCE_MODEL=` | konsola BytePlus |
    | Grafiki Adobe | `FIREFLY_CLIENT_ID=` i `FIREFLY_CLIENT_SECRET=` | developer.adobe.com/console |
 
+   Po dodaniu klucza OpenAI albo Anthropic w pasku górnym Cosmosa pojawi się **nowa
+   zakładka silnika**. Który dokładnie model ma za nią stać, ustawiasz osobno:
+   `OPENAI_MODEL=` (domyślnie `gpt-4o`) i `CLAUDE_MODEL=`. Jeśli zakładka zwraca błąd
+   404, ten identyfikator nie istnieje na Twoim koncie — sprawdź listę przez
+   **Ustawienia → Pobierz listę**.
+
 4. Zapisz plik (`Ctrl+S`) i zamknij.
 
 > 🔒 **Bezpieczeństwo:** plik `.env` z Twoimi kluczami zostaje tylko tam, gdzie stoi
@@ -619,13 +625,58 @@ Nie musisz nic ustawiać — wystarczy, że masz `NVIDIA_API_KEY`. Jeśli VPS w 
 > Sprawdzisz aktualny stan w **Ustawieniach → statystyki** albo pytając Cosmosa
 > „pokaż, co potrafisz" (Nauka → Pomysły).
 
-## Aktualizacja Cosmosa na VPS
+## Aktualizacja Cosmosa
+
+> **Najpierw ustal, co gdzie stoi.** Cosmos to dwie niezależne części i aktualizuje
+> się je osobno:
+>
+> | Zmiana w plikach | Gdzie zaktualizować | Co zrestartować |
+> |---|---|---|
+> | `server.js`, `public/*` (interfejs, czat, wyszukiwanie) | tam, gdzie działa serwer — VPS albo komputer domowy | serwer Cosmosa |
+> | `senses/*` (zmysły, Kinect) | zawsze na komputerze z kamerą i GPU | `python service.py` |
+> | `*.md` | nigdzie — to sama dokumentacja | nic |
+>
+> Przy Ścieżce B (serwer na VPS, zmysły na komputerze domowym) prawie każda
+> aktualizacja wymaga **obu** kroków.
+
+### Serwer na VPS (Linux)
 
 ```bash
 cd /opt/cosmos
 git pull
 sudo systemctl restart cosmos
 ```
+
+### Serwer albo zmysły na Windowsie
+
+**Masz Gita:**
+```
+cd /d D:\Cosmos
+git pull
+```
+
+**Nie masz Gita** — dwie możliwości.
+
+*Jednorazowo zainstaluj Gita* (potem wystarczy `git pull`): pobierz z
+[git-scm.com/download/win](https://git-scm.com/download/win), zainstaluj z domyślnymi
+opcjami i **otwórz `cmd` na nowo** — bez tego Windows nie zobaczy nowego polecenia.
+
+*Albo pobierz same zmienione pliki* — `curl` jest w Windowsie od wersji 10, nic nie
+trzeba instalować. Podmień `ADRES-REPO` na swój (`https://raw.githubusercontent.com/<użytkownik>/<repo>/<gałąź>`):
+```
+cd /d D:\Cosmos\senses
+curl -L -o service.py ADRES-REPO/senses/service.py
+```
+
+> ⚠️ **Po aktualizacji serwera odśwież stronę z pominięciem pamięci podręcznej**
+> (`Ctrl+F5` na komputerze). W aplikacji PWA na telefonie zamknij ją całkowicie
+> i otwórz ponownie — nowa wersja wchodzi dopiero wtedy.
+
+### Co zrobić po aktualizacji
+
+1. Sprawdź, czy serwer wstał: otwórz Cosmosa i zobacz wskaźniki w panelu bocznym.
+2. Jeśli aktualizowałeś zmysły — okno z `python service.py` musi być uruchomione
+   **na nowo**; stary proces działa dalej ze starym kodem.
 
 ## ⚠️ Kamera i mikrofon wymagają HTTPS
 

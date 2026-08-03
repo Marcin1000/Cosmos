@@ -1600,7 +1600,7 @@ async function openCamera() {
   try {
     cameraStream = await getMedia(videoConstraints(cameraFacing));
   } catch (err) {
-    alert(`Brak dostępu do kamery: ${err.message}`);
+    alert(`${t('cam.err')} ${err.message}`);
     return;
   }
   el.cameraVideo.srcObject = cameraStream;
@@ -1617,7 +1617,7 @@ async function flipCamera() {
     // przy odmowie zostalibyśmy z czarnym oknem i bez obrazu.
     stream = await getMedia(videoConstraints(next));
   } catch (err) {
-    alert(`Nie udało się przełączyć kamery: ${err.message}`);
+    alert(`${t('cam.flipErr')} ${err.message}`);
     return;
   }
   if (cameraStream) cameraStream.getTracks().forEach((tr) => tr.stop());

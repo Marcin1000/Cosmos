@@ -29,7 +29,8 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | `kinect_watcher.py` — głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
 | `kinect_win.py` — szkielet, RGB, głębia, silnik | ✅ działa | Windows; **cała funkcjonalność Kinecta 360** |
 | `soundloc.py` — słuch przestrzenny | ✅ działa | macierz 4 mikrofonów Kinecta — patrz niżej |
-| `photoscan.py`, `terrain.py`, `flightplan.py`, `lowlight.py`, `pantilt.py`, `tether.py` | ✅ narzędzia z wiersza poleceń | uruchamiane ręcznie, nie z interfejsu; wyniki trafiają do czatu jako zdarzenia |
+| `photoscan.py`, `terrain.py`, `lowlight.py`, `pantilt.py`, `tether.py` | ✅ narzędzia z wiersza poleceń | uruchamiane ręcznie, nie z interfejsu; wyniki zgłaszają do czatu jako zdarzenia |
+| `flightplan.py` — plan lotu drona | ✅ narzędzie z wiersza poleceń | jako jedyne **nie zgłasza zdarzeń** do Cosmosa — wypisuje plan i pliki na dysk |
 
 Moduły oznaczone ⚠️ opisane są szczegółowo w swoich sekcjach — razem z tym,
 czego dokładnie im brakuje.
@@ -423,9 +424,10 @@ python pantilt.py gigapano --span-h 180 --span-v 60 --fov-h 30 --fov-v 20
 python pantilt.py scan --tilts -15,0,15      # skan wnętrza do fotogrametrii
 ```
 
-Backendy: `sim` (podgląd, domyślny), `serial` (własny sterownik, np. Arduino/ESP),
-`ronin` — **wymaga oficjalnego SDK DJI**, którego nie wolno dołączyć do repozytorium;
-wzorce ruchu i punkt wejścia (`Head.goto`) są gotowe do podpięcia.
+Backendy: `sim` (podgląd, domyślny — nic nie instalujesz), `serial` (własny sterownik,
+np. Arduino/ESP — wymaga `pip install pyserial`), `ronin` — **wymaga oficjalnego SDK DJI**,
+którego nie wolno dołączyć do repozytorium; wzorce ruchu i punkt wejścia (`Head.goto`)
+są gotowe do podpięcia.
 
 ## Sterowanie aparatem — Cosmos Tether
 
