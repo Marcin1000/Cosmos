@@ -807,6 +807,33 @@ kbd {
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field-label { font-size: 12.5px; font-weight: 500; color: var(--text-dim); letter-spacing: .02em; }
 .field-hint { font-size: 11.5px; color: var(--text-faint); }
+/* Opis wybranego modelu. Sam identyfikator nie mówi, do czego model się
+   nadaje — ta ramka dokłada to, co trzeba wiedzieć przed wyborem. */
+.model-info {
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg-input);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.model-info[hidden] { display: none; }
+.model-info-name { color: var(--text); font-weight: 600; }
+.model-info-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.model-info-tag {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.model-info-good { margin-top: 6px; font-size: 12px; }
+.model-info-warn { margin-top: 7px; color: #f5b544; font-size: 12px; }
+.model-info-guess { margin-top: 6px; color: var(--text-faint); font-size: 11.5px; }
+
 .field-row { display: flex; gap: 8px; }
 .field-row input { flex: 1; min-width: 0; }
 

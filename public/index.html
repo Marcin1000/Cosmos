@@ -227,6 +227,7 @@
             <button class="btn-secondary" id="fetch-models-cloud" data-i18n="set.fetchList">Pobierz listę</button>
           </div>
           <select id="model-select-cloud" style="display:none" class="mono"></select>
+          <div class="model-info" id="model-info-cloud" hidden></div>
         </label>
 
         <label class="field">
@@ -236,6 +237,7 @@
             <button class="btn-secondary" id="fetch-models-local" data-i18n="set.fetchList">Pobierz listę</button>
           </div>
           <select id="model-select-local" style="display:none" class="mono"></select>
+          <div class="model-info" id="model-info-local" hidden></div>
           <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
         </label>
 
@@ -697,6 +699,7 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="models.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
