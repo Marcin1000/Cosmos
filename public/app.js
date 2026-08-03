@@ -1714,25 +1714,94 @@ function posLabel(cx, w) {
   return r < 0.34 ? t('posLeft') : r > 0.66 ? t('posRight') : t('posCenter');
 }
 
+// Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i getUserMedia
+// nigdy go nie zwróci. Jego klatki pobieramy po HTTP z usługi zmysłów
+// i pokazujemy w zwykłym <img> zamiast w <video>.
+let liveSource = localStorage.getItem('cosmos.liveSource') || 'camera';
+let liveImgTimer = null;
+
+function liveIsKinect() { return liveSource.startsWith('kinect'); }
+
+/** Element, z którego bierzemy piksele: <video> dla kamery, <img> dla Kinecta. */
+function liveMedia() { return liveIsKinect() ? $('live-image') : $('live-video'); }
+
+function liveMediaSize() {
+  const el = liveMedia();
+  return liveIsKinect()
+    ? { w: el.naturalWidth, h: el.naturalHeight }
+    : { w: el.videoWidth, h: el.videoHeight };
+}
+
+let liveStreaming = false;
+
+function stopKinectStream() {
+  liveStreaming = false;
+  clearTimeout(liveImgTimer);
+  liveImgTimer = null;
+  const img = $('live-image');
+  img.onload = img.onerror = null;
+  img.removeAttribute('src');
+}
+
+/** Pobieraj klatki z Kinecta — kolejną dopiero po wczytaniu poprzedniej.
+ *
+ * Stałe `setInterval` podmieniałoby `src` w trakcie ładowania: obraz migocze,
+ * a przy wolniejszym łączu (telefon przez Tailscale) żądania by się piętrzyły.
+ * Pętla sterowana zdarzeniem `load` sama dopasowuje tempo do łącza.
+ * Znacznik czasu w adresie omija pamięć podręczną przeglądarki.
+ */
+function startKinectStream() {
+  const stream = liveSource === 'kinect-depth' ? 'depth' : 'color';
+  const img = $('live-image');
+  liveStreaming = true;
+
+  const next = (delay) => {
+    if (!liveStreaming) return;
+    liveImgTimer = setTimeout(() => {
+      if (liveStreaming) img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
+    }, delay);
+  };
+
+  img.onload = () => next(120);
+  img.onerror = () => {
+    $('live-status').textContent = t('live.kinectErr');
+    next(2000);          // czujnik może się podnosić — próbuj rzadziej, ale próbuj
+  };
+  img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
+}
+
 async function startLive() {
-  try {
-    liveStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
-  } catch (err) {
-    alert(t('cam.err') + ' ' + err.message);
-    return;
+  $('live-source').value = liveSource;
+  const video = $('live-video');
+  const img = $('live-image');
+
+  if (liveIsKinect()) {
+    video.hidden = true;
+    img.hidden = false;
+    startKinectStream();
+  } else {
+    try {
+      liveStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 960 } } });
+    } catch (err) {
+      alert(t('cam.err') + ' ' + err.message);
+      return;
+    }
+    img.hidden = true;
+    video.hidden = false;
+    video.srcObject = liveStream;
+    await video.play().catch(() => {});
   }
+
   $('live-panel').style.display = '';
   updateLiveRec();
-  const video = $('live-video');
-  video.srcObject = liveStream;
   $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
-  await video.play().catch(() => {});
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
 }
 
 function stopLive() {
   clearInterval(liveTimer); liveTimer = null;
+  stopKinectStream();
   if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
   $('live-video').srcObject = null;
   $('live-panel').style.display = 'none';
@@ -1740,19 +1809,20 @@ function stopLive() {
 }
 
 async function liveDetect() {
-  const video = $('live-video');
-  if (!video.videoWidth) return;
+  const media = liveMedia();
+  const { w, h } = liveMediaSize();
+  if (!w || !h) return;
   const overlay = $('live-overlay');
-  overlay.width = video.videoWidth;
-  overlay.height = video.videoHeight;
+  overlay.width = w;
+  overlay.height = h;
   const octx = overlay.getContext('2d');
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
   if (!(senses.online && senses.caps.yolo)) return; // sam podgląd bez detekcji
 
   const cap = document.createElement('canvas');
-  cap.width = video.videoWidth; cap.height = video.videoHeight;
-  cap.getContext('2d').drawImage(video, 0, 0);
+  cap.width = w; cap.height = h;
+  cap.getContext('2d').drawImage(media, 0, 0);
   let data;
   try {
     const res = await fetch('/api/detect', {
@@ -1811,6 +1881,15 @@ async function liveDetect() {
 
 $('live-btn').addEventListener('click', () => { liveStream ? stopLive() : startLive(); });
 $('live-close').addEventListener('click', stopLive);
+$('live-source').addEventListener('change', async (e) => {
+  liveSource = e.target.value;
+  localStorage.setItem('cosmos.liveSource', liveSource);
+  // Przełączenie źródła to zamknięcie jednego strumienia i otwarcie drugiego —
+  // inaczej kamera zostałaby zajęta albo Kinect odpytywany w tle.
+  const wasOpen = $('live-panel').style.display !== 'none';
+  stopLive();
+  if (wasOpen) await startLive();
+});
 
 // ręczna migawka do osi czasu (Digital Time Machine)
 $('live-snapshot').addEventListener('click', async () => {

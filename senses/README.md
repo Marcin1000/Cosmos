@@ -229,6 +229,21 @@ Wysyła do Cosmosa: obecność w zasięgu, początek i koniec ruchu, dystans
 najbliższego obiektu oraz opis postawy („stoi, na wprost, 2,3 m, ręka prawa
 podniesiona").
 
+### Podgląd z Kinecta w interfejsie Cosmosa
+
+Panel „Kamera na żywo" ma listę wyboru źródła: **Kamera przeglądarki**,
+**Kinect — obraz**, **Kinect — głębia**. Dwie ostatnie pozycje pobierają klatki
+przez `GET /kinect/frame`, bo przeglądarka Kinecta nie widzi (nie jest kamerą UVC)
+i `getUserMedia` nigdy go nie zwróci.
+
+Głębia jest kolorowana: zasięg 0,5–4 m rozłożony na paletę, a miejsca bez pomiaru
+(cień podczerwieni, szkło, poza zasięgiem) zostają **czarne** — żeby nie udawały
+odczytu, którego nie ma.
+
+Detekcja YOLO działa na obu źródłach tak samo, więc Cosmos rozpoznaje obiekty
+także na obrazie z Kinecta. Wymaga to działającego `service.py` na komputerze
+z czujnikiem; przy serwerze na VPS potrzebny jest `SENSES_URL` (patrz wyżej).
+
 ### Kinect jako kamera dla YOLO
 
 Kinect **nie jest kamerą UVC** — OpenCV nigdy go nie zobaczy i `CAMERA_INDEX`
@@ -242,6 +257,20 @@ python watcher.py
 To rozwiązuje typowy przypadek „komputer stacjonarny bez kamery": Kinect zastępuje
 webcam, przy okazji dając 640×480 i podczerwień, która działa też po zmroku.
 
+### Pułapka, na którą warto uważać przy własnych zmianach
+
+SDK miesza dwie konwencje przekazywania klatek i różnicy nie widać, dopóki coś
+nie sięgnie pod zły adres:
+
+| Funkcja | Kto alokuje strukturę | Typ argumentu |
+|---|---|---|
+| `NuiImageStreamGetNextFrame` | **SDK** — zwraca adres swojej klatki | `NUI_IMAGE_FRAME **` |
+| `NuiSkeletonGetNextFrame` | **my** — SDK tylko wypełnia | `NUI_SKELETON_FRAME *` |
+
+Podanie pojedynczego wskaźnika tam, gdzie API chce podwójnego, kończy się tym,
+że sterownik zapisuje 8 bajtów w nasz bufor, reszta zostaje wyzerowana, a przy
+`ReleaseFrame` proces ginie bez śladu. Autotest pilnuje obu sygnatur.
+
 ### Zanim zadzwonisz po pomoc
 
 - **Kinect 360 musi mieć własny zasilacz.** Sam kabel USB nie wystarcza — bez
@@ -254,11 +283,14 @@ webcam, przy okazji dając 640×480 i podczerwień, która działa też po zmrok
 - **Nie mieszaj sterowników.** SDK 1.8 i libfreenect wykluczają się nawzajem —
   instalacja jednego odbiera dostęp drugiemu. Na Windowsie zostań przy SDK.
 
-> ⚠️ **Uczciwie o testach:** logika `kinect_win.py` (układ struktur zgodny co do
-> bajta z nagłówkami SDK, rozpoznawanie postawy, obróbka głębi) jest pokryta
-> autotestem i sprawdzona. Sama rozmowa z `Kinect10.dll` wymaga podłączonego
-> czujnika, więc tej części nie mogliśmy przetestować przed wydaniem. Jeśli coś
-> nie zadziała, zacznij od `python kinect_win.py info` — wypisze dokładny kod błędu.
+> ✅ **Sprawdzone na sprzęcie** (Kinect 360 + SDK 1.8 + Windows 11, Python 64-bit):
+> głębia 640×480, obraz RGB 640×480, śledzenie szkieletu i silnik pochylenia.
+> Przykładowy odczyt sylwetki: `stoi; na wprost; 2.0 m od czujnika; ręka prawa
+> podniesiona`. Autotest (22 pozycje) pokrywa dodatkowo logikę bez czujnika.
+>
+> Gdyby coś nie działało, kolejność diagnostyki jest taka:
+> `python kinect_win.py selftest` → `info` → `dump`. Ostatnie polecenie wypisuje
+> surowy bufor klatki i samo wskazuje wskaźnik na teksturę.
 
 ## Fotogrametria — Cosmos PhotoScan
 
@@ -412,6 +444,8 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 | `POST /extract` | `{name: "plik.pdf", data: base64}` | `{text}` — PDF/DOCX/XLSX/PPTX do bazy wiedzy |
 | `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` — Real-ESRGAN |
 | `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
+| `GET /kinect/status` | — | czy czujnik jest dostępny |
+| `GET /kinect/frame` | `?stream=color\|depth` | klatka JPEG — podgląd Kinecta w Cosmosie |
 
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają

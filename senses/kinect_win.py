@@ -36,10 +36,18 @@ UŻYCIE
     python kinect_win.py skeleton        # stawy i rozpoznana postawa na żywo
     python kinect_win.py tilt 10         # ustaw kąt pochylenia (-27..27 stopni)
 
-UWAGA O TESTACH
-    Logika czysto obliczeniowa (układ struktur, rozpoznawanie postawy, obróbka
-    głębi) jest pokryta `selftest` i sprawdzana bez Kinecta. Sama rozmowa
-    z `Kinect10.dll` z oczywistych powodów wymaga podłączonego czujnika.
+STAN
+    Sprawdzone na sprzęcie (Kinect 360, SDK 1.8, Windows 11, Python 64-bit):
+    głębia 640×480, obraz RGB, szkielet i silnik pochylenia.
+    `selftest` (22 pozycje) pokrywa logikę bez czujnika; `dump` służy do
+    diagnostyki układu bufora klatki, gdyby SDK zachowało się inaczej.
+
+PUŁAPKA
+    SDK używa DWÓCH konwencji przekazywania klatek:
+      NuiImageStreamGetNextFrame → NUI_IMAGE_FRAME **  (klatka należy do SDK)
+      NuiSkeletonGetNextFrame    → NUI_SKELETON_FRAME * (my alokujemy)
+    Pomylenie ich nie daje błędu — daje wyzerowany bufor i awarię w sterowniku
+    przy zwalnianiu klatki. Autotest pilnuje obu sygnatur.
 """
 from __future__ import annotations
 

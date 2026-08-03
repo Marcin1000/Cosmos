@@ -620,8 +620,16 @@
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <div class="live-source">
+      <select id="live-source" class="mono" data-i18n-aria="live.source" aria-label="Źródło obrazu">
+        <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
+        <option value="kinect-color" data-i18n="live.srcKinectColor">Kinect — obraz</option>
+        <option value="kinect-depth" data-i18n="live.srcKinectDepth">Kinect — głębia</option>
+      </select>
+    </div>
     <div class="live-stage">
       <video id="live-video" autoplay playsinline muted></video>
+      <img id="live-image" alt="" hidden>
       <canvas id="live-overlay"></canvas>
     </div>
     <div class="live-status mono" id="live-status">—</div>

@@ -2177,6 +2177,33 @@ async function proxySenses(req, res, targetPath, { json = false } = {}) {
   res.end(buf);
 }
 
+/** Odczyt z usługi percepcji (GET) — np. klatki z Kinecta.
+ *
+ * Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i podgląd nie może
+ * użyć getUserMedia. Klatki idą tędy: usługa zmysłów → serwer → przeglądarka.
+ */
+async function proxySensesGet(req, res, targetPath, search = '') {
+  let upstream;
+  try {
+    upstream = await fetch(`${SENSES_URL}${targetPath}${search}`, {
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    return sendJson(res, 502, {
+      error: `Usługa percepcji nie odpowiada pod ${SENSES_URL}. ` +
+             `Uruchom ją: python senses/service.py (${err.message})`,
+    });
+  }
+  const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+  const buf = Buffer.from(await upstream.arrayBuffer());
+  res.writeHead(upstream.status, {
+    'Content-Type': contentType,
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-store',
+  });
+  res.end(buf);
+}
+
 // ---------------------------------------------------------------------------
 // API: Studio — generowanie mediów (OpenAI / ElevenLabs / Seedance)
 // Każdy wynik trafia do bazy wiedzy i (opcjonalnie) do folderu eksportu
@@ -3128,6 +3155,13 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
     if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
+    if (p === '/api/kinect/frame' && req.method === 'GET') {
+      return await proxySensesGet(req, res, '/kinect/frame',
+        new URL(req.url, 'http://localhost').search);
+    }
+    if (p === '/api/kinect/status' && req.method === 'GET') {
+      return await proxySensesGet(req, res, '/kinect/status');
+    }
     if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
     res.writeHead(405);
     res.end();
