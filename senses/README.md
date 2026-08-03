@@ -229,6 +229,21 @@ Wysyła do Cosmosa: obecność w zasięgu, początek i koniec ruchu, dystans
 najbliższego obiektu oraz opis postawy („stoi, na wprost, 2,3 m, ręka prawa
 podniesiona").
 
+### Podgląd z Kinecta w interfejsie Cosmosa
+
+Panel „Kamera na żywo" ma listę wyboru źródła: **Kamera przeglądarki**,
+**Kinect — obraz**, **Kinect — głębia**. Dwie ostatnie pozycje pobierają klatki
+przez `GET /kinect/frame`, bo przeglądarka Kinecta nie widzi (nie jest kamerą UVC)
+i `getUserMedia` nigdy go nie zwróci.
+
+Głębia jest kolorowana: zasięg 0,5–4 m rozłożony na paletę, a miejsca bez pomiaru
+(cień podczerwieni, szkło, poza zasięgiem) zostają **czarne** — żeby nie udawały
+odczytu, którego nie ma.
+
+Detekcja YOLO działa na obu źródłach tak samo, więc Cosmos rozpoznaje obiekty
+także na obrazie z Kinecta. Wymaga to działającego `service.py` na komputerze
+z czujnikiem; przy serwerze na VPS potrzebny jest `SENSES_URL` (patrz wyżej).
+
 ### Kinect jako kamera dla YOLO
 
 Kinect **nie jest kamerą UVC** — OpenCV nigdy go nie zobaczy i `CAMERA_INDEX`
@@ -429,6 +444,8 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 | `POST /extract` | `{name: "plik.pdf", data: base64}` | `{text}` — PDF/DOCX/XLSX/PPTX do bazy wiedzy |
 | `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` — Real-ESRGAN |
 | `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
+| `GET /kinect/status` | — | czy czujnik jest dostępny |
+| `GET /kinect/frame` | `?stream=color\|depth` | klatka JPEG — podgląd Kinecta w Cosmosie |
 
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają

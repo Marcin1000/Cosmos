@@ -37,7 +37,17 @@ app = FastAPI(title="Cosmos Senses")
 # Wykrywanie dostępnych zmysłów (leniwa inicjalizacja modeli)
 # ---------------------------------------------------------------------------
 
-CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False, "embed": False, "upscale": False}
+CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False,
+        "embed": False, "upscale": False, "kinect": False}
+
+# Kinect 360 przez oficjalne SDK (tylko Windows). Obraz z niego nie jest widoczny
+# dla przeglądarki ani OpenCV — nie jest kamerą UVC — więc klatki muszą iść
+# do Cosmosa tędy, przez HTTP.
+try:
+    import kinect_win
+    CAPS["kinect"] = kinect_win.sensor_count() > 0
+except Exception:
+    pass
 
 try:
     import faster_whisper  # noqa: F401
@@ -316,6 +326,94 @@ async def upscale(request: Request):
     ok, buf = cv2.imencode(".png", out)
     b64 = base64.b64encode(buf.tobytes()).decode()
     return {"image": f"data:image/png;base64,{b64}"}
+
+
+# ---------------------------------------------------------------------------
+# Kinect 360 — klatki po HTTP
+# ---------------------------------------------------------------------------
+#
+# Przeglądarka nie widzi Kinecta (nie jest kamerą UVC), więc podgląd w Cosmosie
+# nie może użyć getUserMedia. Zamiast tego serwujemy pojedyncze klatki JPEG,
+# a interfejs odświeża je jak zwykły obrazek.
+
+_kinect = None
+_kinect_err = ""
+
+
+def get_kinect():
+    """Jedna instancja czujnika na cały proces — Kinect nie znosi dwóch naraz."""
+    global _kinect, _kinect_err
+    if _kinect is None:
+        import kinect_win
+        _kinect = kinect_win.Kinect(color=True, depth=True, skeleton=True)
+        _kinect.open()
+        _kinect_err = ""
+    return _kinect
+
+
+def _to_jpeg(img, quality: int = 80) -> bytes:
+    import cv2
+    ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not ok:
+        raise RuntimeError("Nie udało się zakodować JPEG.")
+    return buf.tobytes()
+
+
+@app.get("/kinect/status")
+async def kinect_status():
+    """Czy czujnik jest dostępny i co potrafi."""
+    try:
+        import kinect_win
+    except Exception as e:
+        return {"available": False, "reason": f"brak modułu kinect_win: {e}"}
+    n = kinect_win.sensor_count()
+    if n <= 0:
+        return {"available": False, "reason": "nie widzę czujnika (zasilacz? sterownik SDK 1.8?)"}
+    return {"available": True, "sensors": n, "streams": ["color", "depth"], "error": _kinect_err}
+
+
+@app.get("/kinect/frame")
+async def kinect_frame(stream: str = "color"):
+    """Pojedyncza klatka jako JPEG. `stream` = color albo depth."""
+    global _kinect, _kinect_err
+    try:
+        k = get_kinect()
+    except Exception as e:
+        _kinect_err = str(e)
+        return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
+
+    try:
+        if stream == "depth":
+            import cv2
+            import numpy as np
+            frame = k.depth_frame()
+            if frame is None:
+                return JSONResponse({"error": "Brak klatki głębi."}, status_code=503)
+            # Głębia to milimetry — dla oka mapujemy zasięg 0,5–4 m na kolory.
+            # Zera (czyli „nie wiem") zostają czarne, żeby nie udawać pomiaru.
+            vis = np.clip((frame.astype(np.float32) - 500) / (4000 - 500), 0, 1)
+            vis = (vis * 255).astype(np.uint8)
+            vis = cv2.applyColorMap(vis, cv2.COLORMAP_TURBO)
+            vis[frame == 0] = 0
+            img = vis
+        else:
+            img = k.color_frame()
+            if img is None:
+                return JSONResponse({"error": "Brak klatki obrazu."}, status_code=503)
+        return Response(content=_to_jpeg(img), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
+    except ImportError:
+        return JSONResponse({"error": "Podgląd wymaga: pip install opencv-python"},
+                            status_code=501)
+    except Exception as e:
+        # Czujnik mógł zostać odłączony — następne żądanie spróbuje otworzyć od nowa.
+        _kinect_err = str(e)
+        try:
+            k.close()
+        except Exception:
+            pass
+        _kinect = None
+        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
 
 
 @app.post("/embed")

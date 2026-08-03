@@ -1155,7 +1155,23 @@ kbd {
 .live-rec { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: .1em; color: var(--danger); margin-right: 4px; }
 .live-rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
 .live-stage { position: relative; background: #000; aspect-ratio: 4/3; }
-.live-stage video, .live-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.live-stage video, .live-stage img, .live-stage canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+.live-stage img[hidden], .live-stage video[hidden] { display: none; }
+.live-source { padding: 6px 10px 0; }
+.live-source select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 8px;
+  outline: none;
+}
+.live-source select:focus { border-color: var(--accent); }
 .live-status {
   padding: 8px 14px;
   font-size: 11px;

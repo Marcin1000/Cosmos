@@ -86,6 +86,13 @@ const I18N = {
     'model.guessed': 'Model spoza katalogu — poniższe cechy odczytane z nazwy, mogą być niepełne.',
     'model.blindWarn': 'Wybrany model nie widzi obrazów, a nie masz ustawionego modelu wizyjnego. Zdjęcie zostanie pominięte — wybierz model z oznaczeniem „widzi obrazy” albo ustaw NEMOTRON_VISION_MODEL w .env.',
 
+    // — źródło obrazu w panelu na żywo —
+    'live.source': 'Źródło obrazu',
+    'live.srcCamera': 'Kamera przeglądarki',
+    'live.srcKinectColor': 'Kinect — obraz',
+    'live.srcKinectDepth': 'Kinect — głębia',
+    'live.kinectErr': 'Brak obrazu z Kinecta — czy działa senses/service.py na komputerze z czujnikiem?',
+
     // — wiadomości —
     'copy': 'Kopiuj',
     'copied': '✓ Skopiowano',
@@ -535,6 +542,12 @@ const I18N = {
     'model.bestFor': 'Best for:',
     'model.guessed': 'Model not in the catalogue — the traits below are read from its name and may be incomplete.',
     'model.blindWarn': 'The selected model cannot see images and no vision model is configured. The photo will be ignored — pick a model tagged “sees images” or set NEMOTRON_VISION_MODEL in .env.',
+
+    'live.source': 'Video source',
+    'live.srcCamera': 'Browser camera',
+    'live.srcKinectColor': 'Kinect — colour',
+    'live.srcKinectDepth': 'Kinect — depth',
+    'live.kinectErr': 'No image from the Kinect — is senses/service.py running on the machine with the sensor?',
 
     'copy': 'Copy',
     'copied': '✓ Copied',
