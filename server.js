@@ -2799,13 +2799,29 @@ function stripTags(s) {
   return decodeEntities(s.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
 }
 
+/** Rozpakuj adres wyniku DuckDuckGo. Zwraca '' dla pozycji, których nie chcemy.
+ *
+ * Wyniki przychodzą w trzech postaciach:
+ *  • zwykły link — bierzemy jak jest,
+ *  • przekierowanie `//duckduckgo.com/l/?uddg=<zakodowany-adres>` — rozpakowujemy,
+ *  • REKLAMA `//duckduckgo.com/y.js?ad_domain=…&click_metadata=…` — odrzucamy.
+ *
+ * Reklamy trafiały do odpowiedzi jako „źródła”. Po kliknięciu użytkownik
+ * dostawał stronę DuckDuckGo z „Oops, there was an error”, bo te adresy są
+ * jednorazowe i wygasają — a model i tak nie mógł z nich nic wyczytać.
+ */
 function resolveDdgUrl(href) {
-  // DDG opakowuje linki: //duckduckgo.com/l/?uddg=<zakodowany-url>&...
   const m = href.match(/[?&]uddg=([^&]+)/);
   if (m) {
-    try { return decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
+    try { href = decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
   }
-  return href.startsWith('//') ? 'https:' + href : href;
+  const full = href.startsWith('//') ? 'https:' + href : href;
+  let u;
+  try { u = new URL(full); } catch { return ''; }
+  if (!/^https?:$/.test(u.protocol)) return '';
+  // wszystko, co zostało na duckduckgo.com, to reklama albo strona pomocnicza
+  if (/(^|\.)duckduckgo\.com$/i.test(u.hostname)) return '';
+  return u.href;
 }
 
 /** Pobierz czytelny tekst ze strony wyniku.
@@ -2861,10 +2877,15 @@ async function handleSearch(req, res) {
     const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
     const links = [...html.matchAll(linkRe)];
     const snips = [...html.matchAll(snipRe)];
-    for (let i = 0; i < Math.min(links.length, 5); i++) {
+    const seen = new Set();
+    for (let i = 0; i < links.length && results.length < 5; i++) {
+      const url = resolveDdgUrl(decodeEntities(links[i][1]));
+      if (!url) continue;                    // reklama albo adres nie do użycia
+      if (seen.has(url)) continue;           // ten sam wynik dwa razy
+      seen.add(url);
       results.push({
         title: stripTags(links[i][2]),
-        url: resolveDdgUrl(decodeEntities(links[i][1])),
+        url,
         snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
       });
     }

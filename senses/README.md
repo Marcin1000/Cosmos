@@ -17,8 +17,8 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 
 | Moduł / zmysł | Stan | Uwaga |
 |---|---|---|
-| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości |
-| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej |
+| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości; przy braku bibliotek CUDA sam przechodzi na procesor |
+| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej; obsługiwane API Pipera ≤1.2 i 1.3+ |
 | Wzrok — `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
 | Pamięć — `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
 | Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy |
@@ -65,6 +65,9 @@ Albo **wybiórczo**, tylko te zmysły, których chcesz (każdy jest niezależny)
 ```bash
 pip install fastapi uvicorn python-multipart          # rdzeń — WYMAGANY
 pip install faster-whisper                            # + słuch (rozpoznawanie mowy)
+#   uwaga: na GPU wymaga bibliotek CUDA 12 (cuBLAS + cuDNN). Bez nich usługa
+#   sama przechodzi na procesor — wolniej, ale bez błędu. Możesz też wymusić
+#   procesor od razu:  set WHISPER_DEVICE=cpu
 pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
 pip install mediapipe                                 # + sylwetka i gesty
@@ -464,6 +467,23 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają
 czytelnym błędem, gdy brakuje pakietu danego zmysłu — usługa startuje zawsze.
+
+## Strojenie usługi (zmienne środowiskowe)
+
+Wszystkie są opcjonalne — bez nich działają wartości domyślne. Ustawiasz je
+**przed** startem `service.py`, w tym samym oknie (`set NAZWA=wartość`) albo na
+stałe w zmiennych środowiskowych Windowsa.
+
+| Zmienna | Domyślnie | Do czego |
+|---|---|---|
+| `SENSES_PORT` | `7060` | port usługi; zmień, gdy 7060 jest zajęty (pamiętaj wtedy o `SENSES_URL` na serwerze) |
+| `WHISPER_MODEL` | `small` | rozmiar modelu mowy: `tiny`, `base`, `small`, `medium`, `large-v3`. Mniejszy = szybszy i mniej dokładny |
+| `WHISPER_DEVICE` | `auto` | `cpu` wymusza procesor. Przydatne, gdy brakuje bibliotek CUDA i nie chcesz czekać na wykrycie |
+| `WHISPER_LANG` | (wykrywa sam) | `pl` przyspiesza i poprawia rozpoznawanie, gdy zawsze mówisz po polsku |
+| `YOLO_MODEL` | `yolo11n.pt` | model rozpoznawania obiektów; `yolo11s.pt`/`yolo11m.pt` są dokładniejsze i wolniejsze |
+| `REALESRGAN_MODEL` | wbudowany | ścieżka do własnego modelu powiększania |
+| `PIPER_VOICE` | — | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
+| `COSMOS_RECORD_OUT` | — | folder na nagrania z `tether.py` (sterowanie aparatem) |
 
 ## Wydajność na RTX 3080
 

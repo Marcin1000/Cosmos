@@ -230,6 +230,46 @@ function msgImages(m) {
 // Mini-renderer Markdown (bez zewnętrznych bibliotek)
 // ----------------------------------------------------------------
 
+/** Zamień gołe adresy w tekście na klikalne odnośniki.
+ *
+ * Model podaje źródła raz jako `[tekst](adres)`, a raz jako sam adres w zdaniu —
+ * i ta druga postać zostawała martwym tekstem, którego nie dało się kliknąć.
+ * Pracujemy na HTML-u po `renderInline`, więc omijamy to, co już jest wewnątrz
+ * `<a>` i `<code>`: inaczej podlinkowalibyśmy adres w atrybucie href.
+ */
+function autoLink(html) {
+  const skip = /<a\b[^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>/gi;
+  const url = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*/gi;
+
+  const linkify = (chunk) => chunk.replace(url, (m) => {
+    // Znaki interpunkcyjne na końcu należą do zdania, nie do adresu.
+    // Nawias zamykający zostawiamy tylko wtedy, gdy w adresie jest otwierający.
+    let tail = '';
+    let addr = m;
+    for (;;) {
+      const last = addr.slice(-1);
+      if (/[.,;:!?…"']/.test(last)
+          || (last === ')' && (addr.match(/\(/g) || []).length < (addr.match(/\)/g) || []).length)) {
+        tail = last + tail;
+        addr = addr.slice(0, -1);
+        continue;
+      }
+      break;
+    }
+    if (!addr) return m;
+    const href = addr.startsWith('www.') ? 'https://' + addr : addr;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${addr}</a>${tail}`;
+  });
+
+  let out = '';
+  let last = 0;
+  for (const m of html.matchAll(skip)) {
+    out += linkify(html.slice(last, m.index)) + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + linkify(html.slice(last));
+}
+
 function renderInline(text) {
   let out = escapeHtml(text);
   out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
@@ -239,7 +279,7 @@ function renderInline(text) {
   out = out.replace(/(^|[\s(])_([^_\s][^_]*)_/g, '$1<em>$2</em>');
   out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  return out;
+  return autoLink(out);
 }
 
 function renderMarkdown(text) {
@@ -455,9 +495,56 @@ function imagesHtml(images) {
     const img = document.createElement('img');
     img.src = src;
     img.alt = t('attachment');
+    img.title = t('img.openHint');
+    img.addEventListener('click', () => openImageViewer(src));
     wrap.appendChild(img);
   }
   return wrap;
+}
+
+/** Podgląd obrazu na pełnym ekranie, z pobieraniem.
+ *
+ * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
+ * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
+ */
+function openImageViewer(src) {
+  const box = $('img-viewer');
+  const img = $('img-viewer-img');
+  img.src = src;
+  box.style.display = '';
+  imageViewerSrc = src;
+}
+
+function closeImageViewer() {
+  $('img-viewer').style.display = 'none';
+  $('img-viewer-img').removeAttribute('src');
+  imageViewerSrc = '';
+}
+
+let imageViewerSrc = '';
+
+/** Zapisz oglądany obraz na dysk — działa i dla dataURL, i dla adresu z serwera. */
+async function downloadViewedImage() {
+  if (!imageViewerSrc) return;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  let href = imageViewerSrc;
+  let revoke = '';
+  if (!href.startsWith('data:')) {
+    // Obraz z bazy wiedzy leci przez /api/kb/raw — `download` zadziała tylko
+    // na tym samym pochodzeniu, więc pobieramy go i zapisujemy z pamięci.
+    try {
+      const blob = await (await fetch(imageViewerSrc)).blob();
+      href = URL.createObjectURL(blob);
+      revoke = href;
+    } catch { /* zostaw oryginalny adres — przeglądarka otworzy go w karcie */ }
+  }
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = `cosmos-${stamp}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  if (revoke) setTimeout(() => URL.revokeObjectURL(revoke), 10000);
 }
 
 function messageElement(m, idx = -1) {
@@ -985,6 +1072,18 @@ async function streamOnce(conv) {
   // polu `reasoning_content`. Bez tego ekran stoi pusty przez cały czas myślenia,
   // a gdy budżet tokenów skończy się w trakcie — zostaje pusta odpowiedź.
   // Pokazujemy myślenie na żywo, zwinięte, żeby było widać, że coś się dzieje.
+  // Model rozumujący potrafi milczeć kilkadziesiąt sekund, a pusty dymek
+  // z migającym kursorem wygląda jak zawieszenie. Licznik pokazuje, że praca
+  // trwa — i ile już trwa.
+  const started = Date.now();
+  let waitNote = '';
+  const waitTimer = setInterval(() => {
+    if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
+    const s = Math.round((Date.now() - started) / 1000);
+    waitNote = `<div class="wait-note mono">${escapeHtml(t('chat.stillWorking', { s }))}</div>`;
+    schedulePaint();
+  }, 1000);
+
   const paint = () => {
     renderQueued = false;
     const head = think
@@ -992,7 +1091,7 @@ async function streamOnce(conv) {
         + `<summary>${escapeHtml(t(acc ? 'think.done' : 'think.live'))}</summary>`
         + `<pre>${escapeHtml(think)}</pre></details>`
       : '';
-    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>';
+    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>' + waitNote;
     scrollToBottom();
   };
   const schedulePaint = () => {
@@ -1064,6 +1163,7 @@ async function streamOnce(conv) {
         }
       }
     }
+    clearInterval(waitTimer);
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
     if (!acc.trim() && think.trim()) {
@@ -1075,6 +1175,7 @@ async function streamOnce(conv) {
     lastThink = think.trim();
     return acc;
   } catch (err) {
+    clearInterval(waitTimer);
     if (err.name === 'AbortError') {
       err.partial = acc;
     }
@@ -1389,6 +1490,23 @@ let currentAudio = null;
 
 // Zwraca Promise kończącą się wraz z końcem mówienia —
 // tryb głosowy czeka, zanim znów zacznie słuchać (brak sprzężenia).
+/** Odczytaj odpowiedź jako JSON, nie wywracając się na tym, co JSON-em nie jest.
+ *
+ * Gdy usługa zmysłów rzuci wyjątkiem, serwer potrafi oddać zwykły tekst
+ * „Internal Server Error”. `res.json()` mówił wtedy „Unexpected token 'I' …
+ * is not valid JSON” — komunikat, z którego użytkownik nie dowiaduje się
+ * niczego o prawdziwej przyczynie. Tutaj oddajemy treść odpowiedzi.
+ */
+async function readJsonSafe(res) {
+  const body = await res.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    const short = body.trim().slice(0, 200) || `HTTP ${res.status}`;
+    return { error: `HTTP ${res.status} — ${short}` };
+  }
+}
+
 async function speakText(text) {
   const clean = stripForSpeech(text);
   if (!clean) return;
@@ -1417,20 +1535,56 @@ async function speakText(text) {
 
   // 2. Głos systemowy przeglądarki
   if ('speechSynthesis' in window) {
-    await new Promise((resolve) => {
-      const u = new SpeechSynthesisUtterance(clean);
-      u.lang = t('speechLang');
-      const langPrefix = t('speechLang').slice(0, 2);
-      const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
-      if (voice) u.voice = voice;
-      u.onend = resolve;
-      u.onerror = resolve;
-      speechSynthesis.speak(u);
-    });
+    const langPrefix = t('speechLang').slice(0, 2);
+    const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
+    speakSerial = {};                 // znacznik tej wypowiedzi
+    const mine = speakSerial;
+    for (const part of splitForSpeech(clean)) {
+      if (speakSerial !== mine) return;   // ktoś przerwał albo zaczął nową
+      await new Promise((resolve) => {
+        const u = new SpeechSynthesisUtterance(part);
+        u.lang = t('speechLang');
+        if (voice) u.voice = voice;
+        u.onend = resolve;
+        u.onerror = resolve;
+        speechSynthesis.speak(u);
+      });
+    }
   }
 }
 
+// Znacznik trwającej wypowiedzi — po przerwaniu kolejne kawałki mają nie ruszyć.
+let speakSerial = null;
+
+/** Potnij tekst na kawałki mieszczące się w jednej wypowiedzi.
+ *
+ * Chrome przerywa `speechSynthesis` po kilkunastu sekundach i reszta zdania
+ * przepada — dlatego czytanie na głos urywało się w połowie. Tniemy po
+ * granicach zdań, a bardzo długie zdania po przecinkach i spacjach, żeby nigdy
+ * nie rozerwać słowa.
+ */
+function splitForSpeech(text, max = 180) {
+  const out = [];
+  // podział po końcach zdań, z zachowaniem znaku interpunkcyjnego
+  for (let piece of String(text).split(/(?<=[.!?…])\s+|\n+/)) {
+    piece = piece.trim();
+    if (!piece) continue;
+    while (piece.length > max) {
+      const window = piece.slice(0, max);
+      // najpierw przecinek, potem ostatnia spacja, w ostateczności twarde cięcie
+      let cut = Math.max(window.lastIndexOf(', '), window.lastIndexOf('; '));
+      if (cut < max * 0.5) cut = window.lastIndexOf(' ');
+      if (cut <= 0) cut = max;
+      out.push(piece.slice(0, cut + 1).trim());
+      piece = piece.slice(cut + 1).trim();
+    }
+    if (piece) out.push(piece);
+  }
+  return out.length ? out : [String(text)];
+}
+
 function stopSpeaking() {
+  speakSerial = null;                 // zatrzymaj kolejne kawałki wypowiedzi
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
@@ -1513,7 +1667,7 @@ async function startWhisperRecording() {
         headers: { 'Content-Type': blob.type },
         body: blob,
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       if (data.text) {
         el.input.value = (el.input.value ? el.input.value + ' ' : '') + data.text;
@@ -1537,28 +1691,72 @@ function startBrowserRecognition() {
     alert(t('dictNoStt'));
     return;
   }
-  speechRec = new SR();
-  speechRec.lang = t('speechLang');
-  speechRec.interimResults = false;
-  speechRec.continuous = true;
-  speechRec.onresult = (e) => {
-    const text = [...e.results].slice(e.resultIndex).map((r) => r[0].transcript).join(' ').trim();
-    if (text) {
-      el.input.value = (el.input.value ? el.input.value + ' ' : '') + text;
-      autosizeInput();
-      updateSendButton();
-    }
+  // Chrome kończy sesję rozpoznawania sam — po pauzie w mówieniu i najpóźniej
+  // po ~60 s — mimo `continuous = true`. Wcześniej gasiliśmy wtedy nagrywanie
+  // i dyktowanie urywało się w połowie zdania. Teraz wznawiamy je tak długo,
+  // aż użytkownik sam kliknie „stop”.
+  dictationWanted = true;
+
+  const makeRec = () => {
+    const rec = new SR();
+    rec.lang = t('speechLang');
+    rec.interimResults = true;      // widać, że słucha, zanim padnie wynik
+    rec.continuous = true;
+
+    rec.onresult = (e) => {
+      let finalText = '';
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (finalText.trim()) {
+        el.input.value = (el.input.value ? el.input.value + ' ' : '') + finalText.trim();
+        autosizeInput();
+        updateSendButton();
+      }
+      el.input.placeholder = interim.trim() || t('chat.listening');
+    };
+
+    rec.onend = () => {
+      if (!dictationWanted) { setRecordingUI(false); el.input.placeholder = t('inputPh'); return; }
+      // krótka przerwa, bo natychmiastowy start bywa odrzucany
+      setTimeout(() => {
+        if (!dictationWanted) return;
+        try { speechRec = makeRec(); speechRec.start(); } catch { /* już wystartował */ }
+      }, 250);
+    };
+
+    // „no-speech" i „aborted" to normalny koniec cyklu — onend wznowi nasłuch.
+    // Realny błąd (brak zgody, brak sieci) kończy dyktowanie.
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      dictationWanted = false;
+      setRecordingUI(false);
+      el.input.placeholder = t('inputPh');
+      if (e.error !== 'not-allowed') return;
+      alert(t('dictDenied'));
+    };
+    return rec;
   };
-  speechRec.onend = () => setRecordingUI(false);
-  speechRec.onerror = () => setRecordingUI(false);
+
+  speechRec = makeRec();
   speechRec.start();
   setRecordingUI(true);
+  el.input.placeholder = t('chat.listening');
 }
+
+// Czy użytkownik nadal chce dyktować (a nie: czy przeglądarka akurat słucha).
+let dictationWanted = false;
 
 el.micBtn.addEventListener('click', async () => {
   if (isRecording) {
+    dictationWanted = false;          // dopiero to kończy nasłuch na dobre
     if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
     if (speechRec) { speechRec.stop(); speechRec = null; }
+    setRecordingUI(false);
+    el.input.placeholder = t('inputPh');
     return;
   }
   stopSpeaking();
@@ -1583,9 +1781,41 @@ let cameraFacing = localStorage.getItem('cosmos.cameraFacing') || 'environment';
 
 function videoConstraints(facing) {
   // `ideal`, nie `exact` — na laptopie z jedną kamerą `exact` po prostu rzuca
-  // błędem, a chcemy wtedy dostać tę jedyną, jaka jest.
+  // błędem, a przy pierwszym otwarciu chcemy dostać tę jedyną, jaka jest.
   return { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: facing } } };
 }
+
+/** Weź strumień z konkretnego obiektywu — do PRZEŁĄCZANIA, nie do otwierania.
+ *
+ * Przy `ideal` przeglądarka ma prawo prośbę zignorować i oddać kamerę, która
+ * już działa — i właśnie dlatego przełącznik przód/tył nic nie robił. Do zmiany
+ * obiektywu trzeba `exact`. Gdyby telefon nie znał `facingMode` (zdarza się przy
+ * kamerach zewnętrznych i na desktopie), wybieramy kolejne urządzenie z listy.
+ */
+async function getMediaFacing(facing) {
+  try {
+    return await getMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 },
+      facingMode: { exact: facing } } });
+  } catch (err) {
+    if (err && err.name === 'NotAllowedError') throw err;
+    const devs = (await navigator.mediaDevices.enumerateDevices())
+      .filter((d) => d.kind === 'videoinput');
+    if (devs.length < 2) throw err;
+    // po etykiecie, a gdy jej brak (bez zgody) — po prostu następne urządzenie
+    const wantBack = facing === 'environment';
+    const byLabel = devs.find((d) => {
+      const l = (d.label || '').toLowerCase();
+      return wantBack ? /back|rear|tyl|tył|environment/.test(l)
+                      : /front|przod|przód|user|face/.test(l);
+    });
+    const pick = byLabel || devs[(devs.findIndex((d) => d.deviceId === currentCameraId) + 1) % devs.length];
+    currentCameraId = pick.deviceId;
+    return await getMedia({ video: { deviceId: { exact: pick.deviceId },
+      width: { ideal: 1280 }, height: { ideal: 720 } } });
+  }
+}
+
+let currentCameraId = '';
 
 /** Czy urządzenie ma więcej niż jedną kamerę — tylko wtedy przełącznik ma sens. */
 async function hasMultipleCameras() {
@@ -1615,7 +1845,7 @@ async function flipCamera() {
   try {
     // Stary strumień zwalniamy dopiero po udanym otwarciu nowego — inaczej
     // przy odmowie zostalibyśmy z czarnym oknem i bez obrazu.
-    stream = await getMedia(videoConstraints(next));
+    stream = await getMediaFacing(next);
   } catch (err) {
     alert(`${t('cam.flipErr')} ${err.message}`);
     return;
@@ -1635,6 +1865,13 @@ function closeCamera() {
   }
   el.cameraVideo.srcObject = null;
 }
+
+$('img-viewer-close').addEventListener('click', closeImageViewer);
+$('img-viewer-download').addEventListener('click', downloadViewedImage);
+// kliknięcie w tło zamyka; kliknięcie w sam obraz albo pasek — nie
+$('img-viewer').addEventListener('click', (e) => {
+  if (e.target === $('img-viewer')) closeImageViewer();
+});
 
 el.cameraBtn.addEventListener('click', openCamera);
 $('camera-flip').addEventListener('click', flipCamera);
@@ -1707,10 +1944,14 @@ async function openStudio() {
     $('studio-video-last').innerHTML =
       `<option value="">${t('st.lastNone')}</option>` + opts;
     $('studio-edit-img').innerHTML = `<option value="">${t('st.editPick')}</option>` + opts;
-    // klatka wybrana wcześniej w Galerii
-    if (pendingVideoFrameId) {
-      $('studio-video-image').value = pendingVideoFrameId;
-      pendingVideoFrameId = null;
+    // Klatka wybrana w Galerii. Wybór jest TRWAŁY: wcześniej kasowaliśmy go po
+    // pierwszym otwarciu Studia, więc przy drugim wejściu pole było znów puste
+    // i wyglądało to tak, jakby wybór nigdy się nie zapisał.
+    const wanted = localStorage.getItem('cosmos.videoFrame') || '';
+    if (wanted && images.some((i) => i.id === wanted)) {
+      $('studio-video-image').value = wanted;
+    } else if (wanted) {
+      localStorage.removeItem('cosmos.videoFrame');   // obraz zniknął z bazy
     }
     renderPromptTemplates();
   } catch { /* sekcje zostają w stanie domyślnym */ }
@@ -2116,7 +2357,7 @@ $('live-flip').addEventListener('click', async () => {
   const next = cameraFacing === 'environment' ? 'user' : 'environment';
   let stream;
   try {
-    stream = await getMedia(videoConstraints(next));
+    stream = await getMediaFacing(next);
   } catch (err) {
     $('live-status').textContent = `${t('cam.err')} ${err.message}`;
     return;
@@ -2229,8 +2470,12 @@ async function renderGallery() {
     else if (k === 'video') media = `<video src="${url}" controls preload="metadata"></video>`;
     else media = `<div class="gallery-audio">🎵</div><audio src="${url}" controls></audio>`;
 
+    // Widać, który obraz jest w tej chwili pierwszą klatką — bez tego jedynym
+    // potwierdzeniem był ✓ znikający po sekundzie.
+    const isFrame = localStorage.getItem('cosmos.videoFrame') === it.id;
     const frameBtn = k === 'image'
-      ? `<button data-frame="${escapeHtml(it.id)}" title="${t('gallery.useFrame')}">🎬</button>` : '';
+      ? `<button data-frame="${escapeHtml(it.id)}" class="${isFrame ? 'frame-on' : ''}" `
+        + `title="${isFrame ? t('gallery.frameIs') : t('gallery.useFrame')}">🎬</button>` : '';
     const upBtn = k === 'image'
       ? `<button data-up="${escapeHtml(it.id)}" title="${t('gallery.upscale')}">⤢</button>` : '';
     cell.innerHTML =
@@ -2249,9 +2494,9 @@ async function renderGallery() {
     renderGallery();
   }));
   grid.querySelectorAll('[data-frame]').forEach((b) => b.addEventListener('click', () => {
-    pendingVideoFrameId = b.dataset.frame;
-    b.textContent = '✓';
-    setTimeout(() => { b.textContent = '🎬'; }, 1200);
+    localStorage.setItem('cosmos.videoFrame', b.dataset.frame);
+    renderGallery();          // odśwież oznaczenia — widać, który obraz jest wybrany
+    galleryNote(t('gallery.frameSet'));
   }));
   grid.querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', async () => {
     const prev = b.textContent; b.textContent = '…'; b.disabled = true;
@@ -2270,7 +2515,15 @@ async function renderGallery() {
   }));
 }
 
-let pendingVideoFrameId = null; // obraz wybrany w galerii jako pierwsza klatka wideo
+/** Krótki komunikat w nagłówku Galerii — potwierdzenie, które nie znika po chwili. */
+function galleryNote(text) {
+  const n = $('gallery-note');
+  if (!n) return;
+  n.textContent = text;
+  n.hidden = false;
+  clearTimeout(galleryNote._t);
+  galleryNote._t = setTimeout(() => { n.hidden = true; }, 4000);
+}
 
 $('gallery-btn').addEventListener('click', openGallery);
 $('gallery-close').addEventListener('click', closeGallery);
@@ -2922,6 +3175,8 @@ el.voiceClose.addEventListener('click', exitVoiceMode);
 // posprzątać: zwolnić kamerę, zatrzymać detekcję, zapisać stan.
 // Kolejność od wierzchu: to, co otwiera się na innych, jest wyżej.
 const overlays = [
+  // podgląd obrazu jest na samym wierzchu — otwiera się z galerii i z rozmowy
+  { id: 'img-viewer', close: closeImageViewer },
   { open: () => voiceMode, close: exitVoiceMode },
   { id: 'camera-modal', close: closeCamera },
   { id: 'live-panel', close: stopLive },
@@ -3508,10 +3763,30 @@ async function fetchModelsInto(epName, selectEl, btn) {
       const info = typeof modelInfo === 'function' ? modelInfo(m) : null;
       (info && !info.zgadywane ? described : rest).push([m, info]);
     }
-    const option = ([m, info]) =>
-      `<option value="${escapeHtml(m)}">${escapeHtml(m)}`
-      + (info && !info.zgadywane ? ` — ${escapeHtml(info.nazwa)}` : '')
-      + '</option>';
+    // Natywny wybierak Androida to lista na cały ekran, w której każda pozycja
+    // zawija się na tyle wierszy, ile trzeba. Pełny identyfikator PLUS nazwa
+    // dawały po trzy wiersze na model i listę nie do przejrzenia. Na wąskim
+    // ekranie pokazujemy więc samą nazwę (identyfikator i tak siedzi w value
+    // i ląduje w polu tekstowym po wyborze).
+    const narrow = window.matchMedia('(max-width: 720px)').matches;
+    // Kilka różnych modeli może trafić na ten sam opis w katalogu („Lokalny
+    // model wizyjny"). Sama nazwa byłaby wtedy nie do rozróżnienia, więc
+    // policzmy powtórzenia i przy nich dołóżmy końcówkę identyfikatora.
+    const nameCount = {};
+    for (const [, info] of [...described, ...rest]) {
+      if (info && !info.zgadywane) nameCount[info.nazwa] = (nameCount[info.nazwa] || 0) + 1;
+    }
+    const option = ([m, info]) => {
+      const named = info && !info.zgadywane;
+      const short = m.split('/').pop();
+      let label;
+      if (!named) label = narrow ? short : m;
+      else if (!narrow) label = `${m} — ${info.nazwa}`;
+      // Gdy nazwa się powtarza, i tak nic nie rozróżnia — pokazujemy wtedy sam
+      // identyfikator (bez prefiksu dostawcy), bo to on jest tu informacją.
+      else label = nameCount[info.nazwa] > 1 ? short : info.nazwa;
+      return `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+    };
     selectEl.innerHTML =
       `<option value="">${t('set.selectModel')}</option>`
       + (described.length ? `<optgroup label="${t('model.known')}">`

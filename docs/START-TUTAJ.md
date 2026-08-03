@@ -655,6 +655,18 @@ cd /d D:\Cosmos
 git pull
 ```
 
+> ⚠️ **„Your local changes to the following files would be overwritten by merge"**
+> — Git odmawia, bo któryś plik w folderze różni się od wersji z repozytorium.
+> Najczęstsza przyczyna: pobranie pojedynczego pliku przez `curl` (patrz niżej)
+> zamiast aktualizacji Gitem. Jeśli **nie wprowadzałeś własnych zmian w kodzie**,
+> wyrzuć lokalne wersje i pobierz czyste:
+> ```
+> git checkout -- senses/
+> git pull
+> ```
+> Chcesz najpierw zobaczyć, co się różni? `git diff --stat`. A jeśli jednak coś
+> swojego tam masz — `git stash`, potem `git pull`, potem `git stash pop`.
+
 **Nie masz Gita** — dwie możliwości.
 
 *Jednorazowo zainstaluj Gita* (potem wystarczy `git pull`): pobierz z
@@ -667,6 +679,9 @@ trzeba instalować. Podmień `ADRES-REPO` na swój (`https://raw.githubuserconte
 cd /d D:\Cosmos\senses
 curl -L -o service.py ADRES-REPO/senses/service.py
 ```
+> To rozwiązanie doraźne: pobrany plik przestaje zgadzać się z Gitem i **następny
+> `git pull` odmówi działania** (patrz ostrzeżenie wyżej). Jeśli aktualizujesz
+> częściej niż raz, zainstaluj Gita — wyjdzie taniej.
 
 > ⚠️ **Po aktualizacji serwera odśwież stronę z pominięciem pamięci podręcznej**
 > (`Ctrl+F5` na komputerze). W aplikacji PWA na telefonie zamknij ją całkowicie
@@ -1008,6 +1023,15 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | Nad odpowiedzią widać „🧠 Myślę…" i długo nic więcej | Tak działa model rozumujący: najpierw myśli, potem pisze. Wcześniej ten czas wyglądał na zawieszenie, bo ekran był pusty. Kliknij blok, żeby zobaczyć tok myślenia |
 | „(pusta odpowiedź modelu)" | Model rozumujący zużył cały budżet na myślenie i nie zdążył napisać odpowiedzi. Zwiększ **Maks. tokenów odpowiedzi** (np. na 4096) albo wybierz szybszy model. Cosmos pokaże wtedy przynajmniej tok myślenia zamiast pustki |
 | Model szuka w internecie w kółko i nic nie znajduje | Serwer pobiera teraz treść dwóch pierwszych stron z wyników, nie same linki, a po wyczerpaniu limitu rund każe modelowi odpowiedzieć tym, co ma. Jeśli wciąż się to zdarza, strona źródłowa najpewniej ładuje dane skryptem — poproś o konkretne źródło |
+| Kliknięcie w grafikę w rozmowie nic nie robi | Naprawione — obraz otwiera się na pełnym ekranie, z przyciskiem pobierania. Zamykasz Escape'em, krzyżykiem albo kliknięciem w tło |
+| „Użyj jako pierwsza klatka wideo" nie zapisuje się | Naprawione. Wybór przepadał po pierwszym otwarciu Studia; teraz jest trwały, a wybrany obraz ma w Galerii podświetlony przycisk 🎬 |
+| „Upscale niedostępny — pip install realesrgan basicsr" | To nie błąd, tylko brakujący dodatek. Zainstaluj go **na komputerze ze zmysłami**: `pip install realesrgan basicsr` w folderze `senses` z aktywnym `(.venv)`, potem uruchom `service.py` na nowo |
+| Linki ze źródeł prowadzą do „Oops, there was an error" na duckduckgo.com | To były reklamy wyszukiwarki, nie prawdziwe wyniki. Po aktualizacji Cosmos je odrzuca i nie podaje jako źródeł |
+| Dyktowanie urywa się w połowie zdania | Naprawione. Chrome kończył sesję rozpoznawania po pauzie w mówieniu, a Cosmos to akceptował. Teraz nasłuch wznawia się sam, aż klikniesz mikrofon ponownie |
+| „Rozpoznawanie mowy nie powiodło się: Unexpected token 'I'…" | Usługa zmysłów zwróciła błąd zwykłym tekstem. Sprawdź okno z `python service.py` — tam jest prawdziwa przyczyna. Po aktualizacji Cosmos pokazuje ją wprost zamiast komunikatu o JSON-ie |
+| Dyktowanie nie działa, w oknie zmysłów `Library cublas64_12.dll is not found` | Whisper próbował liczyć na karcie graficznej bez bibliotek CUDA. Po aktualizacji sam przechodzi na procesor (wolniej, ale działa). Chcesz GPU? Doinstaluj cuBLAS i cuDNN dla CUDA 12 albo ustaw `WHISPER_DEVICE=cpu` w `.env`, żeby nie próbował |
+| Czytanie na głos urywa się w połowie | Naprawione. Chrome przerywa mowę po kilkunastu sekundach — Cosmos czyta teraz zdaniami, jedno po drugim |
+| W oknie zmysłów `wave.Error: # channels not specified` przy czytaniu | Nowy Piper zmienił API i stary sposób zapisu dawał pusty plik. Zaktualizuj zmysły |
 | Streszczenie rozmowy nic nie zwraca | Naprawione — było tą samą przyczyną co puste odpowiedzi. Zaktualizuj Cosmosa (`git pull` + restart) |
 | Lista mikrofonów w Ustawieniach jest pusta | To samo ograniczenie co przy kamerze: przeglądarka pokazuje urządzenia dopiero po HTTPS albo na `localhost`. Po wejściu przez `https://` kliknij „Odśwież" obok listy |
 | Mikrofon z listy przestał działać (odłączone słuchawki) | Cosmos sam wróci do domyślnego mikrofonu przy pierwszym nagraniu. Żeby wybrać nowy — Ustawienia → „Odśwież" |
