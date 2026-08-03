@@ -1399,7 +1399,7 @@ async function polishPrompt() {
     const res = await fetch('/api/polish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Cosmos-Lang': getLang() },
-      body: JSON.stringify({ text: raw, endpoint }),
+      body: JSON.stringify({ text: raw, endpoint, model: currentModel() || undefined }),
     });
     const data = await readJsonSafe(res);
     if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
@@ -3270,7 +3270,7 @@ $('summarize-btn').addEventListener('click', async () => {
   try {
     const res = await fetch('/api/summarize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, endpoint }),
+      body: JSON.stringify({ text, endpoint, model: currentModel() || undefined }),
     });
     const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);

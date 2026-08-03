@@ -236,6 +236,40 @@ Nie planowana z góry — wynikła z używania Cosmosa na Androidzie i z Kinecte
 - [x] **Panel boczny na telefonie** — stopka ze scrollem, lista rozmów z
       gwarantowanym minimum, przyciski rozmowy widoczne bez najechania
 
+## ✅ Partia 13 — naprawy z realnego użycia (GOTOWE)
+
+Wszystkie z konkretnego zgłoszenia albo z logu usługi zmysłów — żadna nie była
+planowana z góry.
+
+- [x] **Głos Pipera** — nowe API (1.3+) zwraca generator zamiast pisać do pliku
+      wave; obsłużone trzy warianty API, bo wersje różnią się nieodwracalnie
+- [x] **Whisper bez bibliotek CUDA** — przejście na procesor w miejscu, w którym
+      błąd naprawdę wypada (pierwsze przeliczenie), nie przy ładowaniu modelu
+- [x] **Błędy zmysłów jako JSON** — Starlette oddawał „Internal Server Error"
+      zwykłym tekstem, a przeglądarka pokazywała komunikat o składni JSON
+- [x] **Dyktowanie bez urywania** — Chrome kończy sesję po pauzie w mówieniu;
+      nasłuch wznawia się aż do kliknięcia „stop"
+- [x] **Czytanie długiego tekstu** — Chrome przerywa mowę po kilkunastu sekundach,
+      więc tekst jest cięty po zdaniach i czytany kawałek po kawałku
+- [x] **Kamera przód/tył** — `facingMode: exact`, bo `ideal` przeglądarka
+      może zignorować; awaryjnie wybór drugiej kamery z listy urządzeń
+- [x] **Panel boczny na telefonie** — jeden obszar przewijania zamiast dwóch
+- [x] **Lista modeli na telefonie** — krótkie etykiety, identyfikator tylko tam,
+      gdzie nazwy się powtarzają
+- [x] **Reklamy wyszukiwarki odrzucane** — `duckduckgo.com/y.js?ad_domain=…`
+      trafiały do odpowiedzi jako źródła i kończyły się stroną błędu
+- [x] **Podgląd obrazu** — pełny ekran z pobieraniem, otwierany kliknięciem
+- [x] **Pierwsza klatka wideo** — wybór trwały, wcześniej znikał po pierwszym
+      otwarciu Studia
+- [x] **Licznik czekania** — model rozumujący potrafi milczeć kilkadziesiąt
+      sekund, a pusty dymek wyglądał jak zawieszenie
+- [x] **Klikalne gołe adresy** — źródła podawane bez składni markdown
+- [x] **Odczyt odpowiedzi modelu** — strumień mimo `stream: false` i sklejone
+      obiekty JSON; przy nieczytelnej odpowiedzi widać jej początek i status
+- [x] **Model z Ustawień w funkcjach pomocniczych** — dopracowanie promptu
+      i streszczenie szły do modelu z `.env`, nie do wybranego; przy nieaktualnym
+      wpisie dawało to 404, choć sam czat działał
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
