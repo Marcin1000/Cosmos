@@ -33,6 +33,24 @@ import uvicorn
 
 app = FastAPI(title="Cosmos Senses")
 
+
+@app.exception_handler(Exception)
+async def any_error_as_json(request: Request, exc: Exception):
+    """Każdy nieprzewidziany błąd wraca jako JSON.
+
+    Domyślnie Starlette oddaje przy wyjątku zwykły tekst „Internal Server
+    Error”. Przeglądarka próbuje czytać go jako JSON i pokazuje użytkownikowi
+    „Unexpected token 'I' … is not valid JSON” — komunikat, z którego nie
+    wynika absolutnie nic. Tutaj oddajemy typ i treść wyjątku, żeby w Cosmosie
+    było widać prawdziwą przyczynę, a pełny ślad zostaje w oknie usługi.
+    """
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        {"error": f"{type(exc).__name__}: {exc}", "gdzie": request.url.path},
+        status_code=500,
+    )
+
 # ---------------------------------------------------------------------------
 # Wykrywanie dostępnych zmysłów (leniwa inicjalizacja modeli)
 # ---------------------------------------------------------------------------
@@ -91,18 +109,44 @@ _yolo_model = None
 _embed_model = None
 
 
+def _load_whisper(device: str):
+    from faster_whisper import WhisperModel
+    name = os.environ.get("WHISPER_MODEL", "small")
+    compute = "int8" if device == "cpu" else "float16"
+    return WhisperModel(name, device=device, compute_type=compute)
+
+
 def get_whisper():
     global _whisper_model
     if _whisper_model is None:
-        from faster_whisper import WhisperModel
-        name = os.environ.get("WHISPER_MODEL", "small")
         device = os.environ.get("WHISPER_DEVICE", "auto")
-        compute = "float16" if device != "cpu" else "int8"
         try:
-            _whisper_model = WhisperModel(name, device=device, compute_type=compute)
+            _whisper_model = _load_whisper(device)
         except Exception:
-            _whisper_model = WhisperModel(name, device="cpu", compute_type="int8")
+            _whisper_model = _load_whisper("cpu")
     return _whisper_model
+
+
+def whisper_to_cpu():
+    """Przełącz Whispera na procesor i zwróć nowy model.
+
+    Samo utworzenie modelu z device="auto" udaje się nawet bez bibliotek CUDA —
+    CTranslate2 sięga po nie dopiero przy pierwszym przeliczeniu. Dlatego
+    zabezpieczenie przy ładowaniu nic nie dawało: proces wywracał się w środku
+    transkrypcji na „Library cublas64_12.dll is not found”. Ten przełącznik
+    wołamy właśnie wtedy — raz, i zostajemy na procesorze do restartu usługi.
+    """
+    global _whisper_model
+    _whisper_model = _load_whisper("cpu")
+    return _whisper_model
+
+
+# Rozpoznajemy po treści: brakująca biblioteka CUDA/cuDNN, nie błąd samego audio.
+def _is_cuda_runtime_error(e: Exception) -> bool:
+    msg = str(e).lower()
+    return any(k in msg for k in
+               ("cublas", "cudnn", "cudart", "cuda driver", "no kernel image",
+                "libcublas", "cuda runtime", "cuda_error"))
 
 
 def get_piper():
@@ -111,6 +155,79 @@ def get_piper():
         from piper import PiperVoice
         _piper_voice = PiperVoice.load(os.environ["PIPER_VOICE"])
     return _piper_voice
+
+
+def piper_wav(voice, text: str) -> bytes:
+    """Zsyntezuj mowę do gotowego pliku WAV — niezależnie od wersji Pipera.
+
+    Piper zmienił API. Do 1.2 `synthesize(text, wav_file)` zapisywał wprost do
+    otwartego pliku wave. Od 1.3 `synthesize(text)` zwraca GENERATOR kawałków
+    dźwięku, a stara postać jest nieobsługiwana. Wywołanie generatora bez
+    iterowania po nim nie robi nic: plik wave zostawał bez parametrów i bez
+    danych, a zamknięcie go rzucało „# channels not specified”. Tak właśnie
+    padało czytanie na głos.
+
+    Kolejność prób: `synthesize_wav` (jawne API 1.3), potem generator kawałków,
+    na końcu stara sygnatura.
+    """
+    import wave
+
+    def open_wav(buf, rate, width, channels):
+        w = wave.open(buf, "wb")
+        w.setnchannels(channels)
+        w.setsampwidth(width)
+        w.setframerate(rate)
+        return w
+
+    # 1.3+: gotowa metoda zapisu do pliku wave
+    if hasattr(voice, "synthesize_wav"):
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            voice.synthesize_wav(text, w)
+        return buf.getvalue()
+
+    try:
+        result = voice.synthesize(text)
+    except TypeError:
+        # ≤1.2: sygnatura wymaga otwartego pliku wave jako drugiego argumentu
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            voice.synthesize(text, w)
+        return buf.getvalue()
+
+    # 1.3+: generator kawałków dźwięku
+    if hasattr(result, "__iter__") and not isinstance(result, (bytes, bytearray)):
+        buf = io.BytesIO()
+        w = None
+        try:
+            for chunk in result:
+                raw = (getattr(chunk, "audio_int16_bytes", None)
+                       or getattr(chunk, "audio_int16_array", None))
+                if raw is None and isinstance(chunk, (bytes, bytearray)):
+                    raw = chunk
+                if raw is None:
+                    continue
+                if hasattr(raw, "tobytes"):
+                    raw = raw.tobytes()
+                if w is None:
+                    w = open_wav(buf,
+                                 getattr(chunk, "sample_rate", 22050),
+                                 getattr(chunk, "sample_width", 2),
+                                 getattr(chunk, "sample_channels", 1))
+                w.writeframes(raw)
+        finally:
+            if w is not None:
+                w.close()
+        return buf.getvalue() if w is not None else b""
+
+    if isinstance(result, (bytes, bytearray)):
+        return bytes(result)
+
+    # ≤1.2: zapis wprost do otwartego pliku wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        voice.synthesize(text, w)
+    return buf.getvalue()
 
 
 def get_yolo():
@@ -168,8 +285,20 @@ async def stt(request: Request):
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio)
         tmp = f.name
+    lang = os.environ.get("WHISPER_LANG") or None
     try:
-        segments, info = get_whisper().transcribe(tmp, language=os.environ.get("WHISPER_LANG") or None, vad_filter=True)
+        # `transcribe` zwraca leniwy generator — lista wymusza przeliczenie
+        # TERAZ, wewnątrz try. Inaczej błąd CUDA wypadłby dopiero przy
+        # składaniu tekstu, poza zasięgiem tego zabezpieczenia.
+        try:
+            segments, info = get_whisper().transcribe(tmp, language=lang, vad_filter=True)
+            segments = list(segments)
+        except Exception as e:
+            if not _is_cuda_runtime_error(e):
+                raise
+            print(f"  ⚠ Whisper: brak bibliotek CUDA ({e}). Przechodzę na procesor.", flush=True)
+            segments, info = whisper_to_cpu().transcribe(tmp, language=lang, vad_filter=True)
+            segments = list(segments)
         text = " ".join(s.text.strip() for s in segments).strip()
         return {"text": text, "language": info.language}
     finally:
@@ -188,11 +317,13 @@ async def tts(request: Request):
     text = (payload.get("text") or "").strip()
     if not text:
         return JSONResponse({"error": "Puste pole text."}, status_code=400)
-    import wave
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_file:
-        get_piper().synthesize(text, wav_file)
-    return Response(content=buf.getvalue(), media_type="audio/wav")
+    try:
+        data = piper_wav(get_piper(), text)
+    except Exception as e:
+        return JSONResponse({"error": f"Piper nie zsyntezował mowy: {e}"}, status_code=500)
+    if not data:
+        return JSONResponse({"error": "Piper zwrócił pustą próbkę dźwięku."}, status_code=500)
+    return Response(content=data, media_type="audio/wav")
 
 
 @app.post("/detect")

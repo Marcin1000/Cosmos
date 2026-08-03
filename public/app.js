@@ -1389,6 +1389,23 @@ let currentAudio = null;
 
 // Zwraca Promise kończącą się wraz z końcem mówienia —
 // tryb głosowy czeka, zanim znów zacznie słuchać (brak sprzężenia).
+/** Odczytaj odpowiedź jako JSON, nie wywracając się na tym, co JSON-em nie jest.
+ *
+ * Gdy usługa zmysłów rzuci wyjątkiem, serwer potrafi oddać zwykły tekst
+ * „Internal Server Error”. `res.json()` mówił wtedy „Unexpected token 'I' …
+ * is not valid JSON” — komunikat, z którego użytkownik nie dowiaduje się
+ * niczego o prawdziwej przyczynie. Tutaj oddajemy treść odpowiedzi.
+ */
+async function readJsonSafe(res) {
+  const body = await res.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    const short = body.trim().slice(0, 200) || `HTTP ${res.status}`;
+    return { error: `HTTP ${res.status} — ${short}` };
+  }
+}
+
 async function speakText(text) {
   const clean = stripForSpeech(text);
   if (!clean) return;
@@ -1417,20 +1434,56 @@ async function speakText(text) {
 
   // 2. Głos systemowy przeglądarki
   if ('speechSynthesis' in window) {
-    await new Promise((resolve) => {
-      const u = new SpeechSynthesisUtterance(clean);
-      u.lang = t('speechLang');
-      const langPrefix = t('speechLang').slice(0, 2);
-      const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
-      if (voice) u.voice = voice;
-      u.onend = resolve;
-      u.onerror = resolve;
-      speechSynthesis.speak(u);
-    });
+    const langPrefix = t('speechLang').slice(0, 2);
+    const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
+    speakSerial = {};                 // znacznik tej wypowiedzi
+    const mine = speakSerial;
+    for (const part of splitForSpeech(clean)) {
+      if (speakSerial !== mine) return;   // ktoś przerwał albo zaczął nową
+      await new Promise((resolve) => {
+        const u = new SpeechSynthesisUtterance(part);
+        u.lang = t('speechLang');
+        if (voice) u.voice = voice;
+        u.onend = resolve;
+        u.onerror = resolve;
+        speechSynthesis.speak(u);
+      });
+    }
   }
 }
 
+// Znacznik trwającej wypowiedzi — po przerwaniu kolejne kawałki mają nie ruszyć.
+let speakSerial = null;
+
+/** Potnij tekst na kawałki mieszczące się w jednej wypowiedzi.
+ *
+ * Chrome przerywa `speechSynthesis` po kilkunastu sekundach i reszta zdania
+ * przepada — dlatego czytanie na głos urywało się w połowie. Tniemy po
+ * granicach zdań, a bardzo długie zdania po przecinkach i spacjach, żeby nigdy
+ * nie rozerwać słowa.
+ */
+function splitForSpeech(text, max = 180) {
+  const out = [];
+  // podział po końcach zdań, z zachowaniem znaku interpunkcyjnego
+  for (let piece of String(text).split(/(?<=[.!?…])\s+|\n+/)) {
+    piece = piece.trim();
+    if (!piece) continue;
+    while (piece.length > max) {
+      const window = piece.slice(0, max);
+      // najpierw przecinek, potem ostatnia spacja, w ostateczności twarde cięcie
+      let cut = Math.max(window.lastIndexOf(', '), window.lastIndexOf('; '));
+      if (cut < max * 0.5) cut = window.lastIndexOf(' ');
+      if (cut <= 0) cut = max;
+      out.push(piece.slice(0, cut + 1).trim());
+      piece = piece.slice(cut + 1).trim();
+    }
+    if (piece) out.push(piece);
+  }
+  return out.length ? out : [String(text)];
+}
+
 function stopSpeaking() {
+  speakSerial = null;                 // zatrzymaj kolejne kawałki wypowiedzi
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
@@ -1513,7 +1566,7 @@ async function startWhisperRecording() {
         headers: { 'Content-Type': blob.type },
         body: blob,
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       if (data.text) {
         el.input.value = (el.input.value ? el.input.value + ' ' : '') + data.text;
@@ -1537,28 +1590,72 @@ function startBrowserRecognition() {
     alert(t('dictNoStt'));
     return;
   }
-  speechRec = new SR();
-  speechRec.lang = t('speechLang');
-  speechRec.interimResults = false;
-  speechRec.continuous = true;
-  speechRec.onresult = (e) => {
-    const text = [...e.results].slice(e.resultIndex).map((r) => r[0].transcript).join(' ').trim();
-    if (text) {
-      el.input.value = (el.input.value ? el.input.value + ' ' : '') + text;
-      autosizeInput();
-      updateSendButton();
-    }
+  // Chrome kończy sesję rozpoznawania sam — po pauzie w mówieniu i najpóźniej
+  // po ~60 s — mimo `continuous = true`. Wcześniej gasiliśmy wtedy nagrywanie
+  // i dyktowanie urywało się w połowie zdania. Teraz wznawiamy je tak długo,
+  // aż użytkownik sam kliknie „stop”.
+  dictationWanted = true;
+
+  const makeRec = () => {
+    const rec = new SR();
+    rec.lang = t('speechLang');
+    rec.interimResults = true;      // widać, że słucha, zanim padnie wynik
+    rec.continuous = true;
+
+    rec.onresult = (e) => {
+      let finalText = '';
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (finalText.trim()) {
+        el.input.value = (el.input.value ? el.input.value + ' ' : '') + finalText.trim();
+        autosizeInput();
+        updateSendButton();
+      }
+      el.input.placeholder = interim.trim() || t('chat.listening');
+    };
+
+    rec.onend = () => {
+      if (!dictationWanted) { setRecordingUI(false); el.input.placeholder = t('inputPh'); return; }
+      // krótka przerwa, bo natychmiastowy start bywa odrzucany
+      setTimeout(() => {
+        if (!dictationWanted) return;
+        try { speechRec = makeRec(); speechRec.start(); } catch { /* już wystartował */ }
+      }, 250);
+    };
+
+    // „no-speech" i „aborted" to normalny koniec cyklu — onend wznowi nasłuch.
+    // Realny błąd (brak zgody, brak sieci) kończy dyktowanie.
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      dictationWanted = false;
+      setRecordingUI(false);
+      el.input.placeholder = t('inputPh');
+      if (e.error !== 'not-allowed') return;
+      alert(t('dictDenied'));
+    };
+    return rec;
   };
-  speechRec.onend = () => setRecordingUI(false);
-  speechRec.onerror = () => setRecordingUI(false);
+
+  speechRec = makeRec();
   speechRec.start();
   setRecordingUI(true);
+  el.input.placeholder = t('chat.listening');
 }
+
+// Czy użytkownik nadal chce dyktować (a nie: czy przeglądarka akurat słucha).
+let dictationWanted = false;
 
 el.micBtn.addEventListener('click', async () => {
   if (isRecording) {
+    dictationWanted = false;          // dopiero to kończy nasłuch na dobre
     if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
     if (speechRec) { speechRec.stop(); speechRec = null; }
+    setRecordingUI(false);
+    el.input.placeholder = t('inputPh');
     return;
   }
   stopSpeaking();
@@ -1583,9 +1680,41 @@ let cameraFacing = localStorage.getItem('cosmos.cameraFacing') || 'environment';
 
 function videoConstraints(facing) {
   // `ideal`, nie `exact` — na laptopie z jedną kamerą `exact` po prostu rzuca
-  // błędem, a chcemy wtedy dostać tę jedyną, jaka jest.
+  // błędem, a przy pierwszym otwarciu chcemy dostać tę jedyną, jaka jest.
   return { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: facing } } };
 }
+
+/** Weź strumień z konkretnego obiektywu — do PRZEŁĄCZANIA, nie do otwierania.
+ *
+ * Przy `ideal` przeglądarka ma prawo prośbę zignorować i oddać kamerę, która
+ * już działa — i właśnie dlatego przełącznik przód/tył nic nie robił. Do zmiany
+ * obiektywu trzeba `exact`. Gdyby telefon nie znał `facingMode` (zdarza się przy
+ * kamerach zewnętrznych i na desktopie), wybieramy kolejne urządzenie z listy.
+ */
+async function getMediaFacing(facing) {
+  try {
+    return await getMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 },
+      facingMode: { exact: facing } } });
+  } catch (err) {
+    if (err && err.name === 'NotAllowedError') throw err;
+    const devs = (await navigator.mediaDevices.enumerateDevices())
+      .filter((d) => d.kind === 'videoinput');
+    if (devs.length < 2) throw err;
+    // po etykiecie, a gdy jej brak (bez zgody) — po prostu następne urządzenie
+    const wantBack = facing === 'environment';
+    const byLabel = devs.find((d) => {
+      const l = (d.label || '').toLowerCase();
+      return wantBack ? /back|rear|tyl|tył|environment/.test(l)
+                      : /front|przod|przód|user|face/.test(l);
+    });
+    const pick = byLabel || devs[(devs.findIndex((d) => d.deviceId === currentCameraId) + 1) % devs.length];
+    currentCameraId = pick.deviceId;
+    return await getMedia({ video: { deviceId: { exact: pick.deviceId },
+      width: { ideal: 1280 }, height: { ideal: 720 } } });
+  }
+}
+
+let currentCameraId = '';
 
 /** Czy urządzenie ma więcej niż jedną kamerę — tylko wtedy przełącznik ma sens. */
 async function hasMultipleCameras() {
@@ -1615,7 +1744,7 @@ async function flipCamera() {
   try {
     // Stary strumień zwalniamy dopiero po udanym otwarciu nowego — inaczej
     // przy odmowie zostalibyśmy z czarnym oknem i bez obrazu.
-    stream = await getMedia(videoConstraints(next));
+    stream = await getMediaFacing(next);
   } catch (err) {
     alert(`${t('cam.flipErr')} ${err.message}`);
     return;
@@ -2116,7 +2245,7 @@ $('live-flip').addEventListener('click', async () => {
   const next = cameraFacing === 'environment' ? 'user' : 'environment';
   let stream;
   try {
-    stream = await getMedia(videoConstraints(next));
+    stream = await getMediaFacing(next);
   } catch (err) {
     $('live-status').textContent = `${t('cam.err')} ${err.message}`;
     return;
@@ -3508,10 +3637,30 @@ async function fetchModelsInto(epName, selectEl, btn) {
       const info = typeof modelInfo === 'function' ? modelInfo(m) : null;
       (info && !info.zgadywane ? described : rest).push([m, info]);
     }
-    const option = ([m, info]) =>
-      `<option value="${escapeHtml(m)}">${escapeHtml(m)}`
-      + (info && !info.zgadywane ? ` — ${escapeHtml(info.nazwa)}` : '')
-      + '</option>';
+    // Natywny wybierak Androida to lista na cały ekran, w której każda pozycja
+    // zawija się na tyle wierszy, ile trzeba. Pełny identyfikator PLUS nazwa
+    // dawały po trzy wiersze na model i listę nie do przejrzenia. Na wąskim
+    // ekranie pokazujemy więc samą nazwę (identyfikator i tak siedzi w value
+    // i ląduje w polu tekstowym po wyborze).
+    const narrow = window.matchMedia('(max-width: 720px)').matches;
+    // Kilka różnych modeli może trafić na ten sam opis w katalogu („Lokalny
+    // model wizyjny"). Sama nazwa byłaby wtedy nie do rozróżnienia, więc
+    // policzmy powtórzenia i przy nich dołóżmy końcówkę identyfikatora.
+    const nameCount = {};
+    for (const [, info] of [...described, ...rest]) {
+      if (info && !info.zgadywane) nameCount[info.nazwa] = (nameCount[info.nazwa] || 0) + 1;
+    }
+    const option = ([m, info]) => {
+      const named = info && !info.zgadywane;
+      const short = m.split('/').pop();
+      let label;
+      if (!named) label = narrow ? short : m;
+      else if (!narrow) label = `${m} — ${info.nazwa}`;
+      // Gdy nazwa się powtarza, i tak nic nie rozróżnia — pokazujemy wtedy sam
+      // identyfikator (bez prefiksu dostawcy), bo to on jest tu informacją.
+      else label = nameCount[info.nazwa] > 1 ? short : info.nazwa;
+      return `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+    };
     selectEl.innerHTML =
       `<option value="">${t('set.selectModel')}</option>`
       + (described.length ? `<optgroup label="${t('model.known')}">`

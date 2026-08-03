@@ -361,6 +361,8 @@ const I18N = {
     'chat.imageErrVoice': 'Nie udało się wygenerować obrazu.',
     'chat.searchResults': '🔍 Wyniki wyszukiwania: „{q}"',
     'chat.dictating': 'Rozpoznawanie mowy…',
+    'chat.listening': 'Słucham — mów, a potem kliknij mikrofon…',
+    'dictDenied': 'Brak zgody na mikrofon. Zezwól na dostęp w ustawieniach przeglądarki.',
     'chat.sttErr': 'Rozpoznawanie mowy nie powiodło się:\n{msg}',
     'chat.modelNotSet': 'model nieustawiony',
 
@@ -836,6 +838,8 @@ const I18N = {
     'chat.imageErrVoice': 'Failed to generate the image.',
     'chat.searchResults': '🔍 Search results: “{q}”',
     'chat.dictating': 'Recognizing speech…',
+    'chat.listening': 'Listening — speak, then tap the microphone…',
+    'dictDenied': 'Microphone permission denied. Allow access in the browser settings.',
     'chat.sttErr': 'Speech recognition failed:\n{msg}',
     'chat.modelNotSet': 'model not set',
 

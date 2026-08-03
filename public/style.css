@@ -198,7 +198,16 @@ kbd {
 }
 .conv-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 
-.conversations { flex: 1; overflow-y: auto; padding: 0 10px; }
+/* Na pulpicie ta warstwa nic nie zmienia: lista rozmów przewija się sama,
+   a stopka zostaje przypięta na dole. Dopiero na telefonie (patrz sekcja
+   MOBILE) przejmuje przewijanie całości, żeby nie było dwóch suwaków. */
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.conversations { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px; }
 
 .conv-pin-mark { color: var(--accent); flex-shrink: 0; margin-left: 8px; display: flex; }
 .conv-pin-mark svg { width: 12px; height: 12px; }
@@ -1587,22 +1596,38 @@ kbd {
   .sidebar.collapsed { margin-left: -288px; }
   #expand-btn { display: inline-flex; }
 
-  /* Osiem pozycji stopki plus pasek stanu to na telefonie prawie cały ekran —
-     na historię rozmów zostawał jeden wiersz. Stopka dostaje więc własny
-     scroll i najwyżej połowę wysokości, a lista rozmów gwarantowane minimum. */
   /* Druga siatka bezpieczeństwa dla przycisków rozmowy: nie każda przeglądarka
      mobilna raportuje `hover: none`, a na wąskim ekranie i tak nie ma myszy. */
   .conv-item .conv-action,
   .conv-item .conv-delete { display: inline-flex; }
 
-  .conversations { min-height: 34vh; }
-  .sidebar-footer {
-    max-height: 46vh;
-    overflow-y: auto;
-    flex-shrink: 0;
-    padding: 8px 14px;
+  /* JEDEN obszar przewijania, nie dwa.
+     Poprzednia wersja dawała własny scroll i liście rozmów, i stopce — przez to
+     lista urywała się w pół wiersza, były dwa suwaki obok siebie, a pasek stanu
+     był przycięty tak, że „Zmysły” w ogóle nie było widać. Teraz przewija się
+     cała zawartość naraz: rozmowy, menu i status jedno pod drugim. */
+  .sidebar > .conversations,
+  .sidebar > .sidebar-footer {
+    flex: none;
+    overflow: visible;
+    max-height: none;
   }
-  .footer-btn { padding: 7px 10px; }
+  .sidebar-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-scroll > .conversations,
+  .sidebar-scroll > .sidebar-footer {
+    flex: none;
+    overflow: visible;
+    max-height: none;
+  }
+  .sidebar-footer { padding: 8px 14px 16px; }
+  .footer-btn { padding: 8px 10px; }
 
   /* Panel boczny nakłada się na czat, więc tło musi zgasnąć — inaczej obie
      warstwy czyta się naraz. Dotknięcie przyciemnienia zamyka panel. */

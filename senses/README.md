@@ -17,8 +17,8 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 
 | Moduł / zmysł | Stan | Uwaga |
 |---|---|---|
-| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości |
-| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej |
+| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości; przy braku bibliotek CUDA sam przechodzi na procesor |
+| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej; obsługiwane API Pipera ≤1.2 i 1.3+ |
 | Wzrok — `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
 | Pamięć — `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
 | Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy |
@@ -65,6 +65,9 @@ Albo **wybiórczo**, tylko te zmysły, których chcesz (każdy jest niezależny)
 ```bash
 pip install fastapi uvicorn python-multipart          # rdzeń — WYMAGANY
 pip install faster-whisper                            # + słuch (rozpoznawanie mowy)
+#   uwaga: na GPU wymaga bibliotek CUDA 12 (cuBLAS + cuDNN). Bez nich usługa
+#   sama przechodzi na procesor — wolniej, ale bez błędu. Możesz też wymusić
+#   procesor od razu:  set WHISPER_DEVICE=cpu
 pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
 pip install mediapipe                                 # + sylwetka i gesty
