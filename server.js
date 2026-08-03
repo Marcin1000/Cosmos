@@ -2368,6 +2368,71 @@ async function fireflyGenerateImage(prompt, size) {
 }
 
 // Niestreamowane wywołanie modelu (Storyboard, streszczenia itp.)
+/** Odczytaj odpowiedź modelu, nawet gdy nie jest czystym JSON-em.
+ *
+ * `stream: false` bywa zignorowane: bramka potrafi oddać strumień zdarzeń
+ * (`data: {…}` w wielu liniach) albo kilka obiektów JSON jeden po drugim.
+ * `JSON.parse` mówi wtedy „Unexpected non-whitespace character after JSON at
+ * position 4” — komunikat, który trafiał wprost do użytkownika i nie mówił nic
+ * o prawdziwej przyczynie. Tutaj składamy taką odpowiedź w jedną całość,
+ * a gdy się nie da — rzucamy błąd z kawałkiem tego, co faktycznie przyszło.
+ */
+async function parseModelResponse(r) {
+  const body = await r.text();
+  try {
+    return JSON.parse(body);
+  } catch { /* niżej próby ratunkowe */ }
+
+  // 1. strumień zdarzeń mimo stream:false — sklej treść z kolejnych fragmentów
+  if (/^\s*data:/m.test(body)) {
+    let content = '';
+    let reasoning = '';
+    let finish = null;
+    for (const line of body.split('\n')) {
+      const m = line.match(/^\s*data:\s*(.+)$/);
+      if (!m || m[1].trim() === '[DONE]') continue;
+      try {
+        const j = JSON.parse(m[1]);
+        const c = j.choices?.[0] || {};
+        content += c.delta?.content ?? c.message?.content ?? '';
+        reasoning += c.delta?.reasoning_content ?? c.message?.reasoning_content ?? '';
+        if (c.finish_reason) finish = c.finish_reason;
+      } catch { /* niepełny fragment */ }
+    }
+    if (content || reasoning) {
+      return { choices: [{ message: { content, reasoning_content: reasoning }, finish_reason: finish }] };
+    }
+  }
+
+  // 2. kilka obiektów JSON pod rząd — weź ostatni kompletny
+  const objects = [];
+  let depth = 0; let start = -1; let inStr = false; let esc = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) start = i; depth++; continue; }
+    if (ch === '}') {
+      depth--;
+      if (depth === 0 && start >= 0) { objects.push(body.slice(start, i + 1)); start = -1; }
+    }
+  }
+  for (let i = objects.length - 1; i >= 0; i--) {
+    try {
+      const j = JSON.parse(objects[i]);
+      if (j.choices || j.error) return j;
+    } catch { /* próbuj wcześniejszy */ }
+  }
+
+  throw new Error(`Model oddał odpowiedź, której nie da się odczytać (HTTP ${r.status}). `
+    + `Początek: ${body.trim().slice(0, 200) || '(pusto)'}`);
+}
+
 async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = {}) {
   const ep = pickEndpoint(endpoint);
   const model = ep.model;
@@ -2380,7 +2445,7 @@ async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = 
     body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: maxTokens, stream: false }),
     signal: AbortSignal.timeout(120000),
   });
-  const d = await r.json();
+  const d = await parseModelResponse(r);
   if (!r.ok) throw new Error(d.error?.message || d.error || `HTTP ${r.status}`);
   const msg = d.choices?.[0]?.message || {};
   const text = (msg.content || '').trim();

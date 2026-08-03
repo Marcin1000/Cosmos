@@ -1290,7 +1290,7 @@ async function runGeneration(conv) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt }),
           });
-          const d = await r.json();
+          const d = await readJsonSafe(r);
           if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
           conv.messages.push({
             role: 'assistant',
@@ -1401,7 +1401,7 @@ async function polishPrompt() {
       headers: { 'Content-Type': 'application/json', 'X-Cosmos-Lang': getLang() },
       body: JSON.stringify({ text: raw, endpoint }),
     });
-    const data = await res.json();
+    const data = await readJsonSafe(res);
     if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
     polishPrevious = raw;
     el.input.value = data.text;
@@ -1978,7 +1978,7 @@ $('studio-image-go').addEventListener('click', async () => {
         provider: $('studio-image-provider').value || undefined,
       }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
     const imgs = (d.items || [{ item: d.item, url: d.url }])
       .map((r) => `<img src="${escapeHtml(r.url)}" alt="wygenerowany obraz">`).join('');
@@ -2028,7 +2028,7 @@ $('studio-sb-go').addEventListener('click', async () => {
         size: $('studio-image-size').value, provider: $('studio-image-provider').value || undefined,
       }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
     studioOut('sb', d.frames.map((f) =>
       `<div class="sb-frame"><span class="sb-num">${f.shot}</span><img src="${escapeHtml(f.url)}" title="${escapeHtml(f.prompt)}"></div>`).join(''));
@@ -2110,7 +2110,7 @@ $('studio-edit-go').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageId: editState.imageId, prompt, mask: mask.toDataURL('image/png') }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
     studioOut('edit', `<img src="${escapeHtml(d.url)}">` + studioNote(d.item, d.exported));
   } catch (err) {
@@ -2289,7 +2289,7 @@ async function liveDetect() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7) }),
     });
-    data = await res.json();
+    data = await readJsonSafe(res);
     if (!res.ok) throw new Error(data.error || 'detect');
   } catch { return; }
 
@@ -2505,7 +2505,7 @@ async function renderGallery() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: b.dataset.up }),
       });
-      const d = await r.json();
+      const d = await readJsonSafe(r);
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       renderGallery();
     } catch (err) {
@@ -2546,7 +2546,7 @@ $('studio-speech-go').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voiceId: $('studio-speech-voice').value.trim() || undefined }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
     studioOut('speech', `<audio controls src="${escapeHtml(d.url)}"></audio>` + studioNote(d.item, d.exported));
   } catch (err) {
@@ -2573,7 +2573,7 @@ $('studio-video-go').addEventListener('click', async () => {
         lastFrameId: $('studio-video-last').value || undefined,
       }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
 
     const started = Date.now();
@@ -2738,7 +2738,7 @@ async function kbUploadFiles(files) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: file.name, mime: file.type, data: await fileToBase64(file) }),
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     } catch (err) {
       alert(t('kb.addErr', { name: file.name }) + '\n' + err.message);
@@ -2759,7 +2759,7 @@ async function kbAddLink() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json();
+    const data = await readJsonSafe(res);
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     el.kbUrl.value = '';
   } catch (err) {
@@ -2811,7 +2811,7 @@ async function kbToggleRecording() {
           const res = await fetch('/api/stt', {
             method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
           });
-          const data = await res.json();
+          const data = await readJsonSafe(res);
           if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
           if (data.text) await kbSaveNote(data.text);
           else alert(t('kb.noSpeech'));
@@ -3272,7 +3272,7 @@ $('summarize-btn').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, endpoint }),
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
     conv.messages.push({ role: 'assistant', content: `**${t('summarize')}:**\n\n${d.summary}` });
     saveConversations();
@@ -3541,7 +3541,7 @@ $('dev-add').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, url, method: $('dev-method').value, body: $('dev-body').value.trim() }),
     });
-    const d = await r.json();
+    const d = await readJsonSafe(r);
     if (!r.ok) { $('dev-status').textContent = d.error || t('dev.need'); return; }
     $('dev-name').value = ''; $('dev-url').value = ''; $('dev-body').value = '';
     $('dev-status').textContent = t('dev.added');
@@ -3634,7 +3634,7 @@ $('train-start').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: $('train-model').value.trim(), ollamaName: $('train-ollama').value.trim() }),
     });
-    const d = await r.json();
+    const d = await readJsonSafe(r);
     if (!r.ok) { $('train-env').textContent = d.message || d.error || t('train.startErr'); $('train-start').disabled = false; return; }
     refreshTrainStatus();
   } catch { $('train-start').disabled = false; }
@@ -3652,7 +3652,7 @@ $('backup-file').addEventListener('change', async () => {
     const res = await fetch('/api/backup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text,
     });
-    const d = await res.json();
+    const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || '');
     alert(t('backupRestored', { n: d.restored }));
     await loadConversations();
@@ -3751,7 +3751,7 @@ async function fetchModelsInto(epName, selectEl, btn) {
   btn.textContent = t('set.fetching');
   try {
     const res = await fetch(`/api/models?endpoint=${epName}`);
-    const data = await res.json();
+    const data = await readJsonSafe(res);
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const models = (data.data || []).map((m) => m.id).sort();
     if (!models.length) throw new Error(t('set.noModels'));
@@ -4238,7 +4238,7 @@ async function runReadonly(procId, statusEl, resultsEl) {
     const r = await fetch('/api/procedures/run-readonly', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: procId }),
     });
-    const d = await r.json();
+    const d = await readJsonSafe(r);
     if (!r.ok || !d.ok) {
       if (statusEl) {
         statusEl.textContent = d.error === 'not-readonly' ? t('learn.autoNotReadonly')
@@ -4269,7 +4269,7 @@ $('rec-start').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: $('rec-url').value.trim() }),
     });
-    const d = await r.json();
+    const d = await readJsonSafe(r);
     if (!r.ok) { $('rec-status').textContent = d.message || d.error || t('rec.startErr'); return; }
     $('rec-start').style.display = 'none';
     $('rec-stop').style.display = '';
@@ -4325,7 +4325,7 @@ $('proc-save').addEventListener('click', async () => {
   if (procEditing) body.id = procEditing;
   try {
     const r = await fetch('/api/procedures', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const d = await r.json();
+    const d = await readJsonSafe(r);
     if (!r.ok) throw 0;
     if (!procEditing && d.id) procEditing = d.id;
     $('learn-proc-status').textContent = t('learn.procSaved');
