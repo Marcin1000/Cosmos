@@ -1830,7 +1830,7 @@ async function handlePolish(req, res) {
     const text = await llmComplete([
       { role: 'system', content: instruction },
       { role: 'user', content: raw },
-    ], { endpoint: pickEndpoint(data.endpoint) === ENDPOINTS.local ? 'local' : 'cloud', maxTokens: 1200 });
+    ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 1200 });
     return sendJson(res, 200, { ok: true, text: text.trim() });
   } catch (err) {
     return sendJson(res, 502, { error: 'polish-failed', message: err.message });
@@ -2433,9 +2433,17 @@ async function parseModelResponse(r) {
     + `Początek: ${body.trim().slice(0, 200) || '(pusto)'}`);
 }
 
-async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = {}) {
+async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024, model: want } = {}) {
   const ep = pickEndpoint(endpoint);
-  const model = ep.model;
+  // Model wybrany w Ustawieniach jest ważniejszy niż ten z .env — tak samo jak
+  // w czacie. Bez tego funkcje pomocnicze (dopracowanie promptu, streszczenie)
+  // strzelały do modelu, którego użytkownik nie wybrał, i przy nieaktualnym
+  // wpisie w .env dostawały 404, choć sam czat działał bez zarzutu.
+  const model = (typeof want === 'string' && want.trim()) || ep.model;
+  if (!model) {
+    throw new Error(`Nie ustawiono modelu dla „${ep.label}". Wybierz go w Ustawieniach `
+      + 'albo uzupełnij .env na serwerze.');
+  }
   if (!ep.apiKey && ep.baseUrl.includes('integrate.api.nvidia.com')) {
     throw new Error('Brak klucza API dla chmury NVIDIA.');
   }
@@ -2445,8 +2453,18 @@ async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = 
     body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: maxTokens, stream: false }),
     signal: AbortSignal.timeout(120000),
   });
-  const d = await parseModelResponse(r);
-  if (!r.ok) throw new Error(d.error?.message || d.error || `HTTP ${r.status}`);
+  let d;
+  try {
+    d = await parseModelResponse(r);
+  } catch (err) {
+    // Dopowiedz, DOKĄD poszło żądanie — bez tego „404 page not found" nie mówi,
+    // czy winny jest adres, czy identyfikator modelu.
+    throw new Error(`${err.message}  [${ep.label} · ${model}]`
+      + (r.status === 404
+        ? '\nTaki model nie istnieje pod tym adresem — sprawdź go w Ustawieniach → Pobierz listę.'
+        : ''));
+  }
+  if (!r.ok) throw new Error(`${d.error?.message || d.error || `HTTP ${r.status}`}  [${ep.label} · ${model}]`);
   const msg = d.choices?.[0]?.message || {};
   const text = (msg.content || '').trim();
   if (text) return text;
@@ -3423,7 +3441,7 @@ const server = http.createServer(async (req, res) => {
         const summary = await llmComplete([
           { role: 'system', content: 'Streść poniższą rozmowę zwięźle w punktach, w języku rozmowy. Zwróć samo streszczenie.' },
           { role: 'user', content: text },
-        ], { endpoint: data.endpoint || 'cloud', maxTokens: 600 });
+        ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 600 });
         return sendJson(res, 200, { ok: true, summary });
       } catch (err) {
         return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
