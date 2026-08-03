@@ -576,7 +576,13 @@ class Kinect:
             del rect_keep
             return data, rect.Pitch
         finally:
-            self.dll.NuiImageStreamReleaseFrame(stream, frame_p)
+            # Klatkę oddajemy tylko wtedy, gdy udało się ją zrozumieć.
+            # Jeśli nie znaleźliśmy w buforze tekstury, to znaczy, że jego układ
+            # jest inny, niż sądzimy — a wtedy ReleaseFrame czyta wskaźnik spod
+            # swojego przesunięcia i wywraca proces. Lepiej zostawić klatkę
+            # nieoddaną (pula ma kilka sztuk) niż zginąć przy sprzątaniu.
+            if self.texture_offset is not None:
+                self.dll.NuiImageStreamReleaseFrame(stream, frame_p)
 
     def color_frame(self, timeout_ms: int = 1000):
         """Obraz RGB jako tablica (wysokość × szerokość × 3) w kolejności BGR.
@@ -826,21 +832,35 @@ def cmd_dump(args) -> None:
         if hr != 0:
             sys.exit(f"\n  Nie dostałem klatki: {_hr_text(hr)}\n")
         raw = keep.raw
-        print("\n✦ Surowy bufor NUI_IMAGE_FRAME (pierwsze 96 B, po 8):\n")
-        for off in range(0, 96, 8):
+        span = 128
+        print(f"\n✦ Surowy bufor klatki — pierwsze {span} B\n")
+        print("  Bajty (po 16 w wierszu):")
+        for off in range(0, span, 16):
+            hexy = " ".join(f"{b:02X}" for b in raw[off:off + 16])
+            print(f"    +{off:<4} {hexy}")
+
+        print("\n  Jako 64-bitowe słowa:")
+        for off in range(0, span, 8):
             v = _qword(raw, off)
             mark = ""
-            if _addr_ok(v) and v % 8 == 0 and reader:
+            if v == 0xFFFFFFFFFFFFFFFF:
+                mark = "  ← same jedynki (pole niewypełnione?)"
+            elif 0 < v < 0x100000:
+                mark = "  ← mała liczba (licznik / typ / rozdzielczość?)"
+            elif _addr_ok(v) and v % 8 == 0 and reader:
                 head = reader(v, 8)
                 if head is not None and _addr_ok(_qword(head, 0)):
-                    mark = "  ← wygląda na obiekt COM (wskaźnik na teksturę?)"
-            print(f"  +{off:<3} 0x{v:016X}{mark}")
-        found = find_texture_offset(raw, reader) if reader else None
-        print(f"\n  Znalezione przesunięcie tekstury: "
-              + (f"+{found} B" if found is not None else "nie znaleziono"))
-        print("  (nasze odwzorowanie zakładało +"
-              f"{NuiImageFrame.pFrameTexture.offset} B)\n")
-        k.dll.NuiImageStreamReleaseFrame(k._depth_stream, frame_p)
+                    mark = "  ← WSKAŹNIK NA OBIEKT COM (tu jest tekstura)"
+                else:
+                    mark = "  ← wygląda na adres, ale nieczytelny"
+            print(f"    +{off:<4} 0x{v:016X}{mark}")
+
+        found = find_texture_offset(raw, reader, max_offset=span) if reader else None
+        print("\n  Znalezione przesunięcie tekstury: "
+              + (f"+{found} B" if found is not None else "NIE ZNALEZIONO"))
+        print(f"  Nasze odwzorowanie zakłada:       +{NuiImageFrame.pFrameTexture.offset} B\n")
+        # Świadomie nie oddajemy klatki: gdy nie rozumiemy układu bufora,
+        # ReleaseFrame wywraca proces — a chcemy, żeby powyższy wydruk przetrwał.
     finally:
         k.close()
 
