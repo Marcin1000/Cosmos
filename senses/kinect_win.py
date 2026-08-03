@@ -314,6 +314,22 @@ def _vtable_call(iface: int, index: int, restype, *argtypes):
     return proto(vtbl[index])
 
 
+def _out_struct(struct_type, slack: int = 512):
+    """Bufor z zapasem na strukturę, którą wypełnia sterownik.
+
+    Nagłówki SDK 1.8 odwzorowaliśmy z dokumentacji, nie z pliku na dysku.
+    Gdyby prawdziwa struktura miała choć jedno pole więcej, sterownik zapisałby
+    poza końcem naszej alokacji — a to nie jest cichy błąd, tylko uszkodzenie
+    sterty (0xC0000374) i natychmiastowa śmierć procesu, bez szansy na obsługę.
+
+    Zapas kilkuset bajtów kosztuje tyle co nic i usuwa całą tę klasę awarii:
+    cokolwiek sterownik dopisze na końcu, trafia w pamięć, która jest nasza.
+    Zwracamy `(bufor, wskaźnik)` — bufor musi żyć tak długo jak wskaźnik.
+    """
+    raw = ctypes.create_string_buffer(ctypes.sizeof(struct_type) + slack)
+    return raw, ctypes.cast(raw, POINTER(struct_type))
+
+
 def _declare(dll) -> None:
     """Opisz sygnatury funkcji SDK.
 
@@ -440,26 +456,33 @@ class Kinect:
         Ostatni kod błędu zapamiętujemy w `last_error` — bez tego „brak klatki"
         nie odróżnia czujnika, który się jeszcze rozgrzewa, od realnej awarii.
         """
-        frame = NuiImageFrame()
-        hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), byref(frame))
+        _keep, frame_p = _out_struct(NuiImageFrame)
+        hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), frame_p)
         if hr != 0:
             self.last_error = hr
             return None
+        frame = frame_p.contents
         try:
             texture = frame.pFrameTexture
-            lock = _vtable_call(texture, self.LOCK_RECT_INDEX, ctypes.HRESULT,
+            if not texture:
+                self.last_error = 0
+                return None
+            lock = _vtable_call(texture, self.LOCK_RECT_INDEX, c_int32,
                                 c_uint, POINTER(NuiLockedRect), c_void_p, DWORD)
-            rect = NuiLockedRect()
-            lock(texture, 0, byref(rect), None, 0)
-            if rect.Pitch == 0 or not rect.pBits:
+            rect_keep, rect_p = _out_struct(NuiLockedRect)
+            if lock(texture, 0, rect_p, None, 0) != 0:
+                return None
+            rect = rect_p.contents
+            if rect.Pitch <= 0 or rect.size <= 0 or not rect.pBits:
                 return None
             # Kopiujemy, bo bufor przestaje być nasz zaraz po UnlockRect.
             data = ctypes.string_at(rect.pBits, rect.size)
-            unlock = _vtable_call(texture, self.UNLOCK_RECT_INDEX, ctypes.HRESULT, c_uint)
+            unlock = _vtable_call(texture, self.UNLOCK_RECT_INDEX, c_int32, c_uint)
             unlock(texture, 0)
+            del rect_keep
             return data, rect.Pitch
         finally:
-            self.dll.NuiImageStreamReleaseFrame(stream, byref(frame))
+            self.dll.NuiImageStreamReleaseFrame(stream, frame_p)
 
     def color_frame(self, timeout_ms: int = 1000):
         """Obraz RGB jako tablica (wysokość × szerokość × 3) w kolejności BGR.
@@ -496,10 +519,12 @@ class Kinect:
 
     def skeletons(self, timeout_ms: int = 1000):
         """Lista śledzonych sylwetek: [{id, stawy, opis}]."""
-        frame = NuiSkeletonFrame()
-        hr = self.dll.NuiSkeletonGetNextFrame(DWORD(timeout_ms), byref(frame))
+        _keep, frame_p = _out_struct(NuiSkeletonFrame)
+        hr = self.dll.NuiSkeletonGetNextFrame(DWORD(timeout_ms), frame_p)
         if hr != 0:
+            self.last_error = hr
             return []
+        frame = frame_p.contents
         found = []
         for i in range(NUI_SKELETON_COUNT):
             s = frame.SkeletonData[i]
@@ -787,13 +812,24 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if good else 'ZLE'} 14. nieśledzone stawy pominięte: {len(jd)}/{len(JOINTS)}")
     ok = ok and good
 
-    # 15. Na Windowsie sprawdź jeszcze, czy DLL w ogóle jest.
+    # 15. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
+    #     bez niego jedno dodatkowe pole w nagłówku SDK niszczy stertę procesu.
+    for i, (typ, nazwa) in enumerate(((NuiImageFrame, "NUI_IMAGE_FRAME"),
+                                      (NuiSkeletonFrame, "NUI_SKELETON_FRAME"),
+                                      (NuiLockedRect, "NUI_LOCKED_RECT"))):
+        buf, _ = _out_struct(typ)
+        zapas = len(buf.raw) - ctypes.sizeof(typ)
+        good = zapas >= 256
+        ok = ok and good
+        print(f"  {'OK ' if good else 'ZLE'} {15 + i}. zapas bufora {nazwa}: {zapas} B")
+
+    # 16. Na Windowsie sprawdź jeszcze, czy DLL w ogóle jest.
     if os.name == "nt":
         n = sensor_count()
-        print(f"  {'OK ' if n >= 0 else 'ZLE'} 15. Kinect10.dll: "
+        print(f"  {'OK ' if n >= 0 else 'ZLE'} 18. Kinect10.dll: "
               + (f"znaleziona, czujników: {n}" if n >= 0 else "brak — zainstaluj SDK 1.8"))
     else:
-        print("  --  15. Kinect10.dll: pominięte (nie Windows)")
+        print("  --  18. Kinect10.dll: pominięte (nie Windows)")
 
     print("\n  " + ("✓ Wszystkie testy przeszły." if ok else "✗ Któryś test nie przeszedł."))
     sys.exit(0 if ok else 1)
