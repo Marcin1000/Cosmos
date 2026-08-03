@@ -1725,8 +1725,17 @@ function capabilityText(m) {
     '',
     'Mózgi: ' + m.mozgi.map((b) => `${b.id}=${b.model}${b.gotowy ? '' : ' (niegotowy)'}`).join(', '),
     `Zmysły: ${z.online ? 'online' : 'offline'} — mowa(Whisper)=${yes(z.whisper)}, `
-      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, sylwetka=${yes(z.mediapipe)}, `
+      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, `
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
+    // MediaPipe bywa zainstalowany, ale żadna funkcja interfejsu go nie wywołuje.
+    // Bez tego zastrzeżenia model obiecywał odczyt sylwetki, którego nie ma.
+    `Sylwetka (MediaPipe): ${z.mediapipe ? 'biblioteka zainstalowana, ale ŻADNA funkcja '
+      + 'Cosmosa jej nie wywołuje — nie obiecuj odczytu sylwetki z kamery przeglądarki' : 'nie'}`,
+    `Kinect 360: ${z.kinect
+      ? 'podłączony — masz podgląd obrazu i mapy głębi w panelu „Kamera na żywo”, '
+        + 'a z wiersza poleceń (senses/kinect_win.py) szkielet 20 stawów, postawę, gesty, '
+        + 'dystans i sterowanie silnikiem pochylenia'
+      : 'niepodłączony albo zmysły nie działają'}`,
     `Wyszukiwanie semantyczne (embeddingi): ${m.embeddingi.opis}`,
     `Studio: obraz=${m.studio.obraz.join('/') || 'brak'}, lektor=${yes(m.studio.dzwiek)}, `
       + `wideo=${yes(m.studio.wideo)}`,
@@ -1788,6 +1797,44 @@ async function handleImprovements(req, res, pathname) {
     return sendJson(res, 200, { ok: true });
   }
   res.writeHead(405); res.end();
+}
+
+/** Zamień surową wypowiedź w precyzyjny prompt.
+ *
+ * Dyktowana wiadomość jest z natury luźna: powtórzenia, „yyy", myśl zmieniana
+ * w połowie zdania. Model dostaje ją do przepisania — ma zachować INTENCJĘ
+ * i wszystkie szczegóły, a uporządkować formę. Zwracamy sam tekst, bez
+ * komentarzy, żeby dało się nim po prostu podmienić zawartość pola.
+ */
+async function handlePolish(req, res) {
+  let data;
+  try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const raw = String(data.text || '').trim();
+  if (!raw) return sendJson(res, 400, { error: 'Pusty tekst.' });
+  if (raw.length > 8000) return sendJson(res, 400, { error: 'Tekst za długi (max 8000 znaków).' });
+
+  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
+  const instruction = lang === 'en'
+    ? 'Rewrite the user\'s dictated text as a clear, precise prompt. Keep every requirement and '
+      + 'detail they gave; do not invent new ones and do not answer the request. Remove filler, '
+      + 'repetition and false starts. Where the intent implies it, state the desired output format, '
+      + 'and add a short bulleted list of the concrete requirements. Reply with the prompt only, '
+      + 'in the same language as the input.'
+    : 'Przepisz podyktowany tekst użytkownika jako jasny, precyzyjny prompt. Zachowaj WSZYSTKIE '
+      + 'wymagania i szczegóły, które podał; nie dopisuj nowych i nie odpowiadaj na prośbę. '
+      + 'Usuń wypełniacze, powtórzenia i urwane początki zdań. Jeśli intencja to sugeruje, dopisz '
+      + 'oczekiwany format odpowiedzi oraz krótką listę punktową konkretnych wymagań. '
+      + 'Odpowiedz samym promptem, w języku oryginału, bez komentarza i bez cudzysłowów.';
+
+  try {
+    const text = await llmComplete([
+      { role: 'system', content: instruction },
+      { role: 'user', content: raw },
+    ], { endpoint: pickEndpoint(data.endpoint) === ENDPOINTS.local ? 'local' : 'cloud', maxTokens: 1200 });
+    return sendJson(res, 200, { ok: true, text: text.trim() });
+  } catch (err) {
+    return sendJson(res, 502, { error: 'polish-failed', message: err.message });
+  }
 }
 
 /** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
@@ -2177,11 +2224,53 @@ async function proxySenses(req, res, targetPath, { json = false } = {}) {
   res.end(buf);
 }
 
-/** Odczyt z usługi percepcji (GET) — np. klatki z Kinecta.
+/* Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i podgląd nie może
+   użyć getUserMedia. Obraz idzie tędy: usługa zmysłów → serwer → przeglądarka. */
+
+/** Przekaż strumień MJPEG bez buforowania.
  *
- * Kinect nie jest kamerą UVC, więc przeglądarka go nie widzi i podgląd nie może
- * użyć getUserMedia. Klatki idą tędy: usługa zmysłów → serwer → przeglądarka.
+ * Zwykłe proxy czeka na całą odpowiedź — a strumień nie kończy się nigdy.
+ * Tutaj przepisujemy nagłówki i przelewamy ciało kawałek po kawałku, żeby
+ * klatki docierały na bieżąco.
  */
+async function proxySensesStream(req, res, targetPath, search = '') {
+  const ctrl = new AbortController();
+  // Gdy przeglądarka zamknie podgląd, zrywamy też połączenie do zmysłów —
+  // inaczej Kinect produkowałby klatki w nieskończoność dla nikogo.
+  res.on('close', () => ctrl.abort());
+
+  let upstream;
+  try {
+    upstream = await fetch(`${SENSES_URL}${targetPath}${search}`, { signal: ctrl.signal });
+  } catch (err) {
+    if (!res.headersSent) sendJson(res, 502, { error: `Usługa percepcji nie odpowiada: ${err.message}` });
+    return;
+  }
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => '');
+    if (!res.headersSent) {
+      res.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') || 'application/json' });
+      res.end(text);
+    }
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': upstream.headers.get('content-type') || 'multipart/x-mixed-replace',
+    'Cache-Control': 'no-store',
+    Connection: 'close',
+  });
+  try {
+    for await (const chunk of upstream.body) {
+      if (!res.write(Buffer.from(chunk))) {
+        await new Promise((r) => res.once('drain', r));
+      }
+    }
+  } catch { /* zerwane połączenie — normalne przy zamknięciu podglądu */ }
+  res.end();
+}
+
+/** Odczyt z usługi percepcji (GET) — pojedyncza klatka, status czujnika.
+ *  Zapasowa droga, gdy strumień MJPEG nie przejdzie przez proxy. */
 async function proxySensesGet(req, res, targetPath, search = '') {
   let upstream;
   try {
@@ -2293,7 +2382,21 @@ async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024 } = 
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error?.message || d.error || `HTTP ${r.status}`);
-  return d.choices?.[0]?.message?.content || '';
+  const msg = d.choices?.[0]?.message || {};
+  const text = (msg.content || '').trim();
+  if (text) return text;
+
+  // Model rozumujący (Nemotron 3, gpt-oss, R1) potrafi zużyć cały budżet tokenów
+  // na myślenie i zwrócić puste `content`. Bez tego streszczenia i dopracowanie
+  // promptu po cichu zwracały pusty tekst — wyglądało to na zepsutą funkcję.
+  const reasoning = (msg.reasoning_content || msg.reasoning || '').trim();
+  if (reasoning) return reasoning;
+
+  const why = d.choices?.[0]?.finish_reason;
+  throw new Error(why === 'length'
+    ? 'Model zużył cały budżet tokenów na myślenie i nie zdążył odpowiedzieć. '
+      + 'Zwiększ „Maks. tokenów odpowiedzi” albo wybierz szybszy model.'
+    : 'Model zwrócił pustą odpowiedź.');
 }
 
 // Wygeneruj jeden obraz (dowolny skonfigurowany silnik) → wpis w bazie wiedzy.
@@ -2662,12 +2765,34 @@ async function handleStudio(req, res, pathname) {
 // API: wyszukiwanie w internecie (DuckDuckGo HTML — bez klucza API)
 // ---------------------------------------------------------------------------
 
+// Nazwane encje, które realnie sypią się ze stron — stopnie przy pogodzie,
+// polskie znaki, myślniki i cudzysłowy. Bez tego model dostawał „7&deg;C”
+// zamiast „7°C” i nie umiał odczytać liczby, o którą pytał użytkownik.
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', deg: '°',
+  hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»',
+  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', bdquo: '„', sbquo: '‚',
+  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', middot: '·',
+  times: '×', divide: '÷', plusmn: '±', frac12: '½', frac14: '¼', sup2: '²', sup3: '³',
+  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú',
+  agrave: 'à', egrave: 'è', ccedil: 'ç', ntilde: 'ñ',
+  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß', aring: 'å', oslash: 'ø',
+};
+
 function decodeEntities(s) {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ');
+    .replace(/&([a-z][a-z0-9]{1,9});/gi, (whole, name) => {
+      const lower = name.toLowerCase();
+      if (NAMED_ENTITIES[name]) return NAMED_ENTITIES[name];
+      // wielkość liter rozróżnia tylko litery akcentowane (&Ouml; vs &ouml;)
+      if (NAMED_ENTITIES[lower]) {
+        const v = NAMED_ENTITIES[lower];
+        return name[0] === name[0].toUpperCase() && /[a-zà-ÿ]/i.test(v) ? v.toUpperCase() : v;
+      }
+      return whole;                 // nieznana encja — zostaw, nie zgaduj
+    });
 }
 
 function stripTags(s) {
@@ -2681,6 +2806,39 @@ function resolveDdgUrl(href) {
     try { return decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
   }
   return href.startsWith('//') ? 'https:' + href : href;
+}
+
+/** Pobierz czytelny tekst ze strony wyniku.
+ *
+ * Bez tego model dostawał wyłącznie tytuły, adresy i zajawki z wyszukiwarki —
+ * a w zajawce nie ma liczby, o którą pytał użytkownik („ile jest stopni”).
+ * Skutek: model szukał znowu i znowu, aż wyczerpał limit rund i nic nie podał.
+ * Tutaj wchodzimy na stronę i wyciągamy sam tekst.
+ */
+async function fetchPageText(pageUrl, maxChars = 2500) {
+  try {
+    const r = await fetch(pageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
+      },
+      signal: AbortSignal.timeout(7000),
+      redirect: 'follow',
+    });
+    if (!r.ok) return '';
+    const type = r.headers.get('content-type') || '';
+    if (!/text\/html|text\/plain/i.test(type)) return '';
+
+    // Czytamy z górnym limitem — nie chcemy wciągnąć kilkumegabajtowej strony.
+    const raw = (await r.text()).slice(0, 400000);
+    const body = raw
+      .replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)>/gi, '\n');
+    return stripTags(body.replace(/\n\s*\n+/g, '\n')).slice(0, maxChars);
+  } catch {
+    return '';                        // strona niedostępna — zostają zajawki
+  }
 }
 
 async function handleSearch(req, res) {
@@ -2710,7 +2868,12 @@ async function handleSearch(req, res) {
         snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
       });
     }
-    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników)`);
+    // Treść dwóch pierwszych trafień — równolegle, żeby nie sumować opóźnień.
+    const texts = await Promise.all(results.slice(0, 2).map((r) => fetchPageText(r.url)));
+    texts.forEach((txt, i) => { if (txt) results[i].text = txt; });
+
+    const withText = texts.filter(Boolean).length;
+    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników, ${withText} z treścią)`);
     sendJson(res, 200, { query: q, results });
   } catch (err) {
     sendJson(res, 200, {
@@ -2927,6 +3090,29 @@ async function handleChat(req, res) {
       body: JSON.stringify(body),
       signal: abort.signal,
     });
+    // Modele rozumujące OpenAI (o1, o3, gpt-5) odrzucają `max_tokens` i własną
+    // temperaturę — trzeba `max_completion_tokens` i temperatury domyślnej.
+    // Bez tego cała zakładka silnika po prostu nie działa, a użytkownik widzi
+    // tylko surowy błąd 400. Jedna ponowna próba z poprawionym żądaniem.
+    if (upstream.status === 400) {
+      const raw = await upstream.clone().text().catch(() => '');
+      const fixed = { ...body };
+      let changed = false;
+      if (/max_completion_tokens/.test(raw)) {
+        fixed.max_completion_tokens = fixed.max_tokens;
+        delete fixed.max_tokens;
+        changed = true;
+      }
+      if (/temperature/.test(raw)) { delete fixed.temperature; delete fixed.top_p; changed = true; }
+      if (changed) {
+        upstream = await fetch(`${ep.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: authHeaders(ep),
+          body: JSON.stringify(fixed),
+          signal: abort.signal,
+        });
+      }
+    }
   } catch (err) {
     if (abort.signal.aborted) return;
     return sendJson(res, 502, {
@@ -2947,7 +3133,15 @@ async function handleChat(req, res) {
     } catch {
       if (detail) message = `${message} ${detail.slice(0, 300)}`;
     }
-    return sendJson(res, upstream.status, { error: message });
+    // Bez tego widać sam komunikat dostawcy i nie wiadomo nawet, którą zakładkę
+    // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
+    const where = `[${ep.label} · ${model}]`;
+    const hint = upstream.status === 404
+      ? ' Taki model nie istnieje pod tym adresem — wybierz go przez Ustawienia → Pobierz listę.'
+      : (upstream.status === 401 || upstream.status === 403)
+        ? ' Klucz API jest nieprawidłowy albo nie ma dostępu do tego modelu.'
+        : upstream.status === 429 ? ' Limit zapytań u dostawcy — spróbuj za chwilę.' : '';
+    return sendJson(res, upstream.status, { error: `${where} ${message}${hint}` });
   }
 
   res.writeHead(200, {
@@ -2982,7 +3176,20 @@ async function handleModels(req, res) {
     const data = await upstream.json();
     sendJson(res, upstream.status, data);
   } catch (err) {
-    sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
+    // „fetch failed” samo w sobie nie mówi nic. Najczęstszy powód przy modelu
+    // lokalnym to wyłączona Ollama albo nasłuch tylko na 127.0.0.1 — i to
+    // właśnie trzeba napisać, zamiast zostawiać użytkownika z komunikatem sieci.
+    const local = ep === ENDPOINTS.local;
+    const hint = local
+      ? `\n\nNajczęstsze przyczyny:\n`
+        + `• Ollama nie działa na komputerze domowym — uruchom ją (\`ollama serve\` albo ikona w zasobniku).\n`
+        + `• Ollama słucha tylko lokalnie — ustaw OLLAMA_HOST=0.0.0.0 i zrestartuj.\n`
+        + `• Komputer domowy jest wyłączony albo poza Tailscale.\n`
+        + `Sprawdź z serwera: curl ${ep.baseUrl}/models`
+      : '';
+    sendJson(res, 502, {
+      error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}${hint}`,
+    });
   }
 }
 
@@ -3037,6 +3244,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
@@ -3155,6 +3363,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
     if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
+    if (p === '/api/kinect/stream' && req.method === 'GET') {
+      return await proxySensesStream(req, res, '/kinect/stream',
+        new URL(req.url, 'http://localhost').search);
+    }
     if (p === '/api/kinect/frame' && req.method === 'GET') {
       return await proxySensesGet(req, res, '/kinect/frame',
         new URL(req.url, 'http://localhost').search);

@@ -255,6 +255,15 @@ kbd {
   justify-content: center;
 }
 .conv-item:hover .conv-delete { display: inline-flex; }
+
+/* Na ekranie dotykowym `:hover` zostaje po dotknięciu i gaśnie dopiero przy
+   dotknięciu czegoś innego — przez to przypnij/zmień nazwę/usuń pojawiały się
+   pozornie losowo. Bez myszy pokazujemy je po prostu zawsze. */
+@media (hover: none) {
+  .conv-item .conv-action,
+  .conv-item .conv-delete { display: inline-flex; }
+  .conv-title { padding-right: 4px; }
+}
 .conv-delete:hover { color: var(--danger); background: var(--bg); }
 .conv-delete svg { width: 14px; height: 14px; }
 
@@ -833,8 +842,24 @@ kbd {
 .model-info-good { margin-top: 6px; font-size: 12px; }
 .model-info-warn { margin-top: 7px; color: #f5b544; font-size: 12px; }
 .model-info-guess { margin-top: 6px; color: var(--text-faint); font-size: 11.5px; }
+.model-info-err {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
 
-.field-row { display: flex; gap: 8px; }
+/* Zawijanie, bo trzy kontrolki w rzędzie (przycisk + etykieta + pole)
+   nie mieszczą się na telefonie i ostatnia wychodziła poza ekran. */
+.field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .field-row input { flex: 1; min-width: 0; }
 
 .field input[type="text"], .field input[type="number"],
@@ -1172,6 +1197,23 @@ kbd {
   outline: none;
 }
 .live-source select:focus { border-color: var(--accent); }
+/* Tryb powiększony: panel na środku ekranu, obraz tak duży, jak się zmieści.
+   `object-fit: contain` zamiast `cover` — przy dużym kadrze ważniejsze jest
+   widzieć całość niż wypełnić prostokąt. */
+.live-panel.expanded {
+  right: 50%;
+  bottom: 50%;
+  transform: translate(50%, 50%);
+  /* Szerokość ogranicza też wysokość okna. Przy proporcji 4:3 samo obcięcie
+     wysokości sceny zostawiłoby czarne pasy po bokach — tu panel zwęża się
+     razem z obrazem. 220px to nagłówek, wybór źródła, status i przycisk. */
+  width: min(1100px, calc(100vw - 40px), calc((100dvh - 220px) * 4 / 3));
+  max-width: none;
+}
+.live-panel.expanded .live-stage { background: #000; }
+.live-panel.expanded .live-stage video,
+.live-panel.expanded .live-stage img { object-fit: contain; }
+
 .live-status {
   padding: 8px 14px;
   font-size: 11px;
@@ -1182,6 +1224,7 @@ kbd {
 
 @media (max-width: 720px) {
   .live-panel { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
+  .live-panel.expanded { width: min(calc(100vw - 16px), calc((100dvh - 260px) * 4 / 3)); }
 }
 
 /* ============================ GALERIA ============================ */
@@ -1380,6 +1423,8 @@ kbd {
 }
 
 .voice-close { position: absolute; top: 18px; right: 18px; }
+.voice-cam-btn { position: absolute; top: 18px; right: 60px; color: var(--text-faint); }
+.voice-cam-btn.active { color: var(--accent); }
 
 .voice-orb {
   width: 150px;
@@ -1452,7 +1497,9 @@ kbd {
   bottom: 56px;
   right: 24px;
   width: 190px;
+  max-width: 40vw;          /* na telefonie podgląd ma być kontrolką, nie ekranem */
 }
+.voice-camera-wrap video { max-height: 30vh; object-fit: cover; }
 .voice-camera-wrap video {
   width: 100%;
   border-radius: 10px;
@@ -1472,6 +1519,36 @@ kbd {
 
 /* wyniki wyszukiwania w rozmowie */
 .msg-search { display: block; }
+/* Tok myślenia modelu rozumującego — widoczny, ale zwinięty, żeby nie
+   przykrywał właściwej odpowiedzi. */
+.think-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.think-block summary {
+  cursor: pointer;
+  padding: 7px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.think-block[open] summary { border-bottom: 1px solid var(--border); }
+.think-block pre {
+  padding: 10px 12px;
+  margin: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
 .search-results {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1509,6 +1586,23 @@ kbd {
   }
   .sidebar.collapsed { margin-left: -288px; }
   #expand-btn { display: inline-flex; }
+
+  /* Osiem pozycji stopki plus pasek stanu to na telefonie prawie cały ekran —
+     na historię rozmów zostawał jeden wiersz. Stopka dostaje więc własny
+     scroll i najwyżej połowę wysokości, a lista rozmów gwarantowane minimum. */
+  /* Druga siatka bezpieczeństwa dla przycisków rozmowy: nie każda przeglądarka
+     mobilna raportuje `hover: none`, a na wąskim ekranie i tak nie ma myszy. */
+  .conv-item .conv-action,
+  .conv-item .conv-delete { display: inline-flex; }
+
+  .conversations { min-height: 34vh; }
+  .sidebar-footer {
+    max-height: 46vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 8px 14px;
+  }
+  .footer-btn { padding: 7px 10px; }
 
   /* Panel boczny nakłada się na czat, więc tło musi zgasnąć — inaczej obie
      warstwy czyta się naraz. Dotknięcie przyciemnienia zamyka panel. */

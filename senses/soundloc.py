@@ -342,6 +342,10 @@ def cmd_selftest() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Kierunek źródła dźwięku z macierzy mikrofonów.")
     ap.add_argument("--selftest", action="store_true", help="sprawdź poprawność bez sprzętu")
+    # Pozostałe moduły przyjmują „selftest" jako podpolecenie. Ten jeden miał
+    # tylko flagę, więc wpisanie tego samego co wszędzie kończyło się błędem
+    # argparse. Przyjmujemy obie formy — wzorzec ma być jeden.
+    ap.add_argument("cmd", nargs="?", choices=["selftest"], help=argparse.SUPPRESS)
     ap.add_argument("--wav", help="plik WAV wielokanałowy (np. z Kinecta)")
     ap.add_argument("--listen", action="store_true", help="nasłuch na żywo")
     ap.add_argument("--list-devices", action="store_true", dest="list_devices",
@@ -355,7 +359,7 @@ def main() -> None:
     ap.add_argument("--min-conf", type=float, default=0.15, dest="min_conf")
     args = ap.parse_args()
 
-    if args.selftest:
+    if args.selftest or args.cmd == "selftest":
         cmd_selftest()
     elif args.list_devices:
         cmd_list_devices()

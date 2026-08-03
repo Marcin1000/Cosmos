@@ -120,6 +120,12 @@ Od teraz zakładam, że Cosmos jest w folderze `C:\Cosmos`.
    | Wideo | `SEEDANCE_API_KEY=` i `SEEDANCE_MODEL=` | konsola BytePlus |
    | Grafiki Adobe | `FIREFLY_CLIENT_ID=` i `FIREFLY_CLIENT_SECRET=` | developer.adobe.com/console |
 
+   Po dodaniu klucza OpenAI albo Anthropic w pasku górnym Cosmosa pojawi się **nowa
+   zakładka silnika**. Który dokładnie model ma za nią stać, ustawiasz osobno:
+   `OPENAI_MODEL=` (domyślnie `gpt-4o`) i `CLAUDE_MODEL=`. Jeśli zakładka zwraca błąd
+   404, ten identyfikator nie istnieje na Twoim koncie — sprawdź listę przez
+   **Ustawienia → Pobierz listę**.
+
 4. Zapisz plik (`Ctrl+S`) i zamknij.
 
 > 🔒 **Bezpieczeństwo:** plik `.env` z Twoimi kluczami zostaje tylko tam, gdzie stoi
@@ -619,13 +625,58 @@ Nie musisz nic ustawiać — wystarczy, że masz `NVIDIA_API_KEY`. Jeśli VPS w 
 > Sprawdzisz aktualny stan w **Ustawieniach → statystyki** albo pytając Cosmosa
 > „pokaż, co potrafisz" (Nauka → Pomysły).
 
-## Aktualizacja Cosmosa na VPS
+## Aktualizacja Cosmosa
+
+> **Najpierw ustal, co gdzie stoi.** Cosmos to dwie niezależne części i aktualizuje
+> się je osobno:
+>
+> | Zmiana w plikach | Gdzie zaktualizować | Co zrestartować |
+> |---|---|---|
+> | `server.js`, `public/*` (interfejs, czat, wyszukiwanie) | tam, gdzie działa serwer — VPS albo komputer domowy | serwer Cosmosa |
+> | `senses/*` (zmysły, Kinect) | zawsze na komputerze z kamerą i GPU | `python service.py` |
+> | `*.md` | nigdzie — to sama dokumentacja | nic |
+>
+> Przy Ścieżce B (serwer na VPS, zmysły na komputerze domowym) prawie każda
+> aktualizacja wymaga **obu** kroków.
+
+### Serwer na VPS (Linux)
 
 ```bash
 cd /opt/cosmos
 git pull
 sudo systemctl restart cosmos
 ```
+
+### Serwer albo zmysły na Windowsie
+
+**Masz Gita:**
+```
+cd /d D:\Cosmos
+git pull
+```
+
+**Nie masz Gita** — dwie możliwości.
+
+*Jednorazowo zainstaluj Gita* (potem wystarczy `git pull`): pobierz z
+[git-scm.com/download/win](https://git-scm.com/download/win), zainstaluj z domyślnymi
+opcjami i **otwórz `cmd` na nowo** — bez tego Windows nie zobaczy nowego polecenia.
+
+*Albo pobierz same zmienione pliki* — `curl` jest w Windowsie od wersji 10, nic nie
+trzeba instalować. Podmień `ADRES-REPO` na swój (`https://raw.githubusercontent.com/<użytkownik>/<repo>/<gałąź>`):
+```
+cd /d D:\Cosmos\senses
+curl -L -o service.py ADRES-REPO/senses/service.py
+```
+
+> ⚠️ **Po aktualizacji serwera odśwież stronę z pominięciem pamięci podręcznej**
+> (`Ctrl+F5` na komputerze). W aplikacji PWA na telefonie zamknij ją całkowicie
+> i otwórz ponownie — nowa wersja wchodzi dopiero wtedy.
+
+### Co zrobić po aktualizacji
+
+1. Sprawdź, czy serwer wstał: otwórz Cosmosa i zobacz wskaźniki w panelu bocznym.
+2. Jeśli aktualizowałeś zmysły — okno z `python service.py` musi być uruchomione
+   **na nowo**; stary proces działa dalej ze starym kodem.
 
 ## ⚠️ Kamera i mikrofon wymagają HTTPS
 
@@ -638,11 +689,13 @@ zablokowanego dostępu — po prostu tego API nie ma.** Nie działają wtedy:
 | Funkcja | Przy `http://` na adres IP |
 |---|---|
 | Dyktowanie (ikona mikrofonu) | ❌ |
+| Wybór mikrofonu w Ustawieniach | ❌ (lista pusta — przeglądarka nie widzi urządzeń) |
 | Zdjęcie z kamery (ikona aparatu) | ❌ |
 | Panel „Kamera na żywo" — kamera przeglądarki | ❌ |
 | Tryb głosowy | ❌ |
 | Nauka → „Pokaż" (uczenie z kamery) | ❌ |
 | **Panel na żywo — źródło Kinect** | ✅ **działa** |
+| **✦ Dopracowanie promptu** | ✅ **działa** (wpisany tekst, bez mikrofonu) |
 | Czat, baza wiedzy, Studio, wszystko inne | ✅ |
 
 **Kinect jest wyjątkiem**, bo jego klatki nie idą przez przeglądarkę, tylko przez usługę
@@ -883,9 +936,17 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 - **Studio** — generowanie obrazów (OpenAI / Adobe Firefly) z wariantami, szablonami,
   storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
-- **Kamera na żywo** — panel z detekcją obiektów, oraz tryb głosowy uruchamiany
-  przyciskiem fal dźwiękowych (rozmowa po polsku przy otwartej karcie; nasłuch słowa
-  aktywującego w tle jest jeszcze niedokończony — patrz `senses/README.md`).
+- **Kamera na żywo** — panel z detekcją obiektów, przyciskiem powiększenia (podgląd na
+  środku ekranu), przełącznikiem przód/tył na telefonie i wyborem źródła: kamera
+  przeglądarki albo Kinect (obraz / głębia).
+  Obok tryb głosowy uruchamiany przyciskiem fal dźwiękowych (rozmowa po polsku przy
+  otwartej karcie; nasłuch słowa aktywującego w tle jest jeszcze niedokończony —
+  patrz `senses/README.md`).
+- **Dyktowanie i dopracowanie promptu** — mikrofon 🎤 zamienia mowę na tekst, a którym
+  mikrofonem — wybierasz w Ustawieniach (macierz Kinecta, Galaxy Buds, telefon,
+  laptop). Przycisk ✦ obok przepisuje podyktowaną wypowiedź na precyzyjny prompt:
+  wycina wypełniacze i powtórzenia, a wymagania układa w listę. Drugie kliknięcie
+  przywraca Twoją wersję, więc nic nie tracisz.
 - **Nauka** (przycisk w panelu bocznym) — naucz Cosmosa rozpoznawania (pokaż w kamerze
   i nazwij), **nagraj procedury** z ekranu (klikasz i wpisujesz, a Cosmos zapisuje kroki)
   i zaplanuj je jako **rutyny** cykliczne. Kroki wrażliwe (płatność, wysłanie) zawsze
@@ -937,9 +998,21 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | Telefon nie łączy się (Ścieżka B) | Tailscale włączony na telefonie i VPS? `sudo systemctl status cosmos` pokazuje `active (running)`? |
 | Ekran logowania nie przyjmuje hasła | Sprawdź `COSMOS_PASSWORD` w `.env` na serwerze i zrestartuj (`sudo systemctl restart cosmos`) |
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
+| „Nie udało się pobrać listy modeli … fetch failed" | Ten sam powód: Ollama nie odpowiada pod adresem z `LOCAL_BASE_URL`. Komunikat pod polem wypisuje teraz konkretne przyczyny i polecenie `curl` do sprawdzenia |
+| W trybie głosowym na telefonie słychać ciągłe podłączanie sprzętu | Naprawione — Cosmos trzyma teraz mikrofon otwarty przez całą sesję zamiast przejmować go przy każdym pytaniu |
+| W trybie głosowym włącza się kamera i zasłania ekran | Już się nie włącza sama. Podgląd włączasz ikoną kamery w prawym górnym rogu okna głosowego; wybór jest zapamiętywany |
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |
 | „Brak dostępu do kamery: Cannot read properties of undefined" | Kamera i mikrofon działają tylko po HTTPS albo na `localhost`. Wejdź przez `https://` (patrz CZĘŚĆ 3) albo — mając Kinecta — wybierz go jako źródło obrazu |
+| **Model odpowiada bardzo wolno** | Sprawdź, jaki model masz w **Ustawieniach → Model — chmura NVIDIA**. Ustawienie z przeglądarki jest ważniejsze niż `.env`, więc możesz mieć wybrany duży model, choć w `.env` stoi mały. Nemotron 3 Ultra 550B jest najwolniejszy z rodziny — do codziennych pytań weź Nano 9B albo Super. Puste pole = model z `.env` |
+| Nad odpowiedzią widać „🧠 Myślę…" i długo nic więcej | Tak działa model rozumujący: najpierw myśli, potem pisze. Wcześniej ten czas wyglądał na zawieszenie, bo ekran był pusty. Kliknij blok, żeby zobaczyć tok myślenia |
+| „(pusta odpowiedź modelu)" | Model rozumujący zużył cały budżet na myślenie i nie zdążył napisać odpowiedzi. Zwiększ **Maks. tokenów odpowiedzi** (np. na 4096) albo wybierz szybszy model. Cosmos pokaże wtedy przynajmniej tok myślenia zamiast pustki |
+| Model szuka w internecie w kółko i nic nie znajduje | Serwer pobiera teraz treść dwóch pierwszych stron z wyników, nie same linki, a po wyczerpaniu limitu rund każe modelowi odpowiedzieć tym, co ma. Jeśli wciąż się to zdarza, strona źródłowa najpewniej ładuje dane skryptem — poproś o konkretne źródło |
+| Streszczenie rozmowy nic nie zwraca | Naprawione — było tą samą przyczyną co puste odpowiedzi. Zaktualizuj Cosmosa (`git pull` + restart) |
+| Lista mikrofonów w Ustawieniach jest pusta | To samo ograniczenie co przy kamerze: przeglądarka pokazuje urządzenia dopiero po HTTPS albo na `localhost`. Po wejściu przez `https://` kliknij „Odśwież" obok listy |
+| Mikrofon z listy przestał działać (odłączone słuchawki) | Cosmos sam wróci do domyślnego mikrofonu przy pierwszym nagraniu. Żeby wybrać nowy — Ustawienia → „Odśwież" |
+| ✦ „Dopracuj prompt": „Brak klucza API dla chmury NVIDIA" | Przepisywanie idzie przez ten sam model co czat. Uzupełnij `NVIDIA_API_KEY` albo przełącz się na „Lokalnie" (Ollama musi działać) |
+| Podgląd z Kinecta zatrzymuje się po chwili | Sprawdź okno z `python service.py` — przy zerwanym strumieniu Cosmos przechodzi na pojedyncze klatki, więc obraz zwalnia zamiast zniknąć |
 | „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |

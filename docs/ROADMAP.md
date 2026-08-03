@@ -212,6 +212,30 @@ Uczenie Cosmosa — trzy filary, wszystkie z zasadą „człowiek w pętli":
 
 ---
 
+## ✅ Partia 12 — dopracowanie po testach na telefonie (GOTOWE)
+
+Nie planowana z góry — wynikła z używania Cosmosa na Androidzie i z Kinectem.
+
+- [x] **Podgląd Kinecta w MJPEG** — jedno połączenie zamiast żądania na klatkę;
+      wcześniej sam obieg telefon → VPS → dom zjadał ćwierć sekundy na klatkę
+- [x] **Powiększanie podglądu** — panel na środku ekranu, szerokość ograniczona
+      także wysokością okna, żeby przy 4:3 nie było czarnych pasów
+- [x] **Wybór mikrofonu** — macierz Kinecta, słuchawki, telefon; z powrotem do
+      domyślnego, gdy zapamiętane urządzenie zniknie
+- [x] **Dopracowanie promptu** — `POST /api/polish` przepisuje podyktowany tekst;
+      idzie tam sama treść pola, bez historii rozmowy
+- [x] **Modele rozumujące** — `reasoning_content` pokazywany na żywo i używany,
+      gdy model zużyje cały budżet na myślenie (to samo psuło streszczenia)
+- [x] **Wyszukiwanie z treścią stron** — model dostaje tekst dwóch pierwszych
+      trafień, nie same linki; dyrektywa `[SZUKAJ:]` nigdy nie trafia na ekran
+- [x] **Zgodność z modelami rozumującymi OpenAI** — przy odmowie `max_tokens`
+      /`temperature` serwer ponawia z `max_completion_tokens`
+- [x] **Tryb głosowy bez niespodzianek** — kamera pod przyciskiem, nie sama;
+      mikrofon trzymany przez sesję, żeby Android nie sygnalizował go w kółko
+- [x] **Kamera przód/tył** — w zdjęciu do wiadomości i w podglądzie na żywo
+- [x] **Panel boczny na telefonie** — stopka ze scrollem, lista rozmów z
+      gwarantowanym minimum, przyciski rozmowy widoczne bez najechania
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

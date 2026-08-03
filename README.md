@@ -209,11 +209,18 @@ głosowego (jak Asystent Google na Androidzie):
 2. **Rozmowa**: po sygnale mówisz pytanie; odpowiedź jest czytana na głos, a Cosmos
    od razu słucha pytania uzupełniającego — rozmowa płynie bez powtarzania wake word.
    Cisza albo „koniec" wraca do nasłuchu.
-3. **Wzrok**: przy pytaniach typu *„co mam w ręku?"*, *„co widzisz?"* Cosmos sam
-   robi klatkę z kamery i wysyła ją do modelu wizyjnego (podgląd w rogu ekranu).
+3. **Wzrok**: przy pytaniach typu *„co mam w ręku?"*, *„co widzisz?"* Cosmos może
+   dołożyć klatkę z kamery. Podgląd **włączasz świadomie** ikoną kamery w oknie
+   głosowym — nie startuje sam, bo na telefonie zasłaniał pół ekranu.
 4. **Internet**: gdy pytasz np. *„jaki to telefon?"*, model może zarządzić
    wyszukiwanie — Cosmos mówi „Sprawdzam w internecie", pobiera wyniki
    (DuckDuckGo, bez klucza API) i odpowiada z podaniem źródeł.
+
+Wyszukiwanie pobiera **treść dwóch pierwszych stron**, nie same tytuły i zajawki.
+Zajawka wyszukiwarki to zwykle opis serwisu („Radar temperatury pokazuje aktualne
+wartości…"), a nie odpowiedź — model nie znajdował w niej liczby, o którą pytano,
+i szukał w kółko. Rundy są ograniczone; po wyczerpaniu limitu model dostaje
+polecenie odpowiedzieć tym, co zebrał, i podać adresy do sprawdzenia.
 
 Wymagania trybu głosowego: przeglądarka **Chrome lub Edge** (Web Speech API; działa
 też w PWA na Androidzie). Rozpoznawanie wake word wymaga otwartej aplikacji.
@@ -240,11 +247,20 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 
 **W interfejsie:**
 - 🎤 przycisk mikrofonu — dyktowanie: Whisper (lokalnie, przez Senses), a gdy usługa
-  nie działa, rozpoznawanie wbudowane w Chrome/Edge,
+  nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** — wybierasz
+  w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
+  wybór jest zapamiętywany,
+- ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) — przepisuje
+  podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
+  porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
 - 🔊 przełącznik głosu (pasek górny) — odpowiedzi czytane przez Piper (naturalny polski
   głos, lokalnie), fallback: głos systemowy przeglądarki,
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
-  analizowane przez model wizyjny,
+  analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
+  zapamiętywany),
+- 🧠 przy modelach rozumujących (Nemotron 3, gpt-oss, R1) tok myślenia jest
+  widoczny na żywo w zwijanym bloku. Gdy model zużyje cały budżet tokenów na
+  myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi,
 - 🛰️ status „Zmysły" w panelu bocznym pokazuje, które zmysły są aktywne.
 
 Instalacja zmysłów: **[senses/README.md](senses/README.md)** (każdy jest opcjonalny —
@@ -508,7 +524,8 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
-| `/api/kinect/frame` `/api/kinect/status` | GET | Klatki z Kinecta 360 (obraz / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC |
+| `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
+| `/api/polish` | POST | Przepisuje podyktowany tekst na precyzyjny prompt (`{text, endpoint}` → `{text}`) |
 | `/api/lessons` `/api/lessons/match` | GET/POST/DELETE | Nauka: wzorce rozpoznawania i dopasowanie |
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
 | `/api/routines` `/api/routines/due` | GET/POST/PUT/DELETE | Nauka: rutyny (harmonogram) i zadania do wykonania |
