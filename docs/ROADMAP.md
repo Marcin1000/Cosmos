@@ -54,7 +54,8 @@ jest w pełni działająca i przetestowana, zanim ruszy następna. `[x]` = gotow
   pochylenia. Wcześniej zakładaliśmy, że SDK jest dostępne tylko z C#/C++, i kierowaliśmy
   na libfreenect — który wymaga budowania i nie ma szkieletu w ogóle. `watcher.py`
   przyjmuje Kinecta jako źródło obrazu (`CAMERA_SOURCE=kinect`), `kinect_watcher.py`
-  sam wybiera sterownik. Część sprzętowa nietestowana — brak czujnika w środowisku CI
+  sam wybiera sterownik. **Potwierdzone na sprzęcie**: głębia, RGB, szkielet
+  i silnik pochylenia działają na Kinekcie 360 z SDK 1.8 pod Windows 11
 - [~] **Integracja z Mavic 3** — pokryta przez `senses/photoscan.py`: zdjęcia z lotu →
   model 3D (COLMAP). Sterowanie lotem z PC jest ograniczone przez DJI (patrz analiza wcześniej)
 - [ ] **Sterowanie gestami** — wymaga biblioteki MediaPipe w przeglądarce (zewnętrzna,
