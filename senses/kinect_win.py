@@ -314,6 +314,80 @@ def _vtable_call(iface: int, index: int, restype, *argtypes):
     return proto(vtbl[index])
 
 
+# ---------------------------------------------------------------------------
+# Odnajdywanie wskaźnika na teksturę — zamiast zgadywania układu struktury
+# ---------------------------------------------------------------------------
+#
+# Z całej NUI_IMAGE_FRAME potrzebujemy dokładnie JEDNEGO pola: `pFrameTexture`.
+# Rozdzielczość znamy, bo sami otwieraliśmy strumień; reszta pól jest nam
+# obojętna. A ponieważ odwzorowanie układu z dokumentacji okazało się błędne
+# (odczyt spod złego przesunięcia dawał adres 0xFFFF... i wywracał proces),
+# nie zgadujemy go po raz kolejny — znajdujemy wskaźnik po jego kształcie.
+#
+# Obiekt COM rozpoznajemy tak: to czytelny adres, pod którym leży kolejny
+# czytelny adres (tablica metod wirtualnych), a w niej same czytelne adresy
+# funkcji. Przypadkowa liczba w buforze nie przejdzie tego sita.
+# Czytamy przez ReadProcessMemory, więc sprawdzanie kandydata nie może
+# wywrócić procesu — zły adres zwraca po prostu „nie da się przeczytać".
+
+ADDR_MIN = 0x10000                  # niżej leży strefa niedostępna dla procesu
+ADDR_MAX = 0x7FFFFFFFFFFF           # górna granica przestrzeni użytkownika (x64)
+
+
+def _addr_ok(v: int) -> bool:
+    return ADDR_MIN <= v <= ADDR_MAX
+
+
+def _make_reader():
+    """Bezpieczny odczyt pamięci procesu. None poza Windowsem."""
+    if os.name != "nt":
+        return None
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetCurrentProcess.restype = c_void_p
+    k32.ReadProcessMemory.argtypes = [c_void_p, c_void_p, c_void_p,
+                                      ctypes.c_size_t, POINTER(ctypes.c_size_t)]
+    k32.ReadProcessMemory.restype = c_int32
+    proc = k32.GetCurrentProcess()
+
+    def read(addr: int, size: int):
+        buf = ctypes.create_string_buffer(size)
+        got = ctypes.c_size_t(0)
+        if not k32.ReadProcessMemory(proc, c_void_p(addr), buf, size, byref(got)):
+            return None
+        return buf.raw[:got.value] if got.value == size else None
+
+    return read
+
+
+def _qword(raw: bytes, off: int) -> int:
+    return int.from_bytes(raw[off:off + 8], "little")
+
+
+def find_texture_offset(raw: bytes, read, max_offset: int = 96):
+    """Przesunięcie wskaźnika na INuiFrameTexture w buforze klatki.
+
+    `read(addr, size)` ma zwracać bajty albo None dla adresu nieczytelnego.
+    Zwraca przesunięcie w bajtach albo None, gdy nic nie pasuje.
+    """
+    limit = min(len(raw), max_offset)
+    for off in range(0, limit - 7, 8):
+        cand = _qword(raw, off)
+        if not _addr_ok(cand) or cand % 8:
+            continue
+        head = read(cand, 8)
+        if head is None:
+            continue
+        vtbl = _qword(head, 0)
+        if not _addr_ok(vtbl) or vtbl % 8:
+            continue
+        methods = read(vtbl, 64)            # osiem pierwszych metod interfejsu
+        if methods is None:
+            continue
+        if all(_addr_ok(_qword(methods, i * 8)) for i in range(8)):
+            return off
+    return None
+
+
 def _out_struct(struct_type, slack: int = 512):
     """Bufor z zapasem na strukturę, którą wypełnia sterownik.
 
@@ -390,6 +464,9 @@ class Kinect:
         self.resolution = resolution
         self.width, self.height = RESOLUTIONS[resolution]
         self.last_error = 0
+        self.last_note = ""
+        self.texture_offset = None      # ustalane przy pierwszej klatce
+        self._reader = _make_reader()
         self._color_stream = c_void_p()
         self._depth_stream = c_void_p()
         self._open = False
@@ -450,22 +527,39 @@ class Kinect:
 
     # -- klatki -----------------------------------------------------------
 
+    def _texture_from(self, keep):
+        """Wyłuskaj wskaźnik na INuiFrameTexture z bufora klatki.
+
+        Przesunięcie ustalamy raz, przy pierwszej klatce, i zapamiętujemy —
+        w kolejnych klatkach jest już tylko odczyt spod znanego adresu.
+        """
+        raw = keep.raw
+        if self.texture_offset is None:
+            if self._reader is None:
+                return None
+            self.texture_offset = find_texture_offset(raw, self._reader)
+            if self.texture_offset is None:
+                return None
+        cand = _qword(raw, self.texture_offset)
+        return cand if _addr_ok(cand) else None
+
     def _grab(self, stream, timeout_ms: int):
         """Pobierz klatkę i zwróć jej bufor jako kopię (bajty + krok).
 
         Ostatni kod błędu zapamiętujemy w `last_error` — bez tego „brak klatki"
         nie odróżnia czujnika, który się jeszcze rozgrzewa, od realnej awarii.
         """
-        _keep, frame_p = _out_struct(NuiImageFrame)
+        keep, frame_p = _out_struct(NuiImageFrame)
         hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), frame_p)
         if hr != 0:
             self.last_error = hr
             return None
-        frame = frame_p.contents
         try:
-            texture = frame.pFrameTexture
-            if not texture:
+            texture = self._texture_from(keep)
+            if texture is None:
                 self.last_error = 0
+                self.last_note = ("Nie znalazłem wskaźnika na teksturę w buforze klatki. "
+                                  "Uruchom:  python kinect_win.py dump")
                 return None
             lock = _vtable_call(texture, self.LOCK_RECT_INDEX, c_int32,
                                 c_uint, POINTER(NuiLockedRect), c_void_p, DWORD)
@@ -637,6 +731,11 @@ def cmd_info() -> None:
             print(f"  Kąt pochylenia: nieodczytany ({e})", flush=True)
 
         _try_frames(k, "Głębia:", k.depth_frame)
+        if k.texture_offset is not None:
+            print(f"            (wskaźnik tekstury znaleziony pod +{k.texture_offset} B; "
+                  f"nasze odwzorowanie zakładało +{NuiImageFrame.pFrameTexture.offset} B)")
+        elif k.last_note:
+            print(f"            {k.last_note}")
         _try_frames(k, "Obraz:", k.color_frame)
 
         try:
@@ -713,6 +812,37 @@ def cmd_skeleton(args) -> None:
 def cmd_tilt(args) -> None:
     with Kinect(color=False, depth=False, skeleton=False) as k:
         print(f"\n  Kąt ustawiony na {k.tilt(args.degrees)}°\n")
+
+
+def cmd_dump(args) -> None:
+    """Wypisz surowy bufor klatki. Ostatnia deska ratunku, gdy szukanie zawiedzie."""
+    k = Kinect(color=False, skeleton=False)
+    reader = _make_reader()
+    try:
+        k.open()
+        time.sleep(1.5)                       # daj strumieniowi ruszyć
+        keep, frame_p = _out_struct(NuiImageFrame)
+        hr = k.dll.NuiImageStreamGetNextFrame(k._depth_stream, DWORD(2000), frame_p)
+        if hr != 0:
+            sys.exit(f"\n  Nie dostałem klatki: {_hr_text(hr)}\n")
+        raw = keep.raw
+        print("\n✦ Surowy bufor NUI_IMAGE_FRAME (pierwsze 96 B, po 8):\n")
+        for off in range(0, 96, 8):
+            v = _qword(raw, off)
+            mark = ""
+            if _addr_ok(v) and v % 8 == 0 and reader:
+                head = reader(v, 8)
+                if head is not None and _addr_ok(_qword(head, 0)):
+                    mark = "  ← wygląda na obiekt COM (wskaźnik na teksturę?)"
+            print(f"  +{off:<3} 0x{v:016X}{mark}")
+        found = find_texture_offset(raw, reader) if reader else None
+        print(f"\n  Znalezione przesunięcie tekstury: "
+              + (f"+{found} B" if found is not None else "nie znaleziono"))
+        print("  (nasze odwzorowanie zakładało +"
+              f"{NuiImageFrame.pFrameTexture.offset} B)\n")
+        k.dll.NuiImageStreamReleaseFrame(k._depth_stream, frame_p)
+    finally:
+        k.close()
 
 
 def cmd_selftest() -> None:
@@ -812,7 +942,44 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if good else 'ZLE'} 14. nieśledzone stawy pominięte: {len(jd)}/{len(JOINTS)}")
     ok = ok and good
 
-    # 15. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
+    # 15–17. Szukanie wskaźnika na teksturę — na sztucznej pamięci, bez Kinecta.
+    #        Sprawdzamy oba kierunki: że znajduje właściwy adres i że NIE daje
+    #        się nabrać na przypadkowe liczby, które akurat wyglądają jak adres.
+    FAKE_VTBL, FAKE_OBJ = 0x7FF000001000, 0x7FF000002000
+    pamiec = {
+        FAKE_OBJ: FAKE_VTBL.to_bytes(8, "little"),
+        FAKE_VTBL: b"".join((FAKE_VTBL + 0x100 + i * 8).to_bytes(8, "little") for i in range(8)),
+    }
+
+    def czytaj(addr, size):
+        blok = pamiec.get(addr)
+        return blok[:size] if blok and len(blok) >= size else None
+
+    buf = bytearray(96)
+    buf[0:8] = (123456789).to_bytes(8, "little")      # znacznik czasu
+    buf[8:16] = (42).to_bytes(8, "little")            # numer klatki + typ
+    buf[24:32] = FAKE_OBJ.to_bytes(8, "little")       # wskaźnik na obiekt COM
+    off = find_texture_offset(bytes(buf), czytaj)
+    good = off == 24
+    ok = ok and good
+    print(f"  {'OK ' if good else 'ZLE'} 15. znaleziony wskaźnik na teksturę: +{off} B (oczekiwano +24)")
+
+    tylko_smieci = bytearray(96)
+    tylko_smieci[16:24] = (0xFFFFFFFFFFFFFFFF).to_bytes(8, "little")
+    tylko_smieci[32:40] = (0x1234).to_bytes(8, "little")
+    off2 = find_texture_offset(bytes(tylko_smieci), czytaj)
+    good = off2 is None
+    ok = ok and good
+    print(f"  {'OK ' if good else 'ZLE'} 16. same śmieci (0xFFFF…, małe liczby) odrzucone: {off2}")
+
+    granice = bytearray(96)
+    granice[8:16] = FAKE_OBJ.to_bytes(8, "little")    # ten sam obiekt, inne miejsce
+    off3 = find_texture_offset(bytes(granice), czytaj)
+    good = off3 == 8
+    ok = ok and good
+    print(f"  {'OK ' if good else 'ZLE'} 17. wskaźnik pod innym przesunięciem: +{off3} B")
+
+    # 18–20. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
     #     bez niego jedno dodatkowe pole w nagłówku SDK niszczy stertę procesu.
     for i, (typ, nazwa) in enumerate(((NuiImageFrame, "NUI_IMAGE_FRAME"),
                                       (NuiSkeletonFrame, "NUI_SKELETON_FRAME"),
@@ -821,15 +988,15 @@ def cmd_selftest() -> None:
         zapas = len(buf.raw) - ctypes.sizeof(typ)
         good = zapas >= 256
         ok = ok and good
-        print(f"  {'OK ' if good else 'ZLE'} {15 + i}. zapas bufora {nazwa}: {zapas} B")
+        print(f"  {'OK ' if good else 'ZLE'} {18 + i}. zapas bufora {nazwa}: {zapas} B")
 
     # 16. Na Windowsie sprawdź jeszcze, czy DLL w ogóle jest.
     if os.name == "nt":
         n = sensor_count()
-        print(f"  {'OK ' if n >= 0 else 'ZLE'} 18. Kinect10.dll: "
+        print(f"  {'OK ' if n >= 0 else 'ZLE'} 21. Kinect10.dll: "
               + (f"znaleziona, czujników: {n}" if n >= 0 else "brak — zainstaluj SDK 1.8"))
     else:
-        print("  --  18. Kinect10.dll: pominięte (nie Windows)")
+        print("  --  21. Kinect10.dll: pominięte (nie Windows)")
 
     print("\n  " + ("✓ Wszystkie testy przeszły." if ok else "✗ Któryś test nie przeszedł."))
     sys.exit(0 if ok else 1)
@@ -841,6 +1008,7 @@ def main() -> None:
 
     sub.add_parser("selftest", help="sprawdź układ struktur i logikę bez sprzętu")
     sub.add_parser("info", help="wykryj czujnik i pokaż stan strumieni")
+    sub.add_parser("dump", help="surowy bufor klatki (diagnostyka układu struktury)")
 
     p = sub.add_parser("depth", help="podgląd statystyk głębi")
     p.add_argument("--interval", type=float, default=1.0)
@@ -861,6 +1029,8 @@ def main() -> None:
             cmd_selftest()
         elif args.cmd == "info":
             cmd_info()
+        elif args.cmd == "dump":
+            cmd_dump(args)
         elif args.cmd == "depth":
             cmd_depth(args)
         elif args.cmd == "color":
