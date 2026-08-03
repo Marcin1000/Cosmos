@@ -901,6 +901,7 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |
+| „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
 | Chcę zacząć od zera | Zatrzymaj serwer, usuń folder `data`, uruchom ponownie |
