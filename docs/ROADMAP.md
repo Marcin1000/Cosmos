@@ -329,6 +329,34 @@ Not found for account" przychodziła dopiero po wysłaniu pytania.
       trafić do pliku. Hasło czyta z `.env` i podaje wejściem standardowym:
       w historii poleceń nie zostaje, w `ps` też nie widać
 
+## ✅ Partia 17 — poprawki z pierwszego prawdziwego przebiegu (GOTOWE)
+
+Pierwszy przebieg „Sprawdź wszystkie" na koncie Marcina (102 modele) pokazał
+trzy błędy w moim własnym sprawdzaniu i potwierdził dwa problemy w interfejsie.
+
+- [x] **Identyfikator konta nie wychodzi z serwera** — NVIDIA wpisuje go
+      w odmowę („Not found for account '…'"), a przycisk kopiowania wrzucał
+      całość do schowka. `scrubSecrets()` czyści też komunikaty w czacie, bo
+      stamtąd trafiały na zrzuty ekranu
+- [x] **Zimny start ≠ brak dostępu** — 13 modeli (w tym llama-3.3-70b) było
+      raportowanych jako niedostępne tylko dlatego, że nie zdążyły odpowiedzieć
+      w 30 s. Limit podniesiony do 75 s, jedna ponowna próba, a wynik trafia do
+      osobnej kategorii `⏳` zamiast do worka „niedostępne"
+- [x] **Embeddingi, OCR i przeszukiwanie mają własną kategorię `⚙`** — nie mają
+      końcówki `/chat/completions`, więc odpowiadały „404 page not found”, co
+      wyglądało na brak dostępu. Cosmos sam z nich korzysta (baza wiedzy).
+      Nie są już nawet odpytywane
+- [x] **Katalog opisów uzupełniony o wszystkie 26 działających modeli** —
+      z polskimi opisami i zgodnością wzroku sprawdzoną wobec pomiaru, nie
+      wobec nazwy
+- [x] **Lista mikrofonów wystawała poza okno** — nazwy urządzeń Bluetooth mają
+      po 80 znaków, a `select` w wierszu flex nie miał `min-width: 0`; na
+      telefonie wychodził 497 px poza ramkę
+- [x] **Strzałki wybieraków tuż przy obrysie** — własna strzałka rysowana
+      gradientami, z odstępem, jednakowa w Ustawieniach, Studiu i Nauce
+- [x] **Pole godziny białe w ciemnym motywie** — brakowało `color-scheme`,
+      więc przeglądarka rysowała własną kontrolkę w jasnym schemacie
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

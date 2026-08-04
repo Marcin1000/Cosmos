@@ -3,6 +3,12 @@
    Czcionki: IBM Plex Sans / IBM Plex Mono (lokalne, offline)
    ============================================================ */
 
+/* Bez tego przeglądarka rysuje własne kontrolki (zegarek w polu godziny,
+   rozwijaną listę systemową) w jasnym schemacie — na ciemnym tle wychodziła
+   z tego biała plama. */
+:root { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+
 :root {
   --bg: #05060a;
   --bg-sidebar: #07080d;
@@ -869,9 +875,13 @@ kbd {
 /* Zawijanie, bo trzy kontrolki w rzędzie (przycisk + etykieta + pole)
    nie mieszczą się na telefonie i ostatnia wychodziła poza ekran. */
 .field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.field-row input { flex: 1; min-width: 0; }
+/* `select` też musi się kurczyć. Nazwy urządzeń audio potrafią mieć po
+   80 znaków, a bez `min-width: 0` element rozpychał wiersz i jego obrys
+   wychodził poza okno — pole wyglądało wtedy na „rozjechane”. */
+.field-row input, .field-row select { flex: 1; min-width: 0; max-width: 100%; }
 
 .field input[type="text"], .field input[type="number"],
+.field input[type="time"], .field input[type="date"],
 .field textarea, .field select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -883,6 +893,7 @@ kbd {
   outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
+
 .field input.mono, .field select.mono { font-family: var(--font-mono); font-size: 12.5px; }
 .field input:focus, .field textarea:focus, .field select:focus {
   border-color: var(--accent);
@@ -1202,8 +1213,18 @@ kbd {
   color: var(--text-dim);
   font: inherit;
   font-size: 11.5px;
-  padding: 4px 8px;
+  /* Ten wybierak jest niski, więc strzałka musi być bliżej niż w Ustawieniach
+     — ale nadal nie na samym obrysie. */
+  padding: 4px 24px 4px 8px;
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 13px center, right 9px center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
 }
 .live-source select:focus { border-color: var(--accent); }
 /* Tryb powiększony: panel na środku ekranu, obraz tak duży, jak się zmieści.
@@ -1975,3 +1996,26 @@ kbd {
 .check-warn { margin-top: 6px; color: #f5b544; font-size: 12px; }
 .check-bad  { margin-top: 6px; color: var(--danger); font-size: 12px; }
 .check-all  { margin-top: 8px; width: 100%; font-size: 12.5px; }
+
+/* Własna strzałka wybieraka zamiast systemowej.
+   Natywna siedzi tuż przy obrysie pola i na każdej przeglądarce w innym
+   miejscu. Rysujemy ją dwoma gradientami, żeby nie ciągnąć zewnętrznego
+   pliku — strona ma działać offline.
+
+   Reguła stoi na końcu arkusza celowo: `.studio-section select`
+   i `.learn-pane select` ustawiają skrótowe `background`, które skasowałoby
+   `background-image` zapisane wcześniej. */
+.field select,
+.studio-section select,
+.learn-pane select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 17px center, right 12px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select::-ms-expand { display: none; }

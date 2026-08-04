@@ -21,7 +21,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 // Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
-const { modelInfo } = require('./public/models.js');
+const { modelInfo, modelNotForChat } = require('./public/models.js');
 
 // ---------------------------------------------------------------------------
 // Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
@@ -3320,7 +3320,9 @@ async function handleChat(req, res) {
     // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
     const where = `[${ep.label} · ${model}]`;
     const hint = modelErrorHint(payload.endpoint, model, upstream.status);
-    return sendJson(res, upstream.status, { error: `${where} ${message}${hint}` });
+    // Ten komunikat ląduje na ekranie, a stamtąd na zrzutach ekranu — dostawca
+    // wpisuje w niego identyfikator konta, który nikomu nie jest potrzebny.
+    return sendJson(res, upstream.status, { error: `${where} ${scrubSecrets(message)}${hint}` });
   }
 
   res.writeHead(200, {
@@ -3354,7 +3356,25 @@ async function handleChat(req, res) {
  */
 const PROBE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-async function probeModel(ep, model, withImage) {
+/** Usuń z komunikatu dostawcy rzeczy, których nie chcemy nigdzie kopiować.
+ *
+ * NVIDIA wpisuje w odmowę identyfikator konta („Not found for account
+ * 'LeJn…'"), a przycisk „Kopiuj wynik" wrzuca całość do schowka — łatwo
+ * wtedy wkleić to komuś bez zastanowienia. Do zdiagnozowania problemu ten
+ * ciąg nie jest potrzebny, więc go nie pokazujemy.
+ */
+function scrubSecrets(msg) {
+  return String(msg || '')
+    .replace(/(for account\s+)'[^']+'/gi, "$1'(ukryte)'")
+    .replace(/\bnvapi-[A-Za-z0-9_-]+/g, 'nvapi-(ukryte)')
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, 'sk-(ukryte)')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const PROBE_TIMEOUT_MS = 75000;
+
+async function probeOnce(ep, model, withImage) {
   const content = withImage
     ? [{ type: 'image_url', image_url: { url: PROBE_PNG } }, { type: 'text', text: 'hi' }]
     : 'hi';
@@ -3363,7 +3383,7 @@ async function probeModel(ep, model, withImage) {
       method: 'POST',
       headers: authHeaders(ep),
       body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (r.ok) return { ok: true };
     let detail = '';
@@ -3373,11 +3393,26 @@ async function probeModel(ep, model, withImage) {
       const j = JSON.parse(detail);
       msg = j?.error?.message || j?.detail || j?.title || msg;
       if (typeof msg !== 'string') msg = JSON.stringify(msg);
-    } catch { if (detail) msg = detail.slice(0, 160); }
-    return { ok: false, status: r.status, error: msg };
+    } catch { if (detail) msg = detail.slice(0, 200); }
+    return { ok: false, status: r.status, error: scrubSecrets(msg) };
   } catch (e) {
-    return { ok: false, status: 0, error: e.message };
+    // Rozróżniamy „nie masz dostępu" od „nie zdążył odpowiedzieć" — to drugie
+    // przy modelach ładowanych na żądanie znaczy zwykle tylko tyle, że model
+    // wstawał z zimnego startu.
+    const timeout = e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message);
+    return { ok: false, status: 0, timeout, error: scrubSecrets(e.message) };
   }
+}
+
+/** Sonda z jedną ponowną próbą po przekroczeniu czasu.
+ *  Pierwsze żądanie do modelu, którego dostawca nie trzyma rozgrzanego,
+ *  potrafi trwać dłużej niż każde następne — jedna odmowa to za mało, żeby
+ *  napisać komuś „ten model nie działa". */
+async function probeModel(ep, model, withImage) {
+  const first = await probeOnce(ep, model, withImage);
+  if (first.ok || !first.timeout) return first;
+  const second = await probeOnce(ep, model, withImage);
+  return second.timeout ? { ...second, timeout: true } : second;
 }
 
 async function handleModelCheck(req, res) {
@@ -3386,6 +3421,24 @@ async function handleModelCheck(req, res) {
   const ep = pickEndpoint(data.endpoint);
   const model = String(data.model || '').trim();
   if (!model) return sendJson(res, 400, { error: 'Brak identyfikatora modelu.' });
+
+  // Embeddingi, przeszukiwanie, OCR — one nie mają końcówki rozmowy i zwrócą
+  // „404 page not found". To nie brak dostępu, tylko inne przeznaczenie,
+  // a część z nich Cosmos sam wykorzystuje (baza wiedzy). Nie ma sensu ich
+  // odpytywać ani wrzucać do worka „niedostępne”.
+  if (modelNotForChat(model)) {
+    return sendJson(res, 200, {
+      model,
+      silnik: ep.label,
+      rozmowa: false,
+      obrazy: false,
+      inneZadanie: true,
+      blad: null,
+      podpowiedz: 'Ten model nie służy do rozmowy (embeddingi / przeszukiwanie / OCR). '
+        + 'Nie wybieraj go jako modelu czatu.',
+      bladObrazy: null,
+    });
+  }
 
   const text = await probeModel(ep, model, false);
   // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej
@@ -3397,9 +3450,15 @@ async function handleModelCheck(req, res) {
     silnik: ep.label,
     rozmowa: text.ok,
     obrazy: vision.ok,
+    // „Nie zdążył odpowiedzieć" to nie to samo, co „nie masz dostępu”.
+    niepewne: Boolean(text.timeout),
     blad: text.ok ? null : text.error,
     // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
-    podpowiedz: text.ok ? null : modelErrorHint(data.endpoint, model, text.status).trim(),
+    podpowiedz: text.ok ? null
+      : (text.timeout
+        ? 'Model nie odpowiedział na czas — u dostawcy wstaje z zimnego startu. '
+          + 'Spróbuj go sprawdzić pojedynczo przyciskiem „Sprawdź”.'
+        : modelErrorHint(data.endpoint, model, text.status).trim()),
     bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
   });
 }

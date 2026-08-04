@@ -3895,40 +3895,46 @@ async function checkAllModels(epName) {
   const link = $(`check-all-${epName}`);
   if (link) link.disabled = true;
   let ok = 0; let vis = 0;
-  const wzrok = []; const rozmowa = []; const brak = [];
+  const wzrok = []; const rozmowa = []; const brak = []; const niepewne = []; const inne = [];
   for (let i = 0; i < opts.length; i++) {
     const o = opts[i];
     box.hidden = false;
     box.innerHTML = escapeHtml(t('set.checkAllRun', { i: i + 1, n: opts.length, m: o.value }));
     let r;
     try { r = await checkOneModel(epName, o.value); } catch { r = { rozmowa: false }; }
-    const mark = !r.rozmowa ? '✗' : (r.obrazy ? '👁' : '✓');
+    // Pięć stanów, nie dwa: „nie zdążył odpowiedzieć" i „to nie jest model do
+    // rozmowy" to nie to samo, co „nie masz dostępu" — mieszanie ich kazałoby
+    // odpuścić modele, które działają.
+    const mark = r.rozmowa ? (r.obrazy ? '👁' : '✓')
+      : r.inneZadanie ? '⚙' : r.niepewne ? '⏳' : '✗';
     if (r.rozmowa) ok++;
     if (r.obrazy) vis++;
-    if (!r.rozmowa) brak.push(`${o.value} — ${r.blad || '—'}`);
-    else if (r.obrazy) wzrok.push(o.value);
-    else rozmowa.push(o.value);
+    if (r.rozmowa) (r.obrazy ? wzrok : rozmowa).push(o.value);
+    else if (r.inneZadanie) inne.push(o.value);
+    else if (r.niepewne) niepewne.push(o.value);
+    else brak.push(`${o.value} — ${r.blad || '—'}`);
     // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
     // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
     // zaczęłyby się nawarstwiać.
-    o.textContent = `${mark} ${o.textContent.replace(/^[✗✓👁]\s*/u, '')}`;
+    o.textContent = `${mark} ${o.textContent.replace(/^[✗✓👁⏳⚙]\s*/u, '')}`;
     o.dataset.works = r.rozmowa ? '1' : '0';
   }
 
   // Wynik trzeba dać się wynieść na zewnątrz: przy stu pozycjach nikt nie
   // przepisze listy ręcznie, a znaczki w wybieraku znikają po odświeżeniu.
+  const grupa = (tytul, lista) => [
+    '',
+    `=== ${tytul} (${lista.length}) ===`,
+    ...(lista.length ? lista.map((m) => `  ${m}`) : ['  —']),
+  ];
   lastCheckReport = [
     `${t('set.checkReportEngine')}: ${epName}`,
     t('set.checkSummary', { ok, n: opts.length, vis }),
-    '',
-    `=== ${t('set.checkGroupVision')} (${wzrok.length}) ===`,
-    ...(wzrok.length ? wzrok.map((m) => `  ${m}`) : ['  —']),
-    '',
-    `=== ${t('set.checkGroupChat')} (${rozmowa.length}) ===`,
-    ...(rozmowa.length ? rozmowa.map((m) => `  ${m}`) : ['  —']),
-    '',
-    `=== ${t('set.checkGroupNone')} (${brak.length}) ===`,
-    ...(brak.length ? brak.map((m) => `  ${m}`) : ['  —']),
+    ...grupa(t('set.checkGroupVision'), wzrok),
+    ...grupa(t('set.checkGroupChat'), rozmowa),
+    ...grupa(t('set.checkGroupSlow'), niepewne),
+    ...grupa(t('set.checkGroupOther'), inne),
+    ...grupa(t('set.checkGroupNone'), brak),
   ].join('\n');
 
   box.innerHTML = `<div>${escapeHtml(t('set.checkSummary', { ok, n: opts.length, vis }))}</div>`
