@@ -170,6 +170,23 @@ przyciski w Ustawieniach:
 | **Sprawdź** (obok pola modelu) | Wysyła do wybranego modelu dwa najtańsze możliwe żądania (`max_tokens: 1`): jedno tekstowe, jedno z obrazkiem 1×1. Odpowiada: `✓ rozmowa działa`, `👁 czyta też obrazy` albo `✗ niedostępny na Twoim koncie` z powodem od dostawcy |
 | **Sprawdź wszystkie z listy** (pod wybierakiem) | To samo dla całej pobranej listy, **po kolei** (nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań). Każdą pozycję oznacza znaczkiem: `✗` nie działa, `✓` rozmowa, `👁` rozmowa + obrazy. Na końcu podsumowanie „Działa N z M. Obrazy czyta K." |
 
+Po przejściu całej listy pojawia się **📋 Kopiuj wynik** — wrzuca do schowka
+gotowy raport (osobno modele z obrazami, osobno z samą rozmową, osobno
+niedostępne wraz z powodem od dostawcy). Znaczki przy pozycjach znikają po
+odświeżeniu strony, więc jeśli wynik ma gdzieś trafić, skopiuj go od razu.
+
+To samo bez przeglądarki — skryptem na serwerze:
+
+```bash
+./scripts/sprawdz-modele.sh              # chmura
+./scripts/sprawdz-modele.sh local        # silnik lokalny
+./scripts/sprawdz-modele.sh cloud > wynik.txt
+```
+
+Hasło bierze z `.env`, więc nie trafia do historii poleceń (a hasło
+z wykrzyknikiem dodatkowo rozbiłoby się o rozwijanie historii basha).
+Serwer pod innym adresem: `COSMOS_URL=http://... ./scripts/sprawdz-modele.sh`.
+
 Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej zdublowalibyśmy
 ten sam błąd dostępu i niepotrzebnie obciążyli limit.
 

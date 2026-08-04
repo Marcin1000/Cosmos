@@ -321,6 +321,13 @@ Not found for account" przychodziła dopiero po wysłaniu pytania.
       a nie w Cosmosie
 - [x] **Limity czasu na wszystkich żądaniach wychodzących** — pobieranie grafiki
       z odpowiedzi dostawcy i token Firefly potrafiły wisieć bez końca
+- [x] **„📋 Kopiuj wynik"** — przy stu pozycjach nikt nie przepisze listy ręcznie,
+      a znaczki w wybieraku znikają po odświeżeniu strony. Raport dzieli modele
+      na trzy grupy i zachowuje powód odmowy. Droga zapasowa przez ukryte pole
+      tekstowe, bo na starym WebView Androida `navigator.clipboard` nie istnieje
+- [x] **`scripts/sprawdz-modele.sh`** — to samo z wiersza poleceń, gdy wynik ma
+      trafić do pliku. Hasło czyta z `.env` i podaje wejściem standardowym:
+      w historii poleceń nie zostaje, w `ps` też nie widać
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
