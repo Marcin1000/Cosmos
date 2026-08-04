@@ -636,7 +636,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 |---|---|---|
 | `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji i pamięci, strumień SSE |
 | `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
-| `/api/models/check` | POST | Sprawdza jednym najtańszym żądaniem, czy dany model działa na tym koncie i czy czyta obrazy. Zwraca `{model, silnik, rozmowa, obrazy, blad, podpowiedz, bladObrazy}` |
+| `/api/models/check` | POST | Sprawdza jednym najtańszym żądaniem, czy dany model działa na tym koncie i czy czyta obrazy. Zwraca `{model, silnik, rozmowa, obrazy, niepewne, inneZadanie, blad, podpowiedz, bladObrazy}` |
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
@@ -666,6 +666,25 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
 | `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
+
+## 🔍 Audyt spójności
+
+```bash
+node scripts/audyt.js
+```
+
+Dwanaście kontroli statycznych, każda mówi, co sprawdza i co znalazła: składnia
+(JS, Python, bash, nawiasy CSS), parytet i pokrycie tłumaczeń, zgodność `$('id')`
+z HTML-em, czy klient nie woła nieistniejących tras i czy każda trasa jest
+opisana, kompletność zmiennych `.env` (także tych po stronie zmysłów), martwe
+odwołania w dokumentacji, przełączniki w wypisanych komendach, zasoby service
+workera i manifestu, bezpieczeństwo (`.env` i `data/` poza repo, brak klucza
+w `/api/config`, redakcja danych konta, bramka logowania, limity czasu na
+żądaniach), zgodność katalogu modeli z pomiarem oraz higiena (TODO, wydruki
+diagnostyczne, czystość drzewa).
+
+Kod wyjścia `0` znaczy „zero problemów”. Uwagi (`·`) to rzeczy do świadomej
+decyzji, nie usterki — skrypt celowo ich nie liczy jako błędów.
 
 ## 💰 Koszty
 
