@@ -3881,6 +3881,9 @@ async function checkModelField(epName) {
   }
 }
 
+// Ostatni raport ze „Sprawdź wszystkie" — do skopiowania.
+let lastCheckReport = '';
+
 /** Sprawdź po kolei całą pobraną listę i oznacz pozycje w wybieraku.
  *  Po kolei, nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań. */
 async function checkAllModels(epName) {
@@ -3892,6 +3895,7 @@ async function checkAllModels(epName) {
   const link = $(`check-all-${epName}`);
   if (link) link.disabled = true;
   let ok = 0; let vis = 0;
+  const wzrok = []; const rozmowa = []; const brak = [];
   for (let i = 0; i < opts.length; i++) {
     const o = opts[i];
     box.hidden = false;
@@ -3901,14 +3905,60 @@ async function checkAllModels(epName) {
     const mark = !r.rozmowa ? '✗' : (r.obrazy ? '👁' : '✓');
     if (r.rozmowa) ok++;
     if (r.obrazy) vis++;
+    if (!r.rozmowa) brak.push(`${o.value} — ${r.blad || '—'}`);
+    else if (r.obrazy) wzrok.push(o.value);
+    else rozmowa.push(o.value);
     // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
     // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
     // zaczęłyby się nawarstwiać.
     o.textContent = `${mark} ${o.textContent.replace(/^[✗✓👁]\s*/u, '')}`;
     o.dataset.works = r.rozmowa ? '1' : '0';
   }
-  box.innerHTML = escapeHtml(t('set.checkSummary', { ok, n: opts.length, vis }));
+
+  // Wynik trzeba dać się wynieść na zewnątrz: przy stu pozycjach nikt nie
+  // przepisze listy ręcznie, a znaczki w wybieraku znikają po odświeżeniu.
+  lastCheckReport = [
+    `${t('set.checkReportEngine')}: ${epName}`,
+    t('set.checkSummary', { ok, n: opts.length, vis }),
+    '',
+    `=== ${t('set.checkGroupVision')} (${wzrok.length}) ===`,
+    ...(wzrok.length ? wzrok.map((m) => `  ${m}`) : ['  —']),
+    '',
+    `=== ${t('set.checkGroupChat')} (${rozmowa.length}) ===`,
+    ...(rozmowa.length ? rozmowa.map((m) => `  ${m}`) : ['  —']),
+    '',
+    `=== ${t('set.checkGroupNone')} (${brak.length}) ===`,
+    ...(brak.length ? brak.map((m) => `  ${m}`) : ['  —']),
+  ].join('\n');
+
+  box.innerHTML = `<div>${escapeHtml(t('set.checkSummary', { ok, n: opts.length, vis }))}</div>`
+    + `<button type="button" class="btn-secondary check-all" id="copy-check-${epName}">`
+    + `${escapeHtml(t('set.checkCopy'))}</button>`;
+  $(`copy-check-${epName}`).addEventListener('click', (e) => copyCheckReport(e.currentTarget));
   if (link) link.disabled = false;
+}
+
+/** Skopiuj raport ze sprawdzenia do schowka.
+ *  Na telefonie `navigator.clipboard` bywa niedostępny (stary WebView, brak
+ *  HTTPS), więc jest zapasowa droga przez ukryte pole tekstowe. */
+async function copyCheckReport(btn) {
+  if (!lastCheckReport) return;
+  const prev = btn.textContent;
+  let done = false;
+  try {
+    await navigator.clipboard.writeText(lastCheckReport);
+    done = true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = lastCheckReport;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { done = document.execCommand('copy'); } catch { done = false; }
+    ta.remove();
+  }
+  btn.textContent = t(done ? 'set.checkCopied' : 'set.checkCopyFail');
+  setTimeout(() => { btn.textContent = prev; }, 2500);
 }
 
 function refreshModelInfoBoxes() {
