@@ -170,6 +170,21 @@ przyciski w Ustawieniach:
 | **Sprawdź** (obok pola modelu) | Wysyła do wybranego modelu dwa najtańsze możliwe żądania (`max_tokens: 1`): jedno tekstowe, jedno z obrazkiem 1×1. Odpowiada: `✓ rozmowa działa`, `👁 czyta też obrazy` albo `✗ niedostępny na Twoim koncie` z powodem od dostawcy |
 | **Sprawdź wszystkie z listy** (pod wybierakiem) | To samo dla całej pobranej listy, **po kolei** (nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań). Każdą pozycję oznacza znaczkiem: `✗` nie działa, `✓` rozmowa, `👁` rozmowa + obrazy. Na końcu podsumowanie „Działa N z M. Obrazy czyta K." |
 
+Sprawdzenie rozdziela pięć stanów, nie dwa — bo „nie masz dostępu" to co innego
+niż „nie zdążył odpowiedzieć":
+
+| Znaczek | Znaczenie |
+|---|---|
+| `👁` | rozmawia i czyta obrazy |
+| `✓` | rozmawia, obrazów nie czyta |
+| `⏳` | nie odpowiedział na czas mimo ponownej próby — u dostawcy wstaje z zimnego startu. Sprawdź go pojedynczo |
+| `⚙` | inne przeznaczenie: embeddingi, przeszukiwanie, OCR. Nie jest wadą, że nie rozmawia — część z nich Cosmos sam wykorzystuje |
+| `✗` | niedostępny na Twoim koncie |
+
+Identyfikator konta, który dostawca wpisuje w odmowę („Not found for account
+'…'"), jest z komunikatów usuwany — trafiał inaczej do schowka i na zrzuty
+ekranu, a do zdiagnozowania problemu nie jest potrzebny.
+
 Po przejściu całej listy pojawia się **📋 Kopiuj wynik** — wrzuca do schowka
 gotowy raport (osobno modele z obrazami, osobno z samą rozmową, osobno
 niedostępne wraz z powodem od dostawcy). Znaczki przy pozycjach znikają po
