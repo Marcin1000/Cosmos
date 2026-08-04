@@ -270,6 +270,19 @@ planowana z góry.
       i streszczenie szły do modelu z `.env`, nie do wybranego; przy nieaktualnym
       wpisie dawało to 404, choć sam czat działał
 
+## ✅ Partia 14 — tryb głosowy i kamera na telefonie (GOTOWE)
+
+- [x] **Jeden rozpoznawacz mowy na sesję** — zamiast tworzenia nowego przy każdym
+      przejściu nasłuch → pytanie → odpowiedź. Każde przejęcie mikrofonu Android
+      sygnalizuje dźwiękiem; teraz zdarza się raz, nie przy każdym zdaniu
+- [x] **Cofnięcie trzymania mikrofonu** — próba wyciszenia tych sygnałów przez
+      otwarty strumień `getUserMedia` odbierała mikrofon rozpoznawaniu mowy
+      i tryb głosowy przestawał cokolwiek słyszeć
+- [x] **Przełączanie kamery** — najpierw zwolnij stary obiektyw, potem otwórz nowy;
+      telefon obsługuje jeden naraz i inaczej odpowiada „Could not start video source"
+- [x] **Przycisk przełączania kamery** — przeniesiony obok zamknięcia (wcześniej
+      `space-between` wypychał go na środek nagłówka) i czytelna ikona dwóch strzałek
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

@@ -43,10 +43,7 @@ let isRecording = false;
 let cameraStream = null;
 let voiceMode = false;        // tryb asystenta głosowego („Hej, Kosmos”)
 let voiceState = 'off';       // wake | listening | thinking | speaking
-let voiceWakeRec = null;
-let voiceQueryRec = null;
 let voiceCameraStream = null;
-let voiceMicKeepAlive = null;  // mikrofon trzymany na czas sesji głosowej
 let voiceNoteMode = false;    // dyktowanie notatki do bazy wiedzy
 let voiceNoteBuffer = [];
 let kbSelected = new Set(loadJson('cosmos.kbSelected', []));
@@ -1839,22 +1836,42 @@ async function openCamera() {
 }
 
 /** Przełącz przód/tył bez zamykania okna. */
+/** Przełącz obiektyw. NAJPIERW zwolnij stary strumień.
+ *
+ * Telefon obsługuje jeden obiektyw naraz. Próba otwarcia drugiego, gdy pierwszy
+ * jeszcze pracuje, kończy się „Could not start video source" — i dokładnie
+ * dlatego przełącznik nie działał. Kolejność jest więc odwrotna niż podpowiada
+ * ostrożność: zamykamy, otwieramy, a gdy nowy obiektyw zawiedzie — wracamy do
+ * poprzedniego, żeby nie zostawić czarnego okna.
+ */
+async function swapStream(current, next, apply) {
+  const prev = cameraFacing;
+  if (current) current.getTracks().forEach((tr) => tr.stop());
+  try {
+    const stream = await getMediaFacing(next);
+    cameraFacing = next;
+    localStorage.setItem('cosmos.cameraFacing', next);
+    apply(stream);
+    return { ok: true, stream };
+  } catch (err) {
+    try {                                   // odzyskaj poprzedni widok
+      const back = await getMediaFacing(prev);
+      apply(back);
+      return { ok: false, stream: back, error: err };
+    } catch {
+      apply(null);
+      return { ok: false, stream: null, error: err };
+    }
+  }
+}
+
 async function flipCamera() {
   const next = cameraFacing === 'environment' ? 'user' : 'environment';
-  let stream;
-  try {
-    // Stary strumień zwalniamy dopiero po udanym otwarciu nowego — inaczej
-    // przy odmowie zostalibyśmy z czarnym oknem i bez obrazu.
-    stream = await getMediaFacing(next);
-  } catch (err) {
-    alert(`${t('cam.flipErr')} ${err.message}`);
-    return;
-  }
-  if (cameraStream) cameraStream.getTracks().forEach((tr) => tr.stop());
-  cameraStream = stream;
-  cameraFacing = next;
-  localStorage.setItem('cosmos.cameraFacing', next);
-  el.cameraVideo.srcObject = stream;
+  const r = await swapStream(cameraStream, next, (s) => {
+    cameraStream = s;
+    el.cameraVideo.srcObject = s;
+  });
+  if (!r.ok) alert(`${t('cam.flipErr')} ${r.error.message}`);
 }
 
 function closeCamera() {
@@ -2355,20 +2372,13 @@ function applyLiveExpanded() {
 }
 $('live-flip').addEventListener('click', async () => {
   const next = cameraFacing === 'environment' ? 'user' : 'environment';
-  let stream;
-  try {
-    stream = await getMediaFacing(next);
-  } catch (err) {
-    $('live-status').textContent = `${t('cam.err')} ${err.message}`;
-    return;
-  }
-  if (liveStream) liveStream.getTracks().forEach((tr) => tr.stop());
-  liveStream = stream;
-  cameraFacing = next;
-  localStorage.setItem('cosmos.cameraFacing', next);
   const video = $('live-video');
-  video.srcObject = stream;
-  await video.play().catch(() => {});
+  const r = await swapStream(liveStream, next, (s) => {
+    liveStream = s;
+    video.srcObject = s;
+    if (s) video.play().catch(() => {});
+  });
+  $('live-status').textContent = r.ok ? '…' : `${t('cam.err')} ${r.error.message}`;
 });
 $('live-expand').addEventListener('click', () => {
   const on = $('live-panel').classList.contains('expanded');
@@ -2927,17 +2937,18 @@ function chime(freq = 880) {
   } catch { /* dźwięk to tylko ozdoba */ }
 }
 
+/** Zatrzymaj rozpoznawanie na dobre — tylko przy wyjściu z trybu głosowego. */
 function stopVoiceRecognizers() {
-  for (const rec of [voiceWakeRec, voiceQueryRec]) {
-    if (rec) {
-      rec.onend = null;
-      rec.onresult = null;
-      rec.onerror = null;
-      try { rec.stop(); } catch { /* już zatrzymany */ }
-    }
+  clearTimeout(voiceSilence);
+  voiceHeard = '';
+  voiceDeaf = false;
+  if (voiceRec) {
+    voiceRec.onend = null;          // bez tego wznowiłby się sam
+    voiceRec.onresult = null;
+    voiceRec.onerror = null;
+    try { voiceRec.stop(); } catch { /* już zatrzymany */ }
+    voiceRec = null;
   }
-  voiceWakeRec = null;
-  voiceQueryRec = null;
 }
 
 async function enterVoiceMode() {
@@ -2951,13 +2962,11 @@ async function enterVoiceMode() {
   el.voiceTranscript.textContent = '';
   el.voiceAnswer.textContent = '';
 
-  // Rozpoznawanie mowy przejmuje mikrofon na nowo przy każdym cyklu
-  // nasłuch → pytanie → odpowiedź, a Android sygnalizuje każde takie przejęcie
-  // dźwiękiem. Trzymamy więc własny strumień otwarty przez całą sesję: mikrofon
-  // pozostaje „zajęty”, więc system nie odgrywa podłączania w kółko.
-  try {
-    voiceMicKeepAlive = await getMedia(audioConstraints());
-  } catch { /* bez tego działa, tylko głośniej */ }
+  // UWAGA — nie wolno tu trzymać własnego strumienia z mikrofonu.
+  // Próbowałem tak wyciszyć sygnały podłączania sprzętu na Androidzie, ale
+  // rozpoznawanie mowy korzysta z tego samego mikrofonu na wyłączność: przy
+  // zajętym wejściu przestawało cokolwiek słyszeć, łącznie z „Hej, Kosmos”.
+  // Działające rozpoznawanie jest ważniejsze niż cichszy telefon.
 
   // Kamera NIE włącza się sama. Wcześniej tak było i na telefonie podgląd
   // zasłaniał pół ekranu przy każdym nasłuchu — a wizji potrzeba tylko przy
@@ -3016,79 +3025,122 @@ function exitVoiceMode() {
   stopSpeaking();
   el.voiceOverlay.style.display = 'none';
   stopVoiceCamera();
-  if (voiceMicKeepAlive) {
-    voiceMicKeepAlive.getTracks().forEach((tr) => tr.stop());
-    voiceMicKeepAlive = null;
-  }
   setVoiceState('off');
 }
 
-function startWakeListening() {
-  if (!voiceMode) return;
-  stopVoiceRecognizers();
-  setVoiceState('wake');
-  el.voiceTranscript.textContent = '';
+/* JEDEN rozpoznawacz na całą sesję głosową.
+ *
+ * Wcześniej nasłuch słowa budzącego i nasłuch pytania to były dwa osobne
+ * obiekty, tworzone i niszczone przy każdym przejściu stanu. Każde takie
+ * przejęcie mikrofonu Android sygnalizuje dźwiękiem — stąd „ciągłe podłączanie
+ * i odłączanie". Teraz rozpoznawacz żyje od wejścia w tryb głosowy do wyjścia,
+ * a zmienia się tylko to, jak interpretujemy wynik. Mikrofon jest przejmowany
+ * raz, nie przy każdym zdaniu.
+ *
+ * Gdy Cosmos myśli albo mówi, wyników nie czytamy (`voiceDeaf`) — inaczej
+ * usłyszałby własny głos i odpowiadał sam sobie. Rozpoznawacz zostaje wtedy
+ * uruchomiony, ale głuchy, bo zatrzymanie go zwolniłoby mikrofon i wróciłby
+ * dźwięk przy ponownym starcie.
+ */
+let voiceRec = null;          // jedyny rozpoznawacz sesji
+let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
+let voiceHeard = '';          // złożone zdanie w trybie pytania
+let voiceSilence = null;      // odliczanie ciszy po pytaniu
 
+function startVoiceRecognizer() {
+  if (!voiceMode || voiceRec) return;
   const SR = getSR();
+  if (!SR) return;
+
   const rec = new SR();
-  voiceWakeRec = rec;
+  voiceRec = rec;
   rec.lang = t('speechLang');
   rec.continuous = true;
   rec.interimResults = true;
 
   rec.onresult = (e) => {
-    const latest = [...e.results].slice(-3).map((r) => r[0].transcript).join(' ');
-    const match = latest.match(WAKE_RE);
-    if (!match) return;
-    // wszystko po „hej, kosmos” traktujemy od razu jako pytanie
-    const after = latest.slice(latest.search(WAKE_RE) + match[0].length).trim();
-    rec.onend = null;
-    try { rec.stop(); } catch { /* ignorujemy */ }
-    voiceWakeRec = null;
-    chime(880);
-    if (after.length > 5) handleVoiceQuery(after);
-    else startQueryListening();
-  };
-  rec.onend = () => {
-    // Chrome ucina sesję co ~60 s — wznawiamy nasłuch
-    if (voiceMode && voiceState === 'wake') {
-      setTimeout(() => { if (voiceMode && voiceState === 'wake') startWakeListening(); }, 300);
+    if (!voiceMode || voiceDeaf) return;
+
+    if (voiceState === 'wake') {
+      const latest = [...e.results].slice(-3).map((r) => r[0].transcript).join(' ');
+      const match = latest.match(WAKE_RE);
+      if (!match) return;
+      const after = latest.slice(latest.search(WAKE_RE) + match[0].length).trim();
+      chime(880);
+      if (after.length > 5) { askVoice(after); return; }
+      voiceHeard = '';
+      setVoiceState('listening');
+      el.voiceTranscript.textContent = '';
+      return;
     }
-  };
-  rec.onerror = () => { /* onend zrobi restart */ };
-  try { rec.start(); } catch { /* podwójny start — ignorujemy */ }
-}
 
-function startQueryListening() {
-  if (!voiceMode) return;
-  stopVoiceRecognizers();
-  setVoiceState('listening');
-
-  const SR = getSR();
-  const rec = new SR();
-  voiceQueryRec = rec;
-  rec.lang = t('speechLang');
-  rec.continuous = false;
-  rec.interimResults = true;
-
-  let finalText = '';
-  rec.onresult = (e) => {
+    if (voiceState !== 'listening') return;
     let interim = '';
-    for (const r of e.results) {
-      if (r.isFinal) finalText += r[0].transcript;
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) voiceHeard += r[0].transcript;
       else interim += r[0].transcript;
     }
-    el.voiceTranscript.textContent = (finalText + ' ' + interim).trim();
+    el.voiceTranscript.textContent = (voiceHeard + ' ' + interim).trim();
+
+    // Rozpoznawacz jest ciągły, więc sam nie zasygnalizuje końca pytania.
+    // Kończymy po chwili ciszy od ostatniego usłyszanego słowa.
+    clearTimeout(voiceSilence);
+    voiceSilence = setTimeout(() => {
+      if (!voiceMode || voiceState !== 'listening') return;
+      const text = voiceHeard.trim();
+      voiceHeard = '';
+      if (text) askVoice(text);
+      else backToWake();
+    }, 1400);
   };
+
+  // Chrome i tak utnie sesję po ~60 s — wznawiamy ten sam obiekt.
   rec.onend = () => {
-    voiceQueryRec = null;
+    voiceRec = null;
     if (!voiceMode) return;
-    const text = finalText.trim();
-    if (text) handleVoiceQuery(text);
-    else startWakeListening(); // cisza — wracamy do nasłuchu wake word
+    setTimeout(() => { if (voiceMode) startVoiceRecognizer(); }, 250);
   };
-  rec.onerror = () => { /* onend obsłuży powrót */ };
-  try { rec.start(); } catch { /* ignorujemy */ }
+  rec.onerror = (ev) => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      voiceRec = null;
+      el.voiceTranscript.textContent = t('voice.micDenied');
+      voiceMode = false;
+      return;
+    }
+    /* „no-speech" i „aborted" to normalny bieg rzeczy — onend wznowi */
+  };
+
+  try { rec.start(); } catch { /* już wystartował */ }
+}
+
+function backToWake() {
+  if (!voiceMode) return;
+  clearTimeout(voiceSilence);
+  voiceHeard = '';
+  voiceDeaf = false;
+  setVoiceState('wake');
+  el.voiceTranscript.textContent = '';
+  startVoiceRecognizer();
+}
+
+/** Zadaj pytanie, nie słuchając własnej odpowiedzi. */
+function askVoice(text) {
+  clearTimeout(voiceSilence);
+  voiceDeaf = true;
+  handleVoiceQuery(text);
+}
+
+// Nazwy używane w pozostałej części pliku — zostawiamy je jako cienkie przejścia,
+// żeby nie rozsypać wywołań rozsianych po trybie głosowym.
+function startWakeListening() { backToWake(); }
+function startQueryListening() {
+  if (!voiceMode) return;
+  voiceHeard = '';
+  voiceDeaf = false;
+  setVoiceState('listening');
+  el.voiceTranscript.textContent = '';
+  startVoiceRecognizer();
 }
 
 function captureVoiceFrame() {
