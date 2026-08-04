@@ -139,6 +139,15 @@ NEMOTRON_MODEL=nvidia/nvidia-nemotron-nano-9b-v2   # podmień na wybrany model
 NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 ```
 
+> 👁 **`NEMOTRON_VISION_MODEL` warto ustawić.** Większość modeli tekstowych nie
+> odczytuje obrazów — wysłane zdjęcie albo kończy się błędem 400, albo (gorzej)
+> odpowiedzią „nie mam dostępu do żadnego zdjęcia", choć obraz poleciał. Gdy to
+> pole jest wypełnione, Cosmos **sam kieruje same zdjęcia** do modelu wizyjnego,
+> a rozmowę zostawia modelowi wybranemu w Ustawieniach; pod odpowiedzią widać
+> wtedy, który model ją napisał. Bez tego pola żądanie ze zdjęciem jest
+> zatrzymywane z czytelnym wyjaśnieniem. Sprawdzony wybór:
+> `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`.
+
 > ⚠️ **NVIDIA zmienia identyfikatory modeli** — ten sam model bywa dostępny raz jako
 > `nvidia/nemotron-nano-9b-v2`, a po jakimś czasie jako `nvidia/nvidia-nemotron-nano-9b-v2`.
 > Nieaktualny wpis kończy się błędem **404 „page not found"**. Nie przepisuj więc nazw

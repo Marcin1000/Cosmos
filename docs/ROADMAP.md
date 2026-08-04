@@ -283,6 +283,22 @@ planowana z góry.
 - [x] **Przycisk przełączania kamery** — przeniesiony obok zamknięcia (wcześniej
       `space-between` wypychał go na środek nagłówka) i czytelna ikona dwóch strzałek
 
+## ✅ Partia 15 — zdjęcia trafiają tam, gdzie ktoś je odczyta (GOTOWE)
+
+- [x] **Kierowanie zdjęć do modelu wizyjnego** — decyduje to, czy WYBRANY model
+      umie patrzeć, a nie to, czy użytkownik czegokolwiek nie wybrał. Wcześniej
+      podmiana działała wyłącznie przy pustym polu modelu, czyli prawie nigdy
+- [x] **Katalog modeli wspólny z serwerem** — `public/models.js` eksportuje się
+      i dla przeglądarki, i dla Node; jedno miejsce wiedzy o tym, co widzi obrazy
+- [x] **Uczciwość wobec użytkownika** — pod odpowiedzią widać, że na zdjęcie
+      odpowiedział inny model niż wybrany (nagłówek `X-Cosmos-Model`)
+- [x] **Czytelna odmowa zamiast bezużytecznej odpowiedzi** — bez modelu wizyjnego
+      żądanie ze zdjęciem jest zatrzymywane z wyjaśnieniem, co ustawić
+- [x] **Modele spoza katalogu** — gdy dostawca odrzuci obraz błędem 400, komunikat
+      mówi to samo, co przy modelach znanych, zamiast „Błąd modelu (HTTP 400)"
+- [x] **Zdjęcie z aparatu w Galerii** — trafia i do wiadomości, i do bazy wiedzy;
+      wcześniej po wysłaniu nie dało się do niego wrócić ani go pobrać
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

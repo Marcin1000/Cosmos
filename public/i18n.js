@@ -84,6 +84,7 @@ const I18N = {
     'model.other': 'Pozostałe',
     'model.bestFor': 'Najlepszy do:',
     'model.guessed': 'Model spoza katalogu — poniższe cechy odczytane z nazwy, mogą być niepełne.',
+    'model.swapped': '👁 {from} nie widzi obrazów — na zdjęcie odpowiedział {to}.',
     'model.blindWarn': 'Wybrany model nie widzi obrazów, a nie masz ustawionego modelu wizyjnego. Zdjęcie zostanie pominięte — wybierz model z oznaczeniem „widzi obrazy” albo ustaw NEMOTRON_VISION_MODEL w .env.',
 
     // — źródło obrazu w panelu na żywo —
@@ -574,6 +575,7 @@ const I18N = {
     'model.other': 'Others',
     'model.bestFor': 'Best for:',
     'model.guessed': 'Model not in the catalogue — the traits below are read from its name and may be incomplete.',
+    'model.swapped': '👁 {from} cannot see images — {to} answered about the photo.',
     'model.blindWarn': 'The selected model cannot see images and no vision model is configured. The photo will be ignored — pick a model tagged “sees images” or set NEMOTRON_VISION_MODEL in .env.',
 
     'live.source': 'Video source',

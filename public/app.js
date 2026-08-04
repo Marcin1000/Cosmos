@@ -617,7 +617,9 @@ function messageElement(m, idx = -1) {
   body.innerHTML = (m.think
     ? `<details class="think-block"><summary>${escapeHtml(t('think.done'))}</summary>`
       + `<pre>${escapeHtml(m.think)}</pre></details>`
-    : '') + renderMarkdown(text);
+    : '')
+    + (m.note ? `<div class="model-note mono">${escapeHtml(m.note)}</div>` : '')
+    + renderMarkdown(text);
   if (images.length) {
     const imgs = imagesHtml(images);
     body.prepend(imgs);
@@ -1119,10 +1121,20 @@ async function streamOnce(conv) {
     if (!res.ok) {
       let errText = `Błąd HTTP ${res.status}`;
       try {
-        const data = await res.json();
+        const data = await readJsonSafe(res);
         errText = data.error || errText;
       } catch { /* ignore */ }
       throw new Error(errText);
+    }
+
+    // Serwer mógł skierować zdjęcie do modelu wizyjnego. Podmiana za plecami
+    // użytkownika byłaby nieuczciwa — mówimy, kto naprawdę odpowiedział.
+    const swapped = res.headers.get('X-Cosmos-Model-Swapped-From');
+    if (swapped) {
+      const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
+      lastModelNote = t('model.swapped', { from: decodeURIComponent(swapped), to: used });
+    } else {
+      lastModelNote = '';
     }
 
     const reader = res.body.getReader();
@@ -1179,6 +1191,9 @@ async function streamOnce(conv) {
     throw err;
   }
 }
+
+// Model, który faktycznie odpowiedział, gdy różni się od wybranego.
+let lastModelNote = '';
 
 // Tok myślenia z ostatniej tury — awaryjne źródło treści, gdy `content` był pusty.
 let lastReasoning = '';
@@ -1240,7 +1255,7 @@ async function runGeneration(conv) {
         renderMessages();
         const last = await streamOnce(conv);
         finalText = stripSearchMarker(last) || lastReasoning || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink });
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
         saveConversations();
         break;
       }
@@ -1312,11 +1327,11 @@ async function runGeneration(conv) {
       const actMarker = finalText.match(ACTION_RE);
       if (actMarker) {
         const shown = finalText.replace(actMarker[0], '').trim();
-        conv.messages.push({ role: 'assistant', content: shown || '…', think: lastThink });
+        conv.messages.push({ role: 'assistant', content: shown || '…', think: lastThink, note: lastModelNote });
         conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
         finalText = shown;
       } else {
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink });
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
       }
       saveConversations();
       break;
@@ -1906,14 +1921,35 @@ el.cameraCapture.addEventListener('click', () => {
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
   if (pendingImages.length < 4) {
-    pendingImages.push(canvas.toDataURL('image/jpeg', 0.85));
+    pendingImages.push(dataUrl);
     renderAttachments();
     updateSendButton();
   }
+  // Zdjęcie trafia też do bazy wiedzy, czyli do Galerii. Wcześniej żyło
+  // wyłącznie jako załącznik rozmowy: po wysłaniu nie dało się do niego wrócić
+  // ani go pobrać, a w Galerii nie było go w ogóle.
+  saveShotToGallery(dataUrl);
   closeCamera();
   el.input.focus();
 });
+
+/** Zapisz zdjęcie w bazie wiedzy (widoczne w Galerii). Po cichu, w tle. */
+async function saveShotToGallery(dataUrl) {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  try {
+    await fetch('/api/kb/file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `zdjecie-${stamp}.jpg`,
+        mime: 'image/jpeg',
+        data: dataUrl.split(',')[1],
+      }),
+    });
+  } catch { /* brak sieci — zdjęcie i tak jest w rozmowie */ }
+}
 
 // ----------------------------------------------------------------
 // STUDIO — obraz (OpenAI) · dźwięk (ElevenLabs) · wideo (Seedance)

@@ -19,6 +19,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+// Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
+// który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
+const { modelInfo } = require('./public/models.js');
 
 // ---------------------------------------------------------------------------
 // Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
@@ -2988,6 +2991,22 @@ async function handleSearch(req, res) {
   }
 }
 
+/** Czy MAMY PEWNOŚĆ, że model nie odczyta obrazu?
+ *
+ * Katalog `public/models.js` jest wspólny dla przeglądarki i serwera — ta sama
+ * wiedza po obu stronach, jedno miejsce do aktualizacji. Odpowiadamy „tak”
+ * tylko dla modeli, które katalog zna i które nie mają cechy „wizja”.
+ * Model nieznany przepuszczamy: może widzieć, a my byśmy go zablokowali.
+ */
+function blindToImages(id) {
+  try {
+    const info = modelInfo(id);
+    return Boolean(info && !info.zgadywane && !info.cechy.includes('wizja'));
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // API: czat (streaming SSE) z kontekstem percepcji
 // ---------------------------------------------------------------------------
@@ -3163,8 +3182,7 @@ async function handleChat(req, res) {
   const hasImages = messages.some((m) => Array.isArray(m.content) &&
     m.content.some((p) => p.type === 'image_url'));
 
-  const model = payload.model
-    || (hasImages && ep.visionModel ? ep.visionModel : ep.model);
+  let model = payload.model || ep.model;
 
   if (!model) {
     return sendJson(res, 400, {
@@ -3172,6 +3190,29 @@ async function handleChat(req, res) {
         ? 'Nie skonfigurowano modelu lokalnego. Ustaw LOCAL_MODEL w .env albo wybierz model w Ustawieniach.'
         : 'Nie skonfigurowano modelu. Ustaw NEMOTRON_MODEL w .env albo wybierz model w Ustawieniach.',
     });
+  }
+
+  // Zdjęcie do modelu, który nie widzi obrazów, kończy się albo błędem 400,
+  // albo — gorzej — odpowiedzią „nie mam dostępu do żadnego zdjęcia”, choć
+  // obraz poleciał. Wcześniej przełączenie na model wizyjny działało tylko
+  // wtedy, gdy użytkownik NIE wybrał modelu w Ustawieniach; a wybiera prawie
+  // zawsze. Teraz decyduje to, czy wybrany model umie patrzeć.
+  let swappedFrom = '';
+  if (hasImages && blindToImages(model)) {
+    if (ep.visionModel) {
+      swappedFrom = model;
+      model = ep.visionModel;
+    } else {
+      return sendJson(res, 400, {
+        error: `Model „${model}" nie odczytuje obrazów, a dla silnika „${ep.label}" nie `
+          + 'ustawiono modelu wizyjnego — zdjęcie zostałoby zignorowane.\n\n'
+          + 'Masz dwa wyjścia:\n'
+          + '• wybierz w Ustawieniach model oznaczony „widzi obrazy”, albo\n'
+          + `• ustaw ${payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL'} `
+          + 'w .env na serwerze — Cosmos będzie wtedy sam kierował do niego same zdjęcia, '
+          + 'a rozmowę zostawi wybranemu modelowi.',
+      });
+    }
   }
 
   const body = {
@@ -3237,6 +3278,18 @@ async function handleChat(req, res) {
     } catch {
       if (detail) message = `${message} ${detail.slice(0, 300)}`;
     }
+    // Model spoza katalogu, który jednak nie przyjmuje obrazów, poznajemy dopiero
+    // po odmowie dostawcy. „Błąd modelu (HTTP 400)” nic użytkownikowi nie mówi —
+    // zamieniamy to na tę samą wskazówkę, co przy modelach znanych.
+    if (upstream.status === 400 && hasImages && /image|vision|multimodal|content.*type/i.test(detail)) {
+      return sendJson(res, 400, {
+        error: `Model „${model}" odmówił przyjęcia zdjęcia.\n\n`
+          + 'Wybierz w Ustawieniach model oznaczony „widzi obrazy”, albo ustaw '
+          + `${payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL'} `
+          + 'w .env — Cosmos skieruje wtedy same zdjęcia do modelu wizyjnego, '
+          + `a rozmowę zostawi wybranemu.\n\nOdpowiedź dostawcy: ${String(detail).slice(0, 200)}`,
+      });
+    }
     // Bez tego widać sam komunikat dostawcy i nie wiadomo nawet, którą zakładkę
     // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
     const where = `[${ep.label} · ${model}]`;
@@ -3253,6 +3306,10 @@ async function handleChat(req, res) {
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
+    // Który model faktycznie odpowiedział. Przy zdjęciu bywa inny niż wybrany,
+    // a podmiana za plecami użytkownika byłaby nieuczciwa.
+    'X-Cosmos-Model': encodeURIComponent(model),
+    ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
   });
 
   try {
