@@ -1954,3 +1954,7 @@ kbd {
   color: #0b0d14;
   border-color: var(--accent);
 }
+
+/* Przyciski nagłówka trzymamy razem po prawej. Bez tego `space-between`
+   rozrzucał je po całej szerokości i przełącznik kamery lądował na środku. */
+.modal-header-actions { display: flex; align-items: center; gap: 4px; }

@@ -632,8 +632,8 @@
     <div class="live-head">
       <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
       <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
-      <button class="icon-btn" id="live-flip" data-i18n-title="cam.flip" title="Przód / tył" aria-label="Przód / tył" hidden>
-        <svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 13.5a2.5 2.5 0 0 1 5 0m0 0h-2m2 0v-2M14.5 14.5a2.5 2.5 0 0 1-5 0m0 0h2m-2 0v2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <button class="icon-btn" id="live-flip" data-i18n-title="cam.flip" title="Przełącz kamerę" aria-label="Przełącz kamerę" hidden>
+        <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-13.7-5.3L4 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <button class="icon-btn" id="live-expand" data-i18n-title="live.expand" title="Powiększ" aria-label="Powiększ">
         <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -732,12 +732,14 @@
     <div class="modal camera-modal" role="dialog" data-i18n-aria="cam.title" aria-label="Kamera">
       <div class="modal-header">
         <h2 data-i18n="cam.title">Kamera</h2>
-        <button class="icon-btn" id="camera-flip" data-i18n-title="cam.flip" title="Przód / tył" aria-label="Przód / tył" hidden>
-          <svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 13.5a2.5 2.5 0 0 1 5 0m0 0h-2m2 0v-2M14.5 14.5a2.5 2.5 0 0 1-5 0m0 0h2m-2 0v2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <div class="modal-header-actions">
+        <button class="icon-btn" id="camera-flip" data-i18n-title="cam.flip" title="Przełącz kamerę" aria-label="Przełącz kamerę" hidden>
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-13.7-5.3L4 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button class="icon-btn" id="camera-close" data-i18n-aria="close" aria-label="Zamknij">
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
+        </div>
       </div>
       <div class="camera-body">
         <video id="camera-video" autoplay playsinline muted></video>
