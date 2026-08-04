@@ -19,6 +19,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+// Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
+// który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
+const { modelInfo } = require('./public/models.js');
 
 // ---------------------------------------------------------------------------
 // Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
@@ -2110,6 +2113,31 @@ function pickEndpoint(name) {
   return ENDPOINTS[name] || ENDPOINTS.cloud;
 }
 
+/** Podpowiedź „co z tym zrobić" do odmowy dostawcy.
+ *
+ * Sam komunikat dostawcy nie mówi, co ma zrobić człowiek przed ekranem.
+ * Lokalny 404 znaczy zwykle „modelu nie ma jeszcze na dysku" i da się to
+ * naprawić jedną komendą, więc tę komendę wypisujemy wprost. W chmurze
+ * 404 znaczy co innego: lista modeli u dostawcy pokazuje wszystko, co
+ * hostuje, a nie to, do czego Twój klucz ma dostęp.
+ */
+function modelErrorHint(epName, model, status) {
+  const local = epName === 'local';
+  if (status === 404) {
+    return local
+      ? ` Tego modelu nie ma jeszcze na dysku. Pobierz go na domowym komputerze: ollama pull ${model}`
+      : ' Ten model nie jest dostępny na Twoim koncie u dostawcy (lista pokazuje wszystko, co dostawca hostuje). '
+        + 'Sprawdź przyciskiem „Sprawdź wszystkie z listy" w Ustawieniach, które modele naprawdę działają.';
+  }
+  if (status === 401 || status === 403) {
+    return local
+      ? ' Lokalny silnik odrzucił żądanie — sprawdź LOCAL_API_KEY w .env.'
+      : ' Klucz API jest nieprawidłowy albo nie ma dostępu do tego modelu.';
+  }
+  if (status === 429) return ' Limit zapytań u dostawcy — spróbuj za chwilę.';
+  return '';
+}
+
 function authHeaders(ep) {
   const headers = { 'Content-Type': 'application/json' };
   if (ep.apiKey) headers.Authorization = `Bearer ${ep.apiKey}`;
@@ -2325,6 +2353,7 @@ async function getFireflyToken() {
   if (fireflyTokenCache.token && Date.now() < fireflyTokenCache.exp) return fireflyTokenCache.token;
   const r = await fetch(`${STUDIO.firefly.imsUrl}/ims/token/v3`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'client_credentials',
@@ -2502,7 +2531,7 @@ async function studioGenImage(prompt, size, provider) {
     if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
     const first = resp.data?.[0] || {};
     if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-    else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+    else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
     else throw new Error('API nie zwróciło obrazu.');
     engineLabel = STUDIO.openai.imageModel;
   }
@@ -2561,7 +2590,7 @@ async function handleStudio(req, res, pathname) {
       const first = resp.data?.[0] || {};
       let buf;
       if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+      else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
       else throw new Error('API nie zwróciło obrazu.');
       return { buf, engineLabel: STUDIO.openai.imageModel };
     };
@@ -2661,7 +2690,7 @@ async function handleStudio(req, res, pathname) {
       const first = resp.data?.[0] || {};
       let buf;
       if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-      else if (first.url) buf = Buffer.from(await (await fetch(first.url)).arrayBuffer());
+      else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
       else throw new Error('API nie zwróciło obrazu.');
       const name = tsName('edycja', 'png');
       const item = await kbAddFile(name, 'image/png', buf, `Edycja obrazu (inpainting). Prompt: ${prompt}`);
@@ -2988,6 +3017,22 @@ async function handleSearch(req, res) {
   }
 }
 
+/** Czy MAMY PEWNOŚĆ, że model nie odczyta obrazu?
+ *
+ * Katalog `public/models.js` jest wspólny dla przeglądarki i serwera — ta sama
+ * wiedza po obu stronach, jedno miejsce do aktualizacji. Odpowiadamy „tak”
+ * tylko dla modeli, które katalog zna i które nie mają cechy „wizja”.
+ * Model nieznany przepuszczamy: może widzieć, a my byśmy go zablokowali.
+ */
+function blindToImages(id) {
+  try {
+    const info = modelInfo(id);
+    return Boolean(info && !info.zgadywane && !info.cechy.includes('wizja'));
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // API: czat (streaming SSE) z kontekstem percepcji
 // ---------------------------------------------------------------------------
@@ -3163,8 +3208,7 @@ async function handleChat(req, res) {
   const hasImages = messages.some((m) => Array.isArray(m.content) &&
     m.content.some((p) => p.type === 'image_url'));
 
-  const model = payload.model
-    || (hasImages && ep.visionModel ? ep.visionModel : ep.model);
+  let model = payload.model || ep.model;
 
   if (!model) {
     return sendJson(res, 400, {
@@ -3172,6 +3216,29 @@ async function handleChat(req, res) {
         ? 'Nie skonfigurowano modelu lokalnego. Ustaw LOCAL_MODEL w .env albo wybierz model w Ustawieniach.'
         : 'Nie skonfigurowano modelu. Ustaw NEMOTRON_MODEL w .env albo wybierz model w Ustawieniach.',
     });
+  }
+
+  // Zdjęcie do modelu, który nie widzi obrazów, kończy się albo błędem 400,
+  // albo — gorzej — odpowiedzią „nie mam dostępu do żadnego zdjęcia”, choć
+  // obraz poleciał. Wcześniej przełączenie na model wizyjny działało tylko
+  // wtedy, gdy użytkownik NIE wybrał modelu w Ustawieniach; a wybiera prawie
+  // zawsze. Teraz decyduje to, czy wybrany model umie patrzeć.
+  let swappedFrom = '';
+  if (hasImages && blindToImages(model)) {
+    if (ep.visionModel) {
+      swappedFrom = model;
+      model = ep.visionModel;
+    } else {
+      return sendJson(res, 400, {
+        error: `Model „${model}" nie odczytuje obrazów, a dla silnika „${ep.label}" nie `
+          + 'ustawiono modelu wizyjnego — zdjęcie zostałoby zignorowane.\n\n'
+          + 'Masz dwa wyjścia:\n'
+          + '• wybierz w Ustawieniach model oznaczony „widzi obrazy”, albo\n'
+          + `• ustaw ${payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL'} `
+          + 'w .env na serwerze — Cosmos będzie wtedy sam kierował do niego same zdjęcia, '
+          + 'a rozmowę zostawi wybranemu modelowi.',
+      });
+    }
   }
 
   const body = {
@@ -3237,14 +3304,22 @@ async function handleChat(req, res) {
     } catch {
       if (detail) message = `${message} ${detail.slice(0, 300)}`;
     }
+    // Model spoza katalogu, który jednak nie przyjmuje obrazów, poznajemy dopiero
+    // po odmowie dostawcy. „Błąd modelu (HTTP 400)” nic użytkownikowi nie mówi —
+    // zamieniamy to na tę samą wskazówkę, co przy modelach znanych.
+    if (upstream.status === 400 && hasImages && /image|vision|multimodal|content.*type/i.test(detail)) {
+      return sendJson(res, 400, {
+        error: `Model „${model}" odmówił przyjęcia zdjęcia.\n\n`
+          + 'Wybierz w Ustawieniach model oznaczony „widzi obrazy”, albo ustaw '
+          + `${payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL'} `
+          + 'w .env — Cosmos skieruje wtedy same zdjęcia do modelu wizyjnego, '
+          + `a rozmowę zostawi wybranemu.\n\nOdpowiedź dostawcy: ${String(detail).slice(0, 200)}`,
+      });
+    }
     // Bez tego widać sam komunikat dostawcy i nie wiadomo nawet, którą zakładkę
     // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
     const where = `[${ep.label} · ${model}]`;
-    const hint = upstream.status === 404
-      ? ' Taki model nie istnieje pod tym adresem — wybierz go przez Ustawienia → Pobierz listę.'
-      : (upstream.status === 401 || upstream.status === 403)
-        ? ' Klucz API jest nieprawidłowy albo nie ma dostępu do tego modelu.'
-        : upstream.status === 429 ? ' Limit zapytań u dostawcy — spróbuj za chwilę.' : '';
+    const hint = modelErrorHint(payload.endpoint, model, upstream.status);
     return sendJson(res, upstream.status, { error: `${where} ${message}${hint}` });
   }
 
@@ -3253,6 +3328,10 @@ async function handleChat(req, res) {
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
+    // Który model faktycznie odpowiedział. Przy zdjęciu bywa inny niż wybrany,
+    // a podmiana za plecami użytkownika byłaby nieuczciwa.
+    'X-Cosmos-Model': encodeURIComponent(model),
+    ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
   });
 
   try {
@@ -3263,6 +3342,66 @@ async function handleChat(req, res) {
     /* klient przerwał lub upstream padł — kończymy strumień */
   }
   res.end();
+}
+
+/** Sprawdź, czy model naprawdę działa NA TYM KONCIE — i czy czyta obrazy.
+ *
+ * `/v1/models` u NVIDII wypisuje wszystko, co NVIDIA hostuje, a nie to, do czego
+ * Twój klucz ma dostęp: część pozycji kończy się „Not found for account". Tego
+ * nie da się przewidzieć z nazwy — trzeba spróbować. Wysyłamy więc najtańsze
+ * możliwe żądanie (jeden token), a przy teście wzroku dokładamy obrazek 1×1.
+ * Odpowiedź 200 znaczy „działa”; treść nas nie interesuje.
+ */
+const PROBE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+async function probeModel(ep, model, withImage) {
+  const content = withImage
+    ? [{ type: 'image_url', image_url: { url: PROBE_PNG } }, { type: 'text', text: 'hi' }]
+    : 'hi';
+  try {
+    const r = await fetch(`${ep.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: authHeaders(ep),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (r.ok) return { ok: true };
+    let detail = '';
+    try { detail = await r.text(); } catch { /* bez treści */ }
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = JSON.parse(detail);
+      msg = j?.error?.message || j?.detail || j?.title || msg;
+      if (typeof msg !== 'string') msg = JSON.stringify(msg);
+    } catch { if (detail) msg = detail.slice(0, 160); }
+    return { ok: false, status: r.status, error: msg };
+  } catch (e) {
+    return { ok: false, status: 0, error: e.message };
+  }
+}
+
+async function handleModelCheck(req, res) {
+  let data;
+  try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const ep = pickEndpoint(data.endpoint);
+  const model = String(data.model || '').trim();
+  if (!model) return sendJson(res, 400, { error: 'Brak identyfikatora modelu.' });
+
+  const text = await probeModel(ep, model, false);
+  // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej
+  // zdublowalibyśmy ten sam błąd dostępu i niepotrzebnie obciążyli limit.
+  const vision = text.ok ? await probeModel(ep, model, true) : { ok: false, skipped: true };
+
+  return sendJson(res, 200, {
+    model,
+    silnik: ep.label,
+    rozmowa: text.ok,
+    obrazy: vision.ok,
+    blad: text.ok ? null : text.error,
+    // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
+    podpowiedz: text.ok ? null : modelErrorHint(data.endpoint, model, text.status).trim(),
+    bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3347,6 +3486,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/config' && req.method === 'GET') return handleConfig(res);
     if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
+    if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);

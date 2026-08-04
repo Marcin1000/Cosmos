@@ -1958,3 +1958,20 @@ kbd {
 /* Przyciski nagłówka trzymamy razem po prawej. Bez tego `space-between`
    rozrzucał je po całej szerokości i przełącznik kamery lądował na środku. */
 .modal-header-actions { display: flex; align-items: center; gap: 4px; }
+
+/* Informacja, że na zdjęcie odpowiedział inny model niż wybrany. */
+.model-note {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--bg-elevated);
+  border-radius: 0 6px 6px 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* Wynik sprawdzenia modelu — mierzony, nie zgadywany. */
+.check-ok   { margin-top: 6px; color: #58c98a; font-size: 12px; }
+.check-warn { margin-top: 6px; color: #f5b544; font-size: 12px; }
+.check-bad  { margin-top: 6px; color: var(--danger); font-size: 12px; }
+.check-all  { margin-top: 8px; width: 100%; font-size: 12.5px; }

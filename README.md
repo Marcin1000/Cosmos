@@ -139,6 +139,15 @@ NEMOTRON_MODEL=nvidia/nvidia-nemotron-nano-9b-v2   # podmień na wybrany model
 NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 ```
 
+> 👁 **`NEMOTRON_VISION_MODEL` warto ustawić.** Większość modeli tekstowych nie
+> odczytuje obrazów — wysłane zdjęcie albo kończy się błędem 400, albo (gorzej)
+> odpowiedzią „nie mam dostępu do żadnego zdjęcia", choć obraz poleciał. Gdy to
+> pole jest wypełnione, Cosmos **sam kieruje same zdjęcia** do modelu wizyjnego,
+> a rozmowę zostawia modelowi wybranemu w Ustawieniach; pod odpowiedzią widać
+> wtedy, który model ją napisał. Bez tego pola żądanie ze zdjęciem jest
+> zatrzymywane z czytelnym wyjaśnieniem. Sprawdzony wybór:
+> `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`.
+
 > ⚠️ **NVIDIA zmienia identyfikatory modeli** — ten sam model bywa dostępny raz jako
 > `nvidia/nemotron-nano-9b-v2`, a po jakimś czasie jako `nvidia/nvidia-nemotron-nano-9b-v2`.
 > Nieaktualny wpis kończy się błędem **404 „page not found"**. Nie przepisuj więc nazw
@@ -147,6 +156,30 @@ NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
 Pod polem wyboru pojawia się opis modelu — do czego się nadaje, czy widzi obrazy,
 jaki ma kontekst i na co uważać. Katalog opisów: `public/models.js`.
+
+### „Sprawdź" — które modele naprawdę działają
+
+Lista z „Pobierz listę" to **wszystko, co dostawca hostuje**, a nie to, do czego
+Twój klucz ma dostęp. Część pozycji NVIDII kończy się błędem
+*„Function … Not found for account"*. Katalog opisów też tylko zgaduje po nazwie,
+czy model widzi obrazy. Jedyna pewna odpowiedź to spróbować — i od tego są dwa
+przyciski w Ustawieniach:
+
+| Przycisk | Co robi |
+|---|---|
+| **Sprawdź** (obok pola modelu) | Wysyła do wybranego modelu dwa najtańsze możliwe żądania (`max_tokens: 1`): jedno tekstowe, jedno z obrazkiem 1×1. Odpowiada: `✓ rozmowa działa`, `👁 czyta też obrazy` albo `✗ niedostępny na Twoim koncie` z powodem od dostawcy |
+| **Sprawdź wszystkie z listy** (pod wybierakiem) | To samo dla całej pobranej listy, **po kolei** (nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań). Każdą pozycję oznacza znaczkiem: `✗` nie działa, `✓` rozmowa, `👁` rozmowa + obrazy. Na końcu podsumowanie „Działa N z M. Obrazy czyta K." |
+
+Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej zdublowalibyśmy
+ten sam błąd dostępu i niepotrzebnie obciążyli limit.
+
+**Ile to kosztuje?** Jedno sprawdzenie to jeden lub dwa tokeny. Przy chmurze to
+w praktyce zero; przy modelu lokalnym — tyle, ile ładowanie modelu do pamięci GPU.
+
+**Czego to NIE naprawia.** Jeśli model jest wyłączony na Twoim koncie u dostawcy,
+Cosmos nie ma jak tego obejść — pokaże tylko uczciwie, że tak jest. A modelu
+lokalnego, którego nie masz jeszcze na dysku, nie da się użyć bez pobrania:
+w takiej sytuacji komunikat podaje gotową komendę `ollama pull <model>`.
 
 Model wybrany w Ustawieniach jest **ważniejszy niż `.env`** i obowiązuje wszędzie:
 w czacie, przy dopracowywaniu promptu i przy streszczeniach. `.env` to wartość
@@ -571,6 +604,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 |---|---|---|
 | `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji i pamięci, strumień SSE |
 | `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
+| `/api/models/check` | POST | Sprawdza jednym najtańszym żądaniem, czy dany model działa na tym koncie i czy czyta obrazy. Zwraca `{model, silnik, rozmowa, obrazy, blad, podpowiedz, bladObrazy}` |
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
