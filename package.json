@@ -23,6 +23,7 @@
     "productName": "Cosmos",
     "files": [
       "server.js",
+      "lib/**",
       "desktop/**",
       "automation/**",
       "public/**",

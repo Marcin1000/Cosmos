@@ -1,7 +1,7 @@
 // parseModelResponse: strumień mimo stream:false, sklejone obiekty, śmieci
-const src = require('fs').readFileSync('/home/user/Bear/server.js', 'utf8');
-const fn = src.match(/\/\*\* Odczytaj odpowiedź modelu[\s\S]*?\nasync function parseModelResponse[\s\S]*?\n}\n/)[0];
-const parseModelResponse = eval(`(() => { ${fn}\n return parseModelResponse; })()`);
+// Import zamiast skrobania źródła regexem: tamto padało przy każdym
+// przeniesieniu funkcji do innego pliku, choć sama funkcja działała.
+const { parseModelResponse } = require('../../lib/model.js');
 const res = (body, status = 200) => ({ status, text: async () => body });
 
 const fail = [];

@@ -269,6 +269,45 @@ POMIAR_TEKST.includes(domyslnyModel) ? ok('domyślny model rozmowy jest wśród 
 POMIAR_WZROK.includes(domyslnyWzrok) ? ok('domyślny model wizyjny jest wśród potwierdzonych')
   : zle(`domyślny model wizyjny „${domyslnyWzrok}" nie jest wśród potwierdzonych`);
 
+// ------------------------------------------------------------- 11b moduły
+sekcja('Podział na moduły');
+const moduly = fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js'));
+const liniiSerwer = server.split('\n').length;
+let liniiLib = 0;
+for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
+console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
+liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
+  : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
+// Żaden identyfikator z modułu nie może być używany bez importu — inaczej
+// serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
+const glowa = server.slice(0, server.indexOf('// ----', 2500));
+const ogon = server.slice(glowa.length);
+const bezImportu = [];
+for (const m of moduly) {
+  let mod; try { mod = require(path.join(R, 'lib', m)); } catch (e) { zle(`lib/${m} nie daje się wczytać: ${e.message}`); continue; }
+  for (const k of Object.keys(mod)) {
+    if (k === 'polacz') continue;
+    if (new RegExp(`\\b${k}\\b`).test(ogon) && !new RegExp(`\\b${k}\\b`).test(glowa)) bezImportu.push(`${m}:${k}`);
+  }
+}
+bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
+  : ok('każdy symbol z modułów jest zaimportowany');
+// Tablice podmieniane w module nie mogą wychodzić jako tablice — serwer
+// dostałby kopię wiązania i po pierwszym usunięciu widziałby stary stan.
+const pulapki = [];
+for (const m of moduly) {
+  const src = rd(`lib/${m}`);
+  const eks = (src.match(/module\.exports = \{([\s\S]*?)\}/) || ['', ''])[1];
+  for (const mm of src.matchAll(/^\s*([a-zA-Z_$][\w$]*) = \1\.filter\(/gm)) {
+    // Liczy się TYLKO skrócona własność (`lessons,`), a nie wystąpienie
+    // wewnątrz funkcji odczytującej (`wzorce: () => lessons`) — ta druga
+    // postać jest właśnie poprawką, nie pułapką.
+    if (new RegExp(`(^|[{,])\\s*${mm[1]}\\s*[,}]`).test(eks)) pulapki.push(`${m}:${mm[1]}`);
+  }
+}
+pulapki.length ? zle('podmieniane tablice wystawione wprost (kopia wiązania): ' + pulapki.join(', '))
+  : ok('podmieniane kolekcje wychodzą jako funkcje, nie tablice');
+
 // ---------------------------------------------------------------- 12 pozostałości
 sekcja('Pozostałości i higiena');
 const smieci = [];

@@ -667,6 +667,28 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
 | `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
 
+## 🧩 Układ kodu
+
+```
+server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
+lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
+lib/model.js       wywołania modelu bez strumienia (streszczenia, prompt)
+lib/studio.js      generowanie mediów (OpenAI / Firefly / ElevenLabs / Seedance)
+lib/nauka.js       rozpoznawanie, procedury, rutyny, automatyzacja
+lib/trening.js     eksport JSONL i uruchamianie QLoRA
+lib/urzadzenia.js  smart home i poranna odprawa
+```
+
+Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
+dziedzina potrzebuje czegoś z innej (Studio zapisuje do bazy wiedzy), serwer
+wstrzykuje to raz przy starcie przez `polacz()` — krzyżowe `require` dałoby
+cykliczną zależność i jedna ze stron widziałaby pusty obiekt.
+
+**Kolekcje podmieniane przy usuwaniu** (`procedures = procedures.filter(...)`)
+wychodzą z modułów jako funkcje odczytujące, nie jako tablice: `module.exports`
+kopiuje wiązanie w chwili eksportu, więc tablica zdezaktualizowałaby się po
+pierwszym skasowaniu. Audyt to sprawdza.
+
 ## 🧪 Testy
 
 ```bash
