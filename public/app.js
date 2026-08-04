@@ -1119,7 +1119,7 @@ async function streamOnce(conv) {
     });
 
     if (!res.ok) {
-      let errText = `Błąd HTTP ${res.status}`;
+      let errText = t('httpErr', { status: res.status });
       try {
         const data = await readJsonSafe(res);
         errText = data.error || errText;
@@ -2744,7 +2744,7 @@ async function loadKbList() {
       del.textContent = '×';
       del.title = t('kb.remove');
       del.addEventListener('click', async () => {
-        if (!confirm(`Usunąć „${item.name}” z bazy wiedzy?`)) return;
+        if (!confirm(t('kb.confirmDel', { name: item.name }))) return;
         await fetch(`/api/kb?id=${encodeURIComponent(item.id)}`, { method: 'DELETE' });
         kbSelected.delete(item.id);
         saveKbSelected();
@@ -4642,7 +4642,7 @@ function scheduleControls() {
   $('routine-day').style.display = (type === 'weekly' || type === 'monthly') ? '' : 'none';
   const day = $('routine-day');
   if (type === 'weekly') {
-    const names = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+    const names = t('weekdaysShort').split(' ');
     day.innerHTML = names.map((n, i) => `<option value="${i}">${n}</option>`).join('');
   } else if (type === 'monthly') {
     day.innerHTML = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');

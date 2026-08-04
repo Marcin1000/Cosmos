@@ -357,6 +357,31 @@ trzy błędy w moim własnym sprawdzaniu i potwierdził dwa problemy w interfejs
 - [x] **Pole godziny białe w ciemnym motywie** — brakowało `color-scheme`,
       więc przeglądarka rysowała własną kontrolkę w jasnym schemacie
 
+## ✅ Partia 18 — audyt, który nie krzyczy na wilka (GOTOWE)
+
+Pełny przegląd wykazał trzy „problemy”, z których **wszystkie trzy okazały się
+wadami samego audytu**, nie kodu. Skrypt, który przy każdym przebiegu podaje
+fałszywe alarmy, przestaje być użyteczny — więc najpierw naprawiliśmy narzędzie.
+
+- [x] **`scripts/audyt.js`** — dwanaście kontroli statycznych w repozytorium,
+      nie w plikach tymczasowych; kod wyjścia 0 znaczy „zero problemów”
+- [x] **Cztery fałszywe alarmy usunięte** — ścieżki będące fragmentem adresu URL,
+      przykłady składni w cudzysłowach odwrotnych, ścieżki względne kontra
+      bezwzględne w cache service workera, oraz liczenie limitów czasu zamiast
+      patrzenia w kontekst wywołania
+- [x] **Zmienne zmysłów sprawdzane wobec `senses/README.md`** — chodzą na innej
+      maszynie niż serwer i mają własną konfigurację
+- [x] **Trzy prawdziwe luki w tłumaczeniach** znalezione przy okazji: potwierdzenie
+      usunięcia z bazy wiedzy miało gotowe tłumaczenie, którego kod nie używał;
+      „Błąd HTTP" był wpisany po polsku na sztywno; skróty dni tygodnia
+      („Nd Pn Wt Śr") widział też użytkownik anglojęzyczny
+- [x] **`blind-check.js` i `tabs-check.js` stawiają własny serwer** — wymagały
+      innej konfiguracji niż reszta baterii i padały przy każdym pełnym przebiegu
+      z powodu atrap, nie kodu
+- [x] **`vision_test.js` używa identyfikatora spoza katalogu** — po dopisaniu
+      modeli Meta do katalogu jego dotychczasowy przypadek testowy przestał
+      badać to, co miał badać (Cosmos zaczął go poprawnie przekierowywać)
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
