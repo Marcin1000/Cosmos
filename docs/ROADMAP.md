@@ -299,6 +299,29 @@ planowana z góry.
 - [x] **Zdjęcie z aparatu w Galerii** — trafia i do wiadomości, i do bazy wiedzy;
       wcześniej po wysłaniu nie dało się do niego wrócić ani go pobrać
 
+## ✅ Partia 16 — wiadomo, który model działa (GOTOWE)
+
+Problem: lista modeli u dostawcy pokazuje **wszystko, co dostawca hostuje**, a nie
+to, do czego Twój klucz ma dostęp. Katalog opisów też tylko zgaduje po nazwie, czy
+model widzi obrazy. Skutek: wybór modelu był losowaniem, a odpowiedź „Function …
+Not found for account" przychodziła dopiero po wysłaniu pytania.
+
+- [x] **`POST /api/models/check`** — dwie najtańsze możliwe sondy (`max_tokens: 1`):
+      jedna tekstowa, jedna z obrazkiem 1×1. Zwraca `{rozmowa, obrazy, blad,
+      podpowiedz}`. Wzrok sprawdzany tylko wtedy, gdy rozmowa działa — inaczej
+      dublowalibyśmy ten sam błąd dostępu i obciążali limit
+- [x] **Przycisk „Sprawdź"** obok pola modelu — natychmiastowa odpowiedź o modelu,
+      który właśnie rozważasz
+- [x] **„Sprawdź wszystkie z listy"** — przechodzi całą listę **po kolei** (nie
+      równolegle, bo dostawca odrzuciłby nas za nadmiar żądań) i oznacza pozycje:
+      `✗` niedostępny, `✓` rozmawia, `👁` rozmawia i czyta obrazy; na końcu
+      podsumowanie „Działa N z M"
+- [x] **Podpowiedź zamiast samego kodu błędu** — lokalny 404 podaje gotową komendę
+      `ollama pull <model>`, chmurowy tłumaczy, że rzecz jest w uprawnieniach konta,
+      a nie w Cosmosie
+- [x] **Limity czasu na wszystkich żądaniach wychodzących** — pobieranie grafiki
+      z odpowiedzi dostawcy i token Firefly potrafiły wisieć bez końca
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

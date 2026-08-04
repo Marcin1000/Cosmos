@@ -3826,6 +3826,91 @@ async function loadMicList() {
   }
 }
 
+/** Sprawdź model NA ŻYWO: czy działa na tym koncie i czy czyta obrazy.
+ *
+ * Lista z `/v1/models` wypisuje wszystko, co dostawca hostuje — nie to, do czego
+ * Twój klucz ma dostęp. Katalog opisów też tylko zgaduje po nazwie. Jedyna
+ * pewna odpowiedź to spróbować, więc serwer wysyła najtańsze możliwe żądanie.
+ */
+async function checkOneModel(epName, model) {
+  const res = await fetch('/api/models/check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: epName, model }),
+  });
+  return readJsonSafe(res);
+}
+
+function renderCheckResult(box, r) {
+  const lines = [];
+  if (r.rozmowa) {
+    lines.push(`<div class="check-ok">${escapeHtml(t('set.checkOkChat'))}</div>`);
+    lines.push(r.obrazy
+      ? `<div class="check-ok">${escapeHtml(t('set.checkOkVision'))}</div>`
+      : `<div class="check-warn">${escapeHtml(t('set.checkNoVision'))}</div>`);
+  } else {
+    lines.push(`<div class="check-bad">${escapeHtml(t('set.checkFail'))}</div>`);
+    if (r.podpowiedz) lines.push(`<div class="check-warn">${escapeHtml(r.podpowiedz)}</div>`);
+    if (r.blad) lines.push(`<pre class="model-info-err">${escapeHtml(r.blad)}</pre>`);
+  }
+  box.hidden = false;
+  box.innerHTML = lines.join('');
+}
+
+async function checkModelField(epName) {
+  const input = epName === 'local' ? el.setModelLocal : el.setModelCloud;
+  const sel = epName === 'local' ? el.modelSelectLocal : el.modelSelectCloud;
+  const btn = $(`check-model-${epName}`);
+  const box = $(`model-info-${epName}`);
+  const model = (input.value.trim() || sel.value || epConfig(epName).model || '').trim();
+  if (!model) { box.hidden = false; box.innerHTML = escapeHtml(t('set.checkNeedModel')); return; }
+
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = t('set.checking');
+  try {
+    const r = await checkOneModel(epName, model);
+    if (r.error && r.rozmowa === undefined) throw new Error(r.error);
+    renderCheckResult(box, r);
+  } catch (err) {
+    box.hidden = false;
+    box.innerHTML = `<div class="check-bad">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+}
+
+/** Sprawdź po kolei całą pobraną listę i oznacz pozycje w wybieraku.
+ *  Po kolei, nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań. */
+async function checkAllModels(epName) {
+  const sel = epName === 'local' ? el.modelSelectLocal : el.modelSelectCloud;
+  const box = $(`model-info-${epName}`);
+  const opts = [...sel.options].filter((o) => o.value);
+  if (!opts.length) return;
+
+  const link = $(`check-all-${epName}`);
+  if (link) link.disabled = true;
+  let ok = 0; let vis = 0;
+  for (let i = 0; i < opts.length; i++) {
+    const o = opts[i];
+    box.hidden = false;
+    box.innerHTML = escapeHtml(t('set.checkAllRun', { i: i + 1, n: opts.length, m: o.value }));
+    let r;
+    try { r = await checkOneModel(epName, o.value); } catch { r = { rozmowa: false }; }
+    const mark = !r.rozmowa ? '✗' : (r.obrazy ? '👁' : '✓');
+    if (r.rozmowa) ok++;
+    if (r.obrazy) vis++;
+    // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
+    // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
+    // zaczęłyby się nawarstwiać.
+    o.textContent = `${mark} ${o.textContent.replace(/^[✗✓👁]\s*/u, '')}`;
+    o.dataset.works = r.rozmowa ? '1' : '0';
+  }
+  box.innerHTML = escapeHtml(t('set.checkSummary', { ok, n: opts.length, vis }));
+  if (link) link.disabled = false;
+}
+
 function refreshModelInfoBoxes() {
   renderModelInfo($('model-info-cloud'), el.setModelCloud.value.trim()
     || epConfig('cloud').model || '');
@@ -3882,6 +3967,19 @@ async function fetchModelsInto(epName, selectEl, btn) {
       + (rest.length ? `<optgroup label="${t('model.other')}">`
           + rest.map(option).join('') + '</optgroup>' : '');
     selectEl.style.display = '';
+
+    // Dopiero po pobraniu listy ma sens sprawdzanie jej w całości.
+    let all = $(`check-all-${epName}`);
+    if (!all) {
+      all = document.createElement('button');
+      all.id = `check-all-${epName}`;
+      all.className = 'btn-secondary check-all';
+      all.type = 'button';
+      all.addEventListener('click', () => checkAllModels(epName));
+      selectEl.insertAdjacentElement('afterend', all);
+    }
+    all.textContent = t('set.checkAll');
+    all.hidden = false;
   } catch (err) {
     // Nie alert: przy modelu lokalnym komunikat ma kilka linijek podpowiedzi,
     // a systemowe okienko na telefonie ucina je i nie da się z nich skopiować.
@@ -3913,6 +4011,8 @@ el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
 $('set-mic').addEventListener('change', (e) => {
   localStorage.setItem('cosmos.micId', e.target.value);
 });
+$('check-model-cloud').addEventListener('click', () => checkModelField('cloud'));
+$('check-model-local').addEventListener('click', () => checkModelField('local'));
 $('mic-refresh').addEventListener('click', loadMicList);
 $('polish-btn').addEventListener('click', polishPrompt);
 el.setModelLocal.addEventListener('input', refreshModelInfoBoxes);

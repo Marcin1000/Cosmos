@@ -166,6 +166,45 @@ internetu** — czyli dokładnie ten hybrydowy układ, który daje Cosmos.
 w 26 językach, w tym polskim, do bazy wiedzy; `llama-nemotron-rerank-1b-v2` —
 poprawia trafność wyszukiwania; `nemotron-ocr-v2` — OCR do skanów i PDF-ów.
 
+### Czy muszę pobrać wszystkie modele?
+
+Nie — i przy chmurze nie da się nawet tego zrobić. Trzy różne sytuacje, które
+łatwo pomylić:
+
+| Skąd model | Czy coś się pobiera | Co decyduje, czy zadziała |
+|---|---|---|
+| **Chmura NVIDIA** (zakładka „Chmura") | **Nic.** Model stoi na serwerach NVIDII, Cosmos tylko wysyła tam zapytanie | Czy Twój klucz ma do niego dostęp. „Pobierz listę" pokazuje wszystko, co NVIDIA hostuje, a nie to, co masz włączone |
+| **OpenAI / Anthropic** (zakładki po dodaniu klucza) | Nic — tak samo zdalnie | Czy Twoje konto ma dostęp do tego identyfikatora |
+| **Lokalny (RTX 3080)** | **Tak** — model musi być na dysku domowego komputera | `ollama pull <model>` i czy zmieści się w 10 GB VRAM |
+
+Praktyczny wniosek:
+
+1. **W chmurze niczego nie pobierasz.** Wystarczy wybrać model i pisać. Jeśli
+   któryś odmawia („Function … Not found for account"), to nie usterka Cosmosa —
+   ten model po prostu nie jest włączony na Twoim koncie NVIDII.
+2. **Żeby nie zgadywać, które działają**, kliknij **Ustawienia → Sprawdź wszystkie
+   z listy**. Cosmos przejdzie po całej liście najtańszymi możliwymi żądaniami
+   (po jednym tokenie) i oznaczy każdą pozycję: `✗` niedostępny, `✓` rozmawia,
+   `👁` rozmawia i czyta obrazy. To zajmuje chwilę i kosztuje tyle co nic.
+3. **Lokalnie pobierasz tylko to, czego naprawdę używasz.** Lista lokalna pokazuje
+   wyłącznie modele, które już masz — bo tak działa Ollama. Nowy dokładasz komendą
+   w `cmd` **na komputerze z RTX**:
+   ```
+   ollama pull nemotron-nano-9b-v2
+   ollama list
+   ```
+   Na RTX 3080 (10 GB) mieści się mniej więcej **jeden model 7–9B w 4-bit naraz**
+   (~6 GB) — ewentualnie mały model wizyjny 8B obok. Pobieranie kilkunastu
+   modeli „na zapas" zapcha dysk i nic nie da: i tak w danej chwili pracuje jeden.
+4. **Rozsądny zestaw na start:** jeden model tekstowy w chmurze (do pisania
+   i rozumowania), jeden wizyjny w chmurze (do zdjęć), jeden lokalny 9B
+   (do rzeczy prywatnych i pracy bez internetu). Reszta na żądanie.
+
+> 💡 Jeśli chcesz, żeby **zdjęcia** zawsze trafiały do modelu wizyjnego, a rozmowa
+> zostawała przy Twoim ulubionym — ustaw `NEMOTRON_VISION_MODEL` (chmura) albo
+> `LOCAL_VISION_MODEL` (lokalnie) w `.env`. Cosmos przekieruje wtedy same obrazy
+> i uczciwie napisze pod odpowiedzią, który model ją napisał.
+
 ## KROK 4 — Uruchom Cosmos po raz pierwszy
 
 1. Otwórz folder `C:\Cosmos` w oknie `cmd`:
@@ -1027,7 +1066,9 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Unexpected non-whitespace character after JSON" / „is not valid JSON" | Dostawca modelu oddał coś, co nie jest zwykłym JSON-em — najczęściej strumień zdarzeń mimo prośby o całość, albo stronę błędu od proxy. Cosmos radzi sobie teraz z jednym i drugim, a gdy naprawdę nie da się odczytać, pokazuje początek odpowiedzi zamiast komunikatu o JSON-ie |
 | Model odpowiada „nie mam dostępu do żadnego zdjęcia", choć zdjęcie wysłałeś | Ten model nie odczytuje obrazów — Cosmos wysyłał je mimo to. Ustaw `NEMOTRON_VISION_MODEL` (dla chmury) albo `LOCAL_VISION_MODEL` w `.env`: Cosmos będzie wtedy sam kierował same zdjęcia do modelu wizyjnego, a rozmowę zostawi wybranemu. Pod odpowiedzią zobaczysz, który model odpowiedział |
 | „Model … nie odczytuje obrazów, a … nie ustawiono modelu wizyjnego" | Dokładnie to samo, tylko Cosmos zatrzymuje teraz żądanie zamiast wysyłać je na darmo. Albo wybierz model oznaczony „widzi obrazy", albo ustaw wizyjny w `.env` |
-| „Function … Not found for account …" | Model jest w katalogu NVIDII, ale nie na Twoim koncie. „Pobierz listę" pokazuje wszystko, co NVIDIA wystawia — nie wszystko musi być dla Ciebie włączone. Wybierz inny |
+| „Function … Not found for account …" | Model jest w katalogu NVIDII, ale nie na Twoim koncie. „Pobierz listę" pokazuje wszystko, co NVIDIA wystawia — nie wszystko musi być dla Ciebie włączone. Kliknij **Ustawienia → Sprawdź wszystkie z listy**: Cosmos przejdzie po całej liście i oznaczy `✗` te, których nie masz, `✓` te, które rozmawiają, i `👁` te, które czytają też obrazy. Wtedy wybierasz świadomie, a nie na chybił trafił |
+| Nie wiem, który model wybrać — połowa nie działa | **Ustawienia → Sprawdź wszystkie z listy**. Jedno sprawdzenie to jeden token, więc to praktycznie darmowe. Znaczki zostają przy pozycjach do końca sesji |
+| Model lokalny: „404" albo „model not found" | Tego modelu nie ma jeszcze na dysku domowego komputera. Komunikat podaje gotową komendę — uruchom ją w cmd **na komputerze z RTX**, np. `ollama pull qwen2.5:7b`. Na RTX 3080 (10 GB) zmieści się mniej więcej jeden model 7–9B w kwantyzacji 4-bit naraz |
 | Zdjęcie zrobione w Cosmosie nie pojawia się w Galerii | Naprawione — zdjęcie z przycisku aparatu trafia teraz i do wiadomości, i do bazy wiedzy, więc widać je w Galerii i da się pobrać |
 | „Nie udało się przełączyć kamery: Could not start video source" | Naprawione. Telefon obsługuje jeden obiektyw naraz, a Cosmos otwierał nowy przed zwolnieniem starego. Teraz najpierw zwalnia, a gdy nowy zawiedzie — wraca do poprzedniego |
 | W trybie głosowym mikrofon podłącza się i odłącza w kółko, a Cosmos nic nie słyszy | Naprawione, i była to moja wcześniejsza poprawka: trzymałem otwarty strumień z mikrofonu, żeby wyciszyć sygnały Androida, a to odbierało mikrofon rozpoznawaniu mowy. Teraz rozpoznawacz jest jeden na całą sesję i to on ma mikrofon |
