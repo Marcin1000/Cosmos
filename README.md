@@ -667,6 +667,18 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
 | `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
 
+## 🧪 Testy
+
+```bash
+npm test                 # 38 zestawów + 9 selftestów Pythona (~10 min)
+npm run test:szybkie     # tylko bez przeglądarki (~30 s)
+npm test -- --lista      # co jest do uruchomienia
+```
+
+Każdy zestaw dostaje własny serwer, własny port i świeży katalog danych — bo
+połowa dawnych „awarii" brała się z tego, że wspólny serwer akurat wstał z inną
+konfiguracją. Szczegóły i instrukcja pisania nowych zestawów: `tests/README.md`.
+
 ## 🔍 Audyt spójności
 
 ```bash

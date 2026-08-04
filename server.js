@@ -263,7 +263,12 @@ function sceneContext() {
 // wyszukiwanie słów kluczowych.
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.join(__dirname, 'data');
+/* Domyślnie `data/` obok serwera. Nadpisywalne, bo testy muszą pisać gdzie
+   indziej — inaczej każdy przebieg baterii dokłada rozmowy do prawdziwych
+   danych i liczniki rosną z przebiegu na przebieg. */
+const DATA_DIR = process.env.COSMOS_DATA_DIR
+  ? path.resolve(process.env.COSMOS_DATA_DIR)
+  : path.join(__dirname, 'data');
 const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
 
 let memories = [];
