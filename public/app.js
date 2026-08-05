@@ -33,6 +33,9 @@ let serverConfig = { endpoints: { cloud: {}, local: {} } };
 let abortController = null;
 let isGenerating = false;
 let pendingImages = []; // dataURL-e załączników czekających na wysłanie
+// Dokumenty czekające na wysłanie: { name, chars, text, truncated }. Trzymamy
+// gotowy TEKST, nie plik — treść wyciąga serwer, zaraz po wybraniu pliku.
+let pendingDocs = [];
 let senses = { online: false, caps: {} }; // stan usługi percepcji (Python)
 // Serwer nieosiągalny: interfejs pochodzi z pamięci podręcznej, więc wygląda
 // sprawnie. Bez wyraźnego komunikatu awarię widać dopiero po wysłaniu wiadomości.
@@ -226,6 +229,10 @@ function msgImages(m) {
 // albo wygenerowane). Mają źródło, więc dają się kliknąć i sprawdzić.
 function msgPhotos(m) {
   return typeof m.content === 'string' ? [] : (m.content?.photos || []);
+}
+// Wczytane dokumenty: na ekranie kafelek z nazwą, do modelu pełna treść.
+function msgDocs(m) {
+  return typeof m.content === 'string' ? [] : (m.content?.docs || []);
 }
 
 // ----------------------------------------------------------------
@@ -542,6 +549,35 @@ function photosGrid(photos) {
  * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
  * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
  */
+/** Podgląd tekstu załącznika — bez biblioteki, bez zapisu, tylko do wglądu.
+ *  Buduje się na żądanie i znika po zamknięciu: to okno pomocnicze, nie stan. */
+function openTextViewer(nazwa, tekst) {
+  const tlo = document.createElement('div');
+  tlo.className = 'text-viewer';
+  const okno = document.createElement('div');
+  okno.className = 'text-viewer-box';
+  const pasek = document.createElement('div');
+  pasek.className = 'text-viewer-bar';
+  const tytul = document.createElement('span');
+  tytul.textContent = nazwa;
+  const zamknij = document.createElement('button');
+  zamknij.className = 'btn-secondary';
+  zamknij.textContent = t('close');
+  const tresc = document.createElement('pre');
+  tresc.className = 'text-viewer-body';
+  tresc.textContent = tekst;
+  pasek.append(tytul, zamknij);
+  okno.append(pasek, tresc);
+  tlo.appendChild(okno);
+
+  const usun = () => { tlo.remove(); document.removeEventListener('keydown', naEscape); };
+  const naEscape = (e) => { if (e.key === 'Escape') usun(); };
+  zamknij.addEventListener('click', usun);
+  tlo.addEventListener('click', (e) => { if (e.target === tlo) usun(); });
+  document.addEventListener('keydown', naEscape);
+  document.body.appendChild(tlo);
+}
+
 function openImageViewer(src) {
   const box = $('img-viewer');
   const img = $('img-viewer-img');
@@ -664,6 +700,23 @@ function messageElement(m, idx = -1) {
   }
   const photos = msgPhotos(m);
   if (photos.length) body.appendChild(photosGrid(photos));
+  const docs = msgDocs(m);
+  if (docs.length) {
+    const lista = document.createElement('div');
+    lista.className = 'msg-docs';
+    for (const d of docs) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'doc-chip';
+      chip.textContent = `📄 ${d.name} · ${t('doc.chars', { n: (d.chars || 0).toLocaleString() })}`;
+      chip.title = t('doc.peek');
+      // Podgląd na żądanie: wysłaną treść trzeba móc sprawdzić, ale nie
+      // kosztem zalania rozmowy ośmioma tysiącami znaków umowy.
+      chip.addEventListener('click', () => openTextViewer(d.name, d.text));
+      lista.appendChild(chip);
+    }
+    body.prepend(lista);
+  }
 
   const col = document.createElement('div');
   col.style.flex = '1';
@@ -988,6 +1041,30 @@ function renderAttachments() {
     wrap.append(img, rm);
     el.attachments.appendChild(wrap);
   });
+  pendingDocs.forEach((doc, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'attachment attachment-doc' + (doc.loading ? ' is-loading' : '');
+    const label = document.createElement('span');
+    label.className = 'attachment-doc-name';
+    // Liczba znaków to jedyna uczciwa miara „ile z tego pliku model dostanie".
+    label.textContent = doc.loading
+      ? t('doc.reading', { name: doc.name })
+      : `${doc.name} · ${t('doc.chars', { n: doc.chars.toLocaleString() })}${doc.truncated ? ' ✂' : ''}`;
+    wrap.appendChild(label);
+    if (!doc.loading) {
+      const rm = document.createElement('button');
+      rm.className = 'attachment-remove';
+      rm.textContent = '×';
+      rm.title = t('removeAttachment');
+      rm.addEventListener('click', () => {
+        pendingDocs.splice(idx, 1);
+        renderAttachments();
+        updateSendButton();
+      });
+      wrap.appendChild(rm);
+    }
+    el.attachments.appendChild(wrap);
+  });
   renderBlindModelWarning();
 }
 
@@ -1017,18 +1094,44 @@ el.attachBtn.addEventListener('click', () => el.fileInput.click());
 
 el.fileInput.addEventListener('change', async () => {
   for (const file of el.fileInput.files) {
-    if (!file.type.startsWith('image/')) continue;
-    if (pendingImages.length >= 4) { alert(t('cam.maxImages')); break; }
-    try {
-      pendingImages.push(await resizeImage(file));
-    } catch (err) {
-      alert(err.message);
+    if (file.type.startsWith('image/')) {
+      if (pendingImages.length >= 4) { alert(t('cam.maxImages')); break; }
+      try { pendingImages.push(await resizeImage(file)); }
+      catch (err) { alert(err.message); }
+      continue;
     }
+    // Dokument: treść wyciąga serwer, przeglądarka dostaje gotowy tekst.
+    if (pendingDocs.length >= 4) { alert(t('doc.max')); break; }
+    await wczytajDokument(file);
   }
   el.fileInput.value = '';
   renderAttachments();
   updateSendButton();
 });
+
+/** Wyślij plik do odczytania i zapamiętaj wynik jako załącznik rozmowy. */
+async function wczytajDokument(file) {
+  const wpis = { name: file.name, chars: 0, text: '', loading: true };
+  pendingDocs.push(wpis);
+  renderAttachments();
+  updateSendButton();
+  try {
+    const r = await fetch('/api/document', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
+      body: file,
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    Object.assign(wpis, { chars: d.chars, text: d.text, truncated: d.truncated, loading: false });
+  } catch (err) {
+    // Plik, którego nie da się odczytać, znika z listy — ale z powodem.
+    pendingDocs.splice(pendingDocs.indexOf(wpis), 1);
+    alert(t('doc.failed', { name: file.name, msg: err.message }));
+  }
+  renderAttachments();
+  updateSendButton();
+}
 
 // wklejanie obrazów ze schowka
 el.input.addEventListener('paste', async (e) => {
@@ -1056,8 +1159,17 @@ function toApiMessages(conv) {
   }
   for (const m of conv.messages) {
     if (m.error || m.role === 'action') continue;
-    const text = msgText(m);
+    let text = msgText(m);
     const images = msgImages(m);
+    // Dokumenty doklejamy dopiero tutaj: w rozmowie widać kafelek z nazwą,
+    // a model dostaje pełną treść z wyraźną ramką, żeby wiedział, co jest
+    // załącznikiem, a co pytaniem użytkownika.
+    const docs = msgDocs(m);
+    if (docs.length) {
+      const bloki = docs.map((d) => `--- ZAŁĄCZNIK: ${d.name}`
+        + (d.truncated ? ' (przycięty)' : '') + ` ---\n${d.text}\n--- KONIEC: ${d.name} ---`);
+      text = bloki.join('\n\n') + (text ? `\n\n${text}` : '');
+    }
     if (images.length && m.role === 'user') {
       const parts = images.map((src) => ({ type: 'image_url', image_url: { url: src } }));
       if (text) parts.push({ type: 'text', text });
@@ -1073,12 +1185,22 @@ function toApiMessages(conv) {
 
 async function sendMessage() {
   const text = el.input.value.trim();
-  if ((!text && !pendingImages.length) || isGenerating) return;
+  const gotowe = pendingDocs.filter((d) => !d.loading);
+  if ((!text && !pendingImages.length && !gotowe.length) || isGenerating) return;
 
-  const conv = ensureConversation(text);
-  const content = pendingImages.length ? { text, images: [...pendingImages] } : text;
+  const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
+  const content = (pendingImages.length || gotowe.length)
+    ? {
+        text,
+        ...(pendingImages.length ? { images: [...pendingImages] } : {}),
+        // Treść dokumentu trzymamy osobno od tekstu wiadomości: na ekranie ma
+        // być kafelek „umowa.pdf · 8 412 znaków", a nie ośmiotysięczna ściana.
+        ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
+      }
+    : text;
   conv.messages.push({ role: 'user', content });
   pendingImages = [];
+  pendingDocs = [];
   renderAttachments();
   saveConversations();
 

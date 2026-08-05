@@ -615,6 +615,39 @@ dały super 4,4 · 1,2 · 1,3 s wobec ultra 3,1 · 2,5 · 3,6 s. Przeciętnie po
 dwa razy szybciej, a różnicę w polszczyźnie widać dopiero w dłuższych
 tekstach. Do pisania scenariuszy zostaje Ultra, do rozmowy Super.
 
+## ✅ Partia 26 — Cosmos czyta dokumenty (GOTOWE)
+
+Pierwszy krok programu „ma umieć to, co ChatGPT i Claude". Największa dziura
+była tutaj: **wczytanie umowy z telefonu nie działało nigdy.**
+
+Kod do wyciągania tekstu z PDF-ów i Office'a istniał, ale siedział w usłudze
+zmysłów na komputerze domowym — a ten komputer zwykle jest wyłączony.
+
+- [x] **Czytniki w Node, bez ani jednej zewnętrznej biblioteki** —
+      `lib/dokumenty.js`. DOCX, XLSX i PPTX to archiwa ZIP z XML-em w środku,
+      a ZIP-a rozpakuje `zlib` ze standardowej biblioteki. PDF: strumienie
+      FlateDecode i operatory `Tj`/`TJ`
+- [x] **Zmysły zostały jako zapas, nie jako warunek** — najpierw próbuje sam
+      serwer, do zmysłów idą tylko skany (OCR) i formaty, których nie umiemy
+      (`doc`, `xls`, `odt`)
+- [x] **Załącznik do rozmowy, nie tylko do bazy wiedzy** — spinacz przyjmuje
+      teraz dokumenty. Na ekranie kafelek „umowa.pdf · 8 412 znaków",
+      do modelu pełna treść w wyraźnej ramce. Kliknięcie kafelka pokazuje,
+      co dokładnie model dostał — bez tego „wczytałem plik" trzeba brać
+      na wiarę
+
+Trzy pułapki, które wyszły dopiero na próbnych plikach:
+
+- **Tabela w DOCX rozsypywała się na pionowy słupek.** Komórka zawiera akapit,
+  więc zamiana `</w:p>` na nowy wiersz przed obsługą `</w:tc>` rozbijała każdą
+  komórkę na osobną linię. Kolejność podmian ma tu znaczenie.
+- **W PDF-ie słowa się skleiły** — „Sprzedawca:Marcin". Odstępy między słowami
+  PDF robi liczbami w `[(a) -300 (b)] TJ`, a nie spacjami. Wartości poniżej
+  −100 tysięcznych firetu to teraz spacja.
+- **Krótka faktura była brana za skan** i szła niepotrzebnie do OCR. Skanu nie
+  poznaje się po długości tekstu, tylko po proporcji: setki kilobajtów na
+  stronę przy zerowej treści.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

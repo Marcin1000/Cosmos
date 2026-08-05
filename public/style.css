@@ -525,6 +525,81 @@ kbd {
   display: block;
 }
 
+/* Załączone dokumenty — kafelek z nazwą i liczbą znaków. Treść idzie do
+   modelu, ale na ekranie zostaje jedna linijka, nie ściana tekstu. */
+.attachment-doc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  font-size: 12px;
+  max-width: 260px;
+}
+.attachment-doc.is-loading { opacity: 0.6; }
+.attachment-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-docs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.doc-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-chip:hover { border-color: var(--accent); }
+
+.text-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.text-viewer-box {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  width: min(820px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.text-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.text-viewer-body {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* Zdjęcia znalezione w internecie. Siatka, nie rząd — na telefonie rząd
    miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa. */
 .photo-grid {

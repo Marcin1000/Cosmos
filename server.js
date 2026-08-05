@@ -33,6 +33,7 @@ const {
 } = require('./lib/rdzen.js');
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
+const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -671,12 +672,56 @@ async function sensesDetectSummary(buf, mime) {
   } catch { return ''; }
 }
 
+/* Załącznik do ROZMOWY (nie do bazy wiedzy). Cosmos wyciąga tekst i oddaje go
+   przeglądarce, która dokleja go do wiadomości — model dostaje treść umowy,
+   a nie informację, że plik istnieje. */
+const DOKUMENT_MAX_B = Number(process.env.DOCUMENT_MAX_BYTES || 25_000_000);
+const DOKUMENT_ZNAKI = Number(process.env.DOCUMENT_MAX_CHARS || 120_000);
+
+async function handleDokument(req, res) {
+  const nazwa = String(req.headers['x-file-name'] || 'plik').slice(0, 200);
+  const buf = await readBodyBuffer(req);
+  if (!buf.length) return sendJson(res, 400, { error: 'Pusty plik.' });
+  if (buf.length > DOKUMENT_MAX_B) {
+    return sendJson(res, 413, { error: `Plik większy niż ${Math.round(DOKUMENT_MAX_B / 1e6)} MB.` });
+  }
+  const ext = extOf(nazwa);
+  const tekst = (await extractKbText(nazwa, req.headers['content-type'] || '', buf)) || '';
+  if (!tekst.trim()) {
+    return sendJson(res, 200, {
+      name: nazwa, chars: 0, text: '',
+      error: ext === 'pdf'
+        ? 'To wygląda na skan — nie ma w nim warstwy tekstowej. Odczytanie wymaga OCR, '
+          + 'czyli uruchomionej usługi zmysłów na komputerze domowym.'
+        : `Nie umiem odczytać pliku .${ext}. Obsługiwane: PDF, DOCX, XLSX, PPTX, CSV i pliki tekstowe.`,
+    });
+  }
+  const przyciety = tekst.slice(0, DOKUMENT_ZNAKI);
+  addEvent('dokument', `wczytano ${nazwa} (${przyciety.length} znaków)`);
+  sendJson(res, 200, {
+    name: nazwa,
+    chars: przyciety.length,
+    truncated: tekst.length > DOKUMENT_ZNAKI,
+    text: przyciety,
+  });
+}
+
 async function extractKbText(name, mime, buf) {
   const ext = extOf(name);
   if (TEXT_EXTS.has(ext) || /^text\//.test(mime || '')) {
     return buf.toString('utf8').slice(0, 200000);
   }
-  if (OFFICE_EXTS.has(ext)) return (await sensesExtract(name, buf)).slice(0, 200000);
+  /* Najpierw własnym czytnikiem, dopiero potem zmysłami. Odwrotna kolejność
+     znaczyła, że wczytanie umowy z telefonu nie działa, gdy komputer domowy
+     jest wyłączony — czyli prawie zawsze. */
+  if (OFFICE_EXTS.has(ext) || DOK_OBSLUGIWANE.has(ext)) {
+    const { text, potrzebnyOcr } = czytajLokalnie(name, buf);
+    if (text && !potrzebnyOcr) return text.slice(0, 200000);
+    // Skan albo format, którego sami nie umiemy (doc, xls, odt) — do zmysłów.
+    const zeZmyslow = await sensesExtract(name, buf);
+    if (zeZmyslow) return zeZmyslow.slice(0, 200000);
+    return text.slice(0, 200000);
+  }
   if (AV_EXTS.has(ext) || /^(audio|video)\//.test(mime || '')) {
     return (await sensesTranscribe(buf, mime)).slice(0, 200000);
   }
@@ -2056,6 +2101,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+    if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
