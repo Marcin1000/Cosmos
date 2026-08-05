@@ -9,11 +9,15 @@
    Mierzymy trzy liczby na model, każdą trzy razy (bierzemy MEDIANĘ, bo
    pojedynczy pomiar łapie zimny start i kłamie):
 
-     • pierwszy znak  — ile trwa cisza, zanim cokolwiek się pojawi.
-                        To decyduje o wrażeniu „odpowiada od razu".
-     • tempo pisania  — znaków na sekundę po ruszeniu. Poniżej ~20 zn./s
-                        czyta się wolniej, niż model pisze — i to widać.
-     • całość         — do ostatniego znaku krótkiej odpowiedzi.
+     • ruch    — ile trwa cisza, zanim cokolwiek dotrze. Przy modelach
+                 rozumujących to często sam tok myślenia, nie odpowiedź.
+     • treść   — pierwsze słowo właściwej odpowiedzi. Na to czeka człowiek,
+                 więc ocena patrzy tutaj, a nie na „ruch".
+     • tempo   — znaków na sekundę po ruszeniu. Poniżej ~20 zn./s czyta się
+                 wolniej, niż model pisze — i to widać.
+     • całość  — do ostatniego znaku krótkiej odpowiedzi.
+
+   Gdy „treść" mocno odstaje od „ruchu", wiersz dostaje znacznik 🧠myśli X s.
 
      ./scripts/plynnosc.js                    # wszystkie działające modele
      ./scripts/plynnosc.js cloud              # tylko chmura
@@ -22,6 +26,16 @@
      ./scripts/plynnosc.js cloud > wynik.txt  # do pliku
 
    Kosztuje tyle, co kilkanaście krótkich wiadomości.
+
+   ⚠ Pełny przebieg (100+ modeli) trwa kilkanaście minut i potrafi przeżyć
+   zerwanie połączenia SSH. Puść go tak, żeby żył bez Ciebie:
+
+     nohup ./scripts/plynnosc.js cloud > /tmp/plynnosc.txt 2>&1 &
+     tail -f /tmp/plynnosc.txt          # podglądaj; Ctrl+C wychodzi z podglądu
+
+   Wynik i tak jest dopisywany na bieżąco do pliku wskazanego przez
+   PLYNNOSC_PLIK (domyślnie /tmp/plynnosc-ostatni.txt), więc po zerwanym
+   połączeniu nie tracisz tego, co już zmierzone.
    ============================================================ */
 
 const fs = require('fs');
@@ -36,6 +50,14 @@ const PYTANIE = 'Napisz jednym zdaniem, czym jest fotografia poklatkowa.';
    zdążą nic napisać — wychodziło z tego „pusta odpowiedź" przy modelach,
    które działają bez zarzutu. */
 const MAX_TOKENOW = Number(process.env.PLYNNOSC_TOKENY || 700);
+
+/* Zapis na bieżąco. Przebieg 103 modeli trwa kilkanaście minut i realnie
+   zdarzyło się, że SSH padło w połowie — cała praca poszła w gwizdek. */
+const PLIK = process.env.PLYNNOSC_PLIK || '/tmp/plynnosc-ostatni.txt';
+function zapisz(linia) {
+  console.log(linia);
+  try { fs.appendFileSync(PLIK, linia + '\n'); } catch { /* brak prawa zapisu */ }
+}
 
 let ciasteczko = '';
 
@@ -75,6 +97,7 @@ async function jedenPomiar(endpoint, model) {
   let pierwszy = 0;
   let znaki = 0;
   let myslenie = 0;
+  let doTresci = 0;
   let blad = '';
   try {
     const r = await fetch(`${ADRES}/api/chat`, {
@@ -110,6 +133,10 @@ async function jedenPomiar(endpoint, model) {
           // „myśli" a „zawiesiło się".
           const widoczne = tekst || d.reasoning_content || d.reasoning || '';
           if (widoczne && !pierwszy) pierwszy = Date.now() - t0;
+          // Osobno: kiedy pojawiła się TREŚĆ, a nie sam tok myślenia.
+          // Przy modelu rozumującym to dwie różne chwile i dwa różne
+          // doświadczenia — „coś się dzieje" kontra „mam odpowiedź".
+          if (tekst && !doTresci) doTresci = Date.now() - t0;
           znaki += tekst.length;
           myslenie += (d.reasoning_content || d.reasoning || '').length;
         } catch { /* niepełna ramka */ }
@@ -123,9 +150,10 @@ async function jedenPomiar(endpoint, model) {
   if (!znaki && !myslenie) return { blad: 'pusta odpowiedź' };
   // Sam tok myślenia bez treści — model działa, ale nie zmieścił się
   // w budżecie. Dla płynności to i tak „coś się dzieje na ekranie".
-  if (!znaki) return { pierwszy, calosc, znaki: myslenie, tylkoMyslenie: true,
+  if (!znaki) return { pierwszy, doTresci: 0, calosc, znaki: myslenie, tylkoMyslenie: true,
     tempo: Math.round(myslenie / Math.max(0.1, (calosc - pierwszy) / 1000)) };
-  return { pierwszy, calosc, znaki, tempo: Math.round(znaki / Math.max(0.1, (calosc - pierwszy) / 1000)) };
+  return { pierwszy, doTresci: doTresci || pierwszy, calosc, znaki,
+    tempo: Math.round(znaki / Math.max(0.1, (calosc - (doTresci || pierwszy)) / 1000)) };
 }
 
 const mediana = (xs) => {
@@ -175,14 +203,16 @@ function ocena(pierwszy, tempo, udane, wszystkich, najgorszy) {
     process.exit(1);
   }
 
+  try { fs.writeFileSync(PLIK, `Pomiar z ${new Date().toLocaleString('pl-PL')}\n`); } catch { /* bez pliku */ }
   console.log(`Płynność — ${doZbadania.length} modeli, po ${POWTORZENIA} próby, mediana.`);
+  console.log(`Wynik dopisywany na bieżąco do ${PLIK} — przeżyje zerwane połączenie.`);
   console.log('Bez pamięci, bazy wiedzy i manifestu — mierzymy modele, nie okoliczności.\n');
-  console.log('  pierwszy znak · tempo · całość · udane   model');
+  console.log('  ruch · treść ·   tempo · całość · udane   model');
   console.log('  ' + '─'.repeat(72));
 
   const wyniki = [];
   for (const [ep, model] of doZbadania) {
-    if (process.stderr.isTTY) process.stderr.write(`  … ${model}\r`);
+
     /* Wszystkie próby, nie do pierwszego błędu. Darmowy endpoint NVIDII
        potrafi raz odpowiedzieć w 0,4 s, a raz w ogóle — przerywanie na
        pierwszej wpadce dawało wynik zależny od tego, w której sekundzie
@@ -195,24 +225,30 @@ function ocena(pierwszy, tempo, udane, wszystkich, najgorszy) {
       if (w.blad) bledy.push(w.blad); else próby.push(w);
     }
     const blad = próby.length ? '' : (bledy[0] || 'brak odpowiedzi');
-    if (process.stderr.isTTY) process.stderr.write(' '.repeat(72) + '\r');
+
     if (blad) {
-      console.log(`  ${'—'.padStart(13)} · ${'—'.padStart(5)} · ${'—'.padStart(6)}   ✗ ${model}`);
-      console.log(`  ${' '.repeat(32)}${blad}`);
+      zapisz(`  ${'—'.padStart(13)} · ${'—'.padStart(5)} · ${'—'.padStart(6)}   ✗ ${model}`);
+      zapisz(`  ${' '.repeat(32)}${blad}`);
       wyniki.push({ ep, model, blad });
       continue;
     }
     const p = mediana(próby.map((x) => x.pierwszy));
+    const tresc = mediana(próby.map((x) => x.doTresci || x.pierwszy));
     const tempo = mediana(próby.map((x) => x.tempo));
     const c = mediana(próby.map((x) => x.calosc));
     const najgorszy = Math.max(...próby.map((x) => x.pierwszy));
     const udane = próby.length;
-    const [znak, opis] = ocena(p, tempo, udane, POWTORZENIA, najgorszy);
+    const [znak, opis] = ocena(tresc, tempo, udane, POWTORZENIA, najgorszy);
     const rozrzut = udane > 1 && najgorszy > p * 3 ? ` ⚡do ${(najgorszy / 1000).toFixed(1)}s` : '';
-    console.log(`  ${(p / 1000).toFixed(1).padStart(9)} s · ${String(tempo).padStart(3)}/s · `
-      + `${(c / 1000).toFixed(1).padStart(4)} s · ${udane}/${POWTORZENIA}   ${znak} ${model}${rozrzut}`);
-    if (bledy.length) console.log(`  ${' '.repeat(38)}${bledy.length}× ${bledy[0].slice(0, 60)}`);
-    wyniki.push({ ep, model, pierwszy: p, tempo, calosc: c, znak, opis, udane, najgorszy, bledy: bledy.length });
+    // Model rozumujący zaczyna od myślenia; treść przychodzi później.
+    // Bez tej kolumny „0,1 s" wyglądało jak błyskawiczna odpowiedź, a było
+    // błyskawicznym „…myślę".
+    const mysli = tresc > p * 1.5 ? ` 🧠myśli ${((tresc - p) / 1000).toFixed(1)}s` : '';
+    zapisz(`  ${(p / 1000).toFixed(1).padStart(6)} s · ${(tresc / 1000).toFixed(1).padStart(5)} s · `
+      + `${String(tempo).padStart(3)}/s · ${(c / 1000).toFixed(1).padStart(5)} s · ${udane}/${POWTORZENIA}`
+      + `   ${znak} ${model}${rozrzut}${mysli}`);
+    if (bledy.length) zapisz(`  ${' '.repeat(38)}${bledy.length}× ${bledy[0].slice(0, 60)}`);
+    wyniki.push({ ep, model, pierwszy: p, tresc, tempo, calosc: c, znak, opis, udane, najgorszy, bledy: bledy.length });
   }
 
   /* Sortujemy po niezawodności, POTEM po szybkości. Model odpowiadający
@@ -228,8 +264,10 @@ function ocena(pierwszy, tempo, udane, wszystkich, najgorszy) {
       : 'Żaden model nie odpowiedział pewnie we wszystkich próbach. Najbliżej:');
     for (const w of (pewne.length ? pewne : dobre).slice(0, 6)) {
       console.log(`  ${w.znak} ${w.model}`);
-      console.log(`      ${(w.pierwszy / 1000).toFixed(1)} s do pierwszego znaku, ${w.tempo} zn./s, `
-        + `${w.udane}/${POWTORZENIA} prób — ${w.opis}`);
+      const ogon = w.tresc > w.pierwszy * 1.5
+        ? `, treść po ${(w.tresc / 1000).toFixed(1)} s (najpierw myśli)` : '';
+      console.log(`      ${(w.pierwszy / 1000).toFixed(1)} s do pierwszego znaku${ogon}, `
+        + `${w.tempo} zn./s, ${w.udane}/${POWTORZENIA} prób — ${w.opis}`);
     }
     const chwiejne = dobre.filter((w) => w.udane < POWTORZENIA);
     if (chwiejne.length) {

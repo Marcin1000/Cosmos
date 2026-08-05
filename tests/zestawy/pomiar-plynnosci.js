@@ -41,6 +41,20 @@ const { srodowisko } = require('../pomoc');
   console.log(`5. sekcja o modelach nierównych: ${/nie zawsze/.test(out) ? 'jest' : 'BRAK'}`);
   if (!/nie zawsze/.test(out)) fail.push('brak ostrzeżenia o modelach odpowiadających nierówno');
 
+  // 6. model, który najpierw myśli, a potem mówi: „pierwszy znak" po 0,3 s
+  //    wygląda na błyskawiczną odpowiedź, a to dopiero „…myślę".
+  const mysli = wiersz('rozumujacy/mysli-potem-mowi');
+  console.log('6. ' + mysli);
+  if (!/🧠myśli/.test(mysli)) fail.push('nie rozróżnia myślenia od odpowiedzi');
+  if (/✦/.test(mysli)) fail.push('model myślący 3 s uchodzi za błyskawiczny');
+
+  // 7. pasek postępu nie może mieszać się z wynikami (na terminalu stderr
+  //    też jest terminalem, więc `\r` nie kasował i zostawały puste linie)
+  const smieci = out.split('\n').filter((l) => l.trim().startsWith('…')).length;
+  const puste = out.split('\n').filter((l) => /^\s{20,}$/.test(l)).length;
+  console.log(`7. resztki paska postępu: ${smieci}, puste linie: ${puste}`);
+  if (smieci || puste) fail.push('pasek postępu zaśmieca wynik');
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPOMIAR PŁYNNOŚCI OK');
   process.exit(fail.length ? 1 : 0);
