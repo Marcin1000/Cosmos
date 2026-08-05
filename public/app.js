@@ -1561,6 +1561,7 @@ function stripSearchMarker(s) {
     .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
     .replace(/\[GRAFIKA:[^\]]*\]/gi, '')
     .replace(/\[PLAN:?[^\]]*\]/gi, '')
+    .replace(/\[ARCHIWUM:?[^\]]*\]/gi, '')
     .trim();
 }
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
@@ -1576,6 +1577,7 @@ const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
    każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
 const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
 const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
+const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
 const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
@@ -1622,6 +1624,47 @@ async function runGeneration(conv) {
         }
         const resultsText = await webSearch(q);
         conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      // Archiwum: pytania o WŁASNY materiał użytkownika.
+      const archMarker = acc.match(ARCHIVE_RE);
+      if (archMarker && depth < MAX_SEARCHES) {
+        const q = new URLSearchParams();
+        let grupuj = '';
+        for (const kawalek of archMarker[1].trim().split(/\s+/)) {
+          const i = kawalek.indexOf('=');
+          if (i < 1) continue;
+          const k = kawalek.slice(0, i);
+          const v = kawalek.slice(i + 1);
+          if (k === 'grupuj') grupuj = v; else q.set(k, v);
+        }
+        const before = stripSearchMarker(acc.replace(archMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.searchingArchive'),
+        });
+        saveConversations();
+        renderMessages();
+        let dane;
+        try {
+          // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
+          const adres = grupuj
+            ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
+            : `/api/archive/search?limit=40&${q}`;
+          const r = await fetch(adres);
+          dane = await readJsonSafe(r);
+          if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
+        } catch (err) { dane = { error: err.message }; }
+        conv.messages.push({
+          role: 'user',
+          content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
+            + 'podstawie tych danych, nie zgaduj):\n' + JSON.stringify(dane, null, 1).slice(0, 12000),
+          search: true,
+          searchQuery: t('chat.archiveQuery'),
+        });
         saveConversations();
         renderMessages();
         continue;

@@ -37,6 +37,8 @@ const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokument
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
 const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
+const archiwum_ = require('./lib/archiwum.js');
+const archiwum = archiwum_.utworz(DATA_DIR);
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -743,6 +745,41 @@ async function handleUruchom(req, res) {
   const wynik = await uruchomKod(kod, pliki);
   addEvent('kod', `uruchomiono kod (${wynik.ms} ms${wynik.przerwany ? ', przerwany limitem' : ''})`);
   sendJson(res, 200, wynik);
+}
+
+/* Archiwum materiału. Indeks jest pasywny — źródła (OneDrive, dysk przez
+   zmysły) wpychają wpisy, a zapytania działają nawet wtedy, gdy te źródła
+   są offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu
+   w terenie przy wyłączonym komputerze domowym. */
+async function handleArchiwum(req, res, p) {
+  if (p === '/api/archive/add' && req.method === 'POST') {
+    let d;
+    try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    if (!Array.isArray(d.wpisy)) return sendJson(res, 400, { error: 'Brak tablicy `wpisy`.' });
+    if (d.wpisy.length > 5000) return sendJson(res, 413, { error: 'Najwyżej 5000 wpisów naraz.' });
+    const wynik = archiwum.dodaj(d.wpisy);
+    if (wynik.dodanych) addEvent('archiwum', `zindeksowano ${wynik.dodanych} plików (razem ${wynik.razem})`);
+    return sendJson(res, 200, wynik);
+  }
+  if (p === '/api/archive/search' && req.method === 'GET') {
+    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    const limit = Math.min(Number(q.limit) || 40, 200);
+    const wyniki = archiwum.szukaj(q);
+    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit) });
+  }
+  if (p === '/api/archive/stats' && req.method === 'GET') {
+    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    if (!q.pole) return sendJson(res, 200, archiwum.podsumowanie());
+    const grupy = archiwum.zestawienie(q.pole, q);
+    if (!grupy) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
+    return sendJson(res, 200, { pole: q.pole, grupy });
+  }
+  if (p === '/api/archive/source' && req.method === 'DELETE') {
+    const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
+    if (!zrodlo) return sendJson(res, 400, { error: 'Podaj `zrodlo`.' });
+    return sendJson(res, 200, { usunieto: archiwum.usunZrodlo(zrodlo) });
+  }
+  return sendJson(res, 404, { error: 'Nieznana trasa archiwum.' });
 }
 
 /* Asystent planu zdjęciowego — to, czego nie ma żaden asystent w chmurze.
@@ -1730,6 +1767,29 @@ async function handleChat(req, res) {
     });
   }
 
+  /* Archiwum materiału — drugi wyróżnik. Model w chmurze nie ma Twoich
+     plików, więc na „ile klipów 50 mm w tym roku" nie odpowie nigdy. */
+  if (payload.useArchive !== false && !krotko && archiwum.ile() > 0) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — ARCHIWUM MATERIAŁU: użytkownik ma zindeksowane '
+        + `${archiwum.ile()} własnych zdjęć i klipów (aparat, obiektyw, ogniskowa, `
+        + 'przysłona, czas, ISO, data, GPS). Gdy pyta o SWÓJ materiał — „ile klipów '
+        + 'nakręciłem 50 mm", „pokaż ujęcia z czerwca o zachodzie", „mam coś z tego '
+        + 'miejsca" — zakończ odpowiedź osobną linią: [ARCHIWUM: filtry].\n'
+        + 'Filtry (wszystkie opcjonalne, oddzielone spacjami):\n'
+        + '  rok=2026 · miesiac=06 · typ=zdjecie|wideo · aparat=R6 · obiektyw=RF50 ·\n'
+        + '  ogniskowa=50 · ogniskowaOd=24 ogniskowaDo=70 · isoOd=1600 · przyslonaDo=2.8 ·\n'
+        + '  swiatlo=złota godzina|niebieska godzina|ostre światło|zmierzch|noc ·\n'
+        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo\n'
+        + 'Z `grupuj` dostaniesz zestawienie liczbowe zamiast listy plików — tego '
+        + 'używaj przy pytaniach „ile" i „najczęściej".\n'
+        + 'Pora światła jest policzona z pozycji Słońca nad miejscem zdjęcia, '
+        + 'nie zgadnięta z godziny — możesz na niej polegać.',
+    });
+  }
+
   /* Plan zdjęciowy — wyróżnik Cosmosa. Model w chmurze nie wie, gdzie stoisz
      ani jaki masz sprzęt, więc na „jakie ustawienia" odpowiada ogólnikami.
      Tutaj są konkretne liczby, policzone z pozycji Słońca nad Twoim miejscem. */
@@ -2301,6 +2361,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
     if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
     if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
+    if (p.startsWith('/api/archive')) return await handleArchiwum(req, res, p);
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
