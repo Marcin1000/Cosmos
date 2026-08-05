@@ -156,7 +156,17 @@ function loadJson(key, fallback) {
 // localStorage służy tylko jako podgląd offline, gdy serwer jest niedostępny.
 let convSaveTimer = null;
 
+/* Zapis z opóźnieniem — do pisania w płótnie. Zapisywanie przy każdym
+   naciśnięciu klawisza słałoby na serwer kilkanaście żądań na sekundę. */
+let zapisZaChwile = null;
+function saveConversationsSoon(ms = 800) {
+  clearTimeout(zapisZaChwile);
+  zapisZaChwile = setTimeout(() => { zapisZaChwile = null; saveConversations(); }, ms);
+}
+
 function saveConversations() {
+  clearTimeout(zapisZaChwile);
+  zapisZaChwile = null;
   if (!activeConversation) return;
   activeConversation.updatedAt = Date.now();
 
@@ -525,6 +535,80 @@ function imagesHtml(images) {
     wrap.appendChild(img);
   }
   return wrap;
+}
+
+/* ================================ PŁÓTNO ================================ */
+
+$('canvas-close').addEventListener('click', () => { $('canvas').hidden = true; });
+$('canvas-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText($('canvas-text').value).catch(() => {});
+});
+$('canvas-download').addEventListener('click', () => {
+  const conv = activeConv();
+  const nazwa = ((conv && conv.canvas && conv.canvas.title) || 'plotno')
+    .replace(/[^\w\s.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, '').trim() || 'plotno';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$('canvas-text').value], { type: 'text/markdown' }));
+  a.download = `${nazwa}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+/* Ręczne poprawki trafiają z powrotem do rozmowy. Bez tego model przy
+   następnej zmianie szukałby fragmentu, którego już nie ma, i poprawka
+   przepadałaby z komunikatem „nie znalazłem". */
+$('canvas-text').addEventListener('input', () => {
+  const conv = activeConv();
+  if (conv && conv.canvas) {
+    conv.canvas.text = $('canvas-text').value;
+    odswiezMiarePlotna();
+    saveConversationsSoon();
+  }
+});
+
+/** Zastosuj poprawki w formacie SZUKAJ/ZAMIEŃ.
+ *
+ *  Model podaje fragment do znalezienia i jego nową wersję zamiast całego
+ *  dokumentu. Fragment MUSI występować dokładnie raz — gdy trafia w dwa
+ *  miejsca, nie wiadomo, które miał na myśli, i cicha podmiana pierwszego
+ *  z brzegu potrafi zepsuć tekst tak, że nikt tego nie zauważy.
+ */
+function zastosujZmianePlotna(conv, blok) {
+  if (!conv.canvas) return { ok: false, blad: t('canvas.noneYet') };
+  const kawalki = [...blok.matchAll(
+    /<<<<<<<\s*SZUKAJ\s*\n([\s\S]*?)\n?=======\s*\n([\s\S]*?)\n?>>>>>>>\s*ZAMIEŃ/g)];
+  if (!kawalki.length) return { ok: false, blad: t('canvas.badPatch') };
+
+  let tekst = conv.canvas.text;
+  let ile = 0;
+  for (const [, szukaj, zamien] of kawalki) {
+    const pierwszy = tekst.indexOf(szukaj);
+    if (pierwszy === -1) {
+      return { ok: false, blad: t('canvas.notFound', { frag: szukaj.slice(0, 60) }) };
+    }
+    if (tekst.indexOf(szukaj, pierwszy + 1) !== -1) {
+      return { ok: false, blad: t('canvas.ambiguous', { frag: szukaj.slice(0, 60) }) };
+    }
+    tekst = tekst.slice(0, pierwszy) + zamien + tekst.slice(pierwszy + szukaj.length);
+    ile++;
+  }
+  conv.canvas.text = tekst;
+  return { ok: true, ile };
+}
+
+/** Pokaż płótno bieżącej rozmowy (albo schowaj, gdy go nie ma). */
+function pokazPlotno(conv) {
+  const box = $('canvas');
+  if (!conv || !conv.canvas) { box.hidden = true; return; }
+  box.hidden = false;
+  $('canvas-title').textContent = conv.canvas.title;
+  $('canvas-text').value = conv.canvas.text;
+  odswiezMiarePlotna();
+}
+
+function odswiezMiarePlotna() {
+  const tekst = $('canvas-text').value;
+  const slowa = tekst.trim() ? tekst.trim().split(/\s+/).length : 0;
+  $('canvas-meta').textContent = t('canvas.meta', { w: slowa, c: tekst.length });
 }
 
 /** Wynik uruchomionego programu: co wypisał, jak długo to trwało i co narysował.
@@ -927,6 +1011,9 @@ function editFrom(idx) {
 
 function renderMessages() {
   const conv = activeConv();
+  // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć —
+  // inaczej przy nowej rozmowie zostaje na ekranie cudzy dokument.
+  pokazPlotno(conv);
   el.messages.innerHTML = '';
   const hasMessages = conv && conv.messages.length > 0;
   el.welcome.style.display = hasMessages ? 'none' : '';
@@ -1226,6 +1313,17 @@ function toApiMessages(conv) {
   if (sysPrompt) {
     api.push({ role: 'system', content: sysPrompt });
   }
+  /* Bieżąca treść płótna idzie jako osobna wiadomość systemowa, ZAWSZE
+     aktualna. Historia rozmowy zawiera stare wersje dokumentu; bez tego
+     model poprawiałby fragment, który użytkownik zdążył już zmienić ręcznie. */
+  if (conv.canvas && conv.canvas.text) {
+    api.push({
+      role: 'system',
+      content: `PŁÓTNO — dokument otwarty obok rozmowy, tytuł „${conv.canvas.title}". `
+        + 'To jest jego AKTUALNA treść (użytkownik mógł ją edytować ręcznie):\n'
+        + '--- POCZĄTEK PŁÓTNA ---\n' + conv.canvas.text + '\n--- KONIEC PŁÓTNA ---',
+    });
+  }
   for (const m of conv.messages) {
     if (m.error || m.role === 'action') continue;
     let text = msgText(m);
@@ -1472,6 +1570,11 @@ const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
 /* Kod do wykonania. Jedyne narzędzie zapisane blokiem, nie znacznikiem —
    program nie mieści się w jednej linii. */
 const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
+/* Płótno: dokument obok rozmowy. Tworzenie i podmiana fragmentu to dwie różne
+   rzeczy — przy scenariuszu na trzy tysiące słów przepisywanie całości przy
+   każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
+const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
+const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
@@ -1520,6 +1623,32 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         continue;
+      }
+
+      // Płótno: nowy dokument albo poprawka fragmentu w istniejącym.
+      const nowePlotno = acc.match(CANVAS_NEW_RE);
+      const zmianaPlotna = acc.match(CANVAS_PATCH_RE);
+      if (nowePlotno || zmianaPlotna) {
+        let opis;
+        if (nowePlotno) {
+          conv.canvas = {
+            title: (nowePlotno[1] || '').trim() || t('canvas.untitled'),
+            text: nowePlotno[2].replace(/\n$/, ''),
+          };
+          opis = t('canvas.created', { title: conv.canvas.title });
+        } else {
+          const wynik = zastosujZmianePlotna(conv, zmianaPlotna[1]);
+          opis = wynik.ok
+            ? t('canvas.patched', { n: wynik.ile })
+            : t('canvas.patchFailed', { msg: wynik.blad });
+        }
+        const before = stripSearchMarker(acc.replace((nowePlotno || zmianaPlotna)[0], ''));
+        conv.messages.push({ role: 'assistant', content: (before ? before + '\n\n' : '') + opis });
+        saveConversations();
+        renderMessages();
+        pokazPlotno(conv);
+        finalText = opis;
+        break;
       }
 
       /* Kod sprawdzamy najpierw: wynik programu zwykle jest treścią odpowiedzi,

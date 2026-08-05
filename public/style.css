@@ -544,6 +544,64 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ============================ PŁÓTNO ============================ */
+
+.canvas {
+  display: flex;
+  flex-direction: column;
+  width: min(46vw, 720px);
+  border-left: 1px solid var(--border-strong);
+  background: var(--bg);
+  min-width: 0;
+}
+.canvas[hidden] { display: none; }
+.canvas-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.canvas-title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.canvas-text {
+  flex: 1;
+  border: 0;
+  outline: none;
+  resize: none;
+  padding: 14px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 0;
+}
+.canvas-hint {
+  margin: 0;
+  padding: 6px 12px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+/* Na telefonie płótno zajmuje cały ekran: panel na 46% szerokości przy
+   360 px daje kolumnę, w której nie da się czytać zdania. */
+@media (max-width: 900px) {
+  .canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    width: auto;
+    border-left: 0;
+  }
+}
+
 .run-panel {
   margin: 10px 0;
   border: 1px solid var(--border-strong);

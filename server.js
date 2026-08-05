@@ -1637,6 +1637,31 @@ async function handleChat(req, res) {
     });
   }
 
+  /* Płótno — długi tekst obok rozmowy. Kluczowa jest DRUGA połowa instrukcji:
+     bez niej model przy każdej poprawce przepisuje cały dokument, co przy
+     scenariuszu na trzy tysiące słów trwa minutę i za każdym razem coś gubi. */
+  if (payload.useCanvas !== false && !krotko) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — PŁÓTNO (dokument obok rozmowy): gdy użytkownik prosi o dłuższy '
+        + 'tekst do dalszej pracy — scenariusz, opis filmu, artykuł, plan, dłuższy kod — '
+        + 'nie wypisuj go w rozmowie. Otwórz płótno:\n'
+        + '```płótno: Tytuł dokumentu\n(cała treść)\n```\n'
+        + 'POPRAWKI RÓB FRAGMENTAMI, nigdy nie przepisuj całości:\n'
+        + '```płótno-zmiana\n<<<<<<< SZUKAJ\n(dokładny fragment obecnej treści)\n'
+        + '=======\n(nowa wersja tego fragmentu)\n>>>>>>> ZAMIEŃ\n```\n'
+        + 'Fragment w SZUKAJ musi występować w płótnie DOKŁADNIE RAZ i być przepisany '
+        + 'znak w znak. Gdy trafia w dwa miejsca albo nie trafia wcale, zmiana zostanie '
+        + 'odrzucona — weź wtedy dłuższy, jednoznaczny fragment. Możesz podać kilka '
+        + 'bloków SZUKAJ/ZAMIEŃ naraz.\n'
+        + 'Aktualną treść płótna dostajesz w każdej wiadomości — użytkownik mógł ją '
+        + 'zmienić ręcznie, więc opieraj się na niej, a nie na tym, co sam napisałeś '
+        + 'wcześniej. Krótkie odpowiedzi zostawiaj w rozmowie; płótno jest do tego, '
+        + 'co się redaguje.',
+    });
+  }
+
   /* Liczenie na danych. Tylko dla modeli poziomu „pełny": mniejsze i tak nie
      napiszą poprawnego programu, a blok kodu wypisany w rozmowie zamiast
      wykonania jest gorszy niż brak narzędzia. */

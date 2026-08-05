@@ -715,6 +715,33 @@ poza `PATH`, i osobne sprawdzenie próbuje ten klucz stamtąd wyciągnąć.
 
 Całość wyłącza `CODE_EXEC=off`.
 
+## ✅ Partia 29 — płótno (GOTOWE)
+
+Czwarty krok programu, odpowiednik Canvas/Artifacts. Dłuższy tekst —
+scenariusz, opis filmu, plan zdjęć — trafia do panelu obok rozmowy, a nie
+w strumień czatu. Dla twórcy wideo to teksty, które się **redaguje**, a nie
+czyta raz.
+
+- [x] **Poprawki fragmentami, nie przepisywanie całości** — to jest cała
+      wartość tej partii. Model podaje blok `SZUKAJ`/`ZAMIEŃ` zamiast trzech
+      tysięcy słów od nowa: sekunda zamiast minuty i nic nie gubi się po drodze
+- [x] **Dwuznaczny fragment jest ODRZUCANY** — gdy szukany tekst występuje
+      dwa razy, nie wiadomo, który model miał na myśli. Cicha podmiana
+      pierwszego z brzegu potrafi zepsuć dokument tak, że nikt tego nie
+      zauważy, a to jest tekst, nad którym ktoś pracuje godzinami
+- [x] **Można pisać ręcznie** — a bieżąca treść idzie do modelu przy każdej
+      wiadomości jako osobna wiadomość systemowa. Bez tego model przy
+      następnej poprawce szukałby fragmentu, który użytkownik zdążył już
+      zmienić
+- [x] **Płótno należy do rozmowy** — przy przełączeniu znika, żeby przy nowej
+      rozmowie nie został na ekranie cudzy dokument
+- [x] **Na telefonie pełny ekran** — panel na 46% szerokości przy 360 px dawał
+      kolumnę, w której nie da się przeczytać zdania
+- [x] **Zapis z opóźnieniem** — pisanie w płótnie słałoby inaczej kilkanaście
+      żądań na sekundę
+
+Płótno, jak liczenie na danych, dostają tylko modele poziomu „pełny".
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

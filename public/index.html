@@ -220,6 +220,22 @@
         <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <span class="kbd-hint"><kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span></span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
       </div>
     </main>
+
+    <!-- ================= PŁÓTNO =================
+         Dokument obok rozmowy. Model poprawia w nim fragmenty zamiast
+         przepisywać całość — przy scenariuszu na trzy tysiące słów to
+         różnica między sekundą a minutą. -->
+    <section class="canvas" id="canvas" hidden aria-label="Płótno">
+      <div class="canvas-bar">
+        <span class="canvas-title" id="canvas-title"></span>
+        <span class="canvas-meta mono" id="canvas-meta"></span>
+        <button type="button" class="btn-secondary" id="canvas-copy" data-i18n="copy">Kopiuj</button>
+        <button type="button" class="btn-secondary" id="canvas-download" data-i18n="canvas.download">Pobierz</button>
+        <button type="button" class="btn-secondary" id="canvas-close" data-i18n="close">Zamknij</button>
+      </div>
+      <textarea class="canvas-text" id="canvas-text" spellcheck="false"></textarea>
+      <p class="canvas-hint" data-i18n="canvas.hint">Możesz pisać tutaj sam — model widzi bieżącą treść.</p>
+    </section>
   </div>
 
   <!-- ================= MODAL: USTAWIENIA ================= -->
