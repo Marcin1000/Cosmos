@@ -29,12 +29,12 @@ const MODEL_CATALOG = [
     mocne: ['trudne rozumowanie', 'długie analizy', 'najlepsza polszczyzna', 'kod wielopikowy'],
     kontekst: '1 mln tokenów',
     cechy: ['rozumowanie', 'narzędzia', 'polski'],
-    uwaga: 'Najwolniejszy z rodziny — do szybkich pytań weź Super albo Nano.',
+    uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada — do szybkich pytań weź Super 49B.',
   },
   {
     dopasuj: ['nemotron-3-super', 'super-120b'],
     nazwa: 'Nemotron 3 Super 120B',
-    opis: 'Najlepszy stosunek jakości do szybkości — domyślny wybór na co dzień.',
+    opis: 'Mocny, ale nierówny — zmierzone 0,5 s przy jednym przebiegu i 5,8 s przy drugim.',
     mocne: ['codzienna praca', 'rozumowanie', 'wywoływanie narzędzi', 'dobra polszczyzna'],
     kontekst: '1 mln tokenów',
     cechy: ['rozumowanie', 'narzędzia', 'polski'],
@@ -58,7 +58,7 @@ const MODEL_CATALOG = [
   {
     dopasuj: ['nemotron-nano-12b-v2-vl', '12b-v2-vl'],
     nazwa: 'Nemotron Nano 12B VL',
-    opis: 'Model wizyjny — wiele obrazów i wideo w jednym pytaniu.',
+    opis: 'Najpewniejszy model wizyjny: 0,2–0,3 s, odpowiadał w każdym pomiarze.',
     mocne: ['porównywanie zdjęć', 'czytanie tekstu z obrazu', 'kontrola jakości ujęć'],
     kontekst: 'średni',
     cechy: ['wizja'],
@@ -76,9 +76,11 @@ const MODEL_CATALOG = [
     dopasuj: ['nemotron-nano-9b', 'nano-9b-v2'],
     nazwa: 'Nemotron Nano 9B v2',
     opis: 'Hybryda Transformer-Mamba — mieści się na RTX 3080 i ma budżet myślenia.',
-    mocne: ['praca lokalna', 'szybkie odpowiedzi', 'długi kontekst tanim kosztem'],
+    mocne: ['praca lokalna', 'długi kontekst tanim kosztem'],
     kontekst: 'duży (Mamba oszczędza pamięć)',
     cechy: ['szybki', 'rozumowanie'],
+    uwaga: 'Model rozumujący: przy limicie poniżej ~700 tokenów zużywa cały budżet '
+      + 'na myślenie i oddaje pustą treść. Podnieś „Maks. tokenów odpowiedzi".',
   },
   {
     dopasuj: ['nemotron-mini', 'mini-4b'],
@@ -102,10 +104,10 @@ const MODEL_CATALOG = [
   {
     dopasuj: ['nemotron-super-49b', 'nemotron-super-49b-v1.5', 'llama-3.3-nemotron-super-49b'],
     nazwa: 'Llama 3.3 Nemotron Super 49B',
-    opis: 'Mocny model tekstowy średniej wielkości — sensowna alternatywa dla Super 120B.',
-    mocne: ['dłuższe teksty', 'rozumowanie', 'kod'],
+    opis: 'Najlepszy wybór do rozmowy: 0,3–0,4 s do pierwszego znaku, powtarzalnie.',
+    mocne: ['codzienna rozmowa', 'dłuższe teksty', 'rozumowanie', 'kod'],
     kontekst: 'duży',
-    cechy: ['rozumowanie', 'narzędzia', 'polski'],
+    cechy: ['szybki', 'rozumowanie', 'narzędzia', 'polski'],
   },
   {
     dopasuj: ['nemoguard', 'nemotron-safety-guard', 'content-safety', 'topic-control'],

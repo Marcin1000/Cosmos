@@ -711,8 +711,36 @@ zimny start i kłamie):
 | **tempo pisania** | Znaków na sekundę. Poniżej ~20 czyta się szybciej, niż model pisze — i to widać |
 | **całość** | Do ostatniego znaku krótkiej odpowiedzi |
 
-Ocena: `✦` jak rozmowa · `✓` nie przeszkadza · `~` czuć czekanie ·
-`✗` do zadań w tle, nie do rozmowy.
+Ocena łączy szybkość **z niezawodnością**: `✦` jak rozmowa · `✓` nie
+przeszkadza · `~` nierówny albo czuć czekanie · `✗` zawodny lub męczący.
+
+> ⚠️ **Darmowy endpoint NVIDII bywa mocno przeciążony i pojedynczy przebieg
+> kłamie.** Zmierzone na żywym koncie: `nemotron-3-super-120b` raz 0,5 s
+> (`✦`), pięć minut później 5,8 s (`✗`); `mistral-nemotron` raz 0,4 s, raz
+> brak odpowiedzi w 120 s. Dlatego skrypt wykonuje **wszystkie** próby (nie
+> przerywa na pierwszym błędzie), pokazuje ile z nich się udało (`2/3`)
+> i sortuje **najpierw po niezawodności**, dopiero potem po szybkości.
+> Przy ważnej decyzji puść pomiar dwa razy o różnych porach dnia.
+
+### Zmierzone rekomendacje (dwa przebiegi na żywym koncie)
+
+Ze 102 pozycji na liście **tylko 13 odpowiedziało w obu przebiegach**.
+Domyślne wartości w `.env.example` są ustawione według tego pomiaru:
+
+| Do czego | Model | Zmierzone |
+|---|---|---|
+| **Rozmowa** | `nvidia/llama-3.3-nemotron-super-49b-v1` | 0,3 / 0,4 s — powtarzalnie, 49 mld = dobra polszczyzna |
+| **Zdjęcia** | `nvidia/nemotron-nano-12b-v2-vl` | 0,2 / 0,3 s — jedyny model wizyjny pewny w obu przebiegach |
+| Lekko i szybko | `nvidia/nemotron-3-nano-30b-a3b` | 0,4 s w obu |
+| Rozumowanie z widocznym tokiem myśli | `openai/gpt-oss-20b` | 0,5 s w obu |
+
+Dwie rzeczy, które pomiar obalił:
+
+- **`nemotron-3-super-120b-a12b`** — polecałem go jako codzienny wybór. Raz
+  0,5 s (`✦`), pięć minut później 5,8 s (`✗`). Nierówny.
+- **`nvidia-nemotron-nano-9b-v2`** — był domyślny w `.env.example`, a przy
+  budżecie 160 tokenów oddawał **sam tok myślenia i pustą treść**. To model
+  rozumujący; potrzebuje ≥700 tokenów odpowiedzi.
 
 Pomiar idzie **bez pamięci, bazy wiedzy i manifestu zdolności** — inaczej
 porównywalibyśmy stan Cosmosa, a nie modele między sobą.
