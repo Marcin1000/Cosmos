@@ -504,6 +504,37 @@ używanie narzędzia — nie liczby, tylko robotę wokół nich.
       i siedzą w czołówce. README mówi to wprost, żeby nikt (łącznie ze mną)
       nie odziedziczył błędnego wniosku
 
+## ✅ Partia 23 — ranking przestał polecać klasyfikatory (GOTOWE)
+
+Pierwszy pełny przebieg, który dobiegł końca (103 modele, przez `nohup`),
+pokazał, że tabela jest już wiarygodna, ale **podpowiedź pod nią prowadzi
+prosto w maliny**.
+
+- [x] **Klasyfikatory bezpieczeństwa wypadły z „najlepszych do rozmowy"** —
+      `nemoguard`, `safety-guard`, `topic-control` odsyłają słowo „safe"
+      w 0,1 s, więc wygrywały każdy wyścig na szybkość i zajmowały trzy
+      z sześciu miejsc na podium. Kto by posłuchał, ustawiłby sobie jako
+      główny model coś, co umie odpowiedzieć wyłącznie „bezpieczne /
+      niebezpieczne". Nowa kategoria `modelNotAChatPartner()` obejmuje też
+      tłumaczy (`riva-translate`) i modele badawcze (`ising-calibration`)
+- [x] **Nie znikają po cichu** — trafiają do sekcji „poza rankingiem"
+      z wyjaśnieniem, a w tabeli dostają dopisek `⚙ nie rozmówca`. Pytanie
+      „gdzie się podział mój najszybszy model" ma odpowiedź w tym samym
+      wydruku
+- [x] **Ranking liczy się po całości odpowiedzi, nie po pierwszym znaku** —
+      ocena patrzyła już na treść, sortowanie nie. `super-120b` dostawał `✦`
+      przy 1,2 s całości i wypadał poza szóstkę, przegrywając z modelami,
+      które ruszały wcześniej, a kończyły siedmiokrotnie później
+- [x] **Model, który raz nie odpowiedział, przestał być liczony dwa razy** —
+      wcześniej trafiał i na listę „nierównych", i na „męczące"
+- [x] **`genrm` dopisane do modeli bez końcówki czatu** — generatywne modele
+      oceny odpowiedzi nie są rozmówcami
+
+Domyślnym modelem zostaje flagowiec 550B mimo że `super-120b` bywa szybszy:
+ultra zmierzył się 3,1 s i 2,5 s, super — 1,2 s, 4,4 s i 6,9 s. **Równy bije
+szybkiego, ale nieprzewidywalnego.** README pokazuje teraz dwa przebiegi
+obok siebie, żeby to było widać, a nie żeby trzeba było wierzyć na słowo.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

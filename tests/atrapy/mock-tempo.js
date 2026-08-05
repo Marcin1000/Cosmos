@@ -16,6 +16,14 @@ const MODELE = {
   // Myśli długo, POTEM odpowiada. „Pierwszy znak" po 0,3 s wygląda na
   // błyskawiczną odpowiedź, a to dopiero „…myślę" — treść przychodzi po 3 s.
   'rozumujacy/mysli-potem-mowi': { pierwszy: 300, naZnak: 8, myslenieMs: 3000 },
+  // Rusza wcześnie, kończy późno — i odwrotnie. Ranking liczony po pierwszym
+  // znaku stawiał „zwlekacza" nad „sprinterem", choć czekało się na niego
+  // siedem razy dłużej.
+  'zwlekacz/szybki-start-wolny-koniec': { pierwszy: 250, naZnak: 300 },
+  'sprinter/pozny-start-szybki-koniec': { pierwszy: 500, naZnak: 8 },
+  // Klasyfikator bezpieczeństwa: odsyła jedno słowo w mgnieniu oka. Wygrywał
+  // każdy wyścig na szybkość i lądował na szczycie „najlepszych do rozmowy".
+  'straznik/nemoguard-atrapa': { pierwszy: 100, naZnak: 2, odpowiedz: 'safe' },
 };
 const licznik = {};
 const ODPOWIEDZ = 'Fotografia poklatkowa to seria zdjęć robionych w równych odstępach '
@@ -50,7 +58,7 @@ http.createServer((req, res) => {
         await new Promise((r) => setTimeout(r, cfg.myslenieMs / krokow));
       }
     }
-    for (const znak of ODPOWIEDZ) {
+    for (const znak of (cfg.odpowiedz || ODPOWIEDZ)) {
       const pole = cfg.tylkoMyslenie ? { reasoning_content: znak } : { content: znak };
       res.write(`data: ${JSON.stringify({ choices: [{ delta: pole }] })}\n\n`);
       await new Promise((r) => setTimeout(r, cfg.naZnak / 10));

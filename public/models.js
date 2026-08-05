@@ -315,7 +315,7 @@ function modelSeesImages(id) {
    w błąd. */
 const NIE_DO_ROZMOWY = [
   'embed', 'rerank', 'nvclip', 'nemoretriever', 'ocr', '-parse',
-  'reward', 'detector', 'deplot',
+  'reward', 'genrm', 'detector', 'deplot',
 ];
 
 /** Czy to model o innym przeznaczeniu niż rozmowa? */
@@ -324,13 +324,34 @@ function modelNotForChat(id) {
   return NIE_DO_ROZMOWY.some((frag) => key.includes(frag));
 }
 
+/* Osobna kategoria: modele, które MAJĄ /chat/completions i odpowiadają
+   poprawnie, ale rozmówcami nie są. Klasyfikator bezpieczeństwa odsyła
+   „safe" w jedną dziesiątą sekundy i przez to wygrywa każdy wyścig na
+   szybkość — w rankingu „najlepsze do rozmowy" wyprzedzał flagowca 550B.
+   Kto by posłuchał takiej podpowiedzi, ustawiłby sobie jako główny model
+   coś, co umie odpowiedzieć wyłącznie „bezpieczne / niebezpieczne". */
+const NIE_ROZMOWCA = [
+  'nemoguard', 'safety-guard', 'content-safety', 'topic-control',
+  'llama-guard', 'riva-translate', 'ising-calibration',
+];
+
+/** Czy model odpowiada, ale nie nadaje się na rozmówcę? */
+function modelNotAChatPartner(id) {
+  const key = String(id || '').toLowerCase();
+  return modelNotForChat(key) || NIE_ROZMOWCA.some((frag) => key.includes(frag));
+}
+
 if (typeof window !== 'undefined') {
   window.MODEL_CATALOG = MODEL_CATALOG;
   window.modelInfo = modelInfo;
   window.modelSeesImages = modelSeesImages;
   window.modelNotForChat = modelNotForChat;
+  window.modelNotAChatPartner = modelNotAChatPartner;
   window.CECHA_OPIS = CECHA_OPIS;
 }
 if (typeof module !== 'undefined') {
-  module.exports = { MODEL_CATALOG, modelInfo, modelSeesImages, modelNotForChat, CECHA_OPIS };
+  module.exports = {
+    MODEL_CATALOG, modelInfo, modelSeesImages,
+    modelNotForChat, modelNotAChatPartner, CECHA_OPIS,
+  };
 }

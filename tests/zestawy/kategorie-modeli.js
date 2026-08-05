@@ -70,6 +70,19 @@ up.listen(7105, async () => {
   if (!a.inneZadanie) fail.push('nie rozpoznał modelu o innym przeznaczeniu');
   if (a.niepewne) fail.push('oznaczył go jako niepewny');
 
+  // 2b. klasyfikator bezpieczeństwa: końcówkę czatu MA i odpowie poprawnie,
+  //     więc wychodził z testu jako sprawny model do rozmowy. Odpowie „safe"
+  //     na każde pytanie — sprawność jest pozorna.
+  const przedStraz = prob;
+  a = await check('nvidia/llama-3.1-nemoguard-8b-content-safety');
+  console.log(`2b. klasyfikator → inneZadanie=${a.inneZadanie}, rozmowa=${a.rozmowa}`);
+  console.log(`   ${a.podpowiedz}`);
+  if (!a.inneZadanie) fail.push('klasyfikator bezpieczeństwa uchodzi za model do rozmowy');
+  if (prob - przedStraz) fail.push('niepotrzebnie odpytał klasyfikator');
+  if (!/rozmówcą nie jest|klasyfikator/.test(a.podpowiedz || '')) {
+    fail.push('podpowiedź nie mówi, czym ten model naprawdę jest');
+  }
+
   // 3. zimny start: jedna ponowna próba ma go uratować
   a = await check('meta/wolny-model');
   console.log(`3. zimny start → rozmowa=${a.rozmowa}, niepewne=${!!a.niepewne}, sond=${prob - przed}`);

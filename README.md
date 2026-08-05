@@ -731,25 +731,42 @@ przeszkadza · `~` nierówny albo czuć czekanie · `✗` zawodny lub męczący.
 myślenia, więc `0,1 s` znaczy tylko „coś się dzieje" — treść przychodzi
 kilka sekund później. Skrypt pokazuje obie liczby i oznacza to `🧠myśli`.
 
-| Do czego | Model | ruch → całość |
-|---|---|---|
-| **Rozmowa** | `nvidia/nemotron-3-ultra-550b-a55b` | 0,6 → **3,1 s** · 550 mld = najlepsza polszczyzna |
-| **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 0,4 → **1,7 s** · czyta też wideo |
-| Najszybszy sensowny | `openai/gpt-oss-20b` | 0,4 → 1,0 s |
-| Szybki, słabszy po polsku | `mistralai/mistral-nemotron` | 0,4 → 1,9 s |
-| Wizyjny również lokalnie | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | 0,2 → 2,1 s |
+Poniżej **dwa niezależne przebiegi** o różnych porach — bo jeden nie wystarcza.
 
-Trzy rzeczy, które pomiar obalił — **wszystkie były błędami mojego pomiaru,
-nie modeli**:
+| Do czego | Model | całość (przebieg 1 → 2) |
+|---|---|---|
+| **Rozmowa** | `nvidia/nemotron-3-ultra-550b-a55b` | 3,1 → **2,5 s** · 550 mld = najlepsza polszczyzna |
+| **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 1,7 → **1,9 s** · czyta też wideo |
+| Najszybszy sensowny | `openai/gpt-oss-20b` | 1,0 → 1,5 s |
+| Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 → 1,2 s |
+| Bardzo szybki, słaby po polsku | `nvidia/nemotron-mini-4b-instruct` | 0,3 → 0,3 s |
+
+**Dlaczego domyślny jest 550B, a nie szybszy `super-120b`.** Super bywa
+najszybszy w stawce (1,2 s), ale w drugim przebiegu potrzebował 4,4 s, a we
+wcześniejszym 6,9 s. Ultra zmierzył się 3,1 s i 2,5 s. **Równy model bije
+szybki, ale nieprzewidywalny** — czekanie raz na sekundę, raz na siedem jest
+w rozmowie gorsze niż stałe dwie i pół.
+
+Cztery rzeczy, które pomiar obalił — **wszystkie były błędami narzędzia,
+nie wadami modeli**:
 
 - `nemotron-3-ultra-550b`, `nano-omni-30b` i `nvidia-nemotron-nano-9b-v2`
   wychodziły jako „pusta odpowiedź". To modele rozumujące, a limit 160
   tokenów zużywały w całości na myślenie. Po podniesieniu do 700 — wszystkie
   3/3 prób i w czołówce.
-- `nemotron-3-super-120b` raz 0,5 s, raz 5,8 s, raz 2,4 s. Naprawdę nierówny.
-- `llama-3.3-nemotron-super-49b-v1` ma 0,3 s do pierwszego znaku, ale **4,7 s
+- `llama-3.3-nemotron-super-49b-v1` ma 0,3 s do pierwszego znaku, ale **4,9 s
   do końca odpowiedzi** — dużo myśli. Sama „szybkość startu" wprowadzała
   w błąd, dlatego doszła kolumna „całość".
+- **Ranking szedł po pierwszym znaku, choć ocena patrzyła już na treść.**
+  `super-120b` dostawał `✦` przy 1,2 s całości i wypadał poza pierwszą
+  szóstkę, przegrywając z modelami, które zaczynały wcześniej, a kończyły
+  wielokrotnie później.
+- **Klasyfikatory bezpieczeństwa wygrywały ranking „najlepsze do rozmowy".**
+  `nemoguard`, `safety-guard`, `topic-control` odsyłają słowo „safe"
+  w 0,1 s — nie da się ich pobić na czas i nie da się z nimi porozmawiać.
+  Razem z tłumaczami (`riva-translate`) i modelami badawczymi
+  (`ising-calibration`) trafiają teraz do osobnej sekcji **„poza rankingiem"**,
+  a w tabeli mają dopisek `⚙ nie rozmówca`.
 
 Pomiar idzie **bez pamięci, bazy wiedzy i manifestu zdolności** — inaczej
 porównywalibyśmy stan Cosmosa, a nie modele między sobą.

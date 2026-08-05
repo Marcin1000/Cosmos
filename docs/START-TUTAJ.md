@@ -138,8 +138,8 @@ Gdy zechcesz dobrać świadomie:
 
 | Do czego | Model | Dlaczego |
 |---|---|---|
-| **Czat w chmurze** (codziennie) | `nemotron-3-super-120b-a12b` | Najlepszy stosunek jakości do szybkości; kontekst 1M, mocny w rozumowaniu. Darmowy endpoint |
-| Czat w chmurze (maksimum) | `nemotron-3-ultra-550b-a55b` | Flagowiec — wolniejszy, ale najlepszy w trudnych zadaniach |
+| **Czat w chmurze** (domyślny) | `nemotron-3-ultra-550b-a55b` | Flagowiec, a w pomiarze najrówniejszy: 3/3 prób, 2,5–3,1 s na odpowiedź. Najlepsza polszczyzna |
+| Czat, gdy trafisz na spokojną porę | `nemotron-3-super-120b-a12b` | Kontekst 1M, bywa najszybszy w stawce (1,2 s) — ale potrafi też zejść do 6,9 s |
 | **Wzrok w chmurze** | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, **wideo**, mowa i tekst. Idealny do kamery i „co mam w ręku?" |
 | **Model lokalny** (RTX 3080) | `nemotron-nano-9b-v2` | W 4-bit ~6 GB — mieści się w 10 GB z zapasem |
 | Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok modelu tekstowego |
@@ -148,6 +148,12 @@ Gdy zechcesz dobrać świadomie:
 aktywnych parametrów", ale architektura MoE oszczędza **obliczenia, nie pamięć** —
 wszystkie 30 mld musi zmieścić się w karcie (~16–18 GB). **Na RTX 3080 nie wejdzie.**
 Tak samo `super-120b` i `ultra-550b` — te tylko przez chmurę.
+
+**⚠️ Druga pułapka:** na liście modeli zobaczysz `nemoguard`, `safety-guard`
+i `topic-control`. To **klasyfikatory bezpieczeństwa** — odpowiadają słowem
+„safe" w jedną dziesiątą sekundy, więc wyglądają na najszybsze modele w całej
+stawce. Rozmowy z nimi nie da się przeprowadzić. Cosmos oznacza je w sprawdzeniu
+modeli jako ⚙ **inne przeznaczenie**; nie ustawiaj ich jako modelu czatu.
 
 **Po polsku:** im większy model, tym lepsza polszczyzna. Dlatego sensowny podział to
 **chmura do pisania i rozumowania, model lokalny do rzeczy prywatnych i pracy bez
