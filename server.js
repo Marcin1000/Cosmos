@@ -21,7 +21,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 // Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
-const { modelInfo, modelNotForChat } = require('./public/models.js');
+const { modelInfo, modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
@@ -1779,11 +1779,14 @@ async function handleModelCheck(req, res) {
   const model = String(data.model || '').trim();
   if (!model) return sendJson(res, 400, { error: 'Brak identyfikatora modelu.' });
 
-  // Embeddingi, przeszukiwanie, OCR — one nie mają końcówki rozmowy i zwrócą
-  // „404 page not found". To nie brak dostępu, tylko inne przeznaczenie,
-  // a część z nich Cosmos sam wykorzystuje (baza wiedzy). Nie ma sensu ich
-  // odpytywać ani wrzucać do worka „niedostępne”.
-  if (modelNotForChat(model)) {
+  // Dwie grupy, jeden wniosek: nie stawiaj ich jako modelu czatu.
+  //  • Embeddingi, przeszukiwanie, OCR nie mają końcówki rozmowy i zwrócą
+  //    „404 page not found" — to nie brak dostępu, tylko inne przeznaczenie,
+  //    a część z nich Cosmos sam wykorzystuje (baza wiedzy).
+  //  • Klasyfikatory bezpieczeństwa i tłumacze końcówkę mają i odpowiedzą
+  //    poprawnie — dlatego wychodziły z testu jako sprawne modele czatu.
+  //    Odpowiedzą „safe" na każde pytanie, więc sprawność jest tu pozorna.
+  if (modelNotAChatPartner(model)) {
     return sendJson(res, 200, {
       model,
       silnik: ep.label,
@@ -1791,8 +1794,11 @@ async function handleModelCheck(req, res) {
       obrazy: false,
       inneZadanie: true,
       blad: null,
-      podpowiedz: 'Ten model nie służy do rozmowy (embeddingi / przeszukiwanie / OCR). '
-        + 'Nie wybieraj go jako modelu czatu.',
+      podpowiedz: modelNotForChat(model)
+        ? 'Ten model nie służy do rozmowy (embeddingi / przeszukiwanie / OCR). '
+          + 'Nie wybieraj go jako modelu czatu.'
+        : 'Ten model odpowie, ale rozmówcą nie jest — to klasyfikator, tłumacz '
+          + 'albo model badawczy. Do czatu wybierz Nemotrona.',
       bladObrazy: null,
     });
   }

@@ -43,6 +43,7 @@ const path = require('path');
 const readline = require('readline');
 
 const KORZEN = path.resolve(__dirname, '..');
+const { modelNotAChatPartner } = require('../public/models.js');
 const ADRES = process.env.COSMOS_URL || 'http://localhost:3000';
 const POWTORZENIA = Number(process.env.PLYNNOSC_PROBY || 3);
 const PYTANIE = 'Napisz jednym zdaniem, czym jest fotografia poklatkowa.';
@@ -244,40 +245,62 @@ function ocena(pierwszy, tempo, udane, wszystkich, najgorszy) {
     // Bez tej kolumny „0,1 s" wyglądało jak błyskawiczna odpowiedź, a było
     // błyskawicznym „…myślę".
     const mysli = tresc > p * 1.5 ? ` 🧠myśli ${((tresc - p) / 1000).toFixed(1)}s` : '';
+    // Klasyfikator odpowie „safe" w 0,1 s i bez tej adnotacji wygląda
+    // w tabeli jak najlepszy rozmówca w stawce.
+    const specjalista = modelNotAChatPartner(model);
+    const rola = specjalista ? ' ⚙ nie rozmówca' : '';
     zapisz(`  ${(p / 1000).toFixed(1).padStart(6)} s · ${(tresc / 1000).toFixed(1).padStart(5)} s · `
       + `${String(tempo).padStart(3)}/s · ${(c / 1000).toFixed(1).padStart(5)} s · ${udane}/${POWTORZENIA}`
-      + `   ${znak} ${model}${rozrzut}${mysli}`);
+      + `   ${znak} ${model}${rozrzut}${mysli}${rola}`);
     if (bledy.length) zapisz(`  ${' '.repeat(38)}${bledy.length}× ${bledy[0].slice(0, 60)}`);
-    wyniki.push({ ep, model, pierwszy: p, tresc, tempo, calosc: c, znak, opis, udane, najgorszy, bledy: bledy.length });
+    wyniki.push({ ep, model, pierwszy: p, tresc, tempo, calosc: c, znak, opis, udane, najgorszy, bledy: bledy.length, specjalista });
   }
 
-  /* Sortujemy po niezawodności, POTEM po szybkości. Model odpowiadający
-     raz na trzy próby nie ma czego szukać na górze listy, choćby był
-     najszybszy w chwili, gdy akurat odpowie. */
+  /* Sortujemy po niezawodności, POTEM po CAŁOŚCI odpowiedzi — nie po
+     pierwszym znaku. Ocena patrzy już na treść, więc ranking liczony po
+     pierwszym znaku był z nią niespójny: super-120b dostawał ✦ przy 1,2 s
+     całości i wypadał poza szóstkę, przegrywając z modelami, które szybciej
+     zaczynały i wolniej kończyły. */
   const dobre = wyniki.filter((w) => !w.blad)
-    .sort((a, b) => (b.udane - a.udane) || (a.pierwszy - b.pierwszy));
+    .sort((a, b) => (b.udane - a.udane) || (a.calosc - b.calosc));
+  const rozmowni = dobre.filter((w) => !w.specjalista);
   console.log('\n' + '─'.repeat(70));
-  if (dobre.length) {
-    const pewne = dobre.filter((w) => w.znak === '✦' || w.znak === '✓');
+  if (rozmowni.length) {
+    const pewne = rozmowni.filter((w) => w.znak === '✦' || w.znak === '✓');
     console.log(pewne.length
       ? 'Najlepsze do rozmowy — szybkie ORAZ odpowiadające za każdym razem:'
       : 'Żaden model nie odpowiedział pewnie we wszystkich próbach. Najbliżej:');
-    for (const w of (pewne.length ? pewne : dobre).slice(0, 6)) {
+    for (const w of (pewne.length ? pewne : rozmowni).slice(0, 6)) {
       console.log(`  ${w.znak} ${w.model}`);
       const ogon = w.tresc > w.pierwszy * 1.5
-        ? `, treść po ${(w.tresc / 1000).toFixed(1)} s (najpierw myśli)` : '';
-      console.log(`      ${(w.pierwszy / 1000).toFixed(1)} s do pierwszego znaku${ogon}, `
+        ? ` (ruch po ${(w.pierwszy / 1000).toFixed(1)} s, potem myśli)` : '';
+      console.log(`      treść po ${(w.tresc / 1000).toFixed(1)} s${ogon}, `
+        + `całość ${(w.calosc / 1000).toFixed(1)} s, `
         + `${w.tempo} zn./s, ${w.udane}/${POWTORZENIA} prób — ${w.opis}`);
     }
-    const chwiejne = dobre.filter((w) => w.udane < POWTORZENIA);
+  }
+  if (dobre.length) {
+    /* Chwiejne mają pierwszeństwo przed „męczącymi" — model, który
+       odpowiedział raz na trzy próby, trafiał wcześniej na obie listy.
+       Specjaliści mają własną sekcję i nie powtarzają się tutaj: to, że
+       klasyfikator bywa nierówny, nikomu niczego nie ułatwia. */
+    const chwiejne = rozmowni.filter((w) => w.udane < POWTORZENIA);
     if (chwiejne.length) {
       console.log(`\nOdpowiadają, ale nie zawsze (${chwiejne.length}) — darmowy endpoint bywa przeciążony:`);
       console.log('  ' + chwiejne.map((w) => `${w.model.split('/').pop()} (${w.udane}/${POWTORZENIA})`).join(', '));
     }
-    const meczace = dobre.filter((w) => w.znak === '✗');
+    const meczace = rozmowni.filter((w) => w.znak === '✗' && w.udane === POWTORZENIA);
     if (meczace.length) {
       console.log(`\nDo zadań w tle, nie do rozmowy (${meczace.length}): `
         + meczace.map((w) => w.model.split('/').pop()).join(', '));
+    }
+    /* Wypisujemy je jawnie, żeby „gdzie się podział mój najszybszy model"
+       miało odpowiedź w tym samym wydruku, a nie w kodzie. */
+    const specjalisci = dobre.filter((w) => w.specjalista);
+    if (specjalisci.length) {
+      console.log(`\nPoza rankingiem (${specjalisci.length}) — odpowiadają, ale nie są rozmówcami`);
+      console.log('(klasyfikatory bezpieczeństwa, tłumacze, embeddingi, modele badawcze):');
+      console.log('  ' + specjalisci.map((w) => w.model.split('/').pop()).join(', '));
     }
   }
   const padly = wyniki.filter((w) => w.blad);

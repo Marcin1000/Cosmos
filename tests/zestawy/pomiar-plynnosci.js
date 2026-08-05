@@ -55,6 +55,29 @@ const { srodowisko } = require('../pomoc');
   console.log(`7. resztki paska postępu: ${smieci}, puste linie: ${puste}`);
   if (smieci || puste) fail.push('pasek postępu zaśmieca wynik');
 
+  // 8. klasyfikator bezpieczeństwa odsyła „safe" w 0,1 s i przez to wygrywał
+  //    ranking „najlepsze do rozmowy" — a umie odpowiedzieć jednym słowem.
+  const straz = wiersz('straznik/nemoguard-atrapa');
+  console.log('8. ' + straz);
+  if (!/nie rozmówca/.test(straz)) fail.push('klasyfikator nieoznaczony w tabeli');
+  if (lista.some((l) => l.includes('straznik'))) fail.push('klasyfikator trafił na listę najlepszych do rozmowy');
+  if (!/Poza rankingiem/.test(out)) fail.push('brak sekcji tłumaczącej, gdzie zniknęły modele specjalistyczne');
+
+  // 9. ranking musi iść po CAŁOŚCI odpowiedzi, nie po pierwszym znaku —
+  //    inaczej model ruszający wcześniej, a kończący siedem razy później,
+  //    wypada w podpowiedzi lepiej.
+  const poz = (frag) => lista.findIndex((l) => l.includes(frag));
+  console.log(`9. sprinter na pozycji ${poz('sprinter') + 1}, zwlekacz na ${poz('zwlekacz') + 1}`);
+  if (poz('sprinter') === -1) fail.push('sprinter wypadł z listy najlepszych');
+  else if (poz('zwlekacz') !== -1 && poz('zwlekacz') < poz('sprinter')) {
+    fail.push('ranking wciąż idzie po pierwszym znaku, nie po całości odpowiedzi');
+  }
+
+  // 10. model, który raz nie odpowiedział, trafiał na obie listy naraz
+  const dwaRazy = /nie zawsze[\s\S]*?kaprysny[\s\S]*?Do zadań w tle.*kaprysny/.test(out);
+  console.log(`10. kapryśny model liczony podwójnie: ${dwaRazy ? 'TAK' : 'nie'}`);
+  if (dwaRazy) fail.push('ten sam model jest i „nierówny", i „męczący"');
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPOMIAR PŁYNNOŚCI OK');
   process.exit(fail.length ? 1 : 0);
