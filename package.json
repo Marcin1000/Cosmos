@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "desktop": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "test": "node tests/uruchom.js",
+    "test:szybkie": "node tests/uruchom.js szybkie",
+    "audyt": "node scripts/audyt.js"
   },
   "engines": {
     "node": ">=18"
@@ -20,10 +23,12 @@
     "productName": "Cosmos",
     "files": [
       "server.js",
+      "lib/**",
       "desktop/**",
       "automation/**",
       "public/**",
-      ".env.example"
+      ".env.example",
+      "!tests/**"
     ],
     "win": {
       "target": "nsis",

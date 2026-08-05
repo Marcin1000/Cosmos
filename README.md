@@ -640,6 +640,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
+| `/api/events/stream` | GET | **Strumień SSE w drugą stronę** — przeglądarka dowiaduje się o zdarzeniach zamiast tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte przez `senses/wake_listener.py` na domowym komputerze otwiera tryb głosowy na telefonie |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
 | `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
@@ -666,6 +667,90 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
 | `/api/admin/stats` | GET | Statystyki danych i włączonych silników |
+
+## 🧩 Układ kodu
+
+```
+server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
+lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
+lib/model.js       wywołania modelu bez strumienia (streszczenia, prompt)
+lib/studio.js      generowanie mediów (OpenAI / Firefly / ElevenLabs / Seedance)
+lib/nauka.js       rozpoznawanie, procedury, rutyny, automatyzacja
+lib/trening.js     eksport JSONL i uruchamianie QLoRA
+lib/urzadzenia.js  smart home i poranna odprawa
+```
+
+Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
+dziedzina potrzebuje czegoś z innej (Studio zapisuje do bazy wiedzy), serwer
+wstrzykuje to raz przy starcie przez `polacz()` — krzyżowe `require` dałoby
+cykliczną zależność i jedna ze stron widziałaby pusty obiekt.
+
+**Kolekcje podmieniane przy usuwaniu** (`procedures = procedures.filter(...)`)
+wychodzą z modułów jako funkcje odczytujące, nie jako tablice: `module.exports`
+kopiuje wiązanie w chwili eksportu, więc tablica zdezaktualizowałaby się po
+pierwszym skasowaniu. Audyt to sprawdza.
+
+## ⚡ Płynność — który model nadaje się do rozmowy
+
+```bash
+./scripts/plynnosc.js cloud          # zmierz wszystkie modele w chmurze
+./scripts/plynnosc.js local          # to samo lokalnie
+./scripts/plynnosc.js cloud nemotron # tylko pasujące nazwą
+```
+
+„Działa" i „da się z tego korzystać" to dwie różne rzeczy. Model odpowiadający
+poprawnie, ale pokazujący pierwszy znak po ośmiu sekundach, jest w rozmowie
+nie do zniesienia — a w liście modeli wygląda tak samo jak każdy inny.
+
+Skrypt mierzy trzy liczby, każdą trzy razy (mediana — pojedynczy pomiar łapie
+zimny start i kłamie):
+
+| Miara | Dlaczego akurat ta |
+|---|---|
+| **pierwszy znak** | Długość ciszy, zanim cokolwiek się pojawi. To ona decyduje o wrażeniu „odpowiada od razu" |
+| **tempo pisania** | Znaków na sekundę. Poniżej ~20 czyta się szybciej, niż model pisze — i to widać |
+| **całość** | Do ostatniego znaku krótkiej odpowiedzi |
+
+Ocena: `✦` jak rozmowa · `✓` nie przeszkadza · `~` czuć czekanie ·
+`✗` do zadań w tle, nie do rozmowy.
+
+Pomiar idzie **bez pamięci, bazy wiedzy i manifestu zdolności** — inaczej
+porównywalibyśmy stan Cosmosa, a nie modele między sobą.
+
+### Co Cosmos robi, żeby nie przeszkadzać
+
+Zasada jest jedna: **nic, co jest tylko dodatkiem do odpowiedzi, nie może
+wstrzymywać samej odpowiedzi.**
+
+- **Pamięć długotrwała** ma budżet 1,2 s na embedding zapytania; po jego
+  przekroczeniu idzie dopasowanie po słowach kluczowych, a rozmowa rusza.
+  Przeliczanie wektorów po zmianie dostawcy embeddingów dzieje się **w tle**.
+  Wcześniej siedziało w ścieżce żądania z limitem 60 s — zmierzone 5 s ciszy
+  przed **każdą** wiadomością, gdy usługa zmysłów była zajęta.
+- **Bezpiecznik**: gdy usługa embeddingów raz nie wyrobi się w budżecie, przez
+  minutę nie czekamy na nią wcale. Bez tego cisza wracała przy każdej
+  wiadomości.
+- **Wyszukiwanie**: 8 s na listę wyników, 5 s na treść strony, strony
+  pobierane równolegle. Model potrafi zrobić trzy rundy, więc każda sekunda
+  mnoży się przez trzy.
+- **Strumień** idzie z serwera bez buforowania, a przeglądarka przemalowuje
+  dymek raz na klatkę (zmierzone: 7,8 ms przy 20 tys. znaków na telefonie —
+  mieści się w budżecie 16 ms).
+
+Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
+`PAGE_TIMEOUT_MS`), ale domyślne są dobrane pomiarem.
+
+## 🧪 Testy
+
+```bash
+npm test                 # 38 zestawów + 9 selftestów Pythona (~10 min)
+npm run test:szybkie     # tylko bez przeglądarki (~30 s)
+npm test -- --lista      # co jest do uruchomienia
+```
+
+Każdy zestaw dostaje własny serwer, własny port i świeży katalog danych — bo
+połowa dawnych „awarii" brała się z tego, że wspólny serwer akurat wstał z inną
+konfiguracją. Szczegóły i instrukcja pisania nowych zestawów: `tests/README.md`.
 
 ## 🔍 Audyt spójności
 

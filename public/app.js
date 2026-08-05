@@ -2180,6 +2180,8 @@ let liveTimer = null;
 let livePrevObjects = '';
 let liveLastObjects = [];
 let liveLastAutoSnap = 0;
+let liveLastPose = 0;
+let livePrevPose = '';
 
 function updateLiveRec() {
   const rec = $('live-rec');
@@ -2355,9 +2357,13 @@ async function liveDetect() {
     octx.strokeRect(x1, y1, x2 - x1, y2 - y1);
     octx.fillText(o.label, x1 + 4, Math.max(14, y1 - 4));
   }
-  $('live-status').textContent = objs.length
+  // Postawę doklejamy przy KAŻDYM cyklu, nie tylko w chwili pomiaru —
+  // inaczej następna detekcja nadpisuje status i sylwetka miga na ułamek
+  // sekundy. Zmienia się wolno, więc ostatnia znana jest nadal prawdziwa.
+  const ogon = livePrevPose ? ` · 🧍 ${livePrevPose}` : '';
+  $('live-status').textContent = (objs.length
     ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
-    : t('liveNothing');
+    : t('liveNothing')) + ogon;
 
   // zdarzenie percepcji z pozycją — tylko gdy zestaw obiektów się zmienił
   const sig = objs.map((o) => o.label).sort().join(',');
@@ -2389,6 +2395,33 @@ async function liveDetect() {
       liveLastAutoSnap = Date.now();
       captureTimelineSnapshot();
     }
+  }
+
+  // Sylwetka: postawa człowieka w kadrze. Doklejona do TEJ pętli, nie do
+  // własnej — MediaPipe kosztuje, a i tak mamy już gotową klatkę. Pytamy
+  // rzadziej niż o obiekty (co ~3 s), bo postawa zmienia się wolno.
+  if (senses.caps.mediapipe && objs.some((o) => o.label === 'person')
+      && Date.now() - liveLastPose > 3000) {
+    liveLastPose = Date.now();
+    try {
+      const res = await fetch('/api/pose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.7) }),
+      });
+      const poz = await readJsonSafe(res);
+      if (res.ok && poz.present && poz.summary !== livePrevPose) {
+        livePrevPose = poz.summary;
+        $('live-status').textContent += ` · 🧍 ${poz.summary}`;
+        // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.
+        // Do kontekstu rozmowy: model ma wiedzieć, czy stoisz, czy siedzisz.
+        fetch('/api/events', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'sylwetka', summary: poz.summary }),
+        }).catch(() => {});
+      }
+    } catch { /* zmysły offline albo brak MediaPipe */ }
+  } else if (!objs.some((o) => o.label === 'person')) {
+    livePrevPose = '';
   }
 }
 
@@ -4745,7 +4778,77 @@ async function pollDueRoutines() {
 }
 
 // ----------------------------------------------------------------
+// Strumień zdarzeń percepcji — kanał od serwera do okna
+//
+// Dotąd przeglądarka tylko WYSYŁAŁA zdarzenia i nigdy nie dowiadywała się,
+// że coś się stało. „Hej, Kosmos" wykryte przez senses/wake_listener.py na
+// domowym komputerze umierało w logu serwera — telefon w kieszeni nic o tym
+// nie wiedział. Teraz nasłuchujemy.
+// ----------------------------------------------------------------
+
+let strumienZdarzen = null;
+let zwlokaWznowienia = 1000;
+
+/** Czy reagować na słowo aktywujące wykryte poza tą przeglądarką. */
+const wakeZdalny = () => localStorage.getItem('cosmos.wakeZdalny') !== '0';
+
+function pokazZdarzenie(z) {
+  const pasek = $('event-flash');
+  if (!pasek) return;
+  // Nieznany typ zdarzenia (np. z własnego skryptu w senses/) nie ma
+  // tłumaczenia — pokazujemy wtedy surową nazwę zamiast „undefined".
+  const etykieta = maKlucz('event.' + z.type) ? t('event.' + z.type) : z.type;
+  pasek.textContent = `${etykieta}: ${z.summary}`;
+  pasek.hidden = false;
+  clearTimeout(pokazZdarzenie._t);
+  pokazZdarzenie._t = setTimeout(() => { pasek.hidden = true; }, 6000);
+}
+
+async function obsluzZdarzenie(z) {
+  // Słowo aktywujące z innego urządzenia otwiera tryb głosowy tutaj.
+  // Za zgodą: samoistnie włączający się mikrofon byłby nieprzyjemną
+  // niespodzianką, więc da się to wyłączyć w Ustawieniach.
+  if (z.type === 'wake' && wakeZdalny() && !voiceMode) {
+    pokazZdarzenie(z);
+    try { await enterVoiceMode(); } catch { /* brak zgody na mikrofon */ }
+    return;
+  }
+  // Reszta tylko mignięciem — to kontekst, nie polecenie.
+  if (['kamera', 'czujnik', 'sylwetka', 'urządzenie', 'rutyna'].includes(z.type)) pokazZdarzenie(z);
+}
+
+// Przełącznik w Ustawieniach — czytany przy otwarciu okna i zapisywany od razu.
+const wakeCheckbox = $('set-wake-remote');
+if (wakeCheckbox) {
+  wakeCheckbox.checked = wakeZdalny();
+  wakeCheckbox.addEventListener('change', () => {
+    localStorage.setItem('cosmos.wakeZdalny', wakeCheckbox.checked ? '1' : '0');
+  });
+}
+
+function sluchajZdarzen() {
+  if (strumienZdarzen) return;
+  try { strumienZdarzen = new EventSource('/api/events/stream'); }
+  catch { return; }
+
+  strumienZdarzen.addEventListener('zdarzenie', (e) => {
+    zwlokaWznowienia = 1000;
+    try { obsluzZdarzenie(JSON.parse(e.data)); } catch { /* zniekształcone */ }
+  });
+
+  strumienZdarzen.onerror = () => {
+    // Serwer padł albo sieć znikła. Wznawiamy z rosnącą zwłoką — bez tego
+    // telefon poza zasięgiem dobija serwer setkami prób na minutę.
+    strumienZdarzen.close();
+    strumienZdarzen = null;
+    setTimeout(sluchajZdarzen, zwlokaWznowienia);
+    zwlokaWznowienia = Math.min(zwlokaWznowienia * 2, 60000);
+  };
+}
+
+// ----------------------------------------------------------------
 // Start
 // ----------------------------------------------------------------
 
 boot();
+sluchajZdarzen();

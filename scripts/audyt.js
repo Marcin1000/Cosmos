@@ -60,7 +60,9 @@ console.log(`    PL ${pl.length} · EN ${en.length}`);
 const wszystkie = new Set([...pl, ...en]);
 const uzyteApp = [...new Set([...app.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
 const uzyteHtml = [...new Set([...html.matchAll(/data-i18n(?:-ph|-aria|-title)?="([^"]+)"/g)].map((m) => m[1]))];
-const braki = [...uzyteApp, ...uzyteHtml].filter((k) => !wszystkie.has(k));
+// Klucz zakończony kropką to prefiks budowany z danych (`t('event.' + typ)`),
+// a nie brakujące tłumaczenie. Kod ma dla nich zapasową etykietę.
+const braki = [...uzyteApp, ...uzyteHtml].filter((k) => !wszystkie.has(k) && !k.endsWith('.'));
 braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystkie użyte klucze mają tłumaczenie (${uzyteApp.length} + ${uzyteHtml.length})`);
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
   && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``));
@@ -269,6 +271,126 @@ POMIAR_TEKST.includes(domyslnyModel) ? ok('domyślny model rozmowy jest wśród 
 POMIAR_WZROK.includes(domyslnyWzrok) ? ok('domyślny model wizyjny jest wśród potwierdzonych')
   : zle(`domyślny model wizyjny „${domyslnyWzrok}" nie jest wśród potwierdzonych`);
 
+// ------------------------------------------------------------- 11b moduły
+sekcja('Podział na moduły');
+const moduly = fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js'));
+const liniiSerwer = server.split('\n').length;
+let liniiLib = 0;
+for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
+console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
+liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
+  : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
+// Żaden identyfikator z modułu nie może być używany bez importu — inaczej
+// serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
+const glowa = server.slice(0, server.indexOf('// ----', 2500));
+const ogon = server.slice(glowa.length);
+const bezImportu = [];
+for (const m of moduly) {
+  let mod; try { mod = require(path.join(R, 'lib', m)); } catch (e) { zle(`lib/${m} nie daje się wczytać: ${e.message}`); continue; }
+  for (const k of Object.keys(mod)) {
+    if (k === 'polacz') continue;
+    if (new RegExp(`\\b${k}\\b`).test(ogon) && !new RegExp(`\\b${k}\\b`).test(glowa)) bezImportu.push(`${m}:${k}`);
+  }
+}
+bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
+  : ok('każdy symbol z modułów jest zaimportowany');
+// Tablice podmieniane w module nie mogą wychodzić jako tablice — serwer
+// dostałby kopię wiązania i po pierwszym usunięciu widziałby stary stan.
+const pulapki = [];
+for (const m of moduly) {
+  const src = rd(`lib/${m}`);
+  const eks = (src.match(/module\.exports = \{([\s\S]*?)\}/) || ['', ''])[1];
+  for (const mm of src.matchAll(/^\s*([a-zA-Z_$][\w$]*) = \1\.filter\(/gm)) {
+    // Liczy się TYLKO skrócona własność (`lessons,`), a nie wystąpienie
+    // wewnątrz funkcji odczytującej (`wzorce: () => lessons`) — ta druga
+    // postać jest właśnie poprawką, nie pułapką.
+    if (new RegExp(`(^|[{,])\\s*${mm[1]}\\s*[,}]`).test(eks)) pulapki.push(`${m}:${mm[1]}`);
+  }
+}
+pulapki.length ? zle('podmieniane tablice wystawione wprost (kopia wiązania): ' + pulapki.join(', '))
+  : ok('podmieniane kolekcje wychodzą jako funkcje, nie tablice');
+
+// ------------------------------------------------------- 12b rozruch próbny
+sekcja('Rozruch próbny');
+/* Statyczna analiza nie wyłapie odwołania do symbolu, który po podziale na
+   moduły przestał istnieć — próbowałem regexem i przepuścił `events.length`.
+   Jedyna pewna metoda to uruchomić serwer i zapukać we wszystkie trasy.
+   Trwa kilka sekund i wyklucza całą tę klasę błędów. */
+const { execFileSync, spawn: spawnProc } = require('child_process');
+const os = require('os');
+const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
+const proba = spawnProc('node', ['server.js'], {
+  cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+  env: { ...process.env, PORT: '3499', COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
+});
+let logRozruchu = '';
+proba.stdout.on('data', (d) => { logRozruchu += d; });
+proba.stderr.on('data', (d) => { logRozruchu += d; });
+
+(async () => {
+  const adres = 'http://127.0.0.1:3499';
+  let wstal = false;
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 300));
+    try { await fetch(adres, { signal: AbortSignal.timeout(1000) }); wstal = true; break; } catch { /* wstaje */ }
+  }
+  if (!wstal) {
+    zle('serwer nie wstał: ' + logRozruchu.trim().split('\n').slice(-3).join(' | '));
+  } else {
+    ok('serwer wstaje');
+    // GET-y bez skutków ubocznych — pukamy we wszystko, co się da
+    const doSprawdzenia = trasy.filter((t) => t.startsWith('/api/')
+      && !/login|logout|chat|polish|stream|studio|record|train|run/.test(t));
+    const padly = [];
+    const niedostepne = [];
+    /* Trasy, które bez parametru kończą się na walidacji i nigdy nie dochodzą
+       do właściwego kodu. Bez tego `/api/search` przechodził audyt, mając
+       w środku `addEvent is not defined`. */
+    const PARAMETRY = {
+      '/api/search': '?q=pogoda',
+      '/api/models': '?endpoint=cloud',
+      '/api/conversations/search': '?q=test',
+      '/api/kinect/frame': '?stream=color',
+    };
+    for (const t of doSprawdzenia) {
+      try {
+        const r = await fetch(adres + t + (PARAMETRY[t] || ''), { signal: AbortSignal.timeout(12000) });
+        // 502 znaczy „usługa poniżej nie odpowiada" — w środowisku audytu nie
+        // ma ani modelu, ani zmysłów, więc to poprawna odpowiedź, nie usterka.
+        // 500 to już nasza wywrotka i takich szukamy (tak wyszło `rutyny is
+        // not defined` po podziale na moduły).
+        if (r.status === 500) padly.push(`${t} → 500`);
+        else if (r.status === 502) niedostepne.push(t.replace('/api/', ''));
+        else if (r.status === 200) {
+          /* Błąd w kodzie potrafi wyjść jako HTTP 200 z komunikatem w treści —
+             tak przeszedł `addEvent is not defined` w wyszukiwaniu, opisany
+             na dodatek jako „sprawdź połączenie z internetem". */
+          const tresc = (await r.text()).slice(0, 2000);
+          if (/is not defined|is not a function|Cannot read propert|undefined is not/.test(tresc)) {
+            padly.push(`${t} → 200, ale w treści błąd kodu: `
+              + (tresc.match(/[A-Za-z_$][\w$]* is not (?:defined|a function)/) || ['?'])[0]);
+          }
+        }
+      } catch (e) { padly.push(`${t} → ${e.message}`); }
+    }
+    padly.length ? zle('trasy wywracają się (HTTP 500): ' + padly.join(', '))
+      : ok(`${doSprawdzenia.length} tras bez wywrotki`
+        + (niedostepne.length ? ` (${niedostepne.join(', ')} → 502: brak usługi, spodziewane)` : ''));
+    // strumień zdarzeń osobno — nie kończy się sam
+    try {
+      const r = await fetch(adres + '/api/events/stream', { signal: AbortSignal.timeout(3000) });
+      r.status === 200 && /event-stream/.test(r.headers.get('content-type') || '')
+        ? ok('strumień zdarzeń odpowiada') : zle(`strumień zdarzeń: HTTP ${r.status}`);
+      r.body.cancel().catch(() => {});
+    } catch (e) { zle('strumień zdarzeń: ' + e.message); }
+    if (/Error|error:/i.test(logRozruchu)) hmm('w logu rozruchu jest słowo „error"');
+  }
+  try { process.kill(-proba.pid); } catch { /* już nie żyje */ }
+  fs.rmSync(tmpDane, { recursive: true, force: true });
+  podsumuj();
+})();
+
+function podsumuj() {
 // ---------------------------------------------------------------- 12 pozostałości
 sekcja('Pozostałości i higiena');
 const smieci = [];
@@ -288,3 +410,4 @@ console.log(`WYNIK: ${problemy.length} problemów, ${uwagi.length} uwag`);
 if (problemy.length) { console.log('\nPROBLEMY:'); problemy.forEach((p) => console.log('  ✗ ' + p)); }
 if (uwagi.length) { console.log('\nUWAGI (do świadomej decyzji, nie usterki):'); uwagi.forEach((u) => console.log('  · ' + u)); }
 process.exit(problemy.length ? 1 : 0);
+}

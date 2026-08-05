@@ -19,3 +19,4 @@ data/
 
 # Pobrane głosy Piper (duże pliki modeli)
 senses/voices/
+tests/zrzuty/

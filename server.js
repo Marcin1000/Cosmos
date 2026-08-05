@@ -23,127 +23,33 @@ const { spawn } = require('node:child_process');
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
 const { modelInfo, modelNotForChat } = require('./public/models.js');
 
-// ---------------------------------------------------------------------------
-// Konfiguracja: zmienne środowiskowe + opcjonalny plik .env
-// ---------------------------------------------------------------------------
+/* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
+   da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
+   wie nic o rozmowach, zmysłach ani o Studiu. */
+const {
+  KORZEN, PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SEARCH_URL, SECRETS,
+  loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
+  modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
+} = require('./lib/rdzen.js');
+const szukanie_ = require('./lib/szukanie.js');
+const { handleSearch, stripTags } = szukanie_;
+const trening_ = require('./lib/trening.js');
+const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
+  ileZdarzen } = require('./lib/zdarzenia.js');
+const { TRAIN_DIR, TRAIN_SCRIPT, buildTrainingDataset, commandExists, startTraining, trainJob, trainLog, trainStatusView } = trening_;
+const urzadzenia_ = require('./lib/urzadzenia.js');
+const { BRIEFING, handleBriefing, handleDevices, urzadzenia } = urzadzenia_;
+const nauka_ = require('./lib/nauka.js');
+const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
+  routineView, sanitizeStep, saveProcedures, secretsEnabled,
+  startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
+const studio_ = require('./lib/studio.js');
+const { handleStudio, tsName } = studio_;
+const { llmComplete, parseModelResponse, blindToImages } = require('./lib/model.js');
+/* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
+   Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
+   dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
 
-function loadDotEnv(file) {
-  try {
-    const text = fs.readFileSync(file, 'utf8');
-    for (const line of text.split('\n')) {
-      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-      if (!m || line.trim().startsWith('#')) continue;
-      let value = m[2].trim();
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-      if (!(m[1] in process.env)) process.env[m[1]] = value;
-    }
-  } catch {
-    /* brak .env — używamy tylko zmiennych środowiskowych */
-  }
-}
-
-loadDotEnv(path.join(__dirname, '.env'));
-
-const ENDPOINTS = {
-  cloud: {
-    label: 'Chmura NVIDIA',
-    baseUrl: (process.env.NEMOTRON_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, ''),
-    apiKey: process.env.NVIDIA_API_KEY || '',
-    model: process.env.NEMOTRON_MODEL || 'nvidia/nemotron-nano-9b-v2',
-    visionModel: process.env.NEMOTRON_VISION_MODEL || '',
-  },
-  local: {
-    label: 'Lokalny (GPU)',
-    baseUrl: (process.env.LOCAL_BASE_URL || 'http://localhost:11434/v1').replace(/\/+$/, ''),
-    apiKey: process.env.LOCAL_API_KEY || '',
-    model: process.env.LOCAL_MODEL || '',
-    visionModel: process.env.LOCAL_VISION_MODEL || '',
-  },
-};
-
-// Dodatkowe silniki komercyjne — pojawiają się jako zakładki, gdy podasz klucz.
-if (process.env.OPENAI_API_KEY) {
-  ENDPOINTS.openai = {
-    label: 'OpenAI',
-    baseUrl: (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
-    apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
-    visionModel: '', // gpt-4o widzi obrazy natywnie
-  };
-}
-if (process.env.ANTHROPIC_API_KEY) {
-  ENDPOINTS.claude = {
-    label: 'Claude',
-    // Warstwa zgodności Anthropic z API OpenAI (chat/completions)
-    baseUrl: (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1').replace(/\/+$/, ''),
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
-    visionModel: '',
-    anthropic: true,
-  };
-}
-
-// Studio — generowanie mediów z komercyjnych API (płatne kluczem użytkownika)
-const STUDIO = {
-  openai: {
-    key: process.env.OPENAI_API_KEY || '',
-    base: (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
-    imageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
-  },
-  eleven: {
-    key: process.env.ELEVENLABS_API_KEY || '',
-    base: (process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io').replace(/\/+$/, ''),
-    voice: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
-    model: process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
-  },
-  seedance: {
-    key: process.env.SEEDANCE_API_KEY || '',
-    base: (process.env.SEEDANCE_BASE_URL || 'https://ark.ap-southeast.bytepluses.com/api/v3').replace(/\/+$/, ''),
-    model: process.env.SEEDANCE_MODEL || 'seedance-2-0',
-  },
-  firefly: {
-    clientId: process.env.FIREFLY_CLIENT_ID || '',
-    clientSecret: process.env.FIREFLY_CLIENT_SECRET || '',
-    base: (process.env.FIREFLY_BASE_URL || 'https://firefly-api.adobe.io').replace(/\/+$/, ''),
-    imsUrl: (process.env.FIREFLY_IMS_URL || 'https://ims-na1.adobelogin.com').replace(/\/+$/, ''),
-  },
-  exportDir: process.env.STUDIO_EXPORT_DIR || '',
-};
-
-function fireflyEnabled() {
-  return Boolean(STUDIO.firefly.clientId && STUDIO.firefly.clientSecret);
-}
-
-function imageProviders() {
-  const list = [];
-  if (STUDIO.openai.key) list.push({ id: 'openai', label: `OpenAI (${STUDIO.openai.imageModel})` });
-  if (fireflyEnabled()) list.push({ id: 'firefly', label: 'Adobe Firefly' });
-  return list;
-}
-
-const studioTasks = new Map(); // taskId -> { prompt } (zadania wideo w toku)
-
-const SENSES_URL = (process.env.SENSES_URL || 'http://localhost:7060').replace(/\/+$/, '');
-
-// Wyszukiwarka internetowa (bez klucza API). Domyślnie DuckDuckGo HTML;
-// można podmienić na własny SearXNG itp. (format HTML zgodny z DDG).
-const SEARCH_URL = process.env.SEARCH_URL || 'https://html.duckduckgo.com/html/';
-
-// Menedżer haseł — źródło sekretów dla automatyzacji (nazwa → wartość, w locie).
-// Sekrety NIGDY nie są zapisywane w procedurach ani wysyłane do przeglądarki-klienta.
-const SECRETS = {
-  provider: (process.env.SECRETS_PROVIDER || 'none').toLowerCase(), // none|env|bitwarden|onepassword|pass|keepassxc|command
-  command: process.env.SECRETS_COMMAND || '',   // szablon z {name}; dla provider=command
-  keepassDb: process.env.KEEPASSXC_DB || '',
-};
-
-const PORT = Number(process.env.PORT || 3000);
-const PUBLIC_DIR = path.join(__dirname, 'public');
-
-// ---------------------------------------------------------------------------
 // Uwierzytelnianie (konieczne przy wystawieniu na VPS/publicznie).
 //   COSMOS_PASSWORD    — hasło do logowania w przeglądarce.
 //   COSMOS_API_TOKEN   — stały token dla klientów programowych (MCP, skrypty).
@@ -229,33 +135,6 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-// ---------------------------------------------------------------------------
-// Magazyn zdarzeń percepcji (pamięć krótkotrwała „zmysłów”)
-// ---------------------------------------------------------------------------
-
-const EVENTS_MAX = 100;
-const events = []; // { time, type, summary }
-
-function addEvent(type, summary) {
-  events.push({ time: Date.now(), type: String(type || 'event'), summary: String(summary || '').slice(0, 400) });
-  if (events.length > EVENTS_MAX) events.splice(0, events.length - EVENTS_MAX);
-}
-
-function recentEvents(maxAgeMs = 10 * 60 * 1000, limit = 12) {
-  const cutoff = Date.now() - maxAgeMs;
-  return events.filter((e) => e.time >= cutoff).slice(-limit);
-}
-
-function sceneContext() {
-  const recent = recentEvents();
-  if (!recent.length) return '';
-  const lines = recent.map((e) => {
-    const t = new Date(e.time).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    return `[${t}] (${e.type}) ${e.summary}`;
-  });
-  return 'KONTEKST PERCEPCJI — ostatnie zdarzenia z czujników (kamera/mikrofon/czujniki użytkownika). ' +
-         'Traktuj je jako to, co właśnie widzisz i słyszysz w otoczeniu użytkownika:\n' + lines.join('\n');
-}
 
 // ---------------------------------------------------------------------------
 // Pamięć długotrwała (RAG) — fakty zapisane przez użytkownika.
@@ -263,7 +142,6 @@ function sceneContext() {
 // wyszukiwanie słów kluczowych.
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.join(__dirname, 'data');
 const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
 
 let memories = [];
@@ -343,8 +221,25 @@ async function embedViaNvidia(texts, timeoutMs, inputType) {
 }
 
 /** Zwraca { vectors, model } albo null. `model` znakuje wektory — patrz sameModel(). */
+/* Bezpiecznik na wolne embeddingi.
+ *
+ * Gdy usługa raz nie wyrobiła się w budżecie, następne wywołania z krótkim
+ * budżetem (te z rozmowy) nie czekają wcale — od razu idzie dopasowanie po
+ * słowach kluczowych, a rozmowa rusza bez zwłoki. Po minucie próbujemy
+ * ponownie: usługa mogła po prostu wstawać albo liczyć coś ciężkiego.
+ *
+ * Bez tego cisza 1,2 s wracała przy KAŻDEJ wiadomości — dokładnie ten rodzaj
+ * drobnego tarcia, który sprawia, że narzędzie „jakoś tak mierzi".
+ */
+const embedAwaria = { do: 0 };
+const EMBED_KARENCJA_MS = 60000;
+/* Poniżej tego budżetu wywołanie uznajemy za „z rozmowy" — takie odpuszczamy
+   po awarii. Przeliczanie w tle (60 s) idzie zawsze, bo nikt na nie nie czeka. */
+const EMBED_BUDZET_ROZMOWY_MS = 5000;
+
 async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
   if (!texts || !texts.length || EMBED.provider === 'off') return null;
+  if (timeoutMs <= EMBED_BUDZET_ROZMOWY_MS && Date.now() < embedAwaria.do) return null;
   const order = EMBED.provider === 'senses' ? ['senses']
     : EMBED.provider === 'nvidia' ? ['nvidia']
     : ['senses', 'nvidia'];
@@ -352,8 +247,10 @@ async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
     const out = src === 'senses'
       ? await embedViaSenses(texts, timeoutMs)
       : await embedViaNvidia(texts, timeoutMs, inputType);
-    if (out) return out;
+    if (out) { embedAwaria.do = 0; return out; }
   }
+  // Nikt nie odpowiedział — przez chwilę nie zatrzymujemy dla nich rozmowy.
+  embedAwaria.do = Date.now() + EMBED_KARENCJA_MS;
   return null;
 }
 
@@ -404,24 +301,46 @@ function keywordScore(query, text) {
   return hits / Math.sqrt(q.size * Math.max(t.size, 1));
 }
 
+/* Przeliczanie wektorów w tle. NIE w ścieżce czatu.
+ *
+ * Wektory z różnych modeli są nieporównywalne, więc po zmianie dostawcy
+ * embeddingów trzeba przeliczyć całą pamięć. Kiedyś robiliśmy to wewnątrz
+ * `searchMemory`, z limitem 60 s — użytkownik patrzył w pustkę, zanim model
+ * w ogóle dostał prompt. Pomiar: 5 s ciszy przy KAŻDEJ wiadomości, gdy
+ * usługa embeddingów była wolna. Teraz pamięć doucza się sama, w tle,
+ * a rozmowa idzie dalej na dopasowaniu słów kluczowych.
+ */
+let uzupelnianieTrwa = false;
+function uzupelnijWektoryWTle(qmodel) {
+  if (uzupelnianieTrwa) return;
+  const brakujace = memories.filter((m) => !sameModel(m, qmodel));
+  if (!brakujace.length) return;
+  uzupelnianieTrwa = true;
+  setTimeout(async () => {
+    try {
+      const embs = await embedTexts(brakujace.map((m) => m.text), 60000, 'passage');
+      if (embs) {
+        brakujace.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
+        saveMemories();
+      }
+    } catch { /* następnym razem */ } finally { uzupelnianieTrwa = false; }
+  }, 0);
+}
+
+/* Ile wolno czekać na embedding zapytania, zanim odpuścimy i użyjemy słów
+   kluczowych. Przywołanie pamięci jest miłym dodatkiem — wstrzymywanie dla
+   niego całej rozmowy nie jest. */
+const BUDZET_PAMIECI_MS = Number(process.env.MEMORY_SEARCH_BUDGET_MS || 1200);
+
 async function searchMemory(query, limit = 4) {
   if (!memories.length || !query || !query.trim()) return [];
 
   let qvec = null, qmodel = null;
-  const q = await embedTexts([query], 5000, 'query');
+  const q = await embedTexts([query], BUDZET_PAMIECI_MS, 'query');
   if (q) {
     qvec = q.vectors[0];
     qmodel = q.model;
-    // Uzupełnij wpisy bez embeddingu ORAZ policzone innym modelem — wektory
-    // z różnych modeli są nieporównywalne, więc trzeba je przeliczyć.
-    const missing = memories.filter((m) => !sameModel(m, qmodel));
-    if (missing.length) {
-      const embs = await embedTexts(missing.map((m) => m.text), 60000, 'passage');
-      if (embs) {
-        missing.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
-        saveMemories();
-      }
-    }
+    uzupelnijWektoryWTle(qmodel);   // w tle, nie blokuje odpowiedzi
   }
 
   const threshold = qvec ? 0.35 : 0.15;
@@ -870,780 +789,6 @@ async function handleTimeline(req, res) {
 }
 
 // ---------------------------------------------------------------------------
-// NAUKA — uczenie Cosmosa.
-//   1) Rozpoznawanie przez zmysły ("pokaż w kamerze"): zapamiętane wzorce
-//      (etykieta + opis + embedding + miniatura). Później dopasowywane do
-//      tego, co widzą zmysły — jak pamięć długotrwała, ale dla obrazu/gestu.
-//   2) Procedury ("pokaż kroki"): nauczona sekwencja czynności w przeglądarce,
-//      z krokami oznaczonymi jako wrażliwe (płatność, wysłanie) — te zawsze
-//      wymagają potwierdzenia użytkownika.
-//   3) Rutyny: cykliczny harmonogram odpalania procedur. Domyślnie tryb
-//      "prepare" — Cosmos przygotowuje czynność, ale nic nieodwracalnego nie
-//      robi sam. Scheduler tylko zgłasza, że nadszedł czas.
-// ---------------------------------------------------------------------------
-
-const LESSONS_FILE = path.join(DATA_DIR, 'lessons.json');
-const PROCEDURES_FILE = path.join(DATA_DIR, 'procedures.json');
-const ROUTINES_FILE = path.join(DATA_DIR, 'routines.json');
-
-let lessons = [];
-let procedures = [];
-let routines = [];
-try { lessons = JSON.parse(fs.readFileSync(LESSONS_FILE, 'utf8')); } catch { /* brak */ }
-try { procedures = JSON.parse(fs.readFileSync(PROCEDURES_FILE, 'utf8')); } catch { /* brak */ }
-try { routines = JSON.parse(fs.readFileSync(ROUTINES_FILE, 'utf8')); } catch { /* brak */ }
-
-function saveJsonFile(file, data) {
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
-  catch (err) { console.error(`Nie udało się zapisać ${path.basename(file)}:`, err.message); }
-}
-const saveLessons = () => saveJsonFile(LESSONS_FILE, lessons);
-const saveProcedures = () => saveJsonFile(PROCEDURES_FILE, procedures);
-const saveRoutines = () => saveJsonFile(ROUTINES_FILE, routines);
-
-const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-function lessonDescriptor(l) {
-  return [l.label, l.note, (l.objects || []).join(', ')].filter(Boolean).join('. ');
-}
-
-// --- 1) Rozpoznawanie ---
-async function handleLessons(req, res, pathname) {
-  if (pathname === '/api/lessons' && req.method === 'GET') {
-    return sendJson(res, 200, {
-      lessons: lessons.map((l) => ({
-        id: l.id, label: l.label, kind: l.kind, note: l.note,
-        objects: l.objects || [], thumbId: l.thumbId, createdAt: l.createdAt,
-        hasEmbedding: Boolean(l.embedding),
-      })),
-    });
-  }
-  if (pathname === '/api/lessons' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const label = String(data.label || '').trim().slice(0, 120);
-    if (!label) return sendJson(res, 400, { error: 'Podaj nazwę tego, czego Cosmos ma się nauczyć.' });
-    const kind = ['object', 'gesture', 'pose', 'scene'].includes(data.kind) ? data.kind : 'object';
-    let thumbId = null;
-    if (data.image) {
-      try {
-        const buf = Buffer.from(String(data.image).split(',').pop(), 'base64');
-        const item = await kbAddFile(tsName('wzorzec', 'jpg'), 'image/jpeg', buf, `Wzorzec nauki: ${label}`);
-        thumbId = item.id;
-      } catch { /* bez miniatury */ }
-    }
-    const item = {
-      id: genId(), label, kind, note: String(data.note || '').slice(0, 400),
-      objects: Array.isArray(data.objects) ? data.objects.slice(0, 40) : [],
-      thumbId, createdAt: Date.now(), embedding: null,
-    };
-    const vecs = await embedTexts([lessonDescriptor(item)], 60000, 'passage');
-    if (vecs) { item.embedding = vecs.vectors[0]; item.embModel = vecs.model; }
-    lessons.push(item);
-    saveLessons();
-    addEvent('nauka', `nauczono rozpoznawać: ${label}`);
-    return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding) });
-  }
-  if (pathname === '/api/lessons' && req.method === 'DELETE') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    const l = lessons.find((x) => x.id === id);
-    if (l?.thumbId) { try { fs.unlinkSync(path.join(KB_FILES, l.thumbId)); } catch { /* skip */ }
-      kbItems = kbItems.filter((it) => it.id !== l.thumbId); saveKb(); }
-    lessons = lessons.filter((x) => x.id !== id);
-    saveLessons();
-    return sendJson(res, 200, { ok: true });
-  }
-  // dopasowanie: co z tego, co widać, Cosmos już zna?
-  if (pathname === '/api/lessons/match' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const matches = await matchLessons(String(data.text || ''), Array.isArray(data.objects) ? data.objects : []);
-    return sendJson(res, 200, { matches });
-  }
-  res.writeHead(405); res.end();
-}
-
-async function matchLessons(text, objects, limit = 4) {
-  if (!lessons.length) return [];
-  const queryText = [text, objects.join(', ')].filter(Boolean).join('. ');
-  if (!queryText.trim()) return [];
-  let qvec = null, qmodel = null;
-  const q = await embedTexts([queryText], 5000, 'query');
-  if (q) {
-    qvec = q.vectors[0];
-    qmodel = q.model;
-    const missing = lessons.filter((l) => !sameModel(l, qmodel));
-    if (missing.length) {
-      const embs = await embedTexts(missing.map(lessonDescriptor), 60000, 'passage');
-      if (embs) {
-        missing.forEach((l, i) => { l.embedding = embs.vectors[i]; l.embModel = embs.model; });
-        saveLessons();
-      }
-    }
-  }
-  const objSet = new Set(objects.map((o) => String(o).toLowerCase()));
-  const threshold = qvec ? 0.4 : 0.2;
-  return lessons
-    .map((l) => {
-      let score = (qvec && sameModel(l, qmodel)) ? cosine(qvec, l.embedding) : keywordScore(queryText, lessonDescriptor(l));
-      // premia, gdy wykryte obiekty pokrywają się z obiektami wzorca
-      const overlap = (l.objects || []).filter((o) => objSet.has(String(o).toLowerCase())).length;
-      if (overlap) score += 0.15 * overlap;
-      return { l, score };
-    })
-    .filter((s) => s.score > threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => ({ id: s.l.id, label: s.l.label, kind: s.l.kind, note: s.l.note, score: Math.round(s.score * 100) / 100 }));
-}
-
-// --- 2) Procedury ---
-function sanitizeStep(s) {
-  const action = ['open', 'click', 'type', 'read', 'wait', 'confirm', 'note'].includes(s.action) ? s.action : 'note';
-  return {
-    action,
-    target: String(s.target || '').slice(0, 500),
-    value: String(s.value || '').slice(0, 500),
-    // krok wrażliwy = nieodwracalny (płatność, wysłanie, potwierdzenie); zawsze wymaga zgody
-    sensitive: Boolean(s.sensitive) || action === 'confirm',
-    // krok logowania (type/click) — może użyć sekretu z menedżera haseł; dozwolony w trybie auto
-    auth: Boolean(s.auth) && (action === 'type' || action === 'click'),
-    note: String(s.note || '').slice(0, 300),
-  };
-}
-
-async function handleProcedures(req, res, pathname) {
-  const url = new URL(req.url, 'http://localhost');
-  if (pathname === '/api/procedures' && req.method === 'GET') {
-    return sendJson(res, 200, { procedures: procedures.map((p) => ({ ...p, readOnly: autoEligibility(p).eligible, needsAuth: autoEligibility(p).needsAuth })) });
-  }
-  if (pathname === '/api/procedures' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const name = String(data.name || '').trim().slice(0, 120);
-    if (!name) return sendJson(res, 400, { error: 'Podaj nazwę procedury.' });
-    const steps = Array.isArray(data.steps) ? data.steps.slice(0, 60).map(sanitizeStep) : [];
-    const item = {
-      id: genId(), name, description: String(data.description || '').slice(0, 600),
-      scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now(),
-    };
-    procedures.push(item);
-    saveProcedures();
-    addEvent('nauka', `nauczono procedury: ${name} (${steps.length} kroków)`);
-    return sendJson(res, 200, { ok: true, id: item.id });
-  }
-  if (pathname === '/api/procedures' && req.method === 'PUT') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const p = procedures.find((x) => x.id === data.id);
-    if (!p) return sendJson(res, 404, { error: 'Nie znaleziono procedury.' });
-    if (data.name != null) p.name = String(data.name).trim().slice(0, 120) || p.name;
-    if (data.description != null) p.description = String(data.description).slice(0, 600);
-    if (Array.isArray(data.steps)) p.steps = data.steps.slice(0, 60).map(sanitizeStep);
-    p.updatedAt = Date.now();
-    saveProcedures();
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/procedures' && req.method === 'DELETE') {
-    const id = url.searchParams.get('id');
-    procedures = procedures.filter((x) => x.id !== id);
-    routines = routines.filter((r) => r.procedureId !== id); saveRoutines();
-    saveProcedures();
-    return sendJson(res, 200, { ok: true });
-  }
-  res.writeHead(405); res.end();
-}
-
-// --- 3) Rutyny (harmonogram) ---
-function computeNextRun(schedule, from = Date.now()) {
-  const s = schedule || {};
-  if (s.type === 'interval') {
-    const mins = Math.max(1, Number(s.everyMinutes) || 60);
-    return from + mins * 60 * 1000;
-  }
-  const [hh, mm] = String(s.time || '09:00').split(':').map((n) => parseInt(n, 10) || 0);
-  const d = new Date(from);
-  d.setSeconds(0, 0);
-  d.setHours(hh, mm, 0, 0);
-  if (s.type === 'weekly') {
-    const target = Math.min(6, Math.max(0, Number(s.day) || 0));
-    let add = (target - d.getDay() + 7) % 7;
-    if (add === 0 && d.getTime() <= from) add = 7;
-    d.setDate(d.getDate() + add);
-  } else if (s.type === 'monthly') {
-    const dom = Math.min(28, Math.max(1, Number(s.day) || 1));
-    d.setDate(dom);
-    if (d.getTime() <= from) d.setMonth(d.getMonth() + 1);
-  } else { // daily
-    if (d.getTime() <= from) d.setDate(d.getDate() + 1);
-  }
-  return d.getTime();
-}
-
-function routineView(r) {
-  const proc = procedures.find((p) => p.id === r.procedureId);
-  return { ...r, procedureName: proc ? proc.name : '(usunięta procedura)' };
-}
-
-async function handleRoutines(req, res, pathname) {
-  const url = new URL(req.url, 'http://localhost');
-  if (pathname === '/api/routines' && req.method === 'GET') {
-    return sendJson(res, 200, { routines: routines.map(routineView) });
-  }
-  if (pathname === '/api/routines/due' && req.method === 'GET') {
-    return sendJson(res, 200, { due: routines.filter((r) => r.pending).map(routineView) });
-  }
-  if (pathname === '/api/routines' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    if (!procedures.find((p) => p.id === data.procedureId)) {
-      return sendJson(res, 400, { error: 'Wskaż istniejącą procedurę.' });
-    }
-    const schedule = {
-      type: ['daily', 'weekly', 'monthly', 'interval'].includes(data.type) ? data.type : 'daily',
-      time: String(data.time || '09:00').slice(0, 5),
-      day: Number(data.day) || 0,
-      everyMinutes: Number(data.everyMinutes) || 60,
-    };
-    const item = {
-      id: genId(), procedureId: data.procedureId, schedule,
-      // "prepare": przygotuj i poproś o potwierdzenie (bezpieczne, domyślne).
-      // "auto-read": tylko czynności do odczytu mogą iść same.
-      mode: data.mode === 'auto-read' ? 'auto-read' : 'prepare',
-      enabled: data.enabled !== false, pending: false,
-      lastRun: null, nextRun: computeNextRun(schedule), createdAt: Date.now(),
-    };
-    routines.push(item);
-    saveRoutines();
-    return sendJson(res, 200, { ok: true, id: item.id, nextRun: item.nextRun });
-  }
-  if (pathname === '/api/routines' && req.method === 'PUT') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const r = routines.find((x) => x.id === data.id);
-    if (!r) return sendJson(res, 404, { error: 'Nie znaleziono rutyny.' });
-    if (typeof data.enabled === 'boolean') r.enabled = data.enabled;
-    if (data.mode) r.mode = data.mode === 'auto-read' ? 'auto-read' : 'prepare';
-    if (data.schedule || data.type) {
-      const s = data.schedule || data;
-      r.schedule = {
-        type: ['daily', 'weekly', 'monthly', 'interval'].includes(s.type) ? s.type : r.schedule.type,
-        time: String(s.time || r.schedule.time).slice(0, 5),
-        day: Number(s.day) || 0,
-        everyMinutes: Number(s.everyMinutes) || r.schedule.everyMinutes,
-      };
-      r.nextRun = computeNextRun(r.schedule);
-    }
-    if (data.pending === false) { r.pending = false; }
-    saveRoutines();
-    return sendJson(res, 200, { ok: true, nextRun: r.nextRun });
-  }
-  if (pathname === '/api/routines' && req.method === 'DELETE') {
-    const id = url.searchParams.get('id');
-    routines = routines.filter((x) => x.id !== id);
-    saveRoutines();
-    return sendJson(res, 200, { ok: true });
-  }
-  res.writeHead(405); res.end();
-}
-
-// Scheduler: co 30 s sprawdza rutyny. Gdy nadszedł czas — TYLKO oznacza je
-// jako "pending" i zgłasza zdarzenie. Nic nieodwracalnego nie dzieje się samo;
-// właściwe wykonanie (za zgodą) uruchamia użytkownik w interfejsie.
-let schedulerTimer = null;
-function tickRoutines() {
-  const now = Date.now();
-  let changed = false;
-  for (const r of routines) {
-    if (!r.enabled) continue;
-    if (!r.nextRun) { r.nextRun = computeNextRun(r.schedule, now); changed = true; }
-    if (now >= r.nextRun) {
-      r.pending = true;
-      r.lastRun = now;
-      r.nextRun = computeNextRun(r.schedule, now);
-      changed = true;
-      const proc = procedures.find((p) => p.id === r.procedureId);
-      addEvent('rutyna', `zaplanowana czynność do wykonania: ${proc ? proc.name : r.procedureId}`);
-    }
-  }
-  if (changed) saveRoutines();
-}
-function startScheduler() {
-  if (schedulerTimer) return;
-  tickRoutines();
-  schedulerTimer = setInterval(tickRoutines, 30 * 1000);
-  if (schedulerTimer.unref) schedulerTimer.unref();
-}
-
-// --- Automatyzacja web (opcjonalny moduł Playwright) ---
-// Tryb auto obejmuje: odczyt (open/wait/read/click) ORAZ logowanie z menedżera
-// haseł (kroki oznaczone auth: type/click). NIGDY kroków wrażliwych ani
-// zmieniających stan poza logowaniem (płatność, wysłanie, potwierdzenie).
-const READONLY_ACTIONS = new Set(['open', 'wait', 'read', 'click']);
-const AUTOMATION_RUNNER = path.join(__dirname, 'automation', 'runner.js');
-
-function secretsEnabled() { return SECRETS.provider && SECRETS.provider !== 'none'; }
-
-// Menedżer haseł — pobranie jednego sekretu po nazwie. Uruchamiane w procesie
-// serwera (ma dostęp do sesji vaulta przez env), wartość leci do runnera przez
-// stdin. Nigdy nie logujemy wartości ani nie zwracamy jej do klienta.
-function resolveSecret(name) {
-  return new Promise((resolve) => {
-    const safe = String(name).replace(/[^\w.@:/-]/g, ''); // bez metaznaków powłoki
-    if (!safe) return resolve(null);
-    let cmd, args;
-    switch (SECRETS.provider) {
-      case 'env':
-        return resolve(process.env['COSMOS_SECRET_' + safe.toUpperCase().replace(/[^A-Z0-9]/g, '_')] || null);
-      case 'bitwarden': cmd = 'bw'; args = ['get', 'password', safe]; break;
-      case 'onepassword': cmd = 'op'; args = ['read', safe]; break;
-      case 'pass': cmd = 'pass'; args = ['show', safe]; break;
-      case 'keepassxc':
-        if (!SECRETS.keepassDb) return resolve(null);
-        cmd = 'keepassxc-cli'; args = ['show', '-a', 'Password', '-q', SECRETS.keepassDb, safe]; break;
-      case 'command': {
-        if (!SECRETS.command) return resolve(null);
-        const full = SECRETS.command.replaceAll('{name}', safe);
-        cmd = '/bin/sh'; args = ['-c', full]; break;
-      }
-      default: return resolve(null);
-    }
-    let out = '';
-    try {
-      const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] });
-      const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, 15000);
-      child.stdout.on('data', (d) => { out += d; });
-      child.on('error', () => { clearTimeout(timer); resolve(null); });
-      child.on('close', () => { clearTimeout(timer); resolve(out.split('\n')[0].trim() || null); });
-    } catch { resolve(null); }
-  });
-}
-
-// Podmiana wzorców {{secret:NAZWA}} w wartościach kroków na prawdziwe sekrety.
-// Zwraca {steps, missing[]}. Wywoływane WYŁĄCZNIE po stronie serwera (auto).
-async function materializeSecrets(steps) {
-  const missing = [];
-  const out = [];
-  for (const s of steps) {
-    let value = s.value || '';
-    const refs = [...value.matchAll(/\{\{\s*secret:\s*([^}]+?)\s*\}\}/gi)];
-    for (const m of refs) {
-      const val = secretsEnabled() ? await resolveSecret(m[1]) : null;
-      if (val == null) { missing.push(m[1]); }
-      else value = value.replace(m[0], val);
-    }
-    out.push({ ...s, value });
-  }
-  return { steps: out, missing };
-}
-
-// Krok kwalifikuje się do trybu auto: odczyt zawsze; type/click tylko jako
-// logowanie (auth); nigdy krok wrażliwy ani confirm.
-function stepAutoEligible(s) {
-  if (s.sensitive || s.action === 'confirm') return false;
-  if (READONLY_ACTIONS.has(s.action)) return true;
-  if (s.action === 'type' && s.auth) return true;
-  return false;
-}
-function autoEligibility(proc) {
-  if (!proc || !proc.steps.length) return { eligible: false, needsAuth: false };
-  const eligible = proc.steps.every(stepAutoEligible);
-  const needsAuth = proc.steps.some((s) => s.auth ||
-    /\{\{\s*secret:/i.test(s.value || ''));
-  return { eligible, needsAuth };
-}
-
-function runAutomation(name, steps, timeoutMs = 120000) {
-  return new Promise((resolve) => {
-    let child;
-    try {
-      child = spawn(process.execPath, [AUTOMATION_RUNNER], { stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch (err) {
-      return resolve({ ok: false, error: 'spawn-failed', reason: err.message });
-    }
-    let out = '', errOut = '';
-    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, timeoutMs);
-    child.stdout.on('data', (d) => { out += d; });
-    child.stderr.on('data', (d) => { errOut += d; });
-    child.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, error: 'spawn-failed', reason: err.message }); });
-    child.on('close', () => {
-      clearTimeout(timer);
-      try { resolve(JSON.parse(out)); }
-      catch { resolve({ ok: false, error: 'no-output', reason: (errOut || out).slice(0, 300) }); }
-    });
-    child.stdin.write(JSON.stringify({ name, steps }));
-    child.stdin.end();
-  });
-}
-
-async function handleAutomation(req, res, pathname) {
-  if (pathname === '/api/automation/status' && req.method === 'GET') {
-    let available = false;
-    try { require.resolve('playwright'); available = true; } catch { /* brak */ }
-    return sendJson(res, 200, {
-      available, runner: fs.existsSync(AUTOMATION_RUNNER),
-      secrets: secretsEnabled() ? SECRETS.provider : null,
-    });
-  }
-  if (pathname === '/api/procedures/run-readonly' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const proc = procedures.find((p) => p.id === data.id);
-    if (!proc) return sendJson(res, 404, { error: 'Nie znaleziono procedury.' });
-    const { eligible, needsAuth } = autoEligibility(proc);
-    if (!eligible) {
-      return sendJson(res, 400, {
-        error: 'not-readonly',
-        message: 'Ta procedura zawiera kroki wrażliwe lub zmieniające stan poza logowaniem ' +
-                 '(płatność, wysłanie, potwierdzenie). Uruchom ją ręcznym runnerem z potwierdzeniem.',
-      });
-    }
-    // logowanie wymaga skonfigurowanego menedżera haseł
-    if (needsAuth && !secretsEnabled()) {
-      return sendJson(res, 400, {
-        error: 'no-secrets',
-        message: 'Ta procedura loguje się z menedżera haseł, ale żaden nie jest skonfigurowany. ' +
-                 'Ustaw SECRETS_PROVIDER w .env (patrz automation/README.md).',
-      });
-    }
-    // podmień {{secret:...}} na prawdziwe wartości tuż przed uruchomieniem
-    const { steps, missing } = await materializeSecrets(proc.steps);
-    if (missing.length) {
-      return sendJson(res, 400, { error: 'secret-missing', message: `Nie znaleziono w menedżerze haseł: ${[...new Set(missing)].join(', ')}` });
-    }
-    const result = await runAutomation(proc.name, steps);
-    if (result.ok) {
-      const summary = result.results.map((r) => `${r.label}: ${r.value}`).join(' | ').slice(0, 400);
-      addEvent('automatyzacja', `odczyt „${proc.name}": ${summary || '(brak wyników)'}`);
-    }
-    return sendJson(res, result.ok ? 200 : 502, result);
-  }
-  res.writeHead(405); res.end();
-}
-
-// ---------------------------------------------------------------------------
-// TRENING — eksport danych do fine-tuningu (QLoRA/LoRA).
-// Buduje zbiór JSONL z rozmów: czyste tury user↔assistant (bez akcji, wyszukiwań,
-// błędów i obrazów). Dwa formaty: "chat" (messages[]) i "instruction".
-// To NIE trenuje modelu — przygotowuje dane, które wytrenujesz w training/ .
-// ---------------------------------------------------------------------------
-function convTextTurns(conv) {
-  const turns = [];
-  for (const m of (conv.messages || [])) {
-    if (m.role !== 'user' && m.role !== 'assistant') continue; // pomiń action/search
-    if (m.search || m.error) continue;
-    const text = typeof m.content === 'string' ? m.content : (m.content && m.content.text) || '';
-    const t = String(text).trim();
-    if (!t) continue; // pomiń tury bez tekstu (np. sam obraz)
-    turns.push({ role: m.role, content: t });
-  }
-  return turns;
-}
-
-function buildTrainingDataset(format) {
-  const sys = userProfile.trim();
-  const out = [];
-  for (const meta of convIndex) {
-    let conv;
-    try { conv = JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { continue; }
-    const turns = convTextTurns(conv);
-    if (turns.length < 2) continue;
-
-    if (format === 'instruction') {
-      // pary: każda tura użytkownika + następna odpowiedź asystenta
-      for (let i = 0; i < turns.length - 1; i++) {
-        if (turns[i].role === 'user' && turns[i + 1].role === 'assistant') {
-          out.push({ instruction: turns[i].content, input: '', output: turns[i + 1].content });
-        }
-      }
-    } else { // chat
-      if (!turns.some((t) => t.role === 'assistant')) continue;
-      const messages = sys ? [{ role: 'system', content: sys }] : [];
-      out.push({ messages: messages.concat(turns) });
-    }
-  }
-  return { lines: out.map((o) => JSON.stringify(o)).join('\n') + (out.length ? '\n' : ''), count: out.length };
-}
-
-// --- „Dotrenuj" — uruchomienie treningu QLoRA lokalnie (opcjonalne) ---
-const TRAIN_DIR = path.join(DATA_DIR, 'train');
-const TRAIN_SCRIPT = path.join(__dirname, 'training', 'qlora_example.py');
-let trainJob = null; // { status, startedAt, endedAt, log:[], model, ollamaName, exitCode, child }
-const TRAIN_LOG_MAX = 400;
-
-function commandExists(cmd) {
-  return new Promise((resolve) => {
-    try {
-      const c = spawn(cmd, ['--version'], { stdio: 'ignore' });
-      const timer = setTimeout(() => { try { c.kill('SIGKILL'); } catch { /* */ } resolve(false); }, 4000);
-      c.on('error', () => { clearTimeout(timer); resolve(false); });
-      c.on('close', (code) => { clearTimeout(timer); resolve(code === 0 || code === null ? true : true); });
-    } catch { resolve(false); }
-  });
-}
-
-function trainLog(line) {
-  if (!trainJob) return;
-  for (const l of String(line).split('\n')) {
-    const s = l.replace(/\s+$/, '');
-    if (s) trainJob.log.push(s);
-  }
-  if (trainJob.log.length > TRAIN_LOG_MAX) trainJob.log = trainJob.log.slice(-TRAIN_LOG_MAX);
-}
-
-function trainStatusView() {
-  if (!trainJob) return { running: false, status: 'idle', log: [] };
-  return {
-    running: trainJob.status === 'running',
-    status: trainJob.status,
-    startedAt: trainJob.startedAt,
-    endedAt: trainJob.endedAt || null,
-    model: trainJob.model,
-    ollamaName: trainJob.ollamaName,
-    exitCode: trainJob.exitCode,
-    log: trainJob.log.slice(-60),
-  };
-}
-
-async function startTraining(opts) {
-  const { lines, count } = buildTrainingDataset('chat');
-  if (count < 1) return { ok: false, error: 'no-data', message: 'Brak danych do treningu — porozmawiaj najpierw z Cosmosem.' };
-  if (!fs.existsSync(TRAIN_SCRIPT)) return { ok: false, error: 'no-script' };
-  if (!(await commandExists('python3'))) {
-    return { ok: false, error: 'no-python', message: 'Brak python3. Zainstaluj Pythona i zależności z training/README.md.' };
-  }
-  fs.mkdirSync(TRAIN_DIR, { recursive: true });
-  const dataPath = path.join(TRAIN_DIR, 'dataset.jsonl');
-  fs.writeFileSync(dataPath, lines);
-
-  const model = String(opts.model || 'unsloth/Qwen2.5-7B-Instruct-bnb-4bit').replace(/[^\w./:-]/g, '');
-  const ollamaName = String(opts.ollamaName || 'cosmos-ft').replace(/[^a-z0-9._-]/gi, '');
-  const args = [TRAIN_SCRIPT, '--data', dataPath, '--model', model, '--out', path.join(TRAIN_DIR, 'lora'), '--gguf'];
-
-  trainJob = { status: 'running', startedAt: Date.now(), endedAt: null, log: [], model, ollamaName, exitCode: null, child: null };
-  trainLog(`▶ Start treningu: model=${model}, przykłady=${count}`);
-  addEvent('trening', `rozpoczęto dotrenowywanie modelu (${count} przykładów)`);
-
-  let child;
-  try {
-    child = spawn('python3', args, { cwd: path.join(__dirname, 'training'), stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (err) {
-    trainJob.status = 'error'; trainJob.endedAt = Date.now(); trainLog('✗ ' + err.message);
-    return { ok: false, error: 'spawn-failed', message: err.message };
-  }
-  trainJob.child = child;
-  child.stdout.on('data', (d) => trainLog(d));
-  child.stderr.on('data', (d) => trainLog(d));
-  child.on('close', async (code) => {
-    trainJob.exitCode = code;
-    if (code === 0) {
-      trainLog('✓ Trening zakończony.');
-      // rejestracja w Ollamie (jeśli dostępna)
-      const ggufModelfile = path.join(__dirname, 'training', 'cosmos-model-gguf', 'Modelfile');
-      if (fs.existsSync(ggufModelfile) && await commandExists('ollama')) {
-        trainLog(`▶ Rejestruję model w Ollamie jako „${ollamaName}"…`);
-        try {
-          const oc = spawn('ollama', ['create', ollamaName, '-f', ggufModelfile], { stdio: ['ignore', 'pipe', 'pipe'] });
-          oc.stdout.on('data', (d) => trainLog(d));
-          oc.stderr.on('data', (d) => trainLog(d));
-          oc.on('close', (oco) => {
-            if (oco === 0) { trainLog(`✓ Gotowe. Ustaw LOCAL_MODEL=${ollamaName} w .env i przełącz na profil „Lokalnie".`); addEvent('trening', `model „${ollamaName}" gotowy w Ollamie`); }
-            else trainLog(`✗ ollama create zwróciło kod ${oco}.`);
-            trainJob.status = 'done'; trainJob.endedAt = Date.now();
-          });
-        } catch (err) { trainLog('✗ ' + err.message); trainJob.status = 'done'; trainJob.endedAt = Date.now(); }
-      } else {
-        trainLog('ℹ Ollama niedostępna lub brak GGUF — model LoRA zapisany w data/train/lora.');
-        trainJob.status = 'done'; trainJob.endedAt = Date.now();
-        addEvent('trening', 'trening zakończony (adapter LoRA zapisany)');
-      }
-    } else {
-      trainLog(`✗ Trening zakończony błędem (kod ${code}). Sprawdź zależności: training/README.md.`);
-      trainJob.status = 'error'; trainJob.endedAt = Date.now();
-    }
-  });
-  return { ok: true, startedAt: trainJob.startedAt };
-}
-
-// ---------------------------------------------------------------------------
-// JARVIS — urządzenia (smart home) i poranna odprawa.
-//   Urządzenia: prosty mostek HTTP. Definiujesz je w data/devices.json albo
-//   w Ustawieniach; Cosmos może zaproponować użycie, ale WYKONANIE zawsze
-//   wymaga Twojego kliknięcia (ten sam wzorzec co inne akcje).
-//   Działa z Home Assistant, Shelly, Philips Hue, Tasmota i czymkolwiek,
-//   co przyjmuje żądanie HTTP.
-// ---------------------------------------------------------------------------
-
-const DEVICES_FILE = path.join(DATA_DIR, 'devices.json');
-let devices = [];
-try { devices = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')); } catch { /* brak */ }
-const saveDevices = () => saveJsonFile(DEVICES_FILE, devices);
-
-function sanitizeDevice(d) {
-  const method = ['GET', 'POST', 'PUT'].includes(String(d.method || '').toUpperCase())
-    ? String(d.method).toUpperCase() : 'POST';
-  let headers = {};
-  if (d.headers && typeof d.headers === 'object') {
-    for (const [k, v] of Object.entries(d.headers)) headers[String(k).slice(0, 80)] = String(v).slice(0, 500);
-  }
-  return {
-    id: d.id || genId(),
-    name: String(d.name || '').trim().slice(0, 60),
-    url: String(d.url || '').trim().slice(0, 500),
-    method, headers,
-    body: typeof d.body === 'string' ? d.body.slice(0, 2000) : '',
-    note: String(d.note || '').slice(0, 200),
-  };
-}
-
-async function runDevice(dev) {
-  if (!/^https?:\/\//i.test(dev.url)) return { ok: false, error: 'bad-url' };
-  try {
-    const opts = { method: dev.method, headers: { ...dev.headers }, signal: AbortSignal.timeout(10000) };
-    if (dev.method !== 'GET' && dev.body) {
-      if (!Object.keys(opts.headers).some((h) => h.toLowerCase() === 'content-type')) {
-        opts.headers['Content-Type'] = 'application/json';
-      }
-      opts.body = dev.body;
-    }
-    const r = await fetch(dev.url, opts);
-    const text = (await r.text()).slice(0, 300);
-    addEvent('urządzenie', `${dev.name}: ${r.ok ? 'wykonano' : 'błąd ' + r.status}`);
-    return { ok: r.ok, status: r.status, response: text };
-  } catch (err) {
-    return { ok: false, error: 'request-failed', reason: err.message };
-  }
-}
-
-async function handleDevices(req, res, pathname) {
-  if (pathname === '/api/devices' && req.method === 'GET') {
-    return sendJson(res, 200, { devices });
-  }
-  if (pathname === '/api/devices' && req.method === 'POST') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const dev = sanitizeDevice(data);
-    if (!dev.name || !dev.url) return sendJson(res, 400, { error: 'Podaj nazwę i adres URL urządzenia.' });
-    const i = devices.findIndex((d) => d.id === dev.id);
-    if (i >= 0) devices[i] = dev; else devices.push(dev);
-    saveDevices();
-    return sendJson(res, 200, { ok: true, id: dev.id });
-  }
-  if (pathname === '/api/devices' && req.method === 'DELETE') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    devices = devices.filter((d) => d.id !== id);
-    saveDevices();
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/devices/run' && req.method === 'POST') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const want = String(data.id || data.name || '').trim().toLowerCase();
-    const dev = devices.find((d) => d.id === data.id)
-      || devices.find((d) => d.name.toLowerCase() === want)
-      || devices.find((d) => d.name.toLowerCase().includes(want));
-    if (!dev) return sendJson(res, 404, { error: 'Nie znaleziono urządzenia.' });
-    const result = await runDevice(dev);
-    return sendJson(res, result.ok ? 200 : 502, result);
-  }
-  res.writeHead(405); res.end();
-}
-
-// --- Poranna odprawa ---
-const BRIEFING = {
-  lat: process.env.BRIEFING_LAT || '',
-  lon: process.env.BRIEFING_LON || '',
-  ics: process.env.CALENDAR_ICS || '',
-};
-
-async function fetchWeather() {
-  if (!BRIEFING.lat || !BRIEFING.lon) return null;
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(BRIEFING.lat)}` +
-      `&longitude=${encodeURIComponent(BRIEFING.lon)}&current=temperature_2m,weather_code,wind_speed_10m` +
-      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset` +
-      `&forecast_days=1&timezone=auto`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return null;
-    const d = await r.json();
-    return {
-      teraz: d.current?.temperature_2m, wiatr: d.current?.wind_speed_10m,
-      max: d.daily?.temperature_2m_max?.[0], min: d.daily?.temperature_2m_min?.[0],
-      opady: d.daily?.precipitation_probability_max?.[0],
-      wschod: (d.daily?.sunrise?.[0] || '').slice(11), zachod: (d.daily?.sunset?.[0] || '').slice(11),
-    };
-  } catch { return null; }
-}
-
-// Minimalny czytnik ICS — wydarzenia na dziś (plik lokalny albo adres URL).
-async function fetchCalendar() {
-  if (!BRIEFING.ics) return [];
-  let text = '';
-  try {
-    if (/^https?:\/\//i.test(BRIEFING.ics)) {
-      const r = await fetch(BRIEFING.ics, { signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return [];
-      text = await r.text();
-    } else {
-      text = fs.readFileSync(BRIEFING.ics, 'utf8');
-    }
-  } catch { return []; }
-
-  const unfolded = text.replace(/\r?\n[ \t]/g, '');
-  const today = new Date();
-  const stamp = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-  const out = [];
-  for (const block of unfolded.split('BEGIN:VEVENT').slice(1)) {
-    const get = (k) => (block.match(new RegExp(`^${k}[^:]*:(.*)$`, 'm')) || [])[1]?.trim() || '';
-    const start = get('DTSTART');
-    if (!start.startsWith(stamp)) continue;
-    const time = start.length > 8 ? `${start.slice(9, 11)}:${start.slice(11, 13)}` : 'cały dzień';
-    out.push({ czas: time, tytul: get('SUMMARY').slice(0, 120) });
-    if (out.length >= 12) break;
-  }
-  return out.sort((a, b) => a.czas.localeCompare(b.czas));
-}
-
-async function handleBriefing(req, res) {
-  const [weather, calendar] = await Promise.all([fetchWeather(), fetchCalendar()]);
-  const due = routines.filter((r) => r.pending).map((r) => routineView(r).procedureName);
-  const recent = recentEvents(12 * 60 * 60 * 1000, 12).map((e) => e.summary);
-
-  const facts = [];
-  if (weather) {
-    facts.push(`Pogoda: teraz ${weather.teraz}°C, dziś ${weather.min}–${weather.max}°C, ` +
-      `szansa opadów ${weather.opady}%, wiatr ${weather.wiatr} km/h, ` +
-      `wschód ${weather.wschod}, zachód ${weather.zachod}.`);
-  }
-  if (calendar.length) {
-    facts.push('Kalendarz na dziś:\n' + calendar.map((c) => `- ${c.czas} ${c.tytul}`).join('\n'));
-  }
-  if (due.length) facts.push(`Zaplanowane czynności czekające na uruchomienie: ${due.join(', ')}.`);
-  if (recent.length) facts.push('Ostatnie zdarzenia:\n' + recent.map((s) => `- ${s}`).join('\n'));
-  if (!facts.length) {
-    return sendJson(res, 200, {
-      ok: true, text: 'Brak danych do odprawy. Ustaw BRIEFING_LAT/BRIEFING_LON (pogoda) ' +
-        'i opcjonalnie CALENDAR_ICS (kalendarz) w pliku .env.', facts: {},
-    });
-  }
-
-  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
-  const prompt = lang === 'en'
-    ? 'Give a short spoken morning briefing (max 6 sentences) from the facts below. Be concrete, no filler, no greeting formulas beyond one short opener.'
-    : 'Przygotuj krótką poranną odprawę do przeczytania na głos (maks. 6 zdań) na podstawie poniższych faktów. ' +
-      'Konkretnie, bez lania wody, bez powtarzania liczb, które nic nie wnoszą.';
-  try {
-    const text = await llmComplete([
-      { role: 'system', content: prompt },
-      { role: 'user', content: facts.join('\n\n') },
-    ], { endpoint: 'cloud', maxTokens: 400 });
-    addEvent('odprawa', 'przygotowano poranną odprawę');
-    return sendJson(res, 200, { ok: true, text, facts: { weather, calendar, due, recent } });
-  } catch (err) {
-    // bez modelu i tak zwróć surowe fakty — odprawa ma działać zawsze
-    return sendJson(res, 200, { ok: true, text: facts.join('\n\n'), facts: { weather, calendar, due, recent }, raw: true });
-  }
-}
-
-// ---------------------------------------------------------------------------
 // SAMOŚWIADOMOŚĆ — manifest zdolności.
 //   Cosmos musi wiedzieć, czym JEST i co REALNIE potrafi w tej chwili — nie
 //   z wyuczonej formułki, tylko z żywego stanu systemu. Dzięki temu nie obiecuje
@@ -1689,7 +834,7 @@ async function capabilityManifest() {
   if (!secretsEnabled()) missing.push('logowanie z menedżera haseł — ustaw SECRETS_PROVIDER');
   if (!BRIEFING.lat || !BRIEFING.lon) missing.push('poranna odprawa (pogoda) — ustaw BRIEFING_LAT i BRIEFING_LON');
   if (!BRIEFING.ics) missing.push('kalendarz w odprawie — ustaw CALENDAR_ICS');
-  if (!devices.length) missing.push('sterowanie urządzeniami — dodaj je w Ustawieniach → Urządzenia');
+  if (!urzadzenia().length) missing.push('sterowanie urządzeniami — dodaj je w Ustawieniach → Urządzenia');
 
   return {
     tozsamosc: 'Cosmos — osobiste, prywatne środowisko AI użytkownika. Mózgiem jest model '
@@ -1705,10 +850,10 @@ async function capabilityManifest() {
       eksport: STUDIO.exportDir || null },
     wiedza: { rozmowy: convIndex.length, pamiec: memories.length, bazaWiedzy: kbItems.length,
       profil: userProfile.trim().length > 0, migawki: timeline.length },
-    nauka: { wzorce: lessons.length, procedury: procedures.length, rutyny: routines.length,
+    nauka: { wzorce: wzorce().length, procedury: procedury().length, rutyny: rutyny().length,
       nagrywanieEkranu: playwright, automatyzacjaOdczytu: playwright,
       menedzerHasel: secretsEnabled() ? SECRETS.provider : null },
-    dom: { urzadzenia: devices.map((d) => d.name), odprawa: Boolean(BRIEFING.lat && BRIEFING.lon),
+    dom: { urzadzenia: urzadzenia().map((d) => d.name), odprawa: Boolean(BRIEFING.lat && BRIEFING.lon),
       kalendarz: Boolean(BRIEFING.ics) },
     teren: { photoscan: moduleExists('senses', 'photoscan.py'),
       terrain: moduleExists('senses', 'terrain.py') },
@@ -1933,7 +1078,7 @@ async function handleRecord(req, res, pathname) {
     if (!steps.length) return sendJson(res, 200, { ok: true, id: null, steps: [], message: 'Nie zarejestrowano żadnych kroków.' });
     const name = String(data.name || '').trim().slice(0, 120) || `Nagranie ${new Date().toLocaleString('pl-PL')}`;
     const item = { id: genId(), name, description: 'Nagrana automatycznie.', scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now() };
-    procedures.push(item); saveProcedures();
+    dodajProcedure(item); saveProcedures();
     addEvent('nauka', `zapisano nagraną procedurę: ${name} (${steps.length} kroków)`);
     return sendJson(res, 200, { ok: true, id: item.id, steps, name });
   }
@@ -2073,82 +1218,6 @@ async function handleKb(req, res, pathname) {
   res.end();
 }
 
-// ---------------------------------------------------------------------------
-// Pomocnicze
-// ---------------------------------------------------------------------------
-
-function sendJson(res, status, data) {
-  const body = JSON.stringify(data);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-  });
-  res.end(body);
-}
-
-// 128 MB: plik 50 MB po zakodowaniu base64 w JSON rośnie do ~67 MB
-function readBodyBuffer(req, limit = 128 * 1024 * 1024) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on('data', (chunk) => {
-      size += chunk.length;
-      if (size > limit) {
-        reject(new Error('Body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
-
-async function readJson(req) {
-  return JSON.parse((await readBodyBuffer(req)).toString('utf8'));
-}
-
-function pickEndpoint(name) {
-  return ENDPOINTS[name] || ENDPOINTS.cloud;
-}
-
-/** Podpowiedź „co z tym zrobić" do odmowy dostawcy.
- *
- * Sam komunikat dostawcy nie mówi, co ma zrobić człowiek przed ekranem.
- * Lokalny 404 znaczy zwykle „modelu nie ma jeszcze na dysku" i da się to
- * naprawić jedną komendą, więc tę komendę wypisujemy wprost. W chmurze
- * 404 znaczy co innego: lista modeli u dostawcy pokazuje wszystko, co
- * hostuje, a nie to, do czego Twój klucz ma dostęp.
- */
-function modelErrorHint(epName, model, status) {
-  const local = epName === 'local';
-  if (status === 404) {
-    return local
-      ? ` Tego modelu nie ma jeszcze na dysku. Pobierz go na domowym komputerze: ollama pull ${model}`
-      : ' Ten model nie jest dostępny na Twoim koncie u dostawcy (lista pokazuje wszystko, co dostawca hostuje). '
-        + 'Sprawdź przyciskiem „Sprawdź wszystkie z listy" w Ustawieniach, które modele naprawdę działają.';
-  }
-  if (status === 401 || status === 403) {
-    return local
-      ? ' Lokalny silnik odrzucił żądanie — sprawdź LOCAL_API_KEY w .env.'
-      : ' Klucz API jest nieprawidłowy albo nie ma dostępu do tego modelu.';
-  }
-  if (status === 429) return ' Limit zapytań u dostawcy — spróbuj za chwilę.';
-  return '';
-}
-
-function authHeaders(ep) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (ep.apiKey) headers.Authorization = `Bearer ${ep.apiKey}`;
-  if (ep.anthropic) {
-    headers['x-api-key'] = ep.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-  }
-  return headers;
-}
-
-// ---------------------------------------------------------------------------
 // API: konfiguracja i status
 // ---------------------------------------------------------------------------
 
@@ -2217,7 +1286,7 @@ async function handleEvents(req, res) {
       } else {
         addEvent(data.type, data.summary);
       }
-      return sendJson(res, 200, { ok: true, stored: events.length });
+      return sendJson(res, 200, { ok: true, stored: ileZdarzen() });
     } catch {
       return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' });
     }
@@ -2322,718 +1391,6 @@ async function proxySensesGet(req, res, targetPath, search = '') {
 }
 
 // ---------------------------------------------------------------------------
-// API: Studio — generowanie mediów (OpenAI / ElevenLabs / Seedance)
-// Każdy wynik trafia do bazy wiedzy i (opcjonalnie) do folderu eksportu
-// (STUDIO_EXPORT_DIR — np. folder projektu Adobe).
-// ---------------------------------------------------------------------------
-
-function exportToStudioDir(name, buf) {
-  if (!STUDIO.exportDir) return '';
-  try {
-    fs.mkdirSync(STUDIO.exportDir, { recursive: true });
-    const p = path.join(STUDIO.exportDir, name);
-    fs.writeFileSync(p, buf);
-    return p;
-  } catch (err) {
-    console.error('Eksport nie powiódł się:', err.message);
-    return '';
-  }
-}
-
-function tsName(prefix, ext) {
-  const t = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-  return `${prefix}-${t}.${ext}`;
-}
-
-// --- Adobe Firefly: token IMS (server-to-server) z pamięcią podręczną ---
-
-let fireflyTokenCache = { token: '', exp: 0 };
-
-async function getFireflyToken() {
-  if (fireflyTokenCache.token && Date.now() < fireflyTokenCache.exp) return fireflyTokenCache.token;
-  const r = await fetch(`${STUDIO.firefly.imsUrl}/ims/token/v3`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(20000),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: STUDIO.firefly.clientId,
-      client_secret: STUDIO.firefly.clientSecret,
-      scope: 'openid,AdobeID,firefly_api,ff_apis',
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  const d = await r.json();
-  if (!r.ok || !d.access_token) {
-    throw new Error(d.error_description || d.error || 'Nie udało się pobrać tokenu Adobe IMS.');
-  }
-  fireflyTokenCache = {
-    token: d.access_token,
-    exp: Date.now() + Math.max(60, (d.expires_in || 3600) - 300) * 1000,
-  };
-  return d.access_token;
-}
-
-async function fireflyGenerateImage(prompt, size) {
-  const token = await getFireflyToken();
-  const dims = size === '1536x1024' ? { width: 2304, height: 1792 }
-    : size === '1024x1536' ? { width: 1792, height: 2304 }
-    : { width: 2048, height: 2048 };
-  const r = await fetch(`${STUDIO.firefly.base}/v3/images/generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      'x-api-key': STUDIO.firefly.clientId,
-    },
-    body: JSON.stringify({ prompt, size: dims, numVariations: 1 }),
-    signal: AbortSignal.timeout(180000),
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.message || d.error_code || `HTTP ${r.status}`);
-  const url = d.outputs?.[0]?.image?.url;
-  if (!url) throw new Error('Firefly nie zwrócił obrazu.');
-  return Buffer.from(await (await fetch(url, { signal: AbortSignal.timeout(120000) })).arrayBuffer());
-}
-
-// Niestreamowane wywołanie modelu (Storyboard, streszczenia itp.)
-/** Odczytaj odpowiedź modelu, nawet gdy nie jest czystym JSON-em.
- *
- * `stream: false` bywa zignorowane: bramka potrafi oddać strumień zdarzeń
- * (`data: {…}` w wielu liniach) albo kilka obiektów JSON jeden po drugim.
- * `JSON.parse` mówi wtedy „Unexpected non-whitespace character after JSON at
- * position 4” — komunikat, który trafiał wprost do użytkownika i nie mówił nic
- * o prawdziwej przyczynie. Tutaj składamy taką odpowiedź w jedną całość,
- * a gdy się nie da — rzucamy błąd z kawałkiem tego, co faktycznie przyszło.
- */
-async function parseModelResponse(r) {
-  const body = await r.text();
-  try {
-    return JSON.parse(body);
-  } catch { /* niżej próby ratunkowe */ }
-
-  // 1. strumień zdarzeń mimo stream:false — sklej treść z kolejnych fragmentów
-  if (/^\s*data:/m.test(body)) {
-    let content = '';
-    let reasoning = '';
-    let finish = null;
-    for (const line of body.split('\n')) {
-      const m = line.match(/^\s*data:\s*(.+)$/);
-      if (!m || m[1].trim() === '[DONE]') continue;
-      try {
-        const j = JSON.parse(m[1]);
-        const c = j.choices?.[0] || {};
-        content += c.delta?.content ?? c.message?.content ?? '';
-        reasoning += c.delta?.reasoning_content ?? c.message?.reasoning_content ?? '';
-        if (c.finish_reason) finish = c.finish_reason;
-      } catch { /* niepełny fragment */ }
-    }
-    if (content || reasoning) {
-      return { choices: [{ message: { content, reasoning_content: reasoning }, finish_reason: finish }] };
-    }
-  }
-
-  // 2. kilka obiektów JSON pod rząd — weź ostatni kompletny
-  const objects = [];
-  let depth = 0; let start = -1; let inStr = false; let esc = false;
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === '\\') esc = true;
-      else if (ch === '"') inStr = false;
-      continue;
-    }
-    if (ch === '"') { inStr = true; continue; }
-    if (ch === '{') { if (depth === 0) start = i; depth++; continue; }
-    if (ch === '}') {
-      depth--;
-      if (depth === 0 && start >= 0) { objects.push(body.slice(start, i + 1)); start = -1; }
-    }
-  }
-  for (let i = objects.length - 1; i >= 0; i--) {
-    try {
-      const j = JSON.parse(objects[i]);
-      if (j.choices || j.error) return j;
-    } catch { /* próbuj wcześniejszy */ }
-  }
-
-  throw new Error(`Model oddał odpowiedź, której nie da się odczytać (HTTP ${r.status}). `
-    + `Początek: ${body.trim().slice(0, 200) || '(pusto)'}`);
-}
-
-async function llmComplete(messages, { endpoint = 'cloud', maxTokens = 1024, model: want } = {}) {
-  const ep = pickEndpoint(endpoint);
-  // Model wybrany w Ustawieniach jest ważniejszy niż ten z .env — tak samo jak
-  // w czacie. Bez tego funkcje pomocnicze (dopracowanie promptu, streszczenie)
-  // strzelały do modelu, którego użytkownik nie wybrał, i przy nieaktualnym
-  // wpisie w .env dostawały 404, choć sam czat działał bez zarzutu.
-  const model = (typeof want === 'string' && want.trim()) || ep.model;
-  if (!model) {
-    throw new Error(`Nie ustawiono modelu dla „${ep.label}". Wybierz go w Ustawieniach `
-      + 'albo uzupełnij .env na serwerze.');
-  }
-  if (!ep.apiKey && ep.baseUrl.includes('integrate.api.nvidia.com')) {
-    throw new Error('Brak klucza API dla chmury NVIDIA.');
-  }
-  const r = await fetch(`${ep.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: authHeaders(ep),
-    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: maxTokens, stream: false }),
-    signal: AbortSignal.timeout(120000),
-  });
-  let d;
-  try {
-    d = await parseModelResponse(r);
-  } catch (err) {
-    // Dopowiedz, DOKĄD poszło żądanie — bez tego „404 page not found" nie mówi,
-    // czy winny jest adres, czy identyfikator modelu.
-    throw new Error(`${err.message}  [${ep.label} · ${model}]`
-      + (r.status === 404
-        ? '\nTaki model nie istnieje pod tym adresem — sprawdź go w Ustawieniach → Pobierz listę.'
-        : ''));
-  }
-  if (!r.ok) throw new Error(`${d.error?.message || d.error || `HTTP ${r.status}`}  [${ep.label} · ${model}]`);
-  const msg = d.choices?.[0]?.message || {};
-  const text = (msg.content || '').trim();
-  if (text) return text;
-
-  // Model rozumujący (Nemotron 3, gpt-oss, R1) potrafi zużyć cały budżet tokenów
-  // na myślenie i zwrócić puste `content`. Bez tego streszczenia i dopracowanie
-  // promptu po cichu zwracały pusty tekst — wyglądało to na zepsutą funkcję.
-  const reasoning = (msg.reasoning_content || msg.reasoning || '').trim();
-  if (reasoning) return reasoning;
-
-  const why = d.choices?.[0]?.finish_reason;
-  throw new Error(why === 'length'
-    ? 'Model zużył cały budżet tokenów na myślenie i nie zdążył odpowiedzieć. '
-      + 'Zwiększ „Maks. tokenów odpowiedzi” albo wybierz szybszy model.'
-    : 'Model zwrócił pustą odpowiedź.');
-}
-
-// Wygeneruj jeden obraz (dowolny skonfigurowany silnik) → wpis w bazie wiedzy.
-async function studioGenImage(prompt, size, provider) {
-  const providers = imageProviders();
-  const prov = providers.some((p) => p.id === provider) ? provider : providers[0]?.id;
-  let buf; let engineLabel;
-  if (prov === 'firefly') {
-    buf = await fireflyGenerateImage(prompt, size); engineLabel = 'Adobe Firefly';
-  } else {
-    const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
-    if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
-    const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180000),
-    });
-    const resp = await r.json();
-    if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
-    const first = resp.data?.[0] || {};
-    if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-    else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
-    else throw new Error('API nie zwróciło obrazu.');
-    engineLabel = STUDIO.openai.imageModel;
-  }
-  const name = tsName('obraz', 'png');
-  const item = await kbAddFile(name, 'image/png', buf,
-    `Grafika wygenerowana w Studiu (silnik: ${engineLabel}). Prompt: ${prompt}`);
-  exportToStudioDir(name, buf);
-  return { item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` };
-}
-
-async function handleStudio(req, res, pathname) {
-  if (pathname === '/api/studio/providers' && req.method === 'GET') {
-    return sendJson(res, 200, {
-      image: imageProviders().length > 0,
-      imageProviders: imageProviders(),
-      speech: Boolean(STUDIO.eleven.key),
-      video: Boolean(STUDIO.seedance.key),
-      imageModel: STUDIO.openai.imageModel,
-      voice: STUDIO.eleven.voice,
-      videoModel: STUDIO.seedance.model,
-      exportDir: STUDIO.exportDir,
-    });
-  }
-
-  // --- OBRAZ (OpenAI lub Adobe Firefly) ---
-  if (pathname === '/api/studio/image' && req.method === 'POST') {
-    const providers = imageProviders();
-    if (!providers.length) {
-      return sendJson(res, 400, {
-        error: 'Brak silnika obrazów. Ustaw OPENAI_API_KEY albo FIREFLY_CLIENT_ID + FIREFLY_CLIENT_SECRET w .env.',
-      });
-    }
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const prompt = String(data.prompt || '').trim();
-    if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
-    const size = ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
-      .includes(data.size) ? data.size : '1024x1024';
-    const provider = providers.some((p) => p.id === data.provider) ? data.provider : providers[0].id;
-    const count = Math.min(4, Math.max(1, parseInt(data.count, 10) || 1)); // liczba wariantów
-
-    const genOne = async () => {
-      if (provider === 'firefly') {
-        return { buf: await fireflyGenerateImage(prompt, size), engineLabel: 'Adobe Firefly' };
-      }
-      const body = { model: STUDIO.openai.imageModel, prompt, size, n: 1 };
-      if (!STUDIO.openai.imageModel.startsWith('gpt-image')) body.response_format = 'b64_json';
-      const r = await fetch(`${STUDIO.openai.base}/images/generations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.openai.key}` },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(180000),
-      });
-      const resp = await r.json();
-      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
-      const first = resp.data?.[0] || {};
-      let buf;
-      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-      else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
-      else throw new Error('API nie zwróciło obrazu.');
-      return { buf, engineLabel: STUDIO.openai.imageModel };
-    };
-
-    try {
-      const items = [];
-      let engineLabel = '';
-      for (let k = 0; k < count; k++) {
-        const { buf, engineLabel: lbl } = await genOne();
-        engineLabel = lbl;
-        const name = tsName('obraz', 'png');
-        const item = await kbAddFile(name, 'image/png', buf,
-          `Grafika wygenerowana w Studiu (silnik: ${lbl}). Prompt: ${prompt}`);
-        exportToStudioDir(name, buf);
-        items.push({ item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
-      }
-      addEvent('studio', `wygenerowano ${count > 1 ? count + ' warianty obrazu' : 'obraz'} (${engineLabel}): „${prompt.slice(0, 80)}”`);
-      // zgodność wstecz: pierwszy obraz jako item/url (dla znacznika [OBRAZ:] w czacie)
-      return sendJson(res, 200, {
-        ok: true, provider, items, item: items[0].item, url: items[0].url,
-      });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Generowanie obrazu nie powiodło się: ${err.message}` });
-    }
-  }
-
-  // --- STORYBOARD (scena → ujęcia → obraz na ujęcie) ---
-  if (pathname === '/api/studio/storyboard' && req.method === 'POST') {
-    if (!imageProviders().length) {
-      return sendJson(res, 400, { error: 'Brak silnika obrazów (OPENAI_API_KEY / Firefly).' });
-    }
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const scene = String(data.scene || '').trim();
-    if (!scene) return sendJson(res, 400, { error: 'Puste pole scene.' });
-    const shots = Math.min(6, Math.max(2, parseInt(data.shots, 10) || 4));
-    const size = data.size || '1536x1024';
-    try {
-      const raw = await llmComplete([
-        { role: 'system', content: 'Jesteś reżyserem. Rozpisz scenę na ujęcia filmowe. ' +
-          'Zwróć WYŁĄCZNIE tablicę JSON stringów — po jednym szczegółowym opisie kadru po angielsku na ujęcie, ' +
-          'gotowym jako prompt do generatora obrazów. Bez komentarza, bez numeracji.' },
-        { role: 'user', content: `Scena: ${scene}\nLiczba ujęć: ${shots}` },
-      ], { maxTokens: 900 });
-      let prompts;
-      try {
-        const m = raw.match(/\[[\s\S]*\]/);
-        prompts = JSON.parse(m ? m[0] : raw);
-      } catch {
-        prompts = raw.split('\n').map((l) => l.replace(/^\s*[-*\d.)\]]+\s*/, '').trim()).filter(Boolean);
-      }
-      prompts = (prompts || []).filter((p) => typeof p === 'string' && p.trim()).slice(0, shots);
-      if (!prompts.length) throw new Error('Model nie zwrócił opisów ujęć.');
-
-      const frames = [];
-      for (let i = 0; i < prompts.length; i++) {
-        const img = await studioGenImage(prompts[i], size, data.provider);
-        frames.push({ shot: i + 1, prompt: prompts[i], ...img });
-      }
-      addEvent('studio', `storyboard: „${scene.slice(0, 60)}" → ${frames.length} ujęć`);
-      return sendJson(res, 200, { ok: true, scene, frames });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Storyboard nie powiódł się: ${err.message}` });
-    }
-  }
-
-  // --- INPAINTING (obraz z bazy + maska + prompt → OpenAI images/edit) ---
-  if (pathname === '/api/studio/edit' && req.method === 'POST') {
-    if (!STUDIO.openai.key) {
-      return sendJson(res, 400, { error: 'Edycja obrazu wymaga OPENAI_API_KEY.' });
-    }
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const prompt = String(data.prompt || '').trim();
-    const imageId = String(data.imageId || '');
-    if (!prompt || !imageId) return sendJson(res, 400, { error: 'Wymagane: imageId i prompt.' });
-    let maskBuf = null;
-    try { if (data.mask) maskBuf = Buffer.from(String(data.mask).split(',').pop(), 'base64'); } catch { /* brak maski */ }
-    let srcBuf;
-    try { srcBuf = fs.readFileSync(path.join(KB_FILES, imageId.replace(/[^a-z0-9]/gi, ''))); }
-    catch { return sendJson(res, 404, { error: 'Nie znaleziono obrazu w bazie.' }); }
-
-    try {
-      const form = new FormData();
-      form.append('model', STUDIO.openai.imageModel);
-      form.append('prompt', prompt);
-      form.append('image', new Blob([srcBuf], { type: 'image/png' }), 'image.png');
-      if (maskBuf) form.append('mask', new Blob([maskBuf], { type: 'image/png' }), 'mask.png');
-      const r = await fetch(`${STUDIO.openai.base}/images/edits`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${STUDIO.openai.key}` },
-        body: form,
-        signal: AbortSignal.timeout(180000),
-      });
-      const resp = await r.json();
-      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
-      const first = resp.data?.[0] || {};
-      let buf;
-      if (first.b64_json) buf = Buffer.from(first.b64_json, 'base64');
-      else if (first.url) buf = Buffer.from(await (await fetch(first.url, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
-      else throw new Error('API nie zwróciło obrazu.');
-      const name = tsName('edycja', 'png');
-      const item = await kbAddFile(name, 'image/png', buf, `Edycja obrazu (inpainting). Prompt: ${prompt}`);
-      exportToStudioDir(name, buf);
-      addEvent('studio', `edycja obrazu (inpainting): „${prompt.slice(0, 60)}"`);
-      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Edycja obrazu nie powiodła się: ${err.message}` });
-    }
-  }
-
-  // --- UPSCALE (przez usługę zmysłów, jeśli dostępny model Real-ESRGAN) ---
-  if (pathname === '/api/studio/upscale' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const imageId = String(data.imageId || '').replace(/[^a-z0-9]/gi, '');
-    let srcBuf;
-    try { srcBuf = fs.readFileSync(path.join(KB_FILES, imageId)); }
-    catch { return sendJson(res, 404, { error: 'Nie znaleziono obrazu.' }); }
-    try {
-      const r = await fetch(`${SENSES_URL}/upscale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: `data:image/png;base64,${srcBuf.toString('base64')}`, scale: data.scale || 4 }),
-        signal: AbortSignal.timeout(180000),
-      });
-      if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        return sendJson(res, r.status, { error: e.error || 'Upscale niedostępny — zainstaluj Real-ESRGAN w usłudze zmysłów (senses/README.md).' });
-      }
-      const d = await r.json();
-      const buf = Buffer.from(String(d.image).split(',').pop(), 'base64');
-      const name = tsName('upscale', 'png');
-      const item = await kbAddFile(name, 'image/png', buf, 'Obraz powiększony (upscale).');
-      exportToStudioDir(name, buf);
-      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}` });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Upscale niedostępny: ${err.message} (uruchom usługę zmysłów z Real-ESRGAN).` });
-    }
-  }
-
-  // --- DŹWIĘK (ElevenLabs) ---
-  if (pathname === '/api/studio/speech' && req.method === 'POST') {
-    if (!STUDIO.eleven.key) {
-      return sendJson(res, 400, { error: 'Brak klucza ElevenLabs. Ustaw ELEVENLABS_API_KEY w .env.' });
-    }
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const text = String(data.text || '').trim();
-    if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
-    const voice = String(data.voiceId || STUDIO.eleven.voice);
-
-    try {
-      const r = await fetch(`${STUDIO.eleven.base}/v1/text-to-speech/${encodeURIComponent(voice)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'xi-api-key': STUDIO.eleven.key },
-        body: JSON.stringify({ text, model_id: STUDIO.eleven.model }),
-        signal: AbortSignal.timeout(120000),
-      });
-      if (!r.ok) {
-        let msg = `HTTP ${r.status}`;
-        try { msg = (await r.json()).detail?.message || msg; } catch { /* ignore */ }
-        throw new Error(msg);
-      }
-      const buf = Buffer.from(await r.arrayBuffer());
-      const name = tsName('glos', 'mp3');
-      const item = await kbAddFile(name, 'audio/mpeg', buf,
-        `Nagranie głosowe (ElevenLabs, głos: ${voice}). Tekst: ${text.slice(0, 800)}`);
-      const exported = exportToStudioDir(name, buf);
-      addEvent('studio', `wygenerowano dźwięk: „${text.slice(0, 60)}”`);
-      return sendJson(res, 200, { ok: true, item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Generowanie dźwięku nie powiodło się: ${err.message}` });
-    }
-  }
-
-  // --- WIDEO (Seedance przez API zgodne z BytePlus/Ark: zadania asynchroniczne) ---
-  if (pathname === '/api/studio/video' && req.method === 'POST') {
-    if (!STUDIO.seedance.key) {
-      return sendJson(res, 400, { error: 'Brak klucza Seedance. Ustaw SEEDANCE_API_KEY w .env.' });
-    }
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const prompt = String(data.prompt || '').trim();
-    if (!prompt) return sendJson(res, 400, { error: 'Puste pole prompt.' });
-
-    // Parametry w formacie komend tekstowych Ark (--resolution, --ratio, …)
-    const duration = Math.min(15, Math.max(2, parseInt(data.duration, 10) || 5));
-    const resolution = ['480p', '720p', '1080p'].includes(data.resolution) ? data.resolution : '720p';
-    const ratio = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'].includes(data.ratio)
-      ? data.ratio : '16:9';
-    let cmd = ` --resolution ${resolution} --ratio ${ratio} --duration ${duration}`;
-    if (data.seed !== undefined && String(data.seed).trim() !== '' && Number.isInteger(Number(data.seed))) {
-      cmd += ` --seed ${Number(data.seed)}`;
-    }
-    if (data.camerafixed === true) cmd += ' --camerafixed true';
-    if (data.watermark === true) cmd += ' --watermark true';
-
-    const content = [{ type: 'text', text: `${prompt}${cmd}` }];
-
-    const frameFor = (id) => {
-      const kbItem = kbItems.find((it) => it.id === id && /^image\//.test(it.mime || ''));
-      if (!kbItem) return null;
-      try {
-        const buf = fs.readFileSync(path.join(KB_FILES, kbItem.id));
-        return `data:${kbItem.mime};base64,${buf.toString('base64')}`;
-      } catch { return null; }
-    };
-
-    // pierwsza/ostatnia klatka (i2v first–last frame; imageId = stara nazwa pola)
-    const firstUrl = frameFor(data.firstFrameId || data.imageId);
-    const lastUrl = frameFor(data.lastFrameId);
-    if (lastUrl && !firstUrl) {
-      return sendJson(res, 400, {
-        error: 'Ostatnia klatka wymaga podania także pierwszej klatki (wymóg API Seedance).',
-      });
-    }
-    if (firstUrl) {
-      content.push({ type: 'image_url', image_url: { url: firstUrl }, role: 'first_frame' });
-    }
-    if (lastUrl) {
-      content.push({ type: 'image_url', image_url: { url: lastUrl }, role: 'last_frame' });
-    }
-
-    try {
-      const r = await fetch(`${STUDIO.seedance.base}/contents/generations/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${STUDIO.seedance.key}` },
-        body: JSON.stringify({ model: STUDIO.seedance.model, content }),
-        signal: AbortSignal.timeout(30000),
-      });
-      const resp = await r.json();
-      if (!r.ok) throw new Error(resp.error?.message || resp.message || `HTTP ${r.status}`);
-      const taskId = resp.id || resp.data?.id;
-      if (!taskId) throw new Error('API nie zwróciło identyfikatora zadania.');
-      studioTasks.set(String(taskId), { prompt });
-      addEvent('studio', `rozpoczęto generowanie wideo: „${prompt.slice(0, 60)}”`);
-      return sendJson(res, 200, { ok: true, taskId });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Nie udało się zlecić wideo: ${err.message}` });
-    }
-  }
-
-  if (pathname === '/api/studio/video/status' && req.method === 'GET') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
-    try {
-      const r = await fetch(`${STUDIO.seedance.base}/contents/generations/tasks/${encodeURIComponent(id)}`, {
-        headers: { Authorization: `Bearer ${STUDIO.seedance.key}` },
-        signal: AbortSignal.timeout(20000),
-      });
-      const resp = await r.json();
-      if (!r.ok) throw new Error(resp.error?.message || `HTTP ${r.status}`);
-      const status = resp.status || resp.data?.status || 'running';
-
-      if (['succeeded', 'success', 'completed'].includes(status)) {
-        const videoUrl = resp.content?.video_url || resp.video_url ||
-                         resp.data?.content?.video_url || resp.data?.video_url;
-        if (!videoUrl) throw new Error('Zadanie ukończone, ale brak adresu wideo w odpowiedzi.');
-        const buf = Buffer.from(await (await fetch(videoUrl, { signal: AbortSignal.timeout(300000) })).arrayBuffer());
-        const meta = studioTasks.get(id) || {};
-        const name = tsName('wideo', 'mp4');
-        const item = await kbAddFile(name, 'video/mp4', buf,
-          `Wideo wygenerowane w Studiu (model: ${STUDIO.seedance.model}). Prompt: ${meta.prompt || ''}`);
-        const exported = exportToStudioDir(name, buf);
-        studioTasks.delete(id);
-        addEvent('studio', `ukończono wideo: „${(meta.prompt || '').slice(0, 60)}”`);
-        return sendJson(res, 200, { status: 'done', item: kbItemMeta(item), url: `/api/kb/raw?id=${item.id}`, exported });
-      }
-      if (['failed', 'error', 'cancelled'].includes(status)) {
-        studioTasks.delete(id);
-        return sendJson(res, 200, { status: 'failed', error: resp.error?.message || 'Zadanie nie powiodło się.' });
-      }
-      return sendJson(res, 200, { status: 'running' });
-    } catch (err) {
-      return sendJson(res, 502, { error: `Sprawdzenie zadania nie powiodło się: ${err.message}` });
-    }
-  }
-
-  res.writeHead(405);
-  res.end();
-}
-
-// ---------------------------------------------------------------------------
-// API: wyszukiwanie w internecie (DuckDuckGo HTML — bez klucza API)
-// ---------------------------------------------------------------------------
-
-// Nazwane encje, które realnie sypią się ze stron — stopnie przy pogodzie,
-// polskie znaki, myślniki i cudzysłowy. Bez tego model dostawał „7&deg;C”
-// zamiast „7°C” i nie umiał odczytać liczby, o którą pytał użytkownik.
-const NAMED_ENTITIES = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', deg: '°',
-  hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»',
-  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', bdquo: '„', sbquo: '‚',
-  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', middot: '·',
-  times: '×', divide: '÷', plusmn: '±', frac12: '½', frac14: '¼', sup2: '²', sup3: '³',
-  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú',
-  agrave: 'à', egrave: 'è', ccedil: 'ç', ntilde: 'ñ',
-  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß', aring: 'å', oslash: 'ø',
-};
-
-function decodeEntities(s) {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&([a-z][a-z0-9]{1,9});/gi, (whole, name) => {
-      const lower = name.toLowerCase();
-      if (NAMED_ENTITIES[name]) return NAMED_ENTITIES[name];
-      // wielkość liter rozróżnia tylko litery akcentowane (&Ouml; vs &ouml;)
-      if (NAMED_ENTITIES[lower]) {
-        const v = NAMED_ENTITIES[lower];
-        return name[0] === name[0].toUpperCase() && /[a-zà-ÿ]/i.test(v) ? v.toUpperCase() : v;
-      }
-      return whole;                 // nieznana encja — zostaw, nie zgaduj
-    });
-}
-
-function stripTags(s) {
-  return decodeEntities(s.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
-}
-
-/** Rozpakuj adres wyniku DuckDuckGo. Zwraca '' dla pozycji, których nie chcemy.
- *
- * Wyniki przychodzą w trzech postaciach:
- *  • zwykły link — bierzemy jak jest,
- *  • przekierowanie `//duckduckgo.com/l/?uddg=<zakodowany-adres>` — rozpakowujemy,
- *  • REKLAMA `//duckduckgo.com/y.js?ad_domain=…&click_metadata=…` — odrzucamy.
- *
- * Reklamy trafiały do odpowiedzi jako „źródła”. Po kliknięciu użytkownik
- * dostawał stronę DuckDuckGo z „Oops, there was an error”, bo te adresy są
- * jednorazowe i wygasają — a model i tak nie mógł z nich nic wyczytać.
- */
-function resolveDdgUrl(href) {
-  const m = href.match(/[?&]uddg=([^&]+)/);
-  if (m) {
-    try { href = decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
-  }
-  const full = href.startsWith('//') ? 'https:' + href : href;
-  let u;
-  try { u = new URL(full); } catch { return ''; }
-  if (!/^https?:$/.test(u.protocol)) return '';
-  // wszystko, co zostało na duckduckgo.com, to reklama albo strona pomocnicza
-  if (/(^|\.)duckduckgo\.com$/i.test(u.hostname)) return '';
-  return u.href;
-}
-
-/** Pobierz czytelny tekst ze strony wyniku.
- *
- * Bez tego model dostawał wyłącznie tytuły, adresy i zajawki z wyszukiwarki —
- * a w zajawce nie ma liczby, o którą pytał użytkownik („ile jest stopni”).
- * Skutek: model szukał znowu i znowu, aż wyczerpał limit rund i nic nie podał.
- * Tutaj wchodzimy na stronę i wyciągamy sam tekst.
- */
-async function fetchPageText(pageUrl, maxChars = 2500) {
-  try {
-    const r = await fetch(pageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
-        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
-      },
-      signal: AbortSignal.timeout(7000),
-      redirect: 'follow',
-    });
-    if (!r.ok) return '';
-    const type = r.headers.get('content-type') || '';
-    if (!/text\/html|text\/plain/i.test(type)) return '';
-
-    // Czytamy z górnym limitem — nie chcemy wciągnąć kilkumegabajtowej strony.
-    const raw = (await r.text()).slice(0, 400000);
-    const body = raw
-      .replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)>/gi, '\n');
-    return stripTags(body.replace(/\n\s*\n+/g, '\n')).slice(0, maxChars);
-  } catch {
-    return '';                        // strona niedostępna — zostają zajawki
-  }
-}
-
-async function handleSearch(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
-  if (!q) return sendJson(res, 400, { error: 'Brak zapytania (parametr q).' });
-
-  try {
-    const upstream = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
-        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-    const html = await upstream.text();
-
-    const results = [];
-    const linkRe = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-    const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-    const links = [...html.matchAll(linkRe)];
-    const snips = [...html.matchAll(snipRe)];
-    const seen = new Set();
-    for (let i = 0; i < links.length && results.length < 5; i++) {
-      const url = resolveDdgUrl(decodeEntities(links[i][1]));
-      if (!url) continue;                    // reklama albo adres nie do użycia
-      if (seen.has(url)) continue;           // ten sam wynik dwa razy
-      seen.add(url);
-      results.push({
-        title: stripTags(links[i][2]),
-        url,
-        snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
-      });
-    }
-    // Treść dwóch pierwszych trafień — równolegle, żeby nie sumować opóźnień.
-    const texts = await Promise.all(results.slice(0, 2).map((r) => fetchPageText(r.url)));
-    texts.forEach((txt, i) => { if (txt) results[i].text = txt; });
-
-    const withText = texts.filter(Boolean).length;
-    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników, ${withText} z treścią)`);
-    sendJson(res, 200, { query: q, results });
-  } catch (err) {
-    sendJson(res, 200, {
-      query: q,
-      results: [],
-      error: `Wyszukiwarka niedostępna (${err.message}). Sprawdź połączenie z internetem.`,
-    });
-  }
-}
-
-/** Czy MAMY PEWNOŚĆ, że model nie odczyta obrazu?
- *
- * Katalog `public/models.js` jest wspólny dla przeglądarki i serwera — ta sama
- * wiedza po obu stronach, jedno miejsce do aktualizacji. Odpowiadamy „tak”
- * tylko dla modeli, które katalog zna i które nie mają cechy „wizja”.
- * Model nieznany przepuszczamy: może widzieć, a my byśmy go zablokowali.
- */
-function blindToImages(id) {
-  try {
-    const info = modelInfo(id);
-    return Boolean(info && !info.zgadywane && !info.cechy.includes('wizja'));
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // API: czat (streaming SSE) z kontekstem percepcji
 // ---------------------------------------------------------------------------
 
@@ -3098,16 +1455,16 @@ async function handleChat(req, res) {
   }
 
   if (payload.useActions !== false) {
-    const procList = procedures.length
+    const procList = procedury().length
       ? ' Nauczone procedury (możesz zaproponować ich uruchomienie): ' +
-        procedures.map((pr) => `"${pr.name}"`).join(', ') +
+        procedury().map((pr) => `"${pr.name}"`).join(', ') +
         '. Aby uruchomić procedurę, użyj [AKCJA: procedura | dokładna nazwa]. ' +
         'Uruchomienie tylko przygotowuje kroki — każdy krok wrażliwy (płatność, wysłanie) ' +
         'i tak wymaga osobnego potwierdzenia użytkownika.'
       : '';
-    const devList = devices.length
+    const devList = urzadzenia().length
       ? ' Podłączone urządzenia (światło, sprzęt, scena): ' +
-        devices.map((d) => `"${d.name}"`).join(', ') +
+        urzadzenia().map((d) => `"${d.name}"`).join(', ') +
         '. Aby użyć urządzenia, napisz [AKCJA: urządzenie | dokładna nazwa]. ' +
         'Użytkownik zatwierdza jednym kliknięciem.'
       : '';
@@ -3528,6 +1885,15 @@ function serveStatic(req, res) {
 // Router + start
 // ---------------------------------------------------------------------------
 
+/* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
+   Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
+   dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
+studio_.polacz({ KB_FILES, addEvent, kbAddFile, kbItemMeta, kbItems });
+urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
+trening_.polacz({ addEvent, convIndex, convPath, userProfile });
+nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
+  keywordScore, sameModel, saveKb });
+
 const server = http.createServer(async (req, res) => {
   try {
     const p = new URL(req.url, 'http://localhost').pathname;
@@ -3549,6 +1915,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
+    // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast
+    // tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte na komputerze
+    // dociera do telefonu, a nie umiera w logu serwera.
+    if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
@@ -3572,7 +1942,7 @@ const server = http.createServer(async (req, res) => {
         kbItems: kbItems.length,
         kbBytes,
         profileChars: userProfile.length,
-        events: events.length,
+        events: ileZdarzen(),
         engines: Object.keys(ENDPOINTS),
         studio: { image: imageProviders().length > 0, speech: Boolean(STUDIO.eleven.key), video: Boolean(STUDIO.seedance.key) },
         auth: authEnabled(),
@@ -3709,8 +2079,8 @@ function start(port = PORT) {
         STUDIO.eleven.key && 'dźwięk(ElevenLabs)', STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
       console.log(`  → Studio:  ${studioOn.length ? studioOn.join(', ') : 'brak kluczy (opcjonalne)'}` +
         (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
-      if (procedures.length || routines.length) {
-        console.log(`  → Nauka:   ${lessons.length} wzorców, ${procedures.length} procedur, ${routines.length} rutyn`);
+      if (procedury().length || rutyny().length) {
+        console.log(`  → Nauka:   ${wzorce().length} wzorców, ${procedury().length} procedur, ${rutyny().length} rutyn`);
       }
       if (secretsEnabled()) {
         console.log(`  → Sekrety: menedżer haseł „${SECRETS.provider}" (automatyzacja z logowaniem)`);
