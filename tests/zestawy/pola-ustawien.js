@@ -63,8 +63,8 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       if (ciasne.length) fail.push(`${motyw} ${w}px: strzałka za blisko — ` + ciasne.map((x) => x.id).join(', '));
       if (r.przewijaSie) fail.push(`${motyw} ${w}px: okno przewija się w poziomie`);
 
-      if (motyw === 'dark' && w === 1280) await pg.screenshot({ path: 'pola-desktop.png', fullPage: false });
-      if (motyw === 'dark' && w === 360) await pg.screenshot({ path: 'pola-mobile.png', fullPage: false });
+      if (motyw === 'dark' && w === 1280) await pg.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'pola-desktop.png'), fullPage: false });
+      if (motyw === 'dark' && w === 360) await pg.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'pola-mobile.png'), fullPage: false });
       await pg.close();
     }
   }

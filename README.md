@@ -640,6 +640,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
 | `/api/config` | GET | Konfiguracja serwera (bez kluczy) |
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
+| `/api/events/stream` | GET | **Strumień SSE w drugą stronę** — przeglądarka dowiaduje się o zdarzeniach zamiast tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte przez `senses/wake_listener.py` na domowym komputerze otwiera tryb głosowy na telefonie |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
 | `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) — przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |

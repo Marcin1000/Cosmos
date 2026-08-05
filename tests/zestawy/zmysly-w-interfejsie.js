@@ -28,7 +28,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   // 3. kamera: otwórz, zrób zdjęcie (fake device daje obraz testowy)
   await page.click('#camera-btn');
   await page.waitForTimeout(900);
-  await page.screenshot({ path: 'shot-camera.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-camera.png') });
   await page.click('#camera-capture');
   await page.waitForSelector('.attachment img', { timeout: 5000 });
   console.log('Zdjęcie z kamery dodane jako załącznik: true');
@@ -62,7 +62,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await page.waitForFunction(() =>
     document.querySelectorAll('.msg-assistant').length >= 2, null, { timeout: 15000 });
   await page.waitForTimeout(1000);
-  await page.screenshot({ path: 'shot-orchestra.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-orchestra.png') });
 
   console.log('Błędy JS:', errors.length ? errors : 'brak');
   await browser.close();

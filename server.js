@@ -29,15 +29,17 @@ const { modelInfo, modelNotForChat } = require('./public/models.js');
 const {
   KORZEN, PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SEARCH_URL, SECRETS,
   loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, fireflyEnabled, imageProviders, studioTasks,
+  modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
 const trening_ = require('./lib/trening.js');
+const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
+  ileZdarzen } = require('./lib/zdarzenia.js');
 const { TRAIN_DIR, TRAIN_SCRIPT, buildTrainingDataset, commandExists, startTraining, trainJob, trainLog, trainStatusView } = trening_;
 const urzadzenia_ = require('./lib/urzadzenia.js');
 const { BRIEFING, handleBriefing, handleDevices, urzadzenia } = urzadzenia_;
 const nauka_ = require('./lib/nauka.js');
-const { genId, handleAutomation, handleLessons, handleProcedures, handleRoutines,
-  routineView, sanitizeStep, saveJsonFile, saveProcedures, secretsEnabled,
+const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
+  routineView, sanitizeStep, saveProcedures, secretsEnabled,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
@@ -131,33 +133,6 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-// ---------------------------------------------------------------------------
-// Magazyn zdarzeń percepcji (pamięć krótkotrwała „zmysłów”)
-// ---------------------------------------------------------------------------
-
-const EVENTS_MAX = 100;
-const events = []; // { time, type, summary }
-
-function addEvent(type, summary) {
-  events.push({ time: Date.now(), type: String(type || 'event'), summary: String(summary || '').slice(0, 400) });
-  if (events.length > EVENTS_MAX) events.splice(0, events.length - EVENTS_MAX);
-}
-
-function recentEvents(maxAgeMs = 10 * 60 * 1000, limit = 12) {
-  const cutoff = Date.now() - maxAgeMs;
-  return events.filter((e) => e.time >= cutoff).slice(-limit);
-}
-
-function sceneContext() {
-  const recent = recentEvents();
-  if (!recent.length) return '';
-  const lines = recent.map((e) => {
-    const t = new Date(e.time).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    return `[${t}] (${e.type}) ${e.summary}`;
-  });
-  return 'KONTEKST PERCEPCJI — ostatnie zdarzenia z czujników (kamera/mikrofon/czujniki użytkownika). ' +
-         'Traktuj je jako to, co właśnie widzisz i słyszysz w otoczeniu użytkownika:\n' + lines.join('\n');
-}
 
 // ---------------------------------------------------------------------------
 // Pamięć długotrwała (RAG) — fakty zapisane przez użytkownika.
@@ -1268,7 +1243,7 @@ async function handleEvents(req, res) {
       } else {
         addEvent(data.type, data.summary);
       }
-      return sendJson(res, 200, { ok: true, stored: events.length });
+      return sendJson(res, 200, { ok: true, stored: ileZdarzen() });
     } catch {
       return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' });
     }
@@ -2031,7 +2006,7 @@ function serveStatic(req, res) {
    Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
 studio_.polacz({ KB_FILES, addEvent, kbAddFile, kbItemMeta, kbItems });
-urzadzenia_.polacz({ addEvent, recentEvents });
+urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
 trening_.polacz({ addEvent, convIndex, convPath, userProfile });
 nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
   keywordScore, sameModel, saveKb });
@@ -2057,6 +2032,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
+    // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast
+    // tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte na komputerze
+    // dociera do telefonu, a nie umiera w logu serwera.
+    if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
@@ -2080,7 +2059,7 @@ const server = http.createServer(async (req, res) => {
         kbItems: kbItems.length,
         kbBytes,
         profileChars: userProfile.length,
-        events: events.length,
+        events: ileZdarzen(),
         engines: Object.keys(ENDPOINTS),
         studio: { image: imageProviders().length > 0, speech: Boolean(STUDIO.eleven.key), video: Boolean(STUDIO.seedance.key) },
         auth: authEnabled(),

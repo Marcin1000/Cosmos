@@ -123,6 +123,18 @@ const atrapaPy = (plik) => uruchom('python3', [path.join(ATRAPY, plik)], { cwd: 
 // Katalog środowisk — jedyne miejsce, które wie, czego wymaga który zestaw
 // ---------------------------------------------------------------------------
 
+/* Porty, na których słuchają atrapy. Muszą być znane, bo stara atrapa
+   z poprzedniego przebiegu odpowiada tak samo jak nowa — tylko starym
+   kodem. Zdarzyło się naprawdę: test sylwetki widział `yolo: false`,
+   bo odpowiadała atrapa sprzed dopisania /detect. */
+const PORTY_ATRAP = {
+  'mock-upstream.js': [9099, 9098],
+  'fake_senses.py': [7060],
+  'reasonmock.py': [7097],
+  'mock-katalog.js': [7103],
+  'mockllm.py': [7099],
+};
+
 const SRODOWISKA = {
   // Atrapa oddająca bloki kodu, obrazy i wyniki wyszukiwania; dwa silniki.
   pelne: {
@@ -187,6 +199,20 @@ const SRODOWISKA = {
   },
 };
 
+/** Zwolnij porty zajęte przez procesy z poprzednich przebiegów. */
+async function zwolnijPorty(porty) {
+  const { execSync } = require('child_process');
+  let cos = false;
+  for (const port of porty) {
+    try {
+      await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(800) });
+      cos = true;
+    } catch { continue; }        // wolny albo nie mówi po HTTP — zostawiamy
+    try { execSync(`fuser -k ${port}/tcp 2>/dev/null`); } catch { /* brak fusera */ }
+  }
+  if (cos) await new Promise((r) => setTimeout(r, 700));
+}
+
 const wstale = new Map();
 
 /** Postaw środowisko dla zestawu. Zwraca `{ port, adres, koniec }`. */
@@ -194,6 +220,17 @@ async function srodowisko(nazwa) {
   const cfg = SRODOWISKA[nazwa];
   if (!cfg) throw new Error(`Nieznane środowisko „${nazwa}". Znane: ${Object.keys(SRODOWISKA).join(', ')}`);
   if (wstale.has(nazwa)) return wstale.get(nazwa);
+
+  const adres = `http://127.0.0.1:${cfg.port}`;
+
+  /* Zajęty port to najgorszy możliwy błąd w baterii: nowy serwer pada po cichu
+     na EADDRINUSE, a stary — z poprzedniego przebiegu i ze STARYM kodem —
+     dalej odpowiada. Test zdaje albo pada z zupełnie nie tego powodu.
+     Zdarzyło się naprawdę: nowa trasa dawała 404, choć istniała. */
+  await zwolnijPorty([cfg.port]);
+
+  // Atrapy też muszą być świeże — patrz komentarz przy PORTY_ATRAP.
+  for (const [plik] of cfg.atrapy) await zwolnijPorty(PORTY_ATRAP[plik] || []);
 
   const procesy = [];
   for (const [plik] of cfg.atrapy) {
@@ -203,7 +240,6 @@ async function srodowisko(nazwa) {
 
   const srv = serwerCosmosa(cfg.port, cfg.env, cfg.rozmowy || 0);
   procesy.push(srv);
-  const adres = `http://127.0.0.1:${cfg.port}`;
   if (!await czekajNa(adres)) {
     procesy.forEach(zabij);
     throw new Error(`Serwer testowy na ${cfg.port} nie wstał (środowisko „${nazwa}")`);
@@ -245,5 +281,5 @@ function wynik(tytul) {
 module.exports = {
   KORZEN, ATRAPY, CHROMIUM, SRODOWISKA, KATALOG_ZRZUTOW,
   maPrzegladarke, przegladarka, srodowisko, posprzataj, czekajNa,
-  uruchom, zabij, serwerCosmosa, atrapaNode, atrapaPy, wynik, zasiejRozmowy,
+  uruchom, zabij, serwerCosmosa, zwolnijPorty, atrapaNode, atrapaPy, wynik, zasiejRozmowy,
 };

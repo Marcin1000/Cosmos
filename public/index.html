@@ -142,6 +142,10 @@
         <button class="offline-retry" id="offline-retry" data-i18n="offline.retry">Spróbuj ponownie</button>
       </div>
 
+      <!-- Zdarzenie z czujnika albo z innego urządzenia. Miga i znika —
+           to kontekst, nie polecenie wymagające reakcji. -->
+      <div class="event-flash" id="event-flash" role="status" hidden></div>
+
       <header class="topbar">
         <button class="icon-btn" id="expand-btn" data-i18n-title="expand" title="Pokaż panel" aria-label="Pokaż panel">
           <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -289,6 +293,11 @@
 
         <label class="field">
           <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline — bez wyszukiwania w internecie</span></span>
+        </label>
+
+        <label class="field">
+          <span class="field-label"><input type="checkbox" id="set-wake-remote" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.wakeRemote">Reaguj na „Hej, Kosmos" z innych urządzeń</span></span>
+          <span class="field-hint" data-i18n="set.wakeRemoteHint">Gdy na domowym komputerze działa nasłuch słowa aktywującego (senses/wake_listener.py), to okno samo wejdzie w tryb głosowy. Wyłącz, jeśli nie chcesz, żeby mikrofon włączał się bez Twojego kliknięcia.</span>
         </label>
 
         <label class="field">

@@ -225,6 +225,14 @@ const I18N = {
     'stats.kb': 'baza wiedzy',
     'summarize': 'Streść rozmowę',
     'summarizing': 'Streszczam…',
+    'event.wake': 'Usłyszałem Cię',
+    'event.kamera': 'Kamera',
+    'event.czujnik': 'Czujnik',
+    'event.sylwetka': 'Sylwetka',
+    'event.urządzenie': 'Urządzenie',
+    'event.rutyna': 'Rutyna',
+    'set.wakeRemote': 'Reaguj na „Hej, Kosmos" z innych urządzeń',
+    'set.wakeRemoteHint': 'Gdy na domowym komputerze działa nasłuch słowa aktywującego (senses/wake_listener.py), to okno samo wejdzie w tryb głosowy. Wyłącz, jeśli nie chcesz, żeby mikrofon włączał się bez Twojego kliknięcia.',
     'httpErr': 'Błąd HTTP {status}',
     'weekdaysShort': 'Nd Pn Wt Śr Cz Pt Sb',
     'tokensCtx': '~{n} tok. w kontekście',
@@ -734,6 +742,14 @@ const I18N = {
     'stats.kb': 'knowledge base',
     'summarize': 'Summarize chat',
     'summarizing': 'Summarizing…',
+    'event.wake': 'I heard you',
+    'event.kamera': 'Camera',
+    'event.czujnik': 'Sensor',
+    'event.sylwetka': 'Body',
+    'event.urządzenie': 'Device',
+    'event.rutyna': 'Routine',
+    'set.wakeRemote': 'React to “Hey, Cosmos” from other devices',
+    'set.wakeRemoteHint': 'When the wake-word listener runs on your home computer (senses/wake_listener.py), this window will enter voice mode on its own. Turn off if you do not want the microphone opening without your click.',
     'httpErr': 'HTTP error {status}',
     'weekdaysShort': 'Sun Mon Tue Wed Thu Fri Sat',
     'tokensCtx': '~{n} tok. in context',
@@ -1032,6 +1048,10 @@ let _lang = localStorage.getItem('cosmos.lang') || 'pl';
 if (!I18N[_lang]) _lang = 'pl';
 
 function getLang() { return _lang; }
+
+/** Czy taki klucz w ogóle istnieje. Do kluczy budowanych z danych
+    (np. `event.` + typ zdarzenia), gdzie brak wpisu jest normalny. */
+function maKlucz(k) { return Boolean(I18N[_lang] && I18N[_lang][k]); }
 
 function t(key, vars) {
   let s = (I18N[_lang] && I18N[_lang][key]) ?? (I18N.pl[key] ?? key);

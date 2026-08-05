@@ -382,6 +382,45 @@ fałszywe alarmy, przestaje być użyteczny — więc najpierw naprawiliśmy nar
       modeli Meta do katalogu jego dotychczasowy przypadek testowy przestał
       badać to, co miał badać (Cosmos zaczął go poprawnie przekierowywać)
 
+## ✅ Partia 19 — łatanie słabości (GOTOWE)
+
+Trzy rzeczy, które sam wskazałem jako słabe strony przy ocenie Cosmosa.
+
+**1. Testy w repozytorium.** 24 zestawy żyły w katalogu tymczasowym sesji —
+gdyby przepadł, przepadłaby cała sieć bezpieczeństwa. Teraz `npm test`:
+39 zestawów + 9 selftestów Pythona, każdy z własnym serwerem, portem
+i świeżym katalogiem danych. Szczegóły: `tests/README.md`.
+
+**2. Podział serwera na moduły.** 3729 → 2217 linii; siedem modułów w `lib/`.
+Zależności były wyliczane, nie zgadywane. Ujawniło to dwie pułapki:
+kolekcje podmieniane przy usuwaniu (`x = x.filter(...)`) muszą wychodzić
+jako funkcje odczytujące, a `DATA_DIR` musiał trafić do rdzenia, bo moduły
+liczą z niego ścieżki już w chwili wczytania.
+
+**3. Funkcje bez odbiorcy — podłączone.**
+- [x] **Kanał zdarzeń od serwera do okna** (`GET /api/events/stream`, SSE).
+      Dotąd przeglądarka tylko WYSYŁAŁA zdarzenia; „Hej, Kosmos" wykryte
+      przez `senses/wake_listener.py` na domowym komputerze umierało w logu.
+      Teraz otwiera tryb głosowy na telefonie — z przełącznikiem
+      w Ustawieniach, bo mikrofon włączający się bez kliknięcia to
+      niespodzianka, na którą trzeba się zgodzić
+- [x] **`/api/pose` ma odbiorcę** — postawa człowieka doklejona do pętli
+      detekcji (gotowa klatka, pytanie co ~3 s, bo postawa zmienia się wolno);
+      widać ją w panelu i trafia do kontekstu rozmowy
+- [x] **Mignięcie o zdarzeniu** — czujnik, kamera, urządzenie albo rutyna
+      dają znać w oknie, nie tylko w dzienniku serwera
+
+**Audyt zyskał rozruch próbny.** Statyczna analiza przepuściła odwołanie do
+`events.length` po wydzieleniu modułu zdarzeń — regex nie miał szans. Audyt
+uruchamia teraz serwer i puka we wszystkie 33 trasy GET; 500 to wywrotka,
+502 to poprawna odpowiedź „usługa poniżej nie działa". Tak wyszedł
+`rutyny is not defined` w porannej odprawie.
+
+**Bateria wyłapała po drodze pięć regresji z refaktoru** — dokładnie po to
+powstała. A dwukrotnie okazało się, że sam fundament testów kłamie: stary
+serwer i stara atrapa z poprzedniego przebiegu odpowiadały nowym testom.
+Teraz zajęty port jest sprzątany albo zgłaszany, nigdy przemilczany.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

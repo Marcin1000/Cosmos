@@ -40,7 +40,8 @@ class H(http.server.BaseHTTPRequestHandler):
             body = png(64, 48, (20, 80, 200) if depth else (200, 120, 40))
             self.send_response(200); self.send_header("Content-Type", "image/png")
         elif self.path.startswith("/health"):
-            body = json.dumps({"whisper": False, "yolo": False, "kinect": True}).encode()
+            body = json.dumps({"whisper": False, "yolo": True, "mediapipe": True,
+                               "kinect": True}).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json")
         else:
             self.send_response(404); body = b"{}"
@@ -50,7 +51,15 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         self.rfile.read(n)
-        if self.path.startswith("/stt"):
+        if self.path.startswith("/detect"):
+            body = json.dumps({"objects": [
+                {"label": "person", "box": [10, 10, 40, 40], "conf": 0.9}]}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+        elif self.path.startswith("/pose"):
+            body = json.dumps({"present": True,
+                               "summary": "widoczna sylwetka, osoba prawdopodobnie stoi"}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+        elif self.path.startswith("/stt"):
             body = json.dumps({"text": "To jest test dyktowania przez Whisper.",
                                "language": "pl"}).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json")

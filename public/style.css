@@ -2019,3 +2019,26 @@ kbd {
   background-repeat: no-repeat;
 }
 select::-ms-expand { display: none; }
+
+/* Mignięcie o zdarzeniu z czujnika albo z innego urządzenia.
+   Nad treścią, ale nie blokuje jej — to informacja, nie okno dialogowe. */
+.event-flash {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  pointer-events: none;
+}
+.event-flash[hidden] { display: none; }

@@ -9,17 +9,18 @@ const fs = require('fs');
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
+  page.on('response', (r) => { if (r.status() >= 500) console.log(`   500 z: ${r.url()}`); });
   page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
   await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
-  await page.screenshot({ path: 'shot-welcome.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-welcome.png') });
 
   // 1. czat w trybie chmury
   await page.fill('#input', 'Cześć! Pokaż mi przykład kodu.');
   await page.click('#send-btn');
   await page.waitForSelector('.msg-assistant .code-block', { timeout: 15000 });
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: 'shot-chat.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-chat.png') });
 
   // 2. przełącz na tryb lokalny i wyślij
   await page.click('.endpoint-tab[data-endpoint="local"]');
@@ -28,7 +29,7 @@ const fs = require('fs');
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.msg-assistant')].some(m => /local/i.test(m.textContent)), null, { timeout: 15000 });
   await page.waitForTimeout(800);
-  await page.screenshot({ path: 'shot-local.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-local.png') });
 
   // 3. wyślij obraz (tryb chmury, powinien pójść model wizyjny)
   await page.click('.endpoint-tab[data-endpoint="cloud"]');
@@ -38,12 +39,12 @@ const fs = require('fs');
   await page.setInputFiles('#file-input', 'test-img.png');
   await page.waitForSelector('.attachment img', { timeout: 5000 });
   await page.fill('#input', 'Co widzisz na obrazie?');
-  await page.screenshot({ path: 'shot-attach.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-attach.png') });
   await page.click('#send-btn');
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.msg-assistant')].some(m => /Widzę/.test(m.textContent)), null, { timeout: 15000 });
   await page.waitForTimeout(800);
-  await page.screenshot({ path: 'shot-vision.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-vision.png') });
 
   // 4. ustawienia + pobranie list modeli z obu endpointów
   await page.click('#settings-btn');
@@ -51,13 +52,13 @@ const fs = require('fs');
   await page.waitForSelector('#model-select-cloud option', { state: 'attached', timeout: 5000 });
   await page.click('#fetch-models-local');
   await page.waitForSelector('#model-select-local option', { state: 'attached', timeout: 5000 });
-  await page.screenshot({ path: 'shot-settings.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-settings.png') });
   await page.click('#settings-close');
 
   // 5. motyw jasny
   await page.click('#theme-btn');
   await page.waitForTimeout(300);
-  await page.screenshot({ path: 'shot-light.png' });
+  await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-light.png') });
   await page.click('#theme-btn');
 
   // 6. historia po odświeżeniu + service worker
