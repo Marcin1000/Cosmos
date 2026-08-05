@@ -695,6 +695,32 @@ wychodzą z modułów jako funkcje odczytujące, nie jako tablice: `module.expor
 kopiuje wiązanie w chwili eksportu, więc tablica zdezaktualizowałaby się po
 pierwszym skasowaniu. Audyt to sprawdza.
 
+### Kiedy bierzemy gotową bibliotekę, a kiedy piszemy sami
+
+Cosmos ma **dwie strefy** i to nie przypadek:
+
+| Strefa | Zależności | Dlaczego tak |
+|---|---|---|
+| **Rdzeń w Node** (`server.js`, `lib/`) | zero (Playwright opcjonalny) | Na VPS instalacja to `git clone` i `node server.js`. Brak drzewa paczek = brak nocnych wywrotek po `npm audit` i nic, co trzeba budować |
+| **Zmysły w Pythonie** (`senses/`) | pełno: YOLO, Whisper, Piper, MediaPipe, OpenCV, pypdf | Tu problemy mają długi ogon poprawności, którego nie da się dogonić samemu. Nikt nie pisze detektora obiektów od zera |
+
+**Zasada przy nowej funkcji:**
+
+- **Bierzemy bibliotekę**, gdy problem ma długi ogon (formaty dokumentów,
+  kodeki, modele, astronomia, strefy czasowe), biblioteka jest utrzymywana,
+  a całość da się zamknąć za jednym modułem. Jeśli to biblioteka ciężka albo
+  wymagająca budowania — idzie do zmysłów, nie do rdzenia.
+- **Piszemy sami**, gdy to logika produktu (pętla narzędzi, prompt, interfejs),
+  gdy zmieściłoby się w stu linijkach, albo gdy Node ma to w standardzie
+  (`zlib` zamiast paczki do ZIP-a).
+- **Nigdy** nie dokładamy zależności do rdzenia po to, żeby zaoszczędzić
+  pięćdziesiąt linijek.
+
+Czytniki dokumentów (`lib/dokumenty.js`) są świadomym przykładem drugiej
+kolumny: to sto linijek na `zlib`, działa bez sieci i bez instalacji, a skany
+i tak trafiają do `pypdf` w zmysłach. Jedna funkcja, dwie drogi — łatwiejsza
+wygrywa, gdy wystarcza.
+
 ## ⚡ Płynność — który model nadaje się do rozmowy
 
 ```bash

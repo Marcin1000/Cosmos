@@ -48,17 +48,29 @@ const { srodowisko } = require('../pomoc');
 
   // 7. model musi WIEDZIEĆ, że to narzędzie istnieje — inaczej nadal będzie
   //    odpowiadał „nie mam dostępu do wyszukiwania obrazów"
-  const czat = await fetch(`${env.adres}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'cloud', messages: [{ role: 'user', content: 'x' }] }),
-  });
-  const prompt = await czat.text();
+  /* Model podajemy WPROST. Za pierwszym razem test brał domyślny z konfiguracji
+     i przewrócił się, gdy poziomy narzędzi obcięły opis dla mniejszych modeli —
+     badał wtedy nie to, co miał badać, tylko przypadkowe ustawienie. */
+  const promptDla = async (model) => {
+    const r = await fetch(`${env.adres}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: 'cloud', model, messages: [{ role: 'user', content: 'x' }] }),
+    });
+    return r.text();
+  };
+
+  const prompt = await promptDla('nvidia/nemotron-3-super-120b-a12b');
   console.log(`7. instrukcja [GRAFIKA:] w promptcie: ${/GRAFIKA:/.test(prompt) ? 'jest' : 'BRAK'}`);
   if (!/WYSZUKIWANIE GRAFIK/.test(prompt)) fail.push('model nie wie, że umie szukać zdjęć');
   if (!/RÓŻNICA MIĘDZY NARZĘDZIAMI/.test(prompt)) {
     fail.push('nic nie odróżnia „znajdź zdjęcia" od „wygeneruj obraz"');
   }
+
+  // 8. mniejszy model też musi umieć szukać zdjęć — tylko krótszym tekstem
+  const krotki = await promptDla('nvidia/nvidia-nemotron-nano-9b-v2');
+  console.log(`8. mniejszy model — [GRAFIKA:] ${/GRAFIKA:/.test(krotki) ? 'jest' : 'BRAK'}`);
+  if (!/GRAFIKA:/.test(krotki)) fail.push('skracanie instrukcji odebrało mniejszemu modelowi grafiki');
 
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nSZUKANIE GRAFIK OK');

@@ -21,7 +21,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 // Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
-const { modelInfo, modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
+const { modelInfo, modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./public/models.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
@@ -1555,10 +1555,20 @@ async function handleChat(req, res) {
         ? lastUser.content
         : (lastUser.content.find?.((p) => p.type === 'text')?.text || ''));
 
+  /* Ile instrukcji ten model uniesie. Dotąd każdy dostawał ten sam prompt
+     na 1351 tokenów — także model 4-miliardowy, który żadnego z opisanych
+     narzędzi nie umie użyć, a znacznik wypisałby użytkownikowi na ekran. */
+  const poziom = modelToolLevel(payload.model || ep.model || '');
+  const bezNarzedzi = poziom === 'rozmowa';
+  const krotko = poziom !== 'pelny';
+
   // Samoświadomość — czym Cosmos jest i co realnie potrafi w tej chwili
   if (payload.useCapabilities !== false) {
     try {
-      extras.push({ role: 'system', content: capabilityText(await capabilityManifest()) });
+      const pelny = capabilityText(await capabilityManifest());
+      // Najdłuższy pojedynczy blok promptu. Mniejszym modelom wystarcza sama
+      // tożsamość — lista czego brakuje w konfiguracji jest dla nich szumem.
+      extras.push({ role: 'system', content: krotko ? pelny.split('\n\n')[0] : pelny });
     } catch { /* manifest nie może blokować rozmowy */ }
   }
 
@@ -1581,10 +1591,14 @@ async function handleChat(req, res) {
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });
 
-  if (payload.useSearch !== false) {
+  if (payload.useSearch !== false && !bezNarzedzi) {
     extras.push({
       role: 'system',
-      content:
+      content: krotko
+        ? 'NARZĘDZIE — INTERNET: gdy potrzebujesz aktualnych informacji, zakończ '
+          + 'odpowiedź osobną linią: [SZUKAJ: zapytanie]. Dostaniesz wyniki i odpowiesz '
+          + 'na ich podstawie. Gdy brakuje Ci miasta — zapytaj o nie zamiast szukać.'
+        :
         'NARZĘDZIE — WYSZUKIWANIE W INTERNECIE: gdy pytanie wymaga aktualnych lub zewnętrznych ' +
         'informacji (modele urządzeń, ceny, specyfikacje, wiadomości, fakty, których nie znasz), ' +
         'NIE zgaduj — zakończ swoją odpowiedź osobną linią dokładnie w formacie: [SZUKAJ: zapytanie]. ' +
@@ -1605,7 +1619,7 @@ async function handleChat(req, res) {
     });
   }
 
-  if (payload.useActions !== false) {
+  if (payload.useActions !== false && !bezNarzedzi) {
     const procList = procedury().length
       ? ' Nauczone procedury (możesz zaproponować ich uruchomienie): ' +
         procedury().map((pr) => `"${pr.name}"`).join(', ') +
@@ -1636,7 +1650,7 @@ async function handleChat(req, res) {
     });
   }
 
-  if (imageProviders().length && payload.useStudio !== false) {
+  if (imageProviders().length && payload.useStudio !== false && !bezNarzedzi) {
     extras.push({
       role: 'system',
       content:
@@ -1647,10 +1661,14 @@ async function handleChat(req, res) {
     });
   }
 
-  if (payload.useSearch !== false) {
+  if (payload.useSearch !== false && !bezNarzedzi) {
     extras.push({
       role: 'system',
-      content:
+      content: krotko
+        ? 'NARZĘDZIE — ZDJĘCIA Z INTERNETU: gdy użytkownik chce zobaczyć, jak coś '
+          + 'naprawdę wygląda, zakończ odpowiedź osobną linią: [GRAFIKA: zapytanie]. '
+          + 'To prawdziwe zdjęcia; [OBRAZ:] to rysunek tworzony przez AI — nie myl ich.'
+        :
         /* Cosmos umiał obraz wygenerować, ale nie umiał żadnego ZNALEŹĆ.
            Na „pokaż zdjęcia tych miejsc" model odpowiadał uczciwie „nie mam
            dostępu do wyszukiwania obrazów" i proponował wizje artystyczne

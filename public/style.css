@@ -544,6 +544,12 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.model-info-tools {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .msg-docs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .doc-chip {
   font: inherit;

@@ -307,6 +307,34 @@ function modelSeesImages(id) {
   return Boolean(info && info.cechy.includes('wizja'));
 }
 
+/* Ile instrukcji ma sens wysłać temu modelowi.
+ *
+ * Do niedawna KAŻDY model dostawał ten sam prompt systemowy: 1351 tokenów
+ * opisu narzędzi, zanim użytkownik napisał słowo. Model 4-miliardowy dostawał
+ * instrukcje do wyszukiwania, grafik, obrazów, akcji, procedur i urządzeń —
+ * których nie umie użyć. To go spowalnia i rozprasza.
+ *
+ * Trzy poziomy:
+ *   'pelny'   — model ogarnia protokoły znaczników; pełne opisy z niuansami.
+ *   'zwiezly' — te same narzędzia, ale krótkim tekstem. Mniej kontekstu na
+ *               instrukcje, więcej na rozmowę.
+ *   'rozmowa' — same fakty (kim jest, data, miejsce) i zero narzędzi. Dla
+ *               modeli, które i tak by ich nie użyły, a znacznik wypisałyby
+ *               użytkownikowi na ekran.
+ *
+ * Model NIEZNANY dostaje 'pelny'. Ta sama zasada, co przy wzroku: lepiej dać
+ * możliwość czemuś, czego nie znamy, niż odebrać ją po cichu na podstawie
+ * domysłu z nazwy.
+ */
+function modelToolLevel(id) {
+  const info = modelInfo(id);
+  if (!info || info.zgadywane) return 'pelny';
+  if (info.cechy.includes('narzędzia')) return 'pelny';
+  // „szybki" bez rozumowania to modele rzędu paru miliardów parametrów.
+  if (info.cechy.includes('szybki') && !info.cechy.includes('rozumowanie')) return 'rozmowa';
+  return 'zwiezly';
+}
+
 /* Modele, które w ogóle nie mają końcówki /chat/completions — embeddingi,
    przeszukiwanie, OCR, ocena odpowiedzi, wykrywanie treści. Odpowiadają
    „404 page not found", co wygląda jak brak dostępu, a nim nie jest: one po
@@ -347,11 +375,12 @@ if (typeof window !== 'undefined') {
   window.modelSeesImages = modelSeesImages;
   window.modelNotForChat = modelNotForChat;
   window.modelNotAChatPartner = modelNotAChatPartner;
+  window.modelToolLevel = modelToolLevel;
   window.CECHA_OPIS = CECHA_OPIS;
 }
 if (typeof module !== 'undefined') {
   module.exports = {
     MODEL_CATALOG, modelInfo, modelSeesImages,
-    modelNotForChat, modelNotAChatPartner, CECHA_OPIS,
+    modelNotForChat, modelNotAChatPartner, modelToolLevel, CECHA_OPIS,
   };
 }

@@ -4070,6 +4070,10 @@ function renderModelInfo(boxEl, id) {
     if (info.opis) parts.push(`<div>${escapeHtml(info.opis)}</div>`);
   }
   if (tags.length) parts.push(`<div class="model-info-tags">${tags.join('')}</div>`);
+  /* Zestaw narzędzi zależy teraz od modelu. Gdyby to było niewidoczne,
+     „dlaczego mały model nie umie szukać" byłoby zagadką bez odpowiedzi. */
+  const poziom = typeof modelToolLevel === 'function' ? modelToolLevel(id) : 'pelny';
+  if (poziom !== 'pelny') parts.push(`<div class="model-info-tools">${t(`model.tools.${poziom}`)}</div>`);
   if (info.mocne && info.mocne.length) {
     parts.push(`<div class="model-info-good">${t('model.bestFor')} `
       + escapeHtml(info.mocne.join(' · ')) + '</div>');

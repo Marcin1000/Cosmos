@@ -648,6 +648,37 @@ Trzy pułapki, które wyszły dopiero na próbnych plikach:
   poznaje się po długości tekstu, tylko po proporcji: setki kilobajtów na
   stronę przy zerowej treści.
 
+## ✅ Partia 27 — narzędzia dobierane pod model (GOTOWE)
+
+Drugi krok programu. Załatwia dwie rzeczy naraz — „możliwości per model"
+i „ma być szybciej" — bo to okazał się ten sam problem.
+
+**Zmierzone:** każdy model dostawał ten sam prompt systemowy na **1351
+tokenów**, zanim użytkownik napisał słowo. Także model 4-miliardowy, który
+żadnego z opisanych narzędzi nie umie użyć — a znacznik `[SZUKAJ:]`
+wypisałby wprost na ekran.
+
+| Poziom | Kto | Prompt |
+|---|---|---|
+| `pelny` | model z cechą „narzędzia" **oraz każdy nieznany** | 1351 tok. |
+| `zwiezly` | znany model bez tej cechy | **442 tok.** (−67%) |
+| `rozmowa` | mały i szybki, bez rozumowania | **142 tok.** (−89%) |
+
+- [x] **Duże modele nie tracą nic** — to nie jest oszczędzanie na jakości.
+      Osobne sprawdzenie pilnuje, że pełny poziom nadal ma wyszukiwanie,
+      grafiki, regułę o brakującym mieście, datę i manifest
+- [x] **Średni poziom SKRACA, nie odbiera** — `[SZUKAJ:]` i `[GRAFIKA:]`
+      zostają, znika rozwlekły opis niuansów
+- [x] **Model nieznany dostaje pełny zestaw** — ta sama zasada, co przy
+      wzroku: lepiej dać możliwość czemuś, czego nie znamy, niż odebrać ją
+      po cichu na podstawie domysłu z nazwy
+- [x] **Widać to w Ustawieniach** — przy wyborze modelu pojawia się
+      wyjaśnienie „narzędzia skrócone" albo „bez narzędzi". Niewidoczna
+      zmiana zachowania byłaby pułapką: „czemu mały model nie umie szukać"
+      nie miałoby odpowiedzi
+- [x] **Data i miejsce zostają na każdym poziomie** — to fakty o świecie,
+      nie narzędzia
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
