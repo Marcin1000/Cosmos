@@ -1560,6 +1560,7 @@ function stripSearchMarker(s) {
   return String(s || '')
     .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
     .replace(/\[GRAFIKA:[^\]]*\]/gi, '')
+    .replace(/\[PLAN:?[^\]]*\]/gi, '')
     .trim();
 }
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
@@ -1575,6 +1576,7 @@ const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
    każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
 const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
 const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
+const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
@@ -1620,6 +1622,44 @@ async function runGeneration(conv) {
         }
         const resultsText = await webSearch(q);
         conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
+      const planMarker = acc.match(PLAN_RE);
+      if (planMarker && depth < MAX_SEARCHES) {
+        const parametry = {};
+        for (const kawalek of planMarker[1].trim().split(/\s+/)) {
+          const [k, v] = kawalek.split('=');
+          if (k && v) parametry[k] = /^[\d.]+$/.test(v) ? Number(v) : v;
+        }
+        const before = stripSearchMarker(acc.replace(planMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.planning'),
+        });
+        saveConversations();
+        renderMessages();
+        let plan;
+        try {
+          const r = await fetch('/api/plan', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parametry),
+          });
+          plan = await readJsonSafe(r);
+          if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
+        } catch (err) {
+          plan = { error: err.message };
+        }
+        conv.messages.push({
+          role: 'user',
+          content: 'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
+            + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
+          search: true,
+          searchQuery: t('chat.planQuery'),
+        });
         saveConversations();
         renderMessages();
         continue;
@@ -2746,6 +2786,11 @@ async function startLive() {
   // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł — a to właśnie
   // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
   $('live-panel').style.display = '';
+  // Plan pokazujemy tylko wtedy, gdy wiemy GDZIE — bez współrzędnych
+  // nie ma z czego policzyć pozycji Słońca, a pusty panel myli.
+  fetch('/api/location').then((r) => r.json())
+    .then((d) => { $('plan-box').hidden = !(d.wspolrzedne && d.wspolrzedne.lat); })
+    .catch(() => {});
   applyLiveExpanded();
   updateLiveRec();
 
@@ -2782,6 +2827,7 @@ function stopLive() {
   if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
   $('live-video').srcObject = null;
   $('live-panel').style.display = 'none';
+  $('plan-box').hidden = true;
   livePrevObjects = '';
 }
 
@@ -2885,6 +2931,110 @@ async function liveDetect() {
   } else if (!objs.some((o) => o.label === 'person')) {
     livePrevPose = '';
   }
+
+  odswiezPlan(cap);
+}
+
+/* ==================== PLAN ZDJĘCIOWY ==================== */
+
+let planOstatnio = 0;
+let planZajety = false;
+
+/** Średnia jasność kadru (0–1) — pomiar sceny, nie zgadywanka z pory dnia.
+ *  Próbkujemy co dziesiąty piksel: różnica w wyniku żadna, a koszt dziesięć
+ *  razy mniejszy przy klatce co sekundę. */
+function jasnoscKadru(canvas) {
+  try {
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const d = g.getImageData(0, 0, canvas.width, canvas.height).data;
+    let suma = 0;
+    let ile = 0;
+    for (let i = 0; i < d.length; i += 40) {
+      suma += (d[i] * 0.2126 + d[i + 1] * 0.7152 + d[i + 2] * 0.0722) / 255;
+      ile++;
+    }
+    return ile ? suma / ile : null;
+  } catch { return null; }
+}
+
+/** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów —
+ *  światło zmienia się w minutach, nie w klatkach. */
+async function odswiezPlan(cap) {
+  const box = $('plan-box');
+  if (!box || box.hidden) return;
+  if (planZajety || Date.now() - planOstatnio < 8000) return;
+  planZajety = true;
+  planOstatnio = Date.now();
+  try {
+    const trybPola = $('plan-mode').value;
+    const wideo = trybPola.startsWith('wideo');
+    const dane = {
+      sprzet: $('plan-gear').value,
+      tryb: wideo ? 'wideo' : 'zdjecie',
+      klatki: trybPola === 'wideo50' ? 50 : 25,
+      zachmurzenie: $('plan-sky').value,
+      szerokosc: cap ? cap.width : 0,
+      wysokosc: cap ? cap.height : 0,
+    };
+    const j = cap ? jasnoscKadru(cap) : null;
+    if (j !== null) dane.jasnosc = j;
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dane),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) {
+      $('plan-shot').textContent = '—';
+      $('plan-light').textContent = d.error || t('plan.needLocation');
+      $('plan-why').textContent = '';
+      return;
+    }
+    pokazPlan(d);
+  } catch { /* offline — panel zostaje z poprzednim wynikiem */ } finally {
+    planZajety = false;
+  }
+}
+
+function pokazPlan(d) {
+  const u = d.ustawienia;
+  $('plan-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+
+  const czesci = [];
+  if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
+  czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
+  const light = $('plan-light');
+  light.textContent = czesci.join(' · ');
+
+  /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
+     Gdy złota godzina trwa TERAZ, mówimy to wprost zamiast pokazywać
+     ujemne minuty do jej początku. */
+  const zloty = d.slonce.doZlotejMin;
+  const zachod = d.slonce.doZachoduMin;
+  const czas = document.createElement('span');
+  czas.className = 'plan-urgent';
+  if (d.slonce.faza === 'złota godzina') {
+    czas.textContent = ` · ${t('plan.goldenNow')}`
+      + (zachod > 0 ? `, ${t('plan.toSunset', { n: zachod })}` : '');
+  } else if (zloty > 0) {
+    czas.textContent = ` · ${t('plan.toGolden', { n: zloty })}`;
+  } else if (zachod > 0) {
+    czas.textContent = ` · ${t('plan.toSunset', { n: zachod })}`;
+  }
+  if (czas.textContent) light.appendChild(czas);
+
+  const why = $('plan-why');
+  why.innerHTML = '';
+  for (const p of u.powody) {
+    const el = document.createElement('p');
+    el.textContent = p;
+    why.appendChild(el);
+  }
+}
+
+for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
+  const el = $(id);
+  // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
+  if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
 }
 
 // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność

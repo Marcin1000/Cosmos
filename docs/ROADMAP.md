@@ -742,6 +742,44 @@ czyta raz.
 
 Płótno, jak liczenie na danych, dostają tylko modele poziomu „pełny".
 
+## ✅ Partia 30 — asystent planu zdjęciowego (GOTOWE)
+
+**Pierwszy wyróżnik: to, czego nie zrobi żaden asystent w chmurze.** ChatGPT
+nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz sprzęt —
+więc na „jakie ustawienia" odpowiada ogólnikami o złotej godzinie. Cosmos zna
+wszystko troje i podaje liczby.
+
+- [x] **Pozycja Słońca liczona, nie zgadywana** — `lib/slonce.js`, algorytm
+      NOAA, bez bibliotek (zamknięty wzór, nie długi ogon). Do zdjęć liczy się
+      nie „która godzina", tylko jak wysoko stoi Słońce: ta sama 18:00
+      w czerwcu i w grudniu to różnica sześciu działek
+- [x] **Kadr poziomo czy pionowo** — rozpoznawany z proporcji podglądu
+      (9:16, 16:9, 4:3…), tak jak prosiłeś
+- [x] **Czas, przysłona, ISO pod konkretny sprzęt** — profile Canona R6 II,
+      Mavica 3 i telefonu. Wideo ma czas ZABLOKOWANY regułą 180°; ustępuje
+      przysłona i ISO, nigdy płynność ruchu
+- [x] **Druga baza wzmocnienia** — R6 II przy ISO 800 szumi MNIEJ niż przy
+      640. Cosmos to podpowiada, bo w menu aparatu tego nie widać
+- [x] **Pomiar z kamery telefonu koryguje rachunek** — model nie wie, czy
+      stoisz w cieniu budynku. Średnia jasność kadru wchodzi do EV z wagą 0,6
+- [x] **Ile zostało minut** — do złotej godziny albo do zachodu. W terenie to
+      jedyna liczba, na którą naprawdę się patrzy
+
+Trzy błędy złapane przez testy, każdy wart osobnej wzmianki:
+
+- **Odwrócony znak różnicy EV.** Przy Słońcu w zenicie Cosmos radził „weź
+  statyw", zamiast „załóż filtr ND" — czyli dokładnie odwrotnie. Teraz osobne
+  sprawdzenie pilnuje, żeby przy prześwietleniu nigdy nie padło słowo „statyw".
+- **`Number(null)` to zero, nie NaN.** Bez zapisanej lokalizacji endpoint
+  liczył światło dla punktu 0°N 0°E na Atlantyku i oddawał to jako poprawną
+  odpowiedź. Teraz odmawia i mówi, czego brakuje.
+- **Dwie sprzeczne diagnozy naraz** — „potrzebny ND" i „potrzebny statyw"
+  w tym samym bloku. Zostało jedno zdanie z liczbą działek.
+
+Testy sprawdzają liczby wobec faktów **spoza naszego kodu**: astronomicznych
+godzin wschodu i zachodu pod Warszawą (4:16 i 21:00 w przesilenie letnie),
+wysokości Słońca w południe (61,4° latem, 13,6° zimą) i reguły „słoneczne 16".
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

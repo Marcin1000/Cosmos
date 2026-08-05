@@ -665,6 +665,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
+| `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
 | `/api/search/images` | GET | Wyszukiwanie zdjęć w internecie (znacznik `[GRAFIKA:]`) |
 | `/api/search/thumb` | GET | Proxy miniatur — wąskie, tylko znane hosty |
 | `/api/location` | GET/POST | Lokalizacja domowa — używa jej rozmowa i wyszukiwanie |
@@ -686,6 +687,8 @@ lib/trening.js     eksport JSONL i uruchamianie QLoRA
 lib/urzadzenia.js  smart home i poranna odprawa
 lib/dokumenty.js   PDF, DOCX, XLSX, PPTX, CSV → tekst (bez zależności)
 lib/kod.js         uruchamianie programów modelu z ograniczeniami
+lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
+lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie

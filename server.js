@@ -35,6 +35,8 @@ const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
+const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
+const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -472,12 +474,28 @@ function saveProfile(text) {
    ale i wyszukiwanie („warsztat … w Złotokłosie"). Bez niej model pyta
    „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
 const LOCATION_FILE = path.join(DATA_DIR, 'location.txt');
+const WSPOLRZEDNE_FILE = path.join(DATA_DIR, 'location.json');
 let userLocation = '';
+/* Sama nazwa miejsca wystarczała do wyszukiwania, ale nie do liczenia pozycji
+   Słońca — złota godzina wymaga stopni, nie napisu „Złotokłos". Trzymamy
+   jedno i drugie: nazwę dla modelu, współrzędne dla matematyki. */
+let userWspolrzedne = null;
 try { userLocation = fs.readFileSync(LOCATION_FILE, 'utf8'); } catch { /* brak */ }
-function saveLocation(text) {
+try { userWspolrzedne = JSON.parse(fs.readFileSync(WSPOLRZEDNE_FILE, 'utf8')); } catch { /* brak */ }
+// Zapas z odprawy porannej — kto ustawił BRIEFING_LAT, nie musi robić tego drugi raz.
+if (!userWspolrzedne && BRIEFING.lat && BRIEFING.lon) {
+  userWspolrzedne = { lat: Number(BRIEFING.lat), lon: Number(BRIEFING.lon) };
+}
+
+function saveLocation(text, wspolrzedne) {
   userLocation = String(text || '').trim().slice(0, 200);
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LOCATION_FILE, userLocation); }
   catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
+  if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
+    userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
+    try { fs.writeFileSync(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
+    catch (err) { console.error('Nie udało się zapisać współrzędnych:', err.message); }
+  }
 }
 
 /* Data i godzina. Model zna świat wyłącznie do końca swojego treningu —
@@ -522,8 +540,11 @@ async function handleGeokod(req, res) {
     const region = a.state || '';
     const nazwa = [miejsce, region].filter(Boolean).join(', ') || d.display_name || '';
     if (!nazwa) return sendJson(res, 502, { error: 'Nie udało się ustalić nazwy miejsca.' });
+    // Zapisujemy od razu: to jedyny moment, w którym mamy i nazwę,
+    // i współrzędne. Bez nich złota godzina nie ma z czego się policzyć.
+    saveLocation(nazwa, { lat, lon });
     addEvent('lokalizacja', `Ustalono lokalizację: ${nazwa}`);
-    return sendJson(res, 200, { location: nazwa });
+    return sendJson(res, 200, { location: nazwa, lat, lon });
   } catch (err) {
     return sendJson(res, 502, {
       error: /timeout|abort/i.test(err.message)
@@ -722,6 +743,78 @@ async function handleUruchom(req, res) {
   const wynik = await uruchomKod(kod, pliki);
   addEvent('kod', `uruchomiono kod (${wynik.ms} ms${wynik.przerwany ? ', przerwany limitem' : ''})`);
   sendJson(res, 200, wynik);
+}
+
+/* Asystent planu zdjęciowego — to, czego nie ma żaden asystent w chmurze.
+   ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
+   sprzęt. Cosmos wie wszystko troje, więc może policzyć konkretne nastawy
+   zamiast opowiadać ogólniki o „złotej godzinie". */
+async function handlePlanZdjeciowy(req, res) {
+  let d;
+  try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+
+  /* Współrzędne: z żądania (telefon w terenie) albo zapisane w Ustawieniach.
+     `Number(null)` to ZERO, nie NaN — pierwsza wersja przy braku lokalizacji
+     liczyła więc światło dla punktu 0°N 0°E na Atlantyku i oddawała to jako
+     poprawną odpowiedź. Stąd jawne sprawdzenie „czy w ogóle jest wartość". */
+  const zapis = userWspolrzedne || {};
+  const surowyLat = d.lat ?? zapis.lat;
+  const surowyLon = d.lon ?? zapis.lon;
+  const lat = surowyLat === null || surowyLat === undefined ? NaN : Number(surowyLat);
+  const lon = surowyLon === null || surowyLon === undefined ? NaN : Number(surowyLon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return sendJson(res, 400, {
+      error: 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
+        + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
+    });
+  }
+
+  const kiedy = d.kiedy ? new Date(d.kiedy) : new Date();
+  if (Number.isNaN(kiedy.getTime())) return sendJson(res, 400, { error: 'Zła data.' });
+
+  const swiatlo = swiatloDnia(kiedy, lat, lon);
+
+  /* EV liczymy ze Słońca, a gdy przeglądarka zmierzyła jasność podglądu —
+     korygujemy pomiarem. Model nie wie, czy stoisz w cieniu budynku. */
+  let ev = evZeSlonca(swiatlo.teraz.wysokosc, d.zachmurzenie);
+  let zrodloEv = 'pozycja Słońca';
+  if (Number.isFinite(Number(d.jasnosc))) {
+    const zmierzony = evZPomiaru(Number(d.jasnosc), d.pomiar || {});
+    // Ufamy pomiarowi, ale nie bezgranicznie: telefon potrafi się pomylić
+    // przy mocnym kontraście, więc bierzemy średnią ważoną.
+    ev = ev * 0.4 + zmierzony * 0.6;
+    zrodloEv = 'pomiar z kamery + pozycja Słońca';
+  }
+
+  const ustawienia = dobierz(ev, {
+    sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
+    ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
+  });
+
+  const kadr = orientacja(Number(d.szerokosc), Number(d.wysokosc));
+  const czas = (x) => (x ? x.toISOString() : null);
+
+  sendJson(res, 200, {
+    miejsce: userLocation || null,
+    wspolrzedne: { lat, lon },
+    slonce: {
+      wysokosc: swiatlo.teraz.wysokosc,
+      azymut: swiatlo.teraz.azymut,
+      faza: swiatlo.faza,
+      wschod: czas(swiatlo.wschod),
+      zachod: czas(swiatlo.zachod),
+      zlotaRano: swiatlo.zlotaRano && { od: czas(swiatlo.zlotaRano.od), do: czas(swiatlo.zlotaRano.do) },
+      zlotaWieczor: swiatlo.zlotaWieczor && { od: czas(swiatlo.zlotaWieczor.od), do: czas(swiatlo.zlotaWieczor.do) },
+      niebieskaWieczor: swiatlo.niebieskaWieczor
+        && { od: czas(swiatlo.niebieskaWieczor.od), do: czas(swiatlo.niebieskaWieczor.do) },
+      // Ile zostało realnego czasu na ujęcie — to jest liczba, na którą się patrzy.
+      doZlotejMin: zaIleMinut(swiatlo.zlotaWieczor && swiatlo.zlotaWieczor.od, kiedy),
+      doZachoduMin: zaIleMinut(swiatlo.zachod, kiedy),
+    },
+    kadr,
+    zrodloEv,
+    ustawienia,
+  });
 }
 
 async function extractKbText(name, mime, buf) {
@@ -1637,6 +1730,27 @@ async function handleChat(req, res) {
     });
   }
 
+  /* Plan zdjęciowy — wyróżnik Cosmosa. Model w chmurze nie wie, gdzie stoisz
+     ani jaki masz sprzęt, więc na „jakie ustawienia" odpowiada ogólnikami.
+     Tutaj są konkretne liczby, policzone z pozycji Słońca nad Twoim miejscem. */
+  if (payload.usePlan !== false && !krotko && userWspolrzedne) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — PLAN ZDJĘCIOWY: gdy pytanie dotyczy ustawień aparatu, światła, '
+        + 'złotej godziny, wschodu/zachodu albo „kiedy najlepiej kręcić", zakończ '
+        + 'odpowiedź osobną linią: [PLAN: parametry]. Parametry oddzielaj spacjami, '
+        + 'wszystkie są opcjonalne:\n'
+        + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
+        + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
+        + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30\n'
+        + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
+        + 'Dostaniesz pozycję Słońca, godziny złotej i niebieskiej oraz policzone '
+        + 'czas/przysłonę/ISO. NIE zgaduj tych liczb sam — Twoja wiedza nie obejmuje '
+        + 'dzisiejszej daty ani miejsca, w którym stoi użytkownik.',
+    });
+  }
+
   /* Płótno — długi tekst obok rozmowy. Kluczowa jest DRUGA połowa instrukcji:
      bez niej model przy każdej poprawce przepisuje cały dokument, co przy
      scenariuszu na trzy tysiące słów trwa minutę i za każdym razem coś gubi. */
@@ -2186,6 +2300,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
     if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
+    if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
@@ -2197,9 +2312,13 @@ const server = http.createServer(async (req, res) => {
       }
     }
     if (p === '/api/location') {
-      if (req.method === 'GET') return sendJson(res, 200, { location: userLocation, teraz: terazTekst() });
+      if (req.method === 'GET') return sendJson(res, 200, { location: userLocation, wspolrzedne: userWspolrzedne, teraz: terazTekst() });
       if (req.method === 'POST') {
-        try { saveLocation((await readJson(req)).location); return sendJson(res, 200, { ok: true, location: userLocation }); }
+        try {
+          const d = await readJson(req);
+          saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
+          return sendJson(res, 200, { ok: true, location: userLocation, wspolrzedne: userWspolrzedne });
+        }
         catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
       }
     }

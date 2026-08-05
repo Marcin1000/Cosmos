@@ -693,6 +693,32 @@
       <canvas id="live-overlay"></canvas>
     </div>
     <div class="live-status mono" id="live-status">—</div>
+
+    <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
+         w którym stoisz, więc działa w terenie z telefonu. -->
+    <div class="plan-box" id="plan-box" hidden>
+      <div class="plan-row">
+        <select id="plan-gear" class="mono" aria-label="Sprzęt">
+          <option value="canon-r6ii">Canon R6 II</option>
+          <option value="mavic-3">Mavic 3</option>
+          <option value="telefon">Telefon</option>
+        </select>
+        <select id="plan-mode" class="mono" aria-label="Tryb">
+          <option value="wideo">Wideo 25</option>
+          <option value="wideo50">Wideo 50</option>
+          <option value="zdjecie">Zdjęcie</option>
+        </select>
+        <select id="plan-sky" class="mono" aria-label="Zachmurzenie">
+          <option value="bezchmurnie">☀ Bezchmurnie</option>
+          <option value="lekkie">🌤 Lekkie</option>
+          <option value="pochmurno">☁ Pochmurno</option>
+          <option value="deszcz">🌧 Deszcz</option>
+        </select>
+      </div>
+      <div class="plan-shot mono" id="plan-shot">—</div>
+      <div class="plan-light mono" id="plan-light"></div>
+      <div class="plan-why" id="plan-why"></div>
+    </div>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
   </div>
 
