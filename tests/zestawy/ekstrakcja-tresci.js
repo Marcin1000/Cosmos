@@ -1,11 +1,9 @@
 // Sprawdź samą ekstrakcję tekstu ze strony — na lokalnym serwerze HTML,
 // bo wyszukiwarka jest z tego środowiska nieosiągalna.
 const http = require('http');
-const src = require('fs').readFileSync('/home/user/Bear/server.js', 'utf8');
-const cut = (re) => { const m = src.match(re); if (!m) throw new Error('nie znaleziono: ' + re); return m[0]; };
-const deps = cut(/const NAMED_ENTITIES[\s\S]*?\nfunction stripTags[\s\S]*?\n}\n/)
-  + cut(/async function fetchPageText[\s\S]*?\n}\n/);
-const fetchPageText = eval(`(() => { ${deps}\n return fetchPageText; })()`);
+// Import zamiast wycinania regexem: tamto psuło się przy każdym dołożeniu
+// stałej między funkcjami, choć sam kod działał bez zarzutu.
+const { fetchPageText } = require('../../lib/szukanie.js');
 
 const page = `<!doctype html><html><head><title>Pogoda</title>
 <style>.x{color:red}</style><script>var a=1;</script></head>

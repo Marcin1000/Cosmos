@@ -31,6 +31,8 @@ const {
   loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
   modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
+const szukanie_ = require('./lib/szukanie.js');
+const { handleSearch, stripTags } = szukanie_;
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -43,7 +45,7 @@ const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
-const { llmComplete, parseModelResponse } = require('./lib/model.js');
+const { llmComplete, parseModelResponse, blindToImages } = require('./lib/model.js');
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
@@ -219,8 +221,25 @@ async function embedViaNvidia(texts, timeoutMs, inputType) {
 }
 
 /** Zwraca { vectors, model } albo null. `model` znakuje wektory — patrz sameModel(). */
+/* Bezpiecznik na wolne embeddingi.
+ *
+ * Gdy usługa raz nie wyrobiła się w budżecie, następne wywołania z krótkim
+ * budżetem (te z rozmowy) nie czekają wcale — od razu idzie dopasowanie po
+ * słowach kluczowych, a rozmowa rusza bez zwłoki. Po minucie próbujemy
+ * ponownie: usługa mogła po prostu wstawać albo liczyć coś ciężkiego.
+ *
+ * Bez tego cisza 1,2 s wracała przy KAŻDEJ wiadomości — dokładnie ten rodzaj
+ * drobnego tarcia, który sprawia, że narzędzie „jakoś tak mierzi".
+ */
+const embedAwaria = { do: 0 };
+const EMBED_KARENCJA_MS = 60000;
+/* Poniżej tego budżetu wywołanie uznajemy za „z rozmowy" — takie odpuszczamy
+   po awarii. Przeliczanie w tle (60 s) idzie zawsze, bo nikt na nie nie czeka. */
+const EMBED_BUDZET_ROZMOWY_MS = 5000;
+
 async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
   if (!texts || !texts.length || EMBED.provider === 'off') return null;
+  if (timeoutMs <= EMBED_BUDZET_ROZMOWY_MS && Date.now() < embedAwaria.do) return null;
   const order = EMBED.provider === 'senses' ? ['senses']
     : EMBED.provider === 'nvidia' ? ['nvidia']
     : ['senses', 'nvidia'];
@@ -228,8 +247,10 @@ async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
     const out = src === 'senses'
       ? await embedViaSenses(texts, timeoutMs)
       : await embedViaNvidia(texts, timeoutMs, inputType);
-    if (out) return out;
+    if (out) { embedAwaria.do = 0; return out; }
   }
+  // Nikt nie odpowiedział — przez chwilę nie zatrzymujemy dla nich rozmowy.
+  embedAwaria.do = Date.now() + EMBED_KARENCJA_MS;
   return null;
 }
 
@@ -280,24 +301,46 @@ function keywordScore(query, text) {
   return hits / Math.sqrt(q.size * Math.max(t.size, 1));
 }
 
+/* Przeliczanie wektorów w tle. NIE w ścieżce czatu.
+ *
+ * Wektory z różnych modeli są nieporównywalne, więc po zmianie dostawcy
+ * embeddingów trzeba przeliczyć całą pamięć. Kiedyś robiliśmy to wewnątrz
+ * `searchMemory`, z limitem 60 s — użytkownik patrzył w pustkę, zanim model
+ * w ogóle dostał prompt. Pomiar: 5 s ciszy przy KAŻDEJ wiadomości, gdy
+ * usługa embeddingów była wolna. Teraz pamięć doucza się sama, w tle,
+ * a rozmowa idzie dalej na dopasowaniu słów kluczowych.
+ */
+let uzupelnianieTrwa = false;
+function uzupelnijWektoryWTle(qmodel) {
+  if (uzupelnianieTrwa) return;
+  const brakujace = memories.filter((m) => !sameModel(m, qmodel));
+  if (!brakujace.length) return;
+  uzupelnianieTrwa = true;
+  setTimeout(async () => {
+    try {
+      const embs = await embedTexts(brakujace.map((m) => m.text), 60000, 'passage');
+      if (embs) {
+        brakujace.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
+        saveMemories();
+      }
+    } catch { /* następnym razem */ } finally { uzupelnianieTrwa = false; }
+  }, 0);
+}
+
+/* Ile wolno czekać na embedding zapytania, zanim odpuścimy i użyjemy słów
+   kluczowych. Przywołanie pamięci jest miłym dodatkiem — wstrzymywanie dla
+   niego całej rozmowy nie jest. */
+const BUDZET_PAMIECI_MS = Number(process.env.MEMORY_SEARCH_BUDGET_MS || 1200);
+
 async function searchMemory(query, limit = 4) {
   if (!memories.length || !query || !query.trim()) return [];
 
   let qvec = null, qmodel = null;
-  const q = await embedTexts([query], 5000, 'query');
+  const q = await embedTexts([query], BUDZET_PAMIECI_MS, 'query');
   if (q) {
     qvec = q.vectors[0];
     qmodel = q.model;
-    // Uzupełnij wpisy bez embeddingu ORAZ policzone innym modelem — wektory
-    // z różnych modeli są nieporównywalne, więc trzeba je przeliczyć.
-    const missing = memories.filter((m) => !sameModel(m, qmodel));
-    if (missing.length) {
-      const embs = await embedTexts(missing.map((m) => m.text), 60000, 'passage');
-      if (embs) {
-        missing.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
-        saveMemories();
-      }
-    }
+    uzupelnijWektoryWTle(qmodel);   // w tle, nie blokuje odpowiedzi
   }
 
   const threshold = qvec ? 0.35 : 0.15;
@@ -1345,166 +1388,6 @@ async function proxySensesGet(req, res, targetPath, search = '') {
     'Cache-Control': 'no-store',
   });
   res.end(buf);
-}
-
-// ---------------------------------------------------------------------------
-// API: wyszukiwanie w internecie (DuckDuckGo HTML — bez klucza API)
-// ---------------------------------------------------------------------------
-
-// Nazwane encje, które realnie sypią się ze stron — stopnie przy pogodzie,
-// polskie znaki, myślniki i cudzysłowy. Bez tego model dostawał „7&deg;C”
-// zamiast „7°C” i nie umiał odczytać liczby, o którą pytał użytkownik.
-const NAMED_ENTITIES = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', deg: '°',
-  hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»',
-  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', bdquo: '„', sbquo: '‚',
-  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£', middot: '·',
-  times: '×', divide: '÷', plusmn: '±', frac12: '½', frac14: '¼', sup2: '²', sup3: '³',
-  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú',
-  agrave: 'à', egrave: 'è', ccedil: 'ç', ntilde: 'ñ',
-  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß', aring: 'å', oslash: 'ø',
-};
-
-function decodeEntities(s) {
-  return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&([a-z][a-z0-9]{1,9});/gi, (whole, name) => {
-      const lower = name.toLowerCase();
-      if (NAMED_ENTITIES[name]) return NAMED_ENTITIES[name];
-      // wielkość liter rozróżnia tylko litery akcentowane (&Ouml; vs &ouml;)
-      if (NAMED_ENTITIES[lower]) {
-        const v = NAMED_ENTITIES[lower];
-        return name[0] === name[0].toUpperCase() && /[a-zà-ÿ]/i.test(v) ? v.toUpperCase() : v;
-      }
-      return whole;                 // nieznana encja — zostaw, nie zgaduj
-    });
-}
-
-function stripTags(s) {
-  return decodeEntities(s.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
-}
-
-/** Rozpakuj adres wyniku DuckDuckGo. Zwraca '' dla pozycji, których nie chcemy.
- *
- * Wyniki przychodzą w trzech postaciach:
- *  • zwykły link — bierzemy jak jest,
- *  • przekierowanie `//duckduckgo.com/l/?uddg=<zakodowany-adres>` — rozpakowujemy,
- *  • REKLAMA `//duckduckgo.com/y.js?ad_domain=…&click_metadata=…` — odrzucamy.
- *
- * Reklamy trafiały do odpowiedzi jako „źródła”. Po kliknięciu użytkownik
- * dostawał stronę DuckDuckGo z „Oops, there was an error”, bo te adresy są
- * jednorazowe i wygasają — a model i tak nie mógł z nich nic wyczytać.
- */
-function resolveDdgUrl(href) {
-  const m = href.match(/[?&]uddg=([^&]+)/);
-  if (m) {
-    try { href = decodeURIComponent(m[1]); } catch { /* zostaw jak jest */ }
-  }
-  const full = href.startsWith('//') ? 'https:' + href : href;
-  let u;
-  try { u = new URL(full); } catch { return ''; }
-  if (!/^https?:$/.test(u.protocol)) return '';
-  // wszystko, co zostało na duckduckgo.com, to reklama albo strona pomocnicza
-  if (/(^|\.)duckduckgo\.com$/i.test(u.hostname)) return '';
-  return u.href;
-}
-
-/** Pobierz czytelny tekst ze strony wyniku.
- *
- * Bez tego model dostawał wyłącznie tytuły, adresy i zajawki z wyszukiwarki —
- * a w zajawce nie ma liczby, o którą pytał użytkownik („ile jest stopni”).
- * Skutek: model szukał znowu i znowu, aż wyczerpał limit rund i nic nie podał.
- * Tutaj wchodzimy na stronę i wyciągamy sam tekst.
- */
-async function fetchPageText(pageUrl, maxChars = 2500) {
-  try {
-    const r = await fetch(pageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
-        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
-      },
-      signal: AbortSignal.timeout(7000),
-      redirect: 'follow',
-    });
-    if (!r.ok) return '';
-    const type = r.headers.get('content-type') || '';
-    if (!/text\/html|text\/plain/i.test(type)) return '';
-
-    // Czytamy z górnym limitem — nie chcemy wciągnąć kilkumegabajtowej strony.
-    const raw = (await r.text()).slice(0, 400000);
-    const body = raw
-      .replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)>/gi, '\n');
-    return stripTags(body.replace(/\n\s*\n+/g, '\n')).slice(0, maxChars);
-  } catch {
-    return '';                        // strona niedostępna — zostają zajawki
-  }
-}
-
-async function handleSearch(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
-  if (!q) return sendJson(res, 400, { error: 'Brak zapytania (parametr q).' });
-
-  try {
-    const upstream = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
-        'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.6',
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-    const html = await upstream.text();
-
-    const results = [];
-    const linkRe = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-    const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-    const links = [...html.matchAll(linkRe)];
-    const snips = [...html.matchAll(snipRe)];
-    const seen = new Set();
-    for (let i = 0; i < links.length && results.length < 5; i++) {
-      const url = resolveDdgUrl(decodeEntities(links[i][1]));
-      if (!url) continue;                    // reklama albo adres nie do użycia
-      if (seen.has(url)) continue;           // ten sam wynik dwa razy
-      seen.add(url);
-      results.push({
-        title: stripTags(links[i][2]),
-        url,
-        snippet: snips[i] ? stripTags(snips[i][1]).slice(0, 300) : '',
-      });
-    }
-    // Treść dwóch pierwszych trafień — równolegle, żeby nie sumować opóźnień.
-    const texts = await Promise.all(results.slice(0, 2).map((r) => fetchPageText(r.url)));
-    texts.forEach((txt, i) => { if (txt) results[i].text = txt; });
-
-    const withText = texts.filter(Boolean).length;
-    addEvent('internet', `wyszukano: „${q}” (${results.length} wyników, ${withText} z treścią)`);
-    sendJson(res, 200, { query: q, results });
-  } catch (err) {
-    sendJson(res, 200, {
-      query: q,
-      results: [],
-      error: `Wyszukiwarka niedostępna (${err.message}). Sprawdź połączenie z internetem.`,
-    });
-  }
-}
-
-/** Czy MAMY PEWNOŚĆ, że model nie odczyta obrazu?
- *
- * Katalog `public/models.js` jest wspólny dla przeglądarki i serwera — ta sama
- * wiedza po obu stronach, jedno miejsce do aktualizacji. Odpowiadamy „tak”
- * tylko dla modeli, które katalog zna i które nie mają cechy „wizja”.
- * Model nieznany przepuszczamy: może widzieć, a my byśmy go zablokowali.
- */
-function blindToImages(id) {
-  try {
-    const info = modelInfo(id);
-    return Boolean(info && !info.zgadywane && !info.cechy.includes('wizja'));
-  } catch {
-    return false;
-  }
 }
 
 // ---------------------------------------------------------------------------

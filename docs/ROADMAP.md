@@ -421,6 +421,39 @@ powstała. A dwukrotnie okazało się, że sam fundament testów kłamie: stary
 serwer i stara atrapa z poprzedniego przebiegu odpowiadały nowym testom.
 Teraz zajęty port jest sprzątany albo zgłaszany, nigdy przemilczany.
 
+## ✅ Partia 20 — płynność (GOTOWE)
+
+„Żeby używanie Cosmosa sprawiało przyjemność". Zaczęliśmy od pomiaru, nie od
+przeczuć — i pomiar wskazał co innego, niż się spodziewałem.
+
+- [x] **Pamięć nie blokuje rozmowy** — największy hamulec. `searchMemory`
+      czekało do 5 s na embedding zapytania, a gdy wpisy miały wektory
+      z innego modelu, doliczało przeliczenie WSZYSTKICH z limitem 60 s.
+      Wszystko w ścieżce żądania, zanim model dostał prompt.
+      Zmierzone: **5,1 s ciszy przed każdą wiadomością**. Po poprawce
+      (budżet 1,2 s + przeliczanie w tle + bezpiecznik): **0,0 s**
+- [x] **To samo w rozpoznawaniu z kamery** — `matchLessons` leci z pętli
+      detekcji kilka razy na sekundę; 5 s czekania zamrażało podgląd
+- [x] **Budżety wyszukiwania** — 12 s + 7 s dawało do 57 s przy trzech
+      rundach; teraz 8 s + 5 s
+- [x] **`scripts/plynnosc.js`** — pomiar czasu do pierwszego znaku, tempa
+      pisania i całości, per model, z oceną „nadaje się do rozmowy / do zadań
+      w tle". Mediana z trzech prób, bez pamięci i manifestu
+- [x] **Sprawdzone, czego NIE trzeba ruszać** — narzut własny serwera to 8 ms,
+      a przemalowanie dymka przy 20 tys. znaków 7,8 ms (budżet klatki: 16 ms).
+      Zmierzone zamiast „zoptymalizowane na wszelki wypadek"
+
+**Trzy błędy wyszły przy okazji, wszystkie z podziału na moduły:**
+`addEvent` niezaimportowane w wyszukiwaniu (i opisane jako „sprawdź
+połączenie z internetem"), `modelInfo` niezaimportowane w `blindToImages` —
+połknięte przez `try/catch`, przez co **każdy model wyglądał na widzący**,
+oraz trzy testy skrobiące źródło regexem zamiast importować.
+
+**Audyt widzi teraz błędy ukryte w HTTP 200** — `addEvent is not defined`
+przechodził jako poprawna odpowiedź z komunikatem w treści. Trasy wymagające
+parametru dostają go, bo inaczej kończyły się na walidacji, nie dochodząc do
+właściwego kodu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

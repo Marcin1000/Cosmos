@@ -1,9 +1,7 @@
 // Wyniki wyszukiwarki: reklamy odrzucone, przekierowania rozpakowane, bez duplikatów
-const src = require('fs').readFileSync('/home/user/Bear/server.js', 'utf8');
-const cut = (re) => { const m = src.match(re); if (!m) throw new Error('brak: ' + re); return m[0]; };
-const deps = cut(/const NAMED_ENTITIES[\s\S]*?\nfunction stripTags[\s\S]*?\n}\n/)
-  + cut(/\/\*\* Rozpakuj adres wyniku[\s\S]*?\nfunction resolveDdgUrl[\s\S]*?\n}\n/);
-const resolveDdgUrl = eval(`(() => { ${deps}\n return resolveDdgUrl; })()`);
+// Import zamiast wycinania regexem — trzeci raz ten sam problem: przy każdym
+// przeniesieniu funkcji do modułu test padał, choć kod działał.
+const { resolveDdgUrl } = require('../../lib/szukanie.js');
 
 const fail = [];
 const cases = [

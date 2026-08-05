@@ -690,6 +690,56 @@ wychodzą z modułów jako funkcje odczytujące, nie jako tablice: `module.expor
 kopiuje wiązanie w chwili eksportu, więc tablica zdezaktualizowałaby się po
 pierwszym skasowaniu. Audyt to sprawdza.
 
+## ⚡ Płynność — który model nadaje się do rozmowy
+
+```bash
+./scripts/plynnosc.js cloud          # zmierz wszystkie modele w chmurze
+./scripts/plynnosc.js local          # to samo lokalnie
+./scripts/plynnosc.js cloud nemotron # tylko pasujące nazwą
+```
+
+„Działa" i „da się z tego korzystać" to dwie różne rzeczy. Model odpowiadający
+poprawnie, ale pokazujący pierwszy znak po ośmiu sekundach, jest w rozmowie
+nie do zniesienia — a w liście modeli wygląda tak samo jak każdy inny.
+
+Skrypt mierzy trzy liczby, każdą trzy razy (mediana — pojedynczy pomiar łapie
+zimny start i kłamie):
+
+| Miara | Dlaczego akurat ta |
+|---|---|
+| **pierwszy znak** | Długość ciszy, zanim cokolwiek się pojawi. To ona decyduje o wrażeniu „odpowiada od razu" |
+| **tempo pisania** | Znaków na sekundę. Poniżej ~20 czyta się szybciej, niż model pisze — i to widać |
+| **całość** | Do ostatniego znaku krótkiej odpowiedzi |
+
+Ocena: `✦` jak rozmowa · `✓` nie przeszkadza · `~` czuć czekanie ·
+`✗` do zadań w tle, nie do rozmowy.
+
+Pomiar idzie **bez pamięci, bazy wiedzy i manifestu zdolności** — inaczej
+porównywalibyśmy stan Cosmosa, a nie modele między sobą.
+
+### Co Cosmos robi, żeby nie przeszkadzać
+
+Zasada jest jedna: **nic, co jest tylko dodatkiem do odpowiedzi, nie może
+wstrzymywać samej odpowiedzi.**
+
+- **Pamięć długotrwała** ma budżet 1,2 s na embedding zapytania; po jego
+  przekroczeniu idzie dopasowanie po słowach kluczowych, a rozmowa rusza.
+  Przeliczanie wektorów po zmianie dostawcy embeddingów dzieje się **w tle**.
+  Wcześniej siedziało w ścieżce żądania z limitem 60 s — zmierzone 5 s ciszy
+  przed **każdą** wiadomością, gdy usługa zmysłów była zajęta.
+- **Bezpiecznik**: gdy usługa embeddingów raz nie wyrobi się w budżecie, przez
+  minutę nie czekamy na nią wcale. Bez tego cisza wracała przy każdej
+  wiadomości.
+- **Wyszukiwanie**: 8 s na listę wyników, 5 s na treść strony, strony
+  pobierane równolegle. Model potrafi zrobić trzy rundy, więc każda sekunda
+  mnoży się przez trzy.
+- **Strumień** idzie z serwera bez buforowania, a przeglądarka przemalowuje
+  dymek raz na klatkę (zmierzone: 7,8 ms przy 20 tys. znaków na telefonie —
+  mieści się w budżecie 16 ms).
+
+Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
+`PAGE_TIMEOUT_MS`), ale domyślne są dobrane pomiarem.
+
 ## 🧪 Testy
 
 ```bash

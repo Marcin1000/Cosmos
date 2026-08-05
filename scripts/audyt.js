@@ -343,15 +343,34 @@ proba.stderr.on('data', (d) => { logRozruchu += d; });
       && !/login|logout|chat|polish|stream|studio|record|train|run/.test(t));
     const padly = [];
     const niedostepne = [];
+    /* Trasy, które bez parametru kończą się na walidacji i nigdy nie dochodzą
+       do właściwego kodu. Bez tego `/api/search` przechodził audyt, mając
+       w środku `addEvent is not defined`. */
+    const PARAMETRY = {
+      '/api/search': '?q=pogoda',
+      '/api/models': '?endpoint=cloud',
+      '/api/conversations/search': '?q=test',
+      '/api/kinect/frame': '?stream=color',
+    };
     for (const t of doSprawdzenia) {
       try {
-        const r = await fetch(adres + t, { signal: AbortSignal.timeout(8000) });
+        const r = await fetch(adres + t + (PARAMETRY[t] || ''), { signal: AbortSignal.timeout(12000) });
         // 502 znaczy „usługa poniżej nie odpowiada" — w środowisku audytu nie
         // ma ani modelu, ani zmysłów, więc to poprawna odpowiedź, nie usterka.
         // 500 to już nasza wywrotka i takich szukamy (tak wyszło `rutyny is
         // not defined` po podziale na moduły).
         if (r.status === 500) padly.push(`${t} → 500`);
         else if (r.status === 502) niedostepne.push(t.replace('/api/', ''));
+        else if (r.status === 200) {
+          /* Błąd w kodzie potrafi wyjść jako HTTP 200 z komunikatem w treści —
+             tak przeszedł `addEvent is not defined` w wyszukiwaniu, opisany
+             na dodatek jako „sprawdź połączenie z internetem". */
+          const tresc = (await r.text()).slice(0, 2000);
+          if (/is not defined|is not a function|Cannot read propert|undefined is not/.test(tresc)) {
+            padly.push(`${t} → 200, ale w treści błąd kodu: `
+              + (tresc.match(/[A-Za-z_$][\w$]* is not (?:defined|a function)/) || ['?'])[0]);
+          }
+        }
       } catch (e) { padly.push(`${t} → ${e.message}`); }
     }
     padly.length ? zle('trasy wywracają się (HTTP 500): ' + padly.join(', '))
