@@ -13,6 +13,9 @@ const MODELE = {
   'kaprysny/raz-tak-raz-nie': { pierwszy: 200, naZnak: 8, padaCo: 2 },
   // Rozumujący: cały budżet w myślenie, treści zero. Dawniej: „pusta odpowiedź".
   'rozumujacy/samo-myslenie': { pierwszy: 400, naZnak: 10, tylkoMyslenie: true },
+  // Myśli długo, POTEM odpowiada. „Pierwszy znak" po 0,3 s wygląda na
+  // błyskawiczną odpowiedź, a to dopiero „…myślę" — treść przychodzi po 3 s.
+  'rozumujacy/mysli-potem-mowi': { pierwszy: 300, naZnak: 8, myslenieMs: 3000 },
 };
 const licznik = {};
 const ODPOWIEDZ = 'Fotografia poklatkowa to seria zdjęć robionych w równych odstępach '
@@ -40,6 +43,13 @@ http.createServer((req, res) => {
     }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     await new Promise((r) => setTimeout(r, cfg.pierwszy));
+    if (cfg.myslenieMs) {
+      const krokow = 10;
+      for (let i = 0; i < krokow; i++) {
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'myślę… ' } }] })}\n\n`);
+        await new Promise((r) => setTimeout(r, cfg.myslenieMs / krokow));
+      }
+    }
     for (const znak of ODPOWIEDZ) {
       const pole = cfg.tylkoMyslenie ? { reasoning_content: znak } : { content: znak };
       res.write(`data: ${JSON.stringify({ choices: [{ delta: pole }] })}\n\n`);

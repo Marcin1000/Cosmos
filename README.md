@@ -221,8 +221,8 @@ domyślna dla urządzeń, które niczego nie wybrały.
 
 | Do czego | Model | Uwagi |
 |---|---|---|
-| Czat w chmurze (codziennie) | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M — najlepszy balans jakości i szybkości |
-| Czat w chmurze (maksimum) | `nemotron-3-ultra-550b-a55b` | Flagowiec, wolniejszy |
+| Czat w chmurze | `nemotron-3-ultra-550b-a55b` | Domyślny. Flagowiec, a w pomiarze najrówniejszy: 3/3 prób, 3,1 s do końca odpowiedzi |
+| Czat, gdy trafisz na spokojną porę | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M. Bywa błyskawiczny, ale w pomiarze rozjeżdżał się od 0,5 s do 5,8 s |
 | Wzrok w chmurze | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, wideo, mowa, tekst |
 | Model lokalny (RTX 3080) | `nemotron-nano-9b-v2` | ~6 GB w 4-bit — mieści się w 10 GB |
 | Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok |
@@ -702,14 +702,17 @@ pierwszym skasowaniu. Audyt to sprawdza.
 poprawnie, ale pokazujący pierwszy znak po ośmiu sekundach, jest w rozmowie
 nie do zniesienia — a w liście modeli wygląda tak samo jak każdy inny.
 
-Skrypt mierzy trzy liczby, każdą trzy razy (mediana — pojedynczy pomiar łapie
+Skrypt mierzy cztery liczby, każdą trzy razy (mediana — pojedynczy pomiar łapie
 zimny start i kłamie):
 
 | Miara | Dlaczego akurat ta |
 |---|---|
-| **pierwszy znak** | Długość ciszy, zanim cokolwiek się pojawi. To ona decyduje o wrażeniu „odpowiada od razu" |
-| **tempo pisania** | Znaków na sekundę. Poniżej ~20 czyta się szybciej, niż model pisze — i to widać |
+| **ruch** | Cisza, zanim dotrze cokolwiek. Przy modelach rozumujących to zwykle sam tok myślenia, nie odpowiedź |
+| **treść** | Pierwsze słowo właściwej odpowiedzi. Na to czeka człowiek, więc **ocena patrzy tutaj** |
+| **tempo** | Znaków na sekundę. Poniżej ~20 czyta się szybciej, niż model pisze — i to widać |
 | **całość** | Do ostatniego znaku krótkiej odpowiedzi |
+
+Gdy „treść" mocno odstaje od „ruchu", wiersz dostaje znacznik `🧠myśli X s`.
 
 Ocena łączy szybkość **z niezawodnością**: `✦` jak rozmowa · `✓` nie
 przeszkadza · `~` nierówny albo czuć czekanie · `✗` zawodny lub męczący.
@@ -722,25 +725,31 @@ przeszkadza · `~` nierówny albo czuć czekanie · `✗` zawodny lub męczący.
 > i sortuje **najpierw po niezawodności**, dopiero potem po szybkości.
 > Przy ważnej decyzji puść pomiar dwa razy o różnych porach dnia.
 
-### Zmierzone rekomendacje (dwa przebiegi na żywym koncie)
+### Zmierzone rekomendacje (żywe konto, wszystkie 3/3 prób)
 
-Ze 102 pozycji na liście **tylko 13 odpowiedziało w obu przebiegach**.
-Domyślne wartości w `.env.example` są ustawione według tego pomiaru:
+**Patrz na „całość", nie na „pierwszy znak".** Model rozumujący zaczyna od
+myślenia, więc `0,1 s` znaczy tylko „coś się dzieje" — treść przychodzi
+kilka sekund później. Skrypt pokazuje obie liczby i oznacza to `🧠myśli`.
 
-| Do czego | Model | Zmierzone |
+| Do czego | Model | ruch → całość |
 |---|---|---|
-| **Rozmowa** | `nvidia/llama-3.3-nemotron-super-49b-v1` | 0,3 / 0,4 s — powtarzalnie, 49 mld = dobra polszczyzna |
-| **Zdjęcia** | `nvidia/nemotron-nano-12b-v2-vl` | 0,2 / 0,3 s — jedyny model wizyjny pewny w obu przebiegach |
-| Lekko i szybko | `nvidia/nemotron-3-nano-30b-a3b` | 0,4 s w obu |
-| Rozumowanie z widocznym tokiem myśli | `openai/gpt-oss-20b` | 0,5 s w obu |
+| **Rozmowa** | `nvidia/nemotron-3-ultra-550b-a55b` | 0,6 → **3,1 s** · 550 mld = najlepsza polszczyzna |
+| **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 0,4 → **1,7 s** · czyta też wideo |
+| Najszybszy sensowny | `openai/gpt-oss-20b` | 0,4 → 1,0 s |
+| Szybki, słabszy po polsku | `mistralai/mistral-nemotron` | 0,4 → 1,9 s |
+| Wizyjny również lokalnie | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | 0,2 → 2,1 s |
 
-Dwie rzeczy, które pomiar obalił:
+Trzy rzeczy, które pomiar obalił — **wszystkie były błędami mojego pomiaru,
+nie modeli**:
 
-- **`nemotron-3-super-120b-a12b`** — polecałem go jako codzienny wybór. Raz
-  0,5 s (`✦`), pięć minut później 5,8 s (`✗`). Nierówny.
-- **`nvidia-nemotron-nano-9b-v2`** — był domyślny w `.env.example`, a przy
-  budżecie 160 tokenów oddawał **sam tok myślenia i pustą treść**. To model
-  rozumujący; potrzebuje ≥700 tokenów odpowiedzi.
+- `nemotron-3-ultra-550b`, `nano-omni-30b` i `nvidia-nemotron-nano-9b-v2`
+  wychodziły jako „pusta odpowiedź". To modele rozumujące, a limit 160
+  tokenów zużywały w całości na myślenie. Po podniesieniu do 700 — wszystkie
+  3/3 prób i w czołówce.
+- `nemotron-3-super-120b` raz 0,5 s, raz 5,8 s, raz 2,4 s. Naprawdę nierówny.
+- `llama-3.3-nemotron-super-49b-v1` ma 0,3 s do pierwszego znaku, ale **4,7 s
+  do końca odpowiedzi** — dużo myśli. Sama „szybkość startu" wprowadzała
+  w błąd, dlatego doszła kolumna „całość".
 
 Pomiar idzie **bez pamięci, bazy wiedzy i manifestu zdolności** — inaczej
 porównywalibyśmy stan Cosmosa, a nie modele między sobą.

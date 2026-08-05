@@ -478,6 +478,32 @@ najlepsze. `nemotron-3-super-120b` raz 0,5 s (`✦`), raz 5,8 s (`✗`).
 na serwerze Marcina wypisał 24 poprawne zmienne jako martwe. Skanuje teraz
 cały kod serwerowy, nie tylko `server.js`.
 
+## ✅ Partia 22 — pomiar znosi rzeczywistość (GOTOWE)
+
+Trzeci przebieg był już spójny, ale pokazał trzy rzeczy, które psuły samo
+używanie narzędzia — nie liczby, tylko robotę wokół nich.
+
+- [x] **Koniec paska postępu** — pasek pisał po `stderr` „tylko gdy to terminal",
+      a na terminalu Marcina `stderr` **jest** terminalem, więc nazwa modelu
+      wsiąkała w tabelę i zostawiała ~20 pustych linii. Pasek zniknął całkiem:
+      tabela rośnie wiersz po wierszu i to wystarcza za postęp
+- [x] **Myślenie osobno od odpowiedzi** — kolumny `ruch` (pierwszy znak
+      czegokolwiek) i `treść` (pierwsze słowo odpowiedzi) rozjeżdżają się przy
+      modelach rozumujących nawet dziesięciokrotnie. Ocena patrzy na `treść`,
+      bo to na nią czeka człowiek, a znacznik `🧠myśli X s` mówi, dlaczego
+- [x] **Wynik przeżywa zerwane SSH** — czwarty przebieg Marcina zginął na
+      `client_loop: send disconnect` po ~40 modelach i nie zostało nic. Każdy
+      wiersz leci od razu do `PLYNNOSC_PLIK` (domyślnie
+      `/tmp/plynnosc-ostatni.txt`), a nagłówek skryptu podaje wariant z `nohup`
+- [x] **Domyślne modele dobrane po czasie całości, nie po pierwszym znaku** —
+      `llama-3.3-nemotron-super-49b-v1` rusza w 0,3 s, ale kończy w 4,7 s,
+      bo długo myśli. `nemotron-3-ultra-550b-a55b` rusza w 0,6 s i kończy
+      w 3,1 s — przy 550 mld parametrów. To on jest teraz domyślny
+- [x] **Trzy „puste odpowiedzi" z drugiego przebiegu to była nasza usterka** —
+      `ultra-550b`, `nano-omni` i `nano-9b-v2` przy 700 tokenach robią 3/3
+      i siedzą w czołówce. README mówi to wprost, żeby nikt (łącznie ze mną)
+      nie odziedziczył błędnego wniosku
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
