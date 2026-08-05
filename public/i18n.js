@@ -396,6 +396,11 @@ const I18N = {
     // — czat / narzędzia —
     'chat.searching': '🔍 *Szukam w internecie: „{q}"…*',
     'chat.genImage': '🎨 *Generuję obraz — to zwykle trwa od kilkunastu sekund do minuty…*',
+    'chat.findingPhotos': '🖼️ *Szukam zdjęć: {q}…*',
+    'chat.photosDone': 'Znalazłem {n} zdjęć.',
+    'chat.photosNone': '⚠ Nie znalazłem zdjęć. {msg}',
+    'chat.photosNoneVoice': 'Nie znalazłem zdjęć.',
+    'photo.found': 'Zdjęcie znalezione w internecie',
     'chat.stillWorking': 'model myśli… {s} s',
     'chat.imageSaved': 'Gotowe — obraz zapisany w Bazie wiedzy.',
     'chat.imageDone': 'Wygenerowałem obraz i zapisałem go w bazie wiedzy.',
@@ -915,6 +920,11 @@ const I18N = {
 
     'chat.searching': '🔍 *Searching the internet: “{q}”…*',
     'chat.genImage': '🎨 *Generating the image — this usually takes from a few seconds to a minute…*',
+    'chat.findingPhotos': '🖼️ *Looking for photos: {q}…*',
+    'chat.photosDone': 'Found {n} photos.',
+    'chat.photosNone': '⚠ No photos found. {msg}',
+    'chat.photosNoneVoice': 'No photos found.',
+    'photo.found': 'Photo found online',
     'chat.stillWorking': 'the model is thinking… {s}s',
     'chat.imageSaved': 'Done — image saved to the Knowledge base.',
     'chat.imageDone': 'I generated the image and saved it to the knowledge base.',

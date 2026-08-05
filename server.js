@@ -32,7 +32,7 @@ const {
   modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
 const szukanie_ = require('./lib/szukanie.js');
-const { handleSearch, stripTags } = szukanie_;
+const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -861,17 +861,36 @@ async function handleTimeline(req, res) {
 // ---------------------------------------------------------------------------
 
 let sensesCache = { at: 0, online: false, caps: {} };
+let sensesOdswiezanie = null;
 
-async function sensesState() {
-  if (Date.now() - sensesCache.at < 60000) return sensesCache;
-  try {
-    const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(1500) });
-    const caps = r.ok ? await r.json() : {};
-    sensesCache = { at: Date.now(), online: r.ok, caps: caps.caps || caps || {} };
-  } catch {
-    sensesCache = { at: Date.now(), online: false, caps: {} };
+/* Odpytanie zmysłów NIE MOŻE wstrzymywać rozmowy.
+   Tak było: co minutę cache wygasał, a `capabilityManifest()` — czekający na
+   ten fetch — jest awaitowany PRZED wysłaniem pytania do modelu. Komputer
+   domowy Marcina bywa wyłączony, więc raz na minutę pierwsza wiadomość
+   płaciła do 1,5 s ciszy, zanim model w ogóle dostał pytanie.
+
+   Ta sama zasada, co przy pamięci długotrwałej: dodatek do odpowiedzi nigdy
+   nie wstrzymuje samej odpowiedzi. Oddajemy to, co wiemy, a świeży stan
+   dociąga się w tle na następną wiadomość. */
+const ZMYSLY_CACHE_MS = Number(process.env.SENSES_CACHE_MS || 60000);
+function sensesState() {
+  const swiezy = Date.now() - sensesCache.at < ZMYSLY_CACHE_MS;
+  if (!swiezy && !sensesOdswiezanie) {
+    sensesOdswiezanie = (async () => {
+      try {
+        const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(1500) });
+        const caps = r.ok ? await r.json() : {};
+        sensesCache = { at: Date.now(), online: r.ok, caps: caps.caps || caps || {} };
+      } catch {
+        sensesCache = { at: Date.now(), online: false, caps: {} };
+      } finally {
+        sensesOdswiezanie = null;
+      }
+    })();
   }
-  return sensesCache;
+  // Przy pierwszym w życiu zapytaniu nie ma czego oddać — wtedy czekamy,
+  // ale tylko ten jeden raz, nie co minutę.
+  return sensesCache.at ? sensesCache : sensesOdswiezanie.then(() => sensesCache);
 }
 
 function moduleExists(...parts) {
@@ -1583,6 +1602,29 @@ async function handleChat(req, res) {
     });
   }
 
+  if (payload.useSearch !== false) {
+    extras.push({
+      role: 'system',
+      content:
+        /* Cosmos umiał obraz wygenerować, ale nie umiał żadnego ZNALEŹĆ.
+           Na „pokaż zdjęcia tych miejsc" model odpowiadał uczciwie „nie mam
+           dostępu do wyszukiwania obrazów" i proponował wizje artystyczne
+           zamiast prawdziwej Majorki. */
+        'NARZĘDZIE — WYSZUKIWANIE GRAFIK: gdy użytkownik chce ZOBACZYĆ, jak coś ' +
+        'naprawdę wygląda (miejsce, zabytek, produkt, osoba, sprzęt), zakończ odpowiedź ' +
+        'osobną linią dokładnie w formacie: [GRAFIKA: zapytanie]. Zdjęcia zostaną ' +
+        'znalezione w internecie i pokazane pod Twoją odpowiedzią.\n' +
+        'RÓŻNICA MIĘDZY NARZĘDZIAMI: [GRAFIKA:] to prawdziwe zdjęcia z internetu — ' +
+        'używaj jej, gdy pada słowo „zdjęcia", „jak wygląda", „pokaż". [OBRAZ:] to ' +
+        'rysunek tworzony przez AI — tylko gdy użytkownik prosi o wygenerowanie, ' +
+        'narysowanie albo wymyślenie grafiki. Na prośbę o zdjęcia prawdziwego miejsca ' +
+        'NIE proponuj wizji artystycznych — po prostu użyj [GRAFIKA:].\n' +
+        'Możesz poprosić o grafiki dla kilku rzeczy naraz, oddzielając je średnikiem: ' +
+        '[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc; Valldemossa]. Nie pytaj ' +
+        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.',
+    });
+  }
+
   if (payload.useMemory !== false) {
     const recalled = await searchMemory(queryText);
     const memCtx = memoryContextLines(recalled);
@@ -2014,6 +2056,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+    if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
+    if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
     if (p === '/api/profile') {
       if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });

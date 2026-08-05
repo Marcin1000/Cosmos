@@ -89,6 +89,24 @@ const rozmowa = async (adres, tekst) => {
   console.log(`8. współrzędne-śmieci → HTTP ${zle.status}`);
   if (zle.status !== 400) fail.push('nie sprawdza współrzędnych przed wyjściem w internet');
 
+  /* 9. Niedostępne zmysły nie mogą wstrzymywać rozmowy.
+     Cache stanu zmysłów wygasa co minutę, a manifest zdolności — czekający
+     na ten fetch — jest awaitowany PRZED wysłaniem pytania do modelu.
+     Komputer domowy bywa wyłączony, więc raz na minutę pierwsza wiadomość
+     płaciła do 1,5 s ciszy. Środowisko celuje w adres, z którego nic nie
+     wraca (TEST-NET-1), więc gdyby blokada wróciła — ten pomiar ją złapie. */
+  const czasy = [];
+  for (let i = 0; i < 3; i++) {
+    const t0 = Date.now();
+    await rozmowa(env.adres, 'krótkie pytanie');
+    czasy.push(Date.now() - t0);
+  }
+  const najgorszy = Math.max(...czasy);
+  console.log(`9. rozmowa przy niedostępnych zmysłach: ${czasy.join(' / ')} ms`);
+  if (najgorszy > 1200) {
+    fail.push(`odpowiedź czeka na zmysły (${najgorszy} ms) — manifest znów blokuje rozmowę`);
+  }
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nDATA I MIEJSCE OK');
   process.exit(fail.length ? 1 : 0);

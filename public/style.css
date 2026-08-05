@@ -525,6 +525,39 @@ kbd {
   display: block;
 }
 
+/* Zdjęcia znalezione w internecie. Siatka, nie rząd — na telefonie rząd
+   miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa. */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.photo-tile {
+  display: block;
+  text-decoration: none;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+}
+.photo-tile img {
+  display: block;
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+}
+.photo-cap {
+  display: block;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.photo-tile:hover { border-color: var(--accent); }
+
 .msg-assistant { align-items: flex-start; }
 
 .msg-avatar {

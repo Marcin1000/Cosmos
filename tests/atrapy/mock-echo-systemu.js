@@ -6,6 +6,11 @@
 const http = require('http');
 
 http.createServer((req, res) => {
+  /* Udaje uśpiony komputer domowy: połączenie przyjęte, odpowiedzi brak.
+     Adres nieistniejący nie nadaje się do tego testu — w kontenerze odbija
+     się od proxy w 80 ms zamiast wisieć, więc niczego by nie dowodził. */
+  if (req.url === '/health') return;             // celowo bez odpowiedzi
+
   if (req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ data: [{ id: 'atrapa/echo' }] }));

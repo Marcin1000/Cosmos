@@ -222,6 +222,11 @@ function msgText(m) {
 function msgImages(m) {
   return typeof m.content === 'string' ? [] : (m.content?.images || []);
 }
+// Zdjęcia znalezione w internecie — inna rzecz niż `images` (te są wgrane
+// albo wygenerowane). Mają źródło, więc dają się kliknąć i sprawdzić.
+function msgPhotos(m) {
+  return typeof m.content === 'string' ? [] : (m.content?.photos || []);
+}
 
 // ----------------------------------------------------------------
 // Mini-renderer Markdown (bez zewnętrznych bibliotek)
@@ -499,6 +504,39 @@ function imagesHtml(images) {
   return wrap;
 }
 
+/** Siatka zdjęć znalezionych w internecie.
+ *
+ *  Miniatury lecą przez `/api/search/thumb`, a nie prosto z cudzego CDN-u:
+ *  telefon nie łączy się wtedy z obcym hostem przy każdym wyniku, a zdjęcia
+ *  działają też wtedy, gdy sieć ten CDN blokuje. Każdy kafelek prowadzi do
+ *  strony źródłowej — zdjęcie z internetu bez źródła jest bezwartościowe.
+ */
+function photosGrid(photos) {
+  const wrap = document.createElement('div');
+  wrap.className = 'photo-grid';
+  for (const p of photos) {
+    const a = document.createElement('a');
+    a.className = 'photo-tile';
+    a.href = p.source || p.full || '#';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = p.title || '';
+    const img = document.createElement('img');
+    img.src = `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
+    img.alt = p.title || t('photo.found');
+    img.loading = 'lazy';
+    // Miniatura, której nie da się pobrać, nie może zostawić dziury w siatce.
+    img.addEventListener('error', () => a.remove());
+    const cap = document.createElement('span');
+    cap.className = 'photo-cap';
+    try { cap.textContent = new URL(p.source).hostname.replace(/^www\./, ''); }
+    catch { cap.textContent = p.title || ''; }
+    a.append(img, cap);
+    wrap.appendChild(a);
+  }
+  return wrap;
+}
+
 /** Podgląd obrazu na pełnym ekranie, z pobieraniem.
  *
  * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
@@ -624,6 +662,8 @@ function messageElement(m, idx = -1) {
     const imgs = imagesHtml(images);
     body.prepend(imgs);
   }
+  const photos = msgPhotos(m);
+  if (photos.length) body.appendChild(photosGrid(photos));
 
   const col = document.createElement('div');
   col.style.flex = '1';
@@ -1228,9 +1268,16 @@ const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
 /** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
  *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran. */
 function stripSearchMarker(s) {
-  return String(s || '').replace(/\[SZUKAJ:[^\]]*\]/gi, '').trim();
+  return String(s || '')
+    .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
+    .replace(/\[GRAFIKA:[^\]]*\]/gi, '')
+    .trim();
 }
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
+/* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
+   na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
+   obrazów" i proponował wizje artystyczne zamiast prawdziwej Majorki. */
+const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
@@ -1279,6 +1326,50 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         continue;
+      }
+
+      /* Zdjęcia z internetu. Sprawdzane PRZED [OBRAZ:], bo gdy model wypisze
+         oba, użytkownik prosił o zdjęcia — generowanie było jego drugim
+         wyborem, nie pierwszym. */
+      const fotoMarker = acc.match(PHOTO_MARKER_RE);
+      if (fotoMarker) {
+        // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
+        const zapytania = fotoMarker[1].split(';')
+          .map((s) => s.trim()).filter(Boolean).slice(0, 4);
+        const before = stripSearchMarker(acc.replace(fotoMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.findingPhotos', { q: zapytania.join(', ') }),
+        });
+        saveConversations();
+        renderMessages();
+        // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
+        const zestawy = await Promise.all(zapytania.map(async (q) => {
+          try {
+            const r = await fetch(`/api/search/images?q=${encodeURIComponent(q)}`);
+            const d = await readJsonSafe(r);
+            return { q, photos: d.results || [], error: d.error || '' };
+          } catch (err) { return { q, photos: [], error: err.message }; }
+        }));
+        const znalezione = zestawy.filter((z) => z.photos.length);
+        if (znalezione.length) {
+          for (const z of znalezione) {
+            conv.messages.push({
+              role: 'assistant',
+              content: { text: zapytania.length > 1 ? z.q : '', photos: z.photos },
+            });
+          }
+          finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
+        } else {
+          conv.messages.push({
+            role: 'assistant',
+            content: t('chat.photosNone', { msg: zestawy.find((z) => z.error)?.error || '' }),
+            error: true,
+          });
+          finalText = t('chat.photosNoneVoice');
+        }
+        saveConversations();
+        break;
       }
 
       const imgMarker = acc.match(IMAGE_MARKER_RE);

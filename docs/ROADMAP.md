@@ -581,6 +581,40 @@ model nazwał puszkę „słońceżerką", słowem, które nie istnieje. To ogra
 `nano-omni` (3 mld aktywnych parametrów), nie usterka Cosmosa — do sprawdzenia
 `nemotron-nano-12b-v2-vl`, który ma 12 mld i w pomiarze jest równie szybki.
 
+## ✅ Partia 25 — zdjęcia z internetu i koniec czekania na uśpiony komputer (GOTOWE)
+
+- [x] **Wyszukiwanie grafik `[GRAFIKA:]`** — Cosmos umiał obraz WYGENEROWAĆ,
+      ale nie umiał żadnego ZNALEŹĆ. Na „poproszę zdjęcia tych miejsc" model
+      odpowiadał uczciwie „nie mam dostępu do wyszukiwania obrazów"
+      i proponował wizje artystyczne zamiast prawdziwej Majorki. Teraz szuka
+      naprawdę, kilka zapytań naraz (`[GRAFIKA: Katedra; plaża; wioska]`),
+      równolegle
+- [x] **Prompt rozróżnia „znajdź" od „wygeneruj"** — bez tego model traktował
+      prośbę o zdjęcia jako zamówienie na rysunek
+- [x] **Miniatury przez serwer, nie prosto z cudzego CDN-u** — telefon nie
+      łączy się z obcym hostem przy każdym wyniku. Proxy jest wąskie:
+      tylko https, tylko znane hosty, tylko treść będąca obrazem, z limitem
+      rozmiaru. Trzy sprawdzenia w baterii pilnują, żeby nie dało się przez
+      nie zajrzeć w sieć lokalną serwera
+- [x] **Każdy kafelek prowadzi do źródła** — zdjęcie z internetu bez źródła
+      jest bezwartościowe
+
+**Znaleziona przy okazji sekunda i pół na każdej wiadomości.** Stan zmysłów
+był odpytywany co minutę, a manifest zdolności — czekający na ten fetch —
+jest awaitowany PRZED wysłaniem pytania do modelu. Komputer domowy bywa
+wyłączony, więc raz na minutę pierwsza wiadomość płaciła **1,5 s ciszy**,
+zanim model w ogóle dostał pytanie. Odświeżanie poszło w tło, tak jak
+wcześniej pamięć długotrwała: **1510 ms → 7 ms**, zmierzone w obie strony.
+
+Zasada jest już trzecia z rzędu ta sama i warto ją zapisać wprost:
+**nic, co jest tylko dodatkiem do odpowiedzi, nie może wstrzymywać samej
+odpowiedzi.** Dotyczyło to pamięci, embeddingów, a teraz manifestu.
+
+**Domyślny model to teraz `super-120b`, nie `ultra-550b`** — trzy przebiegi
+dały super 4,4 · 1,2 · 1,3 s wobec ultra 3,1 · 2,5 · 3,6 s. Przeciętnie ponad
+dwa razy szybciej, a różnicę w polszczyźnie widać dopiero w dłuższych
+tekstach. Do pisania scenariuszy zostaje Ultra, do rozmowy Super.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
