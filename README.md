@@ -666,7 +666,10 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
-| `/api/archive/*` | GET/POST/DELETE | Archiwum materiału: indeks, wyszukiwanie, zestawienia |
+| `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
+| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła |
+| `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
+| `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
 | `/api/search/images` | GET | Wyszukiwanie zdjęć w internecie (znacznik `[GRAFIKA:]`) |
 | `/api/search/thumb` | GET | Proxy miniatur — wąskie, tylko znane hosty |
 | `/api/location` | GET/POST | Lokalizacja domowa — używa jej rozmowa i wyszukiwanie |
