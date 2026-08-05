@@ -3515,6 +3515,7 @@ function openSettings() {
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
+  fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
@@ -3611,8 +3612,46 @@ el.settingsSave.addEventListener('click', () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile: $('set-profile').value }),
   }).catch(() => {});
+  // lokalizacja tak samo — używa jej też wyszukiwanie, nie tylko rozmowa
+  fetch('/api/location', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location: $('set-location').value }),
+  }).catch(() => {});
   updateModelBadge();
   closeSettings();
+});
+
+/* Wykrycie lokalizacji: przeglądarka daje współrzędne, serwer zamienia je na
+   nazwę. Współrzędne nie opuszczają Cosmosa inaczej niż przez ten jeden
+   zapytanie — i tylko po kliknięciu, nigdy samo z siebie. */
+$('set-location-detect').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const pole = $('set-location');
+  if (!navigator.geolocation) {
+    pole.placeholder = t('set.locationNoGps');
+    return;
+  }
+  const dawny = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('set.locationWorking');
+  try {
+    const poz = await new Promise((ok, zle) => navigator.geolocation.getCurrentPosition(ok, zle, {
+      enableHighAccuracy: false, timeout: 10000, maximumAge: 600000,
+    }));
+    const r = await fetch('/api/location/resolve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: poz.coords.latitude, lon: poz.coords.longitude }),
+    });
+    const d = await r.json();
+    if (d.location) pole.value = d.location;
+    else pole.placeholder = d.error || t('set.locationFailed');
+  } catch (err) {
+    // Odmowa zgody to nie awaria — użytkownik zawsze może wpisać ręcznie.
+    pole.placeholder = err && err.code === 1 ? t('set.locationDenied') : t('set.locationFailed');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = dawny;
+  }
 });
 
 // kopia zapasowa — pobieranie i przywracanie

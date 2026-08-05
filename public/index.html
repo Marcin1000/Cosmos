@@ -286,6 +286,16 @@
         </label>
 
         <div class="field">
+          <span class="field-label" data-i18n="set.location">Twoja lokalizacja</span>
+          <div class="field-row">
+            <input type="text" id="set-location" placeholder="np. Złotokłos, mazowieckie">
+            <button type="button" class="btn-secondary" id="set-location-detect"
+              data-i18n="set.locationDetect">📍 Wykryj</button>
+          </div>
+          <span class="field-hint" data-i18n="set.locationHint">Cosmos użyje tego przy pytaniach „w okolicy"…</span>
+        </div>
+
+        <div class="field">
           <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
           <div class="memory-list" id="memory-list"><span class="field-hint" data-i18n="loading">Ładowanie…</span></div>
           <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>

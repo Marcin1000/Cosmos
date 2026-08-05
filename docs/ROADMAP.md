@@ -541,6 +541,46 @@ szybszy; ultra bardziej przewidywalny i ma 55 mld aktywnych parametrów wobec
 nie dla równości** — a README pokazuje teraz oba przebiegi obok siebie
 i podaje jedną linijkę do przełączenia, zamiast rozstrzygać za czytelnika.
 
+## ✅ Partia 24 — Cosmos wie, który dziś i gdzie jesteś (GOTOWE)
+
+Prawdziwa rozmowa („znajdź, gdzie naprawię klimatyzację w okolicy") pokazała
+trzy luki naraz. Wszystkie były w tym, co Cosmos **mówi** modelowi — nie
+w modelu.
+
+- [x] **Data i godzina w każdej rozmowie** — dotąd nie było ich w promptcie
+      w ogóle. Model zna świat do końca swojego treningu, więc na „co dziś?"
+      nie odpowiadał „nie wiem", tylko podawał konkretną złą datę. Strefa
+      z `COSMOS_TZ` (domyślnie `Europe/Warsaw`), bo serwer stoi w UTC
+- [x] **Lokalizacja domowa** — nowe pole w Ustawieniach plus przycisk
+      **📍 Wykryj**: przeglądarka podaje współrzędne, serwer zamienia je na
+      nazwę miejscowości. Zamiana idzie **przez Cosmos, nie przez
+      przeglądarkę** — telefon nie łączy się z obcym hostem, a my podajemy
+      uczciwy User-Agent, którego Nominatim wymaga. `GEOCODE_URL=off`
+      wyłącza to całkiem, wpisać ręcznie można zawsze
+- [x] **Instrukcja wyszukiwania przewiduje „brakuje mi jednej informacji"** —
+      dotąd mówiła tylko „gdy pytanie wymaga aktualnych danych, dodaj
+      `[SZUKAJ:]`". Przy pytaniu o coś w okolicy bez znanego miasta model
+      kręcił się w kółko przez **cztery ekrany toku myślenia**: „mam szukać
+      czy zapytać? instrukcja każe szukać, ale nie mam czego". Teraz wie, że
+      dopytanie jednym zdaniem to poprawne zachowanie, nie złamanie zasady
+- [x] **Koniec odpowiedzi typu „oto lista katalogów"** — na pytanie
+      o warsztat wyszukiwarka zwróciła same agregatory (Fixly, Cylex, PKT),
+      a model uczciwie je wypisał. Uczciwie, ale bezużytecznie — to samo dałby
+      Google. Prompt każe teraz podać konkretne firmy z adresem i telefonem,
+      a gdy w wynikach są wyłącznie katalogi — powiedzieć to wprost
+- [x] **Atrapa, która oddaje wiadomości systemowe jako treść** — zestaw
+      sprawdza, co model NAPRAWDĘ widzi, zamiast wnioskować z kodu serwera.
+      Osiem sprawdzeń, zweryfikowane przez cofnięcie poprawki
+
+**Rozpoznawanie zdjęć potwierdzone na żywym zdjęciu.** Puszka Pringles
+Buffalo Wings na stole piknikowym, osoba w tle: model trafił markę, smak,
+rodzaj stołu, kolor koszulki, kierunek spojrzenia i otoczenie. Zadziałało
+też automatyczne przełączenie — `ultra-550b` nie widzi obrazów, więc zdjęcie
+poszło do `nano-omni` i Cosmos o tym powiedział. Jedyny błąd był językowy:
+model nazwał puszkę „słońceżerką", słowem, które nie istnieje. To ograniczenie
+`nano-omni` (3 mld aktywnych parametrów), nie usterka Cosmosa — do sprawdzenia
+`nemotron-nano-12b-v2-vl`, który ma 12 mld i w pomiarze jest równie szybki.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

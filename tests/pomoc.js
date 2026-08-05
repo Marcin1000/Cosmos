@@ -133,6 +133,7 @@ const PORTY_ATRAP = {
   'reasonmock.py': [7097],
   'mock-katalog.js': [7103],
   'mock-tempo.js': [7115],
+  'mock-echo-systemu.js': [7116],
   'mockllm.py': [7099],
 };
 
@@ -196,6 +197,12 @@ const SRODOWISKA = {
     port: 3408,
     atrapy: [['mock-tempo.js', null]],
     env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7115/v1' },
+  },
+  // Atrapa oddaje wiadomości systemowe jako treść — sprawdzamy, co model widzi.
+  kontekst: {
+    port: 3409,
+    atrapy: [['mock-echo-systemu.js', null]],
+    env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1', COSMOS_TZ: 'Europe/Warsaw' },
   },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },

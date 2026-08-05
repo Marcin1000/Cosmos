@@ -663,6 +663,8 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
+| `/api/location` | GET/POST | Lokalizacja domowa — używa jej rozmowa i wyszukiwanie |
+| `/api/location/resolve` | POST | Współrzędne z przeglądarki → nazwa miejscowości |
 | `/api/summarize` | POST | Streszczenie rozmowy |
 | `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |

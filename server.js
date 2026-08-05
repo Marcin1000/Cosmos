@@ -466,6 +466,71 @@ function saveProfile(text) {
   catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
 }
 
+/* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
+   ale i wyszukiwanie („warsztat … w Złotokłosie"). Bez niej model pyta
+   „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
+const LOCATION_FILE = path.join(DATA_DIR, 'location.txt');
+let userLocation = '';
+try { userLocation = fs.readFileSync(LOCATION_FILE, 'utf8'); } catch { /* brak */ }
+function saveLocation(text) {
+  userLocation = String(text || '').trim().slice(0, 200);
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LOCATION_FILE, userLocation); }
+  catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
+}
+
+/* Data i godzina. Model zna świat wyłącznie do końca swojego treningu —
+   bez tej linijki na pytanie „który dziś?" zgaduje, i to nie „nie wiem",
+   tylko konkretną złą datę. Strefa z ENV, bo serwer stoi w UTC. */
+const STREFA_CZASU = process.env.COSMOS_TZ || 'Europe/Warsaw';
+function terazTekst() {
+  const t = new Date();
+  const dzien = t.toLocaleDateString('pl-PL',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: STREFA_CZASU });
+  const godzina = t.toLocaleTimeString('pl-PL',
+    { hour: '2-digit', minute: '2-digit', timeZone: STREFA_CZASU });
+  return `${dzien}, godzina ${godzina}`;
+}
+
+/* Współrzędne → nazwa miejscowości. Przeglądarka daje samo „52.05, 20.90",
+   a do wyszukiwarki trzeba wpisać „Złotokłos". Zamiana idzie przez serwer,
+   nie przez przeglądarkę: dzięki temu współrzędne nie trafiają do obcego
+   hosta z Twojego telefonu razem z jego nagłówkami, a my możemy podać
+   uczciwy User-Agent, którego Nominatim wymaga. */
+const GEOKOD_URL = process.env.GEOCODE_URL || 'https://nominatim.openstreetmap.org/reverse';
+const GEOKOD_MS = Number(process.env.GEOCODE_TIMEOUT_MS || 6000);
+async function handleGeokod(req, res) {
+  if (GEOKOD_URL === 'off') return sendJson(res, 503, { error: 'Zamiana współrzędnych na nazwę jest wyłączona.' });
+  let dane;
+  try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const lat = Number(dane.lat);
+  const lon = Number(dane.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return sendJson(res, 400, { error: 'Brak poprawnych współrzędnych.' });
+  }
+  const url = `${GEOKOD_URL}?format=jsonv2&zoom=13&accept-language=pl`
+    + `&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`;
+  const stoper = AbortSignal.timeout(GEOKOD_MS);
+  try {
+    const r = await fetch(url, { signal: stoper, headers: { 'User-Agent': 'Cosmos/1.0 (prywatny asystent)' } });
+    if (!r.ok) return sendJson(res, 502, { error: `Usługa nazw miejsc odpowiedziała ${r.status}.` });
+    const d = await r.json();
+    const a = d.address || {};
+    // Od najbardziej konkretnego: wieś → miasteczko → miasto → gmina.
+    const miejsce = a.village || a.town || a.city || a.municipality || a.county || '';
+    const region = a.state || '';
+    const nazwa = [miejsce, region].filter(Boolean).join(', ') || d.display_name || '';
+    if (!nazwa) return sendJson(res, 502, { error: 'Nie udało się ustalić nazwy miejsca.' });
+    addEvent('lokalizacja', `Ustalono lokalizację: ${nazwa}`);
+    return sendJson(res, 200, { location: nazwa });
+  } catch (err) {
+    return sendJson(res, 502, {
+      error: /timeout|abort/i.test(err.message)
+        ? `Usługa nazw miejsc nie odpowiedziała w ${GEOKOD_MS / 1000} s.`
+        : `Nie udało się ustalić miejsca: ${err.message}`,
+    });
+  }
+}
+
 async function handleConversations(req, res, pathname) {
   const rawId = new URL(req.url, 'http://localhost').searchParams.get('id');
   // ta sama sanityzacja co convPath — indeks i nazwa pliku zawsze zgodne
@@ -1433,6 +1498,17 @@ async function handleChat(req, res) {
     } catch { /* manifest nie może blokować rozmowy */ }
   }
 
+  /* Data, godzina i miejsce — dwie rzeczy, których model nie ma skąd wiedzieć,
+     a bez których „w okolicy" i „dziś" nie znaczą nic. Idą zawsze i na początku. */
+  extras.push({
+    role: 'system',
+    content: `TERAZ JEST: ${terazTekst()}.`
+      + (userLocation ? `\nUŻYTKOWNIK ZNAJDUJE SIĘ W: ${userLocation}.`
+        + ' Używaj tego miejsca, gdy pyta o coś „w okolicy", „niedaleko" albo „u mnie" —'
+        + ' nie dopytuj o lokalizację, którą już znasz.'
+        : '\nNie znasz lokalizacji użytkownika. Jeśli jest potrzebna, zapytaj o nią raz, krótko.'),
+  });
+
   // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
   if (userProfile.trim()) {
     extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
@@ -1450,7 +1526,18 @@ async function handleChat(req, res) {
         'NIE zgaduj — zakończ swoją odpowiedź osobną linią dokładnie w formacie: [SZUKAJ: zapytanie]. ' +
         'Otrzymasz wtedy wiadomość „WYNIKI WYSZUKIWANIA” i na jej podstawie udzielisz pełnej ' +
         'odpowiedzi, podając źródła. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
-        'odpowiadaj normalnie, bez [SZUKAJ:].',
+        'odpowiadaj normalnie, bez [SZUKAJ:].\n' +
+        /* Bez tej zasady model przy „znajdź coś w okolicy" bez znanej lokalizacji
+           kręcił się w kółko: „mam szukać czy zapytać? instrukcja każe szukać,
+           ale nie mam czego". Cztery ekrany rozważań, zero odpowiedzi. */
+        'GDY BRAKUJE CI JEDNEJ INFORMACJI do sensownego wyszukania (najczęściej miasta), ' +
+        'a nie masz jej ani w profilu, ani w lokalizacji użytkownika — po prostu zapytaj o nią ' +
+        'jednym zdaniem i NIE dodawaj [SZUKAJ:]. To poprawne zachowanie, nie złamanie zasady; ' +
+        'nie roztrząsaj go w myślach.\n' +
+        'GDY SZUKASZ LOKALNEJ USŁUGI (warsztat, lekarz, sklep): w odpowiedzi podaj konkretne ' +
+        'firmy z adresem i telefonem, jeśli są w wynikach. Sama lista katalogów typu PKT czy ' +
+        'PanoramaFirm to słaba odpowiedź — użytkownik znalazłby ją sam. Jeśli w wynikach są ' +
+        'wyłącznie katalogi, powiedz to wprost i zaproponuj węższe zapytanie.',
     });
   }
 
@@ -1935,6 +2022,14 @@ const server = http.createServer(async (req, res) => {
         catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
       }
     }
+    if (p === '/api/location') {
+      if (req.method === 'GET') return sendJson(res, 200, { location: userLocation, teraz: terazTekst() });
+      if (req.method === 'POST') {
+        try { saveLocation((await readJson(req)).location); return sendJson(res, 200, { ok: true, location: userLocation }); }
+        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      }
+    }
+    if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
     if (p === '/api/admin/stats' && req.method === 'GET') {
       let kbBytes = 0;
       try {
