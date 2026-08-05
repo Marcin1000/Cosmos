@@ -1,7 +1,7 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Naprawy zgłoszone z telefonu: myślenie widoczne, brak pustych odpowiedzi,
 // pętla wyszukiwania kończy się odpowiedzią, panel boczny i kamera na mobile.
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('rozumujacy');

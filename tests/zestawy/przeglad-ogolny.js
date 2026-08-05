@@ -35,8 +35,10 @@ const fs = require('fs');
   await page.click('.endpoint-tab[data-endpoint="cloud"]');
   // stwórz mały PNG w locie
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC', 'base64');
-  fs.writeFileSync('test-img.png', png);
-  await page.setInputFiles('#file-input', 'test-img.png');
+  // do katalogu zrzutów (poza repozytorium), nie obok kodu
+  const plik = require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'test-img.png');
+  fs.writeFileSync(plik, png);
+  await page.setInputFiles('#file-input', plik);
   await page.waitForSelector('.attachment img', { timeout: 5000 });
   await page.fill('#input', 'Co widzisz na obrazie?');
   await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-attach.png') });

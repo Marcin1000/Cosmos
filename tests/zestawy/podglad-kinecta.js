@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Podgląd z Kinecta w panelu na żywo: przełączanie źródła, klatki, sprzątanie
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('zmysly');

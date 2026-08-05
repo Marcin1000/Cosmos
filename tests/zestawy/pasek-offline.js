@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Pasek „brak połączenia": pojawia się po zerwaniu, znika po powrocie serwera
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 const state = (page) => page.evaluate(() => ({
   bar: !document.getElementById('offline-bar').hidden,

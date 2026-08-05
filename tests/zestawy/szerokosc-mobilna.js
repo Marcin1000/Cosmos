@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Sprawdzian mobilny: brak poziomego przepełnienia + pola >= 16px + zrzuty
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('pelne');

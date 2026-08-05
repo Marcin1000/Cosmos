@@ -71,7 +71,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (!after.w) fail.push('brak klatki po przeładowaniu');
   if (!/\/api\/kinect\/stream/.test(after.src)) fail.push('nie użyto MJPEG');
 
-  await page.screenshot({ path: process.env.SHOT_DIR + '/feat3-expanded.png' });
+  await page.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-expanded.png' });
 
   // zwiń z powrotem
   await page.click('#live-expand');
@@ -153,7 +153,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   console.log(`9. cofnięcie przywraca oryginał: ${undone === dictated}`);
   if (undone !== dictated) fail.push('cofnięcie nie przywróciło oryginału');
 
-  await page.screenshot({ path: process.env.SHOT_DIR + '/feat3-desktop.png' });
+  await page.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-desktop.png' });
 
   // ---- 4. mobile: przycisk nie rozbija kompozytora ----
   const m = await ctx.newPage();
@@ -174,7 +174,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (mob.overflowX) fail.push('poziomy scroll na mobile');
   if (mob.btnRight > mob.vw) fail.push('przycisk dopracowania poza ekranem');
   if (mob.btnW < 28 || mob.btnH < 28) fail.push('przycisk za mały pod palec');
-  await m.screenshot({ path: process.env.SHOT_DIR + '/feat3-mobile.png' });
+  await m.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-mobile.png' });
 
   // ---- 5. powiększony podgląd na małych/niskich ekranach ----
   for (const vp of [{ width: 360, height: 740, n: 'telefon' }, { width: 1280, height: 640, n: 'niski laptop' }]) {
@@ -203,7 +203,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
     if (!fits) fail.push(`powiększony panel nie mieści się na ${vp.n}`);
     if (Math.abs(r.ratio - 4 / 3) > 0.03) fail.push(`scena nie 4:3 na ${vp.n} (${r.ratio.toFixed(2)})`);
     if (r.overflowX) fail.push(`poziomy scroll na ${vp.n}`);
-    await m.screenshot({ path: `${process.env.SHOT_DIR}/feat3-exp-${vp.width}x${vp.height}.png` });
+    await m.screenshot({ path: `${require("../pomoc").KATALOG_ZRZUTOW}/feat3-exp-${vp.width}x${vp.height}.png` });
     await m.click('#live-close');
   }
 

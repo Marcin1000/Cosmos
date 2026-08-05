@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Opis modelu: pojawia się, zmienia z modelem, znika dla nieznanych
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('pelne');

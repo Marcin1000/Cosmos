@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Kontrola regresji: pulpit ma wyglądać tak jak przed zmianami mobilnymi
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('pelne');

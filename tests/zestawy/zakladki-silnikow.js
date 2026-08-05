@@ -16,7 +16,7 @@ const start = async () => {
   throw new Error('serwer testowy nie wstał');
 };
 const stop = () => { try { process.kill(-srv.pid); } catch { /* już nie żyje */ } };
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('czterySilniki');

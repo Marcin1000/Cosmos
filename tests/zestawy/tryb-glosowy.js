@@ -130,7 +130,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   });
   console.log(`7. przyciski nagłówka: odstęp przełącznik↔zamknij ${pos.gap}px, od krawędzi ${pos.distFromEdge}px`);
   if (pos.gap > 24) fail.push(`przełącznik oderwany od zamknięcia (${pos.gap}px) — ląduje na środku nagłówka`);
-  await p.screenshot({ path: process.env.SHOT_DIR + '/voice-camera-header.png' });
+  await p.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/voice-camera-header.png' });
 
   console.log(fail.length ? '\nBŁĘDY:\n- ' + fail.join('\n- ') : '\nTRYB GŁOSOWY I KAMERA OK');
   await b.close();

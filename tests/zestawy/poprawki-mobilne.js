@@ -1,7 +1,7 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Panel boczny (jeden suwak, widoczny status), lista modeli na telefonie,
 // dyktowanie bez urywania, czytanie długiego tekstu, przełącznik kamery.
-const SHOT = process.env.SHOT_DIR;
+const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
   const env = await srodowisko('pelne');

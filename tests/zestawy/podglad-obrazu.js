@@ -104,7 +104,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   console.log(`6. telefon: obraz mieści się=${mob.fits}, scroll X=${mob.overflowX}`);
   if (!mob.fits) fail.push('podgląd wychodzi poza ekran telefonu');
   if (mob.overflowX) fail.push('poziomy scroll przy podglądzie');
-  await m.screenshot({ path: process.env.SHOT_DIR + '/viewer-mobile.png' });
+  await m.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/viewer-mobile.png' });
 
   console.log(fail.length ? '\nBŁĘDY:\n- ' + fail.join('\n- ') : '\nPODGLĄD OBRAZU OK');
   await browser.close();
