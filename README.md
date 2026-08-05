@@ -689,6 +689,7 @@ lib/dokumenty.js   PDF, DOCX, XLSX, PPTX, CSV → tekst (bez zależności)
 lib/kod.js         uruchamianie programów modelu z ograniczeniami
 lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
 lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
+lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
