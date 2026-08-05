@@ -530,10 +530,16 @@ prosto w maliny**.
 - [x] **`genrm` dopisane do modeli bez końcówki czatu** — generatywne modele
       oceny odpowiedzi nie są rozmówcami
 
-Domyślnym modelem zostaje flagowiec 550B mimo że `super-120b` bywa szybszy:
-ultra zmierzył się 3,1 s i 2,5 s, super — 1,2 s, 4,4 s i 6,9 s. **Równy bije
-szybkiego, ale nieprzewidywalnego.** README pokazuje teraz dwa przebiegi
-obok siebie, żeby to było widać, a nie żeby trzeba było wierzyć na słowo.
+**Sprostowanie do własnego uzasadnienia.** Odradzałem `super-120b` jako
+„szybki, ale nieprzewidywalny", powołując się na jego 6,9 s. Ten pomiar
+pochodził jednak sprzed podniesienia limitu do 700 tokenów — model spalał
+budżet na myślenie, więc **nie był porównywalny z resztą i nie powinien był
+trafić do uzasadnienia**. Trzy porównywalne przebiegi dają: super 4,4 · 1,2 ·
+1,3 s, ultra 3,1 · 2,5 · 3,6 s. Super jest przeciętnie ponad dwa razy
+szybszy; ultra bardziej przewidywalny i ma 55 mld aktywnych parametrów wobec
+12 mld, co po polsku słychać. Ultra zostaje domyślny **dla jakości języka,
+nie dla równości** — a README pokazuje teraz oba przebiegi obok siebie
+i podaje jedną linijkę do przełączenia, zamiast rozstrzygać za czytelnika.
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
