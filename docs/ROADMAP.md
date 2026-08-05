@@ -679,6 +679,42 @@ wypisałby wprost na ekran.
 - [x] **Data i miejsce zostają na każdym poziomie** — to fakty o świecie,
       nie narzędzia
 
+## ✅ Partia 28 — liczenie na danych (GOTOWE)
+
+Trzeci krok programu, odpowiednik „Code Interpreter". Model pisze program
+w bloku ```` ```uruchom ````, Cosmos go wykonuje i oddaje wyjście z powrotem
+do rozmowy. Na „ile wyszło razem w tym arkuszu" dostajesz **liczbę policzoną,
+nie oszacowaną** — a czas wykonania jest widoczny, żeby było wiadomo, że
+program naprawdę się wykonał.
+
+- [x] **Program widzi załączniki rozmowy jako pliki** — `fs.readFileSync('dane.csv')`
+      działa wprost. To domyka partię 26: wczytany arkusz można teraz policzyć,
+      a nie tylko przeczytać
+- [x] **Wykres jako czysty SVG** — zapisany `wykres.svg` pokazuje się w rozmowie.
+      Wstawiany jako `<img src="data:...">`, nie przez `innerHTML`: program
+      pisze model, więc jego wyjście jest treścią niezaufaną
+- [x] **Tylko dla modeli poziomu „pełny"** — mniejszy model i tak nie napisze
+      poprawnego programu, a blok kodu wypisany w rozmowie zamiast wykonania
+      jest gorszy niż brak narzędzia
+
+**Czym to NIE jest.** Nie piaskownicą. Model uprawnień Node blokuje pliki
+serwera i podprocesy — i bateria to sprawdza — ale **sieci nie obejmuje**.
+Dlatego liczy się to, co da się zagwarantować:
+
+| Granica | Sprawdzenie w baterii |
+|---|---|
+| pliki serwera (`/etc/passwd`) | `ERR_ACCESS_DENIED` |
+| zapis poza katalogiem roboczym | `ERR_ACCESS_DENIED` |
+| podprocesy (`child_process`) | `ERR_ACCESS_DENIED` |
+| **klucze API** | do procesu trafia wyłącznie `PATH` |
+| nieskończona pętla | ubita po 10 s |
+
+Najważniejszy z tych wierszy to klucze: `NVIDIA_API_KEY` siedzi w zmiennych
+środowiskowych, a program pisze model. Do procesu potomnego nie trafia nic
+poza `PATH`, i osobne sprawdzenie próbuje ten klucz stamtąd wyciągnąć.
+
+Całość wyłącza `CODE_EXEC=off`.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

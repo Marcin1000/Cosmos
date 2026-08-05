@@ -234,6 +234,22 @@ function msgPhotos(m) {
 function msgDocs(m) {
   return typeof m.content === 'string' ? [] : (m.content?.docs || []);
 }
+// Wynik uruchomienia programu: { stdout, stderr, wyniki, ms }.
+function msgRun(m) {
+  return typeof m.content === 'string' ? null : (m.content?.run || null);
+}
+
+/** Wszystkie załączniki tej rozmowy — program dostaje je jako pliki obok
+ *  siebie, więc „policz sumę z tego arkusza" działa bez przeklejania danych. */
+function zebranyMaterial(conv) {
+  const pliki = [];
+  for (const m of conv.messages) {
+    for (const d of msgDocs(m)) {
+      if (pliki.length < 8) pliki.push({ name: d.name, text: d.text });
+    }
+  }
+  return pliki;
+}
 
 // ----------------------------------------------------------------
 // Mini-renderer Markdown (bez zewnętrznych bibliotek)
@@ -511,6 +527,57 @@ function imagesHtml(images) {
   return wrap;
 }
 
+/** Wynik uruchomionego programu: co wypisał, jak długo to trwało i co narysował.
+ *
+ *  Czas wykonania jest tu celowo widoczny. „Policzone, nie zgadnięte" ma
+ *  znaczenie tylko wtedy, gdy widać, że program naprawdę się wykonał.
+ */
+function runPanel(run) {
+  const box = document.createElement('div');
+  box.className = 'run-panel';
+
+  const pasek = document.createElement('div');
+  pasek.className = 'run-bar';
+  pasek.textContent = run.przerwany
+    ? t('run.timeout', { s: Math.round((run.limitMs || 10000) / 1000) })
+    : t('run.done', { ms: run.ms || 0 });
+  box.appendChild(pasek);
+
+  if (run.stdout && run.stdout.trim()) {
+    const out = document.createElement('pre');
+    out.className = 'run-out';
+    out.textContent = run.stdout.trim();
+    box.appendChild(out);
+  }
+  if (run.stderr && run.stderr.trim()) {
+    const err = document.createElement('pre');
+    err.className = 'run-out run-err';
+    err.textContent = run.stderr.trim();
+    box.appendChild(err);
+  }
+
+  for (const plik of run.wyniki || []) {
+    if (/\.svg$/i.test(plik.name)) {
+      /* SVG wstawiamy jako obrazek z data-URI, nie przez innerHTML. Program
+         pisze model, więc jego wyjście jest treścią niezaufaną — wstrzyknięte
+         do DOM-u wykonałoby skrypt w kontekście Cosmosa. W <img> nie wykona. */
+      const img = document.createElement('img');
+      img.className = 'run-svg';
+      img.alt = plik.name;
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(plik.text)));
+      box.appendChild(img);
+    } else {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'doc-chip';
+      chip.textContent = `📄 ${plik.name}`;
+      chip.addEventListener('click', () => openTextViewer(plik.name, plik.text));
+      box.appendChild(chip);
+    }
+  }
+  return box;
+}
+
 /** Siatka zdjęć znalezionych w internecie.
  *
  *  Miniatury lecą przez `/api/search/thumb`, a nie prosto z cudzego CDN-u:
@@ -700,6 +767,8 @@ function messageElement(m, idx = -1) {
   }
   const photos = msgPhotos(m);
   if (photos.length) body.appendChild(photosGrid(photos));
+  const run = msgRun(m);
+  if (run) body.appendChild(runPanel(run));
   const docs = msgDocs(m);
   if (docs.length) {
     const lista = document.createElement('div');
@@ -1400,6 +1469,9 @@ const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
    na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
    obrazów" i proponował wizje artystyczne zamiast prawdziwej Majorki. */
 const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
+/* Kod do wykonania. Jedyne narzędzie zapisane blokiem, nie znacznikiem —
+   program nie mieści się w jednej linii. */
+const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
@@ -1445,6 +1517,54 @@ async function runGeneration(conv) {
         }
         const resultsText = await webSearch(q);
         conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      /* Kod sprawdzamy najpierw: wynik programu zwykle jest treścią odpowiedzi,
+         a nie dodatkiem do niej. Pętla wraca potem do modelu, żeby ten
+         zinterpretował liczby — inaczej użytkownik dostaje surowy stdout. */
+      const kodMarker = acc.match(RUN_FENCE_RE);
+      if (kodMarker && depth < MAX_SEARCHES) {
+        const kod = kodMarker[1];
+        const before = stripSearchMarker(acc.replace(kodMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.running'),
+          code: kod,
+        });
+        saveConversations();
+        renderMessages();
+        let wynik;
+        try {
+          const r = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Program dostaje treść załączników tej rozmowy jako pliki.
+            body: JSON.stringify({ code: kod, files: zebranyMaterial(conv) }),
+          });
+          wynik = await readJsonSafe(r);
+          if (!r.ok) throw new Error(wynik.error || `HTTP ${r.status}`);
+        } catch (err) {
+          wynik = { stdout: '', stderr: err.message, wyniki: [] };
+        }
+        const svg = (wynik.wyniki || []).filter((w) => /\.svg$/i.test(w.name));
+        conv.messages.push({
+          role: 'assistant',
+          content: { text: '', run: wynik },
+          ...(svg.length ? {} : {}),
+        });
+        // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
+        conv.messages.push({
+          role: 'user',
+          content: t('chat.runResult', {
+            out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
+            err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
+          }),
+          search: true,
+          searchQuery: t('chat.runQuery'),
+        });
         saveConversations();
         renderMessages();
         continue;

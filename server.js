@@ -34,6 +34,7 @@ const {
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
+const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -704,6 +705,23 @@ async function handleDokument(req, res) {
     truncated: tekst.length > DOKUMENT_ZNAKI,
     text: przyciety,
   });
+}
+
+/* Uruchomienie kodu napisanego przez model. Ograniczenia i to, czego one NIE
+   obejmują, opisuje nagłówek lib/kod.js — najkrócej: brak dostępu do plików
+   serwera i podprocesów, zero zmiennych środowiskowych, twardy limit czasu. */
+async function handleUruchom(req, res) {
+  if (!KOD_WLACZONY) return sendJson(res, 503, { error: 'Wykonywanie kodu jest wyłączone (CODE_EXEC=off).' });
+  let dane;
+  try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const kod = String(dane.code || '');
+  if (!kod.trim()) return sendJson(res, 400, { error: 'Brak kodu do uruchomienia.' });
+  if (kod.length > 100000) return sendJson(res, 413, { error: 'Kod jest za długi.' });
+  const pliki = Array.isArray(dane.files) ? dane.files.slice(0, 8) : [];
+
+  const wynik = await uruchomKod(kod, pliki);
+  addEvent('kod', `uruchomiono kod (${wynik.ms} ms${wynik.przerwany ? ', przerwany limitem' : ''})`);
+  sendJson(res, 200, wynik);
 }
 
 async function extractKbText(name, mime, buf) {
@@ -1619,6 +1637,28 @@ async function handleChat(req, res) {
     });
   }
 
+  /* Liczenie na danych. Tylko dla modeli poziomu „pełny": mniejsze i tak nie
+     napiszą poprawnego programu, a blok kodu wypisany w rozmowie zamiast
+     wykonania jest gorszy niż brak narzędzia. */
+  if (KOD_WLACZONY && payload.useCode !== false && !krotko) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — LICZENIE NA DANYCH: gdy pytanie wymaga policzenia, przetworzenia '
+        + 'albo zestawienia danych (sumy, średnie, sortowanie, porównania, wykres), '
+        + 'NIE licz w pamięci — napisz program i zakończ nim odpowiedź:\n'
+        + '```uruchom\n// JavaScript (Node). Wypisz wynik przez console.log\n```\n'
+        + 'Program dostanie treść załączników z rozmowy jako pliki w katalogu roboczym '
+        + '(np. `fs.readFileSync(\'dane.csv\', \'utf8\')`). Otrzymasz z powrotem to, co '
+        + 'wypisał, i dopiero wtedy udzielisz odpowiedzi.\n'
+        + 'Możesz zapisać plik wynikowy — `wykres.svg` zostanie pokazany w rozmowie. '
+        + 'Wykres rysuj jako czysty SVG, bez bibliotek: żadnej nie ma i `npm install` '
+        + 'nie zadziała. Dostępna jest wyłącznie standardowa biblioteka Node.\n'
+        + 'Program nie ma dostępu do internetu ani do plików serwera i ma '
+        + `${Math.round((Number(process.env.CODE_TIMEOUT_MS || 10000)) / 1000)} sekund na wykonanie.`,
+    });
+  }
+
   if (payload.useActions !== false && !bezNarzedzi) {
     const procList = procedury().length
       ? ' Nauczone procedury (możesz zaproponować ich uruchomienie): ' +
@@ -2120,6 +2160,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
     if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
+    if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
