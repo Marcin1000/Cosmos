@@ -32,6 +32,10 @@ const KORZEN = path.resolve(__dirname, '..');
 const ADRES = process.env.COSMOS_URL || 'http://localhost:3000';
 const POWTORZENIA = Number(process.env.PLYNNOSC_PROBY || 3);
 const PYTANIE = 'Napisz jednym zdaniem, czym jest fotografia poklatkowa.';
+/* Modele rozumujące zużywają budżet na myślenie i przy 160 tokenach nie
+   zdążą nic napisać — wychodziło z tego „pusta odpowiedź" przy modelach,
+   które działają bez zarzutu. */
+const MAX_TOKENOW = Number(process.env.PLYNNOSC_TOKENY || 700);
 
 let ciasteczko = '';
 
@@ -70,6 +74,7 @@ async function jedenPomiar(endpoint, model) {
   const t0 = Date.now();
   let pierwszy = 0;
   let znaki = 0;
+  let myslenie = 0;
   let blad = '';
   try {
     const r = await fetch(`${ADRES}/api/chat`, {
@@ -81,7 +86,7 @@ async function jedenPomiar(endpoint, model) {
         // manifestu i zmysłów. Inaczej porównywalibyśmy stan Cosmosa,
         // a nie modele między sobą.
         useCapabilities: false, useMemory: false, useSenses: false, useStudio: false,
-        max_tokens: 160,
+        max_tokens: MAX_TOKENOW,
       }),
       signal: AbortSignal.timeout(120000),
     });
@@ -106,6 +111,7 @@ async function jedenPomiar(endpoint, model) {
           const widoczne = tekst || d.reasoning_content || d.reasoning || '';
           if (widoczne && !pierwszy) pierwszy = Date.now() - t0;
           znaki += tekst.length;
+          myslenie += (d.reasoning_content || d.reasoning || '').length;
         } catch { /* niepełna ramka */ }
       }
     }
@@ -114,7 +120,11 @@ async function jedenPomiar(endpoint, model) {
   }
   const calosc = Date.now() - t0;
   if (blad) return { blad };
-  if (!znaki) return { blad: 'pusta odpowiedź' };
+  if (!znaki && !myslenie) return { blad: 'pusta odpowiedź' };
+  // Sam tok myślenia bez treści — model działa, ale nie zmieścił się
+  // w budżecie. Dla płynności to i tak „coś się dzieje na ekranie".
+  if (!znaki) return { pierwszy, calosc, znaki: myslenie, tylkoMyslenie: true,
+    tempo: Math.round(myslenie / Math.max(0.1, (calosc - pierwszy) / 1000)) };
   return { pierwszy, calosc, znaki, tempo: Math.round(znaki / Math.max(0.1, (calosc - pierwszy) / 1000)) };
 }
 
@@ -123,7 +133,17 @@ const mediana = (xs) => {
   return s[Math.floor(s.length / 2)];
 };
 
-function ocena(pierwszy, tempo) {
+/* Ocena łączy szybkość Z NIEZAWODNOŚCIĄ. Model, który raz odpowiada
+   w 0,1 s, a dwa razy nie odpowiada wcale, jest w rozmowie gorszy niż
+   spokojne 2 s za każdym razem — bo nie wiesz, czego się spodziewać.
+   Pierwsza wersja tego skryptu tego nie widziała i przy dwóch przebiegach
+   wskazywała zupełnie inne modele jako najlepsze. */
+function ocena(pierwszy, tempo, udane, wszystkich, najgorszy) {
+  const pewny = udane === wszystkich;
+  const stabilny = !najgorszy || najgorszy <= Math.max(2500, pierwszy * 3);
+  if (udane * 2 < wszystkich) return ['✗', `zawodny — odpowiedział ${udane} z ${wszystkich} razy`];
+  if (!pewny) return ['~', `nierówny — ${udane} z ${wszystkich} prób, reszta bez odpowiedzi`];
+  if (!stabilny) return ['~', `nierówny — raz ${(pierwszy / 1000).toFixed(1)} s, raz ${(najgorszy / 1000).toFixed(1)} s`];
   if (pierwszy <= 1200 && tempo >= 30) return ['✦', 'znakomita — jak rozmowa'];
   if (pierwszy <= 2500 && tempo >= 18) return ['✓', 'dobra — nie przeszkadza'];
   if (pierwszy <= 5000) return ['~', 'znośna — czuć czekanie'];
@@ -157,19 +177,24 @@ function ocena(pierwszy, tempo) {
 
   console.log(`Płynność — ${doZbadania.length} modeli, po ${POWTORZENIA} próby, mediana.`);
   console.log('Bez pamięci, bazy wiedzy i manifestu — mierzymy modele, nie okoliczności.\n');
-  console.log('  pierwszy znak · tempo · całość   model');
-  console.log('  ' + '─'.repeat(66));
+  console.log('  pierwszy znak · tempo · całość · udane   model');
+  console.log('  ' + '─'.repeat(72));
 
   const wyniki = [];
   for (const [ep, model] of doZbadania) {
     if (process.stderr.isTTY) process.stderr.write(`  … ${model}\r`);
+    /* Wszystkie próby, nie do pierwszego błędu. Darmowy endpoint NVIDII
+       potrafi raz odpowiedzieć w 0,4 s, a raz w ogóle — przerywanie na
+       pierwszej wpadce dawało wynik zależny od tego, w której sekundzie
+       akurat trafiliśmy. Dwa przebiegi tego samego pomiaru pokazywały
+       zupełnie inne modele jako najlepsze. */
     const próby = [];
-    let blad = '';
+    const bledy = [];
     for (let i = 0; i < POWTORZENIA; i++) {
       const w = await jedenPomiar(ep, model);
-      if (w.blad) { blad = w.blad; break; }
-      próby.push(w);
+      if (w.blad) bledy.push(w.blad); else próby.push(w);
     }
+    const blad = próby.length ? '' : (bledy[0] || 'brak odpowiedzi');
     if (process.stderr.isTTY) process.stderr.write(' '.repeat(72) + '\r');
     if (blad) {
       console.log(`  ${'—'.padStart(13)} · ${'—'.padStart(5)} · ${'—'.padStart(6)}   ✗ ${model}`);
@@ -180,19 +205,36 @@ function ocena(pierwszy, tempo) {
     const p = mediana(próby.map((x) => x.pierwszy));
     const tempo = mediana(próby.map((x) => x.tempo));
     const c = mediana(próby.map((x) => x.calosc));
-    const [znak, opis] = ocena(p, tempo);
+    const najgorszy = Math.max(...próby.map((x) => x.pierwszy));
+    const udane = próby.length;
+    const [znak, opis] = ocena(p, tempo, udane, POWTORZENIA, najgorszy);
+    const rozrzut = udane > 1 && najgorszy > p * 3 ? ` ⚡do ${(najgorszy / 1000).toFixed(1)}s` : '';
     console.log(`  ${(p / 1000).toFixed(1).padStart(9)} s · ${String(tempo).padStart(3)}/s · `
-      + `${(c / 1000).toFixed(1).padStart(4)} s   ${znak} ${model}`);
-    wyniki.push({ ep, model, pierwszy: p, tempo, calosc: c, znak, opis });
+      + `${(c / 1000).toFixed(1).padStart(4)} s · ${udane}/${POWTORZENIA}   ${znak} ${model}${rozrzut}`);
+    if (bledy.length) console.log(`  ${' '.repeat(38)}${bledy.length}× ${bledy[0].slice(0, 60)}`);
+    wyniki.push({ ep, model, pierwszy: p, tempo, calosc: c, znak, opis, udane, najgorszy, bledy: bledy.length });
   }
 
-  const dobre = wyniki.filter((w) => !w.blad).sort((a, b) => a.pierwszy - b.pierwszy);
+  /* Sortujemy po niezawodności, POTEM po szybkości. Model odpowiadający
+     raz na trzy próby nie ma czego szukać na górze listy, choćby był
+     najszybszy w chwili, gdy akurat odpowie. */
+  const dobre = wyniki.filter((w) => !w.blad)
+    .sort((a, b) => (b.udane - a.udane) || (a.pierwszy - b.pierwszy));
   console.log('\n' + '─'.repeat(70));
   if (dobre.length) {
-    console.log('Najlepsze do rozmowy (najkrótsza cisza przed pierwszym znakiem):');
-    for (const w of dobre.slice(0, 5)) {
+    const pewne = dobre.filter((w) => w.znak === '✦' || w.znak === '✓');
+    console.log(pewne.length
+      ? 'Najlepsze do rozmowy — szybkie ORAZ odpowiadające za każdym razem:'
+      : 'Żaden model nie odpowiedział pewnie we wszystkich próbach. Najbliżej:');
+    for (const w of (pewne.length ? pewne : dobre).slice(0, 6)) {
       console.log(`  ${w.znak} ${w.model}`);
-      console.log(`      ${(w.pierwszy / 1000).toFixed(1)} s do pierwszego znaku, ${w.tempo} zn./s — ${w.opis}`);
+      console.log(`      ${(w.pierwszy / 1000).toFixed(1)} s do pierwszego znaku, ${w.tempo} zn./s, `
+        + `${w.udane}/${POWTORZENIA} prób — ${w.opis}`);
+    }
+    const chwiejne = dobre.filter((w) => w.udane < POWTORZENIA);
+    if (chwiejne.length) {
+      console.log(`\nOdpowiadają, ale nie zawsze (${chwiejne.length}) — darmowy endpoint bywa przeciążony:`);
+      console.log('  ' + chwiejne.map((w) => `${w.model.split('/').pop()} (${w.udane}/${POWTORZENIA})`).join(', '));
     }
     const meczace = dobre.filter((w) => w.znak === '✗');
     if (meczace.length) {
@@ -202,6 +244,7 @@ function ocena(pierwszy, tempo) {
   }
   const padly = wyniki.filter((w) => w.blad);
   if (padly.length) console.log(`\nNie odpowiedziały (${padly.length}): ` + padly.map((w) => w.model).join(', '));
-  console.log('\nPodpowiedź: model z górnej piątki ustaw jako główny do rozmowy,');
-  console.log('a wolniejszy, ale mocniejszy — wybieraj świadomie do trudnych zadań.');
+  console.log('\nPodpowiedź: wybieraj z górnej listy — te odpowiadają szybko I za każdym razem.');
+  console.log('Darmowy endpoint NVIDII bywa przeciążony, więc pojedynczy przebieg kłamie;');
+  console.log('przy ważnej decyzji puść pomiar dwa razy o różnych porach dnia.');
 })();

@@ -132,6 +132,7 @@ const PORTY_ATRAP = {
   'fake_senses.py': [7060],
   'reasonmock.py': [7097],
   'mock-katalog.js': [7103],
+  'mock-tempo.js': [7115],
   'mockllm.py': [7099],
 };
 
@@ -188,6 +189,13 @@ const SRODOWISKA = {
     port: 3405,
     atrapy: [['mock-katalog.js', null]],
     env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7103/v1' },
+  },
+  // Modele o różnej płynności, w tym jeden kapryśny i jeden rozumujący —
+  // do sprawdzenia, czy pomiar płynności nie kłamie.
+  tempo: {
+    port: 3408,
+    atrapy: [['mock-tempo.js', null]],
+    env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7115/v1' },
   },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },

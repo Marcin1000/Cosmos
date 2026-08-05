@@ -454,6 +454,30 @@ przechodził jako poprawna odpowiedź z komunikatem w treści. Trasy wymagające
 parametru dostają go, bo inaczej kończyły się na walidacji, nie dochodząc do
 właściwego kodu.
 
+## ✅ Partia 21 — pomiar, który nie kłamie (GOTOWE)
+
+Pierwszy przebieg `plynnosc.js` na żywym koncie ujawnił, że **narzędzie jest
+niewiarygodne**: dwa uruchomienia pod rząd wskazały zupełnie inne modele jako
+najlepsze. `nemotron-3-super-120b` raz 0,5 s (`✦`), raz 5,8 s (`✗`).
+`mistral-nemotron` raz 0,4 s, raz brak odpowiedzi w 120 s.
+
+- [x] **Wszystkie próby, nie do pierwszego błędu** — jedna wpadka przerywała
+      pomiar i model dostawał ocenę zależną od tego, w którą sekundę trafiliśmy
+- [x] **Ocena uwzględnia niezawodność** — model odpowiadający raz na trzy
+      próby nie jest „znakomity", choćby robił to w 0,1 s. Lista sortuje się
+      najpierw po liczbie udanych prób
+- [x] **Modele rozumujące przestały być „pustą odpowiedzią"** — przy 160
+      tokenach cały budżet szedł na myślenie. Limit podniesiony do 700,
+      a sam tok myślenia liczy się jako widoczna aktywność
+- [x] **Widać rozrzut** — `2/3` przy pozycji i ostrzeżenie `⚡do X s`, gdy
+      najgorsza próba jest trzykrotnie wolniejsza od mediany
+- [x] **Osobna sekcja „odpowiadają, ale nie zawsze"** — bo to nie to samo,
+      co „nie działa"
+
+**Audyt: po podziale na moduły przestał widzieć `process.env` w `lib/`** —
+na serwerze Marcina wypisał 24 poprawne zmienne jako martwe. Skanuje teraz
+cały kod serwerowy, nie tylko `server.js`.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

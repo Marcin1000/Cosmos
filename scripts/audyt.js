@@ -104,7 +104,12 @@ nieudok.length ? zle('trasy nieopisane w dokumentacji: ' + nieudok.join(', ')) :
 
 // ---------------------------------------------------------------- 5 .env
 sekcja('Zmienne środowiskowe');
-const kod = server + rd('senses/service.py');
+/* Po podziale na moduły większość `process.env` przeniosła się do lib/ —
+   skanowanie samego server.js kazało audytowi uznać 24 poprawne zmienne za
+   martwe. Czytamy CAŁY kod serwerowy. */
+const kod = server + rd('senses/service.py')
+  + fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`)).join('\n')
+  + fs.readdirSync(path.join(R, 'scripts')).filter((f) => f.endsWith('.js')).map((f) => rd(`scripts/${f}`)).join('\n');
 const uzyteEnv = [...new Set([
   ...[...kod.matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]),
   ...[...kod.matchAll(/os\.environ\.get\("([A-Z0-9_]+)"/g)].map((m) => m[1]),

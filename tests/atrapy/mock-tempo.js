@@ -8,7 +8,13 @@ const MODELE = {
   'wolny/znosny':         { pierwszy: 3000,  naZnak: 55 },
   'zolw/meczacy':         { pierwszy: 7000,  naZnak: 120 },
   'zepsuty/bez-dostepu':  { blad: 404 },
+  // Kapryśny: raz błyskawiczny, raz w ogóle. Tak zachowuje się darmowy
+  // endpoint NVIDII i to właśnie mylnie wychodziło jako „znakomity".
+  'kaprysny/raz-tak-raz-nie': { pierwszy: 200, naZnak: 8, padaCo: 2 },
+  // Rozumujący: cały budżet w myślenie, treści zero. Dawniej: „pusta odpowiedź".
+  'rozumujacy/samo-myslenie': { pierwszy: 400, naZnak: 10, tylkoMyslenie: true },
 };
+const licznik = {};
 const ODPOWIEDZ = 'Fotografia poklatkowa to seria zdjęć robionych w równych odstępach '
   + 'czasu, złożona potem w film pokazujący powolne zmiany w przyspieszeniu.';
 
@@ -20,14 +26,23 @@ http.createServer((req, res) => {
   let b = ''; req.on('data', (c) => { b += c; });
   req.on('end', async () => {
     const cfg = MODELE[JSON.parse(b).model] || MODELE['sredni/przyzwoity'];
+    const id = JSON.parse(b).model;
     if (cfg.blad) {
       res.writeHead(cfg.blad, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: { message: 'Not found for account.' } }));
     }
+    if (cfg.padaCo) {
+      licznik[id] = (licznik[id] || 0) + 1;
+      if (licznik[id] % cfg.padaCo === 0) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Przeciążenie — spróbuj później.' } }));
+      }
+    }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     await new Promise((r) => setTimeout(r, cfg.pierwszy));
     for (const znak of ODPOWIEDZ) {
-      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: znak } }] })}\n\n`);
+      const pole = cfg.tylkoMyslenie ? { reasoning_content: znak } : { content: znak };
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: pole }] })}\n\n`);
       await new Promise((r) => setTimeout(r, cfg.naZnak / 10));
     }
     res.write('data: [DONE]\n\n');
