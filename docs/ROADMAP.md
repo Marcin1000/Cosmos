@@ -827,6 +827,141 @@ czytała trzy OSTATNIE wyniki niezależnie od tego, czy były już widziane.
 Zestaw `glos-bez-sprzezenia` odtwarza dokładnie ten scenariusz i został
 sprawdzony przez cofnięcie poprawki — bez niej wypada.
 
+**Domknięcie: znacznik zużycia zjadał własne pytania.** Pełna bateria pokazała
+to, czego nowy zestaw nie mógł złapać — zapora przed echem działała za dobrze
+i tłumiła też prawdziwe pytania. Zestaw `tryb-glosowy` wypadł na „pytanie nie
+trafiło do transkrypcji" i „cisza nie zakończyła pytania".
+
+Przyczyna była w założeniu, nie w kodzie: **znacznik oparty na samym indeksie
+nie potrafi się cofnąć.** Raz podniesiony, przepuszcza tylko wyniki o indeksie
+wyższym. Jeśli lista wyników nie urośnie ponad znacznik — bo rozpoznawacz podał
+kolejną wypowiedź jako nową listę od zera — świeże pytanie wypada poniżej
+i znika bez śladu.
+
+Czy przeglądarka Marcina naprawdę tak robi, tego nie sprawdziłem i nie twierdzę
+— specyfikacja Web Speech API tego nie rozstrzyga, a Androida nie mam pod ręką.
+Sprawdzone jest co innego i wystarczy: zestaw `tryb-glosowy` podaje każdą
+wypowiedź jako osobną listę i po poprawce ochrony przed echem **cały wsad
+użytkownika przepadał**. Znacznik, który nie umie się cofnąć, jest wadą sam
+w sobie — niezależnie od tego, która przeglądarka go do tego zmusi.
+
+- [x] **Znacznik ma teraz ODCISK** ostatniego zużytego wyniku obok indeksu.
+      Jeśli lista nie urosła ponad znacznik, a tego wyniku już w niej nie ma —
+      numeracja ruszyła od nowa i znacznik wraca do zera. Rosnąca lista (ta
+      sama sesja) nie uruchamia zerowania, więc echo nadal jest tłumione
+- [x] **Słowo budzące wycinane także z gotowego pytania** — obojętne, czy
+      wsiąkło przez opóźnione rozpoznanie, czy przez restart numeracji
+- [x] **Sierota po słowie budzącym** — rozpoznawanie lubi rozbić „Hej Kosmos"
+      na dwa wyniki, więc po wycięciu frazy zostawało samo „Hej". Ucinamy je
+      tylko na początku i tylko wtedy, gdy coś po nim jest
+
+**Drugie domknięcie: myślenie schowane za kliknięciem.** Ta sama bateria
+wyłożyła też poprawkę „tok myślenia nie jest odpowiedzią". Rozumowanie
+przestało udawać odpowiedź — słusznie — ale trafiało do panelu ZWINIĘTEGO, więc
+przy modelu, który przepalił cały budżet na myślenie, na ekranie zostawało samo
+ostrzeżenie i nic więcej. Panel jest teraz otwarty dokładnie wtedy, gdy myślenie
+jest jedyną treścią wiadomości: nie ma czego przykrywać. Przy normalnej
+odpowiedzi zostaje zwinięty, tak jak był.
+
+Morał na przyszłość, ten sam co zwykle: nowe zestawy sprawdzały, czy zapora
+tłumi echo i czy rozumowanie nie udaje odpowiedzi. Jedno i drugie potwierdziły.
+Że zapora tłumi przy okazji prawdziwe pytania, a rozumowanie znika za
+kliknięciem — pokazała dopiero **stara** bateria. Poprawka celuje w to, co
+zgłoszone; skutki uboczne łapie tylko całość. Dlatego po każdej poprawce leci
+cała bateria, nie sam nowy zestaw.
+
+## ✅ Partia 32 — luki, przez które Cosmos „głupiał" (GOTOWE)
+
+Dwa zgłoszenia Marcina: „nie pokazuje zdjęć, które wyszukał" oraz „napisałem,
+jakich obiektywów użyję, i zgłupiał, nie umiał odpowiedzieć". Wyglądały na
+dwie niezwiązane usterki. Mają jedną przyczynę:
+
+> **Narzędzie nie miało gdzie przyjąć tego, co powiedział człowiek — albo nie
+> miało co zrobić, gdy coś poszło nie tak.**
+
+To nie są usterki do załatania po kolei. To jest klasa błędu, więc i poprawka
+jest dla całej klasy.
+
+### Obiektywy — parametr, którego nie było
+
+Cosmos znał tylko KORPUS, a listę przysłon miał przypisaną do korpusu. To jest
+bez sensu: przysłona jest cechą szkła. Gdy Marcin napisał, czego użyje, model
+nie miał gdzie tego odłożyć — gubił informację albo odpowiadał od rzeczy.
+
+- [x] **Parser zapisu obiektywu** — „RF 24-70mm f/2.8L IS USM", „24-70 f2.8",
+      „50mm 1.8", „18-135 f/3.5-5.6", „Sigma 18-35 1.8", „EF 24-105 1:4",
+      „RF 100-500mm F4.5-7.1". Katalog nazwanych szkieł jest tylko wygodą —
+      sedno to parser, bo obejmuje każdy obiektyw, także nieznany
+- [x] **Zoomy ze zmienną jasnością** — przy 500 mm szkło f/4.5-7.1 ma f/7.1,
+      nie f/4.5. Obiecywanie tego pierwszego to półtorej działki błędu
+- [x] **Przysłony bierzemy z obiektywu, nie z korpusu** — koniec doradzania
+      f/1.4 komuś, kto ma zoom f/4. Sprawdzone liczbowo: ten sam zmierzch daje
+      ISO 200 na f/1.8 i ISO 800 na f/4, czyli dokładnie dwie działki różnicy
+- [x] **Kilka obiektywów naraz** — „mam 24-70 f/2.8 i 70-200 f/4"; Cosmos
+      wybiera szkło pod ogniskową, a gdy żadne nie sięga, mówi to wprost
+
+Osobno pułapka po stronie przeglądarki: parametry `[PLAN:]` dzieliły się po
+spacjach, a „24-70 f/2.8" spację ma. Wartość urywała się na „24-70", przysłona
+przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8 — **odpowiedź brzmiała
+sensownie i była nieprawdziwa**.
+
+### Miejsce podane nazwą
+
+Ta sama luka, inne narzędzie. Cosmos umiał zamienić współrzędne na nazwę, ale
+nie odwrotnie. Na „w sobotę kręcę w Krakowie" model musiał zgadnąć szerokość
+i długość z pamięci — a złota godzina policzona dla złego punktu wygląda
+równie wiarygodnie jak policzona dla dobrego.
+
+- [x] **`miejsce=Kraków`** w `[PLAN:]`; zamianę robi serwer przez Nominatim,
+      z pamięcią podręczną i kolejką (regulamin: najwyżej jedno zapytanie na
+      sekundę). Nieznana nazwa daje jasną odmowę, nie cichy wynik dla domu
+
+### Grafiki — jedno źródło to była wada konstrukcyjna
+
+Wyszukiwanie obrazów stało na DuckDuckGo, i to na skrobanym ze strony żetonie
+`vqd`. Zależność od czegoś, czego nikt nam nie obiecał: format już się zmieniał,
+a adresom centrów danych łatwo odmówić. Gdy odmawiał — Cosmos pisał „szukam
+zdjęć" i nie pokazywał nic.
+
+- [x] **Trzy źródła odpytywane równolegle** — DuckDuckGo (najszerszy zasięg),
+      Wikimedia Commons i Openverse (prawdziwe API, bez żetonów, materiał na
+      jasnych licencjach). Równolegle, nie po kolei: koszt to jeden najwolniejszy
+      strzał, a nie trzy przeterminowania jedno po drugim
+- [x] **Wyniki przeplatane, nie sklejane** — inaczej DuckDuckGo zajmowałby
+      wszystkie osiem miejsc i materiał na jasnej licencji nie pokazałby się
+      nigdy. Przy okazji awarię jednego źródła widać od razu
+- [x] **Licencja i źródło przy każdym zdjęciu** — dla kogoś, kto montuje film,
+      „czy wolno mi tego użyć" to nie ozdobnik
+- [x] **`node scripts/grafiki.js`** — sprawdza, które źródła działają Z TEGO
+      SERWERA. Tego pytania nie da się rozstrzygnąć znikąd indziej
+
+### Dwie ciche awarie, przez które „nie było zdjęć"
+
+- [x] **Kafelek bez miniatury już nie znika.** Kod usuwał go, żeby „nie
+      zostawiać dziury w siatce" — i gdy proxy odrzucało wszystkie miniatury,
+      Cosmos pisał „znalazłem 8 zdjęć" nad pustym miejscem. Teraz próbuje po
+      kolei: przez proxy → prosto z serwera obrazka → widoczny kafelek
+      z odnośnikiem. Zawsze widać tyle kafelków, ile zapowiedziała odpowiedź
+- [x] **Nieudane szukanie wraca do MODELU**, nie tylko do użytkownika.
+      Wcześniej pętla narzędzi kończyła się w tym miejscu: człowiek widział
+      „nie znalazłem", a model nie dowiadywał się o niczym. Następne zdanie —
+      choćby samo „Kraków" — trafiało w próżnię, bo model nie wiedział, że
+      przed chwilą coś nie wyszło. **To było właśnie to „zgłupiał".** Teraz
+      może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało
+
+### Zestaw `scenariusze` — łapanie usterek przed zgłoszeniem
+
+Marcin poprosił, żeby przewidywać problemy, zanim się pojawią. Nowy zestaw nie
+bada pojedynczych funkcji, tylko cztery KLASY sytuacji: człowiek podaje coś,
+czego kontrakt nie przewiduje · wartość spoza listy · brak danych do policzenia ·
+usługa zewnętrzna odmawia. Do tego śmieci na wejściu HTTP.
+
+Reguła wspólna, sprawdzana w każdym z szesnastu przypadków: **Cosmos ma
+odpowiedzieć i powiedzieć, czego zabrakło.** Nie wolno mu milczeć, wywalić się
+ani — najgorsze — podać wyniku, który wygląda poprawnie, a policzony jest nie
+dla tego, o co pytano. Zestaw wyłapał od razu jedną taką: nieznany korpus
+wpadał po cichu w Canona R6 II, choć sufit ISO i zapas ze stabilizacji są inne.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

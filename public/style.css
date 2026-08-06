@@ -768,6 +768,22 @@ kbd {
 }
 .photo-tile:hover { border-color: var(--accent); }
 
+/* Kafelek bez miniatury. Nie znika — zniknięcie dawało „znalazłem 8 zdjęć"
+   nad pustym miejscem. Zostaje widoczny odnośnik do źródła. */
+.photo-brak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  padding: 6px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-dim);
+  background: var(--bg-sunken, var(--bg-elev));
+}
+.photo-tile-pusty { border-style: dashed; }
+
 .msg-assistant { align-items: flex-start; }
 
 .msg-avatar {

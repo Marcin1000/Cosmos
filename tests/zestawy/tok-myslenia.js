@@ -55,13 +55,36 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await page.waitForTimeout(400);
   await send('pusto — ile kosztują nowe buty New Balance');
   await page.waitForTimeout(2500);
+  /* Kontrakt zmienił się w Partii 31 i test musiał pójść za nim. Kiedyś surowe
+     rozumowanie SAMO stawało się odpowiedzią — angielskie, urwane w pół zdania,
+     podane jak gotowy wynik. Teraz na miejscu odpowiedzi pada jedno zdanie, co
+     się stało, a rozumowanie ląduje w panelu. Nie wolno go jednak zwinąć: gdy
+     to jedyne, co przyszło, użytkownik zostałby z samym ostrzeżeniem. */
   s = await page.evaluate(() => {
     const b = [...document.querySelectorAll('.msg-assistant .msg-content')].pop();
-    return { text: b.innerText.trim(), hasThink: !!b.querySelector('.think-block') };
+    const th = b.querySelector('.think-block');
+    return {
+      text: b.innerText.trim(),
+      hasThink: !!th,
+      otwarty: th ? th.hasAttribute('open') : null,
+      thinkText: th ? th.innerText.trim() : '',
+    };
   });
   console.log(`2. sam tok myślenia: „${s.text.replace(/\n/g, ' ').slice(0, 70)}"`);
+  console.log(`   panel myślenia=${s.hasThink}, otwarty=${s.otwarty}, `
+    + `treść=„${s.thinkText.replace(/\n/g, ' ').slice(0, 50)}"`);
   if (/pusta odpowiedź|empty model/i.test(s.text)) fail.push('nadal „(pusta odpowiedź modelu)”');
-  if (!/buty|cen/i.test(s.text)) fail.push('tok myślenia nie trafił na ekran');
+  if (!s.hasThink) fail.push('tok myślenia nie trafił na ekran');
+  if (!/buty|cen/i.test(s.thinkText)) fail.push('panel myślenia nie zawiera rozumowania');
+  if (!s.otwarty) fail.push('panel zwinięty, choć myślenie to jedyna treść — zostaje samo ostrzeżenie');
+  // …i rozumowanie NIE MOŻE udawać odpowiedzi poza panelem
+  const pozaPanelem = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('.msg-assistant .msg-content')].pop().cloneNode(true);
+    const th = b.querySelector('.think-block');
+    if (th) th.remove();
+    return b.innerText.trim();
+  });
+  if (/buty|cen/i.test(pozaPanelem)) fail.push(`surowe rozumowanie podane jako odpowiedź: „${pozaPanelem.slice(0, 60)}"`);
 
   // ---- 3. pętla wyszukiwania kończy się odpowiedzią, bez surowego [SZUKAJ:] ----
   await page.click('#new-chat-btn').catch(() => {});

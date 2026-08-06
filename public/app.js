@@ -762,17 +762,47 @@ function photosGrid(photos) {
     a.href = p.source || p.full || '#';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.title = p.title || '';
+    a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
     const img = document.createElement('img');
     img.src = `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
     img.alt = p.title || t('photo.found');
     img.loading = 'lazy';
-    // Miniatura, której nie da się pobrać, nie może zostawić dziury w siatce.
-    img.addEventListener('error', () => a.remove());
+
+    /* Co się dzieje, gdy miniatura nie chce się wczytać.
+
+       Kiedyś kafelek po prostu ZNIKAŁ. Brzmi rozsądnie („nie zostawiaj dziury
+       w siatce"), a w praktyce to była najgorsza możliwa reakcja: gdy proxy
+       odrzucało wszystkie miniatury, Cosmos pisał „znalazłem 8 zdjęć" i nie
+       pokazywał ani jednego, bez śladu, co poszło nie tak. Dokładnie to
+       zgłosił Marcin.
+
+       Teraz próbujemy po kolei: przez proxy → prosto z serwera obrazka →
+       a jak i to nie wyjdzie, zostaje widoczny kafelek z odnośnikiem. Zawsze
+       widać tyle kafelków, ile zapowiedziała odpowiedź. */
+    let probowanoWprost = false;
+    img.addEventListener('error', () => {
+      if (!probowanoWprost && /^https:\/\//i.test(p.thumb || '')) {
+        // Proxy odmówiło (nieznany host, przekroczony czas). Przeglądarka
+        // może pobrać obrazek sama — dla niej to zwykły zewnętrzny zasób.
+        probowanoWprost = true;
+        img.src = p.thumb;
+        return;
+      }
+      img.remove();
+      a.classList.add('photo-tile-pusty');
+      const info = document.createElement('span');
+      info.className = 'photo-brak';
+      info.textContent = t('photo.thumbFailed');
+      a.prepend(info);
+    });
+
     const cap = document.createElement('span');
     cap.className = 'photo-cap';
-    try { cap.textContent = new URL(p.source).hostname.replace(/^www\./, ''); }
-    catch { cap.textContent = p.title || ''; }
+    // Skąd zdjęcie i na jakiej licencji — dla kogoś, kto montuje film, to nie
+    // ozdobnik, tylko odpowiedź na pytanie „czy wolno mi tego użyć".
+    let skad = p.zrodlo || '';
+    if (!skad) { try { skad = new URL(p.source).hostname.replace(/^www\./, ''); } catch { skad = ''; } }
+    cap.textContent = [skad, p.licencja].filter(Boolean).join(' · ') || p.title || '';
     a.append(img, cap);
     wrap.appendChild(a);
   }
@@ -921,10 +951,14 @@ function messageElement(m, idx = -1) {
     return msg;
   }
 
-  // Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
-  // odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
+  /* Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
+     odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
+     Wyjątek: gdy myślenie to WSZYSTKO, co przyszło (`samoMyslenie`), zwinięcie
+     zostawia wiadomość złożoną z samego ostrzeżenia. Wtedy panel jest otwarty —
+     jest jedyną treścią, jaką mamy, więc nie ma czego przykrywać. */
   body.innerHTML = (m.think
-    ? `<details class="think-block"><summary>${escapeHtml(t('think.done'))}</summary>`
+    ? `<details class="think-block"${m.samoMyslenie ? ' open' : ''}>`
+      + `<summary>${escapeHtml(t('think.done'))}</summary>`
       + `<pre>${escapeHtml(m.think)}</pre></details>`
     : '')
     + (m.note ? `<div class="model-note mono">${escapeHtml(m.note)}</div>` : '')
@@ -1688,9 +1722,14 @@ async function runGeneration(conv) {
         const last = await streamOnce(conv);
         // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
         const trescOstatnia = stripSearchMarker(last);
-        if (!trescOstatnia && lastReasoning) { lastThink = lastReasoning; finalText = t('budgetSpentOnThinking'); }
-        else finalText = trescOstatnia || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
+        let samoMyslenie = false;
+        if (!trescOstatnia && lastReasoning) {
+          lastThink = lastReasoning;
+          finalText = t('budgetSpentOnThinking');
+          samoMyslenie = true;
+        } else finalText = trescOstatnia || t('emptyReply');
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
+          note: lastModelNote, samoMyslenie });
         saveConversations();
         break;
       }
@@ -1760,10 +1799,21 @@ async function runGeneration(conv) {
       // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
       const planMarker = acc.match(PLAN_RE);
       if (planMarker && depth < MAX_SEARCHES) {
+        /* Dzielimy na `klucz=wartość`, ale wartość MOŻE mieć spacje —
+           „obiektyw=24-70 f/2.8, 70-200 f/4" to jedna wartość, nie cztery
+           parametry. Dzielenie po samych spacjach urywało ją na „24-70",
+           przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8:
+           odpowiedź brzmiała sensownie i była nieprawdziwa. Tniemy więc tylko
+           tam, gdzie po spacji zaczyna się kolejne `słowo=`. */
         const parametry = {};
-        for (const kawalek of planMarker[1].trim().split(/\s+/)) {
-          const [k, v] = kawalek.split('=');
-          if (k && v) parametry[k] = /^[\d.]+$/.test(v) ? Number(v) : v;
+        const ALIASY = { obiektywy: 'obiektyw', szklo: 'obiektyw', lens: 'obiektyw' };
+        for (const kawalek of planMarker[1].trim().split(/\s+(?=[a-zA-Z_]+=)/)) {
+          const i = kawalek.indexOf('=');
+          if (i <= 0) continue;
+          const k = kawalek.slice(0, i).trim().toLowerCase();
+          const v = kawalek.slice(i + 1).trim();
+          if (!v) continue;
+          parametry[ALIASY[k] || k] = /^[\d.]+$/.test(v) ? Number(v) : v;
         }
         const before = stripSearchMarker(acc.replace(planMarker[0], ''));
         conv.messages.push({
@@ -1901,14 +1951,41 @@ async function runGeneration(conv) {
             });
           }
           finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
-        } else {
-          conv.messages.push({
-            role: 'assistant',
-            content: t('chat.photosNone', { msg: zestawy.find((z) => z.error)?.error || '' }),
-            error: true,
-          });
-          finalText = t('chat.photosNoneVoice');
+          saveConversations();
+          break;
         }
+
+        /* Nic nie znaleziono. Kiedyś kończyliśmy tutaj: użytkownik dostawał
+           „nie znalazłem", a MODEL nie dowiadywał się o niczym. Rozmowa
+           urywała się w pół kroku i następne zdanie użytkownika — choćby samo
+           „Kraków" — trafiało w próżnię: model nie wiedział, że przed chwilą
+           coś nie wyszło, ani czego dotyczyło. Wyglądało to jak zgłupienie.
+           Teraz niepowodzenie wraca do modelu tak samo jak wynik wyszukiwania:
+           może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
+        const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
+        if (depth < MAX_SEARCHES) {
+          conv.messages.push({
+            role: 'user',
+            content: `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
+              + (powod ? `Powód techniczny: ${powod}\n` : '')
+              + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
+              + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
+              + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
+              + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
+              + 'czego dokładnie szukać.',
+            search: true,
+            searchQuery: t('chat.photosQuery'),
+          });
+          saveConversations();
+          renderMessages();
+          continue;
+        }
+        conv.messages.push({
+          role: 'assistant',
+          content: t('chat.photosNone', { msg: powod }),
+          error: true,
+        });
+        finalText = t('chat.photosNoneVoice');
         saveConversations();
         break;
       }
@@ -1975,7 +2052,8 @@ async function runGeneration(conv) {
         conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
         finalText = shown;
       } else {
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
+          note: lastModelNote, samoMyslenie: Boolean(mysliZamiastTresci) });
       }
       saveConversations();
       break;
@@ -3888,10 +3966,52 @@ let voiceSilence = null;      // odliczanie ciszy po pytaniu
    od tego, czy były już widziane. Po skończonej wypowiedzi Cosmos odczytywał
    więc własne zdanie jako nowe polecenie i odpowiadał sam sobie w kółko.
    Teraz wszystko, co padło w czasie głuchoty, jest z góry oznaczone jako
-   zużyte. */
+   zużyte.
+
+   Sam indeks to jednak za mało, bo NIE JEST STAŁYM PUNKTEM ODNIESIENIA.
+   Rozpoznawacz potrafi zacząć numerować od zera bez `onend` — Chrome robi tak
+   po dłuższej ciszy, a na Androidzie po każdej domkniętej wypowiedzi. Znacznik
+   zostawał wtedy w górze, świeże wyniki wypadały poniżej niego i pytanie
+   znikało bez śladu: transkrypcja pusta, cisza nie miała czego wysłać.
+   Dlatego obok indeksu trzymamy ODCISK ostatniego zużytego wyniku. Jeśli lista
+   nie urosła ponad znacznik, a tego wyniku już w niej nie ma — numeracja
+   ruszyła od nowa i znacznik trzeba wyzerować. */
 let voiceZuzyteDo = 0;
+let voiceOdcisk = '';
 // Co Cosmos ostatnio powiedział — druga zapora przed pętlą.
 let voiceOstatniaOdpowiedz = '';
+
+/** Uproszczona postać zdania — rozpoznawanie dopieszcza interpunkcję
+ *  i wielkość liter jeszcze po tym, jak wynik uzna za ostateczny. */
+function odciskWyniku(wyniki, indeks) {
+  const r = wyniki && wyniki[indeks];
+  return r && r[0] ? String(r[0].transcript).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') : '';
+}
+
+/** Zapamiętaj, że wszystko do `doIndeksu` już przerobiliśmy. */
+function oznaczZuzyte(wyniki, doIndeksu) {
+  voiceZuzyteDo = doIndeksu;
+  voiceOdcisk = doIndeksu > 0 ? odciskWyniku(wyniki, doIndeksu - 1) : '';
+}
+
+/** Wytnij słowo budzące — wszystkie wystąpienia, nie tylko pierwsze. Przy
+ *  ciągłym nasłuchu „Hej Kosmos" bywa rozpoznane kilka razy pod rząd. */
+function bezSlowaBudzacego(tekst) {
+  return String(tekst).replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
+    .replace(/\s{2,}/g, ' ').trim()
+    /* Rozpoznawanie lubi rozbić „Hej Kosmos" na dwa wyniki, więc po wycięciu
+       pełnej frazy zostaje sierotą samo „Hej". Ucinamy je tylko na POCZĄTKU
+       i tylko wtedy, gdy coś po nim jest — w środku zdania to już treść. */
+    .replace(/^(?:(?:hej|hey|ok(?:ej)?)[\s,.!]+)+(?=\S)/i, '');
+}
+
+/** Czy rozpoznawacz zaczął numerować wyniki od nowa? */
+function wynikiOdNowa(wyniki) {
+  if (!voiceZuzyteDo) return false;
+  // Lista wciąż rośnie ponad znacznik → to ta sama sesja, tylko dłuższa.
+  if (wyniki.length > voiceZuzyteDo) return false;
+  return odciskWyniku(wyniki, voiceZuzyteDo - 1) !== voiceOdcisk;
+}
 
 function startVoiceRecognizer() {
   if (!voiceMode || voiceRec) return;
@@ -3907,10 +4027,13 @@ function startVoiceRecognizer() {
   rec.onresult = (e) => {
     if (!voiceMode) return;
     rec.__ostatniaDlugosc = e.results.length;
+    rec.__ostatnieWyniki = e.results;
+    // Zanim cokolwiek odczytamy: czy to jeszcze ta sama numeracja?
+    if (wynikiOdNowa(e.results)) oznaczZuzyte(e.results, 0);
     if (voiceDeaf) {
       // Głuchy nie znaczy „nie słyszy" — znaczy „nie reaguje". Wszystko, co
       // wpadło w tym czasie (czyli głos samego Cosmosa), znika z rozważań.
-      voiceZuzyteDo = e.results.length;
+      oznaczZuzyte(e.results, e.results.length);
       return;
     }
 
@@ -3925,9 +4048,8 @@ function startVoiceRecognizer() {
       // Wszystkie wystąpienia, nie tylko pierwsze: przy ciągłym nasłuchu
       // „Hej Kosmos" bywa rozpoznane kilka razy pod rząd i wcześniej lądowało
       // w treści pytania jako „HejHejHej kosmosHej kosmos Co widzisz".
-      const after = latest.replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
-        .replace(/\s{2,}/g, ' ').trim();
-      voiceZuzyteDo = e.results.length;
+      const after = bezSlowaBudzacego(latest);
+      oznaczZuzyte(e.results, e.results.length);
       chime(880);
       if (after.length > 5) { askVoice(after); return; }
       voiceHeard = '';
@@ -3940,7 +4062,7 @@ function startVoiceRecognizer() {
     let interim = '';
     for (let i = Math.max(e.resultIndex, voiceZuzyteDo); i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) { voiceHeard += r[0].transcript; voiceZuzyteDo = i + 1; }
+      if (r.isFinal) { voiceHeard += r[0].transcript; oznaczZuzyte(e.results, i + 1); }
       else interim += r[0].transcript;
     }
     el.voiceTranscript.textContent = (voiceHeard + ' ' + interim).trim();
@@ -3950,7 +4072,10 @@ function startVoiceRecognizer() {
     clearTimeout(voiceSilence);
     voiceSilence = setTimeout(() => {
       if (!voiceMode || voiceState !== 'listening') return;
-      const text = voiceHeard.trim();
+      /* Ostatnia zapora przed „HejHejHej kosmos Co widzisz": gdyby słowo
+         budzące zdążyło wpaść do pytania — obojętne, czy przez opóźnione
+         rozpoznanie, czy przez restart numeracji — tu i tak wypada. */
+      const text = bezSlowaBudzacego(voiceHeard);
       voiceHeard = '';
       if (text) askVoice(text);
       else backToWake();
@@ -3961,7 +4086,7 @@ function startVoiceRecognizer() {
   rec.onend = () => {
     voiceRec = null;
     // Nowa sesja zaczyna liczyć wyniki od zera, więc znacznik też musi.
-    voiceZuzyteDo = 0;
+    oznaczZuzyte(null, 0);
     if (!voiceMode) return;
     setTimeout(() => { if (voiceMode) startVoiceRecognizer(); }, 250);
   };
@@ -3982,7 +4107,9 @@ function backToWake() {
   if (!voiceMode) return;
   clearTimeout(voiceSilence);
   voiceHeard = '';
-  if (voiceRec && voiceRec.__ostatniaDlugosc) voiceZuzyteDo = voiceRec.__ostatniaDlugosc;
+  if (voiceRec && voiceRec.__ostatniaDlugosc) {
+    oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
+  }
   voiceDeaf = false;
   setVoiceState('wake');
   el.voiceTranscript.textContent = '';
@@ -4025,7 +4152,9 @@ function startQueryListening() {
   voiceHeard = '';
   // Wracamy do słuchania dopiero teraz — wszystko sprzed tej chwili to był
   // głos Cosmosa albo cisza, i nie może wrócić jako pytanie.
-  if (voiceRec && voiceRec.__ostatniaDlugosc) voiceZuzyteDo = voiceRec.__ostatniaDlugosc;
+  if (voiceRec && voiceRec.__ostatniaDlugosc) {
+    oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
+  }
   voiceDeaf = false;
   setVoiceState('listening');
   el.voiceTranscript.textContent = '';

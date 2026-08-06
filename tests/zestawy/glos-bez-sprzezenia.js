@@ -139,7 +139,46 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
   if (pary.rozne) fail.push('uznaje różne zdania za echo — blokowałby normalne pytania');
   if (pary.krotkie) fail.push('blokuje krótkie odpowiedzi w rodzaju „tak"');
 
-  console.log(`6. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
+  /* 6. Druga strona tego samego medalu. Znacznik zużycia to INDEKS, a indeks
+     nie jest stałym punktem odniesienia: rozpoznawacz potrafi zacząć numerować
+     od zera bez `onend` (Chrome po dłuższej ciszy, Android po każdej domkniętej
+     wypowiedzi). Pierwsza wersja zapory tego nie przewidywała i pytanie zadane
+     zaraz po słowie budzącym wypadało poniżej znacznika — transkrypcja pusta,
+     cisza nie miała czego wysłać. Zapora ma tłumić echo, nie własne pytania. */
+  const poRestarcie = await pg.evaluate(() => {
+    window.__zadane = [];
+    voiceState = 'wake';
+    voiceDeaf = false;
+    oznaczZuzyte(null, 0);
+
+    const budzenie = window.__zdarzenie(['hej kosmos'], 0);
+    voiceRec.__ostatniaDlugosc = 1;
+    window.__onresult(budzenie);
+    const stanPoBudzeniu = voiceState;
+
+    // Nowa lista, znów od indeksu 0 — dla kodu wygląda jak „nic nowego".
+    const pytanie = window.__zdarzenie(['policz zdjęcia z czerwca'], 0);
+    window.__onresult(pytanie);
+    return { stanPoBudzeniu, transkrypcja: el.voiceTranscript.textContent, uslyszane: voiceHeard };
+  });
+  console.log(`6. po restarcie numeracji: stan=${poRestarcie.stanPoBudzeniu}, `
+    + `transkrypcja=„${poRestarcie.transkrypcja}"`);
+  if (poRestarcie.stanPoBudzeniu !== 'listening') fail.push('słowo budzące nie przełączyło w słuchanie');
+  if (!/czerwca/.test(poRestarcie.uslyszane)) {
+    fail.push('pytanie po restarcie numeracji przepadło — znacznik zużycia połknął świeży wynik');
+  }
+
+  /* 7. …a przy okazji słowo budzące nie może wsiąknąć w treść pytania. */
+  const czyste = await pg.evaluate(() => bezSlowaBudzacego('Hej Hej kosmos Hej kosmos co widzisz'));
+  console.log(`7. czyszczenie słowa budzącego → „${czyste}"`);
+  if (/kosmos/i.test(czyste)) fail.push(`słowo budzące zostaje w treści: „${czyste}"`);
+  if (!/co widzisz/.test(czyste)) fail.push(`czyszczenie zjadło pytanie: „${czyste}"`);
+  if (/^hej/i.test(czyste)) fail.push(`sierota po słowie budzącym zostaje na początku: „${czyste}"`);
+  // ale „hej" w środku zdania to już zwykłe słowo
+  const wSrodku = await pg.evaluate(() => bezSlowaBudzacego('napisz mail zaczynający się od hej'));
+  if (!/od hej$/.test(wSrodku)) fail.push(`ucina „hej" w środku zdania: „${wSrodku}"`);
+
+  console.log(`8. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   if (bledy.length) fail.push(`błędy JS: ${bledy.join(' | ')}`);
 
   await br.close();

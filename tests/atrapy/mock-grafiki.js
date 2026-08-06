@@ -1,9 +1,23 @@
-/* Atrapa DuckDuckGo dla grafik. Dwa kroki, tak jak naprawdę: najpierw strona
-   HTML z żetonem `vqd`, dopiero z nim wolno odpytać `i.js`. Atrapa pilnuje
-   tej kolejności — bez żetonu oddaje pustkę, tak jak oryginał. */
+/* Atrapa źródeł grafik — wszystkich trzech.
+
+   DuckDuckGo działa dwustopniowo, tak jak naprawdę: najpierw strona HTML
+   z żetonem `vqd`, dopiero z nim wolno odpytać `i.js`. Atrapa pilnuje tej
+   kolejności — bez żetonu oddaje pustkę, tak jak oryginał.
+
+   Commons i Openverse dostały tu kształt odpowiedzi zgodny z ich
+   dokumentacją. UWAGA na uczciwość: to sprawdza, czy Cosmos POPRAWNIE CZYTA
+   taki kształt — nie dowodzi, że prawdziwe usługi dokładnie taki oddają.
+   Tego dowodzi dopiero `node scripts/grafiki.js` puszczone na serwerze
+   z prawdziwą siecią.
+
+   Atrapa umie też ODMÓWIĆ: `?awaria=commons,ddg` w adresie ustawia, które
+   źródła mają paść. Bez tego nie da się sprawdzić rzeczy najważniejszej —
+   że kiedy jedno źródło pada, zdjęcia i tak się pokazują. */
 const http = require('http');
 
 const ZETON = '4-123456789';
+// Które źródła mają udawać awarię — ustawiane przez /awaria?zrodla=...
+let padnij = new Set();
 
 const OBRAZY = (q) => Array.from({ length: 8 }, (_, i) => ({
   title: `${q} — zdjęcie ${i + 1}`,
@@ -13,24 +27,87 @@ const OBRAZY = (q) => Array.from({ length: 8 }, (_, i) => ({
   width: 1200, height: 800,
 }));
 
+/* Kształt odpowiedzi Wikimedia Commons: `query.pages` kluczowane po numerze
+   strony, każda z tablicą `imageinfo`, w niej `thumburl` i `extmetadata`. */
+const COMMONS = (q, ile) => ({
+  query: {
+    pages: Object.fromEntries(Array.from({ length: ile }, (_, i) => [String(100 + i), {
+      pageid: 100 + i,
+      title: `File:${q} ${i + 1}.jpg`,
+      imageinfo: [{
+        thumburl: `http://127.0.0.1:7117/iu/?u=commons${i}`,
+        url: `https://upload.wikimedia.org/${encodeURIComponent(q)}-${i}.jpg`,
+        descriptionurl: `https://commons.wikimedia.org/wiki/File:${i}.jpg`,
+        width: 2400, height: 1600,
+        extmetadata: { LicenseShortName: { value: 'CC BY-SA 4.0' } },
+      }],
+    }])),
+  },
+});
+
+/* Kształt odpowiedzi Openverse: płaska lista `results`. */
+const OPENVERSE = (q, ile) => ({
+  result_count: ile,
+  results: Array.from({ length: ile }, (_, i) => ({
+    id: `ov-${i}`,
+    title: `${q} — Openverse ${i + 1}`,
+    thumbnail: `http://127.0.0.1:7117/iu/?u=ov${i}`,
+    url: `https://openverse.example/${encodeURIComponent(q)}-${i}.jpg`,
+    foreign_landing_url: `https://openverse.example/strona/${i}`,
+    license: 'by-nc', license_version: '4.0',
+    width: 1600, height: 1200,
+  })),
+});
+
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
-  const q = u.searchParams.get('q') || '';
+  const q = u.searchParams.get('q') || u.searchParams.get('gsrsearch') || '';
+  const json = (kod, obiekt) => {
+    res.writeHead(kod, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obiekt));
+  };
+
+  // Sterowanie awariami — bez tego nie sprawdzimy zapasowych źródeł.
+  if (u.pathname === '/awaria') {
+    padnij = new Set((u.searchParams.get('zrodla') || '').split(',').filter(Boolean));
+    return json(200, { padaja: [...padnij] });
+  }
+
+  /* Atrapa Nominatim (nazwa miejsca → współrzędne). Zna kilka miast; na
+     resztę odpowiada pustą listą, tak jak oryginał przy nieznanej nazwie. */
+  if (u.pathname === '/geokoduj') {
+    const ZNANE = {
+      'kraków': [50.0614, 19.9366, 'Kraków, województwo małopolskie, Polska'],
+      'krakow': [50.0614, 19.9366, 'Kraków, województwo małopolskie, Polska'],
+      'gdańsk': [54.3520, 18.6466, 'Gdańsk, województwo pomorskie, Polska'],
+      'zakopane': [49.2992, 19.9496, 'Zakopane, województwo małopolskie, Polska'],
+    };
+    const t = ZNANE[String(u.searchParams.get('q') || '').trim().toLowerCase()];
+    return json(200, t ? [{ lat: String(t[0]), lon: String(t[1]), display_name: t[2] }] : []);
+  }
+
+  if (u.pathname === '/commons') {
+    if (padnij.has('commons')) return json(503, { error: 'atrapa: commons wyłączony' });
+    return json(200, COMMONS(q, 4));
+  }
+
+  if (u.pathname === '/openverse') {
+    if (padnij.has('openverse')) return json(503, { error: 'atrapa: openverse wyłączony' });
+    return json(200, OPENVERSE(q, 4));
+  }
 
   // krok 1 — strona z żetonem
   if (u.pathname === '/' && u.searchParams.get('ia') === 'images') {
+    if (padnij.has('ddg')) { res.writeHead(403); return res.end('blocked'); }
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(`<html><body><script>vqd="${ZETON}";</script></body></html>`);
   }
 
   // krok 2 — właściwe wyniki, ale tylko z poprawnym żetonem
   if (u.pathname === '/i.js') {
-    if (u.searchParams.get('vqd') !== ZETON) {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ results: [] }));
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ results: OBRAZY(q) }));
+    if (padnij.has('ddg')) return json(403, { results: [] });
+    if (u.searchParams.get('vqd') !== ZETON) return json(403, { results: [] });
+    return json(200, { results: OBRAZY(q) });
   }
 
   // miniatura — jednopikselowy GIF, żeby proxy miało co przepuścić

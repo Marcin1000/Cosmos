@@ -36,8 +36,10 @@ const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukan
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
-const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
+const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
+  rozpoznajObiektywy } = require('./lib/ekspozycja.js');
 const { pogodaDla } = require('./lib/pogoda.js');
+const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
 const onedrive_ = require('./lib/onedrive.js');
@@ -921,15 +923,30 @@ async function handlePlanZdjeciowy(req, res) {
      `Number(null)` to ZERO, nie NaN — pierwsza wersja przy braku lokalizacji
      liczyła więc światło dla punktu 0°N 0°E na Atlantyku i oddawała to jako
      poprawną odpowiedź. Stąd jawne sprawdzenie „czy w ogóle jest wartość". */
+  /* Nazwa miejsca ma pierwszeństwo przed zapisaną lokalizacją, bo znaczy
+     „planuję zdjęcia TAM", a nie „stoję tutaj". Kiedyś takiego parametru nie
+     było wcale: na „w sobotę kręcę w Krakowie" model musiał zgadnąć
+     współrzędne z pamięci albo zignorować miejsce — a złota godzina policzona
+     dla złego punktu wygląda tak samo wiarygodnie jak dla dobrego. */
+  let zNazwy = null;
+  let miejsceNieznane = '';
+  if (d.miejsce && !(Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lon)))) {
+    zNazwy = await wspolrzedneMiejsca(String(d.miejsce));
+    if (!zNazwy) miejsceNieznane = String(d.miejsce).slice(0, 80);
+  }
+
   const zapis = userWspolrzedne || {};
-  const surowyLat = d.lat ?? zapis.lat;
-  const surowyLon = d.lon ?? zapis.lon;
+  const surowyLat = d.lat ?? (zNazwy && zNazwy.lat) ?? zapis.lat;
+  const surowyLon = d.lon ?? (zNazwy && zNazwy.lon) ?? zapis.lon;
   const lat = surowyLat === null || surowyLat === undefined ? NaN : Number(surowyLat);
   const lon = surowyLon === null || surowyLon === undefined ? NaN : Number(surowyLon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return sendJson(res, 400, {
-      error: 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
-        + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
+      error: miejsceNieznane
+        ? `Nie udało się ustalić współrzędnych miejsca „${miejsceNieznane}". `
+          + 'Podaj je dokładniej (np. „Kraków, Polska") albo wprost jako lat i lon.'
+        : 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
+          + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
     });
   }
 
@@ -956,16 +973,38 @@ async function handlePlanZdjeciowy(req, res) {
     zrodloEv = 'pomiar z kamery + pozycja Słońca';
   }
 
+  /* Obiektywy przychodzą tak, jak je człowiek napisał („24-70 f/2.8 i 70-200 f/4”),
+     bo wpisuje je Marcin w rozmowie, a nie formularz. Rozbiciem zajmuje się
+     `rozpoznajObiektywy`; gdy nic nie da się odczytać, `dobierz` po prostu
+     liczy jak dawniej — dla korpusu. */
+  const szkla = Array.isArray(d.obiektyw)
+    ? d.obiektyw.flatMap((x) => rozpoznajObiektywy(String(x)))
+    : rozpoznajObiektywy(d.obiektyw || '');
+  const nieRozpoznane = (d.obiektyw && !szkla.length) ? String(d.obiektyw).slice(0, 120) : '';
+
   const ustawienia = dobierz(ev, {
     sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
     ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
+    obiektyw: szkla,
   });
+  if (nieRozpoznane) {
+    ustawienia.powody.unshift(`Nie odczytałem obiektywu z „${nieRozpoznane}" — policzyłem dla samego `
+      + 'korpusu. Podaj ogniskową i jasność, np. „24-70 f/2.8", a policzę dla tego szkła.');
+  }
 
   const kadr = orientacja(Number(d.szerokosc), Number(d.wysokosc));
   const czas = (x) => (x ? x.toISOString() : null);
 
+  if (miejsceNieznane) {
+    ustawienia.powody.unshift(`Nie znalazłem miejsca „${miejsceNieznane}" — policzyłem dla `
+      + 'zapisanej lokalizacji. Podaj nazwę dokładniej albo współrzędne.');
+  }
+
   sendJson(res, 200, {
-    miejsce: userLocation || null,
+    // Gdy liczymy dla PODANEGO miejsca, to jego nazwa jest tu istotna —
+    // inaczej odpowiedź mówiłaby o domu, a liczby dotyczyły Krakowa.
+    miejsce: (zNazwy && zNazwy.nazwa) || userLocation || null,
+    miejsceZNazwy: Boolean(zNazwy),
     wspolrzedne: { lat, lon },
     slonce: {
       wysokosc: swiatlo.teraz.wysokosc,
@@ -1944,11 +1983,14 @@ async function handleChat(req, res) {
         + 'wszystkie są opcjonalne:\n'
         + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
         + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
+        + 'obiektyw=24-70 f/2.8 (można kilka po przecinku: „24-70 f/2.8, 70-200 f/4”) · '
         + '(glebia PODAWAJ TYLKO wtedy, gdy użytkownik wprost prosił o określoną '
         + 'głębię ostrości — narzucona z własnej inicjatywy wymusza mocny filtr ND '
         + 'i psuje resztę doboru) · '
         + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30 · '
-        + 'lat=52.02 lon=20.90 (inne miejsce niż domyślne)\n'
+        + 'miejsce=Kraków (gdy zdjęcia planowane są GDZIE INDZIEJ niż lokalizacja '
+        + 'użytkownika — Cosmos sam zamieni nazwę na współrzędne; NIE zgaduj lat/lon '
+        + 'z pamięci) · lat=52.02 lon=20.90 (gdy znasz je dokładnie)\n'
         + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '
         + 'bierze prognozę pogody dla tego miejsca i tej godziny.\n'
         + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
@@ -2070,7 +2112,17 @@ async function handleChat(req, res) {
         'NIE proponuj wizji artystycznych — po prostu użyj [GRAFIKA:].\n' +
         'Możesz poprosić o grafiki dla kilku rzeczy naraz, oddzielając je średnikiem: ' +
         '[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc; Valldemossa]. Nie pytaj ' +
-        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.',
+        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.\n' +
+        /* Marcin: „zdjęcia się nie pokazywały, a jak podałem mu, że Kraków, to
+           zgłupiał". Samo doprecyzowanie jest najzwyklejszą rzeczą w rozmowie,
+           a model traktował je jak nowy, niezrozumiały temat. */
+        'ZAPYTANIE MA BYĆ KONKRETNE: „rynek" nie znajdzie nic sensownego, ' +
+        '„Rynek Główny Kraków" znajdzie. Dodawaj miejsce, nazwę własną albo kontekst ' +
+        'z rozmowy.\n' +
+        'GDY UŻYTKOWNIK DOPOWIADA jedno słowo albo nazwę (np. samo „Kraków”) po tym, ' +
+        'jak prosił o zdjęcia — to jest DOPRECYZOWANIE POPRZEDNIEJ PROŚBY, nie nowy ' +
+        'temat i nie pytanie o miasto. Połącz to z tym, o co prosił wcześniej, ' +
+        'i po prostu poszukaj jeszcze raz.',
     });
   }
 

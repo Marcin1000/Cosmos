@@ -216,7 +216,8 @@ const SRODOWISKA = {
       SENSES_CACHE_MS: '0',
     },
   },
-  // Wyszukiwanie grafik: atrapa DDG (żeton vqd → i.js → miniatura).
+  // Wyszukiwanie grafik: atrapa wszystkich trzech źródeł (DDG z żetonem vqd,
+  // Commons, Openverse) plus miniatura przez proxy.
   grafiki: {
     port: 3410,
     // Echo systemu jest tu po to, żeby sprawdzić, czy model W OGÓLE wie
@@ -224,6 +225,9 @@ const SRODOWISKA = {
     atrapy: [['mock-grafiki.js', null], ['mock-echo-systemu.js', null]],
     env: {
       IMAGE_SEARCH_URL: 'http://127.0.0.1:7117/',
+      COMMONS_API_URL: 'http://127.0.0.1:7117/commons',
+      OPENVERSE_API_URL: 'http://127.0.0.1:7117/openverse',
+      GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
     },
   },

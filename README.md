@@ -740,6 +740,29 @@ kolumny: to sto linijek na `zlib`, działa bez sieci i bez instalacji, a skany
 i tak trafiają do `pypdf` w zmysłach. Jedna funkcja, dwie drogi — łatwiejsza
 wygrywa, gdy wystarcza.
 
+## 🖼️ Grafiki — które źródła działają z tego serwera
+
+```bash
+node scripts/grafiki.js              # zapytanie domyślne
+node scripts/grafiki.js Kraków Wawel # własne
+```
+
+Wyszukiwanie obrazów stoi na trzech cudzych usługach: **DuckDuckGo** (najszerszy
+zasięg, ale wymaga żetonu skrobanego ze strony), **Wikimedia Commons**
+i **Openverse** (prawdziwe API, materiał na jasnych licencjach). Odpytywane są
+równolegle, a wyniki przeplatane — dzięki temu awaria jednej nie zostawia
+Cosmosa bez ani jednego zdjęcia.
+
+Wcześniej źródło było jedno i to była wada konstrukcyjna, nie usterka: kiedy
+DuckDuckGo odmawiał, Cosmos pisał „szukam zdjęć" i nie pokazywał nic. Adresom
+centrów danych odmawia się łatwo, a format żetonu już się zmieniał.
+
+Każda z tych usług może być niedostępna z **konkretnego** serwera i z innego
+powodu — limity zapytań, blokada hostingu, captcha. Tego pytania nie da się
+rozstrzygnąć znikąd indziej niż z tej maszyny, i właśnie po to jest ten skrypt.
+Pokazuje każde źródło osobno z powodem odmowy. Zawężenie listy na stałe:
+`IMAGE_SEARCH_SOURCES=commons,openverse` w `.env`.
+
 ## ⚡ Płynność — który model nadaje się do rozmowy
 
 ```bash
