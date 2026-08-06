@@ -962,6 +962,31 @@ ani — najgorsze — podać wyniku, który wygląda poprawnie, a policzony jest
 dla tego, o co pytano. Zestaw wyłapał od razu jedną taką: nieznany korpus
 wpadał po cichu w Canona R6 II, choć sufit ISO i zapas ze stabilizacji są inne.
 
+### Audyt potrafił po cichu sprawdzić NIE TEN kod
+
+Znalezione przy okazji, przez ściganie jednej uwagi, którą łatwo było machnąć
+ręką: „w logu rozruchu jest słowo «error»". Okazała się wierzchołkiem czegoś
+poważniejszego.
+
+Sekcja „Rozruch próbny" uruchamia serwer na porcie 3499 i puka we wszystkie
+trasy. Sprzątanie po sobie robiła jednym `process.kill(-pid)` — a to czasem nie
+wystarczało i serwer zostawał. Przy NASTĘPNYM audycie nowy proces padał na
+`EADDRINUSE`… i audyt **i tak meldował „✓ serwer wstaje"**, bo pukał w stary
+serwer z poprzedniego przebiegu. Sprawdzał więc kod sprzed poprawek i nie mówił
+o tym ani słowa. Jedynym śladem była ta jedna niewinna uwaga.
+
+- [x] **Port sprawdzany PRZED startem** — zajęty port to teraz błąd audytu,
+      nie cicha zamiana serwera na cudzy
+- [x] **Sprzątanie musi się udać** — SIGTERM, potem SIGKILL, do grupy i do
+      samego procesu, z czekaniem aż port faktycznie zwolniony. Nieudane
+      zamknięcie jest zgłaszane jako problem
+- [x] **Uwaga o „error" pokazuje teraz TREŚĆ linii**, a nie sam fakt, że słowo
+      padło — bo to właśnie brak treści kazał ją zignorować
+
+Morał, wart zapamiętania osobno: **narzędzie do wykrywania usterek, które samo
+może po cichu skłamać, jest gorsze niż jego brak** — bo zielony wynik zamyka
+temat. Uwagi audytu warto ścigać do końca, nawet te wyglądające na kosmetykę.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

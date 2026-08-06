@@ -323,17 +323,60 @@ sekcja('Rozruch próbny');
    Trwa kilka sekund i wyklucza całą tę klasę błędów. */
 const { execFileSync, spawn: spawnProc } = require('child_process');
 const os = require('os');
+const net = require('node:net');
+const PORT_PROBY = 3499;
+
+/** Czy ktoś już siedzi na tym porcie? */
+function portZajety(port) {
+  return new Promise((gotowe) => {
+    const s = net.connect({ host: '127.0.0.1', port });
+    const koniec = (odp) => { s.destroy(); gotowe(odp); };
+    s.once('connect', () => koniec(true));
+    s.once('error', () => koniec(false));
+    setTimeout(() => koniec(false), 700);
+  });
+}
+
 const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
-const proba = spawnProc('node', ['server.js'], {
-  cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
-  env: { ...process.env, PORT: '3499', COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
-});
-let logRozruchu = '';
-proba.stdout.on('data', (d) => { logRozruchu += d; });
-proba.stderr.on('data', (d) => { logRozruchu += d; });
 
 (async () => {
-  const adres = 'http://127.0.0.1:3499';
+  /* Zanim cokolwiek uruchomimy: port MUSI być wolny.
+     To nie jest ostrożność na wyrost, tylko poprawka po realnej wpadce. Audyt
+     zostawiał po sobie serwer (samo `kill(-pid)` czasem nie wystarczało), więc
+     przy następnym uruchomieniu nowy proces padał na EADDRINUSE — a audyt
+     i tak meldował „✓ serwer wstaje", bo pukał w STARY serwer z poprzedniego
+     przebiegu. Czyli sprawdzał nie ten kod, co trzeba, i o niczym nie mówił.
+     Narzędzie do wykrywania usterek, które samo może po cichu skłamać, jest
+     gorsze niż jego brak. */
+  if (await portZajety(PORT_PROBY)) {
+    zle(`port ${PORT_PROBY} jest zajęty — rozruch próbny pukałby w cudzy serwer. `
+      + `Zamknij go (np. pkill -f "node server.js") i powtórz audyt.`);
+    podsumuj();
+    return;
+  }
+
+  const proba = spawnProc('node', ['server.js'], {
+    cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    env: { ...process.env, PORT: String(PORT_PROBY), COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
+  });
+  let logRozruchu = '';
+  proba.stdout.on('data', (d) => { logRozruchu += d; });
+  proba.stderr.on('data', (d) => { logRozruchu += d; });
+
+  /** Ubij serwer NA PEWNO — grupę i sam proces, aż port zwolniony. */
+  async function ubijProbny() {
+    for (const sygnal of ['SIGTERM', 'SIGKILL']) {
+      try { process.kill(-proba.pid, sygnal); } catch { /* grupa już nie żyje */ }
+      try { process.kill(proba.pid, sygnal); } catch { /* proces już nie żyje */ }
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (!(await portZajety(PORT_PROBY))) return true;
+      }
+    }
+    return !(await portZajety(PORT_PROBY));
+  }
+
+  const adres = `http://127.0.0.1:${PORT_PROBY}`;
   let wstal = false;
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 300));
@@ -388,9 +431,16 @@ proba.stderr.on('data', (d) => { logRozruchu += d; });
         ? ok('strumień zdarzeń odpowiada') : zle(`strumień zdarzeń: HTTP ${r.status}`);
       r.body.cancel().catch(() => {});
     } catch (e) { zle('strumień zdarzeń: ' + e.message); }
-    if (/Error|error:/i.test(logRozruchu)) hmm('w logu rozruchu jest słowo „error"');
+    if (/Error|error:/i.test(logRozruchu)) {
+      hmm('w logu rozruchu jest słowo „error": '
+        + (logRozruchu.match(/^.*(?:Error|error:).*$/mi) || [''])[0].trim().slice(0, 120));
+    }
   }
-  try { process.kill(-proba.pid); } catch { /* już nie żyje */ }
+  // Sprzątanie musi się UDAĆ, inaczej następny audyt bada nie ten serwer.
+  if (!(await ubijProbny())) {
+    zle(`nie udało się zamknąć serwera próbnego na porcie ${PORT_PROBY} — `
+      + 'następny audyt sprawdziłby jego, a nie świeży kod');
+  }
   fs.rmSync(tmpDane, { recursive: true, force: true });
   podsumuj();
 })();
