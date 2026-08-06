@@ -198,7 +198,8 @@
           <button class="attach-btn" id="attach-btn" data-i18n-title="addImage" title="Dodaj obraz" aria-label="Dodaj obraz">
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+          <input type="file" id="file-input" multiple style="display:none"
+            accept="image/*,.pdf,.docx,.xlsx,.xlsm,.pptx,.csv,.tsv,.txt,.md,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yml,.yaml">
           <button class="attach-btn" id="camera-btn" data-i18n-title="takePhoto" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
             <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
           </button>
@@ -219,6 +220,22 @@
         <p class="disclaimer"><span data-i18n="disclaimer">Model może popełniać błędy — zweryfikuj ważne informacje.</span> <span class="kbd-hint"><kbd>Enter</kbd> <span data-i18n="kbdSend">wyślij</span> · <kbd>Shift+Enter</kbd> <span data-i18n="kbdNewline">nowa linia</span></span> <span class="mono" id="token-estimate" style="opacity:.7"></span></p>
       </div>
     </main>
+
+    <!-- ================= PŁÓTNO =================
+         Dokument obok rozmowy. Model poprawia w nim fragmenty zamiast
+         przepisywać całość — przy scenariuszu na trzy tysiące słów to
+         różnica między sekundą a minutą. -->
+    <section class="canvas" id="canvas" hidden aria-label="Płótno">
+      <div class="canvas-bar">
+        <span class="canvas-title" id="canvas-title"></span>
+        <span class="canvas-meta mono" id="canvas-meta"></span>
+        <button type="button" class="btn-secondary" id="canvas-copy" data-i18n="copy">Kopiuj</button>
+        <button type="button" class="btn-secondary" id="canvas-download" data-i18n="canvas.download">Pobierz</button>
+        <button type="button" class="btn-secondary" id="canvas-close" data-i18n="close">Zamknij</button>
+      </div>
+      <textarea class="canvas-text" id="canvas-text" spellcheck="false"></textarea>
+      <p class="canvas-hint" data-i18n="canvas.hint">Możesz pisać tutaj sam — model widzi bieżącą treść.</p>
+    </section>
   </div>
 
   <!-- ================= MODAL: USTAWIENIA ================= -->
@@ -284,6 +301,16 @@
           <textarea id="set-profile" rows="3" placeholder="np. Marcin — twórca wideo. Sprzęt: Canon R6 II, Mavic 3, RTX 3080. Lubi ciepłą kolorystykę i 50 mm."></textarea>
           <span class="field-hint" data-i18n="set.profileHint">Stałe fakty o Tobie…</span>
         </label>
+
+        <div class="field">
+          <span class="field-label" data-i18n="set.location">Twoja lokalizacja</span>
+          <div class="field-row">
+            <input type="text" id="set-location" placeholder="np. Złotokłos, mazowieckie">
+            <button type="button" class="btn-secondary" id="set-location-detect"
+              data-i18n="set.locationDetect">📍 Wykryj</button>
+          </div>
+          <span class="field-hint" data-i18n="set.locationHint">Cosmos użyje tego przy pytaniach „w okolicy"…</span>
+        </div>
 
         <div class="field">
           <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
@@ -666,6 +693,32 @@
       <canvas id="live-overlay"></canvas>
     </div>
     <div class="live-status mono" id="live-status">—</div>
+
+    <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
+         w którym stoisz, więc działa w terenie z telefonu. -->
+    <div class="plan-box" id="plan-box" hidden>
+      <div class="plan-row">
+        <select id="plan-gear" class="mono" aria-label="Sprzęt">
+          <option value="canon-r6ii">Canon R6 II</option>
+          <option value="mavic-3">Mavic 3</option>
+          <option value="telefon">Telefon</option>
+        </select>
+        <select id="plan-mode" class="mono" aria-label="Tryb">
+          <option value="wideo">Wideo 25</option>
+          <option value="wideo50">Wideo 50</option>
+          <option value="zdjecie">Zdjęcie</option>
+        </select>
+        <select id="plan-sky" class="mono" aria-label="Zachmurzenie">
+          <option value="bezchmurnie">☀ Bezchmurnie</option>
+          <option value="lekkie">🌤 Lekkie</option>
+          <option value="pochmurno">☁ Pochmurno</option>
+          <option value="deszcz">🌧 Deszcz</option>
+        </select>
+      </div>
+      <div class="plan-shot mono" id="plan-shot">—</div>
+      <div class="plan-light mono" id="plan-light"></div>
+      <div class="plan-why" id="plan-why"></div>
+    </div>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
   </div>
 

@@ -138,8 +138,8 @@ Gdy zechcesz dobrać świadomie:
 
 | Do czego | Model | Dlaczego |
 |---|---|---|
-| **Czat w chmurze** (domyślny) | `nemotron-3-ultra-550b-a55b` | Flagowiec, a w pomiarze najrówniejszy: 3/3 prób, 2,5–3,1 s na odpowiedź. Najlepsza polszczyzna |
-| Czat, gdy trafisz na spokojną porę | `nemotron-3-super-120b-a12b` | Kontekst 1M, bywa najszybszy w stawce (1,2 s) — ale potrafi też zejść do 6,9 s |
+| **Czat w chmurze** (domyślny) | `nemotron-3-ultra-550b-a55b` | 55 mld aktywnych = najlepsza polszczyzna. Odpowiada w 2,5–3,6 s, zawsze 3/3 prób |
+| Czat, gdy wolisz tempo od polszczyzny | `nemotron-3-super-120b-a12b` | Zwykle 1,3 s, raz na kilka razy 4,4 s. Kontekst 1M, ale tylko 12 mld aktywnych |
 | **Wzrok w chmurze** | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, **wideo**, mowa i tekst. Idealny do kamery i „co mam w ręku?" |
 | **Model lokalny** (RTX 3080) | `nemotron-nano-9b-v2` | W 4-bit ~6 GB — mieści się w 10 GB z zapasem |
 | Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok modelu tekstowego |

@@ -525,6 +525,236 @@ kbd {
   display: block;
 }
 
+/* Załączone dokumenty — kafelek z nazwą i liczbą znaków. Treść idzie do
+   modelu, ale na ekranie zostaje jedna linijka, nie ściana tekstu. */
+.attachment-doc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  font-size: 12px;
+  max-width: 260px;
+}
+.attachment-doc.is-loading { opacity: 0.6; }
+.attachment-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ==================== PLAN ZDJĘCIOWY (przy kamerze) ==================== */
+
+.plan-box {
+  margin: 0 14px 8px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-elev);
+}
+.plan-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.plan-row select {
+  flex: 1;
+  min-width: 0;            /* bez tego pole rozpycha panel na wąskim telefonie */
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.plan-shot {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.plan-light { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+.plan-why { font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
+.plan-why p { margin: 0 0 3px; }
+.plan-urgent { color: var(--accent); font-weight: 600; }
+
+/* ============================ PŁÓTNO ============================ */
+
+.canvas {
+  display: flex;
+  flex-direction: column;
+  width: min(46vw, 720px);
+  border-left: 1px solid var(--border-strong);
+  background: var(--bg);
+  min-width: 0;
+}
+.canvas[hidden] { display: none; }
+.canvas-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.canvas-title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-meta { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.canvas-text {
+  flex: 1;
+  border: 0;
+  outline: none;
+  resize: none;
+  padding: 14px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 0;
+}
+.canvas-hint {
+  margin: 0;
+  padding: 6px 12px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+/* Na telefonie płótno zajmuje cały ekran: panel na 46% szerokości przy
+   360 px daje kolumnę, w której nie da się czytać zdania. */
+@media (max-width: 900px) {
+  .canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    width: auto;
+    border-left: 0;
+  }
+}
+
+.run-panel {
+  margin: 10px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-elev);
+}
+.run-bar {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.run-out {
+  margin: 0;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+.run-err { color: var(--danger, #ff6b6b); }
+.run-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  padding: 10px;
+  background: #fff;
+}
+
+.model-info-tools {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.msg-docs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.doc-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-chip:hover { border-color: var(--accent); }
+
+.text-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.text-viewer-box {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  width: min(820px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.text-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.text-viewer-body {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Zdjęcia znalezione w internecie. Siatka, nie rząd — na telefonie rząd
+   miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa. */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.photo-tile {
+  display: block;
+  text-decoration: none;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+}
+.photo-tile img {
+  display: block;
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+}
+.photo-cap {
+  display: block;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.photo-tile:hover { border-color: var(--accent); }
+
 .msg-assistant { align-items: flex-start; }
 
 .msg-avatar {

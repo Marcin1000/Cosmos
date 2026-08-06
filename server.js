@@ -21,7 +21,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 // Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
-const { modelInfo, modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
+const { modelInfo, modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./public/models.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
@@ -32,7 +32,13 @@ const {
   modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
 const szukanie_ = require('./lib/szukanie.js');
-const { handleSearch, stripTags } = szukanie_;
+const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
+const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
+const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
+const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
+const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
+const archiwum_ = require('./lib/archiwum.js');
+const archiwum = archiwum_.utworz(DATA_DIR);
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -466,6 +472,90 @@ function saveProfile(text) {
   catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
 }
 
+/* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
+   ale i wyszukiwanie („warsztat … w Złotokłosie"). Bez niej model pyta
+   „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
+const LOCATION_FILE = path.join(DATA_DIR, 'location.txt');
+const WSPOLRZEDNE_FILE = path.join(DATA_DIR, 'location.json');
+let userLocation = '';
+/* Sama nazwa miejsca wystarczała do wyszukiwania, ale nie do liczenia pozycji
+   Słońca — złota godzina wymaga stopni, nie napisu „Złotokłos". Trzymamy
+   jedno i drugie: nazwę dla modelu, współrzędne dla matematyki. */
+let userWspolrzedne = null;
+try { userLocation = fs.readFileSync(LOCATION_FILE, 'utf8'); } catch { /* brak */ }
+try { userWspolrzedne = JSON.parse(fs.readFileSync(WSPOLRZEDNE_FILE, 'utf8')); } catch { /* brak */ }
+// Zapas z odprawy porannej — kto ustawił BRIEFING_LAT, nie musi robić tego drugi raz.
+if (!userWspolrzedne && BRIEFING.lat && BRIEFING.lon) {
+  userWspolrzedne = { lat: Number(BRIEFING.lat), lon: Number(BRIEFING.lon) };
+}
+
+function saveLocation(text, wspolrzedne) {
+  userLocation = String(text || '').trim().slice(0, 200);
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LOCATION_FILE, userLocation); }
+  catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
+  if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
+    userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
+    try { fs.writeFileSync(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
+    catch (err) { console.error('Nie udało się zapisać współrzędnych:', err.message); }
+  }
+}
+
+/* Data i godzina. Model zna świat wyłącznie do końca swojego treningu —
+   bez tej linijki na pytanie „który dziś?" zgaduje, i to nie „nie wiem",
+   tylko konkretną złą datę. Strefa z ENV, bo serwer stoi w UTC. */
+const STREFA_CZASU = process.env.COSMOS_TZ || 'Europe/Warsaw';
+function terazTekst() {
+  const t = new Date();
+  const dzien = t.toLocaleDateString('pl-PL',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: STREFA_CZASU });
+  const godzina = t.toLocaleTimeString('pl-PL',
+    { hour: '2-digit', minute: '2-digit', timeZone: STREFA_CZASU });
+  return `${dzien}, godzina ${godzina}`;
+}
+
+/* Współrzędne → nazwa miejscowości. Przeglądarka daje samo „52.05, 20.90",
+   a do wyszukiwarki trzeba wpisać „Złotokłos". Zamiana idzie przez serwer,
+   nie przez przeglądarkę: dzięki temu współrzędne nie trafiają do obcego
+   hosta z Twojego telefonu razem z jego nagłówkami, a my możemy podać
+   uczciwy User-Agent, którego Nominatim wymaga. */
+const GEOKOD_URL = process.env.GEOCODE_URL || 'https://nominatim.openstreetmap.org/reverse';
+const GEOKOD_MS = Number(process.env.GEOCODE_TIMEOUT_MS || 6000);
+async function handleGeokod(req, res) {
+  if (GEOKOD_URL === 'off') return sendJson(res, 503, { error: 'Zamiana współrzędnych na nazwę jest wyłączona.' });
+  let dane;
+  try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const lat = Number(dane.lat);
+  const lon = Number(dane.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return sendJson(res, 400, { error: 'Brak poprawnych współrzędnych.' });
+  }
+  const url = `${GEOKOD_URL}?format=jsonv2&zoom=13&accept-language=pl`
+    + `&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`;
+  const stoper = AbortSignal.timeout(GEOKOD_MS);
+  try {
+    const r = await fetch(url, { signal: stoper, headers: { 'User-Agent': 'Cosmos/1.0 (prywatny asystent)' } });
+    if (!r.ok) return sendJson(res, 502, { error: `Usługa nazw miejsc odpowiedziała ${r.status}.` });
+    const d = await r.json();
+    const a = d.address || {};
+    // Od najbardziej konkretnego: wieś → miasteczko → miasto → gmina.
+    const miejsce = a.village || a.town || a.city || a.municipality || a.county || '';
+    const region = a.state || '';
+    const nazwa = [miejsce, region].filter(Boolean).join(', ') || d.display_name || '';
+    if (!nazwa) return sendJson(res, 502, { error: 'Nie udało się ustalić nazwy miejsca.' });
+    // Zapisujemy od razu: to jedyny moment, w którym mamy i nazwę,
+    // i współrzędne. Bez nich złota godzina nie ma z czego się policzyć.
+    saveLocation(nazwa, { lat, lon });
+    addEvent('lokalizacja', `Ustalono lokalizację: ${nazwa}`);
+    return sendJson(res, 200, { location: nazwa, lat, lon });
+  } catch (err) {
+    return sendJson(res, 502, {
+      error: /timeout|abort/i.test(err.message)
+        ? `Usługa nazw miejsc nie odpowiedziała w ${GEOKOD_MS / 1000} s.`
+        : `Nie udało się ustalić miejsca: ${err.message}`,
+    });
+  }
+}
+
 async function handleConversations(req, res, pathname) {
   const rawId = new URL(req.url, 'http://localhost').searchParams.get('id');
   // ta sama sanityzacja co convPath — indeks i nazwa pliku zawsze zgodne
@@ -606,12 +696,180 @@ async function sensesDetectSummary(buf, mime) {
   } catch { return ''; }
 }
 
+/* Załącznik do ROZMOWY (nie do bazy wiedzy). Cosmos wyciąga tekst i oddaje go
+   przeglądarce, która dokleja go do wiadomości — model dostaje treść umowy,
+   a nie informację, że plik istnieje. */
+const DOKUMENT_MAX_B = Number(process.env.DOCUMENT_MAX_BYTES || 25_000_000);
+const DOKUMENT_ZNAKI = Number(process.env.DOCUMENT_MAX_CHARS || 120_000);
+
+async function handleDokument(req, res) {
+  const nazwa = String(req.headers['x-file-name'] || 'plik').slice(0, 200);
+  const buf = await readBodyBuffer(req);
+  if (!buf.length) return sendJson(res, 400, { error: 'Pusty plik.' });
+  if (buf.length > DOKUMENT_MAX_B) {
+    return sendJson(res, 413, { error: `Plik większy niż ${Math.round(DOKUMENT_MAX_B / 1e6)} MB.` });
+  }
+  const ext = extOf(nazwa);
+  const tekst = (await extractKbText(nazwa, req.headers['content-type'] || '', buf)) || '';
+  if (!tekst.trim()) {
+    return sendJson(res, 200, {
+      name: nazwa, chars: 0, text: '',
+      error: ext === 'pdf'
+        ? 'To wygląda na skan — nie ma w nim warstwy tekstowej. Odczytanie wymaga OCR, '
+          + 'czyli uruchomionej usługi zmysłów na komputerze domowym.'
+        : `Nie umiem odczytać pliku .${ext}. Obsługiwane: PDF, DOCX, XLSX, PPTX, CSV i pliki tekstowe.`,
+    });
+  }
+  const przyciety = tekst.slice(0, DOKUMENT_ZNAKI);
+  addEvent('dokument', `wczytano ${nazwa} (${przyciety.length} znaków)`);
+  sendJson(res, 200, {
+    name: nazwa,
+    chars: przyciety.length,
+    truncated: tekst.length > DOKUMENT_ZNAKI,
+    text: przyciety,
+  });
+}
+
+/* Uruchomienie kodu napisanego przez model. Ograniczenia i to, czego one NIE
+   obejmują, opisuje nagłówek lib/kod.js — najkrócej: brak dostępu do plików
+   serwera i podprocesów, zero zmiennych środowiskowych, twardy limit czasu. */
+async function handleUruchom(req, res) {
+  if (!KOD_WLACZONY) return sendJson(res, 503, { error: 'Wykonywanie kodu jest wyłączone (CODE_EXEC=off).' });
+  let dane;
+  try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+  const kod = String(dane.code || '');
+  if (!kod.trim()) return sendJson(res, 400, { error: 'Brak kodu do uruchomienia.' });
+  if (kod.length > 100000) return sendJson(res, 413, { error: 'Kod jest za długi.' });
+  const pliki = Array.isArray(dane.files) ? dane.files.slice(0, 8) : [];
+
+  const wynik = await uruchomKod(kod, pliki);
+  addEvent('kod', `uruchomiono kod (${wynik.ms} ms${wynik.przerwany ? ', przerwany limitem' : ''})`);
+  sendJson(res, 200, wynik);
+}
+
+/* Archiwum materiału. Indeks jest pasywny — źródła (OneDrive, dysk przez
+   zmysły) wpychają wpisy, a zapytania działają nawet wtedy, gdy te źródła
+   są offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu
+   w terenie przy wyłączonym komputerze domowym. */
+async function handleArchiwum(req, res, p) {
+  if (p === '/api/archive/add' && req.method === 'POST') {
+    let d;
+    try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    if (!Array.isArray(d.wpisy)) return sendJson(res, 400, { error: 'Brak tablicy `wpisy`.' });
+    if (d.wpisy.length > 5000) return sendJson(res, 413, { error: 'Najwyżej 5000 wpisów naraz.' });
+    const wynik = archiwum.dodaj(d.wpisy);
+    if (wynik.dodanych) addEvent('archiwum', `zindeksowano ${wynik.dodanych} plików (razem ${wynik.razem})`);
+    return sendJson(res, 200, wynik);
+  }
+  if (p === '/api/archive/search' && req.method === 'GET') {
+    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    const limit = Math.min(Number(q.limit) || 40, 200);
+    const wyniki = archiwum.szukaj(q);
+    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit) });
+  }
+  if (p === '/api/archive/stats' && req.method === 'GET') {
+    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    if (!q.pole) return sendJson(res, 200, archiwum.podsumowanie());
+    const grupy = archiwum.zestawienie(q.pole, q);
+    if (!grupy) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
+    return sendJson(res, 200, { pole: q.pole, grupy });
+  }
+  if (p === '/api/archive/source' && req.method === 'DELETE') {
+    const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
+    if (!zrodlo) return sendJson(res, 400, { error: 'Podaj `zrodlo`.' });
+    return sendJson(res, 200, { usunieto: archiwum.usunZrodlo(zrodlo) });
+  }
+  return sendJson(res, 404, { error: 'Nieznana trasa archiwum.' });
+}
+
+/* Asystent planu zdjęciowego — to, czego nie ma żaden asystent w chmurze.
+   ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
+   sprzęt. Cosmos wie wszystko troje, więc może policzyć konkretne nastawy
+   zamiast opowiadać ogólniki o „złotej godzinie". */
+async function handlePlanZdjeciowy(req, res) {
+  let d;
+  try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+
+  /* Współrzędne: z żądania (telefon w terenie) albo zapisane w Ustawieniach.
+     `Number(null)` to ZERO, nie NaN — pierwsza wersja przy braku lokalizacji
+     liczyła więc światło dla punktu 0°N 0°E na Atlantyku i oddawała to jako
+     poprawną odpowiedź. Stąd jawne sprawdzenie „czy w ogóle jest wartość". */
+  const zapis = userWspolrzedne || {};
+  const surowyLat = d.lat ?? zapis.lat;
+  const surowyLon = d.lon ?? zapis.lon;
+  const lat = surowyLat === null || surowyLat === undefined ? NaN : Number(surowyLat);
+  const lon = surowyLon === null || surowyLon === undefined ? NaN : Number(surowyLon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return sendJson(res, 400, {
+      error: 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
+        + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
+    });
+  }
+
+  const kiedy = d.kiedy ? new Date(d.kiedy) : new Date();
+  if (Number.isNaN(kiedy.getTime())) return sendJson(res, 400, { error: 'Zła data.' });
+
+  const swiatlo = swiatloDnia(kiedy, lat, lon);
+
+  /* EV liczymy ze Słońca, a gdy przeglądarka zmierzyła jasność podglądu —
+     korygujemy pomiarem. Model nie wie, czy stoisz w cieniu budynku. */
+  let ev = evZeSlonca(swiatlo.teraz.wysokosc, d.zachmurzenie);
+  let zrodloEv = 'pozycja Słońca';
+  if (Number.isFinite(Number(d.jasnosc))) {
+    const zmierzony = evZPomiaru(Number(d.jasnosc), d.pomiar || {});
+    // Ufamy pomiarowi, ale nie bezgranicznie: telefon potrafi się pomylić
+    // przy mocnym kontraście, więc bierzemy średnią ważoną.
+    ev = ev * 0.4 + zmierzony * 0.6;
+    zrodloEv = 'pomiar z kamery + pozycja Słońca';
+  }
+
+  const ustawienia = dobierz(ev, {
+    sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
+    ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
+  });
+
+  const kadr = orientacja(Number(d.szerokosc), Number(d.wysokosc));
+  const czas = (x) => (x ? x.toISOString() : null);
+
+  sendJson(res, 200, {
+    miejsce: userLocation || null,
+    wspolrzedne: { lat, lon },
+    slonce: {
+      wysokosc: swiatlo.teraz.wysokosc,
+      azymut: swiatlo.teraz.azymut,
+      faza: swiatlo.faza,
+      wschod: czas(swiatlo.wschod),
+      zachod: czas(swiatlo.zachod),
+      zlotaRano: swiatlo.zlotaRano && { od: czas(swiatlo.zlotaRano.od), do: czas(swiatlo.zlotaRano.do) },
+      zlotaWieczor: swiatlo.zlotaWieczor && { od: czas(swiatlo.zlotaWieczor.od), do: czas(swiatlo.zlotaWieczor.do) },
+      niebieskaWieczor: swiatlo.niebieskaWieczor
+        && { od: czas(swiatlo.niebieskaWieczor.od), do: czas(swiatlo.niebieskaWieczor.do) },
+      // Ile zostało realnego czasu na ujęcie — to jest liczba, na którą się patrzy.
+      doZlotejMin: zaIleMinut(swiatlo.zlotaWieczor && swiatlo.zlotaWieczor.od, kiedy),
+      doZachoduMin: zaIleMinut(swiatlo.zachod, kiedy),
+    },
+    kadr,
+    zrodloEv,
+    ustawienia,
+  });
+}
+
 async function extractKbText(name, mime, buf) {
   const ext = extOf(name);
   if (TEXT_EXTS.has(ext) || /^text\//.test(mime || '')) {
     return buf.toString('utf8').slice(0, 200000);
   }
-  if (OFFICE_EXTS.has(ext)) return (await sensesExtract(name, buf)).slice(0, 200000);
+  /* Najpierw własnym czytnikiem, dopiero potem zmysłami. Odwrotna kolejność
+     znaczyła, że wczytanie umowy z telefonu nie działa, gdy komputer domowy
+     jest wyłączony — czyli prawie zawsze. */
+  if (OFFICE_EXTS.has(ext) || DOK_OBSLUGIWANE.has(ext)) {
+    const { text, potrzebnyOcr } = czytajLokalnie(name, buf);
+    if (text && !potrzebnyOcr) return text.slice(0, 200000);
+    // Skan albo format, którego sami nie umiemy (doc, xls, odt) — do zmysłów.
+    const zeZmyslow = await sensesExtract(name, buf);
+    if (zeZmyslow) return zeZmyslow.slice(0, 200000);
+    return text.slice(0, 200000);
+  }
   if (AV_EXTS.has(ext) || /^(audio|video)\//.test(mime || '')) {
     return (await sensesTranscribe(buf, mime)).slice(0, 200000);
   }
@@ -796,17 +1054,36 @@ async function handleTimeline(req, res) {
 // ---------------------------------------------------------------------------
 
 let sensesCache = { at: 0, online: false, caps: {} };
+let sensesOdswiezanie = null;
 
-async function sensesState() {
-  if (Date.now() - sensesCache.at < 60000) return sensesCache;
-  try {
-    const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(1500) });
-    const caps = r.ok ? await r.json() : {};
-    sensesCache = { at: Date.now(), online: r.ok, caps: caps.caps || caps || {} };
-  } catch {
-    sensesCache = { at: Date.now(), online: false, caps: {} };
+/* Odpytanie zmysłów NIE MOŻE wstrzymywać rozmowy.
+   Tak było: co minutę cache wygasał, a `capabilityManifest()` — czekający na
+   ten fetch — jest awaitowany PRZED wysłaniem pytania do modelu. Komputer
+   domowy Marcina bywa wyłączony, więc raz na minutę pierwsza wiadomość
+   płaciła do 1,5 s ciszy, zanim model w ogóle dostał pytanie.
+
+   Ta sama zasada, co przy pamięci długotrwałej: dodatek do odpowiedzi nigdy
+   nie wstrzymuje samej odpowiedzi. Oddajemy to, co wiemy, a świeży stan
+   dociąga się w tle na następną wiadomość. */
+const ZMYSLY_CACHE_MS = Number(process.env.SENSES_CACHE_MS || 60000);
+function sensesState() {
+  const swiezy = Date.now() - sensesCache.at < ZMYSLY_CACHE_MS;
+  if (!swiezy && !sensesOdswiezanie) {
+    sensesOdswiezanie = (async () => {
+      try {
+        const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(1500) });
+        const caps = r.ok ? await r.json() : {};
+        sensesCache = { at: Date.now(), online: r.ok, caps: caps.caps || caps || {} };
+      } catch {
+        sensesCache = { at: Date.now(), online: false, caps: {} };
+      } finally {
+        sensesOdswiezanie = null;
+      }
+    })();
   }
-  return sensesCache;
+  // Przy pierwszym w życiu zapytaniu nie ma czego oddać — wtedy czekamy,
+  // ale tylko ten jeden raz, nie co minutę.
+  return sensesCache.at ? sensesCache : sensesOdswiezanie.then(() => sensesCache);
 }
 
 function moduleExists(...parts) {
@@ -1426,12 +1703,33 @@ async function handleChat(req, res) {
         ? lastUser.content
         : (lastUser.content.find?.((p) => p.type === 'text')?.text || ''));
 
+  /* Ile instrukcji ten model uniesie. Dotąd każdy dostawał ten sam prompt
+     na 1351 tokenów — także model 4-miliardowy, który żadnego z opisanych
+     narzędzi nie umie użyć, a znacznik wypisałby użytkownikowi na ekran. */
+  const poziom = modelToolLevel(payload.model || ep.model || '');
+  const bezNarzedzi = poziom === 'rozmowa';
+  const krotko = poziom !== 'pelny';
+
   // Samoświadomość — czym Cosmos jest i co realnie potrafi w tej chwili
   if (payload.useCapabilities !== false) {
     try {
-      extras.push({ role: 'system', content: capabilityText(await capabilityManifest()) });
+      const pelny = capabilityText(await capabilityManifest());
+      // Najdłuższy pojedynczy blok promptu. Mniejszym modelom wystarcza sama
+      // tożsamość — lista czego brakuje w konfiguracji jest dla nich szumem.
+      extras.push({ role: 'system', content: krotko ? pelny.split('\n\n')[0] : pelny });
     } catch { /* manifest nie może blokować rozmowy */ }
   }
+
+  /* Data, godzina i miejsce — dwie rzeczy, których model nie ma skąd wiedzieć,
+     a bez których „w okolicy" i „dziś" nie znaczą nic. Idą zawsze i na początku. */
+  extras.push({
+    role: 'system',
+    content: `TERAZ JEST: ${terazTekst()}.`
+      + (userLocation ? `\nUŻYTKOWNIK ZNAJDUJE SIĘ W: ${userLocation}.`
+        + ' Używaj tego miejsca, gdy pyta o coś „w okolicy", „niedaleko" albo „u mnie" —'
+        + ' nie dopytuj o lokalizację, którą już znasz.'
+        : '\nNie znasz lokalizacji użytkownika. Jeśli jest potrzebna, zapytaj o nią raz, krótko.'),
+  });
 
   // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
   if (userProfile.trim()) {
@@ -1441,20 +1739,126 @@ async function handleChat(req, res) {
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });
 
-  if (payload.useSearch !== false) {
+  if (payload.useSearch !== false && !bezNarzedzi) {
     extras.push({
       role: 'system',
-      content:
+      content: krotko
+        ? 'NARZĘDZIE — INTERNET: gdy potrzebujesz aktualnych informacji, zakończ '
+          + 'odpowiedź osobną linią: [SZUKAJ: zapytanie]. Dostaniesz wyniki i odpowiesz '
+          + 'na ich podstawie. Gdy brakuje Ci miasta — zapytaj o nie zamiast szukać.'
+        :
         'NARZĘDZIE — WYSZUKIWANIE W INTERNECIE: gdy pytanie wymaga aktualnych lub zewnętrznych ' +
         'informacji (modele urządzeń, ceny, specyfikacje, wiadomości, fakty, których nie znasz), ' +
         'NIE zgaduj — zakończ swoją odpowiedź osobną linią dokładnie w formacie: [SZUKAJ: zapytanie]. ' +
         'Otrzymasz wtedy wiadomość „WYNIKI WYSZUKIWANIA” i na jej podstawie udzielisz pełnej ' +
         'odpowiedzi, podając źródła. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
-        'odpowiadaj normalnie, bez [SZUKAJ:].',
+        'odpowiadaj normalnie, bez [SZUKAJ:].\n' +
+        /* Bez tej zasady model przy „znajdź coś w okolicy" bez znanej lokalizacji
+           kręcił się w kółko: „mam szukać czy zapytać? instrukcja każe szukać,
+           ale nie mam czego". Cztery ekrany rozważań, zero odpowiedzi. */
+        'GDY BRAKUJE CI JEDNEJ INFORMACJI do sensownego wyszukania (najczęściej miasta), ' +
+        'a nie masz jej ani w profilu, ani w lokalizacji użytkownika — po prostu zapytaj o nią ' +
+        'jednym zdaniem i NIE dodawaj [SZUKAJ:]. To poprawne zachowanie, nie złamanie zasady; ' +
+        'nie roztrząsaj go w myślach.\n' +
+        'GDY SZUKASZ LOKALNEJ USŁUGI (warsztat, lekarz, sklep): w odpowiedzi podaj konkretne ' +
+        'firmy z adresem i telefonem, jeśli są w wynikach. Sama lista katalogów typu PKT czy ' +
+        'PanoramaFirm to słaba odpowiedź — użytkownik znalazłby ją sam. Jeśli w wynikach są ' +
+        'wyłącznie katalogi, powiedz to wprost i zaproponuj węższe zapytanie.',
     });
   }
 
-  if (payload.useActions !== false) {
+  /* Archiwum materiału — drugi wyróżnik. Model w chmurze nie ma Twoich
+     plików, więc na „ile klipów 50 mm w tym roku" nie odpowie nigdy. */
+  if (payload.useArchive !== false && !krotko && archiwum.ile() > 0) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — ARCHIWUM MATERIAŁU: użytkownik ma zindeksowane '
+        + `${archiwum.ile()} własnych zdjęć i klipów (aparat, obiektyw, ogniskowa, `
+        + 'przysłona, czas, ISO, data, GPS). Gdy pyta o SWÓJ materiał — „ile klipów '
+        + 'nakręciłem 50 mm", „pokaż ujęcia z czerwca o zachodzie", „mam coś z tego '
+        + 'miejsca" — zakończ odpowiedź osobną linią: [ARCHIWUM: filtry].\n'
+        + 'Filtry (wszystkie opcjonalne, oddzielone spacjami):\n'
+        + '  rok=2026 · miesiac=06 · typ=zdjecie|wideo · aparat=R6 · obiektyw=RF50 ·\n'
+        + '  ogniskowa=50 · ogniskowaOd=24 ogniskowaDo=70 · isoOd=1600 · przyslonaDo=2.8 ·\n'
+        + '  swiatlo=złota godzina|niebieska godzina|ostre światło|zmierzch|noc ·\n'
+        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo\n'
+        + 'Z `grupuj` dostaniesz zestawienie liczbowe zamiast listy plików — tego '
+        + 'używaj przy pytaniach „ile" i „najczęściej".\n'
+        + 'Pora światła jest policzona z pozycji Słońca nad miejscem zdjęcia, '
+        + 'nie zgadnięta z godziny — możesz na niej polegać.',
+    });
+  }
+
+  /* Plan zdjęciowy — wyróżnik Cosmosa. Model w chmurze nie wie, gdzie stoisz
+     ani jaki masz sprzęt, więc na „jakie ustawienia" odpowiada ogólnikami.
+     Tutaj są konkretne liczby, policzone z pozycji Słońca nad Twoim miejscem. */
+  if (payload.usePlan !== false && !krotko && userWspolrzedne) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — PLAN ZDJĘCIOWY: gdy pytanie dotyczy ustawień aparatu, światła, '
+        + 'złotej godziny, wschodu/zachodu albo „kiedy najlepiej kręcić", zakończ '
+        + 'odpowiedź osobną linią: [PLAN: parametry]. Parametry oddzielaj spacjami, '
+        + 'wszystkie są opcjonalne:\n'
+        + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
+        + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
+        + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30\n'
+        + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
+        + 'Dostaniesz pozycję Słońca, godziny złotej i niebieskiej oraz policzone '
+        + 'czas/przysłonę/ISO. NIE zgaduj tych liczb sam — Twoja wiedza nie obejmuje '
+        + 'dzisiejszej daty ani miejsca, w którym stoi użytkownik.',
+    });
+  }
+
+  /* Płótno — długi tekst obok rozmowy. Kluczowa jest DRUGA połowa instrukcji:
+     bez niej model przy każdej poprawce przepisuje cały dokument, co przy
+     scenariuszu na trzy tysiące słów trwa minutę i za każdym razem coś gubi. */
+  if (payload.useCanvas !== false && !krotko) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — PŁÓTNO (dokument obok rozmowy): gdy użytkownik prosi o dłuższy '
+        + 'tekst do dalszej pracy — scenariusz, opis filmu, artykuł, plan, dłuższy kod — '
+        + 'nie wypisuj go w rozmowie. Otwórz płótno:\n'
+        + '```płótno: Tytuł dokumentu\n(cała treść)\n```\n'
+        + 'POPRAWKI RÓB FRAGMENTAMI, nigdy nie przepisuj całości:\n'
+        + '```płótno-zmiana\n<<<<<<< SZUKAJ\n(dokładny fragment obecnej treści)\n'
+        + '=======\n(nowa wersja tego fragmentu)\n>>>>>>> ZAMIEŃ\n```\n'
+        + 'Fragment w SZUKAJ musi występować w płótnie DOKŁADNIE RAZ i być przepisany '
+        + 'znak w znak. Gdy trafia w dwa miejsca albo nie trafia wcale, zmiana zostanie '
+        + 'odrzucona — weź wtedy dłuższy, jednoznaczny fragment. Możesz podać kilka '
+        + 'bloków SZUKAJ/ZAMIEŃ naraz.\n'
+        + 'Aktualną treść płótna dostajesz w każdej wiadomości — użytkownik mógł ją '
+        + 'zmienić ręcznie, więc opieraj się na niej, a nie na tym, co sam napisałeś '
+        + 'wcześniej. Krótkie odpowiedzi zostawiaj w rozmowie; płótno jest do tego, '
+        + 'co się redaguje.',
+    });
+  }
+
+  /* Liczenie na danych. Tylko dla modeli poziomu „pełny": mniejsze i tak nie
+     napiszą poprawnego programu, a blok kodu wypisany w rozmowie zamiast
+     wykonania jest gorszy niż brak narzędzia. */
+  if (KOD_WLACZONY && payload.useCode !== false && !krotko) {
+    extras.push({
+      role: 'system',
+      content:
+        'NARZĘDZIE — LICZENIE NA DANYCH: gdy pytanie wymaga policzenia, przetworzenia '
+        + 'albo zestawienia danych (sumy, średnie, sortowanie, porównania, wykres), '
+        + 'NIE licz w pamięci — napisz program i zakończ nim odpowiedź:\n'
+        + '```uruchom\n// JavaScript (Node). Wypisz wynik przez console.log\n```\n'
+        + 'Program dostanie treść załączników z rozmowy jako pliki w katalogu roboczym '
+        + '(np. `fs.readFileSync(\'dane.csv\', \'utf8\')`). Otrzymasz z powrotem to, co '
+        + 'wypisał, i dopiero wtedy udzielisz odpowiedzi.\n'
+        + 'Możesz zapisać plik wynikowy — `wykres.svg` zostanie pokazany w rozmowie. '
+        + 'Wykres rysuj jako czysty SVG, bez bibliotek: żadnej nie ma i `npm install` '
+        + 'nie zadziała. Dostępna jest wyłącznie standardowa biblioteka Node.\n'
+        + 'Program nie ma dostępu do internetu ani do plików serwera i ma '
+        + `${Math.round((Number(process.env.CODE_TIMEOUT_MS || 10000)) / 1000)} sekund na wykonanie.`,
+    });
+  }
+
+  if (payload.useActions !== false && !bezNarzedzi) {
     const procList = procedury().length
       ? ' Nauczone procedury (możesz zaproponować ich uruchomienie): ' +
         procedury().map((pr) => `"${pr.name}"`).join(', ') +
@@ -1485,7 +1889,7 @@ async function handleChat(req, res) {
     });
   }
 
-  if (imageProviders().length && payload.useStudio !== false) {
+  if (imageProviders().length && payload.useStudio !== false && !bezNarzedzi) {
     extras.push({
       role: 'system',
       content:
@@ -1493,6 +1897,33 @@ async function handleChat(req, res) {
         'ilustracji lub loga, odpowiedz krótko i zakończ osobną linią dokładnie w formacie: ' +
         '[OBRAZ: szczegółowy opis sceny po angielsku]. Obraz zostanie wygenerowany i pokazany. ' +
         'Nie używaj [OBRAZ:] w innych sytuacjach.',
+    });
+  }
+
+  if (payload.useSearch !== false && !bezNarzedzi) {
+    extras.push({
+      role: 'system',
+      content: krotko
+        ? 'NARZĘDZIE — ZDJĘCIA Z INTERNETU: gdy użytkownik chce zobaczyć, jak coś '
+          + 'naprawdę wygląda, zakończ odpowiedź osobną linią: [GRAFIKA: zapytanie]. '
+          + 'To prawdziwe zdjęcia; [OBRAZ:] to rysunek tworzony przez AI — nie myl ich.'
+        :
+        /* Cosmos umiał obraz wygenerować, ale nie umiał żadnego ZNALEŹĆ.
+           Na „pokaż zdjęcia tych miejsc" model odpowiadał uczciwie „nie mam
+           dostępu do wyszukiwania obrazów" i proponował wizje artystyczne
+           zamiast prawdziwej Majorki. */
+        'NARZĘDZIE — WYSZUKIWANIE GRAFIK: gdy użytkownik chce ZOBACZYĆ, jak coś ' +
+        'naprawdę wygląda (miejsce, zabytek, produkt, osoba, sprzęt), zakończ odpowiedź ' +
+        'osobną linią dokładnie w formacie: [GRAFIKA: zapytanie]. Zdjęcia zostaną ' +
+        'znalezione w internecie i pokazane pod Twoją odpowiedzią.\n' +
+        'RÓŻNICA MIĘDZY NARZĘDZIAMI: [GRAFIKA:] to prawdziwe zdjęcia z internetu — ' +
+        'używaj jej, gdy pada słowo „zdjęcia", „jak wygląda", „pokaż". [OBRAZ:] to ' +
+        'rysunek tworzony przez AI — tylko gdy użytkownik prosi o wygenerowanie, ' +
+        'narysowanie albo wymyślenie grafiki. Na prośbę o zdjęcia prawdziwego miejsca ' +
+        'NIE proponuj wizji artystycznych — po prostu użyj [GRAFIKA:].\n' +
+        'Możesz poprosić o grafiki dla kilku rzeczy naraz, oddzielając je średnikiem: ' +
+        '[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc; Valldemossa]. Nie pytaj ' +
+        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.',
     });
   }
 
@@ -1927,6 +2358,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
     if (p === '/api/memory') return await handleMemory(req, res);
     if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+    if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
+    if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
+    if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
+    if (p.startsWith('/api/archive')) return await handleArchiwum(req, res, p);
+    if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
+    if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
     if (p === '/api/profile') {
       if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });
@@ -1935,6 +2372,18 @@ const server = http.createServer(async (req, res) => {
         catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
       }
     }
+    if (p === '/api/location') {
+      if (req.method === 'GET') return sendJson(res, 200, { location: userLocation, wspolrzedne: userWspolrzedne, teraz: terazTekst() });
+      if (req.method === 'POST') {
+        try {
+          const d = await readJson(req);
+          saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
+          return sendJson(res, 200, { ok: true, location: userLocation, wspolrzedne: userWspolrzedne });
+        }
+        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      }
+    }
+    if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
     if (p === '/api/admin/stats' && req.method === 'GET') {
       let kbBytes = 0;
       try {

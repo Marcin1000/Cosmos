@@ -133,6 +133,8 @@ const PORTY_ATRAP = {
   'reasonmock.py': [7097],
   'mock-katalog.js': [7103],
   'mock-tempo.js': [7115],
+  'mock-echo-systemu.js': [7116],
+  'mock-grafiki.js': [7117],
   'mockllm.py': [7099],
 };
 
@@ -196,6 +198,33 @@ const SRODOWISKA = {
     port: 3408,
     atrapy: [['mock-tempo.js', null]],
     env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7115/v1' },
+  },
+  // Atrapa oddaje wiadomości systemowe jako treść — sprawdzamy, co model widzi.
+  kontekst: {
+    port: 3409,
+    atrapy: [['mock-echo-systemu.js', null]],
+    env: {
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
+      COSMOS_TZ: 'Europe/Warsaw',
+      /* Atrapa przyjmuje połączenie na /health i milczy — tak zachowuje się
+         uśpiony komputer domowy. Adres nieistniejący nie nadaje się: odbija
+         się od proxy w 80 ms zamiast wisieć pełne 1,5 s. */
+      SENSES_URL: 'http://127.0.0.1:7116',
+      // Cache na zero, żeby KAŻDA wiadomość trafiała w moment odświeżenia.
+      // Bez tego pomiar mierzyłby trafienie w cache, czyli nic.
+      SENSES_CACHE_MS: '0',
+    },
+  },
+  // Wyszukiwanie grafik: atrapa DDG (żeton vqd → i.js → miniatura).
+  grafiki: {
+    port: 3410,
+    // Echo systemu jest tu po to, żeby sprawdzić, czy model W OGÓLE wie
+    // o nowym narzędziu — bez tego nadal odpowiadałby „nie umiem".
+    atrapy: [['mock-grafiki.js', null], ['mock-echo-systemu.js', null]],
+    env: {
+      IMAGE_SEARCH_URL: 'http://127.0.0.1:7117/',
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
+    },
   },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },

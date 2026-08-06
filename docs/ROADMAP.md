@@ -530,10 +530,255 @@ prosto w maliny**.
 - [x] **`genrm` dopisane do modeli bez końcówki czatu** — generatywne modele
       oceny odpowiedzi nie są rozmówcami
 
-Domyślnym modelem zostaje flagowiec 550B mimo że `super-120b` bywa szybszy:
-ultra zmierzył się 3,1 s i 2,5 s, super — 1,2 s, 4,4 s i 6,9 s. **Równy bije
-szybkiego, ale nieprzewidywalnego.** README pokazuje teraz dwa przebiegi
-obok siebie, żeby to było widać, a nie żeby trzeba było wierzyć na słowo.
+**Sprostowanie do własnego uzasadnienia.** Odradzałem `super-120b` jako
+„szybki, ale nieprzewidywalny", powołując się na jego 6,9 s. Ten pomiar
+pochodził jednak sprzed podniesienia limitu do 700 tokenów — model spalał
+budżet na myślenie, więc **nie był porównywalny z resztą i nie powinien był
+trafić do uzasadnienia**. Trzy porównywalne przebiegi dają: super 4,4 · 1,2 ·
+1,3 s, ultra 3,1 · 2,5 · 3,6 s. Super jest przeciętnie ponad dwa razy
+szybszy; ultra bardziej przewidywalny i ma 55 mld aktywnych parametrów wobec
+12 mld, co po polsku słychać. Ultra zostaje domyślny **dla jakości języka,
+nie dla równości** — a README pokazuje teraz oba przebiegi obok siebie
+i podaje jedną linijkę do przełączenia, zamiast rozstrzygać za czytelnika.
+
+## ✅ Partia 24 — Cosmos wie, który dziś i gdzie jesteś (GOTOWE)
+
+Prawdziwa rozmowa („znajdź, gdzie naprawię klimatyzację w okolicy") pokazała
+trzy luki naraz. Wszystkie były w tym, co Cosmos **mówi** modelowi — nie
+w modelu.
+
+- [x] **Data i godzina w każdej rozmowie** — dotąd nie było ich w promptcie
+      w ogóle. Model zna świat do końca swojego treningu, więc na „co dziś?"
+      nie odpowiadał „nie wiem", tylko podawał konkretną złą datę. Strefa
+      z `COSMOS_TZ` (domyślnie `Europe/Warsaw`), bo serwer stoi w UTC
+- [x] **Lokalizacja domowa** — nowe pole w Ustawieniach plus przycisk
+      **📍 Wykryj**: przeglądarka podaje współrzędne, serwer zamienia je na
+      nazwę miejscowości. Zamiana idzie **przez Cosmos, nie przez
+      przeglądarkę** — telefon nie łączy się z obcym hostem, a my podajemy
+      uczciwy User-Agent, którego Nominatim wymaga. `GEOCODE_URL=off`
+      wyłącza to całkiem, wpisać ręcznie można zawsze
+- [x] **Instrukcja wyszukiwania przewiduje „brakuje mi jednej informacji"** —
+      dotąd mówiła tylko „gdy pytanie wymaga aktualnych danych, dodaj
+      `[SZUKAJ:]`". Przy pytaniu o coś w okolicy bez znanego miasta model
+      kręcił się w kółko przez **cztery ekrany toku myślenia**: „mam szukać
+      czy zapytać? instrukcja każe szukać, ale nie mam czego". Teraz wie, że
+      dopytanie jednym zdaniem to poprawne zachowanie, nie złamanie zasady
+- [x] **Koniec odpowiedzi typu „oto lista katalogów"** — na pytanie
+      o warsztat wyszukiwarka zwróciła same agregatory (Fixly, Cylex, PKT),
+      a model uczciwie je wypisał. Uczciwie, ale bezużytecznie — to samo dałby
+      Google. Prompt każe teraz podać konkretne firmy z adresem i telefonem,
+      a gdy w wynikach są wyłącznie katalogi — powiedzieć to wprost
+- [x] **Atrapa, która oddaje wiadomości systemowe jako treść** — zestaw
+      sprawdza, co model NAPRAWDĘ widzi, zamiast wnioskować z kodu serwera.
+      Osiem sprawdzeń, zweryfikowane przez cofnięcie poprawki
+
+**Rozpoznawanie zdjęć potwierdzone na żywym zdjęciu.** Puszka Pringles
+Buffalo Wings na stole piknikowym, osoba w tle: model trafił markę, smak,
+rodzaj stołu, kolor koszulki, kierunek spojrzenia i otoczenie. Zadziałało
+też automatyczne przełączenie — `ultra-550b` nie widzi obrazów, więc zdjęcie
+poszło do `nano-omni` i Cosmos o tym powiedział. Jedyny błąd był językowy:
+model nazwał puszkę „słońceżerką", słowem, które nie istnieje. To ograniczenie
+`nano-omni` (3 mld aktywnych parametrów), nie usterka Cosmosa — do sprawdzenia
+`nemotron-nano-12b-v2-vl`, który ma 12 mld i w pomiarze jest równie szybki.
+
+## ✅ Partia 25 — zdjęcia z internetu i koniec czekania na uśpiony komputer (GOTOWE)
+
+- [x] **Wyszukiwanie grafik `[GRAFIKA:]`** — Cosmos umiał obraz WYGENEROWAĆ,
+      ale nie umiał żadnego ZNALEŹĆ. Na „poproszę zdjęcia tych miejsc" model
+      odpowiadał uczciwie „nie mam dostępu do wyszukiwania obrazów"
+      i proponował wizje artystyczne zamiast prawdziwej Majorki. Teraz szuka
+      naprawdę, kilka zapytań naraz (`[GRAFIKA: Katedra; plaża; wioska]`),
+      równolegle
+- [x] **Prompt rozróżnia „znajdź" od „wygeneruj"** — bez tego model traktował
+      prośbę o zdjęcia jako zamówienie na rysunek
+- [x] **Miniatury przez serwer, nie prosto z cudzego CDN-u** — telefon nie
+      łączy się z obcym hostem przy każdym wyniku. Proxy jest wąskie:
+      tylko https, tylko znane hosty, tylko treść będąca obrazem, z limitem
+      rozmiaru. Trzy sprawdzenia w baterii pilnują, żeby nie dało się przez
+      nie zajrzeć w sieć lokalną serwera
+- [x] **Każdy kafelek prowadzi do źródła** — zdjęcie z internetu bez źródła
+      jest bezwartościowe
+
+**Znaleziona przy okazji sekunda i pół na każdej wiadomości.** Stan zmysłów
+był odpytywany co minutę, a manifest zdolności — czekający na ten fetch —
+jest awaitowany PRZED wysłaniem pytania do modelu. Komputer domowy bywa
+wyłączony, więc raz na minutę pierwsza wiadomość płaciła **1,5 s ciszy**,
+zanim model w ogóle dostał pytanie. Odświeżanie poszło w tło, tak jak
+wcześniej pamięć długotrwała: **1510 ms → 7 ms**, zmierzone w obie strony.
+
+Zasada jest już trzecia z rzędu ta sama i warto ją zapisać wprost:
+**nic, co jest tylko dodatkiem do odpowiedzi, nie może wstrzymywać samej
+odpowiedzi.** Dotyczyło to pamięci, embeddingów, a teraz manifestu.
+
+**Domyślny model to teraz `super-120b`, nie `ultra-550b`** — trzy przebiegi
+dały super 4,4 · 1,2 · 1,3 s wobec ultra 3,1 · 2,5 · 3,6 s. Przeciętnie ponad
+dwa razy szybciej, a różnicę w polszczyźnie widać dopiero w dłuższych
+tekstach. Do pisania scenariuszy zostaje Ultra, do rozmowy Super.
+
+## ✅ Partia 26 — Cosmos czyta dokumenty (GOTOWE)
+
+Pierwszy krok programu „ma umieć to, co ChatGPT i Claude". Największa dziura
+była tutaj: **wczytanie umowy z telefonu nie działało nigdy.**
+
+Kod do wyciągania tekstu z PDF-ów i Office'a istniał, ale siedział w usłudze
+zmysłów na komputerze domowym — a ten komputer zwykle jest wyłączony.
+
+- [x] **Czytniki w Node, bez ani jednej zewnętrznej biblioteki** —
+      `lib/dokumenty.js`. DOCX, XLSX i PPTX to archiwa ZIP z XML-em w środku,
+      a ZIP-a rozpakuje `zlib` ze standardowej biblioteki. PDF: strumienie
+      FlateDecode i operatory `Tj`/`TJ`
+- [x] **Zmysły zostały jako zapas, nie jako warunek** — najpierw próbuje sam
+      serwer, do zmysłów idą tylko skany (OCR) i formaty, których nie umiemy
+      (`doc`, `xls`, `odt`)
+- [x] **Załącznik do rozmowy, nie tylko do bazy wiedzy** — spinacz przyjmuje
+      teraz dokumenty. Na ekranie kafelek „umowa.pdf · 8 412 znaków",
+      do modelu pełna treść w wyraźnej ramce. Kliknięcie kafelka pokazuje,
+      co dokładnie model dostał — bez tego „wczytałem plik" trzeba brać
+      na wiarę
+
+Trzy pułapki, które wyszły dopiero na próbnych plikach:
+
+- **Tabela w DOCX rozsypywała się na pionowy słupek.** Komórka zawiera akapit,
+  więc zamiana `</w:p>` na nowy wiersz przed obsługą `</w:tc>` rozbijała każdą
+  komórkę na osobną linię. Kolejność podmian ma tu znaczenie.
+- **W PDF-ie słowa się skleiły** — „Sprzedawca:Marcin". Odstępy między słowami
+  PDF robi liczbami w `[(a) -300 (b)] TJ`, a nie spacjami. Wartości poniżej
+  −100 tysięcznych firetu to teraz spacja.
+- **Krótka faktura była brana za skan** i szła niepotrzebnie do OCR. Skanu nie
+  poznaje się po długości tekstu, tylko po proporcji: setki kilobajtów na
+  stronę przy zerowej treści.
+
+## ✅ Partia 27 — narzędzia dobierane pod model (GOTOWE)
+
+Drugi krok programu. Załatwia dwie rzeczy naraz — „możliwości per model"
+i „ma być szybciej" — bo to okazał się ten sam problem.
+
+**Zmierzone:** każdy model dostawał ten sam prompt systemowy na **1351
+tokenów**, zanim użytkownik napisał słowo. Także model 4-miliardowy, który
+żadnego z opisanych narzędzi nie umie użyć — a znacznik `[SZUKAJ:]`
+wypisałby wprost na ekran.
+
+| Poziom | Kto | Prompt |
+|---|---|---|
+| `pelny` | model z cechą „narzędzia" **oraz każdy nieznany** | 1351 tok. |
+| `zwiezly` | znany model bez tej cechy | **442 tok.** (−67%) |
+| `rozmowa` | mały i szybki, bez rozumowania | **142 tok.** (−89%) |
+
+- [x] **Duże modele nie tracą nic** — to nie jest oszczędzanie na jakości.
+      Osobne sprawdzenie pilnuje, że pełny poziom nadal ma wyszukiwanie,
+      grafiki, regułę o brakującym mieście, datę i manifest
+- [x] **Średni poziom SKRACA, nie odbiera** — `[SZUKAJ:]` i `[GRAFIKA:]`
+      zostają, znika rozwlekły opis niuansów
+- [x] **Model nieznany dostaje pełny zestaw** — ta sama zasada, co przy
+      wzroku: lepiej dać możliwość czemuś, czego nie znamy, niż odebrać ją
+      po cichu na podstawie domysłu z nazwy
+- [x] **Widać to w Ustawieniach** — przy wyborze modelu pojawia się
+      wyjaśnienie „narzędzia skrócone" albo „bez narzędzi". Niewidoczna
+      zmiana zachowania byłaby pułapką: „czemu mały model nie umie szukać"
+      nie miałoby odpowiedzi
+- [x] **Data i miejsce zostają na każdym poziomie** — to fakty o świecie,
+      nie narzędzia
+
+## ✅ Partia 28 — liczenie na danych (GOTOWE)
+
+Trzeci krok programu, odpowiednik „Code Interpreter". Model pisze program
+w bloku ```` ```uruchom ````, Cosmos go wykonuje i oddaje wyjście z powrotem
+do rozmowy. Na „ile wyszło razem w tym arkuszu" dostajesz **liczbę policzoną,
+nie oszacowaną** — a czas wykonania jest widoczny, żeby było wiadomo, że
+program naprawdę się wykonał.
+
+- [x] **Program widzi załączniki rozmowy jako pliki** — `fs.readFileSync('dane.csv')`
+      działa wprost. To domyka partię 26: wczytany arkusz można teraz policzyć,
+      a nie tylko przeczytać
+- [x] **Wykres jako czysty SVG** — zapisany `wykres.svg` pokazuje się w rozmowie.
+      Wstawiany jako `<img src="data:...">`, nie przez `innerHTML`: program
+      pisze model, więc jego wyjście jest treścią niezaufaną
+- [x] **Tylko dla modeli poziomu „pełny"** — mniejszy model i tak nie napisze
+      poprawnego programu, a blok kodu wypisany w rozmowie zamiast wykonania
+      jest gorszy niż brak narzędzia
+
+**Czym to NIE jest.** Nie piaskownicą. Model uprawnień Node blokuje pliki
+serwera i podprocesy — i bateria to sprawdza — ale **sieci nie obejmuje**.
+Dlatego liczy się to, co da się zagwarantować:
+
+| Granica | Sprawdzenie w baterii |
+|---|---|
+| pliki serwera (`/etc/passwd`) | `ERR_ACCESS_DENIED` |
+| zapis poza katalogiem roboczym | `ERR_ACCESS_DENIED` |
+| podprocesy (`child_process`) | `ERR_ACCESS_DENIED` |
+| **klucze API** | do procesu trafia wyłącznie `PATH` |
+| nieskończona pętla | ubita po 10 s |
+
+Najważniejszy z tych wierszy to klucze: `NVIDIA_API_KEY` siedzi w zmiennych
+środowiskowych, a program pisze model. Do procesu potomnego nie trafia nic
+poza `PATH`, i osobne sprawdzenie próbuje ten klucz stamtąd wyciągnąć.
+
+Całość wyłącza `CODE_EXEC=off`.
+
+## ✅ Partia 29 — płótno (GOTOWE)
+
+Czwarty krok programu, odpowiednik Canvas/Artifacts. Dłuższy tekst —
+scenariusz, opis filmu, plan zdjęć — trafia do panelu obok rozmowy, a nie
+w strumień czatu. Dla twórcy wideo to teksty, które się **redaguje**, a nie
+czyta raz.
+
+- [x] **Poprawki fragmentami, nie przepisywanie całości** — to jest cała
+      wartość tej partii. Model podaje blok `SZUKAJ`/`ZAMIEŃ` zamiast trzech
+      tysięcy słów od nowa: sekunda zamiast minuty i nic nie gubi się po drodze
+- [x] **Dwuznaczny fragment jest ODRZUCANY** — gdy szukany tekst występuje
+      dwa razy, nie wiadomo, który model miał na myśli. Cicha podmiana
+      pierwszego z brzegu potrafi zepsuć dokument tak, że nikt tego nie
+      zauważy, a to jest tekst, nad którym ktoś pracuje godzinami
+- [x] **Można pisać ręcznie** — a bieżąca treść idzie do modelu przy każdej
+      wiadomości jako osobna wiadomość systemowa. Bez tego model przy
+      następnej poprawce szukałby fragmentu, który użytkownik zdążył już
+      zmienić
+- [x] **Płótno należy do rozmowy** — przy przełączeniu znika, żeby przy nowej
+      rozmowie nie został na ekranie cudzy dokument
+- [x] **Na telefonie pełny ekran** — panel na 46% szerokości przy 360 px dawał
+      kolumnę, w której nie da się przeczytać zdania
+- [x] **Zapis z opóźnieniem** — pisanie w płótnie słałoby inaczej kilkanaście
+      żądań na sekundę
+
+Płótno, jak liczenie na danych, dostają tylko modele poziomu „pełny".
+
+## ✅ Partia 30 — asystent planu zdjęciowego (GOTOWE)
+
+**Pierwszy wyróżnik: to, czego nie zrobi żaden asystent w chmurze.** ChatGPT
+nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz sprzęt —
+więc na „jakie ustawienia" odpowiada ogólnikami o złotej godzinie. Cosmos zna
+wszystko troje i podaje liczby.
+
+- [x] **Pozycja Słońca liczona, nie zgadywana** — `lib/slonce.js`, algorytm
+      NOAA, bez bibliotek (zamknięty wzór, nie długi ogon). Do zdjęć liczy się
+      nie „która godzina", tylko jak wysoko stoi Słońce: ta sama 18:00
+      w czerwcu i w grudniu to różnica sześciu działek
+- [x] **Kadr poziomo czy pionowo** — rozpoznawany z proporcji podglądu
+      (9:16, 16:9, 4:3…), tak jak prosiłeś
+- [x] **Czas, przysłona, ISO pod konkretny sprzęt** — profile Canona R6 II,
+      Mavica 3 i telefonu. Wideo ma czas ZABLOKOWANY regułą 180°; ustępuje
+      przysłona i ISO, nigdy płynność ruchu
+- [x] **Druga baza wzmocnienia** — R6 II przy ISO 800 szumi MNIEJ niż przy
+      640. Cosmos to podpowiada, bo w menu aparatu tego nie widać
+- [x] **Pomiar z kamery telefonu koryguje rachunek** — model nie wie, czy
+      stoisz w cieniu budynku. Średnia jasność kadru wchodzi do EV z wagą 0,6
+- [x] **Ile zostało minut** — do złotej godziny albo do zachodu. W terenie to
+      jedyna liczba, na którą naprawdę się patrzy
+
+Trzy błędy złapane przez testy, każdy wart osobnej wzmianki:
+
+- **Odwrócony znak różnicy EV.** Przy Słońcu w zenicie Cosmos radził „weź
+  statyw", zamiast „załóż filtr ND" — czyli dokładnie odwrotnie. Teraz osobne
+  sprawdzenie pilnuje, żeby przy prześwietleniu nigdy nie padło słowo „statyw".
+- **`Number(null)` to zero, nie NaN.** Bez zapisanej lokalizacji endpoint
+  liczył światło dla punktu 0°N 0°E na Atlantyku i oddawał to jako poprawną
+  odpowiedź. Teraz odmawia i mówi, czego brakuje.
+- **Dwie sprzeczne diagnozy naraz** — „potrzebny ND" i „potrzebny statyw"
+  w tym samym bloku. Zostało jedno zdanie z liczbą działek.
+
+Testy sprawdzają liczby wobec faktów **spoza naszego kodu**: astronomicznych
+godzin wschodu i zachodu pod Warszawą (4:16 i 21:00 w przesilenie letnie),
+wysokości Słońca w południe (61,4° latem, 13,6° zimą) i reguły „słoneczne 16".
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,

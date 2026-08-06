@@ -221,8 +221,8 @@ domyślna dla urządzeń, które niczego nie wybrały.
 
 | Do czego | Model | Uwagi |
 |---|---|---|
-| Czat w chmurze | `nemotron-3-ultra-550b-a55b` | Domyślny. Flagowiec, a w pomiarze najrówniejszy: 3/3 prób, 3,1 s do końca odpowiedzi |
-| Czat, gdy trafisz na spokojną porę | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M. Bywa błyskawiczny, ale w pomiarze rozjeżdżał się od 0,5 s do 5,8 s |
+| Czat w chmurze | `nemotron-3-ultra-550b-a55b` | Domyślny. 55 mld aktywnych = najlepsza polszczyzna; 2,5–3,6 s, zawsze 3/3 prób |
+| Czat, gdy wolisz tempo | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M. Zwykle 1,3 s, raz na kilka razy 4,4 s |
 | Wzrok w chmurze | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, wideo, mowa, tekst |
 | Model lokalny (RTX 3080) | `nemotron-nano-9b-v2` | ~6 GB w 4-bit — mieści się w 10 GB |
 | Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok |
@@ -663,6 +663,17 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
+| `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
+| `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
+| `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
+| `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
+| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła |
+| `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
+| `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
+| `/api/search/images` | GET | Wyszukiwanie zdjęć w internecie (znacznik `[GRAFIKA:]`) |
+| `/api/search/thumb` | GET | Proxy miniatur — wąskie, tylko znane hosty |
+| `/api/location` | GET/POST | Lokalizacja domowa — używa jej rozmowa i wyszukiwanie |
+| `/api/location/resolve` | POST | Współrzędne z przeglądarki → nazwa miejscowości |
 | `/api/summarize` | POST | Streszczenie rozmowy |
 | `/api/search` | GET | Wyszukiwanie w internecie (dla narzędzia `[SZUKAJ:]`) |
 | `/api/backup` | GET/POST | Kopia zapasowa: pobranie i przywrócenie |
@@ -678,6 +689,12 @@ lib/studio.js      generowanie mediów (OpenAI / Firefly / ElevenLabs / Seedance
 lib/nauka.js       rozpoznawanie, procedury, rutyny, automatyzacja
 lib/trening.js     eksport JSONL i uruchamianie QLoRA
 lib/urzadzenia.js  smart home i poranna odprawa
+lib/dokumenty.js   PDF, DOCX, XLSX, PPTX, CSV → tekst (bez zależności)
+lib/kod.js         uruchamianie programów modelu z ograniczeniami
+lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
+lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
+lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
+lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
@@ -689,6 +706,32 @@ cykliczną zależność i jedna ze stron widziałaby pusty obiekt.
 wychodzą z modułów jako funkcje odczytujące, nie jako tablice: `module.exports`
 kopiuje wiązanie w chwili eksportu, więc tablica zdezaktualizowałaby się po
 pierwszym skasowaniu. Audyt to sprawdza.
+
+### Kiedy bierzemy gotową bibliotekę, a kiedy piszemy sami
+
+Cosmos ma **dwie strefy** i to nie przypadek:
+
+| Strefa | Zależności | Dlaczego tak |
+|---|---|---|
+| **Rdzeń w Node** (`server.js`, `lib/`) | zero (Playwright opcjonalny) | Na VPS instalacja to `git clone` i `node server.js`. Brak drzewa paczek = brak nocnych wywrotek po `npm audit` i nic, co trzeba budować |
+| **Zmysły w Pythonie** (`senses/`) | pełno: YOLO, Whisper, Piper, MediaPipe, OpenCV, pypdf | Tu problemy mają długi ogon poprawności, którego nie da się dogonić samemu. Nikt nie pisze detektora obiektów od zera |
+
+**Zasada przy nowej funkcji:**
+
+- **Bierzemy bibliotekę**, gdy problem ma długi ogon (formaty dokumentów,
+  kodeki, modele, astronomia, strefy czasowe), biblioteka jest utrzymywana,
+  a całość da się zamknąć za jednym modułem. Jeśli to biblioteka ciężka albo
+  wymagająca budowania — idzie do zmysłów, nie do rdzenia.
+- **Piszemy sami**, gdy to logika produktu (pętla narzędzi, prompt, interfejs),
+  gdy zmieściłoby się w stu linijkach, albo gdy Node ma to w standardzie
+  (`zlib` zamiast paczki do ZIP-a).
+- **Nigdy** nie dokładamy zależności do rdzenia po to, żeby zaoszczędzić
+  pięćdziesiąt linijek.
+
+Czytniki dokumentów (`lib/dokumenty.js`) są świadomym przykładem drugiej
+kolumny: to sto linijek na `zlib`, działa bez sieci i bez instalacji, a skany
+i tak trafiają do `pypdf` w zmysłach. Jedna funkcja, dwie drogi — łatwiejsza
+wygrywa, gdy wystarcza.
 
 ## ⚡ Płynność — który model nadaje się do rozmowy
 
@@ -731,21 +774,33 @@ przeszkadza · `~` nierówny albo czuć czekanie · `✗` zawodny lub męczący.
 myślenia, więc `0,1 s` znaczy tylko „coś się dzieje" — treść przychodzi
 kilka sekund później. Skrypt pokazuje obie liczby i oznacza to `🧠myśli`.
 
-Poniżej **dwa niezależne przebiegi** o różnych porach — bo jeden nie wystarcza.
+Poniżej **trzy niezależne przebiegi** o różnych porach — bo jeden kłamie,
+a dwa nie wystarczą, żeby odróżnić trend od przypadku. Liczby to „całość",
+czyli czas do ostatniego znaku krótkiej odpowiedzi.
 
-| Do czego | Model | całość (przebieg 1 → 2) |
+| Do czego | Model | przebieg 1 · 2 · 3 |
 |---|---|---|
-| **Rozmowa** | `nvidia/nemotron-3-ultra-550b-a55b` | 3,1 → **2,5 s** · 550 mld = najlepsza polszczyzna |
-| **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 1,7 → **1,9 s** · czyta też wideo |
-| Najszybszy sensowny | `openai/gpt-oss-20b` | 1,0 → 1,5 s |
-| Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 → 1,2 s |
-| Bardzo szybki, słaby po polsku | `nvidia/nemotron-mini-4b-instruct` | 0,3 → 0,3 s |
+| **Rozmowa (jakość)** | `nvidia/nemotron-3-ultra-550b-a55b` | 3,1 · 2,5 · 3,6 s · 55 mld aktywnych = najlepsza polszczyzna |
+| **Rozmowa (tempo)** | `nvidia/nemotron-3-super-120b-a12b` | 4,4 · 1,2 · 1,3 s · kontekst 1M, ale 12 mld aktywnych |
+| **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 1,7 · 1,9 · 1,0 s · czyta też wideo |
+| Najszybszy sensowny | `openai/gpt-oss-20b` | 1,0 · 1,5 · 1,7 s |
+| Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 · 1,2 · 2,5 s |
+| Bardzo szybki, słaby po polsku | `nvidia/nemotron-mini-4b-instruct` | 0,3 · 0,3 · 0,4 s |
 
-**Dlaczego domyślny jest 550B, a nie szybszy `super-120b`.** Super bywa
-najszybszy w stawce (1,2 s), ale w drugim przebiegu potrzebował 4,4 s, a we
-wcześniejszym 6,9 s. Ultra zmierzył się 3,1 s i 2,5 s. **Równy model bije
-szybki, ale nieprzewidywalny** — czekanie raz na sekundę, raz na siedem jest
-w rozmowie gorsze niż stałe dwie i pół.
+**Ultra czy Super — to jest realny wybór, nie oczywistość.** Super odpowiada
+zwykle w 1,3 s, ale raz potrzebował 4,4 s. Ultra trzyma się przedziału
+2,5–3,6 s i nigdy nie zeszedł niżej. Czyli: **Super jest przeciętnie ponad
+dwa razy szybszy, Ultra bardziej przewidywalny i wyraźnie lepszy po polsku**
+(55 mld aktywnych parametrów wobec 12 mld — MoE oszczędza obliczenia kosztem
+tego, ile modelu naprawdę pracuje nad zdaniem).
+
+Domyślny jest **Ultra**, bo 3 s mieszczą się jeszcze w ocenie „dobra — nie
+przeszkadza", a polszczyzny nie da się nadrobić szybkością. Jeśli wolisz
+tempo — jedna linijka w `.env` i restart:
+
+```bash
+NEMOTRON_MODEL=nvidia/nemotron-3-super-120b-a12b
+```
 
 Cztery rzeczy, które pomiar obalił — **wszystkie były błędami narzędzia,
 nie wadami modeli**:

@@ -33,6 +33,9 @@ let serverConfig = { endpoints: { cloud: {}, local: {} } };
 let abortController = null;
 let isGenerating = false;
 let pendingImages = []; // dataURL-e załączników czekających na wysłanie
+// Dokumenty czekające na wysłanie: { name, chars, text, truncated }. Trzymamy
+// gotowy TEKST, nie plik — treść wyciąga serwer, zaraz po wybraniu pliku.
+let pendingDocs = [];
 let senses = { online: false, caps: {} }; // stan usługi percepcji (Python)
 // Serwer nieosiągalny: interfejs pochodzi z pamięci podręcznej, więc wygląda
 // sprawnie. Bez wyraźnego komunikatu awarię widać dopiero po wysłaniu wiadomości.
@@ -153,7 +156,17 @@ function loadJson(key, fallback) {
 // localStorage służy tylko jako podgląd offline, gdy serwer jest niedostępny.
 let convSaveTimer = null;
 
+/* Zapis z opóźnieniem — do pisania w płótnie. Zapisywanie przy każdym
+   naciśnięciu klawisza słałoby na serwer kilkanaście żądań na sekundę. */
+let zapisZaChwile = null;
+function saveConversationsSoon(ms = 800) {
+  clearTimeout(zapisZaChwile);
+  zapisZaChwile = setTimeout(() => { zapisZaChwile = null; saveConversations(); }, ms);
+}
+
 function saveConversations() {
+  clearTimeout(zapisZaChwile);
+  zapisZaChwile = null;
   if (!activeConversation) return;
   activeConversation.updatedAt = Date.now();
 
@@ -221,6 +234,31 @@ function msgText(m) {
 }
 function msgImages(m) {
   return typeof m.content === 'string' ? [] : (m.content?.images || []);
+}
+// Zdjęcia znalezione w internecie — inna rzecz niż `images` (te są wgrane
+// albo wygenerowane). Mają źródło, więc dają się kliknąć i sprawdzić.
+function msgPhotos(m) {
+  return typeof m.content === 'string' ? [] : (m.content?.photos || []);
+}
+// Wczytane dokumenty: na ekranie kafelek z nazwą, do modelu pełna treść.
+function msgDocs(m) {
+  return typeof m.content === 'string' ? [] : (m.content?.docs || []);
+}
+// Wynik uruchomienia programu: { stdout, stderr, wyniki, ms }.
+function msgRun(m) {
+  return typeof m.content === 'string' ? null : (m.content?.run || null);
+}
+
+/** Wszystkie załączniki tej rozmowy — program dostaje je jako pliki obok
+ *  siebie, więc „policz sumę z tego arkusza" działa bez przeklejania danych. */
+function zebranyMaterial(conv) {
+  const pliki = [];
+  for (const m of conv.messages) {
+    for (const d of msgDocs(m)) {
+      if (pliki.length < 8) pliki.push({ name: d.name, text: d.text });
+    }
+  }
+  return pliki;
 }
 
 // ----------------------------------------------------------------
@@ -499,11 +537,198 @@ function imagesHtml(images) {
   return wrap;
 }
 
+/* ================================ PŁÓTNO ================================ */
+
+$('canvas-close').addEventListener('click', () => { $('canvas').hidden = true; });
+$('canvas-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText($('canvas-text').value).catch(() => {});
+});
+$('canvas-download').addEventListener('click', () => {
+  const conv = activeConv();
+  const nazwa = ((conv && conv.canvas && conv.canvas.title) || 'plotno')
+    .replace(/[^\w\s.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, '').trim() || 'plotno';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$('canvas-text').value], { type: 'text/markdown' }));
+  a.download = `${nazwa}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+/* Ręczne poprawki trafiają z powrotem do rozmowy. Bez tego model przy
+   następnej zmianie szukałby fragmentu, którego już nie ma, i poprawka
+   przepadałaby z komunikatem „nie znalazłem". */
+$('canvas-text').addEventListener('input', () => {
+  const conv = activeConv();
+  if (conv && conv.canvas) {
+    conv.canvas.text = $('canvas-text').value;
+    odswiezMiarePlotna();
+    saveConversationsSoon();
+  }
+});
+
+/** Zastosuj poprawki w formacie SZUKAJ/ZAMIEŃ.
+ *
+ *  Model podaje fragment do znalezienia i jego nową wersję zamiast całego
+ *  dokumentu. Fragment MUSI występować dokładnie raz — gdy trafia w dwa
+ *  miejsca, nie wiadomo, które miał na myśli, i cicha podmiana pierwszego
+ *  z brzegu potrafi zepsuć tekst tak, że nikt tego nie zauważy.
+ */
+function zastosujZmianePlotna(conv, blok) {
+  if (!conv.canvas) return { ok: false, blad: t('canvas.noneYet') };
+  const kawalki = [...blok.matchAll(
+    /<<<<<<<\s*SZUKAJ\s*\n([\s\S]*?)\n?=======\s*\n([\s\S]*?)\n?>>>>>>>\s*ZAMIEŃ/g)];
+  if (!kawalki.length) return { ok: false, blad: t('canvas.badPatch') };
+
+  let tekst = conv.canvas.text;
+  let ile = 0;
+  for (const [, szukaj, zamien] of kawalki) {
+    const pierwszy = tekst.indexOf(szukaj);
+    if (pierwszy === -1) {
+      return { ok: false, blad: t('canvas.notFound', { frag: szukaj.slice(0, 60) }) };
+    }
+    if (tekst.indexOf(szukaj, pierwszy + 1) !== -1) {
+      return { ok: false, blad: t('canvas.ambiguous', { frag: szukaj.slice(0, 60) }) };
+    }
+    tekst = tekst.slice(0, pierwszy) + zamien + tekst.slice(pierwszy + szukaj.length);
+    ile++;
+  }
+  conv.canvas.text = tekst;
+  return { ok: true, ile };
+}
+
+/** Pokaż płótno bieżącej rozmowy (albo schowaj, gdy go nie ma). */
+function pokazPlotno(conv) {
+  const box = $('canvas');
+  if (!conv || !conv.canvas) { box.hidden = true; return; }
+  box.hidden = false;
+  $('canvas-title').textContent = conv.canvas.title;
+  $('canvas-text').value = conv.canvas.text;
+  odswiezMiarePlotna();
+}
+
+function odswiezMiarePlotna() {
+  const tekst = $('canvas-text').value;
+  const slowa = tekst.trim() ? tekst.trim().split(/\s+/).length : 0;
+  $('canvas-meta').textContent = t('canvas.meta', { w: slowa, c: tekst.length });
+}
+
+/** Wynik uruchomionego programu: co wypisał, jak długo to trwało i co narysował.
+ *
+ *  Czas wykonania jest tu celowo widoczny. „Policzone, nie zgadnięte" ma
+ *  znaczenie tylko wtedy, gdy widać, że program naprawdę się wykonał.
+ */
+function runPanel(run) {
+  const box = document.createElement('div');
+  box.className = 'run-panel';
+
+  const pasek = document.createElement('div');
+  pasek.className = 'run-bar';
+  pasek.textContent = run.przerwany
+    ? t('run.timeout', { s: Math.round((run.limitMs || 10000) / 1000) })
+    : t('run.done', { ms: run.ms || 0 });
+  box.appendChild(pasek);
+
+  if (run.stdout && run.stdout.trim()) {
+    const out = document.createElement('pre');
+    out.className = 'run-out';
+    out.textContent = run.stdout.trim();
+    box.appendChild(out);
+  }
+  if (run.stderr && run.stderr.trim()) {
+    const err = document.createElement('pre');
+    err.className = 'run-out run-err';
+    err.textContent = run.stderr.trim();
+    box.appendChild(err);
+  }
+
+  for (const plik of run.wyniki || []) {
+    if (/\.svg$/i.test(plik.name)) {
+      /* SVG wstawiamy jako obrazek z data-URI, nie przez innerHTML. Program
+         pisze model, więc jego wyjście jest treścią niezaufaną — wstrzyknięte
+         do DOM-u wykonałoby skrypt w kontekście Cosmosa. W <img> nie wykona. */
+      const img = document.createElement('img');
+      img.className = 'run-svg';
+      img.alt = plik.name;
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(plik.text)));
+      box.appendChild(img);
+    } else {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'doc-chip';
+      chip.textContent = `📄 ${plik.name}`;
+      chip.addEventListener('click', () => openTextViewer(plik.name, plik.text));
+      box.appendChild(chip);
+    }
+  }
+  return box;
+}
+
+/** Siatka zdjęć znalezionych w internecie.
+ *
+ *  Miniatury lecą przez `/api/search/thumb`, a nie prosto z cudzego CDN-u:
+ *  telefon nie łączy się wtedy z obcym hostem przy każdym wyniku, a zdjęcia
+ *  działają też wtedy, gdy sieć ten CDN blokuje. Każdy kafelek prowadzi do
+ *  strony źródłowej — zdjęcie z internetu bez źródła jest bezwartościowe.
+ */
+function photosGrid(photos) {
+  const wrap = document.createElement('div');
+  wrap.className = 'photo-grid';
+  for (const p of photos) {
+    const a = document.createElement('a');
+    a.className = 'photo-tile';
+    a.href = p.source || p.full || '#';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = p.title || '';
+    const img = document.createElement('img');
+    img.src = `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
+    img.alt = p.title || t('photo.found');
+    img.loading = 'lazy';
+    // Miniatura, której nie da się pobrać, nie może zostawić dziury w siatce.
+    img.addEventListener('error', () => a.remove());
+    const cap = document.createElement('span');
+    cap.className = 'photo-cap';
+    try { cap.textContent = new URL(p.source).hostname.replace(/^www\./, ''); }
+    catch { cap.textContent = p.title || ''; }
+    a.append(img, cap);
+    wrap.appendChild(a);
+  }
+  return wrap;
+}
+
 /** Podgląd obrazu na pełnym ekranie, z pobieraniem.
  *
  * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
  * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
  */
+/** Podgląd tekstu załącznika — bez biblioteki, bez zapisu, tylko do wglądu.
+ *  Buduje się na żądanie i znika po zamknięciu: to okno pomocnicze, nie stan. */
+function openTextViewer(nazwa, tekst) {
+  const tlo = document.createElement('div');
+  tlo.className = 'text-viewer';
+  const okno = document.createElement('div');
+  okno.className = 'text-viewer-box';
+  const pasek = document.createElement('div');
+  pasek.className = 'text-viewer-bar';
+  const tytul = document.createElement('span');
+  tytul.textContent = nazwa;
+  const zamknij = document.createElement('button');
+  zamknij.className = 'btn-secondary';
+  zamknij.textContent = t('close');
+  const tresc = document.createElement('pre');
+  tresc.className = 'text-viewer-body';
+  tresc.textContent = tekst;
+  pasek.append(tytul, zamknij);
+  okno.append(pasek, tresc);
+  tlo.appendChild(okno);
+
+  const usun = () => { tlo.remove(); document.removeEventListener('keydown', naEscape); };
+  const naEscape = (e) => { if (e.key === 'Escape') usun(); };
+  zamknij.addEventListener('click', usun);
+  tlo.addEventListener('click', (e) => { if (e.target === tlo) usun(); });
+  document.addEventListener('keydown', naEscape);
+  document.body.appendChild(tlo);
+}
+
 function openImageViewer(src) {
   const box = $('img-viewer');
   const img = $('img-viewer-img');
@@ -623,6 +848,27 @@ function messageElement(m, idx = -1) {
   if (images.length) {
     const imgs = imagesHtml(images);
     body.prepend(imgs);
+  }
+  const photos = msgPhotos(m);
+  if (photos.length) body.appendChild(photosGrid(photos));
+  const run = msgRun(m);
+  if (run) body.appendChild(runPanel(run));
+  const docs = msgDocs(m);
+  if (docs.length) {
+    const lista = document.createElement('div');
+    lista.className = 'msg-docs';
+    for (const d of docs) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'doc-chip';
+      chip.textContent = `📄 ${d.name} · ${t('doc.chars', { n: (d.chars || 0).toLocaleString() })}`;
+      chip.title = t('doc.peek');
+      // Podgląd na żądanie: wysłaną treść trzeba móc sprawdzić, ale nie
+      // kosztem zalania rozmowy ośmioma tysiącami znaków umowy.
+      chip.addEventListener('click', () => openTextViewer(d.name, d.text));
+      lista.appendChild(chip);
+    }
+    body.prepend(lista);
   }
 
   const col = document.createElement('div');
@@ -765,6 +1011,9 @@ function editFrom(idx) {
 
 function renderMessages() {
   const conv = activeConv();
+  // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć —
+  // inaczej przy nowej rozmowie zostaje na ekranie cudzy dokument.
+  pokazPlotno(conv);
   el.messages.innerHTML = '';
   const hasMessages = conv && conv.messages.length > 0;
   el.welcome.style.display = hasMessages ? 'none' : '';
@@ -948,6 +1197,30 @@ function renderAttachments() {
     wrap.append(img, rm);
     el.attachments.appendChild(wrap);
   });
+  pendingDocs.forEach((doc, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'attachment attachment-doc' + (doc.loading ? ' is-loading' : '');
+    const label = document.createElement('span');
+    label.className = 'attachment-doc-name';
+    // Liczba znaków to jedyna uczciwa miara „ile z tego pliku model dostanie".
+    label.textContent = doc.loading
+      ? t('doc.reading', { name: doc.name })
+      : `${doc.name} · ${t('doc.chars', { n: doc.chars.toLocaleString() })}${doc.truncated ? ' ✂' : ''}`;
+    wrap.appendChild(label);
+    if (!doc.loading) {
+      const rm = document.createElement('button');
+      rm.className = 'attachment-remove';
+      rm.textContent = '×';
+      rm.title = t('removeAttachment');
+      rm.addEventListener('click', () => {
+        pendingDocs.splice(idx, 1);
+        renderAttachments();
+        updateSendButton();
+      });
+      wrap.appendChild(rm);
+    }
+    el.attachments.appendChild(wrap);
+  });
   renderBlindModelWarning();
 }
 
@@ -977,18 +1250,44 @@ el.attachBtn.addEventListener('click', () => el.fileInput.click());
 
 el.fileInput.addEventListener('change', async () => {
   for (const file of el.fileInput.files) {
-    if (!file.type.startsWith('image/')) continue;
-    if (pendingImages.length >= 4) { alert(t('cam.maxImages')); break; }
-    try {
-      pendingImages.push(await resizeImage(file));
-    } catch (err) {
-      alert(err.message);
+    if (file.type.startsWith('image/')) {
+      if (pendingImages.length >= 4) { alert(t('cam.maxImages')); break; }
+      try { pendingImages.push(await resizeImage(file)); }
+      catch (err) { alert(err.message); }
+      continue;
     }
+    // Dokument: treść wyciąga serwer, przeglądarka dostaje gotowy tekst.
+    if (pendingDocs.length >= 4) { alert(t('doc.max')); break; }
+    await wczytajDokument(file);
   }
   el.fileInput.value = '';
   renderAttachments();
   updateSendButton();
 });
+
+/** Wyślij plik do odczytania i zapamiętaj wynik jako załącznik rozmowy. */
+async function wczytajDokument(file) {
+  const wpis = { name: file.name, chars: 0, text: '', loading: true };
+  pendingDocs.push(wpis);
+  renderAttachments();
+  updateSendButton();
+  try {
+    const r = await fetch('/api/document', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
+      body: file,
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    Object.assign(wpis, { chars: d.chars, text: d.text, truncated: d.truncated, loading: false });
+  } catch (err) {
+    // Plik, którego nie da się odczytać, znika z listy — ale z powodem.
+    pendingDocs.splice(pendingDocs.indexOf(wpis), 1);
+    alert(t('doc.failed', { name: file.name, msg: err.message }));
+  }
+  renderAttachments();
+  updateSendButton();
+}
 
 // wklejanie obrazów ze schowka
 el.input.addEventListener('paste', async (e) => {
@@ -1014,10 +1313,30 @@ function toApiMessages(conv) {
   if (sysPrompt) {
     api.push({ role: 'system', content: sysPrompt });
   }
+  /* Bieżąca treść płótna idzie jako osobna wiadomość systemowa, ZAWSZE
+     aktualna. Historia rozmowy zawiera stare wersje dokumentu; bez tego
+     model poprawiałby fragment, który użytkownik zdążył już zmienić ręcznie. */
+  if (conv.canvas && conv.canvas.text) {
+    api.push({
+      role: 'system',
+      content: `PŁÓTNO — dokument otwarty obok rozmowy, tytuł „${conv.canvas.title}". `
+        + 'To jest jego AKTUALNA treść (użytkownik mógł ją edytować ręcznie):\n'
+        + '--- POCZĄTEK PŁÓTNA ---\n' + conv.canvas.text + '\n--- KONIEC PŁÓTNA ---',
+    });
+  }
   for (const m of conv.messages) {
     if (m.error || m.role === 'action') continue;
-    const text = msgText(m);
+    let text = msgText(m);
     const images = msgImages(m);
+    // Dokumenty doklejamy dopiero tutaj: w rozmowie widać kafelek z nazwą,
+    // a model dostaje pełną treść z wyraźną ramką, żeby wiedział, co jest
+    // załącznikiem, a co pytaniem użytkownika.
+    const docs = msgDocs(m);
+    if (docs.length) {
+      const bloki = docs.map((d) => `--- ZAŁĄCZNIK: ${d.name}`
+        + (d.truncated ? ' (przycięty)' : '') + ` ---\n${d.text}\n--- KONIEC: ${d.name} ---`);
+      text = bloki.join('\n\n') + (text ? `\n\n${text}` : '');
+    }
     if (images.length && m.role === 'user') {
       const parts = images.map((src) => ({ type: 'image_url', image_url: { url: src } }));
       if (text) parts.push({ type: 'text', text });
@@ -1033,12 +1352,22 @@ function toApiMessages(conv) {
 
 async function sendMessage() {
   const text = el.input.value.trim();
-  if ((!text && !pendingImages.length) || isGenerating) return;
+  const gotowe = pendingDocs.filter((d) => !d.loading);
+  if ((!text && !pendingImages.length && !gotowe.length) || isGenerating) return;
 
-  const conv = ensureConversation(text);
-  const content = pendingImages.length ? { text, images: [...pendingImages] } : text;
+  const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
+  const content = (pendingImages.length || gotowe.length)
+    ? {
+        text,
+        ...(pendingImages.length ? { images: [...pendingImages] } : {}),
+        // Treść dokumentu trzymamy osobno od tekstu wiadomości: na ekranie ma
+        // być kafelek „umowa.pdf · 8 412 znaków", a nie ośmiotysięczna ściana.
+        ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
+      }
+    : text;
   conv.messages.push({ role: 'user', content });
   pendingImages = [];
+  pendingDocs = [];
   renderAttachments();
   saveConversations();
 
@@ -1228,9 +1557,28 @@ const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
 /** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
  *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran. */
 function stripSearchMarker(s) {
-  return String(s || '').replace(/\[SZUKAJ:[^\]]*\]/gi, '').trim();
+  return String(s || '')
+    .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
+    .replace(/\[GRAFIKA:[^\]]*\]/gi, '')
+    .replace(/\[PLAN:?[^\]]*\]/gi, '')
+    .replace(/\[ARCHIWUM:?[^\]]*\]/gi, '')
+    .trim();
 }
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
+/* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
+   na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
+   obrazów" i proponował wizje artystyczne zamiast prawdziwej Majorki. */
+const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
+/* Kod do wykonania. Jedyne narzędzie zapisane blokiem, nie znacznikiem —
+   program nie mieści się w jednej linii. */
+const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
+/* Płótno: dokument obok rozmowy. Tworzenie i podmiana fragmentu to dwie różne
+   rzeczy — przy scenariuszu na trzy tysiące słów przepisywanie całości przy
+   każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
+const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
+const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
+const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
+const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
 async function runGeneration(conv) {
@@ -1279,6 +1627,203 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         continue;
+      }
+
+      // Archiwum: pytania o WŁASNY materiał użytkownika.
+      const archMarker = acc.match(ARCHIVE_RE);
+      if (archMarker && depth < MAX_SEARCHES) {
+        const q = new URLSearchParams();
+        let grupuj = '';
+        for (const kawalek of archMarker[1].trim().split(/\s+/)) {
+          const i = kawalek.indexOf('=');
+          if (i < 1) continue;
+          const k = kawalek.slice(0, i);
+          const v = kawalek.slice(i + 1);
+          if (k === 'grupuj') grupuj = v; else q.set(k, v);
+        }
+        const before = stripSearchMarker(acc.replace(archMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.searchingArchive'),
+        });
+        saveConversations();
+        renderMessages();
+        let dane;
+        try {
+          // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
+          const adres = grupuj
+            ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
+            : `/api/archive/search?limit=40&${q}`;
+          const r = await fetch(adres);
+          dane = await readJsonSafe(r);
+          if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
+        } catch (err) { dane = { error: err.message }; }
+        conv.messages.push({
+          role: 'user',
+          content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
+            + 'podstawie tych danych, nie zgaduj):\n' + JSON.stringify(dane, null, 1).slice(0, 12000),
+          search: true,
+          searchQuery: t('chat.archiveQuery'),
+        });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
+      const planMarker = acc.match(PLAN_RE);
+      if (planMarker && depth < MAX_SEARCHES) {
+        const parametry = {};
+        for (const kawalek of planMarker[1].trim().split(/\s+/)) {
+          const [k, v] = kawalek.split('=');
+          if (k && v) parametry[k] = /^[\d.]+$/.test(v) ? Number(v) : v;
+        }
+        const before = stripSearchMarker(acc.replace(planMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.planning'),
+        });
+        saveConversations();
+        renderMessages();
+        let plan;
+        try {
+          const r = await fetch('/api/plan', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parametry),
+          });
+          plan = await readJsonSafe(r);
+          if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
+        } catch (err) {
+          plan = { error: err.message };
+        }
+        conv.messages.push({
+          role: 'user',
+          content: 'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
+            + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
+          search: true,
+          searchQuery: t('chat.planQuery'),
+        });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      // Płótno: nowy dokument albo poprawka fragmentu w istniejącym.
+      const nowePlotno = acc.match(CANVAS_NEW_RE);
+      const zmianaPlotna = acc.match(CANVAS_PATCH_RE);
+      if (nowePlotno || zmianaPlotna) {
+        let opis;
+        if (nowePlotno) {
+          conv.canvas = {
+            title: (nowePlotno[1] || '').trim() || t('canvas.untitled'),
+            text: nowePlotno[2].replace(/\n$/, ''),
+          };
+          opis = t('canvas.created', { title: conv.canvas.title });
+        } else {
+          const wynik = zastosujZmianePlotna(conv, zmianaPlotna[1]);
+          opis = wynik.ok
+            ? t('canvas.patched', { n: wynik.ile })
+            : t('canvas.patchFailed', { msg: wynik.blad });
+        }
+        const before = stripSearchMarker(acc.replace((nowePlotno || zmianaPlotna)[0], ''));
+        conv.messages.push({ role: 'assistant', content: (before ? before + '\n\n' : '') + opis });
+        saveConversations();
+        renderMessages();
+        pokazPlotno(conv);
+        finalText = opis;
+        break;
+      }
+
+      /* Kod sprawdzamy najpierw: wynik programu zwykle jest treścią odpowiedzi,
+         a nie dodatkiem do niej. Pętla wraca potem do modelu, żeby ten
+         zinterpretował liczby — inaczej użytkownik dostaje surowy stdout. */
+      const kodMarker = acc.match(RUN_FENCE_RE);
+      if (kodMarker && depth < MAX_SEARCHES) {
+        const kod = kodMarker[1];
+        const before = stripSearchMarker(acc.replace(kodMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.running'),
+          code: kod,
+        });
+        saveConversations();
+        renderMessages();
+        let wynik;
+        try {
+          const r = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Program dostaje treść załączników tej rozmowy jako pliki.
+            body: JSON.stringify({ code: kod, files: zebranyMaterial(conv) }),
+          });
+          wynik = await readJsonSafe(r);
+          if (!r.ok) throw new Error(wynik.error || `HTTP ${r.status}`);
+        } catch (err) {
+          wynik = { stdout: '', stderr: err.message, wyniki: [] };
+        }
+        const svg = (wynik.wyniki || []).filter((w) => /\.svg$/i.test(w.name));
+        conv.messages.push({
+          role: 'assistant',
+          content: { text: '', run: wynik },
+          ...(svg.length ? {} : {}),
+        });
+        // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
+        conv.messages.push({
+          role: 'user',
+          content: t('chat.runResult', {
+            out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
+            err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
+          }),
+          search: true,
+          searchQuery: t('chat.runQuery'),
+        });
+        saveConversations();
+        renderMessages();
+        continue;
+      }
+
+      /* Zdjęcia z internetu. Sprawdzane PRZED [OBRAZ:], bo gdy model wypisze
+         oba, użytkownik prosił o zdjęcia — generowanie było jego drugim
+         wyborem, nie pierwszym. */
+      const fotoMarker = acc.match(PHOTO_MARKER_RE);
+      if (fotoMarker) {
+        // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
+        const zapytania = fotoMarker[1].split(';')
+          .map((s) => s.trim()).filter(Boolean).slice(0, 4);
+        const before = stripSearchMarker(acc.replace(fotoMarker[0], ''));
+        conv.messages.push({
+          role: 'assistant',
+          content: (before ? before + '\n\n' : '') + t('chat.findingPhotos', { q: zapytania.join(', ') }),
+        });
+        saveConversations();
+        renderMessages();
+        // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
+        const zestawy = await Promise.all(zapytania.map(async (q) => {
+          try {
+            const r = await fetch(`/api/search/images?q=${encodeURIComponent(q)}`);
+            const d = await readJsonSafe(r);
+            return { q, photos: d.results || [], error: d.error || '' };
+          } catch (err) { return { q, photos: [], error: err.message }; }
+        }));
+        const znalezione = zestawy.filter((z) => z.photos.length);
+        if (znalezione.length) {
+          for (const z of znalezione) {
+            conv.messages.push({
+              role: 'assistant',
+              content: { text: zapytania.length > 1 ? z.q : '', photos: z.photos },
+            });
+          }
+          finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
+        } else {
+          conv.messages.push({
+            role: 'assistant',
+            content: t('chat.photosNone', { msg: zestawy.find((z) => z.error)?.error || '' }),
+            error: true,
+          });
+          finalText = t('chat.photosNoneVoice');
+        }
+        saveConversations();
+        break;
       }
 
       const imgMarker = acc.match(IMAGE_MARKER_RE);
@@ -2284,6 +2829,11 @@ async function startLive() {
   // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł — a to właśnie
   // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
   $('live-panel').style.display = '';
+  // Plan pokazujemy tylko wtedy, gdy wiemy GDZIE — bez współrzędnych
+  // nie ma z czego policzyć pozycji Słońca, a pusty panel myli.
+  fetch('/api/location').then((r) => r.json())
+    .then((d) => { $('plan-box').hidden = !(d.wspolrzedne && d.wspolrzedne.lat); })
+    .catch(() => {});
   applyLiveExpanded();
   updateLiveRec();
 
@@ -2320,6 +2870,7 @@ function stopLive() {
   if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
   $('live-video').srcObject = null;
   $('live-panel').style.display = 'none';
+  $('plan-box').hidden = true;
   livePrevObjects = '';
 }
 
@@ -2423,6 +2974,110 @@ async function liveDetect() {
   } else if (!objs.some((o) => o.label === 'person')) {
     livePrevPose = '';
   }
+
+  odswiezPlan(cap);
+}
+
+/* ==================== PLAN ZDJĘCIOWY ==================== */
+
+let planOstatnio = 0;
+let planZajety = false;
+
+/** Średnia jasność kadru (0–1) — pomiar sceny, nie zgadywanka z pory dnia.
+ *  Próbkujemy co dziesiąty piksel: różnica w wyniku żadna, a koszt dziesięć
+ *  razy mniejszy przy klatce co sekundę. */
+function jasnoscKadru(canvas) {
+  try {
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const d = g.getImageData(0, 0, canvas.width, canvas.height).data;
+    let suma = 0;
+    let ile = 0;
+    for (let i = 0; i < d.length; i += 40) {
+      suma += (d[i] * 0.2126 + d[i + 1] * 0.7152 + d[i + 2] * 0.0722) / 255;
+      ile++;
+    }
+    return ile ? suma / ile : null;
+  } catch { return null; }
+}
+
+/** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów —
+ *  światło zmienia się w minutach, nie w klatkach. */
+async function odswiezPlan(cap) {
+  const box = $('plan-box');
+  if (!box || box.hidden) return;
+  if (planZajety || Date.now() - planOstatnio < 8000) return;
+  planZajety = true;
+  planOstatnio = Date.now();
+  try {
+    const trybPola = $('plan-mode').value;
+    const wideo = trybPola.startsWith('wideo');
+    const dane = {
+      sprzet: $('plan-gear').value,
+      tryb: wideo ? 'wideo' : 'zdjecie',
+      klatki: trybPola === 'wideo50' ? 50 : 25,
+      zachmurzenie: $('plan-sky').value,
+      szerokosc: cap ? cap.width : 0,
+      wysokosc: cap ? cap.height : 0,
+    };
+    const j = cap ? jasnoscKadru(cap) : null;
+    if (j !== null) dane.jasnosc = j;
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dane),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) {
+      $('plan-shot').textContent = '—';
+      $('plan-light').textContent = d.error || t('plan.needLocation');
+      $('plan-why').textContent = '';
+      return;
+    }
+    pokazPlan(d);
+  } catch { /* offline — panel zostaje z poprzednim wynikiem */ } finally {
+    planZajety = false;
+  }
+}
+
+function pokazPlan(d) {
+  const u = d.ustawienia;
+  $('plan-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+
+  const czesci = [];
+  if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
+  czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
+  const light = $('plan-light');
+  light.textContent = czesci.join(' · ');
+
+  /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
+     Gdy złota godzina trwa TERAZ, mówimy to wprost zamiast pokazywać
+     ujemne minuty do jej początku. */
+  const zloty = d.slonce.doZlotejMin;
+  const zachod = d.slonce.doZachoduMin;
+  const czas = document.createElement('span');
+  czas.className = 'plan-urgent';
+  if (d.slonce.faza === 'złota godzina') {
+    czas.textContent = ` · ${t('plan.goldenNow')}`
+      + (zachod > 0 ? `, ${t('plan.toSunset', { n: zachod })}` : '');
+  } else if (zloty > 0) {
+    czas.textContent = ` · ${t('plan.toGolden', { n: zloty })}`;
+  } else if (zachod > 0) {
+    czas.textContent = ` · ${t('plan.toSunset', { n: zachod })}`;
+  }
+  if (czas.textContent) light.appendChild(czas);
+
+  const why = $('plan-why');
+  why.innerHTML = '';
+  for (const p of u.powody) {
+    const el = document.createElement('p');
+    el.textContent = p;
+    why.appendChild(el);
+  }
+}
+
+for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
+  const el = $(id);
+  // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
+  if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
 }
 
 // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
@@ -3515,6 +4170,7 @@ function openSettings() {
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
+  fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
@@ -3611,8 +4267,46 @@ el.settingsSave.addEventListener('click', () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile: $('set-profile').value }),
   }).catch(() => {});
+  // lokalizacja tak samo — używa jej też wyszukiwanie, nie tylko rozmowa
+  fetch('/api/location', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location: $('set-location').value }),
+  }).catch(() => {});
   updateModelBadge();
   closeSettings();
+});
+
+/* Wykrycie lokalizacji: przeglądarka daje współrzędne, serwer zamienia je na
+   nazwę. Współrzędne nie opuszczają Cosmosa inaczej niż przez ten jeden
+   zapytanie — i tylko po kliknięciu, nigdy samo z siebie. */
+$('set-location-detect').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const pole = $('set-location');
+  if (!navigator.geolocation) {
+    pole.placeholder = t('set.locationNoGps');
+    return;
+  }
+  const dawny = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('set.locationWorking');
+  try {
+    const poz = await new Promise((ok, zle) => navigator.geolocation.getCurrentPosition(ok, zle, {
+      enableHighAccuracy: false, timeout: 10000, maximumAge: 600000,
+    }));
+    const r = await fetch('/api/location/resolve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: poz.coords.latitude, lon: poz.coords.longitude }),
+    });
+    const d = await r.json();
+    if (d.location) pole.value = d.location;
+    else pole.placeholder = d.error || t('set.locationFailed');
+  } catch (err) {
+    // Odmowa zgody to nie awaria — użytkownik zawsze może wpisać ręcznie.
+    pole.placeholder = err && err.code === 1 ? t('set.locationDenied') : t('set.locationFailed');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = dawny;
+  }
 });
 
 // kopia zapasowa — pobieranie i przywracanie
@@ -3818,6 +4512,10 @@ function renderModelInfo(boxEl, id) {
     if (info.opis) parts.push(`<div>${escapeHtml(info.opis)}</div>`);
   }
   if (tags.length) parts.push(`<div class="model-info-tags">${tags.join('')}</div>`);
+  /* Zestaw narzędzi zależy teraz od modelu. Gdyby to było niewidoczne,
+     „dlaczego mały model nie umie szukać" byłoby zagadką bez odpowiedzi. */
+  const poziom = typeof modelToolLevel === 'function' ? modelToolLevel(id) : 'pelny';
+  if (poziom !== 'pelny') parts.push(`<div class="model-info-tools">${t(`model.tools.${poziom}`)}</div>`);
   if (info.mocne && info.mocne.length) {
     parts.push(`<div class="model-info-good">${t('model.bestFor')} `
       + escapeHtml(info.mocne.join(' · ')) + '</div>');
