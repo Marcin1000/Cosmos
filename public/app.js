@@ -1686,7 +1686,10 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         const last = await streamOnce(conv);
-        finalText = stripSearchMarker(last) || lastReasoning || t('emptyReply');
+        // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
+        const trescOstatnia = stripSearchMarker(last);
+        if (!trescOstatnia && lastReasoning) { lastThink = lastReasoning; finalText = t('budgetSpentOnThinking'); }
+        else finalText = trescOstatnia || t('emptyReply');
         conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
         saveConversations();
         break;
@@ -1950,9 +1953,21 @@ async function runGeneration(conv) {
         break;
       }
 
-      // Pusta treść przy modelu rozumującym znaczy zwykle „budżet tokenów poszedł
-      // na myślenie” — wtedy tok myślenia jest jedyną odpowiedzią, jaką mamy.
-      finalText = stripSearchMarker(acc) || lastReasoning || t('emptyReply');
+      /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
+         w całości na myślenie”. Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
+         jako odpowiedź — i to było gorsze niż nic: rozumowanie jest po
+         angielsku, urwane w połowie zdania i pokazuje deliberację, której
+         użytkownik widzieć nie powinien. Teraz mówimy wprost, co się stało,
+         a samo myślenie ląduje w zwijanym panelu, gdzie jego miejsce. */
+      const trescOdpowiedzi = stripSearchMarker(acc);
+      let mysliZamiastTresci = '';
+      if (!trescOdpowiedzi && lastReasoning) {
+        mysliZamiastTresci = lastReasoning;
+        lastThink = lastReasoning;
+        finalText = t('budgetSpentOnThinking');
+      } else {
+        finalText = trescOdpowiedzi || t('emptyReply');
+      }
       const actMarker = finalText.match(ACTION_RE);
       if (actMarker) {
         const shown = finalText.replace(actMarker[0], '').trim();
@@ -1985,6 +2000,9 @@ async function runGeneration(conv) {
       if (finalText) {
         el.voiceAnswer.textContent = stripForSpeech(finalText);
         setVoiceState('speaking');
+        // Zapamiętujemy, CO powiedzieliśmy — askVoice odrzuci to, gdyby
+        // wróciło jako „pytanie" z mikrofonu.
+        voiceOstatniaOdpowiedz = stripForSpeech(finalText);
         await speakText(finalText);
       }
       if (voiceMode) startQueryListening(); // rozmowa trwa — pytanie uzupełniające bez wake word
@@ -3863,6 +3881,17 @@ let voiceRec = null;          // jedyny rozpoznawacz sesji
 let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
 let voiceHeard = '';          // złożone zdanie w trybie pytania
 let voiceSilence = null;      // odliczanie ciszy po pytaniu
+/* Znacznik „to już przerobiliśmy”. Samo `voiceDeaf` nie wystarczało i to była
+   przyczyna sprzężenia: rozpoznawacz jest CIĄGŁY, więc kiedy Cosmos mówi,
+   dalej transkrybuje — tyle że my wyniki ignorujemy. Zostają jednak w
+   `e.results`, a gałąź słowa budzącego czytała trzy OSTATNIE wyniki niezależnie
+   od tego, czy były już widziane. Po skończonej wypowiedzi Cosmos odczytywał
+   więc własne zdanie jako nowe polecenie i odpowiadał sam sobie w kółko.
+   Teraz wszystko, co padło w czasie głuchoty, jest z góry oznaczone jako
+   zużyte. */
+let voiceZuzyteDo = 0;
+// Co Cosmos ostatnio powiedział — druga zapora przed pętlą.
+let voiceOstatniaOdpowiedz = '';
 
 function startVoiceRecognizer() {
   if (!voiceMode || voiceRec) return;
@@ -3876,13 +3905,29 @@ function startVoiceRecognizer() {
   rec.interimResults = true;
 
   rec.onresult = (e) => {
-    if (!voiceMode || voiceDeaf) return;
+    if (!voiceMode) return;
+    rec.__ostatniaDlugosc = e.results.length;
+    if (voiceDeaf) {
+      // Głuchy nie znaczy „nie słyszy" — znaczy „nie reaguje". Wszystko, co
+      // wpadło w tym czasie (czyli głos samego Cosmosa), znika z rozważań.
+      voiceZuzyteDo = e.results.length;
+      return;
+    }
 
     if (voiceState === 'wake') {
-      const latest = [...e.results].slice(-3).map((r) => r[0].transcript).join(' ');
+      const swieze = [];
+      for (let i = Math.max(0, voiceZuzyteDo); i < e.results.length; i++) {
+        swieze.push(e.results[i][0].transcript);
+      }
+      const latest = swieze.join(' ');
       const match = latest.match(WAKE_RE);
       if (!match) return;
-      const after = latest.slice(latest.search(WAKE_RE) + match[0].length).trim();
+      // Wszystkie wystąpienia, nie tylko pierwsze: przy ciągłym nasłuchu
+      // „Hej Kosmos" bywa rozpoznane kilka razy pod rząd i wcześniej lądowało
+      // w treści pytania jako „HejHejHej kosmosHej kosmos Co widzisz".
+      const after = latest.replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
+        .replace(/\s{2,}/g, ' ').trim();
+      voiceZuzyteDo = e.results.length;
       chime(880);
       if (after.length > 5) { askVoice(after); return; }
       voiceHeard = '';
@@ -3893,9 +3938,9 @@ function startVoiceRecognizer() {
 
     if (voiceState !== 'listening') return;
     let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    for (let i = Math.max(e.resultIndex, voiceZuzyteDo); i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) voiceHeard += r[0].transcript;
+      if (r.isFinal) { voiceHeard += r[0].transcript; voiceZuzyteDo = i + 1; }
       else interim += r[0].transcript;
     }
     el.voiceTranscript.textContent = (voiceHeard + ' ' + interim).trim();
@@ -3915,6 +3960,8 @@ function startVoiceRecognizer() {
   // Chrome i tak utnie sesję po ~60 s — wznawiamy ten sam obiekt.
   rec.onend = () => {
     voiceRec = null;
+    // Nowa sesja zaczyna liczyć wyniki od zera, więc znacznik też musi.
+    voiceZuzyteDo = 0;
     if (!voiceMode) return;
     setTimeout(() => { if (voiceMode) startVoiceRecognizer(); }, 250);
   };
@@ -3935,6 +3982,7 @@ function backToWake() {
   if (!voiceMode) return;
   clearTimeout(voiceSilence);
   voiceHeard = '';
+  if (voiceRec && voiceRec.__ostatniaDlugosc) voiceZuzyteDo = voiceRec.__ostatniaDlugosc;
   voiceDeaf = false;
   setVoiceState('wake');
   el.voiceTranscript.textContent = '';
@@ -3944,8 +3992,29 @@ function backToWake() {
 /** Zadaj pytanie, nie słuchając własnej odpowiedzi. */
 function askVoice(text) {
   clearTimeout(voiceSilence);
+  /* Druga zapora przed sprzężeniem. Znacznik zużycia załatwia typowy
+     przypadek, ale rozpoznawanie bywa opóźnione i zdanie Cosmosa potrafi
+     domknąć się już po odmilczeniu. Jeśli „pytanie" jest tym, co przed chwilą
+     sam powiedział — nie odpowiadamy na własne słowa. */
+  if (voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
+    backToWake();
+    return;
+  }
   voiceDeaf = true;
   handleVoiceQuery(text);
+}
+
+/** Czy dwa zdania to praktycznie to samo? Porównujemy zbiory słów, bo
+ *  rozpoznawanie mowy gubi końcówki i interpunkcję. */
+function toSamoZdanie(a, b) {
+  const slowa = (x) => new Set(String(x).toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 2));
+  const A = slowa(a);
+  const B = slowa(b);
+  if (A.size < 3) return false;                  // za krótkie, by wnioskować
+  let wspolne = 0;
+  for (const w of A) if (B.has(w)) wspolne++;
+  return wspolne / A.size > 0.7;
 }
 
 // Nazwy używane w pozostałej części pliku — zostawiamy je jako cienkie przejścia,
@@ -3954,6 +4023,9 @@ function startWakeListening() { backToWake(); }
 function startQueryListening() {
   if (!voiceMode) return;
   voiceHeard = '';
+  // Wracamy do słuchania dopiero teraz — wszystko sprzed tej chwili to był
+  // głos Cosmosa albo cisza, i nie może wrócić jako pytanie.
+  if (voiceRec && voiceRec.__ostatniaDlugosc) voiceZuzyteDo = voiceRec.__ostatniaDlugosc;
   voiceDeaf = false;
   setVoiceState('listening');
   el.voiceTranscript.textContent = '';

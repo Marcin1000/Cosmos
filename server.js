@@ -496,6 +496,11 @@ try { userWspolrzedne = JSON.parse(fs.readFileSync(WSPOLRZEDNE_FILE, 'utf8')); }
 if (!userWspolrzedne && BRIEFING.lat && BRIEFING.lon) {
   userWspolrzedne = { lat: Number(BRIEFING.lat), lon: Number(BRIEFING.lon) };
 }
+/* Archiwum potrzebuje domu do liczenia pory światła dla zdjęć bez GPS-u.
+   Ustawiamy TU, a nie przy tworzeniu indeksu: `userWspolrzedne` deklarowane
+   jest niżej niż `archiwum`, więc wcześniejsze odwołanie trafiało w martwą
+   strefę czasową i serwer w ogóle nie wstawał. */
+if (userWspolrzedne) archiwum.ustawDom(userWspolrzedne);
 
 function saveLocation(text, wspolrzedne) {
   userLocation = String(text || '').trim().slice(0, 200);
@@ -504,7 +509,15 @@ function saveLocation(text, wspolrzedne) {
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
     userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
     try { fs.writeFileSync(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
-    catch (err) { console.error('Nie udało się zapisać współrzędnych:', err.message); }
+    catch (err) { console.error('Nie udalo sie zapisac wspolrzednych:', err.message); }
+    /* Archiwum liczy pore swiatla dla zdjec bez GPS-u wzgledem domu, wiec
+       zmiana lokalizacji musi je przeliczyc - inaczej wpisy dodane wczesniej
+       zostaja z `null` mimo ze jest juz z czego je policzyc. */
+    if (typeof archiwum !== 'undefined') {
+      archiwum.ustawDom(userWspolrzedne);
+      const ile = archiwum.przeliczSwiatlo();
+      if (ile) addEvent('archiwum', `przeliczono pore swiatla dla ${ile} plikow`);
+    }
   }
 }
 
@@ -884,9 +897,9 @@ async function handleArchiwum(req, res, p) {
   if (p === '/api/archive/stats' && req.method === 'GET') {
     const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
     if (!q.pole) return sendJson(res, 200, archiwum.podsumowanie());
-    const grupy = archiwum.zestawienie(q.pole, q);
-    if (!grupy) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
-    return sendJson(res, 200, { pole: q.pole, grupy });
+    const wynik = archiwum.zestawienie(q.pole, q);
+    if (!wynik) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
+    return sendJson(res, 200, { pole: q.pole, ...wynik });
   }
   if (p === '/api/archive/source' && req.method === 'DELETE') {
     const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
@@ -1908,7 +1921,13 @@ async function handleChat(req, res) {
         + 'Z `grupuj` dostaniesz zestawienie liczbowe zamiast listy plików — tego '
         + 'używaj przy pytaniach „ile" i „najczęściej".\n'
         + 'Pora światła jest policzona z pozycji Słońca nad miejscem zdjęcia, '
-        + 'nie zgadnięta z godziny — możesz na niej polegać.',
+        + 'nie zgadnięta z godziny. Gdy zdjęcie nie ma GPS-u, liczy się ją dla domu '
+        + 'użytkownika, a wpis dostaje `swiatloPrzyblizone: true` — wtedy powiedz, '
+        + 'że to przybliżenie.\n'
+        + 'ZAWSZE PATRZ NA POKRYCIE DANYCH. Zestawienie oddaje `zDanymi` i `bezDanych`. '
+        + 'Gdy większość plików nie ma wypełnionego pola, liczba NIE JEST odpowiedzią '
+        + 'na pytanie „ile” — jest rozmiarem luki w metadanych. Powiedz to wprost, '
+        + 'zamiast podawać wynik jak fakt.',
     });
   }
 
@@ -1925,6 +1944,9 @@ async function handleChat(req, res) {
         + 'wszystkie są opcjonalne:\n'
         + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
         + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
+        + '(glebia PODAWAJ TYLKO wtedy, gdy użytkownik wprost prosił o określoną '
+        + 'głębię ostrości — narzucona z własnej inicjatywy wymusza mocny filtr ND '
+        + 'i psuje resztę doboru) · '
         + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30 · '
         + 'lat=52.02 lon=20.90 (inne miejsce niż domyślne)\n'
         + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '

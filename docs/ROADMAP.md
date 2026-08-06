@@ -780,6 +780,53 @@ Testy sprawdzają liczby wobec faktów **spoza naszego kodu**: astronomicznych
 godzin wschodu i zachodu pod Warszawą (4:16 i 21:00 w przesilenie letnie),
 wysokości Słońca w południe (61,4° latem, 13,6° zimą) i reguły „słoneczne 16".
 
+## ✅ Partia 31 — poprawki z realnego użycia archiwum i głosu (GOTOWE)
+
+Cztery rozmowy Marcina odsłoniły sześć usterek, z których żadnej nie wyłapałby
+test sprawdzający, czy kod robi to, co kod robi.
+
+- [x] **OneDrive nie pobierał EXIF-u ani GPS-u** — 2106 plików z czerwca,
+      wszystkie z `lat`, `lon` i `swiatlo` na `null`. Przy jednoczesnym
+      `$expand` Microsoft Graph oddaje tylko okrojony, domyślny zestaw
+      właściwości; facety `photo` i `location` trzeba wymienić w `$select`
+      z nazwy. Bez tego indeks wygląda na kompletny i nie jest
+- [x] **Zdjęcia bez GPS-u nie wypadają już z filtra pory światła** — liczy
+      się ją wtedy dla domu użytkownika, a wpis dostaje
+      `swiatloPrzyblizone: true`. Zmiana lokalizacji przelicza całe archiwum
+- [x] **Zestawienia podają POKRYCIE danych** — „6 zdjęć 50 mm w tym roku"
+      brzmi jak fakt, a przy 2100 plikach bez zapisanej ogniskowej jest
+      rozmiarem luki w metadanych. Odpowiedź niesie teraz `zDanymi`
+      i `bezDanych`, a prompt każe to zgłaszać zamiast podawać wynik jak fakt
+- [x] **Surowy tok myślenia przestał wyciekać jako odpowiedź** — awaryjne
+      „pokaż myślenie, gdy nie ma treści" miało sens przy modelach, którym
+      kończy się budżet, ale w praktyce wyrzucało na ekran angielskie
+      rozumowanie urwane w połowie zdania. Teraz pada jedno zdanie, co się
+      stało i co zmienić, a myślenie ląduje w zwijanym panelu
+- [x] **Cosmos przestał twierdzić, że spełnia nieistniejącą prośbę** —
+      „Przysłona f/2.8 zostaje, bo o głębię ostrości prosiłeś", podczas gdy
+      przysłonę narzucił sobie sam model. Prompt mówi teraz wprost, żeby nie
+      podawać `glebia` z własnej inicjatywy: wymusza mocny filtr ND i psuje
+      resztę doboru
+
+**Tryb głosowy: koniec sprzężenia.** Cosmos odpowiadał na własne słowa —
+„jeśli potrzebujesz czegoś jeszcze, daj znać" wracało jako pytanie i pętla
+się zamykała. Osobno słowo budzące dublowało się w transkrypcji
+(„HejHejHej kosmosHej kosmos Co widzisz").
+
+Mechanizm: rozpoznawacz jest CIĄGŁY, więc gdy Cosmos mówi, dalej transkrybuje —
+tylko wyniki ignorujemy. Zostają jednak w `e.results`, a gałąź słowa budzącego
+czytała trzy OSTATNIE wyniki niezależnie od tego, czy były już widziane.
+
+- [x] **Znacznik zużycia** — wszystko, co padło w czasie głuchoty, jest z góry
+      oznaczone jako przerobione i nie może wrócić jako pytanie
+- [x] **Druga zapora** — pytanie pokrywające się w ponad 70% ze zdaniem, które
+      Cosmos przed chwilą wypowiedział, jest odrzucane. Rozpoznawanie bywa
+      opóźnione i zdanie potrafi domknąć się już po odmilczeniu
+- [x] **Słowo budzące usuwane ze WSZYSTKICH wystąpień**, nie tylko z pierwszego
+
+Zestaw `glos-bez-sprzezenia` odtwarza dokładnie ten scenariusz i został
+sprawdzony przez cofnięcie poprawki — bez niej wypada.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
