@@ -37,8 +37,16 @@ const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokument
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
 const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
+const { pogodaDla } = require('./lib/pogoda.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
+const onedrive_ = require('./lib/onedrive.js');
+const onedrive = onedrive_.utworz({
+  katalogDanych: DATA_DIR,
+  clientId: process.env.ONEDRIVE_CLIENT_ID || '',
+  clientSecret: process.env.ONEDRIVE_CLIENT_SECRET || '',
+  redirectUri: process.env.ONEDRIVE_REDIRECT_URI || '',
+});
 const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
   ileZdarzen } = require('./lib/zdarzenia.js');
@@ -747,6 +755,112 @@ async function handleUruchom(req, res) {
   sendJson(res, 200, wynik);
 }
 
+/* OneDrive: logowanie i indeksowanie. Cały przepływ OAuth siedzi tutaj,
+   bo wymaga tras HTTP; sama rozmowa z Microsoftem jest w lib/onedrive.js. */
+let indeksowanie = null;      // { przejrzanych, dodanych, trwa, blad, sygnal }
+
+async function handleOneDrive(req, res, p) {
+  if (p === '/api/onedrive/status' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      skonfigurowany: onedrive.skonfigurowany(),
+      polaczony: onedrive.polaczony(),
+      polaczenie: onedrive.stanPolaczenia(),
+      redirectUri: process.env.ONEDRIVE_REDIRECT_URI || null,
+      indeksowanie: indeksowanie
+        ? { trwa: indeksowanie.trwa, przejrzanych: indeksowanie.przejrzanych,
+            dodanych: indeksowanie.dodanych, blad: indeksowanie.blad }
+        : null,
+      wArchiwum: archiwum.ile(),
+    });
+  }
+
+  if (p === '/api/onedrive/login' && req.method === 'GET') {
+    if (!onedrive.skonfigurowany()) {
+      return sendJson(res, 400, {
+        error: 'Brak konfiguracji OneDrive. Ustaw ONEDRIVE_CLIENT_ID, '
+          + 'ONEDRIVE_CLIENT_SECRET i ONEDRIVE_REDIRECT_URI w pliku .env.',
+      });
+    }
+    /* `state` chroni przed podrzuceniem cudzego kodu autoryzacyjnego:
+       wracający callback musi podać dokładnie tę wartość. */
+    const stanCsrf = genId();
+    oczekiwaneStany.add(stanCsrf);
+    setTimeout(() => oczekiwaneStany.delete(stanCsrf), 600000).unref?.();
+    return sendJson(res, 200, { url: onedrive.adresLogowania(stanCsrf) });
+  }
+
+  if (p === '/api/onedrive/callback' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://localhost').searchParams;
+    const strona = (tytul, tresc) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!doctype html><meta charset="utf-8"><title>${tytul}</title>`
+        + '<body style="font-family:system-ui;background:#0b0d12;color:#e6e9ef;'
+        + 'display:flex;align-items:center;justify-content:center;height:100vh;text-align:center">'
+        + `<div><h2>${tytul}</h2><p>${tresc}</p></div>`);
+    };
+    if (q.get('error')) {
+      return strona('Nie udało się połączyć', escapeHtmlSerwer(q.get('error_description') || q.get('error')));
+    }
+    if (!oczekiwaneStany.has(q.get('state') || '')) {
+      return strona('Nie udało się połączyć', 'Nieprawidłowy albo przeterminowany identyfikator sesji.');
+    }
+    oczekiwaneStany.delete(q.get('state'));
+    try {
+      await onedrive.polacz(q.get('code'));
+      addEvent('archiwum', 'połączono z OneDrive');
+      return strona('OneDrive połączony', 'Możesz zamknąć tę kartę i wrócić do Cosmosa.');
+    } catch (err) {
+      return strona('Nie udało się połączyć', escapeHtmlSerwer(err.message));
+    }
+  }
+
+  if (p === '/api/onedrive/index' && req.method === 'POST') {
+    if (!onedrive.polaczony()) return sendJson(res, 400, { error: 'OneDrive niepołączony.' });
+    if (indeksowanie && indeksowanie.trwa) {
+      return sendJson(res, 409, { error: 'Indeksowanie już trwa.', stan: indeksowanie });
+    }
+    let d = {};
+    try { d = await readJson(req); } catch { /* bez parametrów też można */ }
+    indeksowanie = { trwa: true, przejrzanych: 0, dodanych: 0, blad: null, sygnal: { przerwane: false } };
+    /* Indeksowanie idzie W TLE i nie blokuje odpowiedzi: przy 2 TB trwa
+       kilkanaście minut, a przeglądarka zerwałaby połączenie po minucie. */
+    (async () => {
+      try {
+        await onedrive.indeksuj(async (paczka) => {
+          archiwum.dodaj(paczka);
+          indeksowanie.dodanych += paczka.length;
+        }, { folder: d.folder || '', limit: Number(d.limit) || 100000, sygnal: indeksowanie.sygnal });
+        addEvent('archiwum', `OneDrive: zindeksowano ${indeksowanie.dodanych} plików`);
+      } catch (err) {
+        indeksowanie.blad = err.message;
+        console.error('Indeksowanie OneDrive:', err.message);
+      } finally {
+        indeksowanie.trwa = false;
+        archiwum.zapisz();
+      }
+    })();
+    return sendJson(res, 202, { ruszylo: true });
+  }
+
+  if (p === '/api/onedrive/index' && req.method === 'DELETE') {
+    if (indeksowanie) indeksowanie.sygnal.przerwane = true;
+    return sendJson(res, 200, { przerwano: true });
+  }
+
+  if (p === '/api/onedrive/disconnect' && req.method === 'POST') {
+    onedrive.rozlacz();
+    const usuniete = archiwum.usunZrodlo('onedrive');
+    addEvent('archiwum', `odłączono OneDrive (usunięto ${usuniete} wpisów)`);
+    return sendJson(res, 200, { ok: true, usunieto: usuniete });
+  }
+
+  return sendJson(res, 404, { error: 'Nieznana trasa OneDrive.' });
+}
+
+const oczekiwaneStany = new Set();
+const escapeHtmlSerwer = (s) => String(s || '').replace(/[&<>"]/g,
+  (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[z]));
+
 /* Archiwum materiału. Indeks jest pasywny — źródła (OneDrive, dysk przez
    zmysły) wpychają wpisy, a zapytania działają nawet wtedy, gdy te źródła
    są offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu
@@ -811,9 +925,15 @@ async function handlePlanZdjeciowy(req, res) {
 
   const swiatlo = swiatloDnia(kiedy, lat, lon);
 
+  /* Zachmurzenie: z prognozy, chyba że użytkownik wybrał je ręcznie w panelu.
+     Ręczny wybór wygrywa — stoisz na miejscu i widzisz niebo lepiej niż
+     model pogodowy dla kwadratu kilometra. */
+  const pogoda = d.zachmurzenie ? null : await pogodaDla(lat, lon, kiedy);
+  const zachmurzenie = d.zachmurzenie || (pogoda && pogoda.zachmurzenie) || 'bezchmurnie';
+
   /* EV liczymy ze Słońca, a gdy przeglądarka zmierzyła jasność podglądu —
      korygujemy pomiarem. Model nie wie, czy stoisz w cieniu budynku. */
-  let ev = evZeSlonca(swiatlo.teraz.wysokosc, d.zachmurzenie);
+  let ev = evZeSlonca(swiatlo.teraz.wysokosc, zachmurzenie);
   let zrodloEv = 'pozycja Słońca';
   if (Number.isFinite(Number(d.jasnosc))) {
     const zmierzony = evZPomiaru(Number(d.jasnosc), d.pomiar || {});
@@ -850,6 +970,8 @@ async function handlePlanZdjeciowy(req, res) {
     },
     kadr,
     zrodloEv,
+    pogoda,
+    zachmurzenie,
     ustawienia,
   });
 }
@@ -1803,9 +1925,12 @@ async function handleChat(req, res) {
         + 'wszystkie są opcjonalne:\n'
         + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
         + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
-        + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30\n'
+        + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30 · '
+        + 'lat=52.02 lon=20.90 (inne miejsce niż domyślne)\n'
+        + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '
+        + 'bierze prognozę pogody dla tego miejsca i tej godziny.\n'
         + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
-        + 'Dostaniesz pozycję Słońca, godziny złotej i niebieskiej oraz policzone '
+        + 'Dostaniesz pozycję Słońca, prognozę, godziny złotej i niebieskiej oraz policzone '
         + 'czas/przysłonę/ISO. NIE zgaduj tych liczb sam — Twoja wiedza nie obejmuje '
         + 'dzisiejszej daty ani miejsca, w którym stoi użytkownik.',
     });
@@ -2362,6 +2487,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
     if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
     if (p.startsWith('/api/archive')) return await handleArchiwum(req, res, p);
+    if (p.startsWith('/api/onedrive')) return await handleOneDrive(req, res, p);
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);

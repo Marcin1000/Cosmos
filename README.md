@@ -670,6 +670,11 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła |
 | `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
 | `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
+| `/api/onedrive/status` | GET | Stan połączenia i postęp indeksowania |
+| `/api/onedrive/login` | GET | Adres logowania Microsoft (OAuth) |
+| `/api/onedrive/callback` | GET | Powrót po autoryzacji — wymiana kodu na token |
+| `/api/onedrive/index` | POST/DELETE | Start i przerwanie indeksowania w tle |
+| `/api/onedrive/disconnect` | POST | Odłączenie konta i usunięcie jego wpisów |
 | `/api/search/images` | GET | Wyszukiwanie zdjęć w internecie (znacznik `[GRAFIKA:]`) |
 | `/api/search/thumb` | GET | Proxy miniatur — wąskie, tylko znane hosty |
 | `/api/location` | GET/POST | Lokalizacja domowa — używa jej rozmowa i wyszukiwanie |
@@ -695,6 +700,8 @@ lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
 lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
 lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
+lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
+lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie

@@ -544,6 +544,16 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.arch-box {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--bg-elev);
+}
+.arch-state { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.arch-box .field-row { margin-top: 8px; }
+.arch-box .field-row:empty { display: none; }
+
 /* ==================== PLAN ZDJĘCIOWY (przy kamerze) ==================== */
 
 .plan-box {
@@ -558,7 +568,10 @@ kbd {
   flex: 1;
   min-width: 0;            /* bez tego pole rozpycha panel na wąskim telefonie */
   font-size: 12px;
-  padding: 4px 6px;
+  /* 34 px wysokości, nie 27. Ten panel jest używany w terenie, palcem,
+     często w rękawiczce — cel poniżej 28 px trafia się co drugi raz. */
+  padding: 8px 6px;
+  min-height: 34px;
 }
 .plan-shot {
   font-size: 17px;
