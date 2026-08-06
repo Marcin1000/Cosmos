@@ -135,6 +135,7 @@ const PORTY_ATRAP = {
   'mock-tempo.js': [7115],
   'mock-echo-systemu.js': [7116],
   'mock-grafiki.js': [7117],
+  // atrapa Open-Meteo + Microsoft Graph tworzona wprost w zestawie
   'mockllm.py': [7099],
 };
 

@@ -313,6 +313,15 @@
         </div>
 
         <div class="field">
+          <span class="field-label" data-i18n="arch.title">Archiwum materiału</span>
+          <div class="arch-box" id="arch-box">
+            <div class="arch-state mono" id="arch-state">…</div>
+            <div class="field-row" id="arch-actions"></div>
+          </div>
+          <span class="field-hint" data-i18n="arch.hint">Indeks Twoich zdjęć i klipów…</span>
+        </div>
+
+        <div class="field">
           <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
           <div class="memory-list" id="memory-list"><span class="field-hint" data-i18n="loading">Ładowanie…</span></div>
           <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
@@ -709,6 +718,7 @@
           <option value="zdjecie">Zdjęcie</option>
         </select>
         <select id="plan-sky" class="mono" aria-label="Zachmurzenie">
+          <option value="">🌦 Z prognozy</option>
           <option value="bezchmurnie">☀ Bezchmurnie</option>
           <option value="lekkie">🌤 Lekkie</option>
           <option value="pochmurno">☁ Pochmurno</option>

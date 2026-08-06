@@ -537,6 +537,90 @@ function imagesHtml(images) {
   return wrap;
 }
 
+/* ============================ ARCHIWUM MATERIAŁU ============================ */
+
+let archiwumOdpytywanie = null;
+
+/** Pokaż stan archiwum i przyciski pasujące do tego stanu.
+ *  Panel buduje się od zera przy każdym odświeżeniu — stanów jest pięć
+ *  (nieskonfigurowany, niepołączony, połączony, indeksuje, błąd), a doklejanie
+ *  i chowanie przycisków przy każdym z nich to prosta droga do panelu,
+ *  w którym „Przerwij" zostaje po zakończonym indeksowaniu. */
+async function odswiezArchiwum() {
+  const stanEl = $('arch-state');
+  const akcje = $('arch-actions');
+  if (!stanEl) return;
+  let d;
+  try {
+    d = await (await fetch('/api/onedrive/status')).json();
+  } catch {
+    stanEl.textContent = t('offline.title');
+    akcje.innerHTML = '';
+    return;
+  }
+
+  akcje.innerHTML = '';
+  const przycisk = (etykieta, przy) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn-secondary';
+    b.textContent = etykieta;
+    b.addEventListener('click', przy);
+    akcje.appendChild(b);
+    return b;
+  };
+
+  const indeks = d.indeksowanie;
+  if (indeks && indeks.trwa) {
+    stanEl.textContent = t('arch.indexing', { n: indeks.dodanych });
+    przycisk(t('arch.stop'), async () => {
+      await fetch('/api/onedrive/index', { method: 'DELETE' }).catch(() => {});
+      odswiezArchiwum();
+    });
+    // Odpytujemy tylko w trakcie indeksowania i tylko jedną pętlą.
+    clearTimeout(archiwumOdpytywanie);
+    archiwumOdpytywanie = setTimeout(odswiezArchiwum, 3000);
+    return;
+  }
+  clearTimeout(archiwumOdpytywanie);
+
+  if (indeks && indeks.blad) {
+    stanEl.textContent = t('arch.indexError', { msg: indeks.blad });
+  } else if (!d.skonfigurowany) {
+    stanEl.textContent = t('arch.notConfigured');
+    return;                       // bez konfiguracji nie ma czego klikać
+  } else if (!d.polaczony) {
+    stanEl.textContent = t('arch.notConnected');
+  } else {
+    stanEl.textContent = d.wArchiwum
+      ? t('arch.connected', { n: d.wArchiwum.toLocaleString() })
+      : `${t('arch.notConnected').replace(/[^.]*$/, '')} ${t('arch.empty')}`.trim();
+  }
+
+  if (!d.polaczony) {
+    przycisk(t('arch.connect'), async () => {
+      const r = await fetch('/api/onedrive/login');
+      const w = await readJsonSafe(r);
+      if (w.url) window.open(w.url, '_blank', 'noopener');
+      // Logowanie kończy się w innej karcie — sprawdzamy stan po powrocie.
+      setTimeout(odswiezArchiwum, 4000);
+    });
+    return;
+  }
+
+  przycisk(t('arch.index'), async () => {
+    await fetch('/api/onedrive/index', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    }).catch(() => {});
+    odswiezArchiwum();
+  });
+  przycisk(t('arch.disconnect'), async () => {
+    if (!confirm(t('arch.confirmDisconnect'))) return;
+    await fetch('/api/onedrive/disconnect', { method: 'POST' }).catch(() => {});
+    odswiezArchiwum();
+  });
+}
+
 /* ================================ PŁÓTNO ================================ */
 
 $('canvas-close').addEventListener('click', () => { $('canvas').hidden = true; });
@@ -3015,7 +3099,9 @@ async function odswiezPlan(cap) {
       sprzet: $('plan-gear').value,
       tryb: wideo ? 'wideo' : 'zdjecie',
       klatki: trybPola === 'wideo50' ? 50 : 25,
-      zachmurzenie: $('plan-sky').value,
+      // Puste = „weź z prognozy". Wybór ręczny wygrywa, bo stojąc na miejscu
+      // widzisz niebo lepiej niż model pogodowy dla kwadratu kilometra.
+      ...( $('plan-sky').value ? { zachmurzenie: $('plan-sky').value } : {} ),
       szerokosc: cap ? cap.width : 0,
       wysokosc: cap ? cap.height : 0,
     };
@@ -3045,6 +3131,13 @@ function pokazPlan(d) {
   const czesci = [];
   if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
   czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
+  // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
+  // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.
+  if (d.pogoda) {
+    czesci.push(`${d.pogoda.opis}`
+      + (d.pogoda.temperatura !== null ? ` ${Math.round(d.pogoda.temperatura)}°C` : '')
+      + (d.pogoda.opadyProc > 30 ? ` · opady ${d.pogoda.opadyProc}%` : ''));
+  }
   const light = $('plan-light');
   light.textContent = czesci.join(' · ');
 
@@ -4171,6 +4264,7 @@ function openSettings() {
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
+  odswiezArchiwum();
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
