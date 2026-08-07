@@ -691,6 +691,9 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 ```
 server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
 lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
+lib/pamiec.js      pamięć długotrwała (RAG) i embeddingi — wektory plus słowa
+lib/pomysly.js     backlog usprawnień proponowanych przez Cosmosa do akceptacji
+lib/nagrywanie.js  nagrywanie procedur Playwrightem (opcjonalne, wymaga ekranu)
 lib/model.js       wywołania modelu bez strumienia (streszczenia, prompt)
 lib/studio.js      generowanie mediów (OpenAI / Firefly / ElevenLabs / Seedance)
 lib/nauka.js       rozpoznawanie, procedury, rutyny, automatyzacja
@@ -704,6 +707,9 @@ lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
 lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
 lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
+lib/miejsca.js     nazwa miejsca → współrzędne i promień (Nominatim)
+lib/tematy.js      CO fotografujesz: nastawy pod temat i kategorie w archiwum
+lib/grafiki.js     wyszukiwanie zdjęć w trzech źródłach naraz, z zapasem
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie

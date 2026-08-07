@@ -310,6 +310,56 @@ for (const m of moduly) {
 }
 bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
   : ok('każdy symbol z modułów jest zaimportowany');
+
+/* Nazwy UŻYWANE W MODULE, a nigdzie w nim nieokreślone.
+   `node --check` tego nie widzi — składnia jest poprawna, a trasa wywala się
+   dopiero przy wywołaniu. Przy podziale server.js to sprawdzenie wyłapało
+   siedem takich usterek pod rząd (`kbItems`, `capabilityText`, `genId`,
+   `sanitizeStep`, `saveProcedures`, `dodajProcedure`, `https`), z których
+   każdą inaczej trzeba by znaleźć klikając po interfejsie. */
+const GLOBALE_NODE = new Set(['require', 'module', 'exports', 'process', 'console', 'Buffer',
+  '__dirname', '__filename', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+  'setImmediate', 'fetch', 'URL', 'URLSearchParams', 'AbortSignal', 'TextEncoder', 'TextDecoder',
+  'JSON', 'Math', 'Date', 'Object', 'Array', 'String', 'Number', 'Boolean', 'Promise', 'Error',
+  'TypeError', 'Map', 'Set', 'WeakMap', 'RegExp', 'Infinity', 'NaN', 'undefined', 'globalThis',
+  'Intl', 'structuredClone', 'queueMicrotask', 'BigInt', 'Symbol', 'Proxy', 'Reflect']);
+const SLOWA_JS = new Set(['const', 'let', 'var', 'function', 'async', 'await', 'return', 'if',
+  'else', 'for', 'while', 'of', 'in', 'new', 'typeof', 'instanceof', 'try', 'catch', 'finally',
+  'throw', 'break', 'continue', 'switch', 'case', 'default', 'do', 'delete', 'void', 'yield',
+  'class', 'extends', 'super', 'this', 'static', 'get', 'set', 'true', 'false', 'null']);
+
+const wolneNazwy = [];
+for (const m of moduly) {
+  let src = rd(`lib/${m}`);
+  src = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/`(?:\\.|[^`\\])*`/g, '``');
+  const zdef = new Set();
+  for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  for (const x of src.matchAll(/function\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  for (const x of src.matchAll(/\{([^{}]*)\}\s*=/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.split(':').pop().trim().split('=')[0].trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  for (const x of src.matchAll(/\(([^()]*)\)\s*(?:=>|\{)/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.trim().split('=')[0].trim().replace(/^\.\.\./, '').replace(/[{}]/g, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  /* Interesują nas WYWOŁANIA (`nazwa(`) — tam fałszywych trafień prawie nie ma,
+     bo zmienne pętli i pola obiektów nie są wołane jak funkcje. */
+  for (const x of src.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]{2,})\s*\(/g)) {
+    const n = x[1];
+    if (!zdef.has(n) && !GLOBALE_NODE.has(n) && !SLOWA_JS.has(n)) wolneNazwy.push(`${m}:${n}`);
+  }
+}
+const wolneUnik = [...new Set(wolneNazwy)];
+wolneUnik.length ? zle('w modułach wołane nazwy bez definicji: ' + wolneUnik.join(', '))
+  : ok('każda nazwa wołana w modułach ma definicję');
 // Tablice podmieniane w module nie mogą wychodzić jako tablice — serwer
 // dostałby kopię wiązania i po pierwszym usunięciu widziałby stary stan.
 const pulapki = [];

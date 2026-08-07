@@ -153,265 +153,23 @@ const MIME = {
 
 
 // ---------------------------------------------------------------------------
-// Pamięć długotrwała (RAG) — fakty zapisane przez użytkownika.
-// Embeddingi liczy usługa zmysłów (/embed); bez niej działa
-// wyszukiwanie słów kluczowych.
 // ---------------------------------------------------------------------------
-
-const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
-
-let memories = [];
-try { memories = JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8')); } catch { /* brak pliku */ }
-
-function saveMemories() {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(MEMORY_FILE, JSON.stringify(memories, null, 2));
-  } catch (err) {
-    console.error('Nie udało się zapisać pamięci:', err.message);
-  }
-}
-
-// timeoutMs: przy indeksowaniu (upload) dajemy modelowi czas na start (60 s),
-// ale przy wyszukiwaniu w trakcie rozmowy czekamy krótko (5 s), żeby
-// niedostępna usługa zmysłów nie opóźniała odpowiedzi czatu.
-// Embeddingi: lokalnie przez zmysły (bge-m3 na Twoim GPU) albo z chmury NVIDII.
-// „auto" = najpierw zmysły (za darmo, prywatnie), a gdy są offline — chmura.
-// Dzięki temu baza wiedzy działa w pełni także wtedy, gdy komputer domowy śpi.
-const EMBED = {
-  provider: (process.env.EMBED_PROVIDER || 'auto').toLowerCase(), // auto | senses | nvidia | off
-  nvidiaModel: process.env.NVIDIA_EMBED_MODEL || 'nvidia/llama-nemotron-embed-1b-v2',
-};
-
-async function embedViaSenses(texts, timeoutMs) {
-  try {
-    const r = await fetch(`${SENSES_URL}/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texts }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!Array.isArray(d.vectors) || !d.vectors.length) return null;
-    return { vectors: d.vectors, model: `senses:${d.vectors[0].length}` };
-  } catch {
-    return null;
-  }
-}
-
-async function embedViaNvidia(texts, timeoutMs, inputType) {
-  const ep = ENDPOINTS.cloud;
-  if (!ep.apiKey) return null;
-  // Modele wyszukiwawcze rozróżniają pytanie od dokumentu (input_type). Gdy
-  // dany model tego pola nie przyjmuje, powtarzamy żądanie bez niego.
-  for (const withType of [true, false]) {
-    try {
-      const body = { input: texts, model: EMBED.nvidiaModel, encoding_format: 'float' };
-      if (withType) {
-        body.input_type = inputType === 'query' ? 'query' : 'passage';
-        body.truncate = 'END';
-      }
-      const r = await fetch(`${ep.baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(ep) },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!r.ok) {
-        if (withType && (r.status === 400 || r.status === 422)) continue;  // spróbuj bez input_type
-        return null;
-      }
-      const d = await r.json();
-      const rows = Array.isArray(d.data) ? [...d.data] : [];
-      if (!rows.length) return null;
-      rows.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-      const vectors = rows.map((x) => x.embedding).filter(Array.isArray);
-      if (vectors.length !== texts.length) return null;
-      return { vectors, model: `nvidia:${EMBED.nvidiaModel}` };
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-/** Zwraca { vectors, model } albo null. `model` znakuje wektory — patrz sameModel(). */
-/* Bezpiecznik na wolne embeddingi.
- *
- * Gdy usługa raz nie wyrobiła się w budżecie, następne wywołania z krótkim
- * budżetem (te z rozmowy) nie czekają wcale — od razu idzie dopasowanie po
- * słowach kluczowych, a rozmowa rusza bez zwłoki. Po minucie próbujemy
- * ponownie: usługa mogła po prostu wstawać albo liczyć coś ciężkiego.
- *
- * Bez tego cisza 1,2 s wracała przy KAŻDEJ wiadomości — dokładnie ten rodzaj
- * drobnego tarcia, który sprawia, że narzędzie „jakoś tak mierzi".
- */
-const embedAwaria = { do: 0 };
-const EMBED_KARENCJA_MS = 60000;
-/* Poniżej tego budżetu wywołanie uznajemy za „z rozmowy" — takie odpuszczamy
-   po awarii. Przeliczanie w tle (60 s) idzie zawsze, bo nikt na nie nie czeka. */
-const EMBED_BUDZET_ROZMOWY_MS = 5000;
-
-async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
-  if (!texts || !texts.length || EMBED.provider === 'off') return null;
-  if (timeoutMs <= EMBED_BUDZET_ROZMOWY_MS && Date.now() < embedAwaria.do) return null;
-  const order = EMBED.provider === 'senses' ? ['senses']
-    : EMBED.provider === 'nvidia' ? ['nvidia']
-    : ['senses', 'nvidia'];
-  for (const src of order) {
-    const out = src === 'senses'
-      ? await embedViaSenses(texts, timeoutMs)
-      : await embedViaNvidia(texts, timeoutMs, inputType);
-    if (out) { embedAwaria.do = 0; return out; }
-  }
-  // Nikt nie odpowiedział — przez chwilę nie zatrzymujemy dla nich rozmowy.
-  embedAwaria.do = Date.now() + EMBED_KARENCJA_MS;
-  return null;
-}
-
-/** Który dostawca embeddingów realnie zadziała przy obecnej konfiguracji. */
-function embedStatus(sensesHasEmbed) {
-  if (EMBED.provider === 'off') return { provider: 'off', model: null, opis: 'wyłączone' };
-  const cloudReady = Boolean(ENDPOINTS.cloud.apiKey);
-  if (EMBED.provider === 'nvidia') {
-    return { provider: cloudReady ? 'nvidia' : null, model: EMBED.nvidiaModel,
-      opis: cloudReady ? `chmura NVIDIA (${EMBED.nvidiaModel})` : 'brak NVIDIA_API_KEY' };
-  }
-  if (EMBED.provider === 'senses') {
-    return { provider: sensesHasEmbed ? 'senses' : null, model: 'bge-m3',
-      opis: sensesHasEmbed ? 'zmysły lokalnie' : 'zmysły offline — wyszukiwanie po słowach kluczowych' };
-  }
-  if (sensesHasEmbed) return { provider: 'senses', model: 'bge-m3', opis: 'zmysły lokalnie' };
-  if (cloudReady) {
-    return { provider: 'nvidia', model: EMBED.nvidiaModel,
-      opis: `zmysły offline → chmura NVIDIA (${EMBED.nvidiaModel})` };
-  }
-  return { provider: null, model: null, opis: 'brak — wyszukiwanie po słowach kluczowych' };
-}
-
-/** Wektory z różnych modeli są nieporównywalne — pilnujemy zgodności znacznika. */
-function sameModel(item, model) {
-  return Boolean(item.embedding) && (item.embModel || null) === model;
-}
-
-function cosine(a, b) {
-  let dot = 0, na = 0, nb = 0;
-  const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
-  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
-}
-
-function keywords(text) {
-  return new Set(
-    text.toLowerCase().split(/[^a-ząćęłńóśźż0-9]+/i).filter((w) => w.length >= 4)
-  );
-}
-
-function keywordScore(query, text) {
-  const q = keywords(query);
-  if (!q.size) return 0;
-  const t = keywords(text);
-  let hits = 0;
-  for (const w of q) if (t.has(w)) hits++;
-  return hits / Math.sqrt(q.size * Math.max(t.size, 1));
-}
-
-/* Przeliczanie wektorów w tle. NIE w ścieżce czatu.
- *
- * Wektory z różnych modeli są nieporównywalne, więc po zmianie dostawcy
- * embeddingów trzeba przeliczyć całą pamięć. Kiedyś robiliśmy to wewnątrz
- * `searchMemory`, z limitem 60 s — użytkownik patrzył w pustkę, zanim model
- * w ogóle dostał prompt. Pomiar: 5 s ciszy przy KAŻDEJ wiadomości, gdy
- * usługa embeddingów była wolna. Teraz pamięć doucza się sama, w tle,
- * a rozmowa idzie dalej na dopasowaniu słów kluczowych.
- */
-let uzupelnianieTrwa = false;
-function uzupelnijWektoryWTle(qmodel) {
-  if (uzupelnianieTrwa) return;
-  const brakujace = memories.filter((m) => !sameModel(m, qmodel));
-  if (!brakujace.length) return;
-  uzupelnianieTrwa = true;
-  setTimeout(async () => {
-    try {
-      const embs = await embedTexts(brakujace.map((m) => m.text), 60000, 'passage');
-      if (embs) {
-        brakujace.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
-        saveMemories();
-      }
-    } catch { /* następnym razem */ } finally { uzupelnianieTrwa = false; }
-  }, 0);
-}
-
-/* Ile wolno czekać na embedding zapytania, zanim odpuścimy i użyjemy słów
-   kluczowych. Przywołanie pamięci jest miłym dodatkiem — wstrzymywanie dla
-   niego całej rozmowy nie jest. */
-const BUDZET_PAMIECI_MS = Number(process.env.MEMORY_SEARCH_BUDGET_MS || 1200);
-
-async function searchMemory(query, limit = 4) {
-  if (!memories.length || !query || !query.trim()) return [];
-
-  let qvec = null, qmodel = null;
-  const q = await embedTexts([query], BUDZET_PAMIECI_MS, 'query');
-  if (q) {
-    qvec = q.vectors[0];
-    qmodel = q.model;
-    uzupelnijWektoryWTle(qmodel);   // w tle, nie blokuje odpowiedzi
-  }
-
-  const threshold = qvec ? 0.35 : 0.15;
-  return memories
-    .map((m) => ({
-      m,
-      score: (qvec && sameModel(m, qmodel)) ? cosine(qvec, m.embedding) : keywordScore(query, m.text),
-    }))
-    .filter((s) => s.score > threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => s.m);
-}
-
-function memoryContextLines(items) {
-  if (!items.length) return '';
-  const lines = items.map((m) => {
-    const d = new Date(m.time).toLocaleDateString('pl-PL');
-    return `- [zapisano ${d}] ${m.text}`;
-  });
-  return 'PAMIĘĆ DŁUGOTRWAŁA — fakty, które użytkownik kazał Ci wcześniej zapamiętać ' +
-         '(przywołane, bo pasują do bieżącej rozmowy):\n' + lines.join('\n');
-}
-
-async function handleMemory(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  if (req.method === 'GET') {
-    return sendJson(res, 200, {
-      memories: memories.map(({ id, text, time, embedding }) => ({
-        id, text, time, hasEmbedding: Boolean(embedding),
-      })),
-    });
-  }
-  if (req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const text = String(data.text || '').trim().slice(0, 2000);
-    if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
-    const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, time: Date.now(), embedding: null };
-    const vecs = await embedTexts([text], 60000, 'passage');
-    if (vecs) { item.embedding = vecs.vectors[0]; item.embModel = vecs.model; }
-    memories.push(item);
-    saveMemories();
-    return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding), total: memories.length });
-  }
-  if (req.method === 'DELETE') {
-    const id = url.searchParams.get('id');
-    const before = memories.length;
-    memories = memories.filter((m) => m.id !== id);
-    if (memories.length !== before) saveMemories();
-    return sendJson(res, 200, { ok: true, total: memories.length });
-  }
-  res.writeHead(405);
-  res.end();
-}
+// Pamięć długotrwała (RAG) — całość w lib/pamiec.js.
+// Tutaj tylko spięcie zależności i cienkie przejścia dla reszty pliku.
+// ---------------------------------------------------------------------------
+const pamiec_ = require('./lib/pamiec.js').utworz({
+  katalogDanych: DATA_DIR,
+  sensesUrl: SENSES_URL,
+  chmura: () => ENDPOINTS.cloud,
+  sendJson,
+  readJson,
+});
+const handleMemory = (req, res) => pamiec_.handleMemory(req, res);
+const searchMemory = (q, limit) => pamiec_.searchMemory(q, limit);
+const memoryContextLines = (items) => pamiec_.memoryContextLines(items);
+const embedTexts = (texts, timeoutMs, inputType) => pamiec_.embedTexts(texts, timeoutMs, inputType);
+const embedStatus = (sensesHasEmbed) => pamiec_.embedStatus(sensesHasEmbed);
+const { cosine, sameModel, keywordScore } = pamiec_;
 
 // ---------------------------------------------------------------------------
 // Baza wiedzy — pliki, linki i notatki użytkownika.
@@ -1381,7 +1139,7 @@ async function capabilityManifest() {
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
       eksport: STUDIO.exportDir || null },
-    wiedza: { rozmowy: convIndex.length, pamiec: memories.length, bazaWiedzy: kbItems.length,
+    wiedza: { rozmowy: convIndex.length, pamiec: pamiec_.ile(), bazaWiedzy: kbItems.length,
       profil: userProfile.trim().length > 0, migawki: timeline.length },
     nauka: { wzorce: wzorce().length, procedury: procedury().length, rutyny: rutyny().length,
       nagrywanieEkranu: playwright, automatyzacjaOdczytu: playwright,
@@ -1442,51 +1200,24 @@ function capabilityText(m) {
   return lines.join('\n');
 }
 
-// --- Backlog usprawnień: pomysły Cosmosa na samego siebie, zatwierdzane przez Ciebie ---
-const IMPROVE_FILE = path.join(DATA_DIR, 'improvements.json');
-let improvements = [];
-try { improvements = JSON.parse(fs.readFileSync(IMPROVE_FILE, 'utf8')); } catch { /* brak */ }
-const saveImprovements = () => saveJsonFile(IMPROVE_FILE, improvements);
+// --- Backlog usprawnień: pomysły Cosmosa na samego siebie ---
+//     Całość w lib/pomysly.js; tutaj zostaje tylko spięcie zależności.
+const pomysly_ = require('./lib/pomysly.js').utworz({
+  katalogDanych: DATA_DIR,
+  saveJsonFile,
+  sendJson,
+  readJson,
+  addEvent,
+  llmComplete,
+  manifest: () => capabilityManifest(),
+  opisZdolnosci: (m) => capabilityText(m),
+  profil: () => userProfile,
+  tematyRozmow: () => convIndex.slice(0, 25).map((c) => c.title).filter(Boolean),
+  pozycjeWiedzy: () => kbItems.slice(-25).map((it) => it.name).filter(Boolean),
+});
+const handleImprovements = (req, res, pathname) => pomysly_.handleImprovements(req, res, pathname);
+const handleSuggest = (req, res) => pomysly_.handleSuggest(req, res);
 
-async function handleImprovements(req, res, pathname) {
-  if (pathname === '/api/improvements' && req.method === 'GET') {
-    return sendJson(res, 200, { improvements });
-  }
-  if (pathname === '/api/improvements' && req.method === 'POST') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const text = String(data.text || '').trim().slice(0, 1000);
-    if (!text) return sendJson(res, 400, { error: 'Pusty pomysł.' });
-    const item = { id: genId(), text, zrodlo: data.zrodlo === 'model' ? 'model' : 'ja',
-      status: 'nowy', createdAt: Date.now() };
-    improvements.push(item);
-    saveImprovements();
-    addEvent('rozwój', `nowy pomysł na usprawnienie: ${text.slice(0, 80)}`);
-    return sendJson(res, 200, { ok: true, id: item.id });
-  }
-  if (pathname === '/api/improvements' && req.method === 'PUT') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const it = improvements.find((x) => x.id === data.id);
-    if (!it) return sendJson(res, 404, { error: 'Nie znaleziono.' });
-    if (['nowy', 'zaakceptowany', 'odrzucony', 'zrobione'].includes(data.status)) it.status = data.status;
-    saveImprovements();
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/improvements' && req.method === 'DELETE') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    improvements = improvements.filter((x) => x.id !== id);
-    saveImprovements();
-    return sendJson(res, 200, { ok: true });
-  }
-  res.writeHead(405); res.end();
-}
-
-/** Zamień surową wypowiedź w precyzyjny prompt.
- *
- * Dyktowana wiadomość jest z natury luźna: powtórzenia, „yyy", myśl zmieniana
- * w połowie zdania. Model dostaje ją do przepisania — ma zachować INTENCJĘ
- * i wszystkie szczegóły, a uporządkować formę. Zwracamy sam tekst, bez
- * komentarzy, żeby dało się nim po prostu podmienić zawartość pola.
- */
 async function handlePolish(req, res) {
   let data;
   try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -1519,104 +1250,20 @@ async function handlePolish(req, res) {
 }
 
 /** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
-async function handleSuggest(req, res) {
-  const m = await capabilityManifest();
-  const titles = convIndex.slice(0, 25).map((c) => c.title).filter(Boolean);
-  const kbNames = kbItems.slice(-25).map((it) => it.name).filter(Boolean);
-  const known = improvements.map((i) => i.text.slice(0, 60));
-
-  const context = [
-    capabilityText(m),
-    userProfile.trim() ? '\nPROFIL UŻYTKOWNIKA:\n' + userProfile.trim() : '',
-    titles.length ? '\nOSTATNIE TEMATY ROZMÓW:\n- ' + titles.join('\n- ') : '',
-    kbNames.length ? '\nCO JEST W BAZIE WIEDZY:\n- ' + kbNames.join('\n- ') : '',
-    known.length ? '\nJUŻ ZAPROPONOWANE (nie powtarzaj):\n- ' + known.join('\n- ') : '',
-  ].filter(Boolean).join('\n');
-
-  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
-  const instruction = lang === 'en'
-    ? 'You are Cosmos. Based on your real capabilities and this user\'s context, propose 4 concrete, '
-      + 'personal ways they could use you that they probably have not thought of. Skip anything already '
-      + 'listed. For each: a bold one-line title, two sentences on the value, and a short "How:" line with '
-      + 'the exact steps or what to enable. Only propose things your listed capabilities actually allow.'
-    : 'Jesteś Cosmosem. Na podstawie swoich REALNYCH możliwości i kontekstu tego użytkownika zaproponuj '
-      + '4 konkretne, osobiste sposoby wykorzystania siebie, na które on prawdopodobnie nie wpadł. '
-      + 'Pomiń to, co już zaproponowane. Każdy pomysł: pogrubiony tytuł w jednej linii, dwa zdania '
-      + 'o wartości, oraz krótka linia „Jak:" z dokładnymi krokami albo co włączyć. '
-      + 'Proponuj wyłącznie rzeczy, na które pozwalają wymienione możliwości. Bez lania wody.';
-
-  try {
-    const text = await llmComplete([
-      { role: 'system', content: instruction },
-      { role: 'user', content: context },
-    ], { endpoint: 'cloud', maxTokens: 900 });
-    addEvent('rozwój', 'Cosmos zaproponował nowe zastosowania');
-    return sendJson(res, 200, { ok: true, text });
-  } catch (err) {
-    return sendJson(res, 502, { error: 'suggest-failed', message: err.message });
-  }
-}
-
-// --- Nagrywanie procedur (opcjonalny moduł Playwright, wymaga ekranu) ---
-const RECORDER_SCRIPT = path.join(__dirname, 'automation', 'recorder.js');
-let recordJob = null; // { child, status, outFile, startedAt, log:[] }
-const RECORD_OUT = path.join(TRAIN_DIR, 'recording.json');
-
-function recLog(line) {
-  if (!recordJob) return;
-  for (const l of String(line).split('\n')) { const s = l.replace(/\s+$/, ''); if (s) recordJob.log.push(s); }
-  if (recordJob.log.length > 100) recordJob.log = recordJob.log.slice(-100);
-}
-
-async function handleRecord(req, res, pathname) {
-  if (pathname === '/api/procedures/record/status' && req.method === 'GET') {
-    return sendJson(res, 200, {
-      recording: Boolean(recordJob && recordJob.status === 'recording'),
-      status: recordJob ? recordJob.status : 'idle',
-      log: recordJob ? recordJob.log.slice(-20) : [],
-    });
-  }
-  if (pathname === '/api/procedures/record/start' && req.method === 'POST') {
-    let available = false; try { require.resolve('playwright'); available = true; } catch { /* */ }
-    if (!available) return sendJson(res, 400, { error: 'no-playwright', message: 'Moduł automatyzacji nie jest zainstalowany (npm install playwright).' });
-    if (recordJob && recordJob.status === 'recording') return sendJson(res, 409, { error: 'busy', message: 'Nagrywanie już trwa.' });
-    let data = {}; try { data = await readJson(req); } catch { /* */ }
-    const url = String(data.url || '').slice(0, 500);
-    fs.mkdirSync(TRAIN_DIR, { recursive: true });
-    try { fs.unlinkSync(RECORD_OUT); } catch { /* */ }
-    const args = [RECORDER_SCRIPT];
-    if (/^https?:\/\//i.test(url)) { args.push('--url', url); }
-    recordJob = { status: 'recording', startedAt: Date.now(), outFile: RECORD_OUT, log: [], child: null };
-    let child;
-    try { child = spawn('node', args, { cwd: path.join(__dirname, 'automation'), env: { ...process.env, COSMOS_RECORD_OUT: RECORD_OUT }, stdio: ['ignore', 'pipe', 'pipe'] }); }
-    catch (err) { recordJob.status = 'error'; return sendJson(res, 500, { error: 'spawn-failed', message: err.message }); }
-    recordJob.child = child;
-    child.stdout.on('data', (d) => recLog(d));
-    child.stderr.on('data', (d) => recLog(d));
-    child.on('close', () => { if (recordJob && recordJob.status === 'recording') recordJob.status = 'ready'; });
-    addEvent('nauka', 'rozpoczęto nagrywanie procedury');
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/procedures/record/stop' && req.method === 'POST') {
-    if (!recordJob) return sendJson(res, 400, { error: 'not-recording' });
-    let data = {}; try { data = await readJson(req); } catch { /* */ }
-    // zatrzymaj proces (nagrywarka flushuje kroki przy SIGTERM/zamknięciu okna)
-    if (recordJob.child && recordJob.status === 'recording') { try { recordJob.child.kill('SIGTERM'); } catch { /* */ } }
-    await new Promise((r) => setTimeout(r, 600)); // daj czas na flush
-    let parsed = { steps: [] };
-    try { parsed = JSON.parse(fs.readFileSync(RECORD_OUT, 'utf8')); } catch { /* brak */ }
-    recordJob.status = 'idle';
-    if (parsed.error) return sendJson(res, 400, { error: parsed.error, message: 'Nagrywanie nie powiodło się (brak ekranu lub przeglądarki).' });
-    const steps = Array.isArray(parsed.steps) ? parsed.steps.slice(0, 60).map(sanitizeStep) : [];
-    if (!steps.length) return sendJson(res, 200, { ok: true, id: null, steps: [], message: 'Nie zarejestrowano żadnych kroków.' });
-    const name = String(data.name || '').trim().slice(0, 120) || `Nagranie ${new Date().toLocaleString('pl-PL')}`;
-    const item = { id: genId(), name, description: 'Nagrana automatycznie.', scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now() };
-    dodajProcedure(item); saveProcedures();
-    addEvent('nauka', `zapisano nagraną procedurę: ${name} (${steps.length} kroków)`);
-    return sendJson(res, 200, { ok: true, id: item.id, steps, name });
-  }
-  res.writeHead(405); res.end();
-}
+// --- Nagrywanie procedur (opcjonalny moduł Playwright) ---
+//     Całość w lib/nagrywanie.js; tutaj tylko spięcie zależności.
+const nagrywanie_ = require('./lib/nagrywanie.js').utworz({
+  katalogTreningu: TRAIN_DIR,
+  skryptNagrywarki: path.join(__dirname, 'automation', 'recorder.js'),
+  katalogAutomatyzacji: path.join(__dirname, 'automation'),
+  sendJson,
+  readJson,
+  addEvent,
+  sanitizeStep: nauka_.sanitizeStep,
+  saveProcedures: nauka_.saveProcedures,
+  dodajProcedure: nauka_.dodajProcedure,
+});
+const handleRecord = (req, res, pathname) => nagrywanie_.handleRecord(req, res, pathname);
 
 async function handleTrainRun(req, res, pathname) {
   if (pathname === '/api/train/env' && req.method === 'GET') {
@@ -2696,7 +2343,7 @@ const server = http.createServer(async (req, res) => {
       } catch { /* brak katalogu */ }
       return sendJson(res, 200, {
         conversations: convIndex.length,
-        memories: memories.length,
+        memories: pamiec_.ile(),
         kbItems: kbItems.length,
         kbBytes,
         profileChars: userProfile.length,
@@ -2710,7 +2357,7 @@ const server = http.createServer(async (req, res) => {
       const convs = convIndex.map((meta) => {
         try { return JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { return null; }
       }).filter(Boolean);
-      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories, profile: userProfile };
+      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories: pamiec_.lista(), profile: userProfile };
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -2755,7 +2402,7 @@ const server = http.createServer(async (req, res) => {
         }
         sortConvIndex(); saveConvIndex();
       }
-      if (Array.isArray(bundle.memories)) { memories = bundle.memories; saveMemories(); }
+      if (Array.isArray(bundle.memories)) pamiec_.ustawListe(bundle.memories);
       if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
       return sendJson(res, 200, { ok: true, restored });
     }
@@ -2824,7 +2471,7 @@ function start(port = PORT) {
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
-      console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
+      console.log(`  → Pamięć:  ${pamiec_.ile()} wpisów (data/memory.json)`);
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
       console.log(`  → Rozmowy: ${convIndex.length} (data/conversations/)`);
       console.log(`  → Logowanie: ${authEnabled() ? 'WŁĄCZONE' : 'wyłączone (tryb domowy/localhost)'}`);

@@ -1065,6 +1065,51 @@ oddaje modelu obiektywu.** Facet `photo` ma korpus, czas, ISO i ogniskową,
 ogniskowej — grupowanie po obiektywie pokaże wtedy niskie pokrycie, czyli
 powie prawdę zamiast oddać pustą listę jako fakt.
 
+## ✅ Partia 34 — podział server.js (GOTOWE)
+
+Audyt od kilku partii powtarzał to samo: `server.js` przekroczył próg 2600
+linii i doszedł do 2858. Warunek Marcina brzmiał krótko: „tylko tutaj nic nie
+może się zepsuć".
+
+Wyszły trzy podsystemy o czystych granicach:
+
+- [x] **`lib/pamiec.js`** (259 linii) — pamięć długotrwała i embeddingi.
+      Najbardziej naturalna granica w całym pliku: to jest podsystem, nie
+      zbiór funkcji
+- [x] **`lib/nagrywanie.js`** — nagrywanie procedur Playwrightem
+- [x] **`lib/pomysly.js`** — backlog usprawnień, które Cosmos proponuje sam
+      sobie do akceptacji
+
+Wszystkie trzy dostają zależności przez `utworz()`, tak jak `archiwum`
+i `onedrive` — nie sięgają po globalne stany serwera. **2858 → 2500 linii.**
+
+### Czego `node --check` nie widzi
+
+Podział wyglądał na udany po każdym kroku: składnia poprawna, serwer wstawał.
+A jednak siedem razy pod rząd okazywało się, że coś jest zepsute — tylko widać
+to dopiero po wywołaniu konkretnej trasy:
+
+- granice bloków wyznaczone „na oko" po numerach linii wciągnęły do modułów
+  **cudzy kod**: `handleKb` i obsługa treningu trafiły do nagrywania,
+  a `handlePolish` do pomysłów
+- `__dirname` po przeniesieniu do `lib/` zaczął wskazywać inny katalog —
+  nagrywarka startowałaby w złym miejscu
+- sześć nazw zostało bez definicji: `kbItems`, `capabilityText`, `genId`,
+  `sanitizeStep`, `saveProcedures`, `dodajProcedure`
+
+Każdą z nich wyłapał test dymny na żywym serwerze, jedną po drugiej. To jest
+metoda działająca, ale kosztowna — stąd:
+
+- [x] **Nowa kontrola w audycie: „nazwa wołana w module bez definicji".**
+      Wycina napisy i komentarze, zbiera definicje lokalne, parametry
+      i destrukturyzacje, a potem sprawdza WYWOŁANIA (`nazwa(`). Wywołań
+      nie da się pomylić ze zmienną pętli, więc fałszywych alarmów praktycznie
+      nie ma
+
+Morał jest ten sam co przy porcie audytu: **poprawna składnia nie znaczy
+działający kod**, a przy przenoszeniu kodu między plikami różnica między
+jednym a drugim jest właśnie tam, gdzie mieszkają usterki.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
