@@ -893,8 +893,37 @@ async function handleArchiwum(req, res, p) {
   if (p === '/api/archive/search' && req.method === 'GET') {
     const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
     const limit = Math.min(Number(q.limit) || 40, 200);
+    const dodatki = await miejsceNaPromien(q);
     const wyniki = archiwum.szukaj(q);
-    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit) });
+    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit), ...dodatki });
+  }
+  /* Miniatura pliku z archiwum — dociągana W CHWILI PYTANIA, nie z indeksu.
+     Microsoft Graph oddaje podpisane adresy, które WYGASAJĄ. Zapisane przy
+     indeksowaniu byłyby martwe w momencie, gdy Marcin o nie pyta — a to
+     właśnie wtedy mają się pokazać. Poza tym adres idzie przez nas, więc
+     przeglądarka nie potrzebuje żadnych poświadczeń do OneDrive. */
+  if (p === '/api/archive/thumb' && req.method === 'GET') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
+    if (!id.startsWith('onedrive:')) return sendJson(res, 400, { error: 'Zły identyfikator.' });
+    if (!onedrive.polaczony()) return sendJson(res, 503, { error: 'OneDrive niepołączony.' });
+    try {
+      const el = await onedrive.graf(`/me/drive/items/${encodeURIComponent(id.slice(9))}`
+        + '/thumbnails/0/large');
+      if (!el || !el.url) return sendJson(res, 404, { error: 'Brak miniatury.' });
+      const r = await fetch(el.url, { signal: AbortSignal.timeout(15000) });
+      const typ = r.headers.get('content-type') || '';
+      if (!r.ok || !/^image\//i.test(typ)) return sendJson(res, 502, { error: 'To nie jest obraz.' });
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.writeHead(200, {
+        'Content-Type': typ,
+        'Content-Length': buf.length,
+        // Krótko, bo sam adres u Microsoftu i tak wygasa.
+        'Cache-Control': 'private, max-age=600',
+      });
+      return res.end(buf);
+    } catch (err) {
+      return sendJson(res, 502, { error: `Nie udało się pobrać miniatury: ${err.message}` });
+    }
   }
   if (p === '/api/archive/stats' && req.method === 'GET') {
     const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
@@ -915,6 +944,29 @@ async function handleArchiwum(req, res, p) {
    ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
    sprzęt. Cosmos wie wszystko troje, więc może policzyć konkretne nastawy
    zamiast opowiadać ogólniki o „złotej godzinie". */
+/* „Pokaż zdjęcia z Krakowa" — nazwa miejsca na filtr promieniowy.
+ *
+ *  Indeks trzyma współrzędne, nie nazwy: Microsoft Graph oddaje lat/lon
+ *  i tyle. Dopóki tego nie było, pytanie o miasto nie miało jak zadziałać —
+ *  pole `miejsce` dla materiału z OneDrive jest zawsze puste.
+ *
+ *  Promień dobieramy do tego, CZYM jest miejsce. „Kraków" to punkt i 25 km
+ *  wystarczy z zapasem; „Mazury" albo „Bieszczady" to region rozciągnięty na
+ *  dziesiątki kilometrów i ten sam promień uciąłby większość materiału.
+ *  Nominatim podaje obwiednię (`boundingbox`), więc bierzemy ją zamiast
+ *  zgadywać — a gdy jej nie ma, zostaje rozsądne 25 km.
+ */
+async function miejsceNaPromien(q) {
+  if (!q.miejsce || (q.lat && q.lon)) return {};
+  const m = await wspolrzedneMiejsca(String(q.miejsce));
+  if (!m) return { miejsceNieznane: String(q.miejsce).slice(0, 80) };
+  q.lat = m.lat;
+  q.lon = m.lon;
+  if (!q.promienKm) q.promienKm = m.promienKm || 25;
+  delete q.miejsce;              // dalej filtruje już promień, nie tekst
+  return { miejsceZNazwy: { nazwa: m.nazwa, lat: m.lat, lon: m.lon, promienKm: q.promienKm } };
+}
+
 async function handlePlanZdjeciowy(req, res) {
   let d;
   try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -985,7 +1037,7 @@ async function handlePlanZdjeciowy(req, res) {
   const ustawienia = dobierz(ev, {
     sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
     ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
-    obiektyw: szkla,
+    obiektyw: szkla, temat: d.temat,
   });
   if (nieRozpoznane) {
     ustawienia.powody.unshift(`Nie odczytałem obiektywu z „${nieRozpoznane}" — policzyłem dla samego `
@@ -1956,7 +2008,18 @@ async function handleChat(req, res) {
         + '  rok=2026 · miesiac=06 · typ=zdjecie|wideo · aparat=R6 · obiektyw=RF50 ·\n'
         + '  ogniskowa=50 · ogniskowaOd=24 ogniskowaDo=70 · isoOd=1600 · przyslonaDo=2.8 ·\n'
         + '  swiatlo=złota godzina|niebieska godzina|ostre światło|zmierzch|noc ·\n'
-        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo\n'
+        + '  poraDnia=rano|poludnie|wieczor|noc (można kilka po przecinku: „rano,wieczor") ·\n'
+        + '  miejsce=Kraków (nazwa miejsca albo regionu — Cosmos sam zamieni ją na '
+        + 'współrzędne i dobierze promień; NIE podawaj lat/lon z pamięci) ·\n'
+        + '  temat=ptaki-w-locie|zwierzeta-dzikie|zwierzeta-domowe|wyscig|pojazdy-statycznie|\n'
+        + '    ulica|portret|sesja-moda|ludzie-w-ruchu|koncert|mecz|slub|wydarzenie-rodzinne|\n'
+        + '    krajobraz|gory|las|woda-wybrzeze|jezioro|kanion-klif|architektura|noc-gwiazdy|makro\n'
+        + '    (można kilka po przecinku) ·\n'
+        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo|poraDnia|temat\n'
+        + 'PORA DNIA to co innego niż PORA ŚWIATŁA: złota godzina bywa rano i wieczorem, '
+        + 'więc „zdjęcia z rana i z wieczora" to poraDnia=rano,wieczor, a nie swiatlo=.\n'
+        + 'TEMAT jest zgadywany z nazw folderów i plików, więc bywa niepełny — przy '
+        + 'niskim pokryciu powiedz to wprost, zamiast podawać liczbę jak fakt.\n'
         + 'Z `grupuj` dostaniesz zestawienie liczbowe zamiast listy plików — tego '
         + 'używaj przy pytaniach „ile" i „najczęściej".\n'
         + 'Pora światła jest policzona z pozycji Słońca nad miejscem zdjęcia, '
@@ -1984,6 +2047,9 @@ async function handleChat(req, res) {
         + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
         + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
         + 'obiektyw=24-70 f/2.8 (można kilka po przecinku: „24-70 f/2.8, 70-200 f/4”) · '
+        + 'temat=CO fotografuje (ptaki w locie, jelenie, wyścig motocykli, portret, '
+        + 'koncert, ślub, góry, las, jezioro, klify, gwiazdy… — pisz WŁASNYMI SŁOWAMI, '
+        + 'lista jest otwarta; z tego wychodzą czas migawki, ogniskowa i przysłona) · '
         + '(glebia PODAWAJ TYLKO wtedy, gdy użytkownik wprost prosił o określoną '
         + 'głębię ostrości — narzucona z własnej inicjatywy wymusza mocny filtr ND '
         + 'i psuje resztę doboru) · '

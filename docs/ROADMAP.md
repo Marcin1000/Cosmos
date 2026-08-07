@@ -987,6 +987,84 @@ Morał, wart zapamiętania osobno: **narzędzie do wykrywania usterek, które sa
 może po cichu skłamać, jest gorsze niż jego brak** — bo zielony wynik zamyka
 temat. Uwagi audytu warto ścigać do końca, nawet te wyglądające na kosmetykę.
 
+## ✅ Partia 33 — CO fotografujesz, KIEDY i GDZIE (GOTOWE)
+
+Marcin zapytał, czy „pokaż zdjęcia, które wykonałem rano i wieczorem
+w Krakowie" zadziała. Nie działało, z pięciu niezależnych powodów. Przy okazji
+doszły dwa jego warunki: temat zdjęcia ma wpływać na plan, a sprzęt ma być
+dowolny, „bo zawsze mogę go zmienić".
+
+### Jeden słownik tematów, dwa zastosowania
+
+`lib/tematy.js` odpowiada na dwa pytania naraz — „jak to fotografować"
+i „które pliki są z tej kategorii". Gdyby słowniki były dwa, rozjechałyby się
+przy pierwszej zmianie.
+
+- [x] **22 kategorie**: ptaki w locie, dzikie i domowe zwierzęta, wyścig,
+      pojazdy statycznie, ulica, portret, sesja, ludzie w ruchu, koncert, mecz,
+      ślub, wydarzenia rodzinne, krajobraz, góry, las, morze, jezioro,
+      kanion i klify, architektura, gwiazdy, makro
+- [x] **Lista jest OTWARTA** — to był warunek postawiony wprost. „Pociągi
+      towarowe" dostają neutralne nastawy i zdanie „tego tematu nie mam
+      w słowniku", a nie odmowę
+- [x] **Temat steruje nastawami**: 1/1600 s i 300-600 mm na ptaka w locie,
+      f/8 na krajobraz, otwarcie na portret. Do tego rada praktyczna, która
+      zwykle jest cenniejsza niż liczby — „ekspozycja pod suknię, cienie
+      podnosisz później", „reguła 500", „polaryzator ODEJMUJE odbicie"
+- [x] **Kategorie w archiwum z nazw folderów** — OneDrive nie ma tagów, ale
+      „Wesele Kasi" i „Ptaki Biebrza" to gotowa klasyfikacja, tylko zapisana
+      po ludzku. Plus obiekty z YOLO, gdy zmysły działają
+
+Dopasowanie po fragmencie okazało się za luźne i dało dwa absurdy: „robię
+ZDJĘCIA rowerów" trafiało w koncert (w środku słowa „zdjęcia" siedzi „dj"),
+a „wyścig motocykli" w sesję statyczną. Teraz dopasowujemy do POCZĄTKU słowa,
+rdzenie trzyliterowe wymagają trafienia dokładnego („tort" na urodzinach
+przestał być torem wyścigowym), a słowa przesądzające biją dłuższe ogólniejsze.
+
+### Dowolny sprzęt
+
+- [x] **Klasy zamiast katalogu**: dron / telefon / pełna klatka / APS-C,
+      rozpoznawane po nazwie („Sony A7 IV", „DJI Air 3", „Fujifilm X-T5").
+      Z klasy bierzemy sufit ISO, zapas ze stabilizacji i mnożnik ogniskowej
+- [x] **Mnożnik naprawdę użyty** — na APS-C 200 mm kadruje jak 300 mm i tak
+      samo szybko widać poruszenie, więc czas z drgań liczy się po przeliczeniu
+- [x] Podstawienie klasy jest **powiedziane wprost**, nie milczące
+
+### Pora dnia, miejsce, podglądy
+
+- [x] **`poraDnia` = rano / południe / wieczór / noc**, liczona z KĄTA
+      GODZINNEGO. Kusiło, żeby patrzeć na azymut (wschód = rano), ale to działa
+      tylko na półkuli północnej — a Marcin lata po świecie. Filtr przyjmuje
+      kilka wartości naraz, bo tak brzmi prawdziwe pytanie: „rano i wieczorem"
+- [x] **`miejsce=Kraków` w archiwum** — nazwa na współrzędne, a promień
+      z obwiedni Nominatim: miasto dostaje 25 km, region jak Mazury
+      kilkadziesiąt. Jeden sztywny promień gubiłby albo region, albo miasto
+- [x] **Miniatury dociągane W CHWILI PYTANIA** (`/api/archive/thumb`).
+      Adresy z Microsoft Graph są podpisane i WYGASAJĄ — zapisane przy
+      indeksowaniu byłyby martwe dokładnie wtedy, gdy mają się pokazać
+- [x] **Archiwum wreszcie POKAZUJE zdjęcia**, a nie tylko o nich pisze. Siatka
+      miniatur była podpięta wyłącznie pod wyszukiwanie w internecie; wynik
+      z archiwum szedł do modelu jako tekst i Marcin dostawał listę nazw
+- [x] **Klik otwiera pełny ekran w Cosmosie** — to własny plik, więc nie ma
+      dokąd go „odsyłać" nową kartą
+
+### Dwa błędy złapane po drodze, oba przez sprawdzenie z rzeczywistością
+
+- [x] **EV nocy było zawyżone o ponad SIEDEM działek.** Tabela mówiła +1 dla
+      nocy bezksiężycowej. Kontrola: rozgwieżdżone niebo fotografuje się 20 s
+      przy f/2.8 i ISO 3200, co daje EV = −6,4. Każda nocna porada była nie ta
+- [x] **Ekspozycji dłuższej niż sekunda nie dało się WYRAZIĆ.** Czas był
+      zawsze ułamkiem, więc na gwiazdy Cosmos radził 1/30 s zamiast 20 s.
+      Teraz zdjęcia nocne wydłużają czas zamiast dobijać ISO, z granicą
+      z reguły 500. Kontrola: 24 mm f/2.8 → 20 s ISO 3200, czyli dokładnie to,
+      co się w praktyce ustawia
+
+Trzecia rzecz, tym razem bez poprawki, bo się nie da: **Microsoft Graph nie
+oddaje modelu obiektywu.** Facet `photo` ma korpus, czas, ISO i ogniskową,
+`LensModel` z EXIF-u nie przychodzi. Zostawiamy `null` zamiast zgadywać po
+ogniskowej — grupowanie po obiektywie pokaże wtedy niskie pokrycie, czyli
+powie prawdę zamiast oddać pustą listę jako fakt.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

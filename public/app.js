@@ -764,9 +764,20 @@ function photosGrid(photos) {
     a.rel = 'noopener noreferrer';
     a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
     const img = document.createElement('img');
-    img.src = `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
+    /* Adres własny (np. z archiwum) bierzemy wprost — proxy miniatur jest
+       od CUDZYCH hostów i tylko by tu przeszkadzało. */
+    const wlasny = /^\//.test(p.thumb || '');
+    img.src = wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
     img.alt = p.title || t('photo.found');
     img.loading = 'lazy';
+
+    /* Zdjęcie z archiwum otwiera się NA PEŁNYM EKRANIE w Cosmosie, a nie
+       w nowej karcie: to własny plik Marcina, więc nie ma dokąd go „odesłać".
+       Zdjęcia z internetu zostają odnośnikiem do źródła. */
+    if (p.podglad) {
+      a.href = '#';
+      a.addEventListener('click', (e) => { e.preventDefault(); openImageViewer(p.podglad); });
+    }
 
     /* Co się dzieje, gdy miniatura nie chce się wczytać.
 
@@ -779,7 +790,7 @@ function photosGrid(photos) {
        Teraz próbujemy po kolei: przez proxy → prosto z serwera obrazka →
        a jak i to nie wyjdzie, zostaje widoczny kafelek z odnośnikiem. Zawsze
        widać tyle kafelków, ile zapowiedziała odpowiedź. */
-    let probowanoWprost = false;
+    let probowanoWprost = wlasny;   // własnego adresu nie ma po co próbować drugi raz
     img.addEventListener('error', () => {
       if (!probowanoWprost && /^https:\/\//i.test(p.thumb || '')) {
         // Proxy odmówiło (nieznany host, przekroczony czas). Przeglądarka
@@ -1784,10 +1795,41 @@ async function runGeneration(conv) {
           dane = await readJsonSafe(r);
           if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
         } catch (err) { dane = { error: err.message }; }
+
+        /* PODGLĄDY, nie tylko opis słowami.
+           Do tej pory wynik archiwum szedł wyłącznie do modelu jako tekst,
+           więc na „pokaż zdjęcia z rana" Marcin dostawał listę nazw plików.
+           Siatka miniatur była podpięta tylko pod wyszukiwanie w internecie.
+           Miniatury lecą przez `/api/archive/thumb`, bo adresy z OneDrive
+           wygasają i muszą być dociągane teraz, a nie przy indeksowaniu. */
+        const pliki = (dane && Array.isArray(dane.wyniki)) ? dane.wyniki : [];
+        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive').slice(0, 24);
+        if (zPodgladem.length) {
+          conv.messages.push({
+            role: 'assistant',
+            content: {
+              text: '',
+              photos: zPodgladem.map((w) => ({
+                thumb: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
+                podglad: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
+                source: '',
+                title: [w.nazwa, w.kiedy && w.kiedy.slice(0, 16).replace('T', ' ')]
+                  .filter(Boolean).join(' · '),
+                zrodlo: [w.poraDnia, w.swiatlo].filter(Boolean).join(' · '),
+                licencja: w.ogniskowa ? `${w.ogniskowa} mm` : '',
+              })),
+            },
+          });
+          saveConversations();
+          renderMessages();
+        }
+
         conv.messages.push({
           role: 'user',
           content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-            + 'podstawie tych danych, nie zgaduj):\n' + JSON.stringify(dane, null, 1).slice(0, 12000),
+            + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
+            + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
+            + JSON.stringify(dane, null, 1).slice(0, 12000),
           search: true,
           searchQuery: t('chat.archiveQuery'),
         });
