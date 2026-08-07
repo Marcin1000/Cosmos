@@ -65,7 +65,7 @@ const { srodowisko } = require('../pomoc');
   if (!obcyKorpus.d?.ustawienia?.czas) fail.push('brak wyniku dla nieznanego korpusu');
   // …ale podmiana korpusu nie może być MILCZĄCA: sufit ISO i zapas ze
   // stabilizacji są inne, więc wynik dotyczy nie tego aparatu, o który pytano.
-  if (!powodyZ(obcyKorpus).some((p) => /Nie znam korpusu/.test(p))) {
+  if (!powodyZ(obcyKorpus).some((p) => /nie mam .* w katalogu/i.test(p))) {
     fail.push('nieznany korpus podmieniony po cichu — odpowiedź dotyczy innego aparatu');
   }
 

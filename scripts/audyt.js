@@ -288,7 +288,18 @@ liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
 // Żaden identyfikator z modułu nie może być używany bez importu — inaczej
 // serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
 const glowa = server.slice(0, server.indexOf('// ----', 2500));
-const ogon = server.slice(glowa.length);
+/* Z treści usuwamy NAPISY i komentarze, zanim poszukamy w niej symboli.
+   Bez tego sprawdzenie zgłaszało nieistniejące usterki: `poraDnia` widziało
+   w treści promptu opisującego parametry narzędzia, a `TEMATY` — w polskim
+   zdaniu „OSTATNIE TEMATY ROZMÓW". Fałszywy alarm w narzędziu do wykrywania
+   usterek kosztuje tyle samo czasu co prawdziwy, a uczy go ignorować. */
+const bezNapisow = (kod) => kod
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+  .replace(/'(?:\\.|[^'\\])*'/g, "''")
+  .replace(/"(?:\\.|[^"\\])*"/g, '""')
+  .replace(/`(?:\\.|[^`\\])*`/g, '``');
+const ogon = bezNapisow(server.slice(glowa.length));
 const bezImportu = [];
 for (const m of moduly) {
   let mod; try { mod = require(path.join(R, 'lib', m)); } catch (e) { zle(`lib/${m} nie daje się wczytać: ${e.message}`); continue; }
