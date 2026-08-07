@@ -311,48 +311,103 @@ for (const m of moduly) {
 bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
   : ok('każdy symbol z modułów jest zaimportowany');
 
-/* Nazwy UŻYWANE W MODULE, a nigdzie w nim nieokreślone.
+/* Nazwy WOŁANE w module, a nigdzie w nim niezdefiniowane.
+
    `node --check` tego nie widzi — składnia jest poprawna, a trasa wywala się
-   dopiero przy wywołaniu. Przy podziale server.js to sprawdzenie wyłapało
-   siedem takich usterek pod rząd (`kbItems`, `capabilityText`, `genId`,
-   `sanitizeStep`, `saveProcedures`, `dodajProcedure`, `https`), z których
-   każdą inaczej trzeba by znaleźć klikając po interfejsie. */
+   dopiero przy wywołaniu. Przy podziale server.js takich usterek było sześć
+   pod rząd, a osobno wyszła siódma: `tsName` wołane w nauka.js, a definiowane
+   w studio.js i nigdzie niewstrzykiwane.
+
+   DEFINICJE zbieramy z SUROWEGO źródła, bez wycinania napisów. Pierwsza wersja
+   najpierw usuwała napisy i komentarze — i rozjeżdżała się na literałach
+   wyrażeń regularnych z cudzysłowem w środku (`/vqd=["']([^"']+)/`), połykając
+   pół pliku razem z definicjami. Skutek: dziesięć nieistniejących usterek.
+   Czytanie surowego źródła bywa zbyt hojne, ale myli się w BEZPIECZNĄ stronę —
+   najwyżej przeoczy usterkę, nigdy nie zgłosi zdrowego kodu. */
 const GLOBALE_NODE = new Set(['require', 'module', 'exports', 'process', 'console', 'Buffer',
   '__dirname', '__filename', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
   'setImmediate', 'fetch', 'URL', 'URLSearchParams', 'AbortSignal', 'TextEncoder', 'TextDecoder',
   'JSON', 'Math', 'Date', 'Object', 'Array', 'String', 'Number', 'Boolean', 'Promise', 'Error',
   'TypeError', 'Map', 'Set', 'WeakMap', 'RegExp', 'Infinity', 'NaN', 'undefined', 'globalThis',
-  'Intl', 'structuredClone', 'queueMicrotask', 'BigInt', 'Symbol', 'Proxy', 'Reflect']);
+  'Intl', 'structuredClone', 'queueMicrotask', 'BigInt', 'Symbol', 'Proxy', 'Reflect',
+  'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
+  'encodeURI', 'decodeURI', 'atob', 'btoa', 'FormData', 'Blob', 'File', 'Headers',
+  'Request', 'Response', 'AbortController', 'WebSocket', 'performance']);
 const SLOWA_JS = new Set(['const', 'let', 'var', 'function', 'async', 'await', 'return', 'if',
   'else', 'for', 'while', 'of', 'in', 'new', 'typeof', 'instanceof', 'try', 'catch', 'finally',
   'throw', 'break', 'continue', 'switch', 'case', 'default', 'do', 'delete', 'void', 'yield',
   'class', 'extends', 'super', 'this', 'static', 'get', 'set', 'true', 'false', 'null']);
 
 const wolneNazwy = [];
+/** Zostaw sam KOD: bez komentarzy i bez treści napisów.
+ *
+ *  Zwykłe wyrażenie regularne tu nie wystarcza i to nie jest przesada —
+ *  pierwsza wersja rozjeżdżała się na literale `/vqd=["\']([^"\']+)/`,
+ *  brała cudzysłów w środku wzorca za początek napisu i połykała pół pliku
+ *  razem z definicjami funkcji. Druga wersja zostawiała napisy i tonęła
+ *  w polskiej prozie („wyświetlenie (patrz niżej)" wygląda jak wywołanie).
+ *  Mały automat stanowy rozróżnia napis od wzorca i kosztuje trzydzieści
+ *  linijek — mniej niż jeden fałszywy alarm w środku nocy.
+ */
+function samKod(src) {
+  let out = '';
+  let i = 0;
+  let poprzedni = '';           // ostatni znaczący znak — decyduje, czy `/` to wzorzec
+  while (i < src.length) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (c === '/' && d === '*') { const k = src.indexOf('*/', i + 2); i = k < 0 ? src.length : k + 2; out += ' '; continue; }
+    if (c === '/' && d === '/') { const k = src.indexOf('\n', i); i = k < 0 ? src.length : k; out += ' '; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      const cudzy = c; i++;
+      while (i < src.length && src[i] !== cudzy) { if (src[i] === '\\') i++; i++; }
+      i++; out += cudzy + cudzy; poprzedni = cudzy; continue;
+    }
+    // `/` po operatorze albo nawiasie otwierającym zaczyna WZORZEC, nie dzielenie
+    if (c === '/' && /[=(,:[!&|?{};+\-*%~^<>]/.test(poprzedni)) {
+      i++;
+      while (i < src.length && src[i] !== '/') {
+        if (src[i] === '\\') i++;
+        else if (src[i] === '[') { while (i < src.length && src[i] !== ']') { if (src[i] === '\\') i++; i++; } }
+        i++;
+      }
+      i++; while (i < src.length && /[a-z]/.test(src[i])) i++;   // flagi
+      out += ' 0 '; poprzedni = '0'; continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) poprzedni = c;
+    i++;
+  }
+  return out;
+}
+
 for (const m of moduly) {
-  let src = rd(`lib/${m}`);
-  src = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-    .replace(/'(?:\\.|[^'\\])*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""')
-    .replace(/`(?:\\.|[^`\\])*`/g, '``');
+  const src = samKod(rd(`lib/${m}`));
   const zdef = new Set();
   for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
-  for (const x of src.matchAll(/function\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
-  for (const x of src.matchAll(/\{([^{}]*)\}\s*=/g)) {
-    for (const cz of x[1].split(',')) {
-      const n = cz.split(':').pop().trim().split('=')[0].trim();
-      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
-    }
-  }
-  for (const x of src.matchAll(/\(([^()]*)\)\s*(?:=>|\{)/g)) {
-    for (const cz of x[1].split(',')) {
-      const n = cz.trim().split('=')[0].trim().replace(/^\.\.\./, '').replace(/[{}]/g, '');
-      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
-    }
-  }
+  for (const x of src.matchAll(/function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
-  /* Interesują nas WYWOŁANIA (`nazwa(`) — tam fałszywych trafień prawie nie ma,
-     bo zmienne pętli i pola obiektów nie są wołane jak funkcje. */
-  for (const x of src.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]{2,})\s*\(/g)) {
+  /* Wszystko, co stoi wewnątrz nawiasów klamrowych albo okrągłych, traktujemy
+     jak potencjalny parametr lub destrukturyzację. Hojnie — patrz wyżej. */
+  /* Parametry funkcji czytamy z wersji BEZ zagnieżdżonych klamer, inaczej
+     `indeksuj(naPaczke, { folder, limit })` nie oddaje pierwszego parametru:
+     wzorzec urywa się na klamrze i `naPaczke` wygląda na niezdefiniowane. */
+  const bezKlamer = src.replace(/\{[^{}]*\}/g, ' ');
+  for (const x of bezKlamer.matchAll(/\(([^()]*)\)/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.split(':').pop().trim().split('=')[0].trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  for (const x of src.matchAll(/[({]([^(){}]*)[)}]/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.split(':').pop().trim().split('=')[0].trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  /* Interesują nas WYWOŁANIA — tam fałszywych trafień jest najmniej, bo pola
+     obiektów i zmienne pętli nie są wołane jak funkcje. */
+  for (const x of src.matchAll(/(?<![.\w$'"`])([A-Za-z_$][\w$]{2,})\s*\(/g)) {
     const n = x[1];
     if (!zdef.has(n) && !GLOBALE_NODE.has(n) && !SLOWA_JS.has(n)) wolneNazwy.push(`${m}:${n}`);
   }

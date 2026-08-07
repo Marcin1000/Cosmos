@@ -1106,6 +1106,25 @@ metoda działająca, ale kosztowna — stąd:
       nie da się pomylić ze zmienną pętli, więc fałszywych alarmów praktycznie
       nie ma
 
+Nowa kontrola od razu znalazła ósmą usterkę, tym razem NIE z podziału:
+**`tsName` wołane w `lib/nauka.js`, a definiowane w `lib/studio.js`** i nigdzie
+niewstrzykiwane. Zapis wzorca nauki z kamery wywaliłby się na `tsName is not
+defined`. Leżało to tam od wcześniejszej partii i nie wyszło ani w baterii,
+ani w rozruchu próbnym — trzeba by kliknąć dokładnie tę jedną ścieżkę.
+
+Sama kontrola wymagała trzech podejść i to jest osobna lekcja:
+
+1. wycinanie napisów wyrażeniem regularnym **rozjechało się na literałach
+   wzorców z cudzysłowem w środku** (`/vqd=["']([^"']+)/`) — parser połknął
+   pół pliku razem z definicjami i zgłosił dziesięć nieistniejących usterek
+2. czytanie surowego źródła utonęło w polskiej prozie: „wyświetlenie (patrz
+   niżej)" wygląda dla wzorca jak wywołanie funkcji — sto dziesięć alarmów
+3. dopiero mały automat stanowy, który odróżnia napis od wzorca, dał wynik
+   czysty: **zero fałszywych alarmów, jedna prawdziwa usterka**
+
+Trzydzieści linijek automatu zamiast jednego wyrażenia regularnego to koszt
+mniejszy niż jeden fałszywy alarm, który uczy ignorować całe narzędzie.
+
 Morał jest ten sam co przy porcie audytu: **poprawna składnia nie znaczy
 działający kod**, a przy przenoszeniu kodu między plikami różnica między
 jednym a drugim jest właśnie tam, gdzie mieszkają usterki.

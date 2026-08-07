@@ -2271,7 +2271,7 @@ studio_.polacz({ KB_FILES, addEvent, kbAddFile, kbItemMeta, kbItems });
 urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
 trening_.polacz({ addEvent, convIndex, convPath, userProfile });
 nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
-  keywordScore, sameModel, saveKb });
+  keywordScore, sameModel, saveKb, tsName });
 
 const server = http.createServer(async (req, res) => {
   try {
