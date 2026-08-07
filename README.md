@@ -662,6 +662,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
+| `/api/gear` | GET/PUT | Zestaw sprzętu użytkownika (korpus, obiektywy) — domyślny dla planu zdjęciowego |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |

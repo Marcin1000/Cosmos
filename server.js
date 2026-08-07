@@ -472,6 +472,32 @@ function searchConversationsContent(query) {
   return out.slice(0, 30);
 }
 
+/* SPRZĘT użytkownika — domyślny zestaw do planu zdjęciowego.
+ *
+ * Osobno od profilu, bo profil jest wolnym tekstem DLA MODELU, a to są dane
+ * DLA NARZĘDZIA: z nich liczy się przysłona i ogniskowa. Marcin podał swój
+ * zestaw raz („24-105 f/4, 70-200 f/4, 50 f/1.8") i nie ma powodu, żeby
+ * wpisywał go przy każdym pytaniu — a model nie ma powodu go zgadywać.
+ *
+ * Podanie obiektywu w rozmowie ZAWSZE wygrywa z tym zapisem: sprzęt bywa
+ * pożyczony, a jedno zdanie w czacie jest świeższe niż ustawienie sprzed
+ * miesiąca.
+ */
+const SPRZET_FILE = path.join(DATA_DIR, 'sprzet.json');
+let userSprzet = { korpus: '', obiektywy: '' };
+try { userSprzet = { ...userSprzet, ...JSON.parse(fs.readFileSync(SPRZET_FILE, 'utf8')) }; }
+catch { /* brak — panel Ustawień pozwoli uzupełnić */ }
+function saveSprzet(dane) {
+  userSprzet = {
+    korpus: String((dane && dane.korpus) || '').slice(0, 120),
+    obiektywy: String((dane && dane.obiektywy) || '').slice(0, 400),
+  };
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SPRZET_FILE, JSON.stringify(userSprzet));
+  } catch (err) { console.error('Nie udało się zapisać sprzętu:', err.message); }
+}
+
 // Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
 const PROFILE_FILE = path.join(DATA_DIR, 'profile.txt');
 let userProfile = '';
@@ -1029,13 +1055,17 @@ async function handlePlanZdjeciowy(req, res) {
      bo wpisuje je Marcin w rozmowie, a nie formularz. Rozbiciem zajmuje się
      `rozpoznajObiektywy`; gdy nic nie da się odczytać, `dobierz` po prostu
      liczy jak dawniej — dla korpusu. */
-  const szkla = Array.isArray(d.obiektyw)
+  /* Gdy w pytaniu nie padł żaden obiektyw, bierzemy zestaw zapisany
+     w Ustawieniach. Podanie szkła wprost zawsze wygrywa. */
+  const zPytania = Array.isArray(d.obiektyw)
     ? d.obiektyw.flatMap((x) => rozpoznajObiektywy(String(x)))
     : rozpoznajObiektywy(d.obiektyw || '');
-  const nieRozpoznane = (d.obiektyw && !szkla.length) ? String(d.obiektyw).slice(0, 120) : '';
+  const zUstawien = zPytania.length ? [] : rozpoznajObiektywy(userSprzet.obiektywy || '');
+  const szkla = zPytania.length ? zPytania : zUstawien;
+  const nieRozpoznane = (d.obiektyw && !zPytania.length) ? String(d.obiektyw).slice(0, 120) : '';
 
   const ustawienia = dobierz(ev, {
-    sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
+    sprzet: d.sprzet || userSprzet.korpus || undefined, tryb: d.tryb, klatki: d.klatki,
     ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
     obiektyw: szkla, temat: d.temat,
   });
@@ -2631,6 +2661,13 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
+    if (p === '/api/gear') {
+      if (req.method === 'GET') return sendJson(res, 200, userSprzet);
+      if (req.method === 'PUT') {
+        try { saveSprzet(await readJson(req)); return sendJson(res, 200, { ok: true, ...userSprzet }); }
+        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      }
+    }
     if (p === '/api/profile') {
       if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });
       if (req.method === 'POST') {
