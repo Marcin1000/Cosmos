@@ -107,6 +107,29 @@ http.createServer((req, res) => {
     });
   }
 
+  /* Atrapa NOAA SWPC. Dwa strumienie o RÓŻNYM kształcie i to jest sedno:
+     bieżące Kp to lista obiektów, a prognoza — lista TABLIC z wierszem
+     nagłówka. Pomylenie ich to najłatwiejszy błąd przy czytaniu tego API. */
+  if (u.pathname === '/swpc/kp') {
+    if (padnij.has('swpc')) return json(503, { error: 'atrapa: SWPC wyłączony' });
+    return json(200, [
+      { time_tag: '2026-08-08T07:00:00', kp_index: 4.33 },
+      { time_tag: '2026-08-08T07:01:00', kp_index: 6.67 },
+    ]);
+  }
+  if (u.pathname === '/swpc/prognoza') {
+    if (padnij.has('swpc')) return json(503, { error: 'atrapa: SWPC wyłączony' });
+    const zaGodzin = (h) => new Date(Date.now() + h * 3600 * 1000)
+      .toISOString().replace('T', ' ').slice(0, 19);
+    return json(200, [
+      ['time_tag', 'kp', 'observed', 'noaa_scale'],
+      [zaGodzin(-24), '3.00', 'observed', null],   // przeszłość — ma wypaść
+      [zaGodzin(3), '5.67', 'predicted', 'G1'],
+      [zaGodzin(6), '7.33', 'predicted', 'G3'],
+      [zaGodzin(9), '4.00', 'predicted', null],
+    ]);
+  }
+
   if (u.pathname === '/commons') {
     if (padnij.has('commons')) return json(503, { error: 'atrapa: commons wyłączony' });
     return json(200, COMMONS(q, 4));

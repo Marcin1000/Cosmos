@@ -1185,6 +1185,45 @@ to dwa różne zdania, a ja podałem pierwsze jako drugie.
 - **ExifTool / Exiv2** (z awesome-OpenSourcePhotography) — potwierdzają, że
   `LensModel` to standardowy tag; naszego czytnika nie trzeba zastępować
 
+## ✅ Partia 36 — zorza polarna z danych NOAA (GOTOWE)
+
+Z listy awesome-astrophotography: **SolarHam** i dane **NOAA SWPC**. Zorzę
+w Polsce widać kilka razy w roku, jest do przewidzenia z kilkunastu godzin
+wyprzedzeniem, a przegapienie jej boli. Pasuje do planu zdjęciowego dokładnie
+tak jak pogoda — i tak samo jest tylko DODATKIEM, który nie może go zablokować.
+
+- [x] **Bieżące Kp i prognoza na trzy doby** z NOAA — publicznie, bez klucza
+- [x] **Próg Kp policzony dla MIEJSCA**, nie ogólny. To jest sedno: „Kp 7" nic
+      nie znaczy bez odpowiedzi na pytanie „a gdzie stoisz". W Tromsø zorza
+      jest przy Kp 0, w Zakopanem trzeba Kp 8
+- [x] **Pytamy tylko po zmroku** — przy Słońcu wysoko odpowiedź jest znana
+      z góry i byłoby to marnowanie sekundy przy każdym planie
+- [x] Awaria NOAA nie zabiera ustawień ekspozycji; sprawdzone w `scenariusze`
+- [x] `node scripts/zorza.js` — diagnostyka z serwera, jak przy grafikach
+
+### Liczba, którą trzeba było skorygować
+
+Pierwsza wersja przyjmowała, że łunę nad horyzontem widać **8° poniżej** owalu
+zorzowego. Wychodziło z tego, że w Gdańsku zorza jest przy **Kp 3** — a Kp 3 to
+spokojny dzień, w którym nikt w Polsce niczego nie widzi.
+
+Kontrola z rzeczywistości: w Polsce zorzę widać przy Kp 6-7, a wielką burzę
+z maja 2024 (Kp 8-9) widziano w całym kraju. Po zmianie zapasu na 4° progi
+wychodzą **Gdańsk 5 · Warszawa 6 · Kraków 7 · Zakopane 8** — i to się zgadza.
+
+Osobno przyznane wprost w kodzie i w odpowiedzi: szerokość geomagnetyczną
+liczymy przybliżeniem DIPOLOWYM, a tablice „Kp → granica owalu" opierają się
+na szerokości SKORYGOWANEJ, która dla Polski wypada o 2-3° niżej. Próg jest
+więc lekko optymistyczny i Cosmos tego nie ukrywa.
+
+### Czego NIE potwierdziłem
+
+Kształtu odpowiedzi NOAA nie sprawdziłem na żywym API — kontener testowy ma
+zablokowane wyjście, więc atrapa jest zbudowana z dokumentacji. Sprawdza to,
+czy Cosmos POPRAWNIE CZYTA taki kształt (a to niebanalne: bieżące Kp to lista
+obiektów, prognoza — lista TABLIC z wierszem nagłówka). Czy prawdziwe API
+oddaje dokładnie to, rozstrzyga dopiero `node scripts/zorza.js` na serwerze.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

@@ -229,6 +229,8 @@ const SRODOWISKA = {
       OPENVERSE_API_URL: 'http://127.0.0.1:7117/openverse',
       GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
       SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
+      SWPC_KP_URL: 'http://127.0.0.1:7117/swpc/kp',
+      SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
     },
   },

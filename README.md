@@ -708,6 +708,7 @@ lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
 lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
 lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
+lib/zorza.js       zorza polarna: Kp z NOAA i próg dla Twojej szerokości
 lib/miejsca.js     nazwa miejsca → współrzędne i promień (Nominatim)
 lib/tematy.js      CO fotografujesz: nastawy pod temat i kategorie w archiwum
 lib/grafiki.js     wyszukiwanie zdjęć w trzech źródłach naraz, z zapasem
@@ -771,6 +772,30 @@ powodu — limity zapytań, blokada hostingu, captcha. Tego pytania nie da się
 rozstrzygnąć znikąd indziej niż z tej maszyny, i właśnie po to jest ten skrypt.
 Pokazuje każde źródło osobno z powodem odmowy. Zawężenie listy na stałe:
 `IMAGE_SEARCH_SOURCES=commons,openverse` w `.env`.
+
+## 🌌 Zorza — czy dziś w nocy jest po co wychodzić
+
+```bash
+node scripts/zorza.js               # dla Warszawy
+node scripts/zorza.js 54.35 18.65   # dla podanych współrzędnych
+```
+
+Plan zdjęciowy dopisuje pole `zorza`, gdy Słońce jest pod horyzontem. Dane idą
+z NOAA SWPC — publicznie i bez klucza.
+
+Sedno nie leży w samym Kp, tylko w PROGU. „Kp 7" nic nie znaczy bez odpowiedzi
+na pytanie „a gdzie stoisz": w Tromsø zorza jest przy Kp 0, w Zakopanem trzeba
+Kp 8. Cosmos liczy więc szerokość geomagnetyczną miejsca i podaje próg obok
+prognozy, zamiast obiecywać widok.
+
+Progi wychodzą tak: **Gdańsk 5 · Warszawa 6 · Kraków 7 · Zakopane 8** (łuna nad
+północnym horyzontem). Zgadza się to z rzeczywistością — burzę z maja 2024
+(Kp 8-9) widziano w całej Polsce.
+
+Szerokość geomagnetyczną liczymy przybliżeniem dipolowym, które dla Polski
+wypada o 2-3° korzystniej niż tablice oparte na szerokości skorygowanej, więc
+próg jest lekko optymistyczny i Cosmos mówi o tym wprost. Zorzę i tak zasłoni
+zachmurzenie, Księżyc w pełni i światła miasta.
 
 ## ⚡ Płynność — który model nadaje się do rozmowy
 

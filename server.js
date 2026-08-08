@@ -40,6 +40,7 @@ const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
   rozpoznajObiektywy } = require('./lib/ekspozycja.js');
 const { pogodaDla } = require('./lib/pogoda.js');
 const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
+const { prognozaZorzy } = require('./lib/zorza.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
 const onedrive_ = require('./lib/onedrive.js');
@@ -829,7 +830,14 @@ async function handlePlanZdjeciowy(req, res) {
   /* Zachmurzenie: z prognozy, chyba że użytkownik wybrał je ręcznie w panelu.
      Ręczny wybór wygrywa — stoisz na miejscu i widzisz niebo lepiej niż
      model pogodowy dla kwadratu kilometra. */
-  const pogoda = d.zachmurzenie ? null : await pogodaDla(lat, lon, kiedy);
+  /* Pogoda i zorza lecą RÓWNOLEGLE i obie są tylko dodatkiem — żadna nie może
+     wstrzymać planu. Zorzy nie pytamy w biały dzień: przy Słońcu wysoko nad
+     horyzontem odpowiedź jest znana z góry i byłoby to marnowanie sekundy. */
+  const ciemnoBedzie = swiatlo.teraz.wysokosc < 6;
+  const [pogoda, zorza] = await Promise.all([
+    d.zachmurzenie ? Promise.resolve(null) : pogodaDla(lat, lon, kiedy),
+    ciemnoBedzie ? prognozaZorzy(lat, lon).catch(() => null) : Promise.resolve(null),
+  ]);
   const zachmurzenie = d.zachmurzenie || (pogoda && pogoda.zachmurzenie) || 'bezchmurnie';
 
   /* EV liczymy ze Słońca, a gdy przeglądarka zmierzyła jasność podglądu —
@@ -898,6 +906,7 @@ async function handlePlanZdjeciowy(req, res) {
     kadr,
     zrodloEv,
     pogoda,
+    zorza,
     zachmurzenie,
     ustawienia,
   });
@@ -1772,6 +1781,11 @@ async function handleChat(req, res) {
         + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '
         + 'bierze prognozę pogody dla tego miejsca i tej godziny.\n'
         + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
+        + 'ZORZA: przy Słońcu poniżej horyzontu dostajesz też pole `zorza` — bieżące Kp '
+        + 'z NOAA, prognozę i PRÓG Kp dla tego miejsca. „Kp 7" samo w sobie nic nie znaczy: '
+        + 'porównaj je z `progNadHoryzontem`. Gdy `szansa` to „brak", powiedz wprost, '
+        + 'że zorzy nie będzie, zamiast owijać. Zawsze dodaj, że zasłoni ją zachmurzenie '
+        + 'i Księżyc, a patrzeć trzeba na PÓŁNOC.\n'
         + 'Dostaniesz pozycję Słońca, prognozę, godziny złotej i niebieskiej oraz policzone '
         + 'czas/przysłonę/ISO. NIE zgaduj tych liczb sam — Twoja wiedza nie obejmuje '
         + 'dzisiejszej daty ani miejsca, w którym stoi użytkownik.',

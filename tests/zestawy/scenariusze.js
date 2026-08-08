@@ -129,6 +129,38 @@ const { srodowisko } = require('../pomoc');
   if (zPogoda.status !== 200) fail.push('brak pogody zablokował cały plan');
   if (!zPogoda.d?.ustawienia?.czas) fail.push('brak pogody odebrał ustawienia ekspozycji');
 
+  /* ZORZA — dodatek do planu, więc obowiązuje ta sama zasada co przy pogodzie:
+     jej brak nie może zabrać ustawień ekspozycji. Sprawdzamy oba kierunki:
+     że dane dochodzą i są policzone, ORAZ że awaria NOAA nic nie psuje. */
+  const noca = await plan({ lat: 54.35, lon: 18.65, tryb: 'zdjecie', kiedy: '2026-01-15T22:00' });
+  const z = noca.d?.zorza;
+  console.log(`D1b. zorza w Gdańsku nocą → Kp teraz ${z?.kpTeraz ?? '—'}, `
+    + `szczyt ${z?.szczyt?.kp ?? '—'}, próg łuny ${z?.progNadHoryzontem ?? '—'}, szansa „${z?.szansa ?? '—'}"`);
+  if (!z) fail.push('brak pola `zorza` w planie nocnym');
+  else {
+    if (z.progNadHoryzontem !== 5) fail.push(`próg łuny dla Gdańska ${z.progNadHoryzontem}, oczekiwano 5`);
+    // Atrapa daje szczyt Kp 7,33 — powyżej progu 5, więc szansa MUSI być.
+    if (z.szansa === 'brak') fail.push('Kp 7,3 powyżej progu 5, a Cosmos mówi „brak"');
+    if (!z.prognoza?.length) fail.push('prognoza Kp pusta — zły odczyt tablicy z nagłówkiem');
+    if (z.prognoza?.some((x) => new Date(x.kiedy.replace(' ', 'T') + 'Z') < Date.now() - 4 * 3600e3)) {
+      fail.push('w prognozie została wczorajsza burza');
+    }
+  }
+
+  // W dzień zorzy nie pytamy w ogóle — to marnowanie sekundy na znany wynik.
+  const wDzien = await plan({ lat: 54.35, lon: 18.65, tryb: 'zdjecie', kiedy: '2026-06-21T12:00' });
+  console.log(`D1c. zorza w południe → ${wDzien.d?.zorza === null ? 'pominięta (dobrze)' : 'PYTANA NIEPOTRZEBNIE'}`);
+  if (wDzien.d?.zorza) fail.push('Cosmos pyta o zorzę w biały dzień');
+
+  // Awaria NOAA nie może zabrać reszty planu.
+  await fetch('http://127.0.0.1:7117/awaria?zrodla=swpc');
+  const bezZorzy = await plan({ lat: 54.35, lon: 18.65, tryb: 'zdjecie', kiedy: '2026-01-15T22:00' });
+  console.log(`D1d. NOAA nie odpowiada → HTTP ${bezZorzy.status}, ustawienia są: ${Boolean(bezZorzy.d?.ustawienia?.czas)}`);
+  if (bezZorzy.status !== 200) fail.push('awaria NOAA wywraca plan');
+  if (!bezZorzy.d?.ustawienia?.czas) fail.push('awaria NOAA zabrała ustawienia ekspozycji');
+  if (bezZorzy.d?.zorza) fail.push('atrapa miała paść, a zorza jest');
+  await fetch('http://127.0.0.1:7117/awaria?zrodla=');
+
   // Wyszukiwanie grafik przy wszystkich źródłach w dół — musi POWIEDZIEĆ dlaczego.
   await fetch('http://127.0.0.1:7117/awaria?zrodla=searxng,ddg,commons,openverse');
   const brakZrodel = await (await fetch(`${env.adres}/api/search/images?q=cokolwiek`)).json();
