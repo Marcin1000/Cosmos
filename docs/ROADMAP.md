@@ -1224,6 +1224,192 @@ czy Cosmos POPRAWNIE CZYTA taki kształt (a to niebanalne: bieżące Kp to lista
 obiektów, prognoza — lista TABLIC z wierszem nagłówka). Czy prawdziwe API
 oddaje dokładnie to, rozstrzyga dopiero `node scripts/zorza.js` na serwerze.
 
+## ✅ Partia 37 — reszta z przeglądu list (GOTOWE)
+
+Partia 35 zamknęła dwie rzeczy z przeglądu i wypisała resztę jako „odnotowane,
+a nie zrobione". Marcin przypomniał, że prosił o WDROŻENIE, i miał rację.
+Tu jest reszta — z jednym zastrzeżeniem, które trzeba powiedzieć wprost:
+**żadnego z tych projektów nie wciągamy w całości.** Immich to Docker z
+Postgresem i kontenerem ML, BirdNET to TensorFlow. Bierzemy z nich POMYSŁ
+i realizujemy go częściami, które już mamy — to ta sama zasada, dla której
+SearXNG jest dobrym wyborem, a pisanie własnego scrapera nie było.
+
+### Nasłuch własnym strumieniem — realna naprawa trybu głosowego
+
+To był największy dług. Marcin zgłaszał trzy rzeczy naraz: mikrofon ciągle
+się włącza i wyłącza, Cosmos słyszy sam siebie, i wpada w pętlę. Łataliśmy to
+w Partii 31 znacznikami zużycia i odciskami wyników — działało, ale było
+obchodzeniem cudzego automatu. Wszystkie trzy objawy mają jedną przyczynę:
+**Web Speech API nie da się wyciszyć bez zwolnienia mikrofonu.**
+
+- [x] `public/nasluch.js` — mikrofon otwierany RAZ na całą sesję głosową.
+      Nic go nie przejmuje, więc Android nie ma czego sygnalizować dźwiękiem
+- [x] Wypowiedzi wycinane z sygnału po energii, z ruchomym progiem szumu tła
+      (szybko w dół, wolno w górę — jeden przejeżdżający samochód nie może
+      ogłuchnąć Cosmosa na kilka minut)
+- [x] **„Głuchy" znaczy naprawdę głuchy**: gdy Cosmos mówi, próbki lecą do
+      kosza. Nie ma czego rozpoznać, więc pętla jest NIEMOŻLIWA, a nie tylko
+      mało prawdopodobna. Zestaw `nasluch-wlasny` sprawdza to osobnym testem
+- [x] Przedbieg 320 ms, żeby nie ginęła pierwsza głoska — „Kosmos" zaczyna
+      się od cichego „k", a próg przekracza dopiero samogłoska
+- [x] Wybór silnika w Ustawieniach, z pokazaniem, który DZIAŁA (a nie tylko
+      który jest wybrany) — przy wyłączonych zmysłach Cosmos wraca do
+      przeglądarki i musi to powiedzieć
+
+To pomysł z **Silero VAD** i **huggingface/speech-to-speech**, sprowadzony do
+zera zależności. Silero jest mądrzejsze — sieć neuronowa odróżnia mowę od
+trzaśnięcia drzwiami — ale wymagałoby ONNX w przeglądarce. Przy włączonych
+zmysłach sam Whisper i tak przepuszcza nagranie przez własny VAD.
+
+**Wymaga Whispera w zmysłach**, więc to jest WYBÓR silnika, nie zamiennik.
+I ma swoją cenę, powiedzianą wprost w Ustawieniach: pytanie leci na komputer
+domowy i wraca, więc odpowiedź zaczyna się o sekundę-dwie później niż przy
+rozpoznawaniu w przeglądarce. Za to nie trzeba zgadywać, czy Cosmos właśnie
+usłyszał sam siebie.
+
+#### Liczba, którą trzeba było skorygować (znów)
+
+Pierwsza wersja odrzucała za krótkie wypowiedzi, mierząc długość CAŁEJ zebranej
+paczki. A w paczce siedzi też przedbieg i 700 ms ciszy domykającej — razem
+ponad sekunda. Stuknięcie w biurko trwające 0,13 s wychodziło więc na
+„wypowiedź długą na 1,2 s" i szło do Whispera. Test 6a wyłapał to od razu;
+teraz liczymy ramki, w których NAPRAWDĘ coś było słychać.
+
+### Co widać na zdjęciu — to, co daje Immich, bez stosu Immicha
+
+Materiał z OneDrive nie ma o sobie ŻADNEJ informacji o treści: Microsoft Graph
+oddaje datę, aparat i GPS. Kategorie tematyczne zgadujemy z nazw folderów, więc
+„Wesele Kasi" działa, a „IMG_4471.JPG" nie mówi nic — a takich jest większość.
+
+- [x] `/api/archive/vision` — YOLO ze zmysłów ogląda **miniaturę**, nie plik.
+      Detekcja na 800 px daje ten sam wynik co na 40 megapikselach, a ściąga
+      kilkadziesiąt kilobajtów zamiast dwudziestu megabajtów
+- [x] Wykryte obiekty wpadają w kategoryzację tematyczną SAME, przy zapisie
+      wpisu — „pokaż zdjęcia z psem" zaczyna działać bez drugiego przejścia
+- [x] Próg pewności 0,45, wyżej niż w podglądzie na żywo. Przy podglądzie
+      fałszywy alarm mija po klatce; tutaj zapisuje się w indeksie na stałe
+- [x] Pole `obejrzane` osobno od `obiekty`. Bez tego rozróżnienia krajobraz,
+      na którym YOLO słusznie nie widzi nic z 80 klas, wracałby do kolejki
+      w nieskończoność i paczka mieliłaby w kółko te same pliki
+- [x] **Przyciski w Ustawieniach** — dla tego i dla obiektywów z Partii 35.
+      Do tej pory dało się je uruchomić wyłącznie curlem, co znaczy: nikt ich
+      nigdy nie uruchomił. Pętla po paczkach siedzi w przeglądarce, więc widać
+      postęp i „Przerwij" działa natychmiast
+
+Czego NIE robimy: **CLIP-a i wyszukiwania semantycznego po wektorach.** Immich
+robi to lepiej, ale za cenę drugiej bazy danych obok naszej. Nasze wektory
+(**sqlite-vec** z listy) mają sens dopiero, gdy liczenie kosinusa w JS przestanie
+wyrabiać — przy dwóch tysiącach wpisów jest do tego bardzo daleko.
+
+### Ptak z dźwięku — BirdNET
+
+Ptaka słychać znacznie dalej, niż go widać, i to słuch decyduje, gdzie postawić
+statyw. Dla kogoś, kto fotografuje żurawie, to nie ciekawostka.
+
+- [x] `senses/service.py` → `/ptak`, `CAPS["birdnet"]` (opcjonalna zależność,
+      jak wszystkie pozostałe zmysły)
+- [x] Przycisk 🐦 w nakładce głosowej: 8 s nagrania, wynik czytany na głos
+- [x] Nagranie **bez „ulepszaczy"** i w pełnej częstotliwości — redukcja szumu
+      w telefonie wycina dokładnie te ciche, wysokie tony, które są tu całą
+      treścią, a przy 16 kHz próbkowania połowa gatunków traci to, po czym się
+      je rozpoznaje
+- [x] **Współrzędne dokłada serwer**, nie przeglądarka. BirdNET zawęża listę do
+      gatunków, które w danym tygodniu naprawdę występują pod tymi
+      współrzędnymi — bez tego czajka z Biebrzy potrafi wyjść jako gatunek
+      z Ameryki Południowej o podobnym głosie
+
+### Czytanie wideo — klatki wycinane w przeglądarce
+
+Pomysł z **claude-video** (z trendów). Model nie czyta wideo, model czyta
+KLATKI — cała różnica jest w tym, gdzie się je wycina.
+
+- [x] Klip wrzucony do rozmowy → cztery klatki ze środków równych odcinków
+      (nie od zera: pierwsza klatka filmu to zwykle czarne pole albo klaps)
+- [x] Do tego notatka, CO to jest. Bez niej model dostaje cztery niepowiązane
+      zdjęcia i opisuje je jak cztery różne sceny
+- [x] Zero wysyłki: minuta z R6 II to 300-500 MB, a `<video>` + `<canvas>` to
+      dekoder sprzętowy, który i tak siedzi w każdym urządzeniu. Działa też
+      przy wyłączonych zmysłach i bez ffmpega na VPS-ie
+
+### Podział server.js — drugi raz
+
+Plik znów przebił 2600 linii. Wyszło `lib/archiwum-trasy.js` (242 linie):
+sześć tras jednego indeksu plus dwa pomocniki, których nie używa nic poza nimi.
+Zależności przez `utworz()`, tak jak przy poprzednim podziale — i tak jak wtedy
+pilnuje tego kontrola „wołane, ale niezdefiniowane" ze `scripts/audyt.js`,
+bo osiem usterek z Partii 34 przeszło `node --check` bez mrugnięcia.
+
+### Karty ujęć — video-shotcraft po swojemu
+
+Z trendów: **video-shotcraft** (4 tys. ★), sto kilkadziesiąt „kart przepisów"
+na ujęcia. Sam zapisałem wtedy, że to TREŚĆ, nie kod, i że asystent planu
+mógłby z niej czerpać w trybie wideo.
+
+Nie kopiujemy cudzej listy — po pierwsze to czyjaś praca, po drugie karty
+pisane pod produkcję filmową („crane down over the crowd") są bezużyteczne dla
+człowieka, który stoi sam z gimbalem i jednym korpusem. Bierzemy POMYSŁ: plan
+ujęć to lista do odhaczenia z konkretnymi liczbami, nie akapit o kompozycji.
+
+- [x] `lib/ujecia.js` — 15 kart, 22 zestawy tematyczne. Każda karta ma
+      ogniskową, ruch kamery, czas trwania i jedno zdanie „po co to jest"
+- [x] **Zestaw zależy od TEMATU** — tego samego słownika z `lib/tematy.js`,
+      którym przeszukujemy archiwum. Wesele to nie wyścig
+- [x] **Ujęcia są filtrowane przez SPRZĘT**, a POMINIĘTE oddajemy osobno,
+      z powodem. „Nie ma na liście" i „nie masz drona" to dla kogoś, kto
+      planuje sobotę, dwie zupełnie różne informacje
+- [x] **Ogniskowa policzona dla TWOJEGO szkła**, nie ze środka teoretycznego
+      zakresu: ujęcie ustalające chce 14-35 mm, a z 24-105 wychodzi 30 mm —
+      bo poniżej 24 mm nie masz czym
+- [x] Kolejność jest kolejnością KRĘCENIA, nie montażu. Ustalające najpierw,
+      bo światło z niego ucieka najszybciej; detale zrobisz o każdej porze
+- [x] Tylko przy `tryb=wideo`. Przy zdjęciu pytanie brzmi „jakie nastawy",
+      nie „co nakręcić"
+
+Przy okazji zamknięta luka, która była tu od początku: **sprzęt dostał wreszcie
+pola w Ustawieniach.** Do tej pory `/api/gear` dało się ustawić wyłącznie
+curlem, czyli w praktyce nikt tego nie zrobił — plan liczył dla domyślnego
+korpusu i nie wiedział nic o dronie. Doszło trzecie pole, „reszta sprzętu",
+bo dron i gimbal nie wpływają na ekspozycję, ale przesądzają o ujęciach.
+
+### Czytanie dokumentów — anydoc i doc7, w wersji pythonowej
+
+**firecrawl/anydoc** (11 tys. ★ w pięć dni) i **doc7** robią jedno: 97 formatów
+→ Markdown, z rozumieniem układu strony. Sam napisałem, że anydoc łamie zasadę
+zera zależności w rdzeniu i musiałby wylądować w `senses/`. Tam właśnie ląduje
+— tyle że jako odpowiednik z pythonowego świata, bo anydoc to Rust z wiązaniami
+Node, a strefa zmysłów jest pythonowa.
+
+- [x] `/extract` próbuje najpierw **docling** (IBM) albo **markitdown**
+      (Microsoft), jeśli któryś jest zainstalowany
+- [x] Różnica jest realna na dwóch rzeczach, na których pypdf przegrywa
+      zawsze: **skany** (docling ma OCR, pypdf oddaje pustą stronę bez słowa)
+      i **układ** (tabela w PDF-ie to dla pypdf ciąg luźnych liczb, a dla
+      doclinga tabela Markdown, którą model przeczyta)
+- [x] Awaria mocniejszego czytnika NIE kończy sprawy — cztery sprawdzone
+      gałęzie (pypdf, python-docx, openpyxl, python-pptx) zostają jako zapas
+      i przejmują robotę bez słowa do użytkownika
+- [x] Panel zmysłów pokazuje **nazwę** czytnika, nie samo „jest": „dokumenty
+      (docling)" i „dokumenty" to dwie różne jakości odczytu
+
+### Czego z listy świadomie nie robimy
+
+- **OpenCut** — montaż wideo. Zapisałem wtedy „Ty montujesz filmy, więc to nie
+  jest ciekawostka" i to prawda, ale wniosek jest inny: OpenCut to KOMPLETNA
+  aplikacja webowa, alternatywa dla CapCuta. Wbudowanie jej w Cosmosa znaczy
+  utrzymywanie drugiego programu w środku pierwszego, a Marcin i tak montuje
+  w Premiere. Wartość z tej strony bierzemy inaczej i już ją mamy: karty ujęć
+  mówią, CO nakręcić, a czytanie klipu mówi, co na nagraniu wyszło
+- **sqlite-vec** — sam napisałem: „przy 2 tys. wpisów w porządku, przy 100 tys.
+  już nie". Dziś jest tych wpisów około dwóch tysięcy. Doszłaby natywna
+  biblioteka npm w rdzeniu — dokładnie to, czego zasada zabrania — żeby
+  rozwiązać problem, którego nie ma. Próg jest konkretny: gdy pamięć
+  długotrwała przekroczy kilkadziesiąt tysięcy wpisów
+- **Immich w całości** — Docker z Postgresem i osobnym kontenerem ML, druga
+  baza obok naszej. Wartość (wyszukiwanie po TREŚCI zdjęcia) bierzemy wyżej,
+  częściami, które już mamy
+- **ExifTool / Exiv2** — potwierdziły tylko, że `LensModel` to standardowy tag.
+  Naszego czytnika nie trzeba zastępować
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

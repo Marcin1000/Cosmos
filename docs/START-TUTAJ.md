@@ -1002,6 +1002,13 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
   Obok tryb głosowy uruchamiany przyciskiem fal dźwiękowych (rozmowa po polsku przy
   otwartej karcie; nasłuch słowa aktywującego w tle jest jeszcze niedokończony —
   patrz `senses/README.md`).
+- **Tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch w trybie
+  głosowym"). *Własny strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę
+  i sam wycina wypowiedzi z sygnału — znika sygnał podłączania sprzętu na
+  Androidzie, słyszenie samego siebie i pętle. Wymaga zmysłów z Whisperem;
+  bez nich Cosmos wraca do rozpoznawania przeglądarki i pisze o tym pod polem
+  wyboru. W nakładce głosowej jest też przycisk 🐦: 8 s nagrania i gatunek
+  ptaka z BirdNET-a, czytany na głos.
 - **Dyktowanie i dopracowanie promptu** — mikrofon 🎤 zamienia mowę na tekst, a którym
   mikrofonem — wybierasz w Ustawieniach (macierz Kinecta, Galaxy Buds, telefon,
   laptop). Przycisk ✦ obok przepisuje podyktowaną wypowiedź na precyzyjny prompt:
@@ -1060,6 +1067,7 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
 | „Nie udało się pobrać listy modeli … fetch failed" | Ten sam powód: Ollama nie odpowiada pod adresem z `LOCAL_BASE_URL`. Komunikat pod polem wypisuje teraz konkretne przyczyny i polecenie `curl` do sprawdzenia |
 | W trybie głosowym na telefonie słychać ciągłe podłączanie sprzętu | Naprawione — Cosmos trzyma teraz mikrofon otwarty przez całą sesję zamiast przejmować go przy każdym pytaniu |
+| Cosmos w trybie głosowym słyszy sam siebie i odpowiada w kółko | Przełącz Ustawienia → „Nasłuch w trybie głosowym" na *Własny strumień + Whisper* (wymaga uruchomionych zmysłów). Wtedy mikrofon jest naprawdę wyciszany na czas mówienia, a nie tylko ignorowany |
 | W trybie głosowym włącza się kamera i zasłania ekran | Już się nie włącza sama. Podgląd włączasz ikoną kamery w prawym górnym rogu okna głosowego; wybór jest zapamiętywany |
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |

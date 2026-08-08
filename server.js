@@ -41,6 +41,8 @@ const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
 const { pogodaDla } = require('./lib/pogoda.js');
 const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
 const { prognozaZorzy } = require('./lib/zorza.js');
+const { rozpoznajTemat } = require('./lib/tematy.js');
+const { planUjec } = require('./lib/ujecia.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
 const onedrive_ = require('./lib/onedrive.js');
@@ -243,13 +245,17 @@ function searchConversationsContent(query) {
  * miesiąca.
  */
 const SPRZET_FILE = path.join(DATA_DIR, 'sprzet.json');
-let userSprzet = { korpus: '', obiektywy: '' };
+let userSprzet = { korpus: '', obiektywy: '', dodatki: '' };
 try { userSprzet = { ...userSprzet, ...JSON.parse(fs.readFileSync(SPRZET_FILE, 'utf8')) }; }
 catch { /* brak — panel Ustawień pozwoli uzupełnić */ }
 function saveSprzet(dane) {
   userSprzet = {
     korpus: String((dane && dane.korpus) || '').slice(0, 120),
     obiektywy: String((dane && dane.obiektywy) || '').slice(0, 400),
+    /* Dron, gimbal, statyw, slider. Osobne pole, bo to NIE jest optyka —
+       nie wpływa na ekspozycję, ale przesądza, których ujęć da się w ogóle
+       nakręcić. Wpisywane jak człowiek mówi: „Mavic 3, Ronin-S, statyw". */
+    dodatki: String((dane && dane.dodatki) || '').slice(0, 300),
   };
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -661,131 +667,10 @@ const oczekiwaneStany = new Set();
 const escapeHtmlSerwer = (s) => String(s || '').replace(/[&<>"]/g,
   (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[z]));
 
-/* Archiwum materiału. Indeks jest pasywny — źródła (OneDrive, dysk przez
-   zmysły) wpychają wpisy, a zapytania działają nawet wtedy, gdy te źródła
-   są offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu
-   w terenie przy wyłączonym komputerze domowym. */
-async function handleArchiwum(req, res, p) {
-  if (p === '/api/archive/add' && req.method === 'POST') {
-    let d;
-    try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    if (!Array.isArray(d.wpisy)) return sendJson(res, 400, { error: 'Brak tablicy `wpisy`.' });
-    if (d.wpisy.length > 5000) return sendJson(res, 413, { error: 'Najwyżej 5000 wpisów naraz.' });
-    const wynik = archiwum.dodaj(d.wpisy);
-    if (wynik.dodanych) addEvent('archiwum', `zindeksowano ${wynik.dodanych} plików (razem ${wynik.razem})`);
-    return sendJson(res, 200, wynik);
-  }
-  if (p === '/api/archive/search' && req.method === 'GET') {
-    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
-    const limit = Math.min(Number(q.limit) || 40, 200);
-    const dodatki = await miejsceNaPromien(q);
-    const wyniki = archiwum.szukaj(q);
-    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit), ...dodatki });
-  }
-  /* Miniatura pliku z archiwum — dociągana W CHWILI PYTANIA, nie z indeksu.
-     Microsoft Graph oddaje podpisane adresy, które WYGASAJĄ. Zapisane przy
-     indeksowaniu byłyby martwe w momencie, gdy Marcin o nie pyta — a to
-     właśnie wtedy mają się pokazać. Poza tym adres idzie przez nas, więc
-     przeglądarka nie potrzebuje żadnych poświadczeń do OneDrive. */
-  if (p === '/api/archive/thumb' && req.method === 'GET') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
-    if (!id.startsWith('onedrive:')) return sendJson(res, 400, { error: 'Zły identyfikator.' });
-    if (!onedrive.polaczony()) return sendJson(res, 503, { error: 'OneDrive niepołączony.' });
-    try {
-      const el = await onedrive.graf(`/me/drive/items/${encodeURIComponent(id.slice(9))}`
-        + '/thumbnails/0/large');
-      if (!el || !el.url) return sendJson(res, 404, { error: 'Brak miniatury.' });
-      const r = await fetch(el.url, { signal: AbortSignal.timeout(15000) });
-      const typ = r.headers.get('content-type') || '';
-      if (!r.ok || !/^image\//i.test(typ)) return sendJson(res, 502, { error: 'To nie jest obraz.' });
-      const buf = Buffer.from(await r.arrayBuffer());
-      res.writeHead(200, {
-        'Content-Type': typ,
-        'Content-Length': buf.length,
-        // Krótko, bo sam adres u Microsoftu i tak wygasa.
-        'Cache-Control': 'private, max-age=600',
-      });
-      return res.end(buf);
-    } catch (err) {
-      return sendJson(res, 502, { error: `Nie udało się pobrać miniatury: ${err.message}` });
-    }
-  }
-  if (p === '/api/archive/stats' && req.method === 'GET') {
-    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
-    if (!q.pole) return sendJson(res, 200, archiwum.podsumowanie());
-    const wynik = archiwum.zestawienie(q.pole, q);
-    if (!wynik) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
-    return sendJson(res, 200, { pole: q.pole, ...wynik });
-  }
-  /* Dociągnięcie OBIEKTYWU do wpisów z OneDrive.
-     Osobno od indeksowania, bo kosztuje jedno żądanie HTTP na plik — przy
-     dwóch tysiącach zdjęć to dwa tysiące żądań. Robimy je paczkami, żeby
-     dało się przerwać i wznowić, i tylko dla wpisów, którym obiektywu brakuje. */
-  if (p === '/api/archive/lenses' && req.method === 'POST') {
-    if (!onedrive.polaczony()) return sendJson(res, 503, { error: 'OneDrive niepołączony.' });
-    let d = {};
-    try { d = await readJson(req); } catch { /* domyślne */ }
-    const paczka = Math.min(Math.max(Number(d.ile) || 100, 1), 500);
-
-    const doZrobienia = archiwum.szukaj({ zrodlo: 'onedrive', typ: 'zdjecie' })
-      .filter((w) => !w.obiektyw).slice(0, paczka);
-
-    let uzupelnione = 0;
-    let bezExifu = 0;
-    const bledy = [];
-    for (const w of doZrobienia) {
-      try {
-        const exif = await onedrive.dociagnijExif(String(w.id).replace(/^onedrive:/, ''));
-        if (exif && exif.obiektyw) {
-          archiwum.dodaj([{ ...w, obiektyw: exif.obiektyw }]);
-          uzupelnione++;
-        } else bezExifu++;
-      } catch (err) {
-        if (bledy.length < 3) bledy.push(String(err.message).slice(0, 80));
-      }
-    }
-    const zostalo = archiwum.szukaj({ zrodlo: 'onedrive', typ: 'zdjecie' })
-      .filter((w) => !w.obiektyw).length;
-    if (uzupelnione) addEvent('archiwum', `obiektyw dociągnięty do ${uzupelnione} zdjęć`);
-    return sendJson(res, 200, {
-      sprawdzone: doZrobienia.length, uzupelnione, bezExifu, zostalo, bledy,
-    });
-  }
-
-  if (p === '/api/archive/source' && req.method === 'DELETE') {
-    const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
-    if (!zrodlo) return sendJson(res, 400, { error: 'Podaj `zrodlo`.' });
-    return sendJson(res, 200, { usunieto: archiwum.usunZrodlo(zrodlo) });
-  }
-  return sendJson(res, 404, { error: 'Nieznana trasa archiwum.' });
-}
-
 /* Asystent planu zdjęciowego — to, czego nie ma żaden asystent w chmurze.
    ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
    sprzęt. Cosmos wie wszystko troje, więc może policzyć konkretne nastawy
    zamiast opowiadać ogólniki o „złotej godzinie". */
-/* „Pokaż zdjęcia z Krakowa" — nazwa miejsca na filtr promieniowy.
- *
- *  Indeks trzyma współrzędne, nie nazwy: Microsoft Graph oddaje lat/lon
- *  i tyle. Dopóki tego nie było, pytanie o miasto nie miało jak zadziałać —
- *  pole `miejsce` dla materiału z OneDrive jest zawsze puste.
- *
- *  Promień dobieramy do tego, CZYM jest miejsce. „Kraków" to punkt i 25 km
- *  wystarczy z zapasem; „Mazury" albo „Bieszczady" to region rozciągnięty na
- *  dziesiątki kilometrów i ten sam promień uciąłby większość materiału.
- *  Nominatim podaje obwiednię (`boundingbox`), więc bierzemy ją zamiast
- *  zgadywać — a gdy jej nie ma, zostaje rozsądne 25 km.
- */
-async function miejsceNaPromien(q) {
-  if (!q.miejsce || (q.lat && q.lon)) return {};
-  const m = await wspolrzedneMiejsca(String(q.miejsce));
-  if (!m) return { miejsceNieznane: String(q.miejsce).slice(0, 80) };
-  q.lat = m.lat;
-  q.lon = m.lon;
-  if (!q.promienKm) q.promienKm = m.promienKm || 25;
-  delete q.miejsce;              // dalej filtruje już promień, nie tekst
-  return { miejsceZNazwy: { nazwa: m.nazwa, lat: m.lat, lon: m.lon, promienKm: q.promienKm } };
-}
 
 async function handlePlanZdjeciowy(req, res) {
   let d;
@@ -875,6 +760,21 @@ async function handlePlanZdjeciowy(req, res) {
       + 'korpusu. Podaj ogniskową i jasność, np. „24-70 f/2.8", a policzę dla tego szkła.');
   }
 
+  /* LISTA UJĘĆ — tylko przy wideo, bo tylko tam ma sens. Przy zdjęciu pytanie
+     brzmi „jakie nastawy", a przy filmie „co w ogóle nakręcić, żeby dało się
+     to potem zmontować" — i to jest pytanie, na które nikt nie odpowiada
+     liczbami. Lista jest przefiltrowana przez SPRZĘT: bez drona nie ma ujęć
+     z góry, a POMINIĘTE oddajemy osobno, bo „nie ma na liście" i „nie masz
+     czym" to dla planującego dzień dwie różne informacje. */
+  const ujecia = d.tryb === 'zdjecie' ? null : planUjec({
+    temat: (rozpoznajTemat(d.temat || '') || {}).klucz,
+    obiektywy: szkla,
+    dron: /dron|mavic|dji|air\s?\d|mini\s?\d/i.test(sprzetTekst(d)),
+    gimbal: /gimbal|ronin|crane|osmo|ibis|stabiliz/i.test(sprzetTekst(d)),
+    statyw: !/bez statyw/i.test(sprzetTekst(d)),
+    slider: /slider|wózek|dolly/i.test(sprzetTekst(d)),
+  });
+
   const kadr = orientacja(Number(d.szerokosc), Number(d.wysokosc));
   const czas = (x) => (x ? x.toISOString() : null);
 
@@ -909,7 +809,16 @@ async function handlePlanZdjeciowy(req, res) {
     zorza,
     zachmurzenie,
     ustawienia,
+    ujecia,
   });
+}
+
+/* Wszystko, co użytkownik napisał o sprzęcie, w jednym worku — dodatki
+ * (dron, gimbal, statyw) wpisuje się raz w Ustawieniach albo rzuca w zdaniu
+ * „lecę z Mavikiem", a nie wypełnia formularza z polami wyboru. */
+function sprzetTekst(d) {
+  return [d.sprzet, d.dodatki, userSprzet.korpus, userSprzet.dodatki]
+    .filter(Boolean).join(' ');
 }
 
 async function extractKbText(name, mime, buf) {
@@ -1523,11 +1432,11 @@ async function handleEvents(req, res) {
 // API: proxy do usługi percepcji (Cosmos Senses)
 // ---------------------------------------------------------------------------
 
-async function proxySenses(req, res, targetPath, { json = false } = {}) {
+async function proxySenses(req, res, targetPath, { json = false, search = '' } = {}) {
   let upstream;
   try {
     const body = await readBodyBuffer(req);
-    upstream = await fetch(`${SENSES_URL}${targetPath}`, {
+    upstream = await fetch(`${SENSES_URL}${targetPath}${search}`, {
       method: 'POST',
       headers: { 'Content-Type': req.headers['content-type'] || (json ? 'application/json' : 'application/octet-stream') },
       body,
@@ -1781,6 +1690,13 @@ async function handleChat(req, res) {
         + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '
         + 'bierze prognozę pogody dla tego miejsca i tej godziny.\n'
         + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
+        + 'LISTA UJĘĆ: przy `tryb=wideo` dostajesz pole `ujecia` — gotowy zestaw ujęć '
+        + 'dobrany do TEMATU i przefiltrowany przez posiadany sprzęt, każde z ogniskową, '
+        + 'ruchem kamery i czasem trwania. Podaj je jako listę do odhaczenia w kolejności '
+        + 'KRĘCENIA, nie przepisuj jako opowieści. Pole `ujecia.pominiete` mówi, czego NIE '
+        + 'da się nakręcić tym sprzętem i dlaczego — POWIEDZ O TYM WPROST. Przemilczenie '
+        + 'wygląda, jakby Cosmos o tych ujęciach zapomniał, a nie jakby ich świadomie nie '
+        + 'proponował.\n'
         + 'ZORZA: przy Słońcu poniżej horyzontu dostajesz też pole `zorza` — bieżące Kp '
         + 'z NOAA, prognozę i PRÓG Kp dla tego miejsca. „Kp 7" samo w sobie nic nie znaczy: '
         + 'porównaj je z `progNadHoryzontem`. Gdy `szansa` to „brak", powiedz wprost, '
@@ -2322,6 +2238,16 @@ trening_.polacz({ addEvent, convIndex, convPath, userProfile });
 nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
   keywordScore, sameModel, saveKb, tsName });
 
+/* Trasy archiwum materiału. Sam indeks jest PASYWNY — źródła (OneDrive, dysk
+   przez zmysły) wpychają wpisy, a zapytania działają, gdy te źródła są
+   offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu w terenie
+   przy wyłączonym komputerze domowym. Całość tras: lib/archiwum-trasy.js. */
+const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
+  archiwum, onedrive, SENSES_URL, sendJson, readJson, addEvent,
+  sensesState, wspolrzedneMiejsca,
+});
+const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
+
 const server = http.createServer(async (req, res) => {
   try {
     const p = new URL(req.url, 'http://localhost').pathname;
@@ -2487,6 +2413,18 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
+    /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
+       bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
+       Współrzędne dokłada SERWER z ustawień — przeglądarka nie musi ich znać,
+       a BirdNET bez nich zawęża listę gatunków do całego świata zamiast do
+       tego, co w tym tygodniu naprawdę lata nad Twoją łąką. */
+    if (p === '/api/ptak' && req.method === 'POST') {
+      const w = userWspolrzedne;
+      const qs = w && Number.isFinite(w.lat)
+        ? `?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}`
+        : '';
+      return await proxySenses(req, res, '/ptak', { search: qs });
+    }
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
     if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });

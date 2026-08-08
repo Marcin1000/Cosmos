@@ -199,7 +199,7 @@
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <input type="file" id="file-input" multiple style="display:none"
-            accept="image/*,.pdf,.docx,.xlsx,.xlsm,.pptx,.csv,.tsv,.txt,.md,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yml,.yaml">
+            accept="image/*,video/*,.pdf,.docx,.xlsx,.xlsm,.pptx,.csv,.tsv,.txt,.md,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yml,.yaml">
           <button class="attach-btn" id="camera-btn" data-i18n-title="takePhoto" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
             <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
           </button>
@@ -278,6 +278,33 @@
             <button class="btn-secondary" id="mic-refresh" data-i18n="set.micRefresh">Odśwież</button>
           </div>
           <span class="field-hint" data-i18n="set.micHint">Kinect, słuchawki, mikrofon telefonu — lista pokazuje wszystko, co widzi ta przeglądarka. Wymaga HTTPS.</span>
+        </label>
+
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label" data-i18n="set.body">Korpus</span>
+            <input id="set-body" type="text" data-i18n-ph="set.bodyPh" placeholder="np. Canon R6 II">
+          </label>
+          <label class="field">
+            <span class="field-label" data-i18n="set.lenses">Obiektywy</span>
+            <input id="set-lenses" type="text" data-i18n-ph="set.lensesPh" placeholder="np. 24-105 f/4, 70-200 f/4, 50 f/1.8">
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label" data-i18n="set.extras">Reszta sprzętu</span>
+          <input id="set-extras" type="text" data-i18n-ph="set.extrasPh" placeholder="np. DJI Mavic 3, Ronin-S, statyw">
+          <span class="field-hint" data-i18n="set.gearHint">To jest domyślny zestaw dla planu zdjęciowego: z korpusu i szkieł wychodzą czas, przysłona i ISO, a z reszty — które ujęcia da się w ogóle nakręcić (bez drona nie ma kadrów z góry). Sprzęt podany w rozmowie zawsze wygrywa z tym zapisem.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.stt">Nasłuch w trybie głosowym</span>
+          <select id="set-stt" class="mono">
+            <option value="auto" data-i18n="set.sttAuto">Automatycznie — Whisper, gdy zmysły działają</option>
+            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień + Whisper (bez sprzężenia)</option>
+            <option value="przegladarka" data-i18n="set.sttBrowser">Przeglądarka (Web Speech API)</option>
+          </select>
+          <span class="field-hint" data-i18n="set.sttHint">Własny strumień otwiera mikrofon RAZ na całą rozmowę: znika sygnał podłączania sprzętu, słyszenie samego siebie i pętle. Wymaga włączonych zmysłów z Whisperem — bez nich Cosmos sam wraca do przeglądarki. Cena: pytanie leci na komputer domowy i wraca, więc odpowiedź zaczyna się o sekundę-dwie później niż przy rozpoznawaniu w przeglądarce.</span>
+          <span class="field-hint mono" id="set-stt-now"></span>
         </label>
 
         <label class="field">
@@ -774,6 +801,7 @@
     <button class="icon-btn voice-cam-btn" id="voice-cam-btn" data-i18n-title="voice.camOn" title="Włącz podgląd kamery" aria-label="Podgląd kamery">
       <svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
     </button>
+    <button class="icon-btn voice-bird-btn" id="voice-bird-btn" data-i18n-title="voice.bird" title="Nagraj 8 s i rozpoznaj ptaka" aria-label="Rozpoznaj ptaka">🐦</button>
     <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
       <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
@@ -825,6 +853,7 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="nasluch.js"></script>
   <script src="models.js"></script>
   <script src="app.js"></script>
 </body>

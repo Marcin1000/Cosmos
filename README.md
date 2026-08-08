@@ -342,6 +342,14 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** — wybierasz
   w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
   wybór jest zapamiętywany,
+- 🗣 **tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch"). *Własny
+  strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę i sam wycina wypowiedzi
+  z sygnału: znika dźwięk podłączania sprzętu na Androidzie, słyszenie samego siebie
+  i pętle. Wymaga zmysłów z Whisperem — bez nich Cosmos wraca do Web Speech API
+  i mówi o tym wprost w Ustawieniach,
+- 🐦 przycisk **rozpoznawania ptaka** w nakładce głosowej — 8 s nagrania, gatunek
+  z BirdNET-a, czytany na głos. Współrzędne dokłada serwer, bo BirdNET zawęża listę
+  do gatunków, które w tym tygodniu naprawdę występują w tym miejscu,
 - ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) — przepisuje
   podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
   porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
@@ -350,6 +358,10 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
   analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
   zapamiętywany),
+- 🎬 **klip wrzucony do rozmowy** → cztery klatki kluczowe wycięte w przeglądarce
+  (`<video>` + `<canvas>`, bez wysyłania pliku) i opisane jako kolejne momenty
+  JEDNEGO ujęcia, nie cztery osobne zdjęcia. Minuta z R6 II to 300-500 MB —
+  wysyłanie takiego pliku po to, żeby dostać z niego cztery klatki, nie ma sensu,
 - 🔗 adresy w odpowiedziach są klikalne — także te wpisane gołym tekstem, nie tylko
   w formie `[nazwa](adres)`; otwierają się w nowej karcie,
 - 🖼 kliknięcie w obraz w rozmowie otwiera go na pełnym ekranie, z pobieraniem,
@@ -665,11 +677,13 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/gear` | GET/PUT | Zestaw sprzętu użytkownika (korpus, obiektywy) — domyślny dla planu zdjęciowego |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
+| `/api/ptak` | POST | Nagranie → gatunek ptaka (BirdNET w zmysłach); współrzędne dokłada serwer |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
 | `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
 | `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie |
 | `/api/archive/lenses` | POST | Dociągnięcie modelu obiektywu z EXIF-u (pierwsze 128 KB pliku przez `Range`) |
+| `/api/archive/vision` | POST | Co WIDAĆ na zdjęciu — YOLO ze zmysłów po miniaturze z OneDrive, paczkami |
 | `/api/archive/thumb` | GET | Miniatura pliku z OneDrive, dociągana w chwili pytania (adresy z Graph wygasają) |
 | `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
 | `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
@@ -691,6 +705,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 
 ```
 server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
+public/nasluch.js  drugi silnik nasłuchu: własny strumień z mikrofonu + Whisper
 lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
 lib/pamiec.js      pamięć długotrwała (RAG) i embeddingi — wektory plus słowa
 lib/pomysly.js     backlog usprawnień proponowanych przez Cosmosa do akceptacji
@@ -706,12 +721,14 @@ lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
 lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
 lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
+lib/archiwum-trasy.js  trasy /api/archive/* — wyszukiwanie, uzupełnianie, statystyki
 lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
 lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
 lib/zorza.js       zorza polarna: Kp z NOAA i próg dla Twojej szerokości
 lib/miejsca.js     nazwa miejsca → współrzędne i promień (Nominatim)
 lib/tematy.js      CO fotografujesz: nastawy pod temat i kategorie w archiwum
-lib/grafiki.js     wyszukiwanie zdjęć w trzech źródłach naraz, z zapasem
+lib/ujecia.js      karty ujęć do trybu wideo — co nakręcić, czym i jak długo
+lib/grafiki.js     wyszukiwanie zdjęć w czterech źródłach naraz, z zapasem
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie

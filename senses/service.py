@@ -9,6 +9,7 @@ a /health mówi Cosmosowi, które zmysły są dostępne.
     głos     /tts     Piper                        pip install piper-tts
     wzrok    /detect  YOLO (ultralytics)           pip install ultralytics
     ciało    /pose    MediaPipe (sylwetka/gesty)   pip install mediapipe
+    ptaki    /ptak    BirdNET (gatunek z głosu)    pip install birdnetlib
 
 Uruchomienie:
     pip install fastapi uvicorn python-multipart
@@ -26,6 +27,7 @@ import base64
 import io
 import os
 import tempfile
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -56,7 +58,11 @@ async def any_error_as_json(request: Request, exc: Exception):
 # ---------------------------------------------------------------------------
 
 CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False,
-        "embed": False, "upscale": False, "kinect": False}
+        "embed": False, "upscale": False, "kinect": False, "birdnet": False,
+        # Nie True/False, tylko NAZWA czytnika ("docling" / "markitdown") albo
+        # False. Cosmos pokazuje ja w panelu zmyslow, bo to realna roznica
+        # w jakosci odczytu, a nie tylko "jest / nie ma".
+        "dokumenty": False}
 
 # Kinect 360 przez oficjalne SDK (tylko Windows). Obraz z niego nie jest widoczny
 # dla przeglądarki ani OpenCV — nie jest kamerą UVC — więc klatki muszą iść
@@ -103,10 +109,20 @@ try:
 except ImportError:
     pass
 
+# BirdNET — gatunek ptaka z nagrania. Dla kogoś, kto fotografuje żurawie,
+# to nie ciekawostka: usłyszeć ptaka można znacznie dalej, niż go zobaczyć,
+# a wiedza „to derkacz, siedzi w tej łące" decyduje, gdzie postawić statyw.
+try:
+    import birdnetlib  # noqa: F401
+    CAPS["birdnet"] = True
+except ImportError:
+    pass
+
 _whisper_model = None
 _piper_voice = None
 _yolo_model = None
 _embed_model = None
+_birdnet = None
 
 
 def _load_whisper(device: str):
@@ -249,6 +265,59 @@ def get_embedder():
     return _embed_model
 
 
+# Który mocniejszy czytnik dokumentów jest pod ręką (albo None).
+CAPS_CZYTNIK = None
+for _nazwa in ("docling", "markitdown"):
+    try:
+        __import__(_nazwa)
+        CAPS_CZYTNIK = _nazwa
+        CAPS["dokumenty"] = _nazwa
+        break
+    except ImportError:
+        continue
+
+_konwerter = None
+
+
+def _extract_docling(name: str, data: bytes, ext: str):
+    """Tekst przez docling/markitdown albo None, gdy się nie da.
+
+    NIGDY nie rzuca. Cztery gałęzie niżej (pypdf, python-docx, openpyxl,
+    python-pptx) są sprawdzone i mają działać dalej, gdy mocniejszy czytnik
+    zawiedzie na konkretnym pliku — bo to jest DODATEK, a nie zamiennik.
+    """
+    if not CAPS_CZYTNIK:
+        return None
+    # Zwykły tekst nie potrzebuje modelu układu strony.
+    if ext in ("txt", "md", "csv", "json", "xml", "log"):
+        return None
+    global _konwerter
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix="." + (ext or "bin"), delete=False) as f:
+            f.write(data)
+            tmp = f.name
+        if CAPS_CZYTNIK == "docling":
+            if _konwerter is None:
+                from docling.document_converter import DocumentConverter
+                _konwerter = DocumentConverter()
+            return _konwerter.convert(tmp).document.export_to_markdown()
+        if _konwerter is None:
+            from markitdown import MarkItDown
+            _konwerter = MarkItDown()
+        return _konwerter.convert(tmp).text_content
+    except Exception as e:
+        print(f"  ⚠ {CAPS_CZYTNIK} nie poradzil sobie z {name} ({e}). "
+              f"Wracam do wlasnego czytnika.", flush=True)
+        return None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
 def decode_image(payload: dict):
     """dataURL/base64 -> obraz OpenCV (numpy BGR)."""
     import cv2
@@ -301,6 +370,86 @@ async def stt(request: Request):
             segments = list(segments)
         text = " ".join(s.text.strip() for s in segments).strip()
         return {"text": text, "language": info.language}
+    finally:
+        os.unlink(tmp)
+
+
+@app.post("/ptak")
+async def ptak(request: Request):
+    """Nagranie (wav/mp3/flac) w body -> {"gatunki": [{...}]}  — BirdNET.
+
+    MIEJSCE I DATA SĄ TU ISTOTNE, nie ozdobne. BirdNET zawęża listę do
+    gatunków, które w danym tygodniu faktycznie występują pod danymi
+    współrzędnymi — bez tego czajka z Biebrzy potrafi wyjść jako gatunek
+    z Ameryki Południowej o podobnym głosie. Współrzędne przychodzą z
+    Cosmosa (te same, których używa plan zdjęciowy); bez nich analiza i tak
+    się wykona, tylko szerszym sitem.
+    """
+    if not CAPS["birdnet"]:
+        return JSONResponse(
+            {"error": "BirdNET niedostępny (pip install birdnetlib librosa "
+                      "resampy tensorflow)."},
+            status_code=501,
+        )
+    audio = await request.body()
+    if not audio:
+        return JSONResponse({"error": "Puste nagranie."}, status_code=400)
+
+    q = request.query_params
+    def _f(name):
+        try:
+            return float(q[name])
+        except (KeyError, TypeError, ValueError):
+            return None
+    lat, lon = _f("lat"), _f("lon")
+    try:
+        min_conf = float(q.get("min", 0.25))
+    except ValueError:
+        min_conf = 0.25
+
+    suffix = ".wav"
+    ctype = request.headers.get("content-type", "")
+    for ext in ("wav", "mp3", "flac", "ogg", "m4a"):
+        if ext in ctype:
+            suffix = "." + ext
+            break
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+        f.write(audio)
+        tmp = f.name
+    try:
+        from birdnetlib import Recording
+        from birdnetlib.analyzer import Analyzer
+        global _birdnet
+        if _birdnet is None:
+            _birdnet = Analyzer()
+        kwargs = {"min_conf": min_conf}
+        if lat is not None and lon is not None:
+            kwargs.update(lat=lat, lon=lon, date=datetime.now())
+        rec = Recording(_birdnet, tmp, **kwargs)
+        rec.analyze()
+        gatunki = [
+            {
+                "nazwa": d.get("common_name"),
+                "lacinska": d.get("scientific_name"),
+                "pewnosc": round(float(d.get("confidence", 0)), 3),
+                "odS": d.get("start_time"),
+                "doS": d.get("end_time"),
+            }
+            for d in rec.detections
+        ]
+        # Ten sam ptak śpiewa zwykle w kilku oknach po 3 s. Zwracamy jedno
+        # wystąpienie na gatunek — to, w którym był najpewniejszy.
+        najlepsze = {}
+        for g in gatunki:
+            klucz = g["lacinska"] or g["nazwa"]
+            if klucz not in najlepsze or g["pewnosc"] > najlepsze[klucz]["pewnosc"]:
+                najlepsze[klucz] = g
+        wynik = sorted(najlepsze.values(), key=lambda g: -g["pewnosc"])
+        return {"gatunki": wynik[:5], "wykryc": len(gatunki),
+                "zMiejscem": lat is not None and lon is not None}
+    except Exception as e:
+        return JSONResponse({"error": f"BirdNET nie przeanalizował nagrania: {e}"},
+                            status_code=500)
     finally:
         os.unlink(tmp)
 
@@ -383,6 +532,26 @@ async def extract(request: Request):
     except Exception:
         return JSONResponse({"error": "Nieprawidłowe dane base64."}, status_code=400)
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+    # NAJPIERW MOCNIEJSZY CZYTNIK, jeśli jest zainstalowany.
+    #
+    # Z trendów: firecrawl/anydoc (97 formatów → Markdown) i doc7. Oba są
+    # lepsze od czterech gałęzi niżej, ale anydoc to Rust z wiązaniami Node —
+    # w rdzeniu Cosmosa złamałby zasadę zera zależności. Tutaj, w Pythonie,
+    # wolno mieć prawdziwe biblioteki, więc bierzemy odpowiedniki z tego
+    # samego świata: docling (IBM) albo markitdown (Microsoft).
+    #
+    # Różnica jest realna i widać ją na dwóch rzeczach, na których pypdf
+    # przegrywa zawsze:
+    #   • SKANY — docling ma OCR, pypdf oddaje pustą stronę bez słowa;
+    #   • UKŁAD — tabela w PDF-ie to dla pypdf ciąg luźnych liczb, a dla
+    #     doclinga tabela Markdown, którą model faktycznie przeczyta.
+    #
+    # Rozłożenie na kolumny w umowie działa tak samo: pypdf skleja dwie
+    # kolumny w jedno zdanie bez sensu.
+    lepszy = _extract_docling(name, data, ext)
+    if lepszy:
+        return {"text": lepszy[:200000], "czytnik": CAPS_CZYTNIK}
 
     try:
         if ext == "pdf":

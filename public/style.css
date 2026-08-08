@@ -1714,6 +1714,10 @@ kbd {
 .voice-close { position: absolute; top: 18px; right: 18px; }
 .voice-cam-btn { position: absolute; top: 18px; right: 60px; color: var(--text-faint); }
 .voice-cam-btn.active { color: var(--accent); }
+/* Trzeci przycisk w rzędzie — emoji zamiast SVG, bo „🐦" czytelniej mówi,
+   o co chodzi, niż jakikolwiek zarys ptaka, który dałoby się narysować
+   w 24 pikselach. */
+.voice-bird-btn { position: absolute; top: 18px; right: 102px; font-size: 18px; line-height: 1; }
 
 .voice-orb {
   width: 150px;

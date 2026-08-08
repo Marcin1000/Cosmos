@@ -614,11 +614,80 @@ async function odswiezArchiwum() {
     }).catch(() => {});
     odswiezArchiwum();
   });
+  /* Dwa uzupełnienia indeksu, każde jedno żądanie NA PLIK — dlatego osobno
+     od indeksowania i dlatego paczkami. Do tej pory dało się je uruchomić
+     wyłącznie ręcznie curlem, co znaczy: nikt ich nigdy nie uruchomił. */
+  if (d.wArchiwum) {
+    przycisk(t('arch.lenses'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/lenses', ile: 100,
+      etykieta: (w) => t('arch.lensesProgress', { ile: w.uzupelnione, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.lensesDone', { ile: suma }),
+    }));
+    przycisk(t('arch.vision'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 50,
+      etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.visionDone', { ile: suma }),
+    }));
+  }
+
   przycisk(t('arch.disconnect'), async () => {
     if (!confirm(t('arch.confirmDisconnect'))) return;
     await fetch('/api/onedrive/disconnect', { method: 'POST' }).catch(() => {});
     odswiezArchiwum();
   });
+}
+
+/* Długie zadanie w paczkach, sterowane z przeglądarki.
+ *
+ * Pętla siedzi TUTAJ, a nie na serwerze, i to jest przemyślane: zadanie na
+ * dwa tysiące żądań, które startuje po jednym kliknięciu i nie ma jak
+ * pokazać postępu ani się zatrzymać, kończy się tym, że po piętnastu minutach
+ * ciszy człowiek restartuje serwer. Tu każde kliknięcie „Przerwij" działa
+ * natychmiast, bo przerywa się między paczkami, a nie w środku zapisu. */
+let paczkiPrzerwane = false;
+
+async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
+  const stanEl = $('arch-state');
+  const pierwotny = przycisk.textContent;
+  if (przycisk.dataset.trwa === '1') { paczkiPrzerwane = true; return; }
+  przycisk.dataset.trwa = '1';
+  przycisk.textContent = t('arch.stop');
+  paczkiPrzerwane = false;
+  let suma = 0;
+  let poprzednioZostalo = Infinity;
+  try {
+    for (;;) {
+      const r = await fetch(adres, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ile }),
+      });
+      const w = await readJsonSafe(r);
+      if (!r.ok) { stanEl.textContent = w.error || `HTTP ${r.status}`; return; }
+      suma += Number(w.uzupelnione || w.opisane || 0);
+      stanEl.textContent = etykieta(w);
+      // `sprawdzone === 0` znaczy „nie ma już czego brać" — bez tego warunku
+      // pusta kolejka kręciłaby pętlę w nieskończoność.
+      if (paczkiPrzerwane || !w.sprawdzone || !w.zostalo) break;
+      /* KOLEJKA MUSI MALEĆ. Gdy każdy plik w paczce kończy się błędem — token
+         OneDrive wygasł, zmysły padły w połowie — nic nie ubywa, a warunki
+         wyżej są dalej spełnione. To była pętla bez końca waląca w serwer
+         co sekundę. Brak postępu kończy zadanie z komunikatem, nie po cichu. */
+      if (Number(w.zostalo) >= poprzednioZostalo) {
+        stanEl.textContent = t('arch.batchStuck', {
+          zostalo: w.zostalo, powod: (w.bledy || [])[0] || '—',
+        });
+        return;
+      }
+      poprzednioZostalo = Number(w.zostalo);
+    }
+    stanEl.textContent = koniec(suma);
+  } catch (err) {
+    stanEl.textContent = String(err.message);
+  } finally {
+    przycisk.dataset.trwa = '0';
+    przycisk.textContent = pierwotny;
+  }
 }
 
 /* ================================ PŁÓTNO ================================ */
@@ -1385,6 +1454,11 @@ el.fileInput.addEventListener('change', async () => {
       catch (err) { alert(err.message); }
       continue;
     }
+    if (file.type.startsWith('video/')) {
+      try { await wczytajWideo(file); }
+      catch (err) { alert(err.message); }
+      continue;
+    }
     // Dokument: treść wyciąga serwer, przeglądarka dostaje gotowy tekst.
     if (pendingDocs.length >= 4) { alert(t('doc.max')); break; }
     await wczytajDokument(file);
@@ -1393,6 +1467,121 @@ el.fileInput.addEventListener('change', async () => {
   renderAttachments();
   updateSendButton();
 });
+
+/* ---- WIDEO: klatki kluczowe wyjęte W PRZEGLĄDARCE --------------------
+   Pomysł z claude-video (z trendów GitHuba): model nie czyta wideo, model
+   czyta KLATKI. Cała różnica jest w tym, gdzie się je wycina.
+
+   Wysyłanie klipu na serwer odpada z arytmetyki: minuta z R6 II to 300-500 MB.
+   Przez Tailscale z telefonu to kilka minut czekania, a potem dokładnie te same
+   klatki, które przeglądarka potrafi wyjąć sama — <video> + <canvas> to
+   dekoder sprzętowy, który i tak siedzi w każdym urządzeniu. Zero zależności,
+   zero wysyłki, zero ffmpega na VPS-ie i działa przy wyłączonych zmysłach.
+
+   Klatki bierzemy ze ŚRODKÓW równych odcinków, nie od zera: pierwsza klatka
+   filmu to zwykle czarne pole albo klaps. */
+const WIDEO_KLATEK = 4;
+const WIDEO_SEEK_MS = 8000;
+
+async function klatkiZWideo(file, ile) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.preload = 'auto';
+  v.muted = true;
+  v.playsInline = true;
+  v.src = url;
+  try {
+    await new Promise((ok, zle) => {
+      v.onloadedmetadata = () => ok();
+      v.onerror = () => zle(new Error(t('video.unreadable', { name: file.name })));
+      setTimeout(() => zle(new Error(t('video.unreadable', { name: file.name }))), WIDEO_SEEK_MS);
+    });
+
+    /* Długość bywa nieznana — pliki nagrywane strumieniowo (webm z przeglądarki,
+       przerwany transfer) nie mają jej w nagłówku i `duration` to Infinity.
+       Materiał z aparatu i drona zawsze ją ma, ale klip nagrany telefonem przez
+       stronę WWW — niekoniecznie.
+
+       Ratunek jest znany i tani: przewinięcie na absurdalnie odległy moment
+       zmusza przeglądarkę do przejrzenia pliku do końca, po czym `duration`
+       nagle jest znane. Brzmi jak sztuczka, bo jest sztuczką — ale różnica
+       między jedną klatką a czterema jest realna. */
+    if (!Number.isFinite(v.duration) || v.duration <= 0) {
+      await new Promise((ok) => {
+        let gotowe = false;
+        const skoncz = () => { if (!gotowe) { gotowe = true; v.ondurationchange = null; ok(); } };
+        v.ondurationchange = () => { if (Number.isFinite(v.duration)) skoncz(); };
+        setTimeout(skoncz, 2000);
+        try { v.currentTime = 1e6; } catch { skoncz(); }
+      });
+    }
+    const dlugosc = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+    const momenty = dlugosc
+      ? Array.from({ length: ile }, (_, i) => (dlugosc * (i + 0.5)) / ile)
+      : [0];
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const klatki = [];
+    for (const sekunda of momenty) {
+      await new Promise((ok) => {
+        let gotowe = false;
+        const skoncz = () => { if (!gotowe) { gotowe = true; ok(); } };
+        v.onseeked = skoncz;
+        // Uszkodzone albo egzotyczne kodowanie potrafi nie dojechać do `seeked`
+        // nigdy. Jedna klatka mniej jest lepsza niż zawieszony interfejs.
+        setTimeout(skoncz, WIDEO_SEEK_MS);
+        try { v.currentTime = sekunda; } catch { skoncz(); }
+      });
+      if (!v.videoWidth) continue;
+      const skala = Math.min(1, 1024 / Math.max(v.videoWidth, v.videoHeight));
+      canvas.width = Math.round(v.videoWidth * skala);
+      canvas.height = Math.round(v.videoHeight * skala);
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      klatki.push({ sekunda, obraz: canvas.toDataURL('image/jpeg', 0.85) });
+    }
+    return { klatki, dlugosc };
+  } finally {
+    v.onseeked = null;
+    v.onerror = null;
+    v.src = '';
+    URL.revokeObjectURL(url);
+  }
+}
+
+function czasMmSs(s) {
+  const c = Math.max(0, Math.round(s));
+  return `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
+}
+
+/** Klip → klatki jako załączniki-obrazy + notatka, CO to właściwie jest.
+ *  Bez notatki model dostaje cztery niepowiązane zdjęcia i opisuje je jak
+ *  cztery różne sceny, zamiast czytać je jako jedno ujęcie w czasie. */
+async function wczytajWideo(file) {
+  const wolne = 4 - pendingImages.length;
+  if (wolne <= 0) throw new Error(t('cam.maxImages'));
+  const wpis = { name: file.name, chars: 0, text: '', loading: true };
+  pendingDocs.push(wpis);
+  renderAttachments();
+  updateSendButton();
+  try {
+    const { klatki, dlugosc } = await klatkiZWideo(file, Math.min(WIDEO_KLATEK, wolne));
+    if (!klatki.length) throw new Error(t('video.noFrames', { name: file.name }));
+    for (const k of klatki) pendingImages.push(k.obraz);
+    const opisKlatek = klatki.map((k, i) => `${i + 1}) ${czasMmSs(k.sekunda)}`).join(', ');
+    const text = dlugosc
+      ? t('video.note', { name: file.name, dlugosc: czasMmSs(dlugosc), ile: klatki.length, momenty: opisKlatek })
+      : t('video.noteNoLen', { name: file.name, ile: klatki.length });
+    Object.assign(wpis, { text, chars: text.length, loading: false });
+  } catch (err) {
+    pendingDocs.splice(pendingDocs.indexOf(wpis), 1);
+    renderAttachments();
+    updateSendButton();
+    throw err;
+  }
+  renderAttachments();
+  updateSendButton();
+}
 
 /** Wyślij plik do odczytania i zapamiętaj wynik jako załącznik rozmowy. */
 async function wczytajDokument(file) {
@@ -3895,8 +4084,10 @@ function chime(freq = 880) {
 /** Zatrzymaj rozpoznawanie na dobre — tylko przy wyjściu z trybu głosowego. */
 function stopVoiceRecognizers() {
   clearTimeout(voiceSilence);
+  clearTimeout(nasluchCisza);
   voiceHeard = '';
   voiceDeaf = false;
+  if (nasluch) { nasluch.stop(); nasluch = null; }
   if (voiceRec) {
     voiceRec.onend = null;          // bez tego wznowiłby się sam
     voiceRec.onresult = null;
@@ -3907,8 +4098,10 @@ function stopVoiceRecognizers() {
 }
 
 async function enterVoiceMode() {
-  const SR = getSR();
-  if (!SR) {
+  // Dwa silniki, dwa różne wymagania. Brak Web Speech API nie przekreśla
+  // trybu głosowego, jeśli działa własny nasłuch z Whisperem — a to właśnie
+  // przypadek Firefoksa i Safari, gdzie rozpoznawania mowy po prostu nie ma.
+  if (!getSR() && !nasluchMozliwy()) {
     alert(t('voice.noSupport'));
     return;
   }
@@ -3972,6 +4165,87 @@ $('voice-cam-btn').addEventListener('click', async () => {
   updateVoiceCamButton();
 });
 
+/* ---- „Kto to śpiewa?" — BirdNET z nakładki głosowej -------------------
+   Ptaka słychać dużo dalej, niż go widać, i to słuch decyduje, gdzie postawić
+   statyw. Nagranie idzie bez „ulepszaczy" dźwięku i w pełnej częstotliwości:
+   redukcja szumu w telefonie wycina dokładnie te ciche, wysokie tony, które
+   są tu całą treścią. */
+const PTAK_SEKUND = 8;
+// Drugie kliknięcie w trakcie nagrania otwierałoby DRUGI strumień z tego samego
+// mikrofonu. Część urządzeń po prostu odmawia, reszta oddaje cichsze nagranie.
+let ptakTrwa = false;
+
+async function rozpoznajPtaka() {
+  if (ptakTrwa) return;
+  if (!(window.NasluchWlasny && window.NasluchWlasny.dostepny())) {
+    el.voiceAnswer.textContent = t('voice.birdNoAudio');
+    return;
+  }
+  if (!(senses.online && senses.caps.birdnet)) {
+    el.voiceAnswer.textContent = t('voice.birdNoSenses');
+    return;
+  }
+  // Mikrofon jest zajęty przez nasłuch ciągły — zwalniamy go na czas nagrania
+  // i wracamy do nasłuchu potem. Dwa strumienie z tego samego wejścia bywają
+  // odrzucane, a na telefonie dają cichsze, gorsze nagranie.
+  ptakTrwa = true;
+  const bylNasluch = Boolean(nasluch);
+  if (nasluch) { nasluch.stop(); nasluch = null; }
+  stopSpeaking();
+  setVoiceState('listening');
+  el.voiceTranscript.textContent = '';
+
+  try {
+    let zostalo = PTAK_SEKUND;
+    el.voiceAnswer.textContent = t('voice.birdRec', { s: zostalo });
+    const tik = setInterval(() => {
+      zostalo--;
+      if (zostalo >= 0) el.voiceAnswer.textContent = t('voice.birdRec', { s: zostalo });
+    }, 1000);
+    let blob;
+    try {
+      blob = await window.NasluchWlasny.nagrajWav(PTAK_SEKUND * 1000, { czestotliwosc: 48000 });
+    } finally {
+      clearInterval(tik);
+    }
+
+    el.voiceAnswer.textContent = t('voice.birdThinking');
+    const res = await fetch('/api/ptak', {
+      method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob,
+    });
+    const dane = await readJsonSafe(res);
+    if (!res.ok) throw new Error(dane.error || `HTTP ${res.status}`);
+
+    const lista = Array.isArray(dane.gatunki) ? dane.gatunki : [];
+    if (!lista.length) {
+      el.voiceAnswer.textContent = t('voice.birdNone');
+      setVoiceState('speaking');
+      await speakText(t('voice.birdNone'));
+    } else {
+      const opis = lista
+        .map((g) => `${g.nazwa || g.lacinska} — ${Math.round((g.pewnosc || 0) * 100)}%`)
+        .join(' · ');
+      el.voiceAnswer.textContent = opis;
+      setVoiceState('speaking');
+      const pierwszy = lista[0];
+      await speakText(t('voice.birdFound', {
+        nazwa: pierwszy.nazwa || pierwszy.lacinska,
+        proc: Math.round((pierwszy.pewnosc || 0) * 100),
+      }));
+    }
+  } catch (err) {
+    el.voiceAnswer.textContent = t('voice.birdErr', { msg: err.message });
+  } finally {
+    ptakTrwa = false;
+    if (voiceMode) {
+      if (bylNasluch) backToWake();
+      else setVoiceState('wake');
+    }
+  }
+}
+
+$('voice-bird-btn').addEventListener('click', rozpoznajPtaka);
+
 function exitVoiceMode() {
   voiceMode = false;
   voiceNoteMode = false;
@@ -4023,6 +4297,112 @@ let voiceOdcisk = '';
 // Co Cosmos ostatnio powiedział — druga zapora przed pętlą.
 let voiceOstatniaOdpowiedz = '';
 
+/* ---- DRUGI SILNIK NASŁUCHU: własny strumień + Whisper ----------------
+   Cała gimnastyka powyżej (znaczniki zużycia, odciski wyników, wykrywanie
+   restartu numeracji) istnieje dlatego, że Web Speech API nie da się
+   wyciszyć ani zatrzymać bez zwolnienia mikrofonu. `public/nasluch.js`
+   rozwiązuje to u źródła: mikrofon otwarty raz na całą sesję, wypowiedzi
+   wycinane z sygnału po energii, tekst z Whispera. Wtedy „głuchy" znaczy
+   naprawdę głuchy — próbki lecą do kosza i nie ma czego rozpoznać.
+
+   Wymaga włączonych zmysłów, więc to WYBÓR, nie zamiennik. Przy wyłączonym
+   komputerze domowym Cosmos wraca do Web Speech API bez pytania. */
+let nasluch = null;            // instancja NasluchWlasny albo null
+let nasluchCisza = null;       // powrót do nasłuchu słowa budzącego po ciszy
+const NASLUCH_CISZA_MS = 9000;
+
+function nasluchMozliwy() {
+  return Boolean(window.NasluchWlasny && window.NasluchWlasny.dostepny()
+    && senses.online && senses.caps.whisper);
+}
+
+/** 'whisper' albo 'przegladarka'. Wybór z Ustawień; `auto` bierze Whispera,
+ *  gdy zmysły są pod ręką, bo to on rozwiązuje problem sprzężenia. */
+function silnikNasluchu() {
+  const wybor = localStorage.getItem('cosmos.sttEngine') || 'auto';
+  if (wybor === 'przegladarka') return 'przegladarka';
+  return nasluchMozliwy() ? 'whisper' : 'przegladarka';
+}
+
+/** Ograniczenia dla nasłuchu ciągłego. Echo cancellation jest tu KLUCZOWE:
+ *  na telefonie głośnik gra wprost do mikrofonu i choć „głuchy" wyrzuca te
+ *  próbki, po zakończeniu wypowiedzi Cosmosa ogon zdania potrafi jeszcze
+ *  wpaść w otwarte okno. */
+function nasluchOgraniczenia() {
+  const id = localStorage.getItem('cosmos.micId') || '';
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  if (id) audio.deviceId = { exact: id };
+  return { audio };
+}
+
+function startNasluchWlasny() {
+  if (nasluch) { nasluch.gluchy(voiceDeaf); return; }
+  nasluch = window.NasluchWlasny.utworz({
+    onWypowiedz: wypowiedzZNasluchu,
+    onBlad: (err) => {
+      // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
+      // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
+      el.voiceTranscript.textContent = t('voice.sttErr', { msg: err.message });
+    },
+  });
+  nasluch.gluchy(voiceDeaf);
+  nasluch.start(nasluchOgraniczenia()).catch(async (err) => {
+    nasluch = null;
+    /* Zapamiętany mikrofon mógł zostać odłączony — tak samo jak przy
+       dyktowaniu, spróbuj domyślnego, zanim ogłosisz porażkę. */
+    if (localStorage.getItem('cosmos.micId')) {
+      localStorage.removeItem('cosmos.micId');
+      startNasluchWlasny();
+      return;
+    }
+    el.voiceTranscript.textContent = t('voice.micDenied');
+    voiceMode = false;
+  });
+}
+
+/** Gotowa wypowiedź z Whispera. W odróżnieniu od Web Speech API nie ma tu
+ *  wyników cząstkowych ani odliczania ciszy — VAD już zdecydował, że zdanie
+ *  się skończyło. */
+function wypowiedzZNasluchu(tekst) {
+  if (!voiceMode || voiceDeaf) return;
+
+  if (voiceState === 'wake') {
+    if (!WAKE_RE.test(tekst)) return;
+    const po = bezSlowaBudzacego(tekst);
+    chime(880);
+    if (po.length > 5) { askVoice(po); return; }
+    czekajNaPytanie();
+    return;
+  }
+
+  if (voiceState !== 'listening') return;
+  const czyste = bezSlowaBudzacego(tekst);
+  if (!czyste) return;
+  clearTimeout(nasluchCisza);
+  el.voiceTranscript.textContent = czyste;
+  askVoice(czyste);
+}
+
+/** Stan „słucham pytania" z własnym odliczaniem powrotu.
+ *  Bez tego Cosmos zostawałby w nasłuchu pytania w nieskończoność, gdyby
+ *  ktoś powiedział „Hej, Kosmos" i się rozmyślił. */
+function czekajNaPytanie() {
+  setVoiceState('listening');
+  el.voiceTranscript.textContent = '';
+  clearTimeout(nasluchCisza);
+  nasluchCisza = setTimeout(() => {
+    if (voiceMode && voiceState === 'listening') backToWake();
+  }, NASLUCH_CISZA_MS);
+}
+
+/** Jedno miejsce na zmianę „czy reagujemy na to, co słychać".
+ *  Przy własnym strumieniu to naprawdę wycisza wejście; przy Web Speech API
+ *  zostaje starym znacznikiem, bo tam wyciszyć się nie da. */
+function ustawGluchote(wlacz) {
+  voiceDeaf = Boolean(wlacz);
+  if (nasluch) nasluch.gluchy(voiceDeaf);
+}
+
 /** Uproszczona postać zdania — rozpoznawanie dopieszcza interpunkcję
  *  i wielkość liter jeszcze po tym, jak wynik uzna za ostateczny. */
 function odciskWyniku(wyniki, indeks) {
@@ -4056,7 +4436,9 @@ function wynikiOdNowa(wyniki) {
 }
 
 function startVoiceRecognizer() {
-  if (!voiceMode || voiceRec) return;
+  if (!voiceMode) return;
+  if (silnikNasluchu() === 'whisper') { startNasluchWlasny(); return; }
+  if (voiceRec) return;
   const SR = getSR();
   if (!SR) return;
 
@@ -4148,11 +4530,12 @@ function startVoiceRecognizer() {
 function backToWake() {
   if (!voiceMode) return;
   clearTimeout(voiceSilence);
+  clearTimeout(nasluchCisza);
   voiceHeard = '';
   if (voiceRec && voiceRec.__ostatniaDlugosc) {
     oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
   }
-  voiceDeaf = false;
+  ustawGluchote(false);
   setVoiceState('wake');
   el.voiceTranscript.textContent = '';
   startVoiceRecognizer();
@@ -4169,7 +4552,7 @@ function askVoice(text) {
     backToWake();
     return;
   }
-  voiceDeaf = true;
+  ustawGluchote(true);
   handleVoiceQuery(text);
 }
 
@@ -4197,7 +4580,8 @@ function startQueryListening() {
   if (voiceRec && voiceRec.__ostatniaDlugosc) {
     oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
   }
-  voiceDeaf = false;
+  ustawGluchote(false);
+  if (silnikNasluchu() === 'whisper') { startVoiceRecognizer(); czekajNaPytanie(); return; }
   setVoiceState('listening');
   el.voiceTranscript.textContent = '';
   startVoiceRecognizer();
@@ -4503,6 +4887,8 @@ function openSettings() {
   el.modelSelectLocal.style.display = 'none';
   refreshModelInfoBoxes();
   loadMicList();
+  odswiezWyborNasluchu();
+  wczytajSprzet();
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
@@ -5135,6 +5521,54 @@ el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
 $('set-mic').addEventListener('change', (e) => {
   localStorage.setItem('cosmos.micId', e.target.value);
 });
+$('set-stt').addEventListener('change', (e) => {
+  localStorage.setItem('cosmos.sttEngine', e.target.value);
+  odswiezWyborNasluchu();
+});
+
+/* Który silnik ZADZIAŁA, a nie który jest wybrany. To dwie różne rzeczy:
+   „Własny strumień" przy wyłączonym komputerze domowym nie ma dokąd wysłać
+   dźwięku i Cosmos po cichu wraca do przeglądarki. Milcząca zmiana zachowania
+   to dokładnie ten rodzaj rzeczy, po której człowiek myśli, że coś zepsuł. */
+/* Mój sprzęt. Do tej pory dało się go ustawić wyłącznie przez `/api/gear`
+   curlem — czyli w praktyce wcale, a plan zdjęciowy liczył dla domyślnego
+   korpusu i nie wiedział nic o dronie. */
+async function wczytajSprzet() {
+  try {
+    const d = await (await fetch('/api/gear')).json();
+    $('set-body').value = d.korpus || '';
+    $('set-lenses').value = d.obiektywy || '';
+    $('set-extras').value = d.dodatki || '';
+  } catch { /* offline — pola zostają puste, zapis i tak zadziała później */ }
+}
+
+let zapisSprzetu = null;
+function zapiszSprzet() {
+  // Odłożony zapis: pisanie „24-105 f/4, 70-200 f/4" to kilkadziesiąt znaków,
+  // a nie kilkadziesiąt żądań PUT.
+  clearTimeout(zapisSprzetu);
+  zapisSprzetu = setTimeout(() => {
+    fetch('/api/gear', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        korpus: $('set-body').value,
+        obiektywy: $('set-lenses').value,
+        dodatki: $('set-extras').value,
+      }),
+    }).catch(() => {});
+  }, 600);
+}
+for (const id of ['set-body', 'set-lenses', 'set-extras']) {
+  $(id).addEventListener('input', zapiszSprzet);
+}
+
+function odswiezWyborNasluchu() {
+  const sel = $('set-stt');
+  sel.value = localStorage.getItem('cosmos.sttEngine') || 'auto';
+  const silnik = silnikNasluchu() === 'whisper' ? t('set.sttWhisper') : t('set.sttBrowser');
+  $('set-stt-now').textContent = t('set.sttNow', { silnik });
+}
 $('check-model-cloud').addEventListener('click', () => checkModelField('cloud'));
 $('check-model-local').addEventListener('click', () => checkModelField('local'));
 $('mic-refresh').addEventListener('click', loadMicList);
@@ -5188,7 +5622,12 @@ async function refreshStatus() {
     setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? t('stat.online') : t('stat.offline'));
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
     if (senses.online) {
-      const active = Object.entries(senses.caps).filter(([, v]) => v).map(([k]) => k);
+      /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
+         (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i
+         „dokumenty (docling)" to dwie różne jakości odczytu — z tym drugim
+         Cosmos czyta skany i tabele, z pierwszym nie. */
+      const active = Object.entries(senses.caps).filter(([, v]) => v)
+        .map(([k, v]) => (typeof v === 'string' ? `${k} (${v})` : k));
       setStatusRow(el.statusSenses, true, active.length ? t('stat.active', { n: active.length }) : t('stat.online'));
       el.statusSenses.title = active.length ? t('stat.sensesTip', { list: active.join(', ') }) : t('stat.online');
     } else {

@@ -105,6 +105,38 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   const zlyId = await fetch(`${env.adres}/api/archive/thumb?id=cokolwiek`);
   if (zlyId.status !== 400) fail.push('trasa miniatur nie sprawdza identyfikatora');
 
+  /* ---- 3b. CO WIDAĆ na zdjęciu — to, co daje Immich, bez stosu Immicha ----
+     Zdjęcie z OneDrive nie ma o sobie żadnej informacji o treści: Graph oddaje
+     datę, aparat i GPS. Kategorie zgadujemy z nazw folderów, więc „Wesele Kasi"
+     działa, a „IMG_4471.JPG" nie mówi nic. Wykryte obiekty muszą tę lukę
+     domykać — i muszą wpadać do kategorii SAME, bez drugiego przejścia. */
+  await fetch(`${env.adres}/api/archive/add`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      wpisy: [{
+        id: 'onedrive:6', zrodlo: 'onedrive', nazwa: 'IMG_4471.JPG',
+        sciezka: '/Zdjecia/2026/IMG_4471.JPG', typ: 'zdjecie',
+        kiedy: '2026-07-04T10:00:00', obiekty: ['dog', 'person'], obejrzane: true,
+      }],
+    }),
+  });
+  const psy = await szukaj({ temat: 'zwierzeta-domowe' });
+  console.log(`7b. „IMG_4471.JPG" + obiekt „dog" → temat: ${nazwy(psy) || 'BRAK'}`);
+  if (!/IMG_4471/.test(nazwy(psy))) {
+    fail.push('obiekty z YOLO nie trafiły do kategorii — „pokaż zdjęcia z psem" nie zadziała');
+  }
+
+  const wizja = await fetch(`${env.adres}/api/archive/vision`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  const wizjaD = await wizja.json().catch(() => ({}));
+  console.log(`7c. rozpoznawanie treści bez OneDrive → HTTP ${wizja.status} „${(wizjaD.error || '').slice(0, 45)}"`);
+  if (wizja.status === 500) fail.push('trasa rozpoznawania treści wywraca serwer');
+  if (wizja.status === 200) fail.push('treść „rozpoznana" mimo braku połączenia z OneDrive');
+  if (!/OneDrive|zmys/i.test(wizjaD.error || '')) {
+    fail.push('komunikat rozpoznawania treści nie mówi, czego brakuje');
+  }
+
   /* ---- 4. Temat steruje planem zdjęciowym ---- */
   const dzien = evZeSlonca(10);
   const nastawy = (op) => {
