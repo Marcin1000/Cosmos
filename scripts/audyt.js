@@ -91,15 +91,40 @@ otw === zam ? ok(`znaczniki się domykają (${otw})`) : zle(`rozjazd znaczników
 
 // ---------------------------------------------------------------- 4 API
 sekcja('Trasy serwera');
-const trasy = [...new Set([...server.matchAll(/p === '([^']+)'/g)].map((m) => m[1]))];
-const prefiksy = [...new Set([...server.matchAll(/p\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
+/* Tras szukamy w server.js ORAZ we wszystkich modułach — i to jest poprawka
+   po realnej luce, którą sam wprowadziłem.
+
+   Do Partii 34 wszystkie trasy siedziały w server.js i skanowanie jednego
+   pliku wystarczało. Po podziale połowa z nich wyprowadziła się do `lib/`
+   i po cichu zniknęła spod kontroli: rozruch próbny pukał w 45 tras zamiast
+   52, a sprawdzenie „każda trasa opisana w dokumentacji" przechodziło dla
+   nieopisanych, bo ich nie widziało. Narzędzie do wykrywania usterek, które
+   po podziale pliku samo przestaje patrzeć na przeniesiony kod, jest gorsze
+   niż jego brak — dokładnie ta sama zasada, co przy zajętym porcie 3499.
+
+   Moduły używają dwóch nazw dla ścieżki (`p` w jednych, `pathname` w innych),
+   więc łapiemy obie. */
+const modulyKod = fs.readdirSync(path.join(R, 'lib'))
+  .filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`)).join('\n');
+const kodTras = server + '\n' + modulyKod;
+const trasy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname) === '(\/[^']*)'/g)].map((m) => m[1]))];
+const prefiksy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname)\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
 const wolane = [...new Set([...(app + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
 const sieroty = wolane.filter((c) => !trasy.includes(c) && !prefiksy.some((p) => c.startsWith(p))
   && !trasy.some((r) => c.startsWith(r + '/')));
 sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
   : ok(`${wolane.length} wywołań klienta ma pokrycie w ${trasy.length} trasach`);
-const dokTrasy = readme + start;
-const nieudok = trasy.filter((r) => r.startsWith('/api/') && !dokTrasy.includes(r));
+/* Dokumentacja opisuje rodziny tras skrótami — `/api/studio/*` na osiem tras
+   Studia i `/api/procedures/record/{start,stop,status}` na trzy. To jest dobry
+   zapis dla człowieka i nie chcę go rozbijać na jedenaście wierszy tabeli
+   tylko po to, żeby dopasować się do `includes()`. Rozwijamy więc skróty tutaj,
+   zamiast psuć dokumentację pod narzędzie. */
+const dokTrasy = (readme + start)
+  .replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g,
+    (_, przed, srodek, po) => srodek.split(',').map((x) => `${przed}${x.trim()}${po}`).join(' '));
+const rodziny = [...dokTrasy.matchAll(/`(\/api\/[a-z0-9/_-]*)\*`/gi)].map((m) => m[1]);
+const nieudok = trasy.filter((r) => r.startsWith('/api/')
+  && !dokTrasy.includes(r) && !rodziny.some((pref) => r.startsWith(pref)));
 nieudok.length ? zle('trasy nieopisane w dokumentacji: ' + nieudok.join(', ')) : ok('każda trasa /api/ jest opisana');
 
 // ---------------------------------------------------------------- 5 .env
