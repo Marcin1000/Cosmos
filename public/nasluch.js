@@ -36,6 +36,11 @@
 (function (global) {
   'use strict';
 
+  /* Po tylu milisekundach bez ani jednej ramki uznajemy, że wejście umarło.
+     Ramka przy 48 kHz i buforze 1024 to 21 ms, więc 2,5 s to ponad sto
+     przegapionych — na pewno awaria, a nie chwilowe zadyszanie procesora. */
+  const CISZA_ALARM_MS = 2500;
+
   const DOMYSLNE = {
     // Whisper i tak pracuje na 16 kHz. Wysyłanie 48 kHz to trzykrotnie
     // większy plik bez ani jednej dodatkowej informacji dla modelu.
@@ -125,6 +130,7 @@
     const onWypowiedz = o.onWypowiedz || (() => {});
     const onPoziom = o.onPoziom || (() => {});
     const onBlad = o.onBlad || (() => {});
+    o.onCisza = o.onCisza || (() => {});
 
     let ctx = null;
     let strumien = null;
@@ -133,6 +139,9 @@
     let cisza = null;             // węzeł o zerowym wzmocnieniu (patrz niżej)
     let dziala = false;
     let gluchyFlag = false;
+    let ostatniaRamka = 0;      // kiedy ostatnio przyszła ramka dźwięku
+    let pilnowanie = null;      // odliczanie „mikrofon zamilkł"
+    let cisząZgloszona = false;
 
     // Stan wykrywania mowy
     let tlo = 0.01;               // ruchomy poziom szumu otoczenia
@@ -196,15 +205,62 @@
       procesor.connect(cisza);
       cisza.connect(ctx.destination);
 
+      /* ---- CZUJNIK GŁUCHOTY ------------------------------------------
+         Najgorsza możliwa awaria tego modułu nie jest głośna. Jest CICHA:
+         mikrofon przestaje dawać próbki, a interfejs dalej pokazuje
+         „SŁUCHAM…". Człowiek mówi do ekranu i nie rozumie, dlaczego nic
+         się nie dzieje. Trzy realne drogi do tego stanu, wszystkie na
+         telefonie:
+
+           1. WYGASZONY EKRAN — Android usypia AudioContext. Wraca sam po
+              odblokowaniu, ale tylko jeśli ktoś go obudzi.
+           2. POŁĄCZENIE PRZYCHODZĄCE albo inna aplikacja przejmująca
+              mikrofon — ścieżka dostaje `mute`, a czasem `ended`.
+           3. ODŁĄCZONE SŁUCHAWKI — ścieżka kończy się na dobre i nie
+              wróci; trzeba wziąć mikrofon od nowa.
+
+         Żadna z nich nie rzuca wyjątkiem. Dlatego pilnujemy tego z trzech
+         stron naraz: stanu kontekstu, zdarzeń ścieżki i — bo tamte dwa
+         potrafią milczeć — licznika czasu od ostatniej ramki. */
+      ctx.onstatechange = () => {
+        if (!dziala || !ctx) return;
+        if (ctx.state === 'running') return;
+        // „interrupted" to stan z Safari na iOS; nie ma go w standardzie.
+        ctx.resume().catch(() => {});
+        zglosCisze(ctx.state === 'closed' ? 'kontekst zamknięty' : 'dźwięk uśpiony');
+      };
+      for (const tr of strumien.getTracks()) {
+        tr.onended = () => zglosCisze('mikrofon odłączony');
+        tr.onmute = () => zglosCisze('mikrofon wyciszony przez system');
+      }
+      ostatniaRamka = Date.now();
+      pilnowanie = setInterval(() => {
+        if (!dziala || gluchyFlag) return;
+        if (Date.now() - ostatniaRamka > CISZA_ALARM_MS) zglosCisze('brak sygnału z mikrofonu');
+      }, 2000);
+
       wyzeruj();
       tlo = 0.01;
       dziala = true;
       return true;
     }
 
+    /* Zgłaszamy RAZ na epizod, nie co dwie sekundy. Powtarzany komunikat
+       w kółko jest tak samo bezużyteczny jak jego brak, a przy odzyskaniu
+       dźwięku i tak zerujemy znacznik. */
+    function zglosCisze(powod) {
+      if (cisząZgloszona) return;
+      cisząZgloszona = true;
+      o.onCisza(powod);
+    }
+
     function stop() {
       dziala = false;
       wyzeruj();
+      clearInterval(pilnowanie);
+      pilnowanie = null;
+      cisząZgloszona = false;
+      try { if (ctx) ctx.onstatechange = null; } catch { /* już zwolniony */ }
       try { if (procesor) procesor.onaudioprocess = null; } catch { /* już zwolniony */ }
       try { if (zrodlo) zrodlo.disconnect(); } catch { /* jw. */ }
       try { if (procesor) procesor.disconnect(); } catch { /* jw. */ }
@@ -225,6 +281,9 @@
 
     function ramka(dane) {
       if (!dziala) return;
+      ostatniaRamka = Date.now();
+      // Dźwięk wrócił — kolejna awaria ma znów dojść do interfejsu.
+      cisząZgloszona = false;
 
       let suma = 0;
       for (let i = 0; i < dane.length; i++) suma += dane[i] * dane[i];
@@ -340,7 +399,8 @@
       }
     }
 
-    return { start, stop, gluchy, dziala: () => dziala, czyGluchy: () => gluchyFlag };
+    return { start, stop, gluchy, dziala: () => dziala, czyGluchy: () => gluchyFlag,
+      zywy: () => dziala && Date.now() - ostatniaRamka < CISZA_ALARM_MS };
   }
 
   /** Jednorazowe nagranie o zadanej długości → Blob WAV.

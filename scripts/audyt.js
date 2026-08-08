@@ -64,8 +64,16 @@ const uzyteHtml = [...new Set([...html.matchAll(/data-i18n(?:-ph|-aria|-title)?=
 // a nie brakujące tłumaczenie. Kod ma dla nich zapasową etykietę.
 const braki = [...uzyteApp, ...uzyteHtml].filter((k) => !wszystkie.has(k) && !k.endsWith('.'));
 braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystkie użyte klucze mają tłumaczenie (${uzyteApp.length} + ${uzyteHtml.length})`);
+/* Klucze budowane z danych są używane, tylko nie widać tego dosłownie:
+   `t('event.' + z.type)` ożywia wszystkie `event.*`. Bez tego wyjątku audyt
+   podaje je jako martwe, człowiek je kasuje, a w interfejsie pojawia się goły
+   `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
+   da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
+   w którym ginie prawdziwa robota do zrobienia. */
+const prefiksyDynamiczne = [...app.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
-  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``));
+  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``)
+  && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
 

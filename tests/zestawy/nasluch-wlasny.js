@@ -31,11 +31,16 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
   const zadania = [];        // każde wywołanie /api/stt
 
   let procesor = null;
+  let audioCtx = null;
+  let sciezka = null;
+  let wznowien = 0;
   class AtrapaCtx {
     constructor() {
       this.sampleRate = CZESTOTLIWOSC_WE;
       this.state = 'running';
       this.destination = {};
+      this.onstatechange = null;
+      audioCtx = this;
     }
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createScriptProcessor(n) {
@@ -43,7 +48,7 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
       return procesor;
     }
     createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
-    resume() { return Promise.resolve(); }
+    resume() { wznowien++; return Promise.resolve(); }
     close() {}
   }
 
@@ -51,7 +56,12 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
     AudioContext: AtrapaCtx,
     navigator: {
       mediaDevices: {
-        getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+        getUserMedia: async () => {
+          // Ścieżka z prawdziwymi punktami zaczepienia: to przez nie system
+          // mówi „zabrałem ci mikrofon", i to je zestaw poniżej wyzwala.
+          sciezka = { stop() {}, onended: null, onmute: null };
+          return { getTracks: () => [sciezka] };
+        },
       },
     },
     Blob,
@@ -62,6 +72,8 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
     Math,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     fetch: async (adres, opcje) => {
       zadania.push({ adres, opcje });
       return {
@@ -77,7 +89,20 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
   const kontekst = vm.createContext(Object.assign({ console, Blob, TextEncoder }, window, { window }));
   const kod = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'nasluch.js'), 'utf8');
   vm.runInContext(kod, kontekst);
-  return { API: kontekst.window.NasluchWlasny, zadania, proc: () => procesor };
+  const skrypt = vm.runInContext('window.NasluchWlasny', kontekst);
+  return {
+    API: skrypt,
+    zadania,
+    proc: () => procesor,
+    track: () => sciezka,
+    wznowien: () => wznowien,
+    /* Wygaszony ekran w Androidzie: kontekst przechodzi w „suspended"
+       i przestaje wołać onaudioprocess. Zdarzenie przychodzi, wyjątku nie ma. */
+    uspij: () => {
+      audioCtx.state = 'suspended';
+      if (audioCtx.onstatechange) audioCtx.onstatechange();
+    },
+  };
 }
 
 const pauza = () => new Promise((r) => setImmediate(r));
@@ -344,6 +369,55 @@ async function sekundyWav(blob) {
     if (!n.dziala()) fail.push('po błędzie transkrypcji nasłuch się wyłączył');
     n.stop();
     if (n.dziala()) fail.push('stop() nie zatrzymał nasłuchu');
+  }
+
+  // ---------------------------------------------------------------
+  // 9. CICHA GŁUCHOTA — awaria, która nie daje o sobie znać
+  // ---------------------------------------------------------------
+  /* To jest najgorszy możliwy stan tego modułu i dlatego dostaje własną
+     sekcję: mikrofon przestaje dawać próbki, a ekran dalej pokazuje
+     „SŁUCHAM…". Trzy drogi do niego, wszystkie na telefonie: wygaszony ekran
+     usypia AudioContext, rozmowa przychodząca zabiera mikrofon, odłączone
+     słuchawki kończą ścieżkę. Żadna nie rzuca wyjątkiem. */
+  {
+    // a) ścieżka mikrofonu kończy się (odłączone słuchawki)
+    const b1 = zaladuj();
+    const ciszePowody = [];
+    const n = b1.API.utworz({ onCisza: (p) => ciszePowody.push(p) });
+    await n.start();
+    podaj(b1.proc(), cisza(3));
+    if (!n.zywy()) fail.push('świeżo uruchomiony nasłuch od razu uznany za martwy');
+    b1.track().onended();
+    console.log(`9a. koniec ścieżki mikrofonu → ${JSON.stringify(ciszePowody)}`);
+    if (ciszePowody.length !== 1) fail.push(`odłączony mikrofon zgłoszony ${ciszePowody.length} razy zamiast raz`);
+    // Drugie zdarzenie tego samego epizodu nie może zasypać interfejsu.
+    b1.track().onmute();
+    if (ciszePowody.length !== 1) fail.push('powtórzone zgłoszenie tej samej ciszy');
+    n.stop();
+
+    // b) uśpiony kontekst dźwięku (wygaszony ekran w Androidzie)
+    const b2 = zaladuj();
+    const powody2 = [];
+    const m = b2.API.utworz({ onCisza: (p) => powody2.push(p) });
+    await m.start();
+    b2.uspij();
+    console.log(`9b. uśpiony kontekst → ${JSON.stringify(powody2)}`);
+    if (!powody2.length) fail.push('uśpienie AudioContextu przeszło bez słowa — Cosmos udawałby, że słucha');
+    if (!b2.wznowien()) fail.push('Cosmos nie spróbował sam obudzić dźwięku');
+    m.stop();
+
+    // c) po powrocie dźwięku nasłuch znów żyje i zgłosi KOLEJNĄ awarię
+    const b3 = zaladuj();
+    const powody3 = [];
+    const k = b3.API.utworz({ onCisza: (p) => powody3.push(p) });
+    await k.start();
+    b3.track().onended();
+    podaj(b3.proc(), cisza(2));            // dźwięk wrócił
+    b3.track().onended();                  // i znowu padł
+    console.log(`9c. awaria → powrót → awaria: ${powody3.length} zgłoszenia`);
+    if (powody3.length !== 2) fail.push(`po odzyskaniu dźwięku kolejna awaria zgłoszona ${powody3.length - 1} raz(y)`);
+    if (!k.zywy()) fail.push('nasluch.zywy() nie zauważył, że ramki wróciły');
+    k.stop();
   }
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nNASŁUCH WŁASNY OK');

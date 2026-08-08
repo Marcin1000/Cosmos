@@ -1391,6 +1391,42 @@ Node, a strefa zmysłów jest pythonowa.
 - [x] Panel zmysłów pokazuje **nazwę** czytnika, nie samo „jest": „dokumenty
       (docling)" i „dokumenty" to dwie różne jakości odczytu
 
+### Trzy awarie, na które nie chciałem czekać
+
+Standardowa prośba Marcina: przewidzieć problemy, zanim się pojawią. W nowym
+trybie głosowym widzę trzy realne i wszystkie na jego sprzęcie.
+
+**Cicha głuchota.** Najgorsza awaria tego modułu nie jest głośna — mikrofon
+przestaje dawać próbki, a ekran dalej pokazuje „SŁUCHAM…". Człowiek mówi do
+telefonu i nie rozumie, czemu nic się nie dzieje. Trzy drogi do tego stanu,
+żadna nie rzuca wyjątkiem: wygaszony ekran usypia AudioContext, rozmowa
+przychodząca zabiera mikrofon, odłączone słuchawki kończą ścieżkę.
+
+- [x] Pilnowane z trzech stron naraz: stan kontekstu, zdarzenia `ended`/`mute`
+      na ścieżce oraz — bo tamte potrafią milczeć — licznik czasu od ostatniej
+      ramki (2,5 s to ponad sto przegapionych ramek, na pewno awaria)
+- [x] Najpierw PRÓBA ODZYSKANIA, bo dwie z trzech przyczyn mijają same
+      i wystarczy wziąć wejście od nowa. Dopiero potem komunikat — jedna
+      próba, nie pętla wznowień co dwie sekundy
+- [x] Zgłoszenie RAZ na epizod. Ten sam komunikat powtarzany w kółko jest
+      równie bezużyteczny jak jego brak
+
+**Whisper w kółko odmawia.** Jeden błąd to przypadek — GPU zajęte, dziura
+w Tailscale. Trzy pod rząd znaczą, że zmysłów nie ma, a trwanie przy nich
+skazuje tryb głosowy na milczenie. Po trzeciej awarii Cosmos wraca do
+rozpoznawania przeglądarki i MÓWI o tym: milcząca zmiana zachowania to
+dokładnie ten rodzaj rzeczy, po której człowiek myśli, że coś zepsuł.
+
+**H.265 z R6 II.** Canon nagrywa 4K w HEVC, a Chrome na Windowsie dekoduje go
+tylko z rozszerzeniem od Microsoftu. Bez rozpoznania tego przypadku komunikat
+brzmiałby „ta przeglądarka nie zna tego kodowania" — prawda, z której nic nie
+wynika. Teraz Cosmos nazywa kodek po imieniu i podaje dwa wyjścia: proxy
+w H.264 albo doinstalowanie rozszerzenia.
+
+Wszystkie trzy mają testy. Sekcja 9 zestawu `nasluch-wlasny` wyzwala każdą
+z dróg do głuchoty osobno i sprawdza też rzecz nieoczywistą: że po powrocie
+dźwięku KOLEJNA awaria znów zostanie zgłoszona.
+
 ### Czego z listy świadomie nie robimy
 
 - **OpenCut** — montaż wideo. Zapisałem wtedy „Ty montujesz filmy, więc to nie

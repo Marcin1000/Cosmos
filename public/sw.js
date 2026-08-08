@@ -2,7 +2,7 @@
    Statyczne pliki: cache-first (działa offline).
    API: zawsze sieć — czat wymaga połączenia z modelem. */
 
-const CACHE = 'cosmos-v71';
+const CACHE = 'cosmos-v72';
 
 const STATIC_ASSETS = [
   '/',

@@ -1483,6 +1483,23 @@ el.fileInput.addEventListener('change', async () => {
 const WIDEO_KLATEK = 4;
 const WIDEO_SEEK_MS = 8000;
 
+/* Czy przeglądarka w ogóle zna ten kodek?
+ *
+ * To nie jest pytanie akademickie akurat przy tym sprzęcie. Canon R6 II
+ * nagrywa 4K w H.265/HEVC, a Chrome na Windowsie dekoduje HEVC tylko wtedy,
+ * gdy system ma rozszerzenie od Microsoftu. Bez niego `<video>` po prostu
+ * odmawia — i bez tego sprawdzenia dostajesz komunikat „ta przeglądarka nie
+ * zna tego kodowania", z którego nie wynika ANI co jest nie tak, ani co
+ * z tym zrobić. A rada jest bardzo konkretna: nagrywaj proxy w H.264 albo
+ * doinstaluj rozszerzenie HEVC.
+ */
+function kodekZnany(file) {
+  const v = document.createElement('video');
+  if (!v.canPlayType) return true;                 // nie wiadomo — próbujemy
+  if (v.canPlayType(file.type || '')) return true; // przeglądarka mówi „tak"
+  return !/hevc|h\.?265|x265/i.test(file.type || '');
+}
+
 async function klatkiZWideo(file, ile) {
   const url = URL.createObjectURL(file);
   const v = document.createElement('video');
@@ -1490,11 +1507,15 @@ async function klatkiZWideo(file, ile) {
   v.muted = true;
   v.playsInline = true;
   v.src = url;
+  const podejrzanyKodek = /\.(mov|mp4|m4v)$/i.test(file.name) && !kodekZnany(file);
+  const nieczytelne = () => new Error(podejrzanyKodek
+    ? t('video.hevc', { name: file.name })
+    : t('video.unreadable', { name: file.name }));
   try {
     await new Promise((ok, zle) => {
       v.onloadedmetadata = () => ok();
-      v.onerror = () => zle(new Error(t('video.unreadable', { name: file.name })));
-      setTimeout(() => zle(new Error(t('video.unreadable', { name: file.name }))), WIDEO_SEEK_MS);
+      v.onerror = () => zle(nieczytelne());
+      setTimeout(() => zle(nieczytelne()), WIDEO_SEEK_MS);
     });
 
     /* Długość bywa nieznana — pliki nagrywane strumieniowo (webm z przeglądarki,
@@ -4085,6 +4106,9 @@ function chime(freq = 880) {
 function stopVoiceRecognizers() {
   clearTimeout(voiceSilence);
   clearTimeout(nasluchCisza);
+  clearTimeout(odzyskiwanieMikrofonu);
+  odzyskiwanieMikrofonu = null;
+  nasluchAwarie = 0;
   voiceHeard = '';
   voiceDeaf = false;
   if (nasluch) { nasluch.stop(); nasluch = null; }
@@ -4335,15 +4359,33 @@ function nasluchOgraniczenia() {
   return { audio };
 }
 
+/* Ile razy pod rząd Whisper może zawieść, zanim wrócimy do przeglądarki.
+   Jeden błąd to przypadek — GPU zajęte innym zadaniem, chwilowa dziura
+   w Tailscale. Trzy pod rząd znaczą, że zmysłów po prostu nie ma, a wtedy
+   trwanie przy Whisperze to skazanie trybu głosowego na milczenie. */
+const NASLUCH_PROG_AWARII = 3;
+let nasluchAwarie = 0;
+
 function startNasluchWlasny() {
   if (nasluch) { nasluch.gluchy(voiceDeaf); return; }
   nasluch = window.NasluchWlasny.utworz({
-    onWypowiedz: wypowiedzZNasluchu,
+    onWypowiedz: (tekst) => { nasluchAwarie = 0; wypowiedzZNasluchu(tekst); },
     onBlad: (err) => {
       // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
       // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
       el.voiceTranscript.textContent = t('voice.sttErr', { msg: err.message });
+      if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
+      /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
+         DZIAŁA — a Cosmos, który w kółko powtarza ten sam błąd, jest po
+         prostu zepsuty. Zmiana jest jawna: człowiek musi wiedzieć, czemu
+         nagle zmieniło się zachowanie. */
+      nasluchAwarie = 0;
+      localStorage.setItem('cosmos.sttEngine', 'przegladarka');
+      if (nasluch) { nasluch.stop(); nasluch = null; }
+      el.voiceTranscript.textContent = t('voice.sttFallback');
+      if (voiceMode) startVoiceRecognizer();
     },
+    onCisza: (powod) => zaradzGluchocie(powod),
   });
   nasluch.gluchy(voiceDeaf);
   nasluch.start(nasluchOgraniczenia()).catch(async (err) => {
@@ -4358,6 +4400,38 @@ function startNasluchWlasny() {
     el.voiceTranscript.textContent = t('voice.micDenied');
     voiceMode = false;
   });
+}
+
+/* ---- CICHA GŁUCHOTA I CO Z NIĄ ZROBIĆ --------------------------------
+   Najgorsza awaria trybu głosowego nie jest głośna: mikrofon przestaje dawać
+   próbki, a ekran dalej pokazuje „SŁUCHAM…". Marcin mówi do telefonu i nie
+   ma pojęcia, dlaczego nic się nie dzieje. `nasluch.js` wykrywa ten stan
+   z trzech stron (stan kontekstu, zdarzenia ścieżki, licznik od ostatniej
+   ramki) — tutaj jest odpowiedź na pytanie, co dalej.
+
+   Najpierw PRÓBUJEMY ODZYSKAĆ, bo dwie z trzech przyczyn (uśpiony dźwięk po
+   wygaszeniu ekranu, mikrofon oddany na czas rozmowy telefonicznej) mijają
+   same i wystarczy wziąć wejście od nowa. Dopiero gdy to nie pomoże, mówimy
+   wprost — jedna próba, nie pętla wznowień co dwie sekundy. */
+let odzyskiwanieMikrofonu = null;
+
+function zaradzGluchocie(powod) {
+  if (!voiceMode || odzyskiwanieMikrofonu) return;
+  el.voiceTranscript.textContent = t('voice.micLost', { powod });
+  odzyskiwanieMikrofonu = setTimeout(async () => {
+    odzyskiwanieMikrofonu = null;
+    if (!voiceMode || !nasluch) return;
+    if (nasluch.zywy()) { el.voiceTranscript.textContent = ''; return; }  // wróciło samo
+    nasluch.stop();
+    nasluch = null;
+    startNasluchWlasny();
+    // Dajemy nowemu wejściu chwilę i sprawdzamy, czy naprawdę żyje.
+    setTimeout(() => {
+      if (!voiceMode || !nasluch) return;
+      if (nasluch.zywy()) el.voiceTranscript.textContent = '';
+      else el.voiceTranscript.textContent = t('voice.micDead', { powod });
+    }, 2500);
+  }, 1500);
 }
 
 /** Gotowa wypowiedź z Whispera. W odróżnieniu od Web Speech API nie ma tu
