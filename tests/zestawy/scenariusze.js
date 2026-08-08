@@ -130,7 +130,7 @@ const { srodowisko } = require('../pomoc');
   if (!zPogoda.d?.ustawienia?.czas) fail.push('brak pogody odebrał ustawienia ekspozycji');
 
   // Wyszukiwanie grafik przy wszystkich źródłach w dół — musi POWIEDZIEĆ dlaczego.
-  await fetch('http://127.0.0.1:7117/awaria?zrodla=ddg,commons,openverse');
+  await fetch('http://127.0.0.1:7117/awaria?zrodla=searxng,ddg,commons,openverse');
   const brakZrodel = await (await fetch(`${env.adres}/api/search/images?q=cokolwiek`)).json();
   console.log(`D2. wszystkie źródła grafik padły → ${brakZrodel.results.length} zdjęć, `
     + `powód: „${(brakZrodel.error || '').slice(0, 60)}"`);
