@@ -1446,6 +1446,86 @@ dźwięku KOLEJNA awaria znów zostanie zgłoszona.
 - **ExifTool / Exiv2** — potwierdziły tylko, że `LensModel` to standardowy tag.
   Naszego czytnika nie trzeba zastępować
 
+## ✅ Partia 38 — audyt całości: co znalazłem, patrząc, a nie uruchamiając (GOTOWE)
+
+Marcin poprosił o skrupulatny przegląd wszystkiego: UI, UX i backendu. Sam
+`scripts/audyt.js` pokazywał **0 problemów** — i to jest dokładnie powód, dla
+którego trzeba było spojrzeć własnymi oczami. Narzędzie sprawdza to, o co je
+zapytano; nie sprawdza tego, o czym nikt nie pomyślał.
+
+### Trzy usterki, których narzędzie nie widziało
+
+**Placeholder wyświetlany dosłownie.** Na zrzucie ekranu z trybu głosowego
+stało: `Brak dostępu do mikrofonu: {msg}`. Klucz istnieje, tłumaczenie
+istnieje, parytet PL/EN pełny — po prostu nikt nie przekazał danych. Żadna
+z dotychczasowych kontroli nie mogła tego złapać, bo wszystkie sprawdzały
+OBECNOŚĆ tekstu, nie jego kompletność. Jedna instancja na 80 kluczy
+z placeholderem, ale klasa realna, więc doszła kontrola stała.
+
+**Dwa modele zapisu w jednym oknie.** Dodane w Partii 37 pola sprzętu
+zapisywały się same, z opóźnieniem, a stojące tuż obok „Profil"
+i „Lokalizacja" — dopiero po kliknięciu „Zapisz". Trzy pola tekstowe
+zachowujące się inaczej niż dwa sąsiednie pola tekstowe to nie jest wygoda,
+tylko zagadka. Sprzęt trafił pod przycisk, jak reszta. Mikrofon zostaje przy
+zapisie natychmiastowym: lista rozwijana czyta się jako wybór dokonany
+w chwili kliknięcia, a pole tekstowe jako brudnopis.
+
+**Zapis, który potrafi zniszczyć dane.** `writeFileSync` nie jest
+niepodzielny — najpierw obcina plik do zera, potem dopisuje treść. Restart
+usługi w złym momencie zostawia plik pusty. Przy `archiwum.json` zauważyłem to
+od razu i zrobiłem tam zapis przez plik tymczasowy, a reszta została po
+staremu — i to była niespójność po ZŁEJ stronie. Indeks zdjęć odbudowuje się
+jednym kliknięciem „Indeksuj teraz"; rozmowy, pamięć długotrwała i baza wiedzy
+nie odbudowują się wcale.
+
+- [x] `zapiszAtomowo()` w rdzeniu, użyte w jedenastu miejscach: rozmowy,
+      indeks rozmów, baza wiedzy, pamięć, oś czasu, profil, lokalizacja,
+      sprzęt, poświadczenia OneDrive i przywracanie kopii zapasowej
+- [x] Tryb dostępu ustawiany NA PLIKU TYMCZASOWYM. Token OneDrive zapisany
+      najpierw jawnie, a obcięty do 0600 sekundę później, jest przez tę
+      sekundę do odczytania przez każdego na maszynie
+- [x] Zestaw `zapis-nie-gubi-danych` MODELUJE awarię („proces zginął po
+      obcięciu, przed dopisaniem") i pokazuje obie strony obok siebie:
+      przy zapisie wprost zostaje 0 z 54 bajtów, przy atomowym — 54 z 54
+
+### Dwa miejsca, w których audyt kłamał
+
+To gorsze niż usterka w kodzie, bo podważa zaufanie do wszystkiego, co
+narzędzie mówi.
+
+- [x] **Trasy przeniesione do modułów zniknęły spod kontroli.** Audyt szukał
+      ich tylko w `server.js`. Zauważyłem po liczbie: 52 trasy przed podziałem
+      archiwum, 45 po nim. Po poprawce widocznych 85, sprawdzanych rozruchem 58
+- [x] **Klucze budowane dynamicznie liczone jako martwe.** `t('event.' + typ)`
+      ożywia wszystkie `event.*`, a lista „bez użycia" podawała je do
+      skasowania. 34 → 28, i teraz tej liście można ufać na tyle, żeby coś
+      z niej usunąć
+
+### Wydajność zmierzona, nie oszacowana
+
+Archiwum przy **2100 wpisach** — tyle Marcin ma naprawdę:
+
+| Operacja | Czas |
+|---|---|
+| filtr pory dnia | 0,5 ms |
+| zestawienie po ogniskowej | 0,8 ms |
+| filtr promieniowy (25 km) | 0,7 ms |
+| jednorazowe zaindeksowanie całości | 683 ms |
+| rozmiar indeksu w pamięci | 896 kB |
+
+To jest też odpowiedź na pytanie o **sqlite-vec**, którego świadomie nie
+wdrożyliśmy. Zapytania idą poniżej milisekundy, a liczenie w JS ma zapas
+rzędu wielkości. Baza wektorowa rozwiązywałaby tu problem, którego nie ma.
+
+### Co sprawdziłem i było dobre
+
+Ścieżki plików (brak przejścia w górę drzewa — `startsWith` po `path.join`,
+identyfikatory z bazy wiedzy generowane po stronie serwera), limit rozmiaru
+ciała żądania, sprzątanie po strumieniu zdarzeń (interwał i słuchacz zwalniane
+przy zamknięciu i przy błędzie), ograniczenia wzrostu danych (zdarzenia, oś
+czasu), zero pustych `catch` bez wyjaśnienia, brak przepełnień poziomych na
+telefonie, brak błędów JS w konsoli.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

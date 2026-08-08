@@ -29,7 +29,7 @@ const { modelInfo, modelNotForChat, modelNotAChatPartner, modelToolLevel } = req
 const {
   KORZEN, PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SEARCH_URL, SECRETS,
   loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
+  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
@@ -194,8 +194,7 @@ try { convIndex = JSON.parse(fs.readFileSync(CONV_INDEX, 'utf8')); } catch { /* 
 
 function saveConvIndex() {
   try {
-    fs.mkdirSync(CONV_DIR, { recursive: true });
-    fs.writeFileSync(CONV_INDEX, JSON.stringify(convIndex));
+    zapiszAtomowo(CONV_INDEX, JSON.stringify(convIndex));
   } catch (err) {
     console.error('Nie udało się zapisać indeksu rozmów:', err.message);
   }
@@ -258,8 +257,7 @@ function saveSprzet(dane) {
     dodatki: String((dane && dane.dodatki) || '').slice(0, 300),
   };
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(SPRZET_FILE, JSON.stringify(userSprzet));
+    zapiszAtomowo(SPRZET_FILE, JSON.stringify(userSprzet));
   } catch (err) { console.error('Nie udało się zapisać sprzętu:', err.message); }
 }
 
@@ -269,7 +267,7 @@ let userProfile = '';
 try { userProfile = fs.readFileSync(PROFILE_FILE, 'utf8'); } catch { /* brak */ }
 function saveProfile(text) {
   userProfile = String(text || '').slice(0, 4000);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(PROFILE_FILE, userProfile); }
+  try { zapiszAtomowo(PROFILE_FILE, userProfile); }
   catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
 }
 
@@ -297,11 +295,11 @@ if (userWspolrzedne) archiwum.ustawDom(userWspolrzedne);
 
 function saveLocation(text, wspolrzedne) {
   userLocation = String(text || '').trim().slice(0, 200);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LOCATION_FILE, userLocation); }
+  try { zapiszAtomowo(LOCATION_FILE, userLocation); }
   catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
     userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
-    try { fs.writeFileSync(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
+    try { zapiszAtomowo(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
     catch (err) { console.error('Nie udalo sie zapisac wspolrzednych:', err.message); }
     /* Archiwum liczy pore swiatla dla zdjec bez GPS-u wzgledem domu, wiec
        zmiana lokalizacji musi je przeliczyc - inaczej wpisy dodane wczesniej
@@ -388,7 +386,7 @@ async function handleConversations(req, res, pathname) {
       const conv = JSON.parse(fs.readFileSync(convPath(id), 'utf8'));
       conv.title = entry.title;
       conv.pinned = entry.pinned || false;
-      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+      zapiszAtomowo(convPath(id), JSON.stringify(conv));
     } catch { /* plik mógł zniknąć — indeks i tak zaktualizowany */ }
     sortConvIndex();
     saveConvIndex();
@@ -417,8 +415,7 @@ async function handleConversations(req, res, pathname) {
     conv.updatedAt = Date.now();
     if (!conv.createdAt) conv.createdAt = conv.updatedAt;
     try {
-      fs.mkdirSync(CONV_DIR, { recursive: true });
-      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+      zapiszAtomowo(convPath(id), JSON.stringify(conv));
     } catch (err) {
       return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
     }
@@ -456,7 +453,7 @@ try { kbItems = JSON.parse(fs.readFileSync(KB_INDEX, 'utf8')); } catch { /* brak
 function saveKb() {
   try {
     fs.mkdirSync(KB_FILES, { recursive: true });
-    fs.writeFileSync(KB_INDEX, JSON.stringify(kbItems));
+    zapiszAtomowo(KB_INDEX, JSON.stringify(kbItems));
   } catch (err) {
     console.error('Nie udało się zapisać bazy wiedzy:', err.message);
   }
@@ -958,7 +955,7 @@ const TIMELINE_FILE = path.join(DATA_DIR, 'timeline.json');
 let timeline = [];
 try { timeline = JSON.parse(fs.readFileSync(TIMELINE_FILE, 'utf8')); } catch { /* brak */ }
 function saveTimeline() {
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TIMELINE_FILE, JSON.stringify(timeline)); }
+  try { zapiszAtomowo(TIMELINE_FILE, JSON.stringify(timeline)); }
   catch (err) { console.error('Nie udało się zapisać osi czasu:', err.message); }
 }
 
@@ -2367,8 +2364,7 @@ const server = http.createServer(async (req, res) => {
           if (!conv || !conv.id) continue;
           const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
           try {
-            fs.mkdirSync(CONV_DIR, { recursive: true });
-            fs.writeFileSync(convPath(id), JSON.stringify(conv));
+            zapiszAtomowo(convPath(id), JSON.stringify(conv));
             const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt || Date.now(), updatedAt: conv.updatedAt || Date.now(), pinned: conv.pinned || false };
             const i = convIndex.findIndex((c) => c.id === id);
             if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);

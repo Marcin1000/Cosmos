@@ -109,10 +109,13 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   // rozmowy i licznik „35 rozmów" rośnie z każdym przebiegiem.
   const dataDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cosmos-test-'));
   if (rozmowy) zasiejRozmowy(dataDir, rozmowy);
-  return uruchom('node', ['server.js'], {
+  const proc = uruchom('node', ['server.js'], {
     cwd: KORZEN,
     env: { ...process.env, PORT: String(port), COSMOS_DATA_DIR: dataDir, NVIDIA_API_KEY: 'test', ...env },
   });
+  // Zestaw sprawdzający TRWAŁOŚĆ zapisu musi wiedzieć, gdzie ten zapis ląduje.
+  proc.katalogDanych = dataDir;
+  return proc;
 }
 
 const atrapaNode = (plik, port) => uruchom('node', [path.join(ATRAPY, plik)],
@@ -290,7 +293,8 @@ async function srodowisko(nazwa) {
     throw new Error(`Serwer testowy na ${cfg.port} nie wstał (środowisko „${nazwa}")`);
   }
 
-  const wynik = { port: cfg.port, adres, koniec: () => procesy.forEach(zabij) };
+  const wynik = { port: cfg.port, adres, katalogDanych: srv.katalogDanych,
+    koniec: () => procesy.forEach(zabij) };
   wstale.set(nazwa, wynik);
   return wynik;
 }

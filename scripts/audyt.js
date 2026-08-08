@@ -77,6 +77,27 @@ const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtm
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
 
+/* Placeholder, który nikt nie podstawił — i to jest błąd, który WIDAĆ.
+   Znalazłem go dopiero na zrzucie ekranu: w trybie głosowym wyświetlało się
+   dosłownie „Brak dostępu do mikrofonu: {msg}". Nie łapie tego ani parytet
+   tłumaczeń, ani sprawdzenie brakujących kluczy — tekst jest, klucz jest,
+   po prostu nikt nie przekazał danych. Jedna instancja na 80 kluczy z
+   placeholderem, ale klasa realna i tania do pilnowania.
+
+   `data-i18n` w HTML-u też nie umie podstawiać, więc klucz z placeholderem
+   użyty w atrybucie jest tak samo zepsuty. */
+const zPlaceholderem = new Set();
+for (const m of czesci[0].matchAll(/^\s*'([^']+)':\s*'((?:[^'\\]|\\.)*)'/gm)) {
+  if (/\{[a-zA-Z0-9_]+\}/.test(m[2])) zPlaceholderem.add(m[1]);
+}
+const gole = [
+  ...[...app.matchAll(/\bt\('([^']+)'\s*\)/g)].map((m) => m[1]),
+  ...uzyteHtml.map((k) => k),
+].filter((k) => zPlaceholderem.has(k));
+gole.length
+  ? zle(`tekst z placeholderem wyświetlany bez danych: ${[...new Set(gole)].join(', ')}`)
+  : ok(`wszystkie ${zPlaceholderem.size} tekstów z placeholderem dostaje dane`);
+
 // ---------------------------------------------------------------- 3 DOM
 sekcja('Zgodność kodu z HTML-em');
 const maId = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));

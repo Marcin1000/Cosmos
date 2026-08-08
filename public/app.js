@@ -4397,7 +4397,7 @@ function startNasluchWlasny() {
       startNasluchWlasny();
       return;
     }
-    el.voiceTranscript.textContent = t('voice.micDenied');
+    el.voiceTranscript.textContent = t('voice.micDenied', { msg: err.message });
     voiceMode = false;
   });
 }
@@ -4591,7 +4591,7 @@ function startVoiceRecognizer() {
   rec.onerror = (ev) => {
     if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
       voiceRec = null;
-      el.voiceTranscript.textContent = t('voice.micDenied');
+      el.voiceTranscript.textContent = t('voice.micDenied', { msg: ev.error });
       voiceMode = false;
       return;
     }
@@ -5059,6 +5059,8 @@ el.settingsSave.addEventListener('click', () => {
   settings.timeMachine = $('set-timemachine').checked;
   saveSettings();
   updateLiveRec();
+  // sprzęt tak samo jak profil — na serwerze, bo używa go plan zdjęciowy
+  zapiszSprzet();
   // profil zapisywany na serwerze (wspólny dla urządzeń)
   fetch('/api/profile', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5616,25 +5618,28 @@ async function wczytajSprzet() {
   } catch { /* offline — pola zostają puste, zapis i tak zadziała później */ }
 }
 
-let zapisSprzetu = null;
+/* Zapis pod przyciskiem „Zapisz", nie przy pisaniu — i to jest poprawka
+   po obejrzeniu własnej roboty na zrzucie ekranu.
+
+   Pierwsza wersja zapisywała sprzęt na bieżąco, z opóźnieniem. Działało, ale
+   stworzyło w JEDNYM oknie dwa różne modele zapisu: pola „Korpus",
+   „Obiektywy" i „Reszta sprzętu" zapisywały się same, a stojące tuż obok
+   „Profil" i „Lokalizacja" — dopiero po kliknięciu. Trzy pola tekstowe
+   zachowujące się inaczej niż dwa sąsiednie pola tekstowe to nie jest
+   wygoda, tylko zagadka.
+
+   Mikrofon zostaje przy zapisie natychmiastowym, bo lista rozwijana czyta
+   się jako wybór dokonany w chwili kliknięcia, a pole tekstowe jako brudnopis. */
 function zapiszSprzet() {
-  // Odłożony zapis: pisanie „24-105 f/4, 70-200 f/4" to kilkadziesiąt znaków,
-  // a nie kilkadziesiąt żądań PUT.
-  clearTimeout(zapisSprzetu);
-  zapisSprzetu = setTimeout(() => {
-    fetch('/api/gear', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        korpus: $('set-body').value,
-        obiektywy: $('set-lenses').value,
-        dodatki: $('set-extras').value,
-      }),
-    }).catch(() => {});
-  }, 600);
-}
-for (const id of ['set-body', 'set-lenses', 'set-extras']) {
-  $(id).addEventListener('input', zapiszSprzet);
+  return fetch('/api/gear', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      korpus: $('set-body').value,
+      obiektywy: $('set-lenses').value,
+      dodatki: $('set-extras').value,
+    }),
+  }).catch(() => {});
 }
 
 function odswiezWyborNasluchu() {
