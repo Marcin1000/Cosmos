@@ -86,6 +86,27 @@ http.createServer((req, res) => {
     return json(200, t ? [{ lat: String(t[0]), lon: String(t[1]), display_name: t[2] }] : []);
   }
 
+  /* SearXNG — kształt odpowiedzi zgodny z jego wyjściem `format=json`.
+     Obsługuje obie kategorie: grafiki i strony. */
+  if (u.pathname === '/searxng/search') {
+    if (padnij.has('searxng')) return json(403, { error: 'atrapa: searxng wyłączony' });
+    const grafiki = (u.searchParams.get('categories') || '').includes('images');
+    return json(200, {
+      results: Array.from({ length: 4 }, (_, i) => (grafiki ? {
+        title: `${q} — SearXNG ${i + 1}`,
+        thumbnail_src: `http://127.0.0.1:7117/iu/?u=sx${i}`,
+        img_src: `https://searx.example/${encodeURIComponent(q)}-${i}.jpg`,
+        url: `https://searx.example/strona/${i}`,
+        resolution: '1600x1200',
+        source: 'example.com',
+      } : {
+        title: `${q} — wynik ${i + 1}`,
+        url: `https://przyklad.pl/${i}`,
+        content: `Zajawka wyniku ${i + 1} dla zapytania ${q}.`,
+      })),
+    });
+  }
+
   if (u.pathname === '/commons') {
     if (padnij.has('commons')) return json(503, { error: 'atrapa: commons wyłączony' });
     return json(200, COMMONS(q, 4));

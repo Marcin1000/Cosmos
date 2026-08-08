@@ -716,6 +716,41 @@ async function handleArchiwum(req, res, p) {
     if (!wynik) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
     return sendJson(res, 200, { pole: q.pole, ...wynik });
   }
+  /* Dociągnięcie OBIEKTYWU do wpisów z OneDrive.
+     Osobno od indeksowania, bo kosztuje jedno żądanie HTTP na plik — przy
+     dwóch tysiącach zdjęć to dwa tysiące żądań. Robimy je paczkami, żeby
+     dało się przerwać i wznowić, i tylko dla wpisów, którym obiektywu brakuje. */
+  if (p === '/api/archive/lenses' && req.method === 'POST') {
+    if (!onedrive.polaczony()) return sendJson(res, 503, { error: 'OneDrive niepołączony.' });
+    let d = {};
+    try { d = await readJson(req); } catch { /* domyślne */ }
+    const paczka = Math.min(Math.max(Number(d.ile) || 100, 1), 500);
+
+    const doZrobienia = archiwum.szukaj({ zrodlo: 'onedrive', typ: 'zdjecie' })
+      .filter((w) => !w.obiektyw).slice(0, paczka);
+
+    let uzupelnione = 0;
+    let bezExifu = 0;
+    const bledy = [];
+    for (const w of doZrobienia) {
+      try {
+        const exif = await onedrive.dociagnijExif(String(w.id).replace(/^onedrive:/, ''));
+        if (exif && exif.obiektyw) {
+          archiwum.dodaj([{ ...w, obiektyw: exif.obiektyw }]);
+          uzupelnione++;
+        } else bezExifu++;
+      } catch (err) {
+        if (bledy.length < 3) bledy.push(String(err.message).slice(0, 80));
+      }
+    }
+    const zostalo = archiwum.szukaj({ zrodlo: 'onedrive', typ: 'zdjecie' })
+      .filter((w) => !w.obiektyw).length;
+    if (uzupelnione) addEvent('archiwum', `obiektyw dociągnięty do ${uzupelnione} zdjęć`);
+    return sendJson(res, 200, {
+      sprawdzone: doZrobienia.length, uzupelnione, bezExifu, zostalo, bledy,
+    });
+  }
+
   if (p === '/api/archive/source' && req.method === 'DELETE') {
     const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
     if (!zrodlo) return sendJson(res, 400, { error: 'Podaj `zrodlo`.' });

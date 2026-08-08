@@ -21,6 +21,9 @@ const zapytanie = process.argv.slice(2).join(' ').trim() || 'Kraków Wawel';
   const w = await szukajGrafik(zapytanie, { limit: 8, timeoutMs: 12000 });
   const ms = Date.now() - start;
 
+  if (!process.env.SEARXNG_URL) {
+    console.log('· SEARXNG_URL nieustawiony — własna metawyszukiwarka pominięta.\n');
+  }
   console.log('Źródła:');
   for (const z of w.zrodla) {
     const stan = z.blad ? `✗ ${z.blad}` : (z.ile ? `✓ ${z.ile} obrazów` : '· 0 obrazów (bez błędu)');

@@ -228,6 +228,7 @@ const SRODOWISKA = {
       COMMONS_API_URL: 'http://127.0.0.1:7117/commons',
       OPENVERSE_API_URL: 'http://127.0.0.1:7117/openverse',
       GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
+      SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
     },
   },

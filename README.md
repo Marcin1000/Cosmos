@@ -669,6 +669,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
 | `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
 | `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie |
+| `/api/archive/lenses` | POST | Dociągnięcie modelu obiektywu z EXIF-u (pierwsze 128 KB pliku przez `Range`) |
 | `/api/archive/thumb` | GET | Miniatura pliku z OneDrive, dociągana w chwili pytania (adresy z Graph wygasają) |
 | `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
 | `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |

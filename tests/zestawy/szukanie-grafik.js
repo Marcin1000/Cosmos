@@ -89,6 +89,17 @@ const { srodowisko } = require('../pomoc');
   };
 
   console.log('9. odporność na awarie źródeł:');
+  /* SearXNG jest źródłem WŁASNYM i idzie pierwszy — sprawdzamy osobno, że
+     naprawdę bierze udział, bo tylko nad nim mamy kontrolę. */
+  const zSearx = await ile('wszystkie działają');
+  if (!zSearx.results?.some((x) => x.zrodlo === 'SearXNG')) {
+    fail.push('SearXNG skonfigurowany, a nie ma go w wynikach');
+  }
+  await awaria('searxng');
+  const bezSearx = await ile('bez SearXNG');
+  if (!bezSearx.results?.length) fail.push('padł SearXNG i zdjęcia zniknęły');
+  await awaria('');
+
   await awaria('ddg');
   let d9 = await ile('bez DuckDuckGo');
   if (!d9.results?.length) fail.push('padł DuckDuckGo i zdjęcia zniknęły — zapas nie działa');
@@ -100,7 +111,7 @@ const { srodowisko } = require('../pomoc');
   d9 = await ile('bez DDG i Commons');
   if (!d9.results?.length) fail.push('zostało jedno źródło, a zdjęć brak');
 
-  await awaria('ddg,commons,openverse');
+  await awaria('searxng,ddg,commons,openverse');
   d9 = await ile('wszystkie padły');
   if (d9.results?.length) fail.push('atrapa miała paść, a zdjęcia są — test nic nie sprawdza');
   if (!d9.error) fail.push('wszystko padło, a Cosmos nie mówi DLACZEGO — nie do zdiagnozowania');

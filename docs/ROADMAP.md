@@ -1129,6 +1129,62 @@ Morał jest ten sam co przy porcie audytu: **poprawna składnia nie znaczy
 działający kod**, a przy przenoszeniu kodu między plikami różnica między
 jednym a drugim jest właśnie tam, gdzie mieszkają usterki.
 
+## ✅ Partia 35 — SearXNG i EXIF przez `Range` (GOTOWE)
+
+Z przeglądu pięciu list „awesome" i trendów GitHuba wyszły dwie rzeczy warte
+zrobienia od razu. Obie zamykają problemy, które sami sobie zostawiliśmy.
+
+### SearXNG — własna metawyszukiwarka jako pierwsze źródło
+
+- [x] **Grafiki i strony** idą najpierw przez `SEARXNG_URL`, gdy operator go
+      ustawi. Bez ustawienia nic się nie zmienia — źródło po prostu nie istnieje
+- [x] **Awaria SearXNG nie kończy sprawy** — Cosmos spada do DuckDuckGo przy
+      stronach i do Commons/Openverse przy grafikach
+- [x] Komunikat 403 mówi wprost, co poprawić: świeży SearXNG ma wyłączone
+      wyjście JSON i trzeba dopisać `- json` do `search.formats`. To najczęstsza
+      pomyłka przy stawianiu i szkoda, żeby wyglądała jak awaria sieci
+
+Uczciwie o granicach: **to nie znosi blokad.** SearXNG na tym samym VPS-ie
+wychodzi z tego samego adresu IP i też może dostać captchę. Przewaga jest inna
+i trwalsza — utrzymywaniem kilkunastu silników i nadążaniem za zmianami ich
+formatów zajmuje się projekt z pięcioletnią historią, a nie nasze trzy scrapery.
+To jest dokładnie zasada Marcina: brać z zewnątrz to, co ktoś już utrzymuje,
+i nie gubić przy tym swojej tożsamości. Cosmos zostaje interfejsem i logiką.
+
+### Obiektyw z OneDrive — luka, o której powiedziałem, że jest nie do zasypania
+
+Twierdziłem, że modelu obiektywu nie da się wyciągnąć, bo facet `photo`
+w Microsoft Graph go nie zawiera. Pierwsza część jest prawdą, wniosek był
+przedwczesny: **EXIF siedzi w pierwszych kilkudziesięciu kilobajtach pliku,
+a Graph obsługuje nagłówek `Range`.**
+
+- [x] `dociagnijExif()` pobiera **128 KB zamiast całego pliku** i czyta je
+      naszym `lib/exif.js`, który tag `0xa434` zna od Partii 27
+- [x] Osobna trasa `/api/archive/lenses` uzupełnia obiektyw paczkami, bo to
+      jedno żądanie na plik — za dużo, żeby robić przy każdym indeksowaniu
+- [x] **Zero nowych zależności.** Przy 2100 zdjęciach to ~250 MB jednorazowo
+      zamiast kilkunastu gigabajtów
+
+Morał wart zapamiętania: „usługa tego nie oddaje" i „tego nie da się zdobyć"
+to dwa różne zdania, a ja podałem pierwsze jako drugie.
+
+### Z przeglądu list — co zostało odnotowane, a nie zrobione
+
+- **Silero VAD** i **huggingface/speech-to-speech** — realna naprawa trybu
+  głosowego: własny strumień audio zamiast Web Speech API. Znika wtedy dźwięk
+  mikrofonu, słyszenie samego siebie i pętle naraz
+- **Immich** (110 tys. ★) — wyszukiwanie semantyczne zdjęć przez CLIP. Wart
+  podejścia, nie całego stosu: to Docker z Postgresem i kontenerem ML
+- **sqlite-vec** — wektory bez serwera, gdy pamięć przerośnie liczenie w JS
+- **BirdNET-Analyzer** — gatunek ptaka z dźwięku; dla kogoś, kto fotografuje
+  żurawie, to nie ciekawostka
+- **SolarHam / NOAA SWPC** (z awesome-astrophotography) — dane o aktywności
+  geomagnetycznej. Zorza w Polsce bywa i jest do przewidzenia; pasuje do
+  planu zdjęciowego tak samo jak pogoda
+- **OpenCut**, **claude-video** (z trendów) — montaż i czytanie wideo
+- **ExifTool / Exiv2** (z awesome-OpenSourcePhotography) — potwierdzają, że
+  `LensModel` to standardowy tag; naszego czytnika nie trzeba zastępować
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
