@@ -1783,6 +1783,57 @@ z obiektu, dostawał `undefined`, prognoza wychodziła pusta.
 ⚠ To nadal nie gwarantuje, że układ nie zmieni się jutro — dlatego czytnik
 rozpoznaje pola po treści, a nie po pozycji.
 
+## ✅ Partia 42 — dwie uwagi Marcina do gotowej listy ujęć (GOTOWE)
+
+Marcin obejrzał pierwszy prawdziwy plan na góry i zgłosił dwie rzeczy. Obie
+były usterkami i obie da się zobaczyć wyłącznie patrząc na WYNIK — z kodu
+żadna nie wygląda podejrzanie.
+
+### „Przelot dronem, a wskazane 24-105 f/4 — to obiektyw na Canonie"
+
+Dobór szkła szedł po JEDNEJ liście dla wszystkich ujęć, więc kadr z Mavica
+dostawał obiektyw od korpusu. Liczba 24 mm nawet się zgadzała, bo tyle wyszło
+z przycięcia zakresu ujęcia do 24-105 — czyli sprawdzanie samej ogniskowej
+tego by NIE złapało. Przy innym zestawie wyszłoby cokolwiek.
+
+Rada oparta na sprzęcie, którego nie da się zamontować, podważa całą resztę
+listy: skoro to nieprawda, to co jeszcze?
+
+- [x] `OPTYKA_DRONOW` — Mavic 3 to Hasselblad 24 mm f/2.8 + tele 162 mm f/4.4,
+      Mavic 2 to 28 mm, Mini/Air 24 mm f/1.7
+- [x] Ujęcia z `potrzebuje: ['dron']` liczą się na optyce DRONA; naziemne dalej
+      na obiektywach korpusu
+- [x] Nieznany dron mówi wprost, że zakłada („kamera drona (zakładam ok. 24 mm)"),
+      zamiast podawać ogniskową jak pewnik
+- [x] Pominięcie z powodu mówi teraz, CO dron ma („a DJI Mavic 3 ma 24 mm i 162 mm")
+
+### „Nie daje ujęć kończących, a na liście są też kilka otwarć"
+
+W całym katalogu nie było ANI JEDNEJ karty domykającej. Zestaw na góry dawał
+ujęcie ustalające i przelot z odsłonięciem — oba otwarcia — i kończył się
+detalem. Materiał zmontowany z takiej listy zaczyna się dwa razy i nie kończy
+wcale.
+
+- [x] Cztery nowe karty domykające: **wyjście z kadru**, **odjazd na koniec**,
+      **ostatni kadr, który sam gaśnie**, **wznos na koniec** (dron)
+- [x] `rola` przy każdej karcie (otwarcie / rozwinięcie / domknięcie), widoczna
+      w interfejsie jako plakietka — bez niej lista wygląda jak worek pomysłów
+- [x] Wszystkie 22 zestawy dostały domknięcie; lista wychodzi POSORTOWANA
+      otwarcie → rozwinięcie → domknięcie
+- [x] Gdy domknięcie z zestawu wypadnie przez brak sprzętu (na górach wymagało
+      drona), `planUjec` dokłada zastępcze, które niczego nie wymaga —
+      **lista bez zakończenia nie jest dopuszczalnym wynikiem**
+- [x] „Kadr z góry prosto w dół" przeklasyfikowany z otwarcia na rozwinięcie:
+      abstrakcyjny kadr nie mówi widzowi, GDZIE jest, a od tego jest otwarcie.
+      To on robił zestawy z trzema otwarciami
+- [x] `karty-ujec` sprawdza teraz strukturę wszystkich 22 zestawów w dwóch
+      wariantach sprzętu: min. jedno domknięcie, maks. dwa otwarcia
+
+### Przy okazji, ze zrzutu ekranu: „70-200 f/4 f/4"
+
+Nazwa obiektywu z `rozpoznajObiektywy` zawiera już jasność, a kod doklejał
+drugą. Widoczne gołym okiem, niewidoczne dla wszystkich ówczesnych sprawdzeń.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

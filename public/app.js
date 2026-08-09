@@ -3850,10 +3850,16 @@ function pokazUjecia(u) {
     const nazwa = document.createElement('span');
     nazwa.className = 'plener-shot-name';
     nazwa.textContent = s.nazwa;
+    /* Rola ujęcia na wierzchu. Bez niej lista wygląda jak worek pomysłów
+       i dopiero po chwili widać, że są w niej trzy otwarcia i zero zakończeń
+       — co dokładnie się zdarzyło i dopiero człowiek to wyłapał. */
+    const rola = document.createElement('span');
+    rola.className = 'plener-shot-role rola-' + (s.rola || 'rozwiniecie');
+    rola.textContent = s.rolaOpis || '';
     const liczby = document.createElement('span');
     liczby.className = 'plener-shot-nums mono';
     liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
-    glowa.append(ptaszek, nazwa, liczby);
+    glowa.append(ptaszek, nazwa, rola, liczby);
 
     const ruch = document.createElement('div');
     ruch.className = 'plener-shot-move';

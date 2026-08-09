@@ -1870,6 +1870,20 @@ kbd {
    oderwana od ptaszka, do którego należy. */
 .plener-shot-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
 .plener-shot-nums { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+/* Rola ujęcia: otwarcie / rozwinięcie / domknięcie. Kolorem odróżniamy tylko
+   początek i koniec — środek jest tłem, na które te dwa mają się odcinać. */
+.plener-shot-role {
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.plener-shot-role.rola-otwarcie { color: var(--accent); border-color: var(--accent-glow); }
+.plener-shot-role.rola-domkniecie { color: #f5b544; border-color: #f5b54433; }
 .plener-shot-move { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
 .plener-shot-how { font-size: 12px; line-height: 1.45; margin-top: 4px; }
 .plener-shot-why { font-size: 11px; color: var(--text-faint); line-height: 1.45; margin-top: 3px; }

@@ -42,7 +42,7 @@ const { pogodaDla } = require('./lib/pogoda.js');
 const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
 const { prognozaZorzy } = require('./lib/zorza.js');
 const { rozpoznajTemat } = require('./lib/tematy.js');
-const { planUjec } = require('./lib/ujecia.js');
+const { planUjec, optykaDrona } = require('./lib/ujecia.js');
 const canon = require('./lib/canon.js');
 const { misjaKmz, siatka } = require('./lib/kmz.js');
 const archiwum_ = require('./lib/archiwum.js');
@@ -773,6 +773,10 @@ async function handlePlanZdjeciowy(req, res) {
   const ujecia = d.tryb === 'zdjecie' ? null : planUjec({
     temat: (rozpoznajTemat(d.temat || '') || {}).klucz,
     obiektywy: szkla,
+    /* Optyka drona osobno od obiektywów korpusu. Bez tego kadr z Mavica
+       dostawał szkło od Canona — rada oparta na sprzęcie, którego nie da
+       się zamontować, podważa całą resztę listy. */
+    optykaDrona: optykaDrona(sprzetTekst(d)),
     dron: /dron|mavic|dji|air\s?\d|mini\s?\d/i.test(sprzetTekst(d)),
     gimbal: /gimbal|ronin|crane|osmo|ibis|stabiliz/i.test(sprzetTekst(d)),
     statyw: !/bez statyw/i.test(sprzetTekst(d)),
