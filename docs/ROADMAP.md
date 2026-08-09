@@ -1706,6 +1706,50 @@ W trybie filmowym aparat oferuje pełną drabinkę wideo, więc nie ma czego
 zaokrąglać. Czas jest teraz dokładnie `1/(2×klatki)`, a przy klatkażach, które
 nie dzielą się na 50 (np. 60 kl./s), plan sam ostrzega o migotaniu.
 
+## ✅ Partia 41 — dwa narzędzia, które nie umiały powiedzieć prawdy (GOTOWE)
+
+Pierwsze uruchomienie Pleneru na serwerze Marcina wyciągnęło dwie usterki
+tej samej rodziny: narzędzie diagnostyczne oddające wynik, z którego nie
+da się wyciągnąć wniosku.
+
+### Audyt przy ustawionym haśle sprawdzał dokładnie nic
+
+Serwer próbny czyta `.env`, więc na maszynie z `COSMOS_PASSWORD` wszystkie
+trasy oddawały 401. Audyt liczył to jako sukces („✓ 63 trasy bez wywrotki"),
+bo 401 to nie 500 — czyli przepuściłby dowolną wywrotkę za bramką.
+Jednocześnie strumień zdarzeń dostawał to samo 401 i szedł do PROBLEMÓW.
+Naraz krzyk o poprawnym zachowaniu i cisza o niesprawdzonym kodzie.
+
+- [x] serwer próbny dostaje WŁASNE, losowe hasło — audyt zachowuje się
+      tak samo u każdego, niezależnie od `.env`
+- [x] bramka sprawdzana NA ŻYWO, a nie tylko czytana z kodu: 401 bez sesji,
+      401 przy złym haśle, ciastko przy dobrym
+- [x] 401 na trasach jest od teraz USTERKĄ z nazwy („audyt stracił sesję —
+      rozruch próbny nic nie sprawdził"), nigdy cichym „przeszło"
+
+### Prognoza zorzy: adres odpowiadał, danych nie było
+
+`Kp teraz` przychodziło, prognoza wychodziła pusta — i nie było jak odróżnić
+„NOAA nie odpowiada" od „zmienił się kształt danych" od „naprawdę pusto".
+Cisza była odziedziczona po bibliotece, która połyka błędy CELOWO (zorza to
+dodatek i nie może blokować planu) — ale narzędzie diagnostyczne nie ma
+prawa być ciche.
+
+- [x] `scripts/zorza.js` pyta oba źródła osobno, a przy pustce **sam pokazuje
+      surową odpowiedź**: kod HTTP, typ treści, kształt i pierwsze wiersze
+- [x] werdykt oparty na połowie danych jest oznaczony — „brak" z samego
+      bieżącego Kp znaczy „nie ma TERAZ", a nie „nie będzie dziś w nocy"
+- [x] domyślne współrzędne z zapisanej lokalizacji, nie z Warszawy na sztywno
+- [x] **czytnik prognozy przestał zakładać układ kolumn.** Rozpoznaje pola
+      po treści (znacznik czasu wygląda jak data, Kp jest liczbą 0-9), więc
+      przeżyje brak nagłówka, przestawione kolumny i obiekty zamiast tablic.
+      Wiersz nagłówka odpada sam, bo nie spełnia żadnego z warunków
+- [x] `tests/zestawy/zorza-ksztalty.js` — te same dane w czterech układach
+      mają dać ten sam wynik; pusto ma zostać pusto
+
+⚠ Nadal nie widziałem żywego API NOAA z tego kontenera ani razu. To jest
+odporność na zmianę kształtu, a nie potwierdzenie kształtu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
