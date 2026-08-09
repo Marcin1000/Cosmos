@@ -13,7 +13,7 @@
    Na koniec przejście całą drogą: [PLAN: tryb=wideo] → serwer → pole `ujecia`.
 */
 const { srodowisko } = require('../pomoc');
-const { planUjec, UJECIA, ZESTAWY } = require('../../lib/ujecia.js');
+const { planUjec, UJECIA, ZESTAWY, optykaDrona } = require('../../lib/ujecia.js');
 const { rozpoznajObiektywy } = require('../../lib/ekspozycja.js');
 
 // Prawdziwy zestaw Marcina — na nim liczą się wszystkie sprawdzenia niżej.
@@ -146,6 +146,88 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
   if (!kluczeHttp.some((k) => (UJECIA[k].potrzebuje || []).includes('dron'))) {
     fail.push('dron wpisany w dodatkach nie odblokował żadnego ujęcia z góry');
   }
+
+  /* ---- 10. OPTYKA DRONA to nie są obiektywy od korpusu ----
+     Marcin, patrząc na gotową listę: „martwi mnie ujęcie z przelotem, gdzie
+     jest wskazane 24-105 f/4, a przecież to obiektyw na moim Canonie, a nie
+     w dronie Mavic 3". Liczba ogniskowej nawet się zgadzała (24 mm), bo tyle
+     wyszło z przycięcia zakresu — czyli sprawdzanie samej liczby by tego
+     NIE złapało. Trzeba patrzeć, CZYM to niby nakręcić. */
+  const zMavicem = planUjec({
+    temat: 'gory', obiektywy: MOJE_SZKLA, dron: true, statyw: true,
+    optykaDrona: optykaDrona('DJI Mavic 3, Ronin-S, statyw'),
+  });
+  const zPowietrza = zMavicem.ujecia.filter((u) => u.zDrona);
+  console.log(`10. ujęcia z drona: ${zPowietrza.map((u) => `${u.nazwa} → ${u.naSzkle}`).join('; ') || 'BRAK'}`);
+  if (!zPowietrza.length) fail.push('z dronem w zestawie nie ma ani jednego ujęcia z powietrza');
+  for (const u of zPowietrza) {
+    // Żadne szkło od Canona nie ma prawa pojawić się przy kadrze z drona.
+    for (const szklo of MOJE_SZKLA) {
+      if (String(u.naSzkle || '').includes(`${szklo.od}-${szklo.do}`)) {
+        fail.push(`ujęcie z drona „${u.nazwa}" dostało obiektyw od korpusu: ${u.naSzkle}`);
+      }
+    }
+    if (!/Hasselblad|tele 162/.test(u.naSzkle || '')) {
+      fail.push(`ujęcie z drona „${u.nazwa}" nie wskazuje optyki Mavica: ${u.naSzkle}`);
+    }
+  }
+  // Ujęcia naziemne mają dalej lecieć na szkła od korpusu.
+  const zZiemi = zMavicem.ujecia.filter((u) => !u.zDrona && u.naSzkle);
+  if (zZiemi.some((u) => /Hasselblad|kamera drona/.test(u.naSzkle))) {
+    fail.push('ujęcie naziemne dostało optykę drona');
+  }
+  /* Jasność ma paść RAZ. „70-200 f/4 f/4" wyszło na zrzucie ekranu, bo nazwa
+     obiektywu już ją zawiera, a kod dokleił drugą — literówka widoczna gołym
+     okiem i niewidoczna dla wszystkich ówczesnych sprawdzeń. */
+  const podwojone = zMavicem.ujecia.filter((u) => /f\/[\d.]+\s+f\//.test(u.naSzkle || ''));
+  console.log(`10b. opis szkła bez powtórzeń: ${!podwojone.length}`);
+  if (podwojone.length) {
+    fail.push(`jasność podana dwa razy: ${podwojone.map((u) => u.naSzkle).join(', ')}`);
+  }
+  // Nieznany dron ma mówić WPROST, że zakłada, a nie udawać wiedzę.
+  const obcy = planUjec({
+    temat: 'gory', obiektywy: MOJE_SZKLA, dron: true, statyw: true,
+    optykaDrona: optykaDrona('jakiś dron z allegro'),
+  }).ujecia.find((u) => u.zDrona);
+  console.log(`11. nieznany dron → „${obcy && obcy.naSzkle}"`);
+  if (!/zakładam/.test((obcy && obcy.naSzkle) || '')) {
+    fail.push('przy nieznanym dronie Cosmos podaje ogniskową jak pewnik');
+  }
+
+  /* ---- 12. Każdy materiał ma się KOŃCZYĆ ----
+     Druga uwaga z tej samej listy: „nie daje np. ujęć kończących, a na tej
+     liście są też kilka otwarć". Zestaw na góry miał dwa otwarcia i zero
+     domknięć — materiał z takiej listy zaczyna się dwa razy i nie kończy. */
+  const braki = [];
+  for (const temat of Object.keys(ZESTAWY)) {
+    for (const [opis, sprzet] of [
+      ['pełny sprzęt', { dron: true, gimbal: true, statyw: true, slider: true }],
+      ['sam korpus', {}],
+    ]) {
+      const w = planUjec({ temat, obiektywy: MOJE_SZKLA, ...sprzet });
+      const otwarc = w.ujecia.filter((u) => u.rola === 'otwarcie').length;
+      const domkniec = w.ujecia.filter((u) => u.rola === 'domkniecie').length;
+      if (!domkniec) braki.push(`${temat} (${opis}): zero domknięć`);
+      if (otwarc > 2) braki.push(`${temat} (${opis}): ${otwarc} otwarć`);
+    }
+  }
+  console.log(`12. struktura ${Object.keys(ZESTAWY).length} zestawów × 2 warianty sprzętu: `
+    + `${braki.length ? braki.join('; ') : 'każdy ma domknięcie i najwyżej dwa otwarcia'}`);
+  if (braki.length) fail.push(...braki);
+
+  // Kolejność na liście: otwarcie → rozwinięcie → domknięcie.
+  const kolejnosc = zMavicem.ujecia.map((u) => u.rola);
+  const WAGA = { otwarcie: 0, rozwiniecie: 1, domkniecie: 2 };
+  const posortowane = kolejnosc.every((r, i) => i === 0 || WAGA[kolejnosc[i - 1]] <= WAGA[r]);
+  console.log(`13. kolejność ról: ${kolejnosc.join(' → ')}`);
+  if (!posortowane) fail.push('ujęcia nie idą w kolejności otwarcie → rozwinięcie → domknięcie');
+
+  // Domknięcie musi zostać nawet wtedy, gdy to zestawowe wymagało drona.
+  const koniec = planUjec({ temat: 'gory', obiektywy: MOJE_SZKLA, statyw: true })
+    .ujecia.filter((u) => u.rola === 'domkniecie');
+  console.log(`14. góry bez drona → domknięcie zastępcze: „${koniec.map((u) => u.nazwa).join(', ') || 'BRAK'}"`);
+  if (!koniec.length) fail.push('bez drona zestaw na góry został bez zakończenia');
+  if (koniec.some((u) => u.zDrona)) fail.push('domknięcie zastępcze samo wymaga drona');
 
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKARTY UJĘĆ OK');

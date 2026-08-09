@@ -584,7 +584,7 @@ w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
 |---|---|---|
 | 🎒 **Mój sprzęt** | korpus, obiektywy, reszta (dron, gimbal, statyw) — zapis własnym przyciskiem | `/api/gear`; z tego liczą się nastawy i to, które ujęcia są w ogóle wykonalne |
 | 🌅 **Plan zdjęciowy** | czas / przysłona / ISO, faza Słońca, ile zostało do złotej godziny i do zachodu, pogoda, zorza | `/api/plan` — działa **bez kamery**, dla podanego MIEJSCA i wybranej GODZINY |
-| 🎬 **Ujęcia do nakręcenia** | lista z liczbami (ogniskowa, ruch, czas trwania), **każda pozycja do odhaczenia** (postęp zostaje w przeglądarce), plus **czego się nie da i dlaczego** | `lib/ujecia.js`, dobierane po temacie i filtrowane przez Twój sprzęt |
+| 🎬 **Ujęcia do nakręcenia** | lista z liczbami (ogniskowa, ruch, czas trwania) ułożona jako **otwarcie → rozwinięcie → domknięcie**, każda pozycja **do odhaczenia**, plus **czego się nie da i dlaczego** | `lib/ujecia.js`, dobierane po temacie, filtrowane przez sprzęt; kadry z drona liczone na **optyce drona**, nie na obiektywach korpusu |
 | 📷 **Aparat po Wi-Fi** | co aparat ma ustawione teraz, „Ustaw w aparacie", zdalna migawka | Canon CCAPI (`CANON_CCAPI_URL`); wiersz znika, gdy aparat nie odpowiada |
 | 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
 | 🗂 **Archiwum materiału** | OneDrive: indeksowanie, obiektywy z EXIF-u, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
