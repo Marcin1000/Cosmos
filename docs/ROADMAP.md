@@ -1526,6 +1526,131 @@ przy zamknięciu i przy błędzie), ograniczenia wzrostu danych (zdarzenia, oś
 czasu), zero pustych `catch` bez wyjaśnienia, brak przepełnień poziomych na
 telefonie, brak błędów JS w konsoli.
 
+## ✅ Partia 39 — DJI i Canon: cztery rzeczy z przeglądu repozytoriów (GOTOWE)
+
+Marcin przysłał kilkadziesiąt zrzutów z repozytoriami wokół DJI i poprosił
+o przeszukanie reszty, w tym Canona. Jedno ustalenie przestawiło całą listę:
+
+**Konsumenckiego Mavica 3 nie da się sterować programowo.** DJI nie wyda dla
+niego Mobile SDK — v5 obsługuje wyłącznie serię Enterprise. To przekreśla
+`HeyMavic`, `mavicmini`, `CustomSDKMavicMini`, `DJIWindowsSDK`,
+`mavic-air-tracking-control`, `Mavic-Missions` i resztę tej rodziny. Dobra
+wiadomość: kieruje uwagę na PLIKI, które dron już zapisuje — a tam leżała
+największa dziura w Cosmosie.
+
+### Telemetria klipów — koniec z archiwum, które nie zna wideo
+
+O zdjęciach Cosmos wiedział wszystko. O klipach nie wiedział NIC, bo Microsoft
+Graph oddaje dla wideo samą datę i rozmiar. „Pokaż ujęcia znad jeziora
+o zachodzie" dotyczyło więc wyłącznie fotografii — i nikt tego nie zauważył,
+bo brak wyników wygląda jak brak materiału.
+
+Tymczasem Mavic 3 zapisuje obok każdego nagrania plik `.SRT`, a w nim DLA
+KAŻDEJ KLATKI: ISO, czas, przysłonę, korektę ekspozycji, ogniskową, GPS
+i dwie wysokości. Zestaw pól jest dokładnie taki, jak kolumny naszego indeksu.
+
+- [x] `lib/srt.js` — oba formaty (nowy z nawiasami, stary `GPS(lon,lat,alt)`),
+      zero zależności, jak `lib/exif.js`
+- [x] Z tysiąca klatek robimy JEDEN wpis plus ślad lotu w rozdzielczości
+      sekundowej. Klip minutowy to 1800 klatek; wszystkie w indeksie
+      rozsadziłyby go i nic nie dały
+- [x] `/api/archive/telemetry` paczkami, jak obiektywy i rozpoznawanie treści
+- [x] **Klip dostaje porę światła tak samo jak zdjęcie** — to jest cała
+      wartość: nagrania wpadają do tych samych pytań co fotografie
+
+Dwie pułapki, które trzeba było ominąć. `Shutter:60` w starym formacie znaczy
+**1/60 s, nie 60 sekund** — wzięte dosłownie dałoby minutową ekspozycję
+z lecącego drona. A `GPS(lon,lat,alt)` ma **długość PIERWSZĄ**, odwrotnie niż
+podpowiada nazwa; zamiana miejscami przenosi materiał z Biebrzy do Somalii
+i nikt tego nie zauważy, dopóki nie spojrzy na mapę.
+
+#### Liczba, którą trzeba było poprawić
+
+Pierwsza wersja liczyła długość klipu jako liczbę klatek podzieloną przez 30.
+Mavic 3 nagrywa też 24, 25, 48, 50 i 120 kl./s, więc dwuminutowy materiał
+w 60 kl./s wychodził na cztery minuty. Znacznik czasu SubRip jest w pliku
+wprost i nie trzeba niczego zakładać.
+
+### Dane lotu ze zdjęć — XMP, którego EXIF nie ma
+
+DJI wpisuje wysokość nad punktem startu i kąty gimbala do **XMP**, czyli
+drugiego segmentu APP1 obok EXIF-u. Nasz czytnik znał tylko ten pierwszy.
+
+- [x] `czytajXmpDrona()` w `lib/exif.js` — oba zapisy DJI (atrybut i znacznik)
+- [x] Czytane **za darmo**, przy okazji dociągania obiektywu: to ten sam
+      pobrany kawałek pliku, drugi przebieg po dwóch tysiącach zdjęć byłby
+      marnotrawstwem
+- [x] Poprawka przy okazji: zdjęcie z drona nigdy nie ma obiektywu, więc
+      wracało do kolejki przy każdym przebiegu. Licznik „zostało" nie zszedłby
+      nigdy do zera
+
+### Canon CCAPI — R6 II jako urządzenie, nie temat rozmowy
+
+**Potwierdzone: firmware 1.7.0 do R6 Mark II dodaje Camera Control API.**
+REST po HTTP, JSON, przez Wi-Fi — czyli zero zależności, samo `fetch`.
+
+To jest naprawa czegoś, co leżało odłogiem. `senses/tether.py` steruje
+aparatem przez gPhoto2 po kablu, a to na Windowsie wymaga WSL — więc
+w praktyce nigdy nie ruszyło.
+
+- [x] `lib/canon.js` + trzy trasy: stan, nastawy, migawka
+- [x] **Ścieżek nie zaszywamy.** CCAPI ma kilka wersji i każdy model wystawia
+      inny podzbiór; pytamy `GET /ccapi`, aparat sam mówi, co potrafi
+- [x] Wartość spoza listy `ability` nie leci do aparatu — komunikat mówi,
+      co aparat przyjmie, zamiast oddawać „Invalid parameter"
+- [x] W panelu planu: nastawy z aparatu obok policzonych, ze znacznikiem
+      „≠ policzone" i przyciskiem „Ustaw w aparacie"
+- [x] **Autofokus przy zdalnym strzale domyślnie WYŁĄCZONY.** Aparat na
+      statywie z ręczną ostrością (astro, makro, stacking) przeostrzyłby się
+      przy każdym zdjęciu i cała seria byłaby do wyrzucenia
+
+Granica powiedziana wprost w kodzie, w `.env.example` i w komunikacie błędu:
+to działa tylko wtedy, gdy Cosmos i aparat są w tej samej sieci. Serwer na
+VPS-ie nie dosięgnie aparatu stojącego w domu.
+
+### Misja waypointowa — plik KMZ dla drona
+
+`senses/flightplan.py` liczył wysokość, pokrycie i liczbę zdjęć, ale nie umiał
+oddać tego dronowi. Plan zostawał liczbą na ekranie do ręcznego przepisania.
+
+- [x] `lib/kmz.js` — WPML w dwóch plikach (`wpmz/template.kml`,
+      `wpmz/waylines.wpml`) spakowanych **własnym zapisem ZIP**. Node ma
+      `zlib.crc32`, reszta nagłówka to kilkanaście liczb; biblioteka do
+      spakowania dwóch plików tekstowych byłaby zależnością większą niż problem
+- [x] Siatka nalotu układana „wężem" — powrót na początek każdej linii to
+      przelot na pusto, przy dziesięciu liniach po 300 m trzy kilometry
+      baterii wyrzucone
+- [x] Bzdury odrzucane PRZED lotem, nie na lotnisku: jeden punkt, sto punktów,
+      900 m wysokości, 40 m/s
+- [x] Plik sprawdzany **cudzą implementacją** — Pythonowym `zipfile`
+      i parserem XML. Własnym kodem potwierdzilibyśmy tylko, że umiemy
+      odczytać to, co sami zapisaliśmy
+
+### Czego NIE potwierdziłem
+
+**Ani jeden wygenerowany KMZ nie przeszedł przez prawdziwego drona.**
+Struktura WPML jest odtworzona z dokumentacji i otwartych generatorów;
+kontener jest zweryfikowany, semantyka nie. Do tego na KONSUMENCKIM Mavicu 3
+nie ma oficjalnej drogi wgrania własnego KMZ — trzeba utworzyć w DJI Fly
+zastępczą misję i podmienić jej plik. Działa, ale jest obejściem.
+
+CCAPI nie widziało prawdziwego aparatu — atrapa jest zbudowana z dokumentacji.
+Telemetria SRT nie widziała pliku z prawdziwej karty.
+
+### Czego świadomie nie robimy
+
+- **Wszystko wokół M3T/M3M** (Thermogram, IRMapper, `m3m_radcal`,
+  `metashape_ortho`, `harpia`, datasety termiczne) — to osprzęt, którego
+  Marcin nie ma. Jakaś jedna trzecia przysłanych zrzutów
+- **FreeFCC-USB, dji-mavic-fcc** — zdejmowanie ograniczeń mocy nadajnika.
+  W UE wychodzi poza dopuszczalne CE
+- **Odblokowywanie baterii, DroneID przez SDR, modele w Simulinku i Webots,
+  klony stron DJI** — szum
+- **MMT** (154★) — dobre narzędzie do porządkowania plików, ale nakłada się
+  na istniejącą ścieżkę do OneDrive, zamiast dokładać
+- **Nakładka telemetryczna na wideo** (dronetrace, GPStitch, OVRLEY) — to
+  renderowanie ffmpegiem. Cosmos oddaje dane, obraz robi się w Premierze
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

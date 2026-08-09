@@ -126,6 +126,53 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
     fail.push('obiekty z YOLO nie trafiły do kategorii — „pokaż zdjęcia z psem" nie zadziała');
   }
 
+  /* ---- 3c. Telemetria klipów i dane lotu ze zdjęć ----
+     Do tej pory Cosmos wiedział o klipach tyle, co Microsoft Graph, czyli
+     datę i rozmiar. Telemetria z pliku .SRT wypełnia GPS, nastawy i wysokość,
+     więc nagrania zaczynają wpadać do tych samych pytań co zdjęcia. */
+  await fetch(`${env.adres}/api/archive/add`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      wpisy: [{
+        id: 'onedrive:7', zrodlo: 'onedrive', nazwa: 'DJI_0042.MP4',
+        sciezka: '/Mazury 2026/DJI_0042.MP4', typ: 'wideo',
+        kiedy: '2026-07-10T20:40:00', lat: 53.77, lon: 21.60,
+        iso: 400, przyslona: 2.8, ogniskowa: 24,
+        lot: { sekund: 42.5, wysokoscMin: 20, wysokoscMax: 88, dystansM: 410, punktow: 43 },
+      }, {
+        id: 'onedrive:8', zrodlo: 'onedrive', nazwa: 'DJI_0100.JPG',
+        sciezka: '/Mazury 2026/DJI_0100.JPG', typ: 'zdjecie',
+        kiedy: '2026-07-10T20:45:00', lat: 53.78, lon: 21.61,
+        dron: { wysokoscWzgl: 62.4, gimbalPochylenie: -90, gimbalObrot: 12.3 },
+      }],
+    }),
+  });
+  const klipy = await szukaj({ typ: 'wideo' });
+  const klip = (klipy.wyniki || []).find((w) => w.nazwa === 'DJI_0042.MP4');
+  console.log(`7d. klip z telemetrią → ${klip && klip.lot
+    ? `${klip.lot.sekund} s, ${klip.lot.wysokoscMin}-${klip.lot.wysokoscMax} m, `
+      + `${klip.lot.dystansM} m, światło: ${klip.swiatlo}` : 'BRAK'}`);
+  if (!klip || !klip.lot) fail.push('podsumowanie lotu nie przetrwało zapisu do indeksu');
+  /* SEDNO: klip z GPS-em i czasem dostaje porę światła tak samo jak zdjęcie.
+     To jest cała wartość telemetrii — „pokaż ujęcia znad jeziora o zachodzie"
+     przestaje dotyczyć wyłącznie fotografii. */
+  if (klip && !klip.swiatlo) fail.push('klip nie dostał pory światła mimo GPS-u i czasu');
+
+  const zLotu = await szukaj({ poraDnia: 'wieczor' });
+  console.log(`7e. wieczorne o zmierzchu, w tym wideo: `
+    + `${(zLotu.wyniki || []).filter((w) => w.typ === 'wideo').length} klipów`);
+  if (!(zLotu.wyniki || []).some((w) => w.typ === 'wideo')) {
+    fail.push('klip nie wpadł do filtra pory dnia — telemetria nie dotarła do liczenia Słońca');
+  }
+
+  const zDronem = (await szukaj({ typ: 'zdjecie' })).wyniki
+    .find((w) => w.nazwa === 'DJI_0100.JPG');
+  console.log(`7f. zdjęcie z drona → wysokość ${zDronem && zDronem.dron
+    ? `${zDronem.dron.wysokoscWzgl} m, gimbal ${zDronem.dron.gimbalPochylenie}°` : 'BRAK'}`);
+  if (!zDronem || !zDronem.dron || zDronem.dron.wysokoscWzgl !== 62.4) {
+    fail.push('dane lotu z XMP nie przetrwały zapisu do indeksu');
+  }
+
   const wizja = await fetch(`${env.adres}/api/archive/vision`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });

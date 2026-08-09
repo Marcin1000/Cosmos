@@ -43,6 +43,8 @@ const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
 const { prognozaZorzy } = require('./lib/zorza.js');
 const { rozpoznajTemat } = require('./lib/tematy.js');
 const { planUjec } = require('./lib/ujecia.js');
+const canon = require('./lib/canon.js');
+const { misjaKmz, siatka } = require('./lib/kmz.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
 const onedrive_ = require('./lib/onedrive.js');
@@ -2280,6 +2282,87 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
+    /* CANON CCAPI — aparat jako urządzenie, nie tylko temat rozmowy.
+       Trzy trasy, bo tyle wystarczy: co tam stoi, co ma ustawione, i zmień to.
+       Wyzwalanie migawki jest osobno i celowo nie ma go w podpowiedziach dla
+       modelu — zdjęcie ma robić człowiek, a nie model, któremu wydawało się,
+       że to dobry moment. */
+    /* MISJA WAYPOINTOWA → plik KMZ. `senses/flightplan.py` liczy już wysokość,
+       pokrycie i liczbę zdjęć; tu domykamy pętlę i oddajemy to dronowi.
+       Odpowiedź jest PLIKIEM, nie JSON-em — trafia prosto do pobrania. */
+    if (p === '/api/plan/mission' && req.method === 'POST') {
+      let d;
+      try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      try {
+        const punkty = Array.isArray(d.punkty) && d.punkty.length
+          ? d.punkty
+          : siatka({
+            lat: Number(d.lat), lon: Number(d.lon),
+            szerokoscM: Number(d.szerokoscM) || 200,
+            dlugoscM: Number(d.dlugoscM) || 200,
+            odstepM: Number(d.odstepM) || 50,
+            kierunek: Number(d.kierunek) || 0,
+          });
+        const buf = misjaKmz(punkty, d);
+        const nazwa = String(d.nazwa || 'misja').replace(/[^\w-]+/g, '-').slice(0, 40);
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.google-earth.kmz',
+          'Content-Length': buf.length,
+          'Content-Disposition': `attachment; filename="${nazwa}.kmz"`,
+        });
+        addEvent('plan', `misja waypointowa: ${punkty.length} punktów`);
+        return res.end(buf);
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
+    if (p === '/api/canon/status' && req.method === 'GET') {
+      return sendJson(res, 200, await canon.stan());
+    }
+    if (p === '/api/canon/settings') {
+      if (!canon.skonfigurowany()) {
+        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+      }
+      try {
+        if (req.method === 'GET') {
+          const w = await canon.nastawy();
+          return sendJson(res, 200, { ...w, liczby: canon.naLiczby(w.nastawy) });
+        }
+        if (req.method === 'PUT') {
+          const d = await readJson(req);
+          const zmiany = [];
+          /* Kolejność ma znaczenie: najpierw ISO, potem przysłona, na końcu
+             czas. Aparat sam koryguje pozostałe nastawy pod tę, którą właśnie
+             zmieniono, więc ustawienie czasu jako ostatniego zostawia go
+             takim, jakiego chcieliśmy. */
+          for (const nazwa of ['iso', 'przyslona', 'czas']) {
+            if (d[nazwa] === undefined || d[nazwa] === null || d[nazwa] === '') continue;
+            zmiany.push(await canon.ustaw(nazwa, d[nazwa]));
+          }
+          if (!zmiany.length) return sendJson(res, 400, { error: 'Nie podano żadnej nastawy.' });
+          addEvent('aparat', `nastawy zmienione: ${zmiany.map((z) => `${z.nazwa}=${z.wartosc}`).join(', ')}`);
+          return sendJson(res, 200, { ok: true, zmiany });
+        }
+      } catch (err) {
+        return sendJson(res, 502, { error: err.message });
+      }
+    }
+    if (p === '/api/canon/shutter' && req.method === 'POST') {
+      if (!canon.skonfigurowany()) {
+        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+      }
+      let d = {};
+      try { d = await readJson(req); } catch { /* domyślne */ }
+      try {
+        const w = await canon.migawka({ af: d.af === true });
+        addEvent('aparat', 'migawka wyzwolona zdalnie');
+        return sendJson(res, 200, w);
+      } catch (err) {
+        return sendJson(res, 502, { error: err.message });
+      }
+    }
+
     if (p === '/api/gear') {
       if (req.method === 'GET') return sendJson(res, 200, userSprzet);
       if (req.method === 'PUT') {

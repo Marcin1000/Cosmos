@@ -755,6 +755,12 @@
       <div class="plan-shot mono" id="plan-shot">—</div>
       <div class="plan-light mono" id="plan-light"></div>
       <div class="plan-why" id="plan-why"></div>
+      <!-- Aparat po Wi-Fi (Canon CCAPI). Wiersz pojawia się dopiero wtedy,
+           gdy aparat odpowiada — bez niego byłby martwym przyciskiem. -->
+      <div class="plan-camera mono" id="plan-camera" hidden>
+        <span id="plan-camera-now">—</span>
+        <button class="btn-secondary" id="plan-camera-apply" data-i18n="plan.apply">Ustaw w aparacie</button>
+      </div>
     </div>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
   </div>

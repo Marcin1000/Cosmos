@@ -1719,6 +1719,22 @@ kbd {
    w 24 pikselach. */
 .voice-bird-btn { position: absolute; top: 18px; right: 102px; font-size: 18px; line-height: 1; }
 
+/* Wiersz aparatu w panelu planu. Nastawy z aparatu i przycisk obok siebie,
+   bo pytanie brzmi „czy to, co mam ustawione, zgadza się z tym, co policzone" —
+   a na to odpowiada się porównaniem, nie dwoma osobnymi ekranami. */
+.plan-camera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.plan-camera > span { flex: 1; min-width: 0; }
+.plan-camera-off { color: var(--text-faint); }
+
 .voice-orb {
   width: 150px;
   height: 150px;

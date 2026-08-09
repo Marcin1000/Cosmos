@@ -358,6 +358,15 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
   analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
   zapamiętywany),
+- 🛰 **telemetria klipów z drona** — Mavic 3 zapisuje obok każdego nagrania plik
+  `.SRT` z GPS-em, wysokością i nastawami DLA KAŻDEJ KLATKI. Cosmos czyta go
+  i dopisuje do archiwum, więc klipy trafiają do tych samych pytań co zdjęcia:
+  „pokaż ujęcia znad jeziora o zachodzie" obejmuje wreszcie wideo,
+- 📸 **aparat po Wi-Fi (Canon CCAPI)** — przy R6 II z firmware'em 1.7.0 Cosmos
+  odczytuje FAKTYCZNE nastawy aparatu, porównuje je z policzonymi dla tego
+  światła i na życzenie ustawia. Działa, gdy Cosmos i aparat są w tej samej sieci,
+- 🗺 **misja waypointowa jako plik `.kmz`** — plan lotu policzony przez Cosmosa
+  da się wyeksportować dla drona (siatka nalotu układana „wężem"),
 - 🎬 **klip wrzucony do rozmowy** → cztery klatki kluczowe wycięte w przeglądarce
   (`<video>` + `<canvas>`, bez wysyłania pliku) i opisane jako kolejne momenty
   JEDNEGO ujęcia, nie cztery osobne zdjęcia. Minuta z R6 II to 300-500 MB —
@@ -675,15 +684,20 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
 | `/api/gear` | GET/PUT | Zestaw sprzętu użytkownika (korpus, obiektywy) — domyślny dla planu zdjęciowego |
+| `/api/canon/status` | GET | Czy aparat odpowiada po CCAPI: model, numer, firmware |
+| `/api/canon/settings` | GET/PUT | Odczyt i zmiana ISO, przysłony i czasu w aparacie (Canon CCAPI) |
+| `/api/canon/shutter` | POST | Zdalne wyzwolenie migawki (autofokus domyślnie wyłączony) |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
 | `/api/ptak` | POST | Nagranie → gatunek ptaka (BirdNET w zmysłach); współrzędne dokłada serwer |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
+| `/api/plan/mission` | POST | Misja waypointowa dla DJI jako plik `.kmz` (WPML) — z listy punktów albo z siatki nalotu |
 | `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
 | `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie |
 | `/api/archive/lenses` | POST | Dociągnięcie modelu obiektywu z EXIF-u (pierwsze 128 KB pliku przez `Range`) |
 | `/api/archive/vision` | POST | Co WIDAĆ na zdjęciu — YOLO ze zmysłów po miniaturze z OneDrive, paczkami |
+| `/api/archive/telemetry` | POST | Telemetria klipów DJI z plików `.SRT` — GPS, wysokość, ISO, czas, przysłona, ogniskowa |
 | `/api/archive/thumb` | GET | Miniatura pliku z OneDrive, dociągana w chwili pytania (adresy z Graph wygasają) |
 | `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
 | `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
@@ -722,6 +736,9 @@ lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
 lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
 lib/archiwum-trasy.js  trasy /api/archive/* — wyszukiwanie, uzupełnianie, statystyki
+lib/srt.js         telemetria z klipów DJI: plik .SRT obok nagrania
+lib/canon.js       Canon CCAPI — odczyt i zmiana nastaw aparatu po Wi-Fi
+lib/kmz.js         misja waypointowa DJI w formacie WPML (własny zapis ZIP)
 lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
 lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
 lib/zorza.js       zorza polarna: Kp z NOAA i próg dla Twojej szerokości

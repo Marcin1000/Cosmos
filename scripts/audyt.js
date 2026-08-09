@@ -354,8 +354,18 @@ const bezNapisow = (kod) => kod
   .replace(/"(?:\\.|[^"\\])*"/g, '""')
   .replace(/`(?:\\.|[^`\\])*`/g, '``');
 const ogon = bezNapisow(server.slice(glowa.length));
+/* Moduł wciągnięty CAŁY, pod jedną nazwą (`const canon = require('./lib/canon.js')`),
+   jest importem tak samo dobrym jak rozpisany po klamrach — a bywa lepszym,
+   gdy nazwy są ogólne: `canon.skonfigurowany()` i `onedrive.skonfigurowany()`
+   czyta się jednoznacznie, a dwa gołe `skonfigurowany` już nie. Kontrola tego
+   nie rozumiała i kazała psuć nazwy pod narzędzie, zamiast odwrotnie. */
+const przestrzenie = new Set(
+  [...glowa.matchAll(/const\s+(\w+)\s*=\s*require\(['"]\.\/lib\/([\w-]+)\.js['"]\)/g)]
+    .map((mm) => `${mm[2]}.js`),
+);
 const bezImportu = [];
 for (const m of moduly) {
+  if (przestrzenie.has(m)) continue;
   let mod; try { mod = require(path.join(R, 'lib', m)); } catch (e) { zle(`lib/${m} nie daje się wczytać: ${e.message}`); continue; }
   for (const k of Object.keys(mod)) {
     if (k === 'polacz') continue;

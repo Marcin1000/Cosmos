@@ -628,6 +628,11 @@ async function odswiezArchiwum() {
       etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
+    przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 25,
+      etykieta: (w) => t('arch.teleProgress', { ile: w.odczytane, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.teleDone', { ile: suma }),
+    }));
   }
 
   przycisk(t('arch.disconnect'), async () => {
@@ -664,7 +669,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
       });
       const w = await readJsonSafe(r);
       if (!r.ok) { stanEl.textContent = w.error || `HTTP ${r.status}`; return; }
-      suma += Number(w.uzupelnione || w.opisane || 0);
+      suma += Number(w.uzupelnione || w.opisane || w.odczytane || 0);
       stanEl.textContent = etykieta(w);
       // `sprawdzone === 0` znaczy „nie ma już czego brać" — bez tego warunku
       // pusta kolejka kręciłaby pętlę w nieskończoność.
@@ -3513,7 +3518,102 @@ function pokazPlan(d) {
     el.textContent = p;
     why.appendChild(el);
   }
+
+  // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
+  planOstatnieUstawienia = u;
+  odswiezAparat(u);
 }
+
+let planOstatnieUstawienia = null;
+
+/* ---- APARAT PO WI-FI (Canon CCAPI) ------------------------------------
+   Sedno nie jest w tym, że da się zdalnie zmienić ISO. Sedno jest w tym, że
+   Cosmos przestaje mówić „ustaw 1/250, f/8, ISO 200", a zaczyna mówić „masz
+   1/60, f/4, ISO 1600 — poprawiam". Do tego musi ZOBACZYĆ, co aparat ma
+   naprawdę ustawione, i porównać z tym, co sam policzył dla tego światła.
+
+   Wiersz pokazuje się dopiero, gdy aparat odpowiada. Martwy przycisk
+   „Ustaw w aparacie" u kogoś, kto nigdy nie włączył CCAPI, byłby gorszy niż
+   jego brak — obiecywałby coś, czego nie ma. */
+let aparatStan = null;
+let aparatSprawdzony = 0;
+const APARAT_CACHE_MS = 30000;
+
+async function odswiezAparat(policzone) {
+  const wiersz = $('plan-camera');
+  if (!wiersz) return;
+
+  if (Date.now() - aparatSprawdzony > APARAT_CACHE_MS) {
+    aparatSprawdzony = Date.now();
+    try { aparatStan = await (await fetch('/api/canon/status')).json(); }
+    catch { aparatStan = null; }
+  }
+  if (!aparatStan || !aparatStan.online) {
+    // Nieskonfigurowany aparat chowamy zupełnie; skonfigurowany, ale
+    // niedostępny — pokazujemy z powodem, bo to stan do naprawienia.
+    wiersz.hidden = !(aparatStan && aparatStan.skonfigurowany);
+    if (!wiersz.hidden) {
+      $('plan-camera-now').textContent = String((aparatStan && aparatStan.powod) || '').slice(0, 120);
+      $('plan-camera-now').className = 'plan-camera-off';
+      $('plan-camera-apply').hidden = true;
+    }
+    return;
+  }
+
+  wiersz.hidden = false;
+  $('plan-camera-apply').hidden = false;
+  try {
+    const w = await (await fetch('/api/canon/settings')).json();
+    const n = w.nastawy || {};
+    const teraz = [n.czas, n.przyslona && `f/${String(n.przyslona).replace(/^f/i, '')}`,
+      n.iso && `ISO ${n.iso}`].filter(Boolean).join(' · ') || '—';
+    const el = $('plan-camera-now');
+    el.className = '';
+    el.textContent = `${aparatStan.model || t('plan.camera')}: ${teraz}`;
+    /* Zgodność liczymy, a nie porównujemy napisy: „1/250" z aparatu i 0,004 s
+       z planu to ta sama wartość zapisana inaczej. Różnica poniżej jednej
+       trzeciej działki jest w praktyce nieodróżnialna na zdjęciu. */
+    const l = w.liczby || {};
+    if (policzone && l.iso && policzone.iso) {
+      const dzialki = Math.abs(Math.log2(l.iso / policzone.iso));
+      if (dzialki > 0.34) el.textContent += ` · ${t('plan.mismatch')}`;
+    }
+  } catch {
+    $('plan-camera-now').textContent = t('plan.cameraErr');
+    $('plan-camera-now').className = 'plan-camera-off';
+  }
+}
+
+$('plan-camera-apply').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const u = planOstatnieUstawienia;
+  if (!u) return;
+  b.disabled = true;
+  const pierwotny = b.textContent;
+  b.textContent = t('plan.applying');
+  try {
+    const r = await fetch('/api/canon/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        iso: u.iso ? String(u.iso) : '',
+        // Aparat oczekuje swojego zapisu: „f4.0" i „1/250", nie liczb.
+        przyslona: u.przyslona ? String(u.przyslona).replace('f/', 'f') : '',
+        czas: u.czas || '',
+      }),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    aparatSprawdzony = 0;
+    await odswiezAparat(u);
+  } catch (err) {
+    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
+    $('plan-camera-now').className = 'plan-camera-off';
+  } finally {
+    b.disabled = false;
+    b.textContent = pierwotny;
+  }
+});
 
 for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
   const el = $(id);
