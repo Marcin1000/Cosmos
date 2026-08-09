@@ -1829,6 +1829,35 @@ wcale.
 - [x] `karty-ujec` sprawdza teraz strukturę wszystkich 22 zestawów w dwóch
       wariantach sprzętu: min. jedno domknięcie, maks. dwa otwarcia
 
+### Trzecia usterka z tych samych zrzutów: misja nad złym miejscem
+
+Na zrzucie Marcina plan był policzony dla **Zakopanego**, a w misji drona
+stały współrzędne **52,012 / 20,902 — czyli domu**. Cicho, bez żadnego znaku.
+
+Mechanizm: panel liczy plan zaraz po otwarciu, jeszcze dla zapisanej
+lokalizacji, i wtedy wypełnia pola misji. Warunek brzmiał „uzupełnij, gdy oba
+pola są puste" — więc po wpisaniu „Zakopane" i przeliczeniu planu pola już
+puste nie były i zostawały z domem. Wychodził z tego plik lotu nad zupełnie
+innym miejscem. W narzędziu, które steruje dronem, to najgorszy możliwy
+rodzaj błędu: wynik wygląda poprawnie i jest nieprawdziwy.
+
+- [x] Współrzędne misji idą za planem przy KAŻDYM przeliczeniu, chyba że
+      wpisano je ręcznie — ręczny wpis dalej wygrywa, bo trzeba móc polecieć
+      nad miejscem innym niż to, dla którego liczy się światło
+- [x] Pod polami stoi teraz podpis, SKĄD są: „Współrzędne z planu: Kraków"
+      albo ostrzeżenie, że wpisano je ręcznie. Dwie liczby same z siebie nie
+      mówią, czy to Zakopane, czy dom
+- [x] `📍 Z planu` wraca do miejsca z planu i kasuje oznaczenie ręcznego wpisu
+- [x] Zestaw `plener` odtwarza dokładnie tę ścieżkę — i **sprawdziłem, że
+      wywala się na starym kodzie** (52,0247 zamiast 50,06). Warunkiem
+      koniecznym jest zapisana lokalizacja w danych testowych; bez niej
+      pierwsze przeliczenie kończy się błędem, pola zostają puste i test
+      przechodzi nawet na zepsutym kodzie
+
+Sprawdzone przy okazji i NIEbędące usterką: przecinek dziesiętny w polach
+(„52,01216") to polskie formatowanie pola `type=number`. `value` oddaje
+`52.01216` z kropką, pobranie `.kmz` działa w locale `pl-PL`.
+
 ### Przy okazji, ze zrzutu ekranu: „70-200 f/4 f/4"
 
 Nazwa obiektywu z `rozpoznajObiektywy` zawiera już jasność, a kod doklejał

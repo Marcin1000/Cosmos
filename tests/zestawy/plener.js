@@ -42,6 +42,17 @@ if (!maPrzegladarke()) {
   const pg = await b.newPage({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
+  /* ZAPISANA LOKALIZACJA jest tu warunkiem koniecznym, nie ozdobą.
+     Bez niej pierwsze, automatyczne przeliczenie planu przy otwarciu panelu
+     kończy się błędem „nie znam współrzędnych" i pola misji zostają puste —
+     a wtedy sprawdzenie z punktu 4 przechodzi nawet na zepsutym kodzie.
+     Usterka, którą Marcin zobaczył na zrzucie ekranu, ujawnia się WYŁĄCZNIE
+     wtedy, gdy jest zapisane miejsce inne niż to wpisane w planie. */
+  await fetch(`${env.adres}/api/location`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location: 'Złotokłos, mazowieckie', lat: 52.0247, lon: 20.9019 }),
+  });
+
   await pg.goto(env.adres, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(500);
 
@@ -193,12 +204,51 @@ if (!maPrzegladarke()) {
     fail.push('dopisanie drona nie odblokowało żadnego ujęcia — filtr sprzętowy nie działa z panelu');
   }
 
-  /* ---- 4. Misja drona → prawdziwy plik ---- */
-  await pg.click('#mis-here');            // współrzędne z policzonego planu
+  /* ---- 4. Misja drona → prawdziwy plik ----
+
+     NAJPIERW najgroźniejsza pułapka, którą Marcin złapał na zrzucie ekranu.
+     Panel liczy plan zaraz po otwarciu, dla zapisanej lokalizacji, i wtedy
+     wypełnia pola misji. Potem człowiek wpisuje inne miejsce i przelicza —
+     a w misji zostają STARE współrzędne. Wychodzi plik lotu nad zupełnie
+     innym miejscem i nic tego nie zdradza.
+
+     Odtwarzamy dokładnie tę ścieżkę: plan dla Krakowa policzony wyżej to już
+     drugie przeliczenie w tym oknie, bo pierwsze poszło automatycznie przy
+     otwarciu. Współrzędne w misji MUSZĄ pokazywać Kraków. */
+  const misjaTeraz = {
+    lat: await pg.inputValue('#mis-lat'),
+    lon: await pg.inputValue('#mis-lon'),
+    skad: (await pg.textContent('#mis-skad') || '').trim(),
+  };
+  console.log(`4. współrzędne misji po zmianie miejsca: ${misjaTeraz.lat}, ${misjaTeraz.lon}`);
+  console.log(`   podpis pod polami: „${misjaTeraz.skad}"`);
+  if (Math.abs(Number(misjaTeraz.lat) - 50.0614) > 0.01) {
+    fail.push(`misja trzyma współrzędne sprzed zmiany miejsca: ${misjaTeraz.lat} zamiast 50.06`);
+  }
+  if (!/Krak/i.test(misjaTeraz.skad)) {
+    fail.push(`podpis pod współrzędnymi nie mówi, skąd są: „${misjaTeraz.skad}"`);
+  }
+
+  /* Ręczny wpis musi WYGRAĆ z planem — inaczej nie da się polecieć nad
+     miejscem innym niż to, dla którego liczy się światło. I musi być
+     oznaczony, żeby nie wyglądał jak wynik planu. */
+  await pg.fill('#mis-lat', '53.50000');
+  await pg.waitForTimeout(200);
+  await pg.click('#fp-go');
+  await pg.waitForTimeout(1500);
+  const poRecznym = {
+    lat: await pg.inputValue('#mis-lat'),
+    skad: (await pg.textContent('#mis-skad') || '').trim(),
+  };
+  console.log(`4b. po ręcznym wpisie i przeliczeniu planu: ${poRecznym.lat} — „${poRecznym.skad.slice(0, 60)}"`);
+  if (Number(poRecznym.lat) !== 53.5) fail.push('przeliczenie planu nadpisało ręcznie wpisane współrzędne');
+  if (!/ręcznie|hand/i.test(poRecznym.skad)) fail.push('ręczny wpis nie jest oznaczony');
+
+  await pg.click('#mis-here');            // powrót do współrzędnych z planu
   await pg.waitForTimeout(400);
   const lat = await pg.inputValue('#mis-lat');
   const lon = await pg.inputValue('#mis-lon');
-  console.log(`4. współrzędne przeniesione z planu: ${lat}, ${lon}`);
+  console.log(`4c. „📍 Z planu" przywraca: ${lat}, ${lon}`);
   if (Math.abs(Number(lat) - 50.0614) > 0.01) fail.push(`„Z planu" wstawiło złą szerokość: ${lat}`);
 
   await pg.fill('#mis-name', 'Wawel nalot');
