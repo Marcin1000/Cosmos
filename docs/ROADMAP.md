@@ -1757,9 +1757,31 @@ otwartą pozycję z Partii 36.
       pytanie „a jak to wygląda naprawdę" — a bez niej atrapa w testach
       zbudowana na złym założeniu utrwala pomyłkę na lata
 
-⚠ Żywego API NOAA nadal nie widziałem z tego kontenera ani razu (403 na oba
-adresy). Czytnik jest odporny na zmianę kształtu; potwierdzenie, KTÓRY układ
-NOAA oddaje, przychodzi z wydruku u Marcina, nie z mojego przebiegu.
+### Co NOAA naprawdę oddaje — potwierdzone i wpisane do atrap
+
+Wydruk z serwera Marcina rozstrzygnął pytanie, którego nie dało się rozstrzygnąć
+z tego kontenera (403 na oba adresy):
+
+| Produkt | Kształt |
+|---|---|
+| `planetary_k_index_1m.json` | tablica obiektów (358) — `time_tag, kp_index, estimated_kp, kp` |
+| `noaa-planetary-k-index-forecast.json` | tablica obiektów (81) — `time_tag, kp, observed, noaa_scale` |
+
+Czyli **tablica obiektów**, a nie tablica tablic z wierszem nagłówka, jak
+zakładałem. To wyjaśnia pierwotną usterkę do końca: czytnik brał `w[0]` i `w[1]`
+z obiektu, dostawał `undefined`, prognoza wychodziła pusta.
+
+- [x] `mock-grafiki.js` oddaje teraz TEN kształt — atrapa i NOAA mówią wreszcie
+      tym samym językiem. Stary układ został pod osobnym adresem, bo raz już
+      nas zaskoczyli
+- [x] W atrapie bieżącego Kp pole `kp` jest napisem z literą („4P", „7M"),
+      tak jak w prawdziwym produkcie — pułapka na wypadek, gdyby ktoś
+      przestawił odczyt z `kp_index` na `kp` i dostał NaN
+- [x] Sprawdzenie „prognoza Kp pusta" w `scenariusze` wreszcie coś znaczy:
+      wcześniej atrapa i czytnik zgadzały się ze sobą i przechodziło zawsze
+
+⚠ To nadal nie gwarantuje, że układ nie zmieni się jutro — dlatego czytnik
+rozpoznaje pola po treści, a nie po pozycji.
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,

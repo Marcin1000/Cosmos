@@ -110,15 +110,39 @@ http.createServer((req, res) => {
   /* Atrapa NOAA SWPC. Dwa strumienie o RÓŻNYM kształcie i to jest sedno:
      bieżące Kp to lista obiektów, a prognoza — lista TABLIC z wierszem
      nagłówka. Pomylenie ich to najłatwiejszy błąd przy czytaniu tego API. */
+  /* Też potwierdzone na żywym API: `planetary_k_index_1m.json` to tablica
+     obiektów o kluczach `time_tag, kp_index, estimated_kp, kp`. Pole `kp`
+     jest NAPISEM z literą („1P", „2M"), więc trzeba czytać `kp_index` —
+     i dlatego atrapa je tak oddaje. Gdyby ktoś kiedyś przestawił kolejność
+     czytania na `kp`, wyjdzie z tego NaN i ten zestaw to zauważy. */
   if (u.pathname === '/swpc/kp') {
     if (padnij.has('swpc')) return json(503, { error: 'atrapa: SWPC wyłączony' });
     return json(200, [
-      { time_tag: '2026-08-08T07:00:00', kp_index: 4.33 },
-      { time_tag: '2026-08-08T07:01:00', kp_index: 6.67 },
+      { time_tag: '2026-08-08T07:00:00', kp_index: 4.33, estimated_kp: 4.333, kp: '4P' },
+      { time_tag: '2026-08-08T07:01:00', kp_index: 6.67, estimated_kp: 6.667, kp: '7M' },
     ]);
   }
+  /* KSZTAŁT POTWIERDZONY NA ŻYWYM API (serwer Marcina, 2026-08-09):
+     `noaa-planetary-k-index-forecast.json` oddaje TABLICĘ OBIEKTÓW o kluczach
+     `time_tag, kp, observed, noaa_scale`, ze znacznikiem czasu w postaci ISO
+     z „T" — a nie tablicę tablic z wierszem nagłówka, jak zakładała pierwsza
+     wersja tej atrapy. To nie jest kosmetyka: czytnik brał wtedy `w[0]`
+     i `w[1]` z obiektu, dostawał `undefined`, i cała prognoza wychodziła
+     pusta. Atrapa i kod zgadzały się ze sobą, więc testy przechodziły —
+     i dokładnie to ukrywało usterkę aż do pierwszego uruchomienia na żywo. */
   if (u.pathname === '/swpc/prognoza') {
     if (padnij.has('swpc')) return json(503, { error: 'atrapa: SWPC wyłączony' });
+    const zaGodzin = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString().slice(0, 19);
+    return json(200, [
+      { time_tag: zaGodzin(-24), kp: 3.00, observed: 'observed', noaa_scale: null },
+      { time_tag: zaGodzin(3), kp: 5.67, observed: 'predicted', noaa_scale: 'G1' },
+      { time_tag: zaGodzin(6), kp: 7.33, observed: 'predicted', noaa_scale: 'G3' },
+      { time_tag: zaGodzin(9), kp: 4.00, observed: 'predicted', noaa_scale: null },
+    ]);
+  }
+  /* Stary układ zostaje pod osobnym adresem — `zorza-ksztalty` sprawdza, że
+     czytnik radzi sobie z obydwoma, bo NOAA już raz nas tym zaskoczyła. */
+  if (u.pathname === '/swpc/prognoza-tablice') {
     const zaGodzin = (h) => new Date(Date.now() + h * 3600 * 1000)
       .toISOString().replace('T', ' ').slice(0, 19);
     return json(200, [
