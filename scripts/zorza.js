@@ -2,9 +2,12 @@
 /* Czy dane o zorzy docierają Z TEGO SERWERA — i co z nich wynika dla miejsca.
  *
  * NOAA SWPC udostępnia je publicznie i bez klucza, ale mój kontener testowy
- * ma zablokowane wyjście, więc kształtu odpowiedzi NIE potwierdziłem na żywym
- * API — tylko na atrapie zbudowanej z dokumentacji. Ten skrypt jest jedynym
- * miejscem, w którym da się to rozstrzygnąć.
+ * ma zablokowane wyjście (403 na oba adresy), więc kształtu odpowiedzi nie
+ * widziałem ani razu z pierwszej ręki. Ten skrypt jest jedynym miejscem,
+ * w którym da się to rozstrzygnąć — i dlatego wypisuje KSZTAŁT odpowiedzi
+ * także wtedy, gdy wszystko działa. Inaczej czytnik odporny na kilka układów
+ * naraz skutecznie zasłania odpowiedź na pytanie „a jak to wygląda naprawdę",
+ * a atrapa w testach zbudowana na złym założeniu utrwala pomyłkę na lata.
  *
  *   node scripts/zorza.js               — dla zapisanej lokalizacji (albo Warszawy)
  *   node scripts/zorza.js 54.35 18.65   — dla podanych współrzędnych
@@ -21,7 +24,8 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { prognozaZorzy, szerokoscGeomagnetyczna, progKp, kpTeraz, kpPrognoza } = require('../lib/zorza.js');
+const { prognozaZorzy, szerokoscGeomagnetyczna, progKp, kpTeraz, kpPrognoza,
+  ostatniKsztalt } = require('../lib/zorza.js');
 
 /** Zapisana lokalizacja z danych serwera — sensowniejsza domyślnie niż Warszawa. */
 function zapisaneWspolrzedne() {
@@ -90,7 +94,13 @@ async function zrodlo(nazwa, adres, wywolaj) {
       await pokazSurowe(adres);
       return null;
     }
-    console.log(`  ${nazwa.padEnd(12)} ✓ ${ile} ${Array.isArray(wynik) ? 'wpisów' : 'wartość'} (${ms} ms)`);
+    /* Kształt podajemy TAKŻE gdy się udało. Czytnik rozpoznaje pola i przez
+       to przełknie trzy różne układy naraz — ale wtedy nikt się nie dowie,
+       który z nich NOAA naprawdę oddaje, a atrapa w testach zbudowana na złym
+       założeniu utrwaliłaby pomyłkę na lata. */
+    const ksztalt = ostatniKsztalt(adres);
+    console.log(`  ${nazwa.padEnd(12)} ✓ ${ile} ${Array.isArray(wynik) ? 'wpisów' : 'wartość'} (${ms} ms)`
+      + (ksztalt ? ` · ${ksztalt}` : ''));
     return wynik;
   } catch (e) {
     console.log(`  ${nazwa.padEnd(12)} ✗ ${e.message}`);

@@ -1747,8 +1747,19 @@ prawa być ciche.
 - [x] `tests/zestawy/zorza-ksztalty.js` — te same dane w czterech układach
       mają dać ten sam wynik; pusto ma zostać pusto
 
-⚠ Nadal nie widziałem żywego API NOAA z tego kontenera ani razu. To jest
-odporność na zmianę kształtu, a nie potwierdzenie kształtu.
+Po poprawce prognoza ruszyła u Marcina od pierwszego uruchomienia: 8 wpisów,
+szczyt Kp 3,33. **Oba źródła zorzy działają na żywo** — to zamyka ostatnią
+otwartą pozycję z Partii 36.
+
+- [x] Skrypt wypisuje KSZTAŁT odpowiedzi także wtedy, gdy wszystko działa
+      (`· tablica obiektów (8; time_tag, kp, observed)`). Czytnik odporny na
+      kilka układów naraz jest dobry, ale skutecznie zasłania odpowiedź na
+      pytanie „a jak to wygląda naprawdę" — a bez niej atrapa w testach
+      zbudowana na złym założeniu utrwala pomyłkę na lata
+
+⚠ Żywego API NOAA nadal nie widziałem z tego kontenera ani razu (403 na oba
+adresy). Czytnik jest odporny na zmianę kształtu; potwierdzenie, KTÓRY układ
+NOAA oddaje, przychodzi z wydruku u Marcina, nie z mojego przebiegu.
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
