@@ -3477,9 +3477,14 @@ async function odswiezPlan(cap) {
   }
 }
 
-function pokazPlan(d) {
+/* Wypisz policzony plan. `pre` to przedrostek identyfikatorów, bo plan
+   pokazuje się w DWÓCH miejscach: pod podglądem kamery (`plan-*`, liczony
+   z jasności bieżącej klatki) i w Plenerze (`fp-*`, liczony dla miejsca
+   i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden —
+   dwie kopie tej samej funkcji rozjechałyby się przy pierwszej poprawce. */
+function pokazPlan(d, pre = 'plan') {
   const u = d.ustawienia;
-  $('plan-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+  $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
 
   const czesci = [];
   if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
@@ -3491,7 +3496,7 @@ function pokazPlan(d) {
       + (d.pogoda.temperatura !== null ? ` ${Math.round(d.pogoda.temperatura)}°C` : '')
       + (d.pogoda.opadyProc > 30 ? ` · opady ${d.pogoda.opadyProc}%` : ''));
   }
-  const light = $('plan-light');
+  const light = $(pre + '-light');
   light.textContent = czesci.join(' · ');
 
   /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
@@ -3511,7 +3516,7 @@ function pokazPlan(d) {
   }
   if (czas.textContent) light.appendChild(czas);
 
-  const why = $('plan-why');
+  const why = $(pre + '-why');
   why.innerHTML = '';
   for (const p of u.powody) {
     const el = document.createElement('p');
@@ -3542,6 +3547,10 @@ const APARAT_CACHE_MS = 30000;
 async function odswiezAparat(policzone) {
   const wiersz = $('plan-camera');
   if (!wiersz) return;
+  /* Wiersz aparatu mieszka w Plenerze. Odpytywanie go przy zamkniętym oknie
+     to dwa żądania do aparatu co osiem sekund przez cały czas otwartego
+     podglądu — do niczego, a aparat i tak zasypia po Wi-Fi. */
+  if ($('plener-modal').style.display === 'none') return;
 
   if (Date.now() - aparatSprawdzony > APARAT_CACHE_MS) {
     aparatSprawdzony = Date.now();
@@ -3615,11 +3624,325 @@ $('plan-camera-apply').addEventListener('click', async (e) => {
   }
 });
 
+/* Migawka. Świadomie TYLKO pod ludzkim palcem — model tego narzędzia nie
+   dostaje. „Zrób zdjęcie, bo wygląda na dobry moment" jest dokładnie tą
+   klasą decyzji, której maszyna nie powinna podejmować za człowieka
+   trzymającego aparat. */
+$('plan-camera-shutter').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  const pierwotny = b.textContent;
+  try {
+    const r = await fetch('/api/canon/shutter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    b.textContent = t('pl.shutterOk');
+  } catch (err) {
+    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
+    $('plan-camera-now').className = 'plan-camera-off';
+  } finally {
+    setTimeout(() => { b.textContent = pierwotny; b.disabled = false; }, 900);
+  }
+});
+
 for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
   const el = $(id);
   // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
   if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
 }
+
+/* ============================== PLENER ==============================
+   Foto i wideo jako jedno miejsce, a nie pięć.
+
+   Powód wydzielenia jest rzeczowy, nie porządkowy. Te funkcje wyrosły
+   przez ostatnie partie do rozmiaru osobnego programu, a mieszkały tak:
+   sprzęt i archiwum w Ustawieniach, plan zdjęciowy w podpanelu podglądu
+   kamery (czyli niedostępny bez włączonej kamery), aparat po Wi-Fi jako
+   wiersz w tamtym podpanelu, ptaki w nakładce głosowej, a misja KMZ
+   i karty ujęć — nigdzie. Te dwie ostatnie dało się uruchomić wyłącznie
+   żądaniem HTTP albo przez model. To nie jest funkcja, której nie ma;
+   to funkcja, o której nie sposób się dowiedzieć.
+
+   Plan liczy się TU bez kamery: dla nazwy miejsca i dla wybranej godziny.
+   To jest ta różnica, na której zależy najbardziej — „co zabrać w sobotę
+   do Krakowa na 18:30" to inne pytanie niż „co ustawić w tej chwili”. */
+
+function otworzPlener() {
+  wczytajSprzet();
+  odswiezArchiwum();
+  $('plener-modal').style.display = '';
+  // Aparat sprawdzamy przy otwarciu, nie w tle — patrz `odswiezAparat`.
+  aparatSprawdzony = 0;
+  odswiezAparat(planOstatnieUstawienia);
+  /* Plan liczymy przy KAŻDYM otwarciu, nie tylko pierwszym. Puste okno
+     z przyciskiem „Policz" kazałoby klikać po to, co i tak zawsze chcemy
+     zobaczyć, a plan sprzed godziny jest już nieprawdą — Słońce się
+     przesunęło, a to jest cała treść tego panelu. */
+  liczPlanPlener();
+}
+
+function zamknijPlener() { $('plener-modal').style.display = 'none'; }
+
+$('plener-btn').addEventListener('click', otworzPlener);
+$('plener-close').addEventListener('click', zamknijPlener);
+$('plener-modal').addEventListener('click', (e) => {
+  if (e.target === $('plener-modal')) zamknijPlener();
+});
+$('set-open-plener').addEventListener('click', () => { closeSettings(); otworzPlener(); });
+
+/* ---- sprzęt ---- */
+$('gear-save').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const stan = $('gear-status');
+  b.disabled = true;
+  stan.className = 'field-hint';
+  try {
+    await zapiszSprzet();
+    stan.textContent = t('pl.gearSaved');
+    setTimeout(() => { stan.textContent = ''; }, 2500);
+    // Zestaw wpływa na ujęcia i na nastawy — plan po zapisie jest nieaktualny.
+    liczPlanPlener();
+  } catch (err) {
+    // Nieudany zapis ZOSTAJE na ekranie — inaczej człowiek wychodzi
+    // przekonany, że sprzęt jest wpisany, a plan liczy dla domyślnego korpusu.
+    stan.className = 'field-hint plener-err';
+    stan.textContent = t('pl.gearErr', { msg: err.message });
+  } finally {
+    b.disabled = false;
+  }
+});
+
+/* ---- plan ---- */
+let plenerZajety = false;
+let plenerPonow = false;
+
+async function liczPlanPlener() {
+  /* Zajęte = przelicz PO powrocie, a nie „odpuść". Zwykłe `return` znaczyło,
+     że przy szybkiej zmianie dwóch list na ekranie zostaje wynik dla pierwszej
+     — i to bez żadnego znaku, że coś przepadło. */
+  if (plenerZajety) { plenerPonow = true; return; }
+  plenerZajety = true;
+  const przycisk = $('fp-go');
+  przycisk.disabled = true;
+  try {
+    const trybPola = $('fp-mode').value;
+    const wideo = trybPola.startsWith('wideo');
+    const dane = {
+      tryb: wideo ? 'wideo' : 'zdjecie',
+      klatki: trybPola === 'wideo50' ? 50 : 25,
+    };
+    // Puste pola znaczą „weź to, co zapisane" — i muszą NIE trafić do żądania,
+    // bo pusty napis to dla serwera podana wartość, a nie jej brak.
+    if ($('fp-gear').value) dane.sprzet = $('fp-gear').value;
+    if ($('fp-sky').value) dane.zachmurzenie = $('fp-sky').value;
+    if ($('fp-place').value.trim()) dane.miejsce = $('fp-place').value.trim();
+    if ($('fp-topic').value.trim()) dane.temat = $('fp-topic').value.trim();
+    if ($('fp-when').value) {
+      const kiedy = new Date($('fp-when').value);
+      if (!Number.isNaN(kiedy.getTime())) dane.kiedy = kiedy.toISOString();
+    }
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dane),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) {
+      $('fp-shot').textContent = '—';
+      $('fp-light').textContent = d.error || t('plan.needLocation');
+      $('fp-why').textContent = '';
+      $('fp-shots').innerHTML = '';
+      return;
+    }
+    pokazPlan(d, 'fp');
+    pokazUjecia(d.ujecia);
+    // Misja dostaje współrzędne z planu — przepisywanie ich z mapy do dwóch
+    // pól to najprostszy sposób na literówkę w miejscu, w którym boli.
+    plenerWspolrzedne = d.wspolrzedne || null;
+    if (plenerWspolrzedne && !$('mis-lat').value && !$('mis-lon').value) wstawWspolrzedne();
+  } catch {
+    $('fp-light').textContent = t('offline.title');
+  } finally {
+    przycisk.disabled = false;
+    plenerZajety = false;
+    if (plenerPonow) { plenerPonow = false; liczPlanPlener(); }
+  }
+}
+
+$('fp-go').addEventListener('click', liczPlanPlener);
+$('fp-now').addEventListener('click', () => { $('fp-when').value = ''; liczPlanPlener(); });
+for (const id of ['fp-gear', 'fp-mode', 'fp-sky']) {
+  $(id).addEventListener('change', liczPlanPlener);
+}
+for (const id of ['fp-place', 'fp-topic']) {
+  // Enter w polu tekstowym ma liczyć — inaczej trzeba sięgać po przycisk.
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') liczPlanPlener(); });
+}
+$('fp-when').addEventListener('change', liczPlanPlener);
+
+/* Karty ujęć — lista pozycji do odhaczenia, z liczbami. POMINIĘTE pokazujemy
+   równie wyraźnie: „nie masz czym" to inna informacja niż „nie ma na liście",
+   a bez niej wygląda, jakby Cosmos o dronie zapomniał. */
+/* Odhaczone ujęcia. Trzymane w przeglądarce, nie na serwerze, i to jest
+   przemyślane: „nakręciłem" to stan JEDNEGO dnia zdjęciowego na JEDNYM
+   urządzeniu, a nie fakt o Marcinie wart miejsca w pamięci Cosmosa.
+   Klucz zawiera temat, więc powrót do tego samego planu wraca też do postępu,
+   a zmiana tematu zaczyna listę od nowa. */
+const KLUCZ_ODHACZONE = 'cosmos.ujecia.';
+function odhaczone(temat) {
+  try { return new Set(JSON.parse(localStorage.getItem(KLUCZ_ODHACZONE + temat) || '[]')); }
+  catch { return new Set(); }
+}
+function zapiszOdhaczone(temat, zbior) {
+  try { localStorage.setItem(KLUCZ_ODHACZONE + temat, JSON.stringify([...zbior])); }
+  catch { /* prywatne okno albo pełny dysk — lista działa dalej, tylko bez pamięci */ }
+}
+
+function pokazUjecia(u) {
+  const box = $('fp-shots');
+  box.innerHTML = '';
+  if (!u || !Array.isArray(u.ujecia) || !u.ujecia.length) return;
+
+  const temat = ($('fp-topic').value.trim() || '—').toLowerCase().slice(0, 40);
+  const zrobione = odhaczone(temat);
+
+  const tytul = document.createElement('div');
+  tytul.className = 'plener-shots-title';
+  const licznik = document.createElement('span');
+  const odswiezLicznik = () => {
+    licznik.textContent = t('pl.shots', { n: u.ujecia.length })
+      + (zrobione.size ? ` — ${t('pl.done', { n: zrobione.size })}` : '');
+  };
+  odswiezLicznik();
+  const wyczysc = document.createElement('button');
+  wyczysc.type = 'button';
+  wyczysc.className = 'plener-clear';
+  wyczysc.textContent = t('pl.clearTicks');
+  wyczysc.addEventListener('click', () => {
+    zrobione.clear();
+    zapiszOdhaczone(temat, zrobione);
+    pokazUjecia(u);
+  });
+  tytul.append(licznik, wyczysc);
+  box.appendChild(tytul);
+
+  for (const s of u.ujecia) {
+    const kar = document.createElement('div');
+    kar.className = 'plener-shot' + (zrobione.has(s.klucz) ? ' zrobione' : '');
+
+    const glowa = document.createElement('div');
+    glowa.className = 'plener-shot-head';
+    /* Odhaczanie jest sensem listy — „lista do odhaczenia" bez sposobu
+       odhaczenia byłaby obietnicą na wyrost. W terenie zaznacza się to
+       palcem, na telefonie, więc pole leży w nagłówku karty. */
+    const ptaszek = document.createElement('input');
+    ptaszek.type = 'checkbox';
+    ptaszek.className = 'plener-tick';
+    ptaszek.checked = zrobione.has(s.klucz);
+    ptaszek.setAttribute('aria-label', s.nazwa);
+    ptaszek.addEventListener('change', () => {
+      ptaszek.checked ? zrobione.add(s.klucz) : zrobione.delete(s.klucz);
+      zapiszOdhaczone(temat, zrobione);
+      kar.classList.toggle('zrobione', ptaszek.checked);
+      odswiezLicznik();
+    });
+    const nazwa = document.createElement('span');
+    nazwa.className = 'plener-shot-name';
+    nazwa.textContent = s.nazwa;
+    const liczby = document.createElement('span');
+    liczby.className = 'plener-shot-nums mono';
+    liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
+    glowa.append(ptaszek, nazwa, liczby);
+
+    const ruch = document.createElement('div');
+    ruch.className = 'plener-shot-move';
+    ruch.textContent = s.ruch + (s.naSzkle ? ` · ${s.naSzkle}` : '');
+
+    const jak = document.createElement('div');
+    jak.className = 'plener-shot-how';
+    jak.textContent = s.jak;
+
+    const poco = document.createElement('div');
+    poco.className = 'plener-shot-why';
+    poco.textContent = s.poCo;
+
+    kar.append(glowa, ruch, jak, poco);
+    box.appendChild(kar);
+  }
+
+  if (u.pominiete && u.pominiete.length) {
+    const p = document.createElement('div');
+    p.className = 'plener-skipped';
+    p.textContent = t('pl.skipped') + ' '
+      + u.pominiete.map((x) => `${x.nazwa} (${x.powod})`).join('; ');
+    box.appendChild(p);
+  }
+}
+
+/* ---- misja drona ---- */
+let plenerWspolrzedne = null;
+
+function wstawWspolrzedne() {
+  if (!plenerWspolrzedne) return;
+  $('mis-lat').value = Number(plenerWspolrzedne.lat).toFixed(5);
+  $('mis-lon').value = Number(plenerWspolrzedne.lon).toFixed(5);
+}
+$('mis-here').addEventListener('click', () => {
+  if (!plenerWspolrzedne) { liczPlanPlener().then(wstawWspolrzedne); return; }
+  wstawWspolrzedne();
+});
+
+$('mis-go').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const out = $('mis-out');
+  const lat = Number($('mis-lat').value);
+  const lon = Number($('mis-lon').value);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    out.textContent = t('pl.misNoCoords');
+    out.className = 'plener-out mono plener-err';
+    return;
+  }
+  b.disabled = true;
+  out.className = 'plener-out mono';
+  out.textContent = t('pl.misWorking');
+  try {
+    const r = await fetch('/api/plan/mission', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat, lon,
+        szerokoscM: Number($('mis-w').value) || 200,
+        dlugoscM: Number($('mis-l').value) || 200,
+        odstepM: Number($('mis-odstep').value) || 50,
+        kierunek: Number($('mis-kier').value) || 0,
+        wysokosc: Number($('mis-alt').value) || 80,
+        predkosc: Number($('mis-speed').value) || 6,
+        nazwa: $('mis-name').value.trim() || 'misja',
+      }),
+    });
+    if (!r.ok) {
+      const d = await readJsonSafe(r);
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    const blob = await r.blob();
+    /* Pobranie przez tymczasowy odsyłacz: żądanie jest POST-em, więc zwykły
+       link nie wystarczy, a otwarcie w nowej karcie zostawiłoby pustą kartę. */
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${($('mis-name').value.trim() || 'misja').replace(/[^\w-]+/g, '-')}.kmz`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    out.textContent = t('pl.misDone', { kb: (blob.size / 1024).toFixed(1) });
+  } catch (err) {
+    out.textContent = err.message;
+    out.className = 'plener-out mono plener-err';
+  } finally {
+    b.disabled = false;
+  }
+});
 
 // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
 // strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.
@@ -4855,6 +5178,7 @@ const overlays = [
   { id: 'learn-modal', close: closeLearn },
   { id: 'kb-modal', close: () => { el.kbModal.style.display = 'none'; } },
   { id: 'studio-modal', close: () => { el.studioModal.style.display = 'none'; } },
+  { id: 'plener-modal', close: zamknijPlener },
   { id: 'settings-modal', close: closeSettings },
 ];
 
@@ -5062,12 +5386,10 @@ function openSettings() {
   refreshModelInfoBoxes();
   loadMicList();
   odswiezWyborNasluchu();
-  wczytajSprzet();
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
-  odswiezArchiwum();
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
@@ -5159,8 +5481,6 @@ el.settingsSave.addEventListener('click', () => {
   settings.timeMachine = $('set-timemachine').checked;
   saveSettings();
   updateLiveRec();
-  // sprzęt tak samo jak profil — na serwerze, bo używa go plan zdjęciowy
-  zapiszSprzet();
   // profil zapisywany na serwerze (wspólny dla urządzeń)
   fetch('/api/profile', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5712,34 +6032,40 @@ $('set-stt').addEventListener('change', (e) => {
 async function wczytajSprzet() {
   try {
     const d = await (await fetch('/api/gear')).json();
-    $('set-body').value = d.korpus || '';
-    $('set-lenses').value = d.obiektywy || '';
-    $('set-extras').value = d.dodatki || '';
+    $('gear-body').value = d.korpus || '';
+    $('gear-lenses').value = d.obiektywy || '';
+    $('gear-extras').value = d.dodatki || '';
   } catch { /* offline — pola zostają puste, zapis i tak zadziała później */ }
 }
 
-/* Zapis pod przyciskiem „Zapisz", nie przy pisaniu — i to jest poprawka
-   po obejrzeniu własnej roboty na zrzucie ekranu.
+/* Zapis pod przyciskiem, nie przy pisaniu — poprawka po obejrzeniu własnej
+   roboty na zrzucie ekranu.
 
    Pierwsza wersja zapisywała sprzęt na bieżąco, z opóźnieniem. Działało, ale
-   stworzyło w JEDNYM oknie dwa różne modele zapisu: pola „Korpus",
-   „Obiektywy" i „Reszta sprzętu" zapisywały się same, a stojące tuż obok
-   „Profil" i „Lokalizacja" — dopiero po kliknięciu. Trzy pola tekstowe
-   zachowujące się inaczej niż dwa sąsiednie pola tekstowe to nie jest
-   wygoda, tylko zagadka.
+   stworzyło w jednym oknie dwa różne modele zapisu: „Korpus", „Obiektywy"
+   i „Reszta sprzętu" zapisywały się same, a stojące tuż obok „Profil"
+   i „Lokalizacja" — dopiero po kliknięciu. Pola tekstowe zachowujące się
+   inaczej niż sąsiednie pola tekstowe to nie wygoda, tylko zagadka.
 
-   Mikrofon zostaje przy zapisie natychmiastowym, bo lista rozwijana czyta
-   się jako wybór dokonany w chwili kliknięcia, a pole tekstowe jako brudnopis. */
-function zapiszSprzet() {
-  return fetch('/api/gear', {
+   Po przeniesieniu sprzętu do Pleneru zostaje ta sama zasada, tylko własny
+   przycisk: „Zapisz sprzęt". `/api/gear` i tak zawsze było osobną trasą —
+   doklejenie go do przycisku Ustawień było wyłącznie skutkiem tego, że pola
+   przypadkiem tam stały. */
+/* Błąd LECI DALEJ, nie jest połykany. Dopóki zapis wisiał pod przyciskiem
+   Ustawień razem z profilem i lokalizacją, ciche `catch` było spójne z resztą.
+   Teraz sprzęt ma własny przycisk i własne potwierdzenie „Zapisane." — a to
+   potwierdzenie po nieudanym żądaniu byłoby zwykłym kłamstwem. */
+async function zapiszSprzet() {
+  const r = await fetch('/api/gear', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      korpus: $('set-body').value,
-      obiektywy: $('set-lenses').value,
-      dodatki: $('set-extras').value,
+      korpus: $('gear-body').value,
+      obiektywy: $('gear-lenses').value,
+      dodatki: $('gear-extras').value,
     }),
-  }).catch(() => {});
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
 }
 
 function odswiezWyborNasluchu() {

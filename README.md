@@ -55,6 +55,10 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**. Źródłem może być
   kamera przeglądarki (na telefonie z przełącznikiem przód/tył) albo **Kinect 360** —
   obraz i mapa głębi. Przycisk powiększenia przenosi podgląd na środek ekranu
+- 📷 **Plener** — foto i wideo w jednym oknie: sprzęt, plan zdjęciowy dla dowolnego
+  miejsca i dowolnej godziny, lista ujęć do nakręcenia dobrana do tematu i sprzętu,
+  Canon po Wi-Fi (CCAPI), misja waypointowa dla drona jako `.kmz` i archiwum materiału.
+  Studio generuje obraz — Plener pomaga go nakręcić
 - 🎤 **Wybór mikrofonu** (Ustawienia) — macierz Kinecta, słuchawki Bluetooth, telefon
   albo mikrofon laptopa; wybór zapamiętywany, z powrotem do domyślnego przy odłączeniu
 - 🦴 **Kinect 360 w pełni** — głębia, obraz RGB, **szkielet 20 stawów**, postawa, gesty
@@ -571,6 +575,30 @@ zainstalowany jest **COLMAP** (CUDA na RTX 3080), buduje model 3D automatycznie
 (`--dense` = gęsta chmura punktów `.ply` do Blendera/MeshLaba). Wynik skanu
 trafia do Cosmosa jako zdarzenie.
 
+### 📷 Plener — foto i wideo w jednym miejscu
+
+Przycisk **Plener** w panelu bocznym, tuż nad Nauką. Stoi obok Studia świadomie:
+w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
+
+| Sekcja | Co robi | Skąd to się bierze |
+|---|---|---|
+| 🎒 **Mój sprzęt** | korpus, obiektywy, reszta (dron, gimbal, statyw) — zapis własnym przyciskiem | `/api/gear`; z tego liczą się nastawy i to, które ujęcia są w ogóle wykonalne |
+| 🌅 **Plan zdjęciowy** | czas / przysłona / ISO, faza Słońca, ile zostało do złotej godziny i do zachodu, pogoda, zorza | `/api/plan` — działa **bez kamery**, dla podanego MIEJSCA i wybranej GODZINY |
+| 🎬 **Ujęcia do nakręcenia** | lista z liczbami (ogniskowa, ruch, czas trwania), **każda pozycja do odhaczenia** (postęp zostaje w przeglądarce), plus **czego się nie da i dlaczego** | `lib/ujecia.js`, dobierane po temacie i filtrowane przez Twój sprzęt |
+| 📷 **Aparat po Wi-Fi** | co aparat ma ustawione teraz, „Ustaw w aparacie", zdalna migawka | Canon CCAPI (`CANON_CCAPI_URL`); wiersz znika, gdy aparat nie odpowiada |
+| 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
+| 🗂 **Archiwum materiału** | OneDrive: indeksowanie, obiektywy z EXIF-u, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
+
+Dwie z tych rzeczy — misja `.kmz` i karty ujęć — do tej pory istniały wyłącznie
+jako trasa HTTP i jako narzędzie modelu. Działały, ale nie było ich jak uruchomić
+z interfejsu. To nie jest funkcja, której nie ma; to funkcja, o której nie sposób
+się dowiedzieć.
+
+> ⚠ **Misja KMZ nie przeszła jeszcze przez prawdziwego drona.** Struktura jest
+> odtworzona z dokumentacji WPML i sprawdzona cudzą implementacją (`zipfile`
+> i parser XML), ale pierwszy import zrób nad pustym polem i z ręką na drążkach.
+> Za zgodność lotu z przepisami odpowiadasz Ty.
+
 ### 🎨 Studio i silniki komercyjne (Twoje klucze API)
 
 Po wpisaniu kluczy w `.env` Cosmos zyskuje dodatkowe moce (płacisz tylko za to,
@@ -950,7 +978,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 38 zestawów + 9 selftestów Pythona (~10 min)
+npm test                 # 67 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

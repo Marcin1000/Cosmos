@@ -1651,6 +1651,61 @@ Telemetria SRT nie widziała pliku z prawdziwej karty.
 - **Nakładka telemetryczna na wideo** (dronetrace, GPStitch, OVRLEY) — to
   renderowanie ffmpegiem. Cosmos oddaje dane, obraz robi się w Premierze
 
+## ✅ Partia 40 — Plener: foto i wideo dostają własne miejsce (GOTOWE)
+
+Pytanie Marcina było krótkie: *„skoro te funkcjonalności foto/wideo to duża
+partia, to może trzeba wydzielić osobną pozycję w menu tylko na to?"*.
+Zanim odpowiedziałem, policzyłem, gdzie te funkcje właściwie są:
+
+| Funkcja | Gdzie mieszkała | Kiedy widoczna |
+|---|---|---|
+| sprzęt (korpus, obiektywy, dodatki) | Ustawienia, między mikrofonem a profilem | zawsze |
+| plan zdjęciowy | podpanel **wewnątrz podglądu kamery** | tylko przy włączonej kamerze i znanej lokalizacji |
+| aparat po Wi-Fi | wiersz w tamtym podpanelu | jw. |
+| archiwum materiału | Ustawienia | zawsze |
+| rozpoznawanie ptaków | nakładka trybu głosowego | tylko w trybie głosowym |
+| **misja KMZ** | — | **nigdzie** |
+| **karty ujęć** | — | **nigdzie** |
+
+Dwie ostatnie pozycje rozstrzygnęły sprawę. `/api/plan/mission` i `lib/ujecia.js`
+były zbudowane, przetestowane i całkowicie nieosiągalne z interfejsu: misję dało
+się pobrać wyłącznie żądaniem HTTP, a listę ujęć zobaczyć tylko wtedy, gdy model
+sam zdecydował się użyć narzędzia `[PLAN:]`. Bateria tego nie łapała, bo trasy
+odpowiadały — więc wszystko „działało".
+
+- [x] **Nowa pozycja „Plener"** w panelu bocznym, tuż nad Nauką. Stoi obok Studia
+      świadomie: w Studiu obraz się **generuje**, w Plenerze się go **kręci**
+- [x] **Plan zdjęciowy bez kamery** — dla nazwy MIEJSCA i wybranej GODZINY.
+      To nie jest przeniesione pole, tylko nowa zdolność: „co zabrać w sobotę
+      do Krakowa na 18:30" wcześniej nie miało w interfejsie odpowiedzi
+- [x] **Karty ujęć na ekranie** — z ogniskową, ruchem kamery i czasem trwania,
+      plus lista pominiętych z powodem („wymaga drona"). Każdą pozycję da się
+      **odhaczyć** i postęp przeżywa przeliczenie planu — bez tego „lista do
+      odhaczenia" byłaby obietnicą na wyrost. Stan siedzi w przeglądarce, bo
+      „nakręciłem" to fakt o jednym dniu zdjęciowym, a nie o Marcinie
+- [x] **Misja waypointowa z formularza** — siatka nalotu → plik `.kmz` do pobrania
+- [x] **Aparat po Wi-Fi** przeniesiony z podglądu kamery; doszła zdalna migawka
+      (świadomie tylko pod ludzkim palcem — model tego narzędzia nie dostaje)
+- [x] **Sprzęt i archiwum** przeprowadzone z Ustawień; w Ustawieniach został
+      drogowskaz, bo szukanie ich tam jest odruchem po miesiącach
+- [x] `tests/zestawy/plener.js` — sprawdza całą drogę z interfejsu, w tym
+      pobrany KMZ **cudzą implementacją** (`zipfile` + parser XML)
+
+### Błąd wyłapany przy okazji: reguła 180° zaokrąglana do drabinki zdjęciowej
+
+Test interfejsu pokazał „1/60" tam, gdzie przy 25 kl./s ma być 1/50 — czas wideo
+przechodził przez `najblizszy(CZASY, …)`, czyli przez klasyczną drabinkę czasów
+aparatu, w której pięćdziesiątki nie ma. Dwa skutki, oba realne:
+
+1. reguła 180° przestawała być regułą — 1/60 przy 25 kl./s to kąt 150°,
+2. **pod polską siecią 50 Hz** świetlówki i LED-y migoczą 100 razy na sekundę,
+   więc 1/50 i 1/100 są czasami bezpiecznymi, a 1/60 daje przewijające się pasy
+   w każdej hali, kościele i biurze.
+
+W trybie filmowym aparat oferuje pełną drabinkę wideo, więc nie ma czego
+zaokrąglać. Czas jest teraz dokładnie `1/(2×klatki)`, a przy klatkażach, które
+nie dzielą się na 50 (np. 60 kl./s), plan sam ostrzega o migotaniu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

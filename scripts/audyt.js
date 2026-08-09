@@ -229,6 +229,20 @@ for (const [f, tekst] of Object.entries(doki)) {
 }
 ok('skrypty z dokumentacji istnieją i są wykonywalne');
 
+/* Liczby w dokumentacji starzeją się po cichu. „38 zestawów" stało w README
+   i w tests/README.md jeszcze wtedy, gdy było ich sześćdziesiąt sześć —
+   nikt tego nie zauważył, bo nieaktualna liczba wygląda dokładnie tak samo
+   jak aktualna. Audyt liczy zestawy sam i porównuje. */
+const ileZestawow = fs.readdirSync(path.join(R, 'tests', 'zestawy')).filter((f) => f.endsWith('.js')).length;
+const zleLiczby = [];
+for (const [f, tekst] of Object.entries({ 'README.md': readme, 'tests/README.md': rd('tests/README.md') })) {
+  for (const m of tekst.matchAll(/(\d+)\s+zestaw(?:ów|y|)/g)) {
+    if (Number(m[1]) !== ileZestawow) zleLiczby.push(`${f}: „${m[0]}", a jest ${ileZestawow}`);
+  }
+}
+zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
+  : ok(`liczba zestawów w dokumentacji zgadza się z katalogiem (${ileZestawow})`);
+
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
 const sw = rd('public/sw.js');

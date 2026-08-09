@@ -701,8 +701,13 @@ async function handlePlanZdjeciowy(req, res) {
       error: miejsceNieznane
         ? `Nie udało się ustalić współrzędnych miejsca „${miejsceNieznane}". `
           + 'Podaj je dokładniej (np. „Kraków, Polska") albo wprost jako lat i lon.'
-        : 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
-          + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
+        /* Komunikat musi podać drogę, którą da się przejść STĄD. „Podaj lat
+           i lon w żądaniu" to instrukcja dla programisty, a nie dla człowieka
+           patrzącego na panel — a tuż nad tym napisem jest pole „Miejsce",
+           w które wystarczy wpisać nazwę. */
+        : 'Nie znam Twoich współrzędnych. Wpisz nazwę miejsca w polu „Miejsce" '
+          + '(Plener → Plan zdjęciowy) albo ustaw lokalizację na stałe '
+          + 'w Ustawieniach przyciskiem „📍 Wykryj".',
     });
   }
 
@@ -741,7 +746,7 @@ async function handlePlanZdjeciowy(req, res) {
      `rozpoznajObiektywy`; gdy nic nie da się odczytać, `dobierz` po prostu
      liczy jak dawniej — dla korpusu. */
   /* Gdy w pytaniu nie padł żaden obiektyw, bierzemy zestaw zapisany
-     w Ustawieniach. Podanie szkła wprost zawsze wygrywa. */
+     w Plenerze. Podanie szkła wprost zawsze wygrywa. */
   const zPytania = Array.isArray(d.obiektyw)
     ? d.obiektyw.flatMap((x) => rozpoznajObiektywy(String(x)))
     : rozpoznajObiektywy(d.obiektyw || '');
@@ -813,7 +818,7 @@ async function handlePlanZdjeciowy(req, res) {
 }
 
 /* Wszystko, co użytkownik napisał o sprzęcie, w jednym worku — dodatki
- * (dron, gimbal, statyw) wpisuje się raz w Ustawieniach albo rzuca w zdaniu
+ * (dron, gimbal, statyw) wpisuje się raz w Plenerze albo rzuca w zdaniu
  * „lecę z Mavikiem", a nie wypełnia formularza z polami wyboru. */
 function sprzetTekst(d) {
   return [d.sprzet, d.dodatki, userSprzet.korpus, userSprzet.dodatki]
@@ -1100,6 +1105,16 @@ async function capabilityManifest() {
       kalendarz: Boolean(BRIEFING.ics) },
     teren: { photoscan: moduleExists('senses', 'photoscan.py'),
       terrain: moduleExists('senses', 'terrain.py') },
+    /* Plener. Bez tego wpisu Cosmos na pytanie „co potrafisz" nie wymieniał
+       ani misji waypointowej, ani kart ujęć — a od kiedy mają interfejs,
+       jest dokąd odesłać człowieka zamiast tłumaczyć trasę HTTP. */
+    plener: {
+      sprzet: [userSprzet.korpus, userSprzet.obiektywy, userSprzet.dodatki].filter(Boolean).join(' · ') || null,
+      aparatPoWifi: canon.skonfigurowany(),
+      misjaKmz: true,
+      kartyUjec: true,
+      archiwum: onedrive.skonfigurowany(),
+    },
     trening: { przykladyChat: buildTrainingDataset('chat').count,
       skrypt: moduleExists('training', 'qlora_example.py') },
     brakujace: missing,
@@ -1138,6 +1153,11 @@ function capabilityText(m) {
     `Dom: urządzenia=${m.dom.urzadzenia.join(', ') || 'brak'}, odprawa=${yes(m.dom.odprawa)}`,
     `Teren z drona: analiza nasłonecznienia/cieni/widoku/objętości=${yes(m.teren.terrain)} `
       + `(senses/terrain.py), fotogrametria=${yes(m.teren.photoscan)}`,
+    `Plener (panel boczny „Plener") — foto i wideo: plan zdjęciowy dla dowolnego miejsca `
+      + 'i godziny, lista ujęć do nakręcenia z ogniskowymi, misja waypointowa dla drona '
+      + `do pobrania jako .kmz, aparat Canon po Wi-Fi=${yes(m.plener.aparatPoWifi)}, `
+      + `archiwum materiału=${yes(m.plener.archiwum)}. Sprzęt użytkownika: `
+      + `${m.plener.sprzet || 'niepodany — poproś o uzupełnienie w Plenerze'}`,
     `Trening własnego modelu: przykładów=${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}`,
     '',
     'JAK SIĘ UCZYSZ (za zgodą użytkownika): możesz zapamiętywać fakty, zapisywać notatki, '

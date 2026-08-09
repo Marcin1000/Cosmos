@@ -85,6 +85,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   await openModal('#settings-btn', '#settings-close', 'ustawienia', 'm3-settings');
   await openModal('#studio-btn', '#studio-close', 'studio', 'm4-studio');
+  await openModal('#plener-btn', '#plener-close', 'plener', 'm4b-plener');
   await openModal('#learn-btn', '#learn-close', 'nauka', 'm5-learn');
   await openModal('#kb-btn', '#kb-close', 'baza wiedzy', 'm6-kb');
   await openModal('#timeline-btn', '#timeline-close', 'oś czasu', 'm7-timeline');

@@ -38,6 +38,46 @@ const { srodowisko } = require('../pomoc');
   console.log('4. szkło podane w pytaniu →', powod2.slice(0, 60));
   if (!/300/.test(powod2)) fail.push('pożyczone szkło z pytania nie wygrało z zapisem w Ustawieniach');
 
+  /* 5. Korpus wpisany PO LUDZKU trafia we własny wpis katalogowy.
+     Pole „Korpus" w Plenerze to pole tekstowe, więc Marcin wpisze tam
+     „Canon R6 Mark II", a nie klucz `canon-r6ii`. Do niedawna kończyło się
+     to komunikatem „Nie mam tego w katalogu" o aparacie, który stoi
+     w katalogu pierwszy — i cichą utratą działki stabilizacji oraz drugiego
+     zakresu wzmocnienia (ISO 800), czyli dokładnie tych liczb, dla których
+     wpis katalogowy istnieje. */
+  const { rozpoznajSprzet } = require('../../lib/ekspozycja.js');
+  const zapisy = [
+    ['Canon R6 Mark II', 'Canon R6 Mark II', false],
+    ['EOS R6 II', 'Canon R6 Mark II', false],
+    ['r6m2', 'Canon R6 Mark II', false],
+    ['canon-r6ii', 'Canon R6 Mark II', false],
+    ['DJI Mavic 3', 'DJI Mavic 3', false],
+    ['Mavic 3 Pro', 'DJI Mavic 3', false],
+    // Mini 3 ma matrycę 1/1.3", nie 4/3 — nie wolno mu podstawić Mavica 3.
+    ['DJI Mini 3', null, true],
+    // R6 pierwszej generacji to inny aparat i ma zostać zgadywany.
+    ['Canon R6', null, true],
+  ];
+  const zle = [];
+  for (const [wpis, oczekiwana, zgadywany] of zapisy) {
+    const r = rozpoznajSprzet(wpis);
+    const ok = r.zgadywany === zgadywany && (!oczekiwana || r.nazwa === oczekiwana);
+    if (!ok) zle.push(`„${wpis}" → ${r.nazwa} (zgadywany: ${r.zgadywany})`);
+  }
+  console.log(`5. rozpoznanie korpusu z pola tekstowego: ${zapisy.length - zle.length}/${zapisy.length}`);
+  if (zle.length) fail.push('źle rozpoznany sprzęt: ' + zle.join('; '));
+
+  // Ta sama droga przez HTTP — pole z Pleneru leci prosto do `/api/plan`.
+  await fetch(`${env.adres}/api/gear`, { method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ korpus: 'Canon R6 Mark II', obiektywy: '24-105 f/4' }) });
+  const r3 = await (await fetch(`${env.adres}/api/plan`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat: 50.06, lon: 19.94, kiedy: '2026-06-21T10:00', tryb: 'zdjecie' }) })).json();
+  const nieznany = (r3.ustawienia.powody || []).some((x) => /Nie mam .* w katalogu/.test(x));
+  console.log(`6. „Canon R6 Mark II" z pola tekstowego → „nie mam w katalogu": ${nieznany}`);
+  if (nieznany) fail.push('własny aparat Marcina nie trafił we własny wpis katalogowy');
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nZESTAW SPRZĘTU OK');
   process.exit(fail.length ? 1 : 0);

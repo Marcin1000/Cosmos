@@ -52,14 +52,35 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   console.log(`5. EV w pełnym słońcu: ${evPelneSlonce.toFixed(1)} (reguła 16 mówi ~15)`);
   if (Math.abs(evPelneSlonce - 15) > 0.8) fail.push('EV pełnego słońca odbiega od reguły „słoneczne 16"');
 
-  // 6. wideo: czas ZAWSZE z reguły 180°, niezależnie od światła
-  for (const [klatki, oczekiwany] of [[25, '1/60'], [50, '1/125']]) {
+  /* 6. Wideo: czas ZAWSZE z reguły 180°, niezależnie od światła — i DOKŁADNIE
+     1/(2×klatki), bez zaokrąglania do drabinki zdjęciowej.
+
+     Ten test do niedawna sam wymuszał błąd: oczekiwał 1/60 przy 25 kl./s
+     i 1/125 przy 50, bo tyle dawało zaokrąglenie do klasycznych czasów
+     aparatu. Tyle że 1/60 przy 25 kl./s to kąt 150°, a nie 180 — i, co gorsze
+     pod polską siecią 50 Hz, to czas, przy którym świetlówki i LED-y dają
+     przewijające się pasy. W trybie filmowym aparat oferuje 1/50 i 1/100,
+     więc nie ma czego zaokrąglać. Wykrył to zestaw `plener`, sprawdzający
+     to samo od strony interfejsu. */
+  for (const [klatki, oczekiwany] of [[24, '1/48'], [25, '1/50'], [50, '1/100'], [60, '1/120']]) {
     const r = dobierz(evZeSlonca(40), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki });
     if (r.czas !== oczekiwany) fail.push(`wideo ${klatki} kl./s dało ${r.czas}, oczekiwano ${oczekiwany}`);
   }
+  // 1/60 przy 60 kl./s nie jest wielokrotnością 1/100 — ma paść ostrzeżenie o migotaniu.
+  const swietlowki = dobierz(evZeSlonca(40), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 60 });
+  console.log(`6a. wideo 60 kl./s → ${swietlowki.czas}, ostrzeżenie o 50 Hz: `
+    + `${swietlowki.powody.some((p) => /50 Hz/.test(p))}`);
+  if (!swietlowki.powody.some((p) => /50 Hz/.test(p))) {
+    fail.push('60 kl./s bez ostrzeżenia o migotaniu pod siecią 50 Hz');
+  }
+  if (dobierz(evZeSlonca(40), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 25 })
+    .powody.some((p) => /50 Hz/.test(p))) {
+    fail.push('25 kl./s straszy migotaniem, choć 1/50 jest właśnie czasem bezpiecznym');
+  }
+
   const ciemno = dobierz(evZeSlonca(-10), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 25 });
   console.log(`6. wideo 25 kl./s po ciemku → ${ciemno.czas} (czas nie może się zmienić)`);
-  if (ciemno.czas !== '1/60') fail.push('po ciemku złamał regułę 180° zamiast podnieść ISO');
+  if (ciemno.czas !== '1/50') fail.push('po ciemku złamał regułę 180° zamiast podnieść ISO');
   if (ciemno.iso <= 100) fail.push('po ciemku nie podniósł ISO');
 
   /* 7. Południe + wideo = PRZEŚWIETLENIE, czyli filtr ND. To był realny błąd:

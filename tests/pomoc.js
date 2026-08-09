@@ -138,6 +138,7 @@ const PORTY_ATRAP = {
   'mock-tempo.js': [7115],
   'mock-echo-systemu.js': [7116],
   'mock-grafiki.js': [7117],
+  'mock-canon.js': [7120],
   // atrapa Open-Meteo + Microsoft Graph tworzona wprost w zestawie
   'mockllm.py': [7099],
 };
@@ -239,6 +240,19 @@ const SRODOWISKA = {
   },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },
+  /* Aparat Canon po CCAPI + geokodowanie. Potrzebne razem, bo drogę „policz
+     plan → wyślij nastawy do aparatu" da się sprawdzić dopiero wtedy, gdy
+     plan ma dla czego się policzyć. */
+  aparat: {
+    port: 3411,
+    atrapy: [['mock-canon.js', null], ['mock-grafiki.js', null]],
+    env: {
+      CANON_CCAPI_URL: 'http://127.0.0.1:7120',
+      GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
+      SWPC_KP_URL: 'http://127.0.0.1:7117/swpc/kp',
+      SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
+    },
+  },
   // Zmysły podłączone, model nieistotny — Kinect, mowa, wykrywanie.
   zmysly: {
     port: 3407,

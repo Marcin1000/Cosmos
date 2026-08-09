@@ -4,6 +4,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 const CASES = [
   { name: 'ustawienia',  open: '#settings-btn', id: 'settings-modal' },
   { name: 'studio',      open: '#studio-btn',   id: 'studio-modal' },
+  { name: 'plener',      open: '#plener-btn',   id: 'plener-modal' },
   { name: 'nauka',       open: '#learn-btn',    id: 'learn-modal' },
   { name: 'baza wiedzy', open: '#kb-btn',       id: 'kb-modal' },
   { name: 'oś czasu',    open: '#timeline-btn', id: 'timeline-modal' },

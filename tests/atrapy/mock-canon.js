@@ -13,7 +13,11 @@
  */
 const http = require('http');
 
-const PORT = Number(process.env.PORT || 7120);
+/* `Number(PORT) || 7120`, nie `Number(PORT || 7120)`. Atrapy uruchamiane
+   z katalogu środowisk dostają `PORT` bez wartości, czyli napis „undefined";
+   pierwsza wersja robiła z tego NaN i serwer stawał na losowym porcie,
+   a zestaw dobijał się do 7120 i dostawał ECONNREFUSED. */
+const PORT = Number(process.env.PORT) || 7120;
 
 let awaria = '';
 const stan = {
