@@ -3964,8 +3964,13 @@ function pokazNalot() {
   if (!el) return;
   const o = oszacujNalot();
   if (!o) { el.textContent = ''; return; }
+  /* Separator dziesiętny z lokalizacji przeglądarki, nie na sztywno kropka.
+     Pola współrzędnych (`type=number`) i tak pokazują polski przecinek, więc
+     „1.20 km" tuż pod „49,29691" wyglądało jak dwie różne aplikacje. */
+  const km = (o.metry / 1000).toLocaleString(undefined,
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const czesci = [t('pl.misLines', { n: o.linii, p: o.punktow }),
-    t('pl.misDist', { km: (o.metry / 1000).toFixed(2) }),
+    t('pl.misDist', { km }),
     t('pl.misTime', { min: Math.round(o.minuty) })];
   el.className = 'field-hint';
   el.textContent = czesci.join(' · ');
