@@ -1854,6 +1854,24 @@ rodzaj błędu: wynik wygląda poprawnie i jest nieprawdziwy.
       pierwsze przeliczenie kończy się błędem, pola zostają puste i test
       przechodzi nawet na zepsutym kodzie
 
+### Czego jeszcze nie mówiła misja, a powinna
+
+Patrząc na ten sam ekran z Zakopanem doszły dwie rzeczy, o które nikt nie
+pytał, ale które przy locie w Tatrach mają znaczenie:
+
+- [x] **Wysokość jest względem PUNKTU STARTU, nie terenu.** Plik zapisuje
+      `relativeToStartPoint`, więc 80 m nad miejscem startu w dolinie to
+      80 m nad doliną, a nie nad zboczem, które w tę trasę wchodzi.
+      Ostrzeżenie stoi teraz wprost przy formularzu
+- [x] **Ile to właściwie lotu** — „5 linii (10 punktów) · trasa 1,20 km ·
+      ok. 4 min lotu", liczone na żywo przy zmianie parametrów. Pola
+      „200 × 200, co 50 m" nie mówią, czy to trzy minuty, czy czterdzieści,
+      a misja dłuższa niż bateria przerwie się w połowie i dron wróci do domu
+- [x] Dwa twarde progi: powyżej 99 punktów (limit formatu WPML) i powyżej
+      18 min lotu (bateria z rezerwą) formularz mówi o tym PRZED pobraniem
+- [x] Zestaw `plener` porównuje oszacowanie z przeglądarki z tym, co naprawdę
+      generuje `siatka()` — dwa niezależne kawałki kodu, które łatwo rozjechać
+
 Sprawdzone przy okazji i NIEbędące usterką: przecinek dziesiętny w polach
 („52,01216") to polskie formatowanie pola `type=number`. `value` oddaje
 `52.01216` z kropką, pobranie `.kmz` działa w locale `pl-PL`.
