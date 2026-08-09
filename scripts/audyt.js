@@ -1,6 +1,7 @@
 // Pełny audyt Cosmosa — statyczny. Każda kontrola mówi, co sprawdza i co znalazła.
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 const R = path.resolve(__dirname, '..');
@@ -549,9 +550,30 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
     return;
   }
 
+  /* HASŁO USTAWIAMY SAMI, zamiast brać to z `.env`.
+
+     Powód jest konkretny i wyszedł dopiero na serwerze Marcina. Serwer próbny
+     czyta `.env` z repozytorium, więc na maszynie z ustawionym COSMOS_PASSWORD
+     wszystkie trasy oddawały 401 — a pukanie po nich sprawdzało wtedy dokładnie
+     nic. Audyt meldował „✓ 63 trasy bez wywrotki", bo 401 to nie 500, i tym
+     samym przepuściłby dowolną wywrotkę w kodzie za bramką. Jednocześnie
+     strumień zdarzeń dostawał to samo 401 i szedł do PROBLEMÓW — czyli audyt
+     naraz krzyczał o poprawnym zachowaniu i milczał o niesprawdzonym kodzie.
+     Gorszej kombinacji nie ma.
+
+     Rozwiązanie: hasło jest ZAWSZE ustawione i ZAWSZE znane. Audyt zachowuje
+     się tak samo u każdego, sprawdza bramkę naprawdę (a nie tylko czytając
+     kod), a potem loguje się i puka po trasach jak zalogowany człowiek. */
+  const HASLO_PROBNE = 'audyt-' + crypto.randomBytes(8).toString('hex');
   const proba = spawnProc('node', ['server.js'], {
     cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
-    env: { ...process.env, PORT: String(PORT_PROBY), COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
+    env: {
+      ...process.env,
+      PORT: String(PORT_PROBY),
+      COSMOS_DATA_DIR: tmpDane,
+      NVIDIA_API_KEY: 'test',
+      COSMOS_PASSWORD: HASLO_PROBNE,
+    },
   });
   let logRozruchu = '';
   proba.stdout.on('data', (d) => { logRozruchu += d; });
@@ -580,11 +602,46 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
     zle('serwer nie wstał: ' + logRozruchu.trim().split('\n').slice(-3).join(' | '));
   } else {
     ok('serwer wstaje');
+
+    /* --- Bramka logowania, sprawdzona NA DZIAŁAJĄCYM serwerze ---
+       Sekcja 9 czyta kod i potwierdza, że warunek stoi przed trasami. To dobre
+       sprawdzenie, ale statyczne: nie wyłapie trasy obsłużonej WCZEŚNIEJ niż
+       ten warunek. Tu pytamy serwer. */
+    let ciastko = '';
+    const bezLogowania = await fetch(adres + '/api/status', { signal: AbortSignal.timeout(5000) })
+      .then((r) => r.status).catch((e) => e.message);
+    if (bezLogowania !== 401) {
+      zle(`przy ustawionym haśle /api/status oddaje ${bezLogowania} zamiast 401 — bramka nie działa`);
+    }
+    const zleHaslo = await fetch(adres + '/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'nie-to-haslo' }), signal: AbortSignal.timeout(5000),
+    }).then((r) => r.status).catch((e) => e.message);
+    if (zleHaslo !== 401) zle(`błędne hasło daje ${zleHaslo} zamiast 401`);
+
+    try {
+      const r = await fetch(adres + '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: HASLO_PROBNE }), signal: AbortSignal.timeout(5000),
+      });
+      ciastko = String(r.headers.get('set-cookie') || '').split(';')[0];
+      if (r.status !== 200 || !/^cosmos_auth=\w/.test(ciastko)) {
+        zle(`logowanie poprawnym hasłem: HTTP ${r.status}, ciastko „${ciastko}"`);
+      }
+    } catch (e) { zle('logowanie poprawnym hasłem: ' + e.message); }
+    if (bezLogowania === 401 && zleHaslo === 401 && ciastko) {
+      ok('bramka logowania działa na żywo (401 bez sesji, 401 przy złym haśle, ciastko przy dobrym)');
+    }
+    const naglowki = ciastko ? { Cookie: ciastko } : {};
+
     // GET-y bez skutków ubocznych — pukamy we wszystko, co się da
     const doSprawdzenia = trasy.filter((t) => t.startsWith('/api/')
       && !/login|logout|chat|polish|stream|studio|record|train|run/.test(t));
     const padly = [];
     const niedostepne = [];
+    /* 401 tu znaczy, że audyt zgubił własną sesję — a wtedy CAŁE pukanie po
+       trasach nic nie sprawdza. Musi być usterką, nigdy cichym „przeszło". */
+    const odbite = [];
     /* Trasy, które bez parametru kończą się na walidacji i nigdy nie dochodzą
        do właściwego kodu. Bez tego `/api/search` przechodził audyt, mając
        w środku `addEvent is not defined`. */
@@ -596,12 +653,14 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
     };
     for (const t of doSprawdzenia) {
       try {
-        const r = await fetch(adres + t + (PARAMETRY[t] || ''), { signal: AbortSignal.timeout(12000) });
+        const r = await fetch(adres + t + (PARAMETRY[t] || ''),
+          { headers: naglowki, signal: AbortSignal.timeout(12000) });
         // 502 znaczy „usługa poniżej nie odpowiada" — w środowisku audytu nie
         // ma ani modelu, ani zmysłów, więc to poprawna odpowiedź, nie usterka.
         // 500 to już nasza wywrotka i takich szukamy (tak wyszło `rutyny is
         // not defined` po podziale na moduły).
         if (r.status === 500) padly.push(`${t} → 500`);
+        else if (r.status === 401) odbite.push(t.replace('/api/', ''));
         else if (r.status === 502) niedostepne.push(t.replace('/api/', ''));
         else if (r.status === 200) {
           /* Błąd w kodzie potrafi wyjść jako HTTP 200 z komunikatem w treści —
@@ -615,12 +674,17 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
         }
       } catch (e) { padly.push(`${t} → ${e.message}`); }
     }
+    if (odbite.length) {
+      zle(`audyt stracił sesję — ${odbite.length} tras oddało 401 (${odbite.slice(0, 5).join(', ')}`
+        + `${odbite.length > 5 ? ', …' : ''}). Rozruch próbny NIC nie sprawdził.`);
+    }
     padly.length ? zle('trasy wywracają się (HTTP 500): ' + padly.join(', '))
-      : ok(`${doSprawdzenia.length} tras bez wywrotki`
-        + (niedostepne.length ? ` (${niedostepne.join(', ')} → 502: brak usługi, spodziewane)` : ''));
+      : (!odbite.length && ok(`${doSprawdzenia.length} tras bez wywrotki`
+        + (niedostepne.length ? ` (${niedostepne.join(', ')} → 502: brak usługi, spodziewane)` : '')));
     // strumień zdarzeń osobno — nie kończy się sam
     try {
-      const r = await fetch(adres + '/api/events/stream', { signal: AbortSignal.timeout(3000) });
+      const r = await fetch(adres + '/api/events/stream',
+        { headers: naglowki, signal: AbortSignal.timeout(3000) });
       r.status === 200 && /event-stream/.test(r.headers.get('content-type') || '')
         ? ok('strumień zdarzeń odpowiada') : zle(`strumień zdarzeń: HTTP ${r.status}`);
       r.body.cancel().catch(() => {});
