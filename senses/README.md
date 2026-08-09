@@ -21,8 +21,9 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej; obsługiwane API Pipera ≤1.2 i 1.3+ |
 | Wzrok — `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
 | Pamięć — `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
-| Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy |
+| Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy. Z `docling` albo `markitdown` czyta też SKANY (OCR) i zachowuje tabele oraz kolumny — bez nich pypdf oddaje ciąg luźnych liczb |
 | Powiększanie — `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
+| Ptaki — `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer — bez nich BirdNET szuka wśród gatunków całego świata |
 | Sylwetka — `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
 | `watcher.py` — ciągła percepcja | ✅ działa | webcam, telefon, aparat — albo Kinect przez `CAMERA_SOURCE=kinect` |
 | `wake_listener.py` — słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
@@ -72,7 +73,10 @@ pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
 pip install mediapipe                                 # + sylwetka i gesty
 pip install sentence-transformers                     # + pamięć (wyszukiwanie semantyczne)
+pip install birdnetlib librosa resampy tensorflow      # + ptaki (gatunek z głosu, BirdNET)
 pip install pypdf python-docx openpyxl python-pptx    # + czytanie dokumentów do bazy wiedzy
+pip install docling                                   # + LEPSZE czytanie: skany (OCR), tabele, kolumny
+#   lżejsza alternatywa: pip install markitdown  (bez OCR, ale szybka i mała)
 pip install requests numpy                            # + obserwatory (watcher, kinect, photoscan)
 ```
 

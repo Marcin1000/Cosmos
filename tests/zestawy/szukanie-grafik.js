@@ -72,6 +72,70 @@ const { srodowisko } = require('../pomoc');
   console.log(`8. mniejszy model — [GRAFIKA:] ${/GRAFIKA:/.test(krotki) ? 'jest' : 'BRAK'}`);
   if (!/GRAFIKA:/.test(krotki)) fail.push('skracanie instrukcji odebrało mniejszemu modelowi grafiki');
 
+  /* ---- SEDNO POPRAWKI: zapas źródeł ----
+     Marcin zgłosił „nie pokazuje zdjęć, które wyszukał". Jedno źródło
+     (DuckDuckGo ze skrobanym żetonem) potrafi odmówić z powodów całkowicie
+     poza naszą kontrolą — i wtedy nie było ŻADNYCH zdjęć. Poniżej wyłączamy
+     źródła po kolei i pilnujemy, że zdjęcia nadal są. */
+  const awaria = async (zrodla) => {
+    await fetch(`http://127.0.0.1:7117/awaria?zrodla=${encodeURIComponent(zrodla)}`);
+  };
+  const ile = async (etykieta) => {
+    const rr = await fetch(`${env.adres}/api/search/images?q=Krak%C3%B3w`);
+    const dd = await rr.json();
+    const zrodla = (dd.zrodla || []).map((z) => `${z.nazwa}=${z.blad ? 'padło' : z.ile}`).join(' ');
+    console.log(`   ${etykieta}: ${dd.results?.length || 0} zdjęć  [${zrodla}]`);
+    return dd;
+  };
+
+  console.log('9. odporność na awarie źródeł:');
+  /* SearXNG jest źródłem WŁASNYM i idzie pierwszy — sprawdzamy osobno, że
+     naprawdę bierze udział, bo tylko nad nim mamy kontrolę. */
+  const zSearx = await ile('wszystkie działają');
+  if (!zSearx.results?.some((x) => x.zrodlo === 'SearXNG')) {
+    fail.push('SearXNG skonfigurowany, a nie ma go w wynikach');
+  }
+  await awaria('searxng');
+  const bezSearx = await ile('bez SearXNG');
+  if (!bezSearx.results?.length) fail.push('padł SearXNG i zdjęcia zniknęły');
+  await awaria('');
+
+  await awaria('ddg');
+  let d9 = await ile('bez DuckDuckGo');
+  if (!d9.results?.length) fail.push('padł DuckDuckGo i zdjęcia zniknęły — zapas nie działa');
+  if (!d9.results?.some((x) => x.zrodlo === 'Wikimedia Commons')) {
+    fail.push('Commons nie wskoczył na miejsce DuckDuckGo');
+  }
+
+  await awaria('ddg,commons');
+  d9 = await ile('bez DDG i Commons');
+  if (!d9.results?.length) fail.push('zostało jedno źródło, a zdjęć brak');
+
+  await awaria('searxng,ddg,commons,openverse');
+  d9 = await ile('wszystkie padły');
+  if (d9.results?.length) fail.push('atrapa miała paść, a zdjęcia są — test nic nie sprawdza');
+  if (!d9.error) fail.push('wszystko padło, a Cosmos nie mówi DLACZEGO — nie do zdiagnozowania');
+  else console.log(`   powód podany użytkownikowi: „${d9.error.slice(0, 80)}"`);
+
+  await awaria('');   // przywróć wszystkie źródła
+  const d10 = await ile('wszystkie działają');
+  const zrodlaWWynikach = [...new Set((d10.results || []).map((x) => x.zrodlo))];
+  console.log(`10. źródła w wynikach: ${zrodlaWWynikach.join(', ')}`);
+  if (!(d10.results || []).every((x) => x.zrodlo)) fail.push('wynik bez nazwy źródła');
+  /* Przeplot: gdy działają wszystkie źródła, w wynikach mają być WSZYSTKIE.
+     Sklejanie po kolei dawało osiem obrazów z samego DuckDuckGo, a materiał
+     na jasnej licencji nie pokazywał się nigdy. */
+  if (zrodlaWWynikach.length < 3) {
+    fail.push(`w wynikach tylko ${zrodlaWWynikach.length} źródła (${zrodlaWWynikach.join(', ')}) `
+      + '— jedno źródło zajmuje wszystkie miejsca');
+  }
+  const zLicencja = (d10.results || []).filter((x) => x.licencja);
+  console.log(`    z podaną licencją: ${zLicencja.length} z ${d10.results.length}`);
+  if (!zLicencja.length) fail.push('żaden wynik nie niesie licencji — nie wiadomo, czego wolno użyć');
+  // Duplikaty: to samo zdjęcie z dwóch źródeł ma pojawić się raz.
+  const pelne = (d10.results || []).map((x) => x.full);
+  if (new Set(pelne).size !== pelne.length) fail.push('ten sam obraz pokazany dwa razy');
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nSZUKANIE GRAFIK OK');
   process.exit(fail.length ? 1 : 0);

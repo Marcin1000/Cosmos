@@ -64,10 +64,39 @@ const uzyteHtml = [...new Set([...html.matchAll(/data-i18n(?:-ph|-aria|-title)?=
 // a nie brakujące tłumaczenie. Kod ma dla nich zapasową etykietę.
 const braki = [...uzyteApp, ...uzyteHtml].filter((k) => !wszystkie.has(k) && !k.endsWith('.'));
 braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystkie użyte klucze mają tłumaczenie (${uzyteApp.length} + ${uzyteHtml.length})`);
+/* Klucze budowane z danych są używane, tylko nie widać tego dosłownie:
+   `t('event.' + z.type)` ożywia wszystkie `event.*`. Bez tego wyjątku audyt
+   podaje je jako martwe, człowiek je kasuje, a w interfejsie pojawia się goły
+   `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
+   da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
+   w którym ginie prawdziwa robota do zrobienia. */
+const prefiksyDynamiczne = [...app.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
-  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``));
+  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``)
+  && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
+
+/* Placeholder, który nikt nie podstawił — i to jest błąd, który WIDAĆ.
+   Znalazłem go dopiero na zrzucie ekranu: w trybie głosowym wyświetlało się
+   dosłownie „Brak dostępu do mikrofonu: {msg}". Nie łapie tego ani parytet
+   tłumaczeń, ani sprawdzenie brakujących kluczy — tekst jest, klucz jest,
+   po prostu nikt nie przekazał danych. Jedna instancja na 80 kluczy z
+   placeholderem, ale klasa realna i tania do pilnowania.
+
+   `data-i18n` w HTML-u też nie umie podstawiać, więc klucz z placeholderem
+   użyty w atrybucie jest tak samo zepsuty. */
+const zPlaceholderem = new Set();
+for (const m of czesci[0].matchAll(/^\s*'([^']+)':\s*'((?:[^'\\]|\\.)*)'/gm)) {
+  if (/\{[a-zA-Z0-9_]+\}/.test(m[2])) zPlaceholderem.add(m[1]);
+}
+const gole = [
+  ...[...app.matchAll(/\bt\('([^']+)'\s*\)/g)].map((m) => m[1]),
+  ...uzyteHtml.map((k) => k),
+].filter((k) => zPlaceholderem.has(k));
+gole.length
+  ? zle(`tekst z placeholderem wyświetlany bez danych: ${[...new Set(gole)].join(', ')}`)
+  : ok(`wszystkie ${zPlaceholderem.size} tekstów z placeholderem dostaje dane`);
 
 // ---------------------------------------------------------------- 3 DOM
 sekcja('Zgodność kodu z HTML-em');
@@ -91,15 +120,40 @@ otw === zam ? ok(`znaczniki się domykają (${otw})`) : zle(`rozjazd znaczników
 
 // ---------------------------------------------------------------- 4 API
 sekcja('Trasy serwera');
-const trasy = [...new Set([...server.matchAll(/p === '([^']+)'/g)].map((m) => m[1]))];
-const prefiksy = [...new Set([...server.matchAll(/p\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
+/* Tras szukamy w server.js ORAZ we wszystkich modułach — i to jest poprawka
+   po realnej luce, którą sam wprowadziłem.
+
+   Do Partii 34 wszystkie trasy siedziały w server.js i skanowanie jednego
+   pliku wystarczało. Po podziale połowa z nich wyprowadziła się do `lib/`
+   i po cichu zniknęła spod kontroli: rozruch próbny pukał w 45 tras zamiast
+   52, a sprawdzenie „każda trasa opisana w dokumentacji" przechodziło dla
+   nieopisanych, bo ich nie widziało. Narzędzie do wykrywania usterek, które
+   po podziale pliku samo przestaje patrzeć na przeniesiony kod, jest gorsze
+   niż jego brak — dokładnie ta sama zasada, co przy zajętym porcie 3499.
+
+   Moduły używają dwóch nazw dla ścieżki (`p` w jednych, `pathname` w innych),
+   więc łapiemy obie. */
+const modulyKod = fs.readdirSync(path.join(R, 'lib'))
+  .filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`)).join('\n');
+const kodTras = server + '\n' + modulyKod;
+const trasy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname) === '(\/[^']*)'/g)].map((m) => m[1]))];
+const prefiksy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname)\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
 const wolane = [...new Set([...(app + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
 const sieroty = wolane.filter((c) => !trasy.includes(c) && !prefiksy.some((p) => c.startsWith(p))
   && !trasy.some((r) => c.startsWith(r + '/')));
 sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
   : ok(`${wolane.length} wywołań klienta ma pokrycie w ${trasy.length} trasach`);
-const dokTrasy = readme + start;
-const nieudok = trasy.filter((r) => r.startsWith('/api/') && !dokTrasy.includes(r));
+/* Dokumentacja opisuje rodziny tras skrótami — `/api/studio/*` na osiem tras
+   Studia i `/api/procedures/record/{start,stop,status}` na trzy. To jest dobry
+   zapis dla człowieka i nie chcę go rozbijać na jedenaście wierszy tabeli
+   tylko po to, żeby dopasować się do `includes()`. Rozwijamy więc skróty tutaj,
+   zamiast psuć dokumentację pod narzędzie. */
+const dokTrasy = (readme + start)
+  .replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g,
+    (_, przed, srodek, po) => srodek.split(',').map((x) => `${przed}${x.trim()}${po}`).join(' '));
+const rodziny = [...dokTrasy.matchAll(/`(\/api\/[a-z0-9/_-]*)\*`/gi)].map((m) => m[1]);
+const nieudok = trasy.filter((r) => r.startsWith('/api/')
+  && !dokTrasy.includes(r) && !rodziny.some((pref) => r.startsWith(pref)));
 nieudok.length ? zle('trasy nieopisane w dokumentacji: ' + nieudok.join(', ')) : ok('każda trasa /api/ jest opisana');
 
 // ---------------------------------------------------------------- 5 .env
@@ -174,6 +228,20 @@ for (const [f, tekst] of Object.entries(doki)) {
   }
 }
 ok('skrypty z dokumentacji istnieją i są wykonywalne');
+
+/* Liczby w dokumentacji starzeją się po cichu. „38 zestawów" stało w README
+   i w tests/README.md jeszcze wtedy, gdy było ich sześćdziesiąt sześć —
+   nikt tego nie zauważył, bo nieaktualna liczba wygląda dokładnie tak samo
+   jak aktualna. Audyt liczy zestawy sam i porównuje. */
+const ileZestawow = fs.readdirSync(path.join(R, 'tests', 'zestawy')).filter((f) => f.endsWith('.js')).length;
+const zleLiczby = [];
+for (const [f, tekst] of Object.entries({ 'README.md': readme, 'tests/README.md': rd('tests/README.md') })) {
+  for (const m of tekst.matchAll(/(\d+)\s+zestaw(?:ów|y|)/g)) {
+    if (Number(m[1]) !== ileZestawow) zleLiczby.push(`${f}: „${m[0]}", a jest ${ileZestawow}`);
+  }
+}
+zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
+  : ok(`liczba zestawów w dokumentacji zgadza się z katalogiem (${ileZestawow})`);
 
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
@@ -288,9 +356,30 @@ liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
 // Żaden identyfikator z modułu nie może być używany bez importu — inaczej
 // serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
 const glowa = server.slice(0, server.indexOf('// ----', 2500));
-const ogon = server.slice(glowa.length);
+/* Z treści usuwamy NAPISY i komentarze, zanim poszukamy w niej symboli.
+   Bez tego sprawdzenie zgłaszało nieistniejące usterki: `poraDnia` widziało
+   w treści promptu opisującego parametry narzędzia, a `TEMATY` — w polskim
+   zdaniu „OSTATNIE TEMATY ROZMÓW". Fałszywy alarm w narzędziu do wykrywania
+   usterek kosztuje tyle samo czasu co prawdziwy, a uczy go ignorować. */
+const bezNapisow = (kod) => kod
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+  .replace(/'(?:\\.|[^'\\])*'/g, "''")
+  .replace(/"(?:\\.|[^"\\])*"/g, '""')
+  .replace(/`(?:\\.|[^`\\])*`/g, '``');
+const ogon = bezNapisow(server.slice(glowa.length));
+/* Moduł wciągnięty CAŁY, pod jedną nazwą (`const canon = require('./lib/canon.js')`),
+   jest importem tak samo dobrym jak rozpisany po klamrach — a bywa lepszym,
+   gdy nazwy są ogólne: `canon.skonfigurowany()` i `onedrive.skonfigurowany()`
+   czyta się jednoznacznie, a dwa gołe `skonfigurowany` już nie. Kontrola tego
+   nie rozumiała i kazała psuć nazwy pod narzędzie, zamiast odwrotnie. */
+const przestrzenie = new Set(
+  [...glowa.matchAll(/const\s+(\w+)\s*=\s*require\(['"]\.\/lib\/([\w-]+)\.js['"]\)/g)]
+    .map((mm) => `${mm[2]}.js`),
+);
 const bezImportu = [];
 for (const m of moduly) {
+  if (przestrzenie.has(m)) continue;
   let mod; try { mod = require(path.join(R, 'lib', m)); } catch (e) { zle(`lib/${m} nie daje się wczytać: ${e.message}`); continue; }
   for (const k of Object.keys(mod)) {
     if (k === 'polacz') continue;
@@ -299,6 +388,111 @@ for (const m of moduly) {
 }
 bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
   : ok('każdy symbol z modułów jest zaimportowany');
+
+/* Nazwy WOŁANE w module, a nigdzie w nim niezdefiniowane.
+
+   `node --check` tego nie widzi — składnia jest poprawna, a trasa wywala się
+   dopiero przy wywołaniu. Przy podziale server.js takich usterek było sześć
+   pod rząd, a osobno wyszła siódma: `tsName` wołane w nauka.js, a definiowane
+   w studio.js i nigdzie niewstrzykiwane.
+
+   DEFINICJE zbieramy z SUROWEGO źródła, bez wycinania napisów. Pierwsza wersja
+   najpierw usuwała napisy i komentarze — i rozjeżdżała się na literałach
+   wyrażeń regularnych z cudzysłowem w środku (`/vqd=["']([^"']+)/`), połykając
+   pół pliku razem z definicjami. Skutek: dziesięć nieistniejących usterek.
+   Czytanie surowego źródła bywa zbyt hojne, ale myli się w BEZPIECZNĄ stronę —
+   najwyżej przeoczy usterkę, nigdy nie zgłosi zdrowego kodu. */
+const GLOBALE_NODE = new Set(['require', 'module', 'exports', 'process', 'console', 'Buffer',
+  '__dirname', '__filename', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+  'setImmediate', 'fetch', 'URL', 'URLSearchParams', 'AbortSignal', 'TextEncoder', 'TextDecoder',
+  'JSON', 'Math', 'Date', 'Object', 'Array', 'String', 'Number', 'Boolean', 'Promise', 'Error',
+  'TypeError', 'Map', 'Set', 'WeakMap', 'RegExp', 'Infinity', 'NaN', 'undefined', 'globalThis',
+  'Intl', 'structuredClone', 'queueMicrotask', 'BigInt', 'Symbol', 'Proxy', 'Reflect',
+  'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
+  'encodeURI', 'decodeURI', 'atob', 'btoa', 'FormData', 'Blob', 'File', 'Headers',
+  'Request', 'Response', 'AbortController', 'WebSocket', 'performance']);
+const SLOWA_JS = new Set(['const', 'let', 'var', 'function', 'async', 'await', 'return', 'if',
+  'else', 'for', 'while', 'of', 'in', 'new', 'typeof', 'instanceof', 'try', 'catch', 'finally',
+  'throw', 'break', 'continue', 'switch', 'case', 'default', 'do', 'delete', 'void', 'yield',
+  'class', 'extends', 'super', 'this', 'static', 'get', 'set', 'true', 'false', 'null']);
+
+const wolneNazwy = [];
+/** Zostaw sam KOD: bez komentarzy i bez treści napisów.
+ *
+ *  Zwykłe wyrażenie regularne tu nie wystarcza i to nie jest przesada —
+ *  pierwsza wersja rozjeżdżała się na literale `/vqd=["\']([^"\']+)/`,
+ *  brała cudzysłów w środku wzorca za początek napisu i połykała pół pliku
+ *  razem z definicjami funkcji. Druga wersja zostawiała napisy i tonęła
+ *  w polskiej prozie („wyświetlenie (patrz niżej)" wygląda jak wywołanie).
+ *  Mały automat stanowy rozróżnia napis od wzorca i kosztuje trzydzieści
+ *  linijek — mniej niż jeden fałszywy alarm w środku nocy.
+ */
+function samKod(src) {
+  let out = '';
+  let i = 0;
+  let poprzedni = '';           // ostatni znaczący znak — decyduje, czy `/` to wzorzec
+  while (i < src.length) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (c === '/' && d === '*') { const k = src.indexOf('*/', i + 2); i = k < 0 ? src.length : k + 2; out += ' '; continue; }
+    if (c === '/' && d === '/') { const k = src.indexOf('\n', i); i = k < 0 ? src.length : k; out += ' '; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      const cudzy = c; i++;
+      while (i < src.length && src[i] !== cudzy) { if (src[i] === '\\') i++; i++; }
+      i++; out += cudzy + cudzy; poprzedni = cudzy; continue;
+    }
+    // `/` po operatorze albo nawiasie otwierającym zaczyna WZORZEC, nie dzielenie
+    if (c === '/' && /[=(,:[!&|?{};+\-*%~^<>]/.test(poprzedni)) {
+      i++;
+      while (i < src.length && src[i] !== '/') {
+        if (src[i] === '\\') i++;
+        else if (src[i] === '[') { while (i < src.length && src[i] !== ']') { if (src[i] === '\\') i++; i++; } }
+        i++;
+      }
+      i++; while (i < src.length && /[a-z]/.test(src[i])) i++;   // flagi
+      out += ' 0 '; poprzedni = '0'; continue;
+    }
+    out += c;
+    if (!/\s/.test(c)) poprzedni = c;
+    i++;
+  }
+  return out;
+}
+
+for (const m of moduly) {
+  const src = samKod(rd(`lib/${m}`));
+  const zdef = new Set();
+  for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  for (const x of src.matchAll(/function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  /* Wszystko, co stoi wewnątrz nawiasów klamrowych albo okrągłych, traktujemy
+     jak potencjalny parametr lub destrukturyzację. Hojnie — patrz wyżej. */
+  /* Parametry funkcji czytamy z wersji BEZ zagnieżdżonych klamer, inaczej
+     `indeksuj(naPaczke, { folder, limit })` nie oddaje pierwszego parametru:
+     wzorzec urywa się na klamrze i `naPaczke` wygląda na niezdefiniowane. */
+  const bezKlamer = src.replace(/\{[^{}]*\}/g, ' ');
+  for (const x of bezKlamer.matchAll(/\(([^()]*)\)/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.split(':').pop().trim().split('=')[0].trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  for (const x of src.matchAll(/[({]([^(){}]*)[)}]/g)) {
+    for (const cz of x[1].split(',')) {
+      const n = cz.split(':').pop().trim().split('=')[0].trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
+    }
+  }
+  /* Interesują nas WYWOŁANIA — tam fałszywych trafień jest najmniej, bo pola
+     obiektów i zmienne pętli nie są wołane jak funkcje. */
+  for (const x of src.matchAll(/(?<![.\w$'"`])([A-Za-z_$][\w$]{2,})\s*\(/g)) {
+    const n = x[1];
+    if (!zdef.has(n) && !GLOBALE_NODE.has(n) && !SLOWA_JS.has(n)) wolneNazwy.push(`${m}:${n}`);
+  }
+}
+const wolneUnik = [...new Set(wolneNazwy)];
+wolneUnik.length ? zle('w modułach wołane nazwy bez definicji: ' + wolneUnik.join(', '))
+  : ok('każda nazwa wołana w modułach ma definicję');
 // Tablice podmieniane w module nie mogą wychodzić jako tablice — serwer
 // dostałby kopię wiązania i po pierwszym usunięciu widziałby stary stan.
 const pulapki = [];
@@ -323,17 +517,60 @@ sekcja('Rozruch próbny');
    Trwa kilka sekund i wyklucza całą tę klasę błędów. */
 const { execFileSync, spawn: spawnProc } = require('child_process');
 const os = require('os');
+const net = require('node:net');
+const PORT_PROBY = 3499;
+
+/** Czy ktoś już siedzi na tym porcie? */
+function portZajety(port) {
+  return new Promise((gotowe) => {
+    const s = net.connect({ host: '127.0.0.1', port });
+    const koniec = (odp) => { s.destroy(); gotowe(odp); };
+    s.once('connect', () => koniec(true));
+    s.once('error', () => koniec(false));
+    setTimeout(() => koniec(false), 700);
+  });
+}
+
 const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
-const proba = spawnProc('node', ['server.js'], {
-  cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
-  env: { ...process.env, PORT: '3499', COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
-});
-let logRozruchu = '';
-proba.stdout.on('data', (d) => { logRozruchu += d; });
-proba.stderr.on('data', (d) => { logRozruchu += d; });
 
 (async () => {
-  const adres = 'http://127.0.0.1:3499';
+  /* Zanim cokolwiek uruchomimy: port MUSI być wolny.
+     To nie jest ostrożność na wyrost, tylko poprawka po realnej wpadce. Audyt
+     zostawiał po sobie serwer (samo `kill(-pid)` czasem nie wystarczało), więc
+     przy następnym uruchomieniu nowy proces padał na EADDRINUSE — a audyt
+     i tak meldował „✓ serwer wstaje", bo pukał w STARY serwer z poprzedniego
+     przebiegu. Czyli sprawdzał nie ten kod, co trzeba, i o niczym nie mówił.
+     Narzędzie do wykrywania usterek, które samo może po cichu skłamać, jest
+     gorsze niż jego brak. */
+  if (await portZajety(PORT_PROBY)) {
+    zle(`port ${PORT_PROBY} jest zajęty — rozruch próbny pukałby w cudzy serwer. `
+      + `Zamknij go (np. pkill -f "node server.js") i powtórz audyt.`);
+    podsumuj();
+    return;
+  }
+
+  const proba = spawnProc('node', ['server.js'], {
+    cwd: R, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    env: { ...process.env, PORT: String(PORT_PROBY), COSMOS_DATA_DIR: tmpDane, NVIDIA_API_KEY: 'test' },
+  });
+  let logRozruchu = '';
+  proba.stdout.on('data', (d) => { logRozruchu += d; });
+  proba.stderr.on('data', (d) => { logRozruchu += d; });
+
+  /** Ubij serwer NA PEWNO — grupę i sam proces, aż port zwolniony. */
+  async function ubijProbny() {
+    for (const sygnal of ['SIGTERM', 'SIGKILL']) {
+      try { process.kill(-proba.pid, sygnal); } catch { /* grupa już nie żyje */ }
+      try { process.kill(proba.pid, sygnal); } catch { /* proces już nie żyje */ }
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (!(await portZajety(PORT_PROBY))) return true;
+      }
+    }
+    return !(await portZajety(PORT_PROBY));
+  }
+
+  const adres = `http://127.0.0.1:${PORT_PROBY}`;
   let wstal = false;
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 300));
@@ -388,9 +625,16 @@ proba.stderr.on('data', (d) => { logRozruchu += d; });
         ? ok('strumień zdarzeń odpowiada') : zle(`strumień zdarzeń: HTTP ${r.status}`);
       r.body.cancel().catch(() => {});
     } catch (e) { zle('strumień zdarzeń: ' + e.message); }
-    if (/Error|error:/i.test(logRozruchu)) hmm('w logu rozruchu jest słowo „error"');
+    if (/Error|error:/i.test(logRozruchu)) {
+      hmm('w logu rozruchu jest słowo „error": '
+        + (logRozruchu.match(/^.*(?:Error|error:).*$/mi) || [''])[0].trim().slice(0, 120));
+    }
   }
-  try { process.kill(-proba.pid); } catch { /* już nie żyje */ }
+  // Sprzątanie musi się UDAĆ, inaczej następny audyt bada nie ten serwer.
+  if (!(await ubijProbny())) {
+    zle(`nie udało się zamknąć serwera próbnego na porcie ${PORT_PROBY} — `
+      + 'następny audyt sprawdziłby jego, a nie świeży kod');
+  }
   fs.rmSync(tmpDane, { recursive: true, force: true });
   podsumuj();
 })();

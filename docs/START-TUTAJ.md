@@ -996,12 +996,26 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 - **Studio** — generowanie obrazów (OpenAI / Adobe Firefly) z wariantami, szablonami,
   storyboardem, edycją/inpaintingiem i upscalem; dźwięk (ElevenLabs); wideo (Seedance,
   także z pierwszej i ostatniej klatki). Wszystko ląduje w Galerii i bazie wiedzy.
+- **Plener** — wszystko, czym się kręci naprawdę, w jednym oknie: mój sprzęt (korpus,
+  obiektywy, reszta), plan zdjęciowy liczony dla dowolnego MIEJSCA i dowolnej GODZINY
+  (bez włączonej kamery), lista ujęć do nakręcenia dobrana do tematu i do sprzętu,
+  aparat Canon po Wi-Fi (podgląd nastaw, „Ustaw w aparacie", zdalna migawka),
+  misja waypointowa dla drona do pobrania jako `.kmz` i archiwum materiału
+  (OneDrive: indeksowanie, obiektywy z EXIF-u, opisy obrazem, telemetria klipów).
+  Studio generuje obraz — Plener pomaga go nakręcić.
 - **Kamera na żywo** — panel z detekcją obiektów, przyciskiem powiększenia (podgląd na
   środku ekranu), przełącznikiem przód/tył na telefonie i wyborem źródła: kamera
   przeglądarki albo Kinect (obraz / głębia).
   Obok tryb głosowy uruchamiany przyciskiem fal dźwiękowych (rozmowa po polsku przy
   otwartej karcie; nasłuch słowa aktywującego w tle jest jeszcze niedokończony —
   patrz `senses/README.md`).
+- **Tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch w trybie
+  głosowym"). *Własny strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę
+  i sam wycina wypowiedzi z sygnału — znika sygnał podłączania sprzętu na
+  Androidzie, słyszenie samego siebie i pętle. Wymaga zmysłów z Whisperem;
+  bez nich Cosmos wraca do rozpoznawania przeglądarki i pisze o tym pod polem
+  wyboru. W nakładce głosowej jest też przycisk 🐦: 8 s nagrania i gatunek
+  ptaka z BirdNET-a, czytany na głos.
 - **Dyktowanie i dopracowanie promptu** — mikrofon 🎤 zamienia mowę na tekst, a którym
   mikrofonem — wybierasz w Ustawieniach (macierz Kinecta, Galaxy Buds, telefon,
   laptop). Przycisk ✦ obok przepisuje podyktowaną wypowiedź na precyzyjny prompt:
@@ -1060,6 +1074,15 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | „Lokalnie" pokazuje offline | Uruchom Ollamę; przy VPS sprawdź `LOCAL_BASE_URL` (adres Tailscale) i `OLLAMA_HOST=0.0.0.0` |
 | „Nie udało się pobrać listy modeli … fetch failed" | Ten sam powód: Ollama nie odpowiada pod adresem z `LOCAL_BASE_URL`. Komunikat pod polem wypisuje teraz konkretne przyczyny i polecenie `curl` do sprawdzenia |
 | W trybie głosowym na telefonie słychać ciągłe podłączanie sprzętu | Naprawione — Cosmos trzyma teraz mikrofon otwarty przez całą sesję zamiast przejmować go przy każdym pytaniu |
+| „Pokaż ujęcia znad jeziora" nie znajduje żadnych KLIPÓW | Wideo nie ma metadanych — telemetria leży w pliku `.SRT` obok nagrania. Włącz napisy w DJI Fly przed lotem, wgraj oba pliki do OneDrive, a potem Plener → Archiwum materiału → „Wczytaj telemetrię klipów". Stare klipy nagrane bez napisów nie mają czego oddać |
+| Nie mogę znaleźć sprzętu ani archiwum w Ustawieniach | Przeniosły się do **Pleneru** (panel boczny, nad Nauką) razem z planem zdjęciowym, aparatem po Wi-Fi i misją drona. W Ustawieniach został przycisk „📷 Otwórz Plener" |
+| Plan zdjęciowy pisze „Nie znam Twoich współrzędnych" | Nie musisz nic ustawiać na stałe: wpisz nazwę miejsca w polu **Miejsce** w Plenerze („Zakopane", „Kraków, Polska"). Zapisanie lokalizacji na stałe jest w Ustawieniach, przycisk „📍 Wykryj" |
+| DJI Fly nie chce zaimportować pliku `.kmz` | Ten format nie przeszedł jeszcze przez prawdziwego drona — jest zbudowany według dokumentacji WPML i sprawdzony niezależnym parserem, ale to nie to samo. Najprościej pobrać `.kmz` **na telefonie**, w przeglądarce z Cosmosem — trafia do „Pobrane" i DJI Fly widzi go w imporcie misji. Z komputera przenieś plik kablem. **Pierwszy lot z importu rób nad pustym polem, z ręką na drążkach.** Jeśli aplikacja odrzuci plik, napisz mi, co dokładnie pokazała — poprawię strukturę |
+| Cosmos nie widzi aparatu po Wi-Fi | Po kolei: firmware R6 II musi być 1.7.0+, CCAPI trzeba raz aktywować narzędziem Canona, a `CANON_CCAPI_URL` w `.env` musi wskazywać adres z menu aparatu razem z portem 8080. Aparat usypia Wi-Fi po kilku minutach — to nie awaria. I najważniejsze: Cosmos na VPS-ie nie dosięgnie aparatu w domu, bo to inna sieć |
+| Cosmos w trybie głosowym słyszy sam siebie i odpowiada w kółko | Przełącz Ustawienia → „Nasłuch w trybie głosowym" na *Własny strumień + Whisper* (wymaga uruchomionych zmysłów). Wtedy mikrofon jest naprawdę wyciszany na czas mówienia, a nie tylko ignorowany |
+| Tryb głosowy pokazuje „SŁUCHAM…", ale nic nie słyszy | Cosmos sam to wykrywa i próbuje odzyskać mikrofon. Trzy typowe przyczyny: wygaszony ekran (Android usypia dźwięk), rozmowa przychodząca albo inna aplikacja, która zabrała mikrofon, oraz odłączone słuchawki. Gdy odzyskanie się nie uda, napisze wprost, co zrobić |
+| Whisper w trybie głosowym co chwilę zgłasza błąd | Po trzech nieudanych próbach z rzędu Cosmos sam wraca do rozpoznawania przeglądarki i pisze o tym. Zwykle znaczy to, że komputer domowy się wyłączył — po jego włączeniu przestaw z powrotem w Ustawieniach |
+| Klip z R6 II nie chce się wczytać do rozmowy | To najpewniej H.265/HEVC — tak nagrywa R6 II w 4K, a Chrome na Windowsie dekoduje go tylko z rozszerzeniem „HEVC Video Extensions". Cosmos rozpoznaje ten przypadek i mówi o nim wprost. Alternatywa: wrzuć plik proxy w H.264 |
 | W trybie głosowym włącza się kamera i zasłania ekran | Już się nie włącza sama. Podgląd włączasz ikoną kamery w prawym górnym rogu okna głosowego; wybór jest zapamiętywany |
 | „Zmysły" na czerwono | Uruchom `python service.py` w folderze `senses`. Jeśli działa, a wskaźnik dalej czerwony i serwer stoi na VPS — brakuje `SENSES_URL`, patrz CZĘŚĆ 3, KROK 9 |
 | `sudo`/`systemctl`: „Sudo is disabled on this machine" | Jesteś w oknie Windowsa, nie na VPS. Najpierw `ssh root@ADRES` — patrz tabelka znaków zachęty w CZĘŚCI 3 |

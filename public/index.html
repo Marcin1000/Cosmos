@@ -80,6 +80,14 @@
           <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="19" cy="17" r="1.4" fill="currentColor"/><circle cx="6" cy="19" r="1" fill="currentColor"/></svg>
           <span data-i18n="studio">Studio</span>
         </button>
+        <!-- Plener — wszystko, co dotyczy prawdziwego sprzętu i prawdziwego
+             światła. Świadomie stoi obok Studia: tam obraz się GENERUJE,
+             tutaj się go KRĘCI. Do tej pory te funkcje leżały w czterech
+             różnych miejscach, a dwie nie miały interfejsu wcale. -->
+        <button class="footer-btn" id="plener-btn">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.4A1 1 0 0 1 9.4 5h5.2a1 1 0 0 1 .8.6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span data-i18n="plener">Plener</span>
+        </button>
         <button class="footer-btn" id="learn-btn">
           <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 9.5V15c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5V9.5M21 7v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span data-i18n="learn">Nauka</span> <span class="kb-badge mono" id="learn-badge"></span>
@@ -199,7 +207,7 @@
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <input type="file" id="file-input" multiple style="display:none"
-            accept="image/*,.pdf,.docx,.xlsx,.xlsm,.pptx,.csv,.tsv,.txt,.md,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yml,.yaml">
+            accept="image/*,video/*,.pdf,.docx,.xlsx,.xlsm,.pptx,.csv,.tsv,.txt,.md,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yml,.yaml">
           <button class="attach-btn" id="camera-btn" data-i18n-title="takePhoto" title="Zrób zdjęcie kamerą" aria-label="Zrób zdjęcie kamerą">
             <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
           </button>
@@ -280,6 +288,27 @@
           <span class="field-hint" data-i18n="set.micHint">Kinect, słuchawki, mikrofon telefonu — lista pokazuje wszystko, co widzi ta przeglądarka. Wymaga HTTPS.</span>
         </label>
 
+        <!-- Sprzęt i archiwum materiału przeniosły się do Pleneru. Zostaje
+             odsyłacz, bo szukanie ich tutaj jest odruchem po miesiącach. -->
+        <div class="field">
+          <span class="field-label" data-i18n="set.gearMoved">Sprzęt i archiwum materiału</span>
+          <div class="field-row">
+            <button type="button" class="btn-secondary" id="set-open-plener" data-i18n="set.gearMovedGo">📷 Otwórz Plener</button>
+          </div>
+          <span class="field-hint" data-i18n="set.gearMovedHint">Korpus, obiektywy, plan zdjęciowy, aparat po Wi-Fi, misja drona i archiwum materiału są teraz w jednym miejscu — w Plenerze.</span>
+        </div>
+
+        <label class="field">
+          <span class="field-label" data-i18n="set.stt">Nasłuch w trybie głosowym</span>
+          <select id="set-stt" class="mono">
+            <option value="auto" data-i18n="set.sttAuto">Automatycznie — Whisper, gdy zmysły działają</option>
+            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień + Whisper (bez sprzężenia)</option>
+            <option value="przegladarka" data-i18n="set.sttBrowser">Przeglądarka (Web Speech API)</option>
+          </select>
+          <span class="field-hint" data-i18n="set.sttHint">Własny strumień otwiera mikrofon RAZ na całą rozmowę: znika sygnał podłączania sprzętu, słyszenie samego siebie i pętle. Wymaga włączonych zmysłów z Whisperem — bez nich Cosmos sam wraca do przeglądarki. Cena: pytanie leci na komputer domowy i wraca, więc odpowiedź zaczyna się o sekundę-dwie później niż przy rozpoznawaniu w przeglądarce.</span>
+          <span class="field-hint mono" id="set-stt-now"></span>
+        </label>
+
         <label class="field">
           <span class="field-label" data-i18n="set.system">Instrukcja systemowa</span>
           <textarea id="set-system" rows="3" data-i18n-ph="set.systemPh" placeholder="np. Jesteś pomocnym asystentem. Odpowiadasz po polsku."></textarea>
@@ -310,15 +339,6 @@
               data-i18n="set.locationDetect">📍 Wykryj</button>
           </div>
           <span class="field-hint" data-i18n="set.locationHint">Cosmos użyje tego przy pytaniach „w okolicy"…</span>
-        </div>
-
-        <div class="field">
-          <span class="field-label" data-i18n="arch.title">Archiwum materiału</span>
-          <div class="arch-box" id="arch-box">
-            <div class="arch-state mono" id="arch-state">…</div>
-            <div class="field-row" id="arch-actions"></div>
-          </div>
-          <span class="field-hint" data-i18n="arch.hint">Indeks Twoich zdjęć i klipów…</span>
         </div>
 
         <div class="field">
@@ -674,6 +694,146 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: PLENER =================
+       Foto i wideo w jednym miejscu. Powód wydzielenia jest prosty: te
+       funkcje rozrosły się do rozmiaru osobnego programu, a leżały
+       rozrzucone po Ustawieniach, podpanelu kamery, nakładce głosowej
+       i znacznikach w rozmowie. Dwie — misja KMZ i karty ujęć — nie miały
+       interfejsu wcale i dało się je uruchomić tylko przez API albo przez
+       model. To nie jest funkcja, której nie ma; to funkcja, o której nikt
+       nie wie. -->
+  <div class="modal-overlay" id="plener-modal" style="display:none">
+    <div class="modal plener-modal" role="dialog" aria-labelledby="plener-title">
+      <div class="modal-header">
+        <h2 id="plener-title" data-i18n="plener">Plener</h2>
+        <button class="icon-btn" id="plener-close" data-i18n-aria="close" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="plener-sub" data-i18n="pl.sub">Sprzęt, światło, aparat, dron i archiwum — wszystko, czym się kręci naprawdę.</div>
+
+        <!-- ---------- SPRZĘT ---------- -->
+        <div class="plener-section">
+          <div class="plener-sec-title">🎒 <span data-i18n="pl.gear">Mój sprzęt</span></div>
+          <div class="field-grid">
+            <label class="field">
+              <span class="field-label" data-i18n="set.body">Korpus</span>
+              <input id="gear-body" type="text" data-i18n-ph="set.bodyPh" placeholder="np. Canon R6 II">
+            </label>
+            <label class="field">
+              <span class="field-label" data-i18n="set.lenses">Obiektywy</span>
+              <input id="gear-lenses" type="text" data-i18n-ph="set.lensesPh" placeholder="np. 24-105 f/4, 70-200 f/4, 50 f/1.8">
+            </label>
+          </div>
+          <label class="field">
+            <span class="field-label" data-i18n="set.extras">Reszta sprzętu</span>
+            <input id="gear-extras" type="text" data-i18n-ph="set.extrasPh" placeholder="np. DJI Mavic 3, Ronin-S, statyw">
+            <span class="field-hint" data-i18n="set.gearHint">To jest domyślny zestaw dla planu zdjęciowego: z korpusu i szkieł wychodzą czas, przysłona i ISO, a z reszty — które ujęcia da się w ogóle nakręcić (bez drona nie ma kadrów z góry). Sprzęt podany w rozmowie zawsze wygrywa z tym zapisem.</span>
+          </label>
+          <div class="field-row">
+            <button type="button" class="btn-primary" id="gear-save" data-i18n="pl.gearSave">Zapisz sprzęt</button>
+            <span class="field-hint" id="gear-status" role="status"></span>
+          </div>
+        </div>
+
+        <!-- ---------- PLAN ZDJĘCIOWY ---------- -->
+        <div class="plener-section">
+          <div class="plener-sec-title">🌅 <span data-i18n="plan.title">Plan zdjęciowy</span></div>
+          <div class="plan-row">
+            <select id="fp-gear" class="mono" data-i18n-aria="pl.gearAria" aria-label="Sprzęt">
+              <option value="" data-i18n="pl.gearMine">Mój zestaw</option>
+              <option value="canon-r6ii">Canon R6 II</option>
+              <option value="mavic-3">Mavic 3</option>
+              <option value="telefon">Telefon</option>
+            </select>
+            <select id="fp-mode" class="mono" data-i18n-aria="pl.modeAria" aria-label="Tryb">
+              <option value="wideo">Wideo 25</option>
+              <option value="wideo50">Wideo 50</option>
+              <option value="zdjecie">Zdjęcie</option>
+            </select>
+            <select id="fp-sky" class="mono" data-i18n-aria="pl.skyAria" aria-label="Zachmurzenie">
+              <option value="">🌦 Z prognozy</option>
+              <option value="bezchmurnie">☀ Bezchmurnie</option>
+              <option value="lekkie">🌤 Lekkie</option>
+              <option value="pochmurno">☁ Pochmurno</option>
+              <option value="deszcz">🌧 Deszcz</option>
+            </select>
+          </div>
+          <div class="plener-grid3">
+            <input type="text" id="fp-place" data-i18n-ph="pl.placePh" placeholder="Miejsce — puste = Twoja lokalizacja">
+            <input type="text" id="fp-topic" data-i18n-ph="pl.topicPh" placeholder="Temat — np. wesele, las, koncert">
+            <input type="datetime-local" id="fp-when" class="mono" data-i18n-title="pl.whenTitle" title="Kiedy — puste = teraz">
+          </div>
+          <div class="field-row">
+            <button type="button" class="btn-primary" id="fp-go" data-i18n="pl.compute">Policz plan</button>
+            <button type="button" class="btn-secondary" id="fp-now" data-i18n="pl.now">Teraz</button>
+          </div>
+          <div class="plan-shot mono" id="fp-shot">—</div>
+          <div class="plan-light mono" id="fp-light"></div>
+          <div class="plan-why" id="fp-why"></div>
+          <!-- Karty ujęć. Do tej pory istniały wyłącznie w `lib/ujecia.js`
+               i docierały do człowieka tylko wtedy, gdy model sam zdecydował
+               się użyć narzędzia [PLAN:]. -->
+          <div class="plener-shots" id="fp-shots"></div>
+        </div>
+
+        <!-- ---------- APARAT PO WI-FI ---------- -->
+        <div class="plener-section" id="pl-sec-camera">
+          <div class="plener-sec-title">📷 <span data-i18n="pl.camera">Aparat po Wi-Fi</span>
+            <span class="mono studio-provider">Canon CCAPI</span></div>
+          <div class="plan-camera mono" id="plan-camera">
+            <span id="plan-camera-now">—</span>
+            <button type="button" class="btn-secondary" id="plan-camera-apply" data-i18n="plan.apply">Ustaw w aparacie</button>
+            <button type="button" class="btn-secondary" id="plan-camera-shutter" data-i18n="pl.shutter">Wyzwól migawkę</button>
+          </div>
+          <span class="field-hint" data-i18n="pl.cameraHint">Aparat: Menu → Ustawienia sieci → CCAPI → włącz. Adres z ekranu aparatu wpisuje się na serwerze w .env jako CANON_CCAPI_URL. Przycisk „Ustaw w aparacie" wysyła ISO, przysłonę i czas policzone wyżej.</span>
+        </div>
+
+        <!-- ---------- MISJA DRONA ---------- -->
+        <div class="plener-section">
+          <div class="plener-sec-title">🚁 <span data-i18n="pl.mission">Misja drona</span>
+            <span class="mono studio-provider">WPML · KMZ</span></div>
+          <div class="plener-grid3">
+            <input type="number" id="mis-lat" step="0.00001" data-i18n-ph="pl.lat" placeholder="szerokość (lat)">
+            <input type="number" id="mis-lon" step="0.00001" data-i18n-ph="pl.lon" placeholder="długość (lon)">
+            <input type="text" id="mis-name" data-i18n-ph="pl.misName" placeholder="nazwa misji">
+          </div>
+          <div class="plener-grid4">
+            <label class="plener-num"><span data-i18n="pl.width">szer. [m]</span>
+              <input type="number" id="mis-w" value="200" min="10" max="5000" step="10"></label>
+            <label class="plener-num"><span data-i18n="pl.length">dł. [m]</span>
+              <input type="number" id="mis-l" value="200" min="10" max="5000" step="10"></label>
+            <label class="plener-num"><span data-i18n="pl.spacing">odstęp [m]</span>
+              <input type="number" id="mis-odstep" value="50" min="5" max="500" step="5"></label>
+            <label class="plener-num"><span data-i18n="pl.heading">kierunek [°]</span>
+              <input type="number" id="mis-kier" value="0" min="0" max="359" step="5"></label>
+            <label class="plener-num"><span data-i18n="pl.alt">wysokość [m]</span>
+              <input type="number" id="mis-alt" value="80" min="5" max="500" step="5"></label>
+            <label class="plener-num"><span data-i18n="pl.speed">prędkość [m/s]</span>
+              <input type="number" id="mis-speed" value="6" min="1" max="15" step="1"></label>
+          </div>
+          <div class="field-row">
+            <button type="button" class="btn-primary" id="mis-go" data-i18n="pl.misGo">Pobierz .kmz</button>
+            <button type="button" class="btn-secondary" id="mis-here" data-i18n="pl.misHere">📍 Z planu</button>
+          </div>
+          <div class="plener-out mono" id="mis-out" role="status"></div>
+          <span class="field-hint plener-warn" data-i18n="pl.misWarn">⚠ Plik jest zbudowany według dokumentacji WPML, ale nie przeszedł jeszcze przez prawdziwego drona — pierwszy import sprawdź na pustym polu i z ręką na drążkach. Za zgodność lotu z przepisami (strefy, zasięg wzrokowy, wysokość) odpowiadasz Ty, nie Cosmos.</span>
+        </div>
+
+        <!-- ---------- ARCHIWUM MATERIAŁU ---------- -->
+        <div class="plener-section">
+          <div class="plener-sec-title">🗂 <span data-i18n="arch.title">Archiwum materiału</span></div>
+          <div class="arch-box" id="arch-box">
+            <div class="arch-state mono" id="arch-state">…</div>
+            <div class="field-row" id="arch-actions"></div>
+          </div>
+          <span class="field-hint" data-i18n="arch.hint">Indeks Twoich zdjęć i klipów…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= PANEL: KAMERA NA ŻYWO ================= -->
   <div class="live-panel" id="live-panel" style="display:none">
     <div class="live-head">
@@ -728,6 +888,9 @@
       <div class="plan-shot mono" id="plan-shot">—</div>
       <div class="plan-light mono" id="plan-light"></div>
       <div class="plan-why" id="plan-why"></div>
+      <!-- Sterowanie aparatem po Wi-Fi jest w Plenerze, nie tutaj. Tu patrzy
+           się na kadr; zmiana nastaw w aparacie to osobna, świadoma czynność
+           i nie powinna dzielić miejsca z podglądem. -->
     </div>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
   </div>
@@ -774,6 +937,7 @@
     <button class="icon-btn voice-cam-btn" id="voice-cam-btn" data-i18n-title="voice.camOn" title="Włącz podgląd kamery" aria-label="Podgląd kamery">
       <svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
     </button>
+    <button class="icon-btn voice-bird-btn" id="voice-bird-btn" data-i18n-title="voice.bird" title="Nagraj 8 s i rozpoznaj ptaka" aria-label="Rozpoznaj ptaka">🐦</button>
     <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
       <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
@@ -825,6 +989,7 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="nasluch.js"></script>
   <script src="models.js"></script>
   <script src="app.js"></script>
 </body>

@@ -103,7 +103,15 @@ const MATERIAL = [
 
   // 8. zestawienia — na tym opierają się pytania „ile" i „najczęściej"
   const poOgn = await staty({ pole: 'ogniskowa' });
-  console.log(`8. wg ogniskowej: ${poOgn.grupy.map((g) => `${g.wartosc}mm×${g.ile}`).join(', ')}`);
+  console.log(`8. wg ogniskowej: ${poOgn.grupy.map((g) => `${g.wartosc}mm×${g.ile}`).join(', ')}`
+    + ` · z danymi ${poOgn.zDanymi}/${poOgn.razem}`);
+  /* Pokrycie danych musi jechać razem z liczbami. „6 zdjęć 50 mm w tym roku"
+     brzmi jak fakt, a bywa rozmiarem luki w metadanych — model bez tej
+     liczby nie ma jak się zorientować. */
+  if (typeof poOgn.zDanymi !== 'number' || typeof poOgn.bezDanych !== 'number') {
+    fail.push('zestawienie nie podaje pokrycia danych');
+  }
+  if (poOgn.bezDanych !== 1) fail.push(`bezDanych=${poOgn.bezDanych}, oczekiwano 1`);
   const p50 = poOgn.grupy.find((g) => g.wartosc === '50');
   if (!p50 || p50.ile !== 3) fail.push('złe zestawienie po ogniskowej');
 

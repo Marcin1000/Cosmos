@@ -9,6 +9,18 @@
 :root { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
 
+/* `hidden` ZNACZY schowany — bez wyjątków.
+   Reguła przeglądarki to tylko `[hidden] { display: none }`, więc każde
+   `display: flex/grid/block` w naszym arkuszu ją pokonuje i element z atrybutem
+   `hidden` zostaje na ekranie. Łatało się to dotąd punktowo (`.canvas[hidden]`,
+   `.offline-bar[hidden]`, …), czyli za każdym razem PO tym, jak coś się
+   pokazało. Wiersz aparatu Canon przeżył tak długo właśnie dlatego: kod
+   ustawiał `hidden = true`, JavaScript widział `hidden === true`, test to
+   potwierdzał — a człowiek patrzył na martwy przycisk „Ustaw w aparacie"
+   przy aparacie, którego nigdy nie skonfigurował. Jedna reguła zamyka całą
+   klasę tej pomyłki. */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #05060a;
   --bg-sidebar: #07080d;
@@ -367,7 +379,6 @@ kbd {
   line-height: 1.5;
   z-index: 2;
 }
-.offline-bar[hidden] { display: none; }
 .offline-bar svg { width: 17px; height: 17px; color: var(--danger); }
 .offline-bar strong { font-weight: 600; }
 .offline-retry {
@@ -593,7 +604,6 @@ kbd {
   background: var(--bg);
   min-width: 0;
 }
-.canvas[hidden] { display: none; }
 .canvas-bar {
   display: flex;
   align-items: center;
@@ -767,6 +777,22 @@ kbd {
   text-overflow: ellipsis;
 }
 .photo-tile:hover { border-color: var(--accent); }
+
+/* Kafelek bez miniatury. Nie znika — zniknięcie dawało „znalazłem 8 zdjęć"
+   nad pustym miejscem. Zostaje widoczny odnośnik do źródła. */
+.photo-brak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  padding: 6px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-dim);
+  background: var(--bg-sunken, var(--bg-elev));
+}
+.photo-tile-pusty { border-style: dashed; }
 
 .msg-assistant { align-items: flex-start; }
 
@@ -1086,7 +1112,6 @@ kbd {
   line-height: 1.55;
   color: var(--text-dim);
 }
-.model-info[hidden] { display: none; }
 .model-info-name { color: var(--text); font-weight: 600; }
 .model-info-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .model-info-tag {
@@ -1446,7 +1471,6 @@ kbd {
 .live-stage video, .live-stage img, .live-stage canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
-.live-stage img[hidden], .live-stage video[hidden] { display: none; }
 .live-source { padding: 6px 10px 0; }
 .live-source select {
   width: 100%;
@@ -1698,6 +1722,158 @@ kbd {
 .voice-close { position: absolute; top: 18px; right: 18px; }
 .voice-cam-btn { position: absolute; top: 18px; right: 60px; color: var(--text-faint); }
 .voice-cam-btn.active { color: var(--accent); }
+/* Trzeci przycisk w rzędzie — emoji zamiast SVG, bo „🐦" czytelniej mówi,
+   o co chodzi, niż jakikolwiek zarys ptaka, który dałoby się narysować
+   w 24 pikselach. */
+.voice-bird-btn { position: absolute; top: 18px; right: 102px; font-size: 18px; line-height: 1; }
+
+/* Wiersz aparatu w panelu planu. Nastawy z aparatu i przycisk obok siebie,
+   bo pytanie brzmi „czy to, co mam ustawione, zgadza się z tym, co policzone" —
+   a na to odpowiada się porównaniem, nie dwoma osobnymi ekranami. */
+.plan-camera {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.plan-camera > span { flex: 1; min-width: 0; }
+.plan-camera-off { color: var(--text-faint); }
+
+/* ---------------------------- PLENER ----------------------------
+   Sekcje wyglądają jak w Studiu i to jest zamierzone: to dwa okna tej samej
+   rangi — jedno o obrazie generowanym, drugie o kręconym. Człowiek nie
+   powinien uczyć się dwóch układów do tej samej czynności. */
+.plener-modal { max-width: 760px; }
+.plener-sub { font-size: 12.5px; color: var(--text-dim); margin: -6px 0 0; }
+
+.plener-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plener-sec-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.plener-section input[type="text"],
+.plener-section input[type="number"],
+.plener-section input[type="datetime-local"],
+.plener-section select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  padding: 9px 12px;
+  outline: none;
+  min-width: 0;               /* bez tego pola rozpychają siatkę na telefonie */
+}
+.plener-section input:focus, .plener-section select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* Trzy listy w rzędzie mieszczą się na monitorze, ale na 390 px zostawało
+   po sto pikseli na pozycję i „Wideo 25" wychodziło jako „Wideo 2!".
+   Siatka sama schodzi do dwóch kolumn, zamiast ciąć napisy. */
+.plener-section .plan-row {
+  margin-bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.plener-section .plan-row select { width: 100%; }
+
+/* Siatki układają się w jedną kolumnę na wąskim ekranie same, bez zapytania
+   o szerokość okna — panel bywa otwarty obok czatu, a nie tylko na całości. */
+.plener-grid3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.plener-grid4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+}
+.plener-num { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.plener-num > span { font-size: 11px; color: var(--text-dim); }
+.plener-num input { font-family: var(--font-mono); font-size: 12px; }
+
+.plener-out { font-size: 12px; color: var(--text-dim); min-height: 16px; }
+.plener-err { color: #f5776b; }
+.plener-warn { color: var(--text-faint); line-height: 1.5; }
+
+/* Karty ujęć — lista do odhaczenia w terenie, więc liczby po prawej i duży
+   odstęp między pozycjami. Czyta się to jednym okiem, drugim patrząc w kadr. */
+.plener-shots { display: flex; flex-direction: column; gap: 8px; }
+.plener-shots-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.plener-clear {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-faint);
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.plener-clear:hover { color: var(--text); }
+/* Pole wyboru w terenie trafia się palcem, często w rękawiczce — stąd 18 px
+   i margines, a nie domyślne 13 px przeglądarki. */
+.plener-tick {
+  width: 18px;
+  height: 18px;
+  margin: 0 2px 0 0;
+  accent-color: var(--accent);
+  flex: none;
+  cursor: pointer;
+}
+/* Odhaczone zostaje na liście, tylko przygaszone. Znikające pozycje kazałyby
+   pamiętać, co się już zrobiło — a od tego jest właśnie ta lista. */
+.plener-shot.zrobione { border-left-color: var(--border-strong); opacity: .5; }
+.plener-shot.zrobione .plener-shot-name { text-decoration: line-through; }
+.plener-shot {
+  border-left: 2px solid var(--accent);
+  padding: 6px 0 6px 10px;
+}
+.plener-shot-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* `flex: 1` trzyma nazwę przy polu wyboru i wypycha liczby na prawo. Bez tego
+   `space-between` rozrzuca trzy elementy po równo i nazwa ląduje na środku,
+   oderwana od ptaszka, do którego należy. */
+.plener-shot-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+.plener-shot-nums { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+.plener-shot-move { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.plener-shot-how { font-size: 12px; line-height: 1.45; margin-top: 4px; }
+.plener-shot-why { font-size: 11px; color: var(--text-faint); line-height: 1.45; margin-top: 3px; }
+.plener-skipped { font-size: 11px; color: var(--text-faint); line-height: 1.5; }
 
 .voice-orb {
   width: 150px;
@@ -2284,4 +2460,3 @@ select::-ms-expand { display: none; }
   box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
   pointer-events: none;
 }
-.event-flash[hidden] { display: none; }

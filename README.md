@@ -55,6 +55,10 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**. Źródłem może być
   kamera przeglądarki (na telefonie z przełącznikiem przód/tył) albo **Kinect 360** —
   obraz i mapa głębi. Przycisk powiększenia przenosi podgląd na środek ekranu
+- 📷 **Plener** — foto i wideo w jednym oknie: sprzęt, plan zdjęciowy dla dowolnego
+  miejsca i dowolnej godziny, lista ujęć do nakręcenia dobrana do tematu i sprzętu,
+  Canon po Wi-Fi (CCAPI), misja waypointowa dla drona jako `.kmz` i archiwum materiału.
+  Studio generuje obraz — Plener pomaga go nakręcić
 - 🎤 **Wybór mikrofonu** (Ustawienia) — macierz Kinecta, słuchawki Bluetooth, telefon
   albo mikrofon laptopa; wybór zapamiętywany, z powrotem do domyślnego przy odłączeniu
 - 🦴 **Kinect 360 w pełni** — głębia, obraz RGB, **szkielet 20 stawów**, postawa, gesty
@@ -342,6 +346,14 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** — wybierasz
   w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
   wybór jest zapamiętywany,
+- 🗣 **tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch"). *Własny
+  strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę i sam wycina wypowiedzi
+  z sygnału: znika dźwięk podłączania sprzętu na Androidzie, słyszenie samego siebie
+  i pętle. Wymaga zmysłów z Whisperem — bez nich Cosmos wraca do Web Speech API
+  i mówi o tym wprost w Ustawieniach,
+- 🐦 przycisk **rozpoznawania ptaka** w nakładce głosowej — 8 s nagrania, gatunek
+  z BirdNET-a, czytany na głos. Współrzędne dokłada serwer, bo BirdNET zawęża listę
+  do gatunków, które w tym tygodniu naprawdę występują w tym miejscu,
 - ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) — przepisuje
   podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
   porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
@@ -350,6 +362,19 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 📷 przycisk aparatu — zdjęcie z kamery (webcam/Kinect RGB) prosto do rozmowy,
   analizowane przez model wizyjny; na telefonie przełącznik przód/tył (wybór
   zapamiętywany),
+- 🛰 **telemetria klipów z drona** — Mavic 3 zapisuje obok każdego nagrania plik
+  `.SRT` z GPS-em, wysokością i nastawami DLA KAŻDEJ KLATKI. Cosmos czyta go
+  i dopisuje do archiwum, więc klipy trafiają do tych samych pytań co zdjęcia:
+  „pokaż ujęcia znad jeziora o zachodzie" obejmuje wreszcie wideo,
+- 📸 **aparat po Wi-Fi (Canon CCAPI)** — przy R6 II z firmware'em 1.7.0 Cosmos
+  odczytuje FAKTYCZNE nastawy aparatu, porównuje je z policzonymi dla tego
+  światła i na życzenie ustawia. Działa, gdy Cosmos i aparat są w tej samej sieci,
+- 🗺 **misja waypointowa jako plik `.kmz`** — plan lotu policzony przez Cosmosa
+  da się wyeksportować dla drona (siatka nalotu układana „wężem"),
+- 🎬 **klip wrzucony do rozmowy** → cztery klatki kluczowe wycięte w przeglądarce
+  (`<video>` + `<canvas>`, bez wysyłania pliku) i opisane jako kolejne momenty
+  JEDNEGO ujęcia, nie cztery osobne zdjęcia. Minuta z R6 II to 300-500 MB —
+  wysyłanie takiego pliku po to, żeby dostać z niego cztery klatki, nie ma sensu,
 - 🔗 adresy w odpowiedziach są klikalne — także te wpisane gołym tekstem, nie tylko
   w formie `[nazwa](adres)`; otwierają się w nowej karcie,
 - 🖼 kliknięcie w obraz w rozmowie otwiera go na pełnym ekranie, z pobieraniem,
@@ -550,6 +575,30 @@ zainstalowany jest **COLMAP** (CUDA na RTX 3080), buduje model 3D automatycznie
 (`--dense` = gęsta chmura punktów `.ply` do Blendera/MeshLaba). Wynik skanu
 trafia do Cosmosa jako zdarzenie.
 
+### 📷 Plener — foto i wideo w jednym miejscu
+
+Przycisk **Plener** w panelu bocznym, tuż nad Nauką. Stoi obok Studia świadomie:
+w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
+
+| Sekcja | Co robi | Skąd to się bierze |
+|---|---|---|
+| 🎒 **Mój sprzęt** | korpus, obiektywy, reszta (dron, gimbal, statyw) — zapis własnym przyciskiem | `/api/gear`; z tego liczą się nastawy i to, które ujęcia są w ogóle wykonalne |
+| 🌅 **Plan zdjęciowy** | czas / przysłona / ISO, faza Słońca, ile zostało do złotej godziny i do zachodu, pogoda, zorza | `/api/plan` — działa **bez kamery**, dla podanego MIEJSCA i wybranej GODZINY |
+| 🎬 **Ujęcia do nakręcenia** | lista z liczbami (ogniskowa, ruch, czas trwania), **każda pozycja do odhaczenia** (postęp zostaje w przeglądarce), plus **czego się nie da i dlaczego** | `lib/ujecia.js`, dobierane po temacie i filtrowane przez Twój sprzęt |
+| 📷 **Aparat po Wi-Fi** | co aparat ma ustawione teraz, „Ustaw w aparacie", zdalna migawka | Canon CCAPI (`CANON_CCAPI_URL`); wiersz znika, gdy aparat nie odpowiada |
+| 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
+| 🗂 **Archiwum materiału** | OneDrive: indeksowanie, obiektywy z EXIF-u, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
+
+Dwie z tych rzeczy — misja `.kmz` i karty ujęć — do tej pory istniały wyłącznie
+jako trasa HTTP i jako narzędzie modelu. Działały, ale nie było ich jak uruchomić
+z interfejsu. To nie jest funkcja, której nie ma; to funkcja, o której nie sposób
+się dowiedzieć.
+
+> ⚠ **Misja KMZ nie przeszła jeszcze przez prawdziwego drona.** Struktura jest
+> odtworzona z dokumentacji WPML i sprawdzona cudzą implementacją (`zipfile`
+> i parser XML), ale pierwszy import zrób nad pustym polem i z ręką na drążkach.
+> Za zgodność lotu z przepisami odpowiadasz Ty.
+
 ### 🎨 Studio i silniki komercyjne (Twoje klucze API)
 
 Po wpisaniu kluczy w `.env` Cosmos zyskuje dodatkowe moce (płacisz tylko za to,
@@ -662,12 +711,22 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
+| `/api/gear` | GET/PUT | Zestaw sprzętu użytkownika (korpus, obiektywy) — domyślny dla planu zdjęciowego |
+| `/api/canon/status` | GET | Czy aparat odpowiada po CCAPI: model, numer, firmware |
+| `/api/canon/settings` | GET/PUT | Odczyt i zmiana ISO, przysłony i czasu w aparacie (Canon CCAPI) |
+| `/api/canon/shutter` | POST | Zdalne wyzwolenie migawki (autofokus domyślnie wyłączony) |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
+| `/api/ptak` | POST | Nagranie → gatunek ptaka (BirdNET w zmysłach); współrzędne dokłada serwer |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
+| `/api/plan/mission` | POST | Misja waypointowa dla DJI jako plik `.kmz` (WPML) — z listy punktów albo z siatki nalotu |
 | `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
-| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła |
+| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie |
+| `/api/archive/lenses` | POST | Dociągnięcie modelu obiektywu z EXIF-u (pierwsze 128 KB pliku przez `Range`) |
+| `/api/archive/vision` | POST | Co WIDAĆ na zdjęciu — YOLO ze zmysłów po miniaturze z OneDrive, paczkami |
+| `/api/archive/telemetry` | POST | Telemetria klipów DJI z plików `.SRT` — GPS, wysokość, ISO, czas, przysłona, ogniskowa |
+| `/api/archive/thumb` | GET | Miniatura pliku z OneDrive, dociągana w chwili pytania (adresy z Graph wygasają) |
 | `/api/archive/stats` | GET | Podsumowanie albo zestawienie liczbowe wg wybranego pola |
 | `/api/archive/source` | DELETE | Usunięcie całego źródła przed przeindeksowaniem od zera |
 | `/api/onedrive/status` | GET | Stan połączenia i postęp indeksowania |
@@ -688,7 +747,11 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 
 ```
 server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
+public/nasluch.js  drugi silnik nasłuchu: własny strumień z mikrofonu + Whisper
 lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
+lib/pamiec.js      pamięć długotrwała (RAG) i embeddingi — wektory plus słowa
+lib/pomysly.js     backlog usprawnień proponowanych przez Cosmosa do akceptacji
+lib/nagrywanie.js  nagrywanie procedur Playwrightem (opcjonalne, wymaga ekranu)
 lib/model.js       wywołania modelu bez strumienia (streszczenia, prompt)
 lib/studio.js      generowanie mediów (OpenAI / Firefly / ElevenLabs / Seedance)
 lib/nauka.js       rozpoznawanie, procedury, rutyny, automatyzacja
@@ -700,8 +763,17 @@ lib/slonce.js      pozycja Słońca, złota i niebieska godzina (NOAA)
 lib/ekspozycja.js  EV sceny i dobór czasu, przysłony oraz ISO
 lib/exif.js        metadane zdjęcia z pliku JPEG (aparat, nastawy, GPS)
 lib/archiwum.js    indeks własnych zdjęć i klipów, filtry i zestawienia
+lib/archiwum-trasy.js  trasy /api/archive/* — wyszukiwanie, uzupełnianie, statystyki
+lib/srt.js         telemetria z klipów DJI: plik .SRT obok nagrania
+lib/canon.js       Canon CCAPI — odczyt i zmiana nastaw aparatu po Wi-Fi
+lib/kmz.js         misja waypointowa DJI w formacie WPML (własny zapis ZIP)
 lib/onedrive.js    OAuth i indeksowanie OneDrive przez Microsoft Graph
 lib/pogoda.js      prognoza dla planu zdjęciowego (Open-Meteo)
+lib/zorza.js       zorza polarna: Kp z NOAA i próg dla Twojej szerokości
+lib/miejsca.js     nazwa miejsca → współrzędne i promień (Nominatim)
+lib/tematy.js      CO fotografujesz: nastawy pod temat i kategorie w archiwum
+lib/ujecia.js      karty ujęć do trybu wideo — co nakręcić, czym i jak długo
+lib/grafiki.js     wyszukiwanie zdjęć w czterech źródłach naraz, z zapasem
 ```
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
@@ -739,6 +811,53 @@ Czytniki dokumentów (`lib/dokumenty.js`) są świadomym przykładem drugiej
 kolumny: to sto linijek na `zlib`, działa bez sieci i bez instalacji, a skany
 i tak trafiają do `pypdf` w zmysłach. Jedna funkcja, dwie drogi — łatwiejsza
 wygrywa, gdy wystarcza.
+
+## 🖼️ Grafiki — które źródła działają z tego serwera
+
+```bash
+node scripts/grafiki.js              # zapytanie domyślne
+node scripts/grafiki.js Kraków Wawel # własne
+```
+
+Wyszukiwanie obrazów stoi na trzech cudzych usługach: **DuckDuckGo** (najszerszy
+zasięg, ale wymaga żetonu skrobanego ze strony), **Wikimedia Commons**
+i **Openverse** (prawdziwe API, materiał na jasnych licencjach). Odpytywane są
+równolegle, a wyniki przeplatane — dzięki temu awaria jednej nie zostawia
+Cosmosa bez ani jednego zdjęcia.
+
+Wcześniej źródło było jedno i to była wada konstrukcyjna, nie usterka: kiedy
+DuckDuckGo odmawiał, Cosmos pisał „szukam zdjęć" i nie pokazywał nic. Adresom
+centrów danych odmawia się łatwo, a format żetonu już się zmieniał.
+
+Każda z tych usług może być niedostępna z **konkretnego** serwera i z innego
+powodu — limity zapytań, blokada hostingu, captcha. Tego pytania nie da się
+rozstrzygnąć znikąd indziej niż z tej maszyny, i właśnie po to jest ten skrypt.
+Pokazuje każde źródło osobno z powodem odmowy. Zawężenie listy na stałe:
+`IMAGE_SEARCH_SOURCES=commons,openverse` w `.env`.
+
+## 🌌 Zorza — czy dziś w nocy jest po co wychodzić
+
+```bash
+node scripts/zorza.js               # dla Warszawy
+node scripts/zorza.js 54.35 18.65   # dla podanych współrzędnych
+```
+
+Plan zdjęciowy dopisuje pole `zorza`, gdy Słońce jest pod horyzontem. Dane idą
+z NOAA SWPC — publicznie i bez klucza.
+
+Sedno nie leży w samym Kp, tylko w PROGU. „Kp 7" nic nie znaczy bez odpowiedzi
+na pytanie „a gdzie stoisz": w Tromsø zorza jest przy Kp 0, w Zakopanem trzeba
+Kp 8. Cosmos liczy więc szerokość geomagnetyczną miejsca i podaje próg obok
+prognozy, zamiast obiecywać widok.
+
+Progi wychodzą tak: **Gdańsk 5 · Warszawa 6 · Kraków 7 · Zakopane 8** (łuna nad
+północnym horyzontem). Zgadza się to z rzeczywistością — burzę z maja 2024
+(Kp 8-9) widziano w całej Polsce.
+
+Szerokość geomagnetyczną liczymy przybliżeniem dipolowym, które dla Polski
+wypada o 2-3° korzystniej niż tablice oparte na szerokości skorygowanej, więc
+próg jest lekko optymistyczny i Cosmos mówi o tym wprost. Zorzę i tak zasłoni
+zachmurzenie, Księżyc w pełni i światła miasta.
 
 ## ⚡ Płynność — który model nadaje się do rozmowy
 
@@ -859,7 +978,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 38 zestawów + 9 selftestów Pythona (~10 min)
+npm test                 # 67 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

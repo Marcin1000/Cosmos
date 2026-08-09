@@ -115,7 +115,7 @@ const WASKI = { width: 360, height: 740 };
   await wBok('wynik programu');
   await wystaje('.run-panel', 'panel wyniku');
 
-  // 5. Ustawienia: pola planu i panel archiwum
+  // 5. Ustawienia: pola profilu i lokalizacji
   console.log('5. Ustawienia');
   /* Na telefonie przycisk Ustawień siedzi w schowanym panelu bocznym —
      najpierw trzeba go wysunąć. To nie usterka, tylko sposób działania
@@ -129,6 +129,19 @@ const WASKI = { width: 360, height: 740 };
   await pg.waitForTimeout(600);
   await wBok('Ustawienia');
   await wystaje('#set-location', 'pole lokalizacji');
+  await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-ustawienia-360.png` });
+  await pg.keyboard.press('Escape');
+  await pg.waitForTimeout(300);
+
+  /* 5b. Plener — sprzęt, plan, aparat, misja i archiwum w jednym oknie.
+     Archiwum przeprowadziło się tutaj z Ustawień, więc sprawdzenie jego
+     stanu przeprowadza się razem z nim. */
+  console.log('5b. Plener');
+  await pg.click('#plener-btn');
+  await pg.waitForTimeout(700);
+  await wBok('Plener');
+  await wystaje('#gear-lenses', 'pole obiektywów');
+  await wystaje('.plener-grid4', 'siatka parametrów misji');
   await wystaje('#arch-box', 'panel archiwum');
   const archTekst = await pg.textContent('#arch-state');
   console.log(`   archiwum mówi: „${(archTekst || '').slice(0, 70)}…"`);
@@ -137,7 +150,40 @@ const WASKI = { width: 360, height: 740 };
   if (!/ONEDRIVE_CLIENT_ID/.test(archTekst || '')) {
     fail.push('panel archiwum nie mówi, co ustawić w .env');
   }
-  await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-ustawienia-360.png` });
+  /* Cele dotykowe sprawdzamy TU, przy otwartym oknie — schowany element ma
+     zerowe wymiary i każde sprawdzenie jego rozmiaru przechodzi zawsze.
+     Sześć pól liczbowych misji obok siebie na 360 px to najciaśniejsze
+     miejsce w całym interfejsie, więc jeśli gdziekolwiek ma być za ciasno,
+     to właśnie tam. */
+  const malePlener = await pg.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('#plener-modal button, #plener-modal select, #plener-modal input')) {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height && r.height < 28) out.push(`${el.id || el.className}: ${Math.round(r.height)} px`);
+      // Przyciski ikonowe (× zamknięcia) są kwadratowe i mniejsze z założenia
+      // — taki sam jak we wszystkich pozostałych oknach, więc nie tutaj.
+      if (r.width && r.width < 44 && !el.classList.contains('icon-btn')) {
+        out.push(`${el.id || el.className}: szer. ${Math.round(r.width)} px`);
+      }
+    }
+    return out;
+  });
+  console.log(`   ciasne pola w Plenerze: ${malePlener.length ? malePlener.join(', ') : 'brak'}`);
+  if (malePlener.length) fail.push(`ciasne pola w Plenerze: ${malePlener.join(', ')}`);
+
+  /* Lista rozwijana węższa niż ~125 px ucina własną treść: „Wideo 25"
+     wychodziło jako „Wideo 2!". Szerokość pola to jedyna rzecz, którą da się
+     tu zmierzyć — czy napis się mieści, przeglądarka nie powie. */
+  const waskieListy = await pg.evaluate(() => [...document.querySelectorAll('#plener-modal select')]
+    .map((e) => ({ id: e.id, w: Math.round(e.getBoundingClientRect().width) }))
+    .filter((x) => x.w > 0 && x.w < 125));
+  console.log(`   listy rozwijane poniżej 125 px: ${waskieListy.length
+    ? waskieListy.map((x) => `${x.id}=${x.w}px`).join(', ') : 'brak'}`);
+  if (waskieListy.length) {
+    fail.push(`listy rozwijane ucinają treść: ${waskieListy.map((x) => `${x.id}=${x.w}px`).join(', ')}`);
+  }
+
+  await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-plener-360.png` });
   await pg.keyboard.press('Escape');
   await pg.waitForTimeout(300);
 

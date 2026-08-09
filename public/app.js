@@ -614,11 +614,85 @@ async function odswiezArchiwum() {
     }).catch(() => {});
     odswiezArchiwum();
   });
+  /* Dwa uzupełnienia indeksu, każde jedno żądanie NA PLIK — dlatego osobno
+     od indeksowania i dlatego paczkami. Do tej pory dało się je uruchomić
+     wyłącznie ręcznie curlem, co znaczy: nikt ich nigdy nie uruchomił. */
+  if (d.wArchiwum) {
+    przycisk(t('arch.lenses'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/lenses', ile: 100,
+      etykieta: (w) => t('arch.lensesProgress', { ile: w.uzupelnione, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.lensesDone', { ile: suma }),
+    }));
+    przycisk(t('arch.vision'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 50,
+      etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.visionDone', { ile: suma }),
+    }));
+    przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
+      przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 25,
+      etykieta: (w) => t('arch.teleProgress', { ile: w.odczytane, zostalo: w.zostalo }),
+      koniec: (suma) => t('arch.teleDone', { ile: suma }),
+    }));
+  }
+
   przycisk(t('arch.disconnect'), async () => {
     if (!confirm(t('arch.confirmDisconnect'))) return;
     await fetch('/api/onedrive/disconnect', { method: 'POST' }).catch(() => {});
     odswiezArchiwum();
   });
+}
+
+/* Długie zadanie w paczkach, sterowane z przeglądarki.
+ *
+ * Pętla siedzi TUTAJ, a nie na serwerze, i to jest przemyślane: zadanie na
+ * dwa tysiące żądań, które startuje po jednym kliknięciu i nie ma jak
+ * pokazać postępu ani się zatrzymać, kończy się tym, że po piętnastu minutach
+ * ciszy człowiek restartuje serwer. Tu każde kliknięcie „Przerwij" działa
+ * natychmiast, bo przerywa się między paczkami, a nie w środku zapisu. */
+let paczkiPrzerwane = false;
+
+async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
+  const stanEl = $('arch-state');
+  const pierwotny = przycisk.textContent;
+  if (przycisk.dataset.trwa === '1') { paczkiPrzerwane = true; return; }
+  przycisk.dataset.trwa = '1';
+  przycisk.textContent = t('arch.stop');
+  paczkiPrzerwane = false;
+  let suma = 0;
+  let poprzednioZostalo = Infinity;
+  try {
+    for (;;) {
+      const r = await fetch(adres, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ile }),
+      });
+      const w = await readJsonSafe(r);
+      if (!r.ok) { stanEl.textContent = w.error || `HTTP ${r.status}`; return; }
+      suma += Number(w.uzupelnione || w.opisane || w.odczytane || 0);
+      stanEl.textContent = etykieta(w);
+      // `sprawdzone === 0` znaczy „nie ma już czego brać" — bez tego warunku
+      // pusta kolejka kręciłaby pętlę w nieskończoność.
+      if (paczkiPrzerwane || !w.sprawdzone || !w.zostalo) break;
+      /* KOLEJKA MUSI MALEĆ. Gdy każdy plik w paczce kończy się błędem — token
+         OneDrive wygasł, zmysły padły w połowie — nic nie ubywa, a warunki
+         wyżej są dalej spełnione. To była pętla bez końca waląca w serwer
+         co sekundę. Brak postępu kończy zadanie z komunikatem, nie po cichu. */
+      if (Number(w.zostalo) >= poprzednioZostalo) {
+        stanEl.textContent = t('arch.batchStuck', {
+          zostalo: w.zostalo, powod: (w.bledy || [])[0] || '—',
+        });
+        return;
+      }
+      poprzednioZostalo = Number(w.zostalo);
+    }
+    stanEl.textContent = koniec(suma);
+  } catch (err) {
+    stanEl.textContent = String(err.message);
+  } finally {
+    przycisk.dataset.trwa = '0';
+    przycisk.textContent = pierwotny;
+  }
 }
 
 /* ================================ PŁÓTNO ================================ */
@@ -762,17 +836,58 @@ function photosGrid(photos) {
     a.href = p.source || p.full || '#';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.title = p.title || '';
+    a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
     const img = document.createElement('img');
-    img.src = `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
+    /* Adres własny (np. z archiwum) bierzemy wprost — proxy miniatur jest
+       od CUDZYCH hostów i tylko by tu przeszkadzało. */
+    const wlasny = /^\//.test(p.thumb || '');
+    img.src = wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
     img.alt = p.title || t('photo.found');
     img.loading = 'lazy';
-    // Miniatura, której nie da się pobrać, nie może zostawić dziury w siatce.
-    img.addEventListener('error', () => a.remove());
+
+    /* Zdjęcie z archiwum otwiera się NA PEŁNYM EKRANIE w Cosmosie, a nie
+       w nowej karcie: to własny plik Marcina, więc nie ma dokąd go „odesłać".
+       Zdjęcia z internetu zostają odnośnikiem do źródła. */
+    if (p.podglad) {
+      a.href = '#';
+      a.addEventListener('click', (e) => { e.preventDefault(); openImageViewer(p.podglad); });
+    }
+
+    /* Co się dzieje, gdy miniatura nie chce się wczytać.
+
+       Kiedyś kafelek po prostu ZNIKAŁ. Brzmi rozsądnie („nie zostawiaj dziury
+       w siatce"), a w praktyce to była najgorsza możliwa reakcja: gdy proxy
+       odrzucało wszystkie miniatury, Cosmos pisał „znalazłem 8 zdjęć" i nie
+       pokazywał ani jednego, bez śladu, co poszło nie tak. Dokładnie to
+       zgłosił Marcin.
+
+       Teraz próbujemy po kolei: przez proxy → prosto z serwera obrazka →
+       a jak i to nie wyjdzie, zostaje widoczny kafelek z odnośnikiem. Zawsze
+       widać tyle kafelków, ile zapowiedziała odpowiedź. */
+    let probowanoWprost = wlasny;   // własnego adresu nie ma po co próbować drugi raz
+    img.addEventListener('error', () => {
+      if (!probowanoWprost && /^https:\/\//i.test(p.thumb || '')) {
+        // Proxy odmówiło (nieznany host, przekroczony czas). Przeglądarka
+        // może pobrać obrazek sama — dla niej to zwykły zewnętrzny zasób.
+        probowanoWprost = true;
+        img.src = p.thumb;
+        return;
+      }
+      img.remove();
+      a.classList.add('photo-tile-pusty');
+      const info = document.createElement('span');
+      info.className = 'photo-brak';
+      info.textContent = t('photo.thumbFailed');
+      a.prepend(info);
+    });
+
     const cap = document.createElement('span');
     cap.className = 'photo-cap';
-    try { cap.textContent = new URL(p.source).hostname.replace(/^www\./, ''); }
-    catch { cap.textContent = p.title || ''; }
+    // Skąd zdjęcie i na jakiej licencji — dla kogoś, kto montuje film, to nie
+    // ozdobnik, tylko odpowiedź na pytanie „czy wolno mi tego użyć".
+    let skad = p.zrodlo || '';
+    if (!skad) { try { skad = new URL(p.source).hostname.replace(/^www\./, ''); } catch { skad = ''; } }
+    cap.textContent = [skad, p.licencja].filter(Boolean).join(' · ') || p.title || '';
     a.append(img, cap);
     wrap.appendChild(a);
   }
@@ -921,10 +1036,14 @@ function messageElement(m, idx = -1) {
     return msg;
   }
 
-  // Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
-  // odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
+  /* Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
+     odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
+     Wyjątek: gdy myślenie to WSZYSTKO, co przyszło (`samoMyslenie`), zwinięcie
+     zostawia wiadomość złożoną z samego ostrzeżenia. Wtedy panel jest otwarty —
+     jest jedyną treścią, jaką mamy, więc nie ma czego przykrywać. */
   body.innerHTML = (m.think
-    ? `<details class="think-block"><summary>${escapeHtml(t('think.done'))}</summary>`
+    ? `<details class="think-block"${m.samoMyslenie ? ' open' : ''}>`
+      + `<summary>${escapeHtml(t('think.done'))}</summary>`
       + `<pre>${escapeHtml(m.think)}</pre></details>`
     : '')
     + (m.note ? `<div class="model-note mono">${escapeHtml(m.note)}</div>` : '')
@@ -1340,6 +1459,11 @@ el.fileInput.addEventListener('change', async () => {
       catch (err) { alert(err.message); }
       continue;
     }
+    if (file.type.startsWith('video/')) {
+      try { await wczytajWideo(file); }
+      catch (err) { alert(err.message); }
+      continue;
+    }
     // Dokument: treść wyciąga serwer, przeglądarka dostaje gotowy tekst.
     if (pendingDocs.length >= 4) { alert(t('doc.max')); break; }
     await wczytajDokument(file);
@@ -1348,6 +1472,142 @@ el.fileInput.addEventListener('change', async () => {
   renderAttachments();
   updateSendButton();
 });
+
+/* ---- WIDEO: klatki kluczowe wyjęte W PRZEGLĄDARCE --------------------
+   Pomysł z claude-video (z trendów GitHuba): model nie czyta wideo, model
+   czyta KLATKI. Cała różnica jest w tym, gdzie się je wycina.
+
+   Wysyłanie klipu na serwer odpada z arytmetyki: minuta z R6 II to 300-500 MB.
+   Przez Tailscale z telefonu to kilka minut czekania, a potem dokładnie te same
+   klatki, które przeglądarka potrafi wyjąć sama — <video> + <canvas> to
+   dekoder sprzętowy, który i tak siedzi w każdym urządzeniu. Zero zależności,
+   zero wysyłki, zero ffmpega na VPS-ie i działa przy wyłączonych zmysłach.
+
+   Klatki bierzemy ze ŚRODKÓW równych odcinków, nie od zera: pierwsza klatka
+   filmu to zwykle czarne pole albo klaps. */
+const WIDEO_KLATEK = 4;
+const WIDEO_SEEK_MS = 8000;
+
+/* Czy przeglądarka w ogóle zna ten kodek?
+ *
+ * To nie jest pytanie akademickie akurat przy tym sprzęcie. Canon R6 II
+ * nagrywa 4K w H.265/HEVC, a Chrome na Windowsie dekoduje HEVC tylko wtedy,
+ * gdy system ma rozszerzenie od Microsoftu. Bez niego `<video>` po prostu
+ * odmawia — i bez tego sprawdzenia dostajesz komunikat „ta przeglądarka nie
+ * zna tego kodowania", z którego nie wynika ANI co jest nie tak, ani co
+ * z tym zrobić. A rada jest bardzo konkretna: nagrywaj proxy w H.264 albo
+ * doinstaluj rozszerzenie HEVC.
+ */
+function kodekZnany(file) {
+  const v = document.createElement('video');
+  if (!v.canPlayType) return true;                 // nie wiadomo — próbujemy
+  if (v.canPlayType(file.type || '')) return true; // przeglądarka mówi „tak"
+  return !/hevc|h\.?265|x265/i.test(file.type || '');
+}
+
+async function klatkiZWideo(file, ile) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.preload = 'auto';
+  v.muted = true;
+  v.playsInline = true;
+  v.src = url;
+  const podejrzanyKodek = /\.(mov|mp4|m4v)$/i.test(file.name) && !kodekZnany(file);
+  const nieczytelne = () => new Error(podejrzanyKodek
+    ? t('video.hevc', { name: file.name })
+    : t('video.unreadable', { name: file.name }));
+  try {
+    await new Promise((ok, zle) => {
+      v.onloadedmetadata = () => ok();
+      v.onerror = () => zle(nieczytelne());
+      setTimeout(() => zle(nieczytelne()), WIDEO_SEEK_MS);
+    });
+
+    /* Długość bywa nieznana — pliki nagrywane strumieniowo (webm z przeglądarki,
+       przerwany transfer) nie mają jej w nagłówku i `duration` to Infinity.
+       Materiał z aparatu i drona zawsze ją ma, ale klip nagrany telefonem przez
+       stronę WWW — niekoniecznie.
+
+       Ratunek jest znany i tani: przewinięcie na absurdalnie odległy moment
+       zmusza przeglądarkę do przejrzenia pliku do końca, po czym `duration`
+       nagle jest znane. Brzmi jak sztuczka, bo jest sztuczką — ale różnica
+       między jedną klatką a czterema jest realna. */
+    if (!Number.isFinite(v.duration) || v.duration <= 0) {
+      await new Promise((ok) => {
+        let gotowe = false;
+        const skoncz = () => { if (!gotowe) { gotowe = true; v.ondurationchange = null; ok(); } };
+        v.ondurationchange = () => { if (Number.isFinite(v.duration)) skoncz(); };
+        setTimeout(skoncz, 2000);
+        try { v.currentTime = 1e6; } catch { skoncz(); }
+      });
+    }
+    const dlugosc = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+    const momenty = dlugosc
+      ? Array.from({ length: ile }, (_, i) => (dlugosc * (i + 0.5)) / ile)
+      : [0];
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const klatki = [];
+    for (const sekunda of momenty) {
+      await new Promise((ok) => {
+        let gotowe = false;
+        const skoncz = () => { if (!gotowe) { gotowe = true; ok(); } };
+        v.onseeked = skoncz;
+        // Uszkodzone albo egzotyczne kodowanie potrafi nie dojechać do `seeked`
+        // nigdy. Jedna klatka mniej jest lepsza niż zawieszony interfejs.
+        setTimeout(skoncz, WIDEO_SEEK_MS);
+        try { v.currentTime = sekunda; } catch { skoncz(); }
+      });
+      if (!v.videoWidth) continue;
+      const skala = Math.min(1, 1024 / Math.max(v.videoWidth, v.videoHeight));
+      canvas.width = Math.round(v.videoWidth * skala);
+      canvas.height = Math.round(v.videoHeight * skala);
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      klatki.push({ sekunda, obraz: canvas.toDataURL('image/jpeg', 0.85) });
+    }
+    return { klatki, dlugosc };
+  } finally {
+    v.onseeked = null;
+    v.onerror = null;
+    v.src = '';
+    URL.revokeObjectURL(url);
+  }
+}
+
+function czasMmSs(s) {
+  const c = Math.max(0, Math.round(s));
+  return `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
+}
+
+/** Klip → klatki jako załączniki-obrazy + notatka, CO to właściwie jest.
+ *  Bez notatki model dostaje cztery niepowiązane zdjęcia i opisuje je jak
+ *  cztery różne sceny, zamiast czytać je jako jedno ujęcie w czasie. */
+async function wczytajWideo(file) {
+  const wolne = 4 - pendingImages.length;
+  if (wolne <= 0) throw new Error(t('cam.maxImages'));
+  const wpis = { name: file.name, chars: 0, text: '', loading: true };
+  pendingDocs.push(wpis);
+  renderAttachments();
+  updateSendButton();
+  try {
+    const { klatki, dlugosc } = await klatkiZWideo(file, Math.min(WIDEO_KLATEK, wolne));
+    if (!klatki.length) throw new Error(t('video.noFrames', { name: file.name }));
+    for (const k of klatki) pendingImages.push(k.obraz);
+    const opisKlatek = klatki.map((k, i) => `${i + 1}) ${czasMmSs(k.sekunda)}`).join(', ');
+    const text = dlugosc
+      ? t('video.note', { name: file.name, dlugosc: czasMmSs(dlugosc), ile: klatki.length, momenty: opisKlatek })
+      : t('video.noteNoLen', { name: file.name, ile: klatki.length });
+    Object.assign(wpis, { text, chars: text.length, loading: false });
+  } catch (err) {
+    pendingDocs.splice(pendingDocs.indexOf(wpis), 1);
+    renderAttachments();
+    updateSendButton();
+    throw err;
+  }
+  renderAttachments();
+  updateSendButton();
+}
 
 /** Wyślij plik do odczytania i zapamiętaj wynik jako załącznik rozmowy. */
 async function wczytajDokument(file) {
@@ -1686,8 +1946,16 @@ async function runGeneration(conv) {
         saveConversations();
         renderMessages();
         const last = await streamOnce(conv);
-        finalText = stripSearchMarker(last) || lastReasoning || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
+        // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
+        const trescOstatnia = stripSearchMarker(last);
+        let samoMyslenie = false;
+        if (!trescOstatnia && lastReasoning) {
+          lastThink = lastReasoning;
+          finalText = t('budgetSpentOnThinking');
+          samoMyslenie = true;
+        } else finalText = trescOstatnia || t('emptyReply');
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
+          note: lastModelNote, samoMyslenie });
         saveConversations();
         break;
       }
@@ -1742,10 +2010,41 @@ async function runGeneration(conv) {
           dane = await readJsonSafe(r);
           if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
         } catch (err) { dane = { error: err.message }; }
+
+        /* PODGLĄDY, nie tylko opis słowami.
+           Do tej pory wynik archiwum szedł wyłącznie do modelu jako tekst,
+           więc na „pokaż zdjęcia z rana" Marcin dostawał listę nazw plików.
+           Siatka miniatur była podpięta tylko pod wyszukiwanie w internecie.
+           Miniatury lecą przez `/api/archive/thumb`, bo adresy z OneDrive
+           wygasają i muszą być dociągane teraz, a nie przy indeksowaniu. */
+        const pliki = (dane && Array.isArray(dane.wyniki)) ? dane.wyniki : [];
+        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive').slice(0, 24);
+        if (zPodgladem.length) {
+          conv.messages.push({
+            role: 'assistant',
+            content: {
+              text: '',
+              photos: zPodgladem.map((w) => ({
+                thumb: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
+                podglad: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
+                source: '',
+                title: [w.nazwa, w.kiedy && w.kiedy.slice(0, 16).replace('T', ' ')]
+                  .filter(Boolean).join(' · '),
+                zrodlo: [w.poraDnia, w.swiatlo].filter(Boolean).join(' · '),
+                licencja: w.ogniskowa ? `${w.ogniskowa} mm` : '',
+              })),
+            },
+          });
+          saveConversations();
+          renderMessages();
+        }
+
         conv.messages.push({
           role: 'user',
           content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-            + 'podstawie tych danych, nie zgaduj):\n' + JSON.stringify(dane, null, 1).slice(0, 12000),
+            + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
+            + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
+            + JSON.stringify(dane, null, 1).slice(0, 12000),
           search: true,
           searchQuery: t('chat.archiveQuery'),
         });
@@ -1757,10 +2056,21 @@ async function runGeneration(conv) {
       // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
       const planMarker = acc.match(PLAN_RE);
       if (planMarker && depth < MAX_SEARCHES) {
+        /* Dzielimy na `klucz=wartość`, ale wartość MOŻE mieć spacje —
+           „obiektyw=24-70 f/2.8, 70-200 f/4" to jedna wartość, nie cztery
+           parametry. Dzielenie po samych spacjach urywało ją na „24-70",
+           przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8:
+           odpowiedź brzmiała sensownie i była nieprawdziwa. Tniemy więc tylko
+           tam, gdzie po spacji zaczyna się kolejne `słowo=`. */
         const parametry = {};
-        for (const kawalek of planMarker[1].trim().split(/\s+/)) {
-          const [k, v] = kawalek.split('=');
-          if (k && v) parametry[k] = /^[\d.]+$/.test(v) ? Number(v) : v;
+        const ALIASY = { obiektywy: 'obiektyw', szklo: 'obiektyw', lens: 'obiektyw' };
+        for (const kawalek of planMarker[1].trim().split(/\s+(?=[a-zA-Z_]+=)/)) {
+          const i = kawalek.indexOf('=');
+          if (i <= 0) continue;
+          const k = kawalek.slice(0, i).trim().toLowerCase();
+          const v = kawalek.slice(i + 1).trim();
+          if (!v) continue;
+          parametry[ALIASY[k] || k] = /^[\d.]+$/.test(v) ? Number(v) : v;
         }
         const before = stripSearchMarker(acc.replace(planMarker[0], ''));
         conv.messages.push({
@@ -1898,14 +2208,41 @@ async function runGeneration(conv) {
             });
           }
           finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
-        } else {
-          conv.messages.push({
-            role: 'assistant',
-            content: t('chat.photosNone', { msg: zestawy.find((z) => z.error)?.error || '' }),
-            error: true,
-          });
-          finalText = t('chat.photosNoneVoice');
+          saveConversations();
+          break;
         }
+
+        /* Nic nie znaleziono. Kiedyś kończyliśmy tutaj: użytkownik dostawał
+           „nie znalazłem", a MODEL nie dowiadywał się o niczym. Rozmowa
+           urywała się w pół kroku i następne zdanie użytkownika — choćby samo
+           „Kraków" — trafiało w próżnię: model nie wiedział, że przed chwilą
+           coś nie wyszło, ani czego dotyczyło. Wyglądało to jak zgłupienie.
+           Teraz niepowodzenie wraca do modelu tak samo jak wynik wyszukiwania:
+           może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
+        const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
+        if (depth < MAX_SEARCHES) {
+          conv.messages.push({
+            role: 'user',
+            content: `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
+              + (powod ? `Powód techniczny: ${powod}\n` : '')
+              + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
+              + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
+              + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
+              + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
+              + 'czego dokładnie szukać.',
+            search: true,
+            searchQuery: t('chat.photosQuery'),
+          });
+          saveConversations();
+          renderMessages();
+          continue;
+        }
+        conv.messages.push({
+          role: 'assistant',
+          content: t('chat.photosNone', { msg: powod }),
+          error: true,
+        });
+        finalText = t('chat.photosNoneVoice');
         saveConversations();
         break;
       }
@@ -1950,9 +2287,21 @@ async function runGeneration(conv) {
         break;
       }
 
-      // Pusta treść przy modelu rozumującym znaczy zwykle „budżet tokenów poszedł
-      // na myślenie” — wtedy tok myślenia jest jedyną odpowiedzią, jaką mamy.
-      finalText = stripSearchMarker(acc) || lastReasoning || t('emptyReply');
+      /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
+         w całości na myślenie”. Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
+         jako odpowiedź — i to było gorsze niż nic: rozumowanie jest po
+         angielsku, urwane w połowie zdania i pokazuje deliberację, której
+         użytkownik widzieć nie powinien. Teraz mówimy wprost, co się stało,
+         a samo myślenie ląduje w zwijanym panelu, gdzie jego miejsce. */
+      const trescOdpowiedzi = stripSearchMarker(acc);
+      let mysliZamiastTresci = '';
+      if (!trescOdpowiedzi && lastReasoning) {
+        mysliZamiastTresci = lastReasoning;
+        lastThink = lastReasoning;
+        finalText = t('budgetSpentOnThinking');
+      } else {
+        finalText = trescOdpowiedzi || t('emptyReply');
+      }
       const actMarker = finalText.match(ACTION_RE);
       if (actMarker) {
         const shown = finalText.replace(actMarker[0], '').trim();
@@ -1960,7 +2309,8 @@ async function runGeneration(conv) {
         conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
         finalText = shown;
       } else {
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
+          note: lastModelNote, samoMyslenie: Boolean(mysliZamiastTresci) });
       }
       saveConversations();
       break;
@@ -1985,6 +2335,9 @@ async function runGeneration(conv) {
       if (finalText) {
         el.voiceAnswer.textContent = stripForSpeech(finalText);
         setVoiceState('speaking');
+        // Zapamiętujemy, CO powiedzieliśmy — askVoice odrzuci to, gdyby
+        // wróciło jako „pytanie" z mikrofonu.
+        voiceOstatniaOdpowiedz = stripForSpeech(finalText);
         await speakText(finalText);
       }
       if (voiceMode) startQueryListening(); // rozmowa trwa — pytanie uzupełniające bez wake word
@@ -3124,9 +3477,14 @@ async function odswiezPlan(cap) {
   }
 }
 
-function pokazPlan(d) {
+/* Wypisz policzony plan. `pre` to przedrostek identyfikatorów, bo plan
+   pokazuje się w DWÓCH miejscach: pod podglądem kamery (`plan-*`, liczony
+   z jasności bieżącej klatki) i w Plenerze (`fp-*`, liczony dla miejsca
+   i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden —
+   dwie kopie tej samej funkcji rozjechałyby się przy pierwszej poprawce. */
+function pokazPlan(d, pre = 'plan') {
   const u = d.ustawienia;
-  $('plan-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+  $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
 
   const czesci = [];
   if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
@@ -3138,7 +3496,7 @@ function pokazPlan(d) {
       + (d.pogoda.temperatura !== null ? ` ${Math.round(d.pogoda.temperatura)}°C` : '')
       + (d.pogoda.opadyProc > 30 ? ` · opady ${d.pogoda.opadyProc}%` : ''));
   }
-  const light = $('plan-light');
+  const light = $(pre + '-light');
   light.textContent = czesci.join(' · ');
 
   /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
@@ -3158,20 +3516,433 @@ function pokazPlan(d) {
   }
   if (czas.textContent) light.appendChild(czas);
 
-  const why = $('plan-why');
+  const why = $(pre + '-why');
   why.innerHTML = '';
   for (const p of u.powody) {
     const el = document.createElement('p');
     el.textContent = p;
     why.appendChild(el);
   }
+
+  // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
+  planOstatnieUstawienia = u;
+  odswiezAparat(u);
 }
+
+let planOstatnieUstawienia = null;
+
+/* ---- APARAT PO WI-FI (Canon CCAPI) ------------------------------------
+   Sedno nie jest w tym, że da się zdalnie zmienić ISO. Sedno jest w tym, że
+   Cosmos przestaje mówić „ustaw 1/250, f/8, ISO 200", a zaczyna mówić „masz
+   1/60, f/4, ISO 1600 — poprawiam". Do tego musi ZOBACZYĆ, co aparat ma
+   naprawdę ustawione, i porównać z tym, co sam policzył dla tego światła.
+
+   Wiersz pokazuje się dopiero, gdy aparat odpowiada. Martwy przycisk
+   „Ustaw w aparacie" u kogoś, kto nigdy nie włączył CCAPI, byłby gorszy niż
+   jego brak — obiecywałby coś, czego nie ma. */
+let aparatStan = null;
+let aparatSprawdzony = 0;
+const APARAT_CACHE_MS = 30000;
+
+async function odswiezAparat(policzone) {
+  const wiersz = $('plan-camera');
+  if (!wiersz) return;
+  /* Wiersz aparatu mieszka w Plenerze. Odpytywanie go przy zamkniętym oknie
+     to dwa żądania do aparatu co osiem sekund przez cały czas otwartego
+     podglądu — do niczego, a aparat i tak zasypia po Wi-Fi. */
+  if ($('plener-modal').style.display === 'none') return;
+
+  if (Date.now() - aparatSprawdzony > APARAT_CACHE_MS) {
+    aparatSprawdzony = Date.now();
+    try { aparatStan = await (await fetch('/api/canon/status')).json(); }
+    catch { aparatStan = null; }
+  }
+  if (!aparatStan || !aparatStan.online) {
+    // Nieskonfigurowany aparat chowamy zupełnie; skonfigurowany, ale
+    // niedostępny — pokazujemy z powodem, bo to stan do naprawienia.
+    wiersz.hidden = !(aparatStan && aparatStan.skonfigurowany);
+    if (!wiersz.hidden) {
+      $('plan-camera-now').textContent = String((aparatStan && aparatStan.powod) || '').slice(0, 120);
+      $('plan-camera-now').className = 'plan-camera-off';
+      $('plan-camera-apply').hidden = true;
+    }
+    return;
+  }
+
+  wiersz.hidden = false;
+  $('plan-camera-apply').hidden = false;
+  try {
+    const w = await (await fetch('/api/canon/settings')).json();
+    const n = w.nastawy || {};
+    const teraz = [n.czas, n.przyslona && `f/${String(n.przyslona).replace(/^f/i, '')}`,
+      n.iso && `ISO ${n.iso}`].filter(Boolean).join(' · ') || '—';
+    const el = $('plan-camera-now');
+    el.className = '';
+    el.textContent = `${aparatStan.model || t('plan.camera')}: ${teraz}`;
+    /* Zgodność liczymy, a nie porównujemy napisy: „1/250" z aparatu i 0,004 s
+       z planu to ta sama wartość zapisana inaczej. Różnica poniżej jednej
+       trzeciej działki jest w praktyce nieodróżnialna na zdjęciu. */
+    const l = w.liczby || {};
+    if (policzone && l.iso && policzone.iso) {
+      const dzialki = Math.abs(Math.log2(l.iso / policzone.iso));
+      if (dzialki > 0.34) el.textContent += ` · ${t('plan.mismatch')}`;
+    }
+  } catch {
+    $('plan-camera-now').textContent = t('plan.cameraErr');
+    $('plan-camera-now').className = 'plan-camera-off';
+  }
+}
+
+$('plan-camera-apply').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const u = planOstatnieUstawienia;
+  if (!u) return;
+  b.disabled = true;
+  const pierwotny = b.textContent;
+  b.textContent = t('plan.applying');
+  try {
+    const r = await fetch('/api/canon/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        iso: u.iso ? String(u.iso) : '',
+        // Aparat oczekuje swojego zapisu: „f4.0" i „1/250", nie liczb.
+        przyslona: u.przyslona ? String(u.przyslona).replace('f/', 'f') : '',
+        czas: u.czas || '',
+      }),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    aparatSprawdzony = 0;
+    await odswiezAparat(u);
+  } catch (err) {
+    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
+    $('plan-camera-now').className = 'plan-camera-off';
+  } finally {
+    b.disabled = false;
+    b.textContent = pierwotny;
+  }
+});
+
+/* Migawka. Świadomie TYLKO pod ludzkim palcem — model tego narzędzia nie
+   dostaje. „Zrób zdjęcie, bo wygląda na dobry moment" jest dokładnie tą
+   klasą decyzji, której maszyna nie powinna podejmować za człowieka
+   trzymającego aparat. */
+$('plan-camera-shutter').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  const pierwotny = b.textContent;
+  try {
+    const r = await fetch('/api/canon/shutter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    b.textContent = t('pl.shutterOk');
+  } catch (err) {
+    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
+    $('plan-camera-now').className = 'plan-camera-off';
+  } finally {
+    setTimeout(() => { b.textContent = pierwotny; b.disabled = false; }, 900);
+  }
+});
 
 for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
   const el = $(id);
   // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
   if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
 }
+
+/* ============================== PLENER ==============================
+   Foto i wideo jako jedno miejsce, a nie pięć.
+
+   Powód wydzielenia jest rzeczowy, nie porządkowy. Te funkcje wyrosły
+   przez ostatnie partie do rozmiaru osobnego programu, a mieszkały tak:
+   sprzęt i archiwum w Ustawieniach, plan zdjęciowy w podpanelu podglądu
+   kamery (czyli niedostępny bez włączonej kamery), aparat po Wi-Fi jako
+   wiersz w tamtym podpanelu, ptaki w nakładce głosowej, a misja KMZ
+   i karty ujęć — nigdzie. Te dwie ostatnie dało się uruchomić wyłącznie
+   żądaniem HTTP albo przez model. To nie jest funkcja, której nie ma;
+   to funkcja, o której nie sposób się dowiedzieć.
+
+   Plan liczy się TU bez kamery: dla nazwy miejsca i dla wybranej godziny.
+   To jest ta różnica, na której zależy najbardziej — „co zabrać w sobotę
+   do Krakowa na 18:30" to inne pytanie niż „co ustawić w tej chwili”. */
+
+function otworzPlener() {
+  wczytajSprzet();
+  odswiezArchiwum();
+  $('plener-modal').style.display = '';
+  // Aparat sprawdzamy przy otwarciu, nie w tle — patrz `odswiezAparat`.
+  aparatSprawdzony = 0;
+  odswiezAparat(planOstatnieUstawienia);
+  /* Plan liczymy przy KAŻDYM otwarciu, nie tylko pierwszym. Puste okno
+     z przyciskiem „Policz" kazałoby klikać po to, co i tak zawsze chcemy
+     zobaczyć, a plan sprzed godziny jest już nieprawdą — Słońce się
+     przesunęło, a to jest cała treść tego panelu. */
+  liczPlanPlener();
+}
+
+function zamknijPlener() { $('plener-modal').style.display = 'none'; }
+
+$('plener-btn').addEventListener('click', otworzPlener);
+$('plener-close').addEventListener('click', zamknijPlener);
+$('plener-modal').addEventListener('click', (e) => {
+  if (e.target === $('plener-modal')) zamknijPlener();
+});
+$('set-open-plener').addEventListener('click', () => { closeSettings(); otworzPlener(); });
+
+/* ---- sprzęt ---- */
+$('gear-save').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const stan = $('gear-status');
+  b.disabled = true;
+  stan.className = 'field-hint';
+  try {
+    await zapiszSprzet();
+    stan.textContent = t('pl.gearSaved');
+    setTimeout(() => { stan.textContent = ''; }, 2500);
+    // Zestaw wpływa na ujęcia i na nastawy — plan po zapisie jest nieaktualny.
+    liczPlanPlener();
+  } catch (err) {
+    // Nieudany zapis ZOSTAJE na ekranie — inaczej człowiek wychodzi
+    // przekonany, że sprzęt jest wpisany, a plan liczy dla domyślnego korpusu.
+    stan.className = 'field-hint plener-err';
+    stan.textContent = t('pl.gearErr', { msg: err.message });
+  } finally {
+    b.disabled = false;
+  }
+});
+
+/* ---- plan ---- */
+let plenerZajety = false;
+let plenerPonow = false;
+
+async function liczPlanPlener() {
+  /* Zajęte = przelicz PO powrocie, a nie „odpuść". Zwykłe `return` znaczyło,
+     że przy szybkiej zmianie dwóch list na ekranie zostaje wynik dla pierwszej
+     — i to bez żadnego znaku, że coś przepadło. */
+  if (plenerZajety) { plenerPonow = true; return; }
+  plenerZajety = true;
+  const przycisk = $('fp-go');
+  przycisk.disabled = true;
+  try {
+    const trybPola = $('fp-mode').value;
+    const wideo = trybPola.startsWith('wideo');
+    const dane = {
+      tryb: wideo ? 'wideo' : 'zdjecie',
+      klatki: trybPola === 'wideo50' ? 50 : 25,
+    };
+    // Puste pola znaczą „weź to, co zapisane" — i muszą NIE trafić do żądania,
+    // bo pusty napis to dla serwera podana wartość, a nie jej brak.
+    if ($('fp-gear').value) dane.sprzet = $('fp-gear').value;
+    if ($('fp-sky').value) dane.zachmurzenie = $('fp-sky').value;
+    if ($('fp-place').value.trim()) dane.miejsce = $('fp-place').value.trim();
+    if ($('fp-topic').value.trim()) dane.temat = $('fp-topic').value.trim();
+    if ($('fp-when').value) {
+      const kiedy = new Date($('fp-when').value);
+      if (!Number.isNaN(kiedy.getTime())) dane.kiedy = kiedy.toISOString();
+    }
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dane),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) {
+      $('fp-shot').textContent = '—';
+      $('fp-light').textContent = d.error || t('plan.needLocation');
+      $('fp-why').textContent = '';
+      $('fp-shots').innerHTML = '';
+      return;
+    }
+    pokazPlan(d, 'fp');
+    pokazUjecia(d.ujecia);
+    // Misja dostaje współrzędne z planu — przepisywanie ich z mapy do dwóch
+    // pól to najprostszy sposób na literówkę w miejscu, w którym boli.
+    plenerWspolrzedne = d.wspolrzedne || null;
+    if (plenerWspolrzedne && !$('mis-lat').value && !$('mis-lon').value) wstawWspolrzedne();
+  } catch {
+    $('fp-light').textContent = t('offline.title');
+  } finally {
+    przycisk.disabled = false;
+    plenerZajety = false;
+    if (plenerPonow) { plenerPonow = false; liczPlanPlener(); }
+  }
+}
+
+$('fp-go').addEventListener('click', liczPlanPlener);
+$('fp-now').addEventListener('click', () => { $('fp-when').value = ''; liczPlanPlener(); });
+for (const id of ['fp-gear', 'fp-mode', 'fp-sky']) {
+  $(id).addEventListener('change', liczPlanPlener);
+}
+for (const id of ['fp-place', 'fp-topic']) {
+  // Enter w polu tekstowym ma liczyć — inaczej trzeba sięgać po przycisk.
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') liczPlanPlener(); });
+}
+$('fp-when').addEventListener('change', liczPlanPlener);
+
+/* Karty ujęć — lista pozycji do odhaczenia, z liczbami. POMINIĘTE pokazujemy
+   równie wyraźnie: „nie masz czym" to inna informacja niż „nie ma na liście",
+   a bez niej wygląda, jakby Cosmos o dronie zapomniał. */
+/* Odhaczone ujęcia. Trzymane w przeglądarce, nie na serwerze, i to jest
+   przemyślane: „nakręciłem" to stan JEDNEGO dnia zdjęciowego na JEDNYM
+   urządzeniu, a nie fakt o Marcinie wart miejsca w pamięci Cosmosa.
+   Klucz zawiera temat, więc powrót do tego samego planu wraca też do postępu,
+   a zmiana tematu zaczyna listę od nowa. */
+const KLUCZ_ODHACZONE = 'cosmos.ujecia.';
+function odhaczone(temat) {
+  try { return new Set(JSON.parse(localStorage.getItem(KLUCZ_ODHACZONE + temat) || '[]')); }
+  catch { return new Set(); }
+}
+function zapiszOdhaczone(temat, zbior) {
+  try { localStorage.setItem(KLUCZ_ODHACZONE + temat, JSON.stringify([...zbior])); }
+  catch { /* prywatne okno albo pełny dysk — lista działa dalej, tylko bez pamięci */ }
+}
+
+function pokazUjecia(u) {
+  const box = $('fp-shots');
+  box.innerHTML = '';
+  if (!u || !Array.isArray(u.ujecia) || !u.ujecia.length) return;
+
+  const temat = ($('fp-topic').value.trim() || '—').toLowerCase().slice(0, 40);
+  const zrobione = odhaczone(temat);
+
+  const tytul = document.createElement('div');
+  tytul.className = 'plener-shots-title';
+  const licznik = document.createElement('span');
+  const odswiezLicznik = () => {
+    licznik.textContent = t('pl.shots', { n: u.ujecia.length })
+      + (zrobione.size ? ` — ${t('pl.done', { n: zrobione.size })}` : '');
+  };
+  odswiezLicznik();
+  const wyczysc = document.createElement('button');
+  wyczysc.type = 'button';
+  wyczysc.className = 'plener-clear';
+  wyczysc.textContent = t('pl.clearTicks');
+  wyczysc.addEventListener('click', () => {
+    zrobione.clear();
+    zapiszOdhaczone(temat, zrobione);
+    pokazUjecia(u);
+  });
+  tytul.append(licznik, wyczysc);
+  box.appendChild(tytul);
+
+  for (const s of u.ujecia) {
+    const kar = document.createElement('div');
+    kar.className = 'plener-shot' + (zrobione.has(s.klucz) ? ' zrobione' : '');
+
+    const glowa = document.createElement('div');
+    glowa.className = 'plener-shot-head';
+    /* Odhaczanie jest sensem listy — „lista do odhaczenia" bez sposobu
+       odhaczenia byłaby obietnicą na wyrost. W terenie zaznacza się to
+       palcem, na telefonie, więc pole leży w nagłówku karty. */
+    const ptaszek = document.createElement('input');
+    ptaszek.type = 'checkbox';
+    ptaszek.className = 'plener-tick';
+    ptaszek.checked = zrobione.has(s.klucz);
+    ptaszek.setAttribute('aria-label', s.nazwa);
+    ptaszek.addEventListener('change', () => {
+      ptaszek.checked ? zrobione.add(s.klucz) : zrobione.delete(s.klucz);
+      zapiszOdhaczone(temat, zrobione);
+      kar.classList.toggle('zrobione', ptaszek.checked);
+      odswiezLicznik();
+    });
+    const nazwa = document.createElement('span');
+    nazwa.className = 'plener-shot-name';
+    nazwa.textContent = s.nazwa;
+    const liczby = document.createElement('span');
+    liczby.className = 'plener-shot-nums mono';
+    liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
+    glowa.append(ptaszek, nazwa, liczby);
+
+    const ruch = document.createElement('div');
+    ruch.className = 'plener-shot-move';
+    ruch.textContent = s.ruch + (s.naSzkle ? ` · ${s.naSzkle}` : '');
+
+    const jak = document.createElement('div');
+    jak.className = 'plener-shot-how';
+    jak.textContent = s.jak;
+
+    const poco = document.createElement('div');
+    poco.className = 'plener-shot-why';
+    poco.textContent = s.poCo;
+
+    kar.append(glowa, ruch, jak, poco);
+    box.appendChild(kar);
+  }
+
+  if (u.pominiete && u.pominiete.length) {
+    const p = document.createElement('div');
+    p.className = 'plener-skipped';
+    p.textContent = t('pl.skipped') + ' '
+      + u.pominiete.map((x) => `${x.nazwa} (${x.powod})`).join('; ');
+    box.appendChild(p);
+  }
+}
+
+/* ---- misja drona ---- */
+let plenerWspolrzedne = null;
+
+function wstawWspolrzedne() {
+  if (!plenerWspolrzedne) return;
+  $('mis-lat').value = Number(plenerWspolrzedne.lat).toFixed(5);
+  $('mis-lon').value = Number(plenerWspolrzedne.lon).toFixed(5);
+}
+$('mis-here').addEventListener('click', () => {
+  if (!plenerWspolrzedne) { liczPlanPlener().then(wstawWspolrzedne); return; }
+  wstawWspolrzedne();
+});
+
+$('mis-go').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  const out = $('mis-out');
+  const lat = Number($('mis-lat').value);
+  const lon = Number($('mis-lon').value);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    out.textContent = t('pl.misNoCoords');
+    out.className = 'plener-out mono plener-err';
+    return;
+  }
+  b.disabled = true;
+  out.className = 'plener-out mono';
+  out.textContent = t('pl.misWorking');
+  try {
+    const r = await fetch('/api/plan/mission', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat, lon,
+        szerokoscM: Number($('mis-w').value) || 200,
+        dlugoscM: Number($('mis-l').value) || 200,
+        odstepM: Number($('mis-odstep').value) || 50,
+        kierunek: Number($('mis-kier').value) || 0,
+        wysokosc: Number($('mis-alt').value) || 80,
+        predkosc: Number($('mis-speed').value) || 6,
+        nazwa: $('mis-name').value.trim() || 'misja',
+      }),
+    });
+    if (!r.ok) {
+      const d = await readJsonSafe(r);
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    const blob = await r.blob();
+    /* Pobranie przez tymczasowy odsyłacz: żądanie jest POST-em, więc zwykły
+       link nie wystarczy, a otwarcie w nowej karcie zostawiłoby pustą kartę. */
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${($('mis-name').value.trim() || 'misja').replace(/[^\w-]+/g, '-')}.kmz`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    out.textContent = t('pl.misDone', { kb: (blob.size / 1024).toFixed(1) });
+  } catch (err) {
+    out.textContent = err.message;
+    out.className = 'plener-out mono plener-err';
+  } finally {
+    b.disabled = false;
+  }
+});
 
 // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
 // strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.
@@ -3757,8 +4528,13 @@ function chime(freq = 880) {
 /** Zatrzymaj rozpoznawanie na dobre — tylko przy wyjściu z trybu głosowego. */
 function stopVoiceRecognizers() {
   clearTimeout(voiceSilence);
+  clearTimeout(nasluchCisza);
+  clearTimeout(odzyskiwanieMikrofonu);
+  odzyskiwanieMikrofonu = null;
+  nasluchAwarie = 0;
   voiceHeard = '';
   voiceDeaf = false;
+  if (nasluch) { nasluch.stop(); nasluch = null; }
   if (voiceRec) {
     voiceRec.onend = null;          // bez tego wznowiłby się sam
     voiceRec.onresult = null;
@@ -3769,8 +4545,10 @@ function stopVoiceRecognizers() {
 }
 
 async function enterVoiceMode() {
-  const SR = getSR();
-  if (!SR) {
+  // Dwa silniki, dwa różne wymagania. Brak Web Speech API nie przekreśla
+  // trybu głosowego, jeśli działa własny nasłuch z Whisperem — a to właśnie
+  // przypadek Firefoksa i Safari, gdzie rozpoznawania mowy po prostu nie ma.
+  if (!getSR() && !nasluchMozliwy()) {
     alert(t('voice.noSupport'));
     return;
   }
@@ -3834,6 +4612,87 @@ $('voice-cam-btn').addEventListener('click', async () => {
   updateVoiceCamButton();
 });
 
+/* ---- „Kto to śpiewa?" — BirdNET z nakładki głosowej -------------------
+   Ptaka słychać dużo dalej, niż go widać, i to słuch decyduje, gdzie postawić
+   statyw. Nagranie idzie bez „ulepszaczy" dźwięku i w pełnej częstotliwości:
+   redukcja szumu w telefonie wycina dokładnie te ciche, wysokie tony, które
+   są tu całą treścią. */
+const PTAK_SEKUND = 8;
+// Drugie kliknięcie w trakcie nagrania otwierałoby DRUGI strumień z tego samego
+// mikrofonu. Część urządzeń po prostu odmawia, reszta oddaje cichsze nagranie.
+let ptakTrwa = false;
+
+async function rozpoznajPtaka() {
+  if (ptakTrwa) return;
+  if (!(window.NasluchWlasny && window.NasluchWlasny.dostepny())) {
+    el.voiceAnswer.textContent = t('voice.birdNoAudio');
+    return;
+  }
+  if (!(senses.online && senses.caps.birdnet)) {
+    el.voiceAnswer.textContent = t('voice.birdNoSenses');
+    return;
+  }
+  // Mikrofon jest zajęty przez nasłuch ciągły — zwalniamy go na czas nagrania
+  // i wracamy do nasłuchu potem. Dwa strumienie z tego samego wejścia bywają
+  // odrzucane, a na telefonie dają cichsze, gorsze nagranie.
+  ptakTrwa = true;
+  const bylNasluch = Boolean(nasluch);
+  if (nasluch) { nasluch.stop(); nasluch = null; }
+  stopSpeaking();
+  setVoiceState('listening');
+  el.voiceTranscript.textContent = '';
+
+  try {
+    let zostalo = PTAK_SEKUND;
+    el.voiceAnswer.textContent = t('voice.birdRec', { s: zostalo });
+    const tik = setInterval(() => {
+      zostalo--;
+      if (zostalo >= 0) el.voiceAnswer.textContent = t('voice.birdRec', { s: zostalo });
+    }, 1000);
+    let blob;
+    try {
+      blob = await window.NasluchWlasny.nagrajWav(PTAK_SEKUND * 1000, { czestotliwosc: 48000 });
+    } finally {
+      clearInterval(tik);
+    }
+
+    el.voiceAnswer.textContent = t('voice.birdThinking');
+    const res = await fetch('/api/ptak', {
+      method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob,
+    });
+    const dane = await readJsonSafe(res);
+    if (!res.ok) throw new Error(dane.error || `HTTP ${res.status}`);
+
+    const lista = Array.isArray(dane.gatunki) ? dane.gatunki : [];
+    if (!lista.length) {
+      el.voiceAnswer.textContent = t('voice.birdNone');
+      setVoiceState('speaking');
+      await speakText(t('voice.birdNone'));
+    } else {
+      const opis = lista
+        .map((g) => `${g.nazwa || g.lacinska} — ${Math.round((g.pewnosc || 0) * 100)}%`)
+        .join(' · ');
+      el.voiceAnswer.textContent = opis;
+      setVoiceState('speaking');
+      const pierwszy = lista[0];
+      await speakText(t('voice.birdFound', {
+        nazwa: pierwszy.nazwa || pierwszy.lacinska,
+        proc: Math.round((pierwszy.pewnosc || 0) * 100),
+      }));
+    }
+  } catch (err) {
+    el.voiceAnswer.textContent = t('voice.birdErr', { msg: err.message });
+  } finally {
+    ptakTrwa = false;
+    if (voiceMode) {
+      if (bylNasluch) backToWake();
+      else setVoiceState('wake');
+    }
+  }
+}
+
+$('voice-bird-btn').addEventListener('click', rozpoznajPtaka);
+
 function exitVoiceMode() {
   voiceMode = false;
   voiceNoteMode = false;
@@ -3863,9 +4722,220 @@ let voiceRec = null;          // jedyny rozpoznawacz sesji
 let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
 let voiceHeard = '';          // złożone zdanie w trybie pytania
 let voiceSilence = null;      // odliczanie ciszy po pytaniu
+/* Znacznik „to już przerobiliśmy”. Samo `voiceDeaf` nie wystarczało i to była
+   przyczyna sprzężenia: rozpoznawacz jest CIĄGŁY, więc kiedy Cosmos mówi,
+   dalej transkrybuje — tyle że my wyniki ignorujemy. Zostają jednak w
+   `e.results`, a gałąź słowa budzącego czytała trzy OSTATNIE wyniki niezależnie
+   od tego, czy były już widziane. Po skończonej wypowiedzi Cosmos odczytywał
+   więc własne zdanie jako nowe polecenie i odpowiadał sam sobie w kółko.
+   Teraz wszystko, co padło w czasie głuchoty, jest z góry oznaczone jako
+   zużyte.
+
+   Sam indeks to jednak za mało, bo NIE JEST STAŁYM PUNKTEM ODNIESIENIA.
+   Rozpoznawacz potrafi zacząć numerować od zera bez `onend` — Chrome robi tak
+   po dłuższej ciszy, a na Androidzie po każdej domkniętej wypowiedzi. Znacznik
+   zostawał wtedy w górze, świeże wyniki wypadały poniżej niego i pytanie
+   znikało bez śladu: transkrypcja pusta, cisza nie miała czego wysłać.
+   Dlatego obok indeksu trzymamy ODCISK ostatniego zużytego wyniku. Jeśli lista
+   nie urosła ponad znacznik, a tego wyniku już w niej nie ma — numeracja
+   ruszyła od nowa i znacznik trzeba wyzerować. */
+let voiceZuzyteDo = 0;
+let voiceOdcisk = '';
+// Co Cosmos ostatnio powiedział — druga zapora przed pętlą.
+let voiceOstatniaOdpowiedz = '';
+
+/* ---- DRUGI SILNIK NASŁUCHU: własny strumień + Whisper ----------------
+   Cała gimnastyka powyżej (znaczniki zużycia, odciski wyników, wykrywanie
+   restartu numeracji) istnieje dlatego, że Web Speech API nie da się
+   wyciszyć ani zatrzymać bez zwolnienia mikrofonu. `public/nasluch.js`
+   rozwiązuje to u źródła: mikrofon otwarty raz na całą sesję, wypowiedzi
+   wycinane z sygnału po energii, tekst z Whispera. Wtedy „głuchy" znaczy
+   naprawdę głuchy — próbki lecą do kosza i nie ma czego rozpoznać.
+
+   Wymaga włączonych zmysłów, więc to WYBÓR, nie zamiennik. Przy wyłączonym
+   komputerze domowym Cosmos wraca do Web Speech API bez pytania. */
+let nasluch = null;            // instancja NasluchWlasny albo null
+let nasluchCisza = null;       // powrót do nasłuchu słowa budzącego po ciszy
+const NASLUCH_CISZA_MS = 9000;
+
+function nasluchMozliwy() {
+  return Boolean(window.NasluchWlasny && window.NasluchWlasny.dostepny()
+    && senses.online && senses.caps.whisper);
+}
+
+/** 'whisper' albo 'przegladarka'. Wybór z Ustawień; `auto` bierze Whispera,
+ *  gdy zmysły są pod ręką, bo to on rozwiązuje problem sprzężenia. */
+function silnikNasluchu() {
+  const wybor = localStorage.getItem('cosmos.sttEngine') || 'auto';
+  if (wybor === 'przegladarka') return 'przegladarka';
+  return nasluchMozliwy() ? 'whisper' : 'przegladarka';
+}
+
+/** Ograniczenia dla nasłuchu ciągłego. Echo cancellation jest tu KLUCZOWE:
+ *  na telefonie głośnik gra wprost do mikrofonu i choć „głuchy" wyrzuca te
+ *  próbki, po zakończeniu wypowiedzi Cosmosa ogon zdania potrafi jeszcze
+ *  wpaść w otwarte okno. */
+function nasluchOgraniczenia() {
+  const id = localStorage.getItem('cosmos.micId') || '';
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  if (id) audio.deviceId = { exact: id };
+  return { audio };
+}
+
+/* Ile razy pod rząd Whisper może zawieść, zanim wrócimy do przeglądarki.
+   Jeden błąd to przypadek — GPU zajęte innym zadaniem, chwilowa dziura
+   w Tailscale. Trzy pod rząd znaczą, że zmysłów po prostu nie ma, a wtedy
+   trwanie przy Whisperze to skazanie trybu głosowego na milczenie. */
+const NASLUCH_PROG_AWARII = 3;
+let nasluchAwarie = 0;
+
+function startNasluchWlasny() {
+  if (nasluch) { nasluch.gluchy(voiceDeaf); return; }
+  nasluch = window.NasluchWlasny.utworz({
+    onWypowiedz: (tekst) => { nasluchAwarie = 0; wypowiedzZNasluchu(tekst); },
+    onBlad: (err) => {
+      // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
+      // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
+      el.voiceTranscript.textContent = t('voice.sttErr', { msg: err.message });
+      if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
+      /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
+         DZIAŁA — a Cosmos, który w kółko powtarza ten sam błąd, jest po
+         prostu zepsuty. Zmiana jest jawna: człowiek musi wiedzieć, czemu
+         nagle zmieniło się zachowanie. */
+      nasluchAwarie = 0;
+      localStorage.setItem('cosmos.sttEngine', 'przegladarka');
+      if (nasluch) { nasluch.stop(); nasluch = null; }
+      el.voiceTranscript.textContent = t('voice.sttFallback');
+      if (voiceMode) startVoiceRecognizer();
+    },
+    onCisza: (powod) => zaradzGluchocie(powod),
+  });
+  nasluch.gluchy(voiceDeaf);
+  nasluch.start(nasluchOgraniczenia()).catch(async (err) => {
+    nasluch = null;
+    /* Zapamiętany mikrofon mógł zostać odłączony — tak samo jak przy
+       dyktowaniu, spróbuj domyślnego, zanim ogłosisz porażkę. */
+    if (localStorage.getItem('cosmos.micId')) {
+      localStorage.removeItem('cosmos.micId');
+      startNasluchWlasny();
+      return;
+    }
+    el.voiceTranscript.textContent = t('voice.micDenied', { msg: err.message });
+    voiceMode = false;
+  });
+}
+
+/* ---- CICHA GŁUCHOTA I CO Z NIĄ ZROBIĆ --------------------------------
+   Najgorsza awaria trybu głosowego nie jest głośna: mikrofon przestaje dawać
+   próbki, a ekran dalej pokazuje „SŁUCHAM…". Marcin mówi do telefonu i nie
+   ma pojęcia, dlaczego nic się nie dzieje. `nasluch.js` wykrywa ten stan
+   z trzech stron (stan kontekstu, zdarzenia ścieżki, licznik od ostatniej
+   ramki) — tutaj jest odpowiedź na pytanie, co dalej.
+
+   Najpierw PRÓBUJEMY ODZYSKAĆ, bo dwie z trzech przyczyn (uśpiony dźwięk po
+   wygaszeniu ekranu, mikrofon oddany na czas rozmowy telefonicznej) mijają
+   same i wystarczy wziąć wejście od nowa. Dopiero gdy to nie pomoże, mówimy
+   wprost — jedna próba, nie pętla wznowień co dwie sekundy. */
+let odzyskiwanieMikrofonu = null;
+
+function zaradzGluchocie(powod) {
+  if (!voiceMode || odzyskiwanieMikrofonu) return;
+  el.voiceTranscript.textContent = t('voice.micLost', { powod });
+  odzyskiwanieMikrofonu = setTimeout(async () => {
+    odzyskiwanieMikrofonu = null;
+    if (!voiceMode || !nasluch) return;
+    if (nasluch.zywy()) { el.voiceTranscript.textContent = ''; return; }  // wróciło samo
+    nasluch.stop();
+    nasluch = null;
+    startNasluchWlasny();
+    // Dajemy nowemu wejściu chwilę i sprawdzamy, czy naprawdę żyje.
+    setTimeout(() => {
+      if (!voiceMode || !nasluch) return;
+      if (nasluch.zywy()) el.voiceTranscript.textContent = '';
+      else el.voiceTranscript.textContent = t('voice.micDead', { powod });
+    }, 2500);
+  }, 1500);
+}
+
+/** Gotowa wypowiedź z Whispera. W odróżnieniu od Web Speech API nie ma tu
+ *  wyników cząstkowych ani odliczania ciszy — VAD już zdecydował, że zdanie
+ *  się skończyło. */
+function wypowiedzZNasluchu(tekst) {
+  if (!voiceMode || voiceDeaf) return;
+
+  if (voiceState === 'wake') {
+    if (!WAKE_RE.test(tekst)) return;
+    const po = bezSlowaBudzacego(tekst);
+    chime(880);
+    if (po.length > 5) { askVoice(po); return; }
+    czekajNaPytanie();
+    return;
+  }
+
+  if (voiceState !== 'listening') return;
+  const czyste = bezSlowaBudzacego(tekst);
+  if (!czyste) return;
+  clearTimeout(nasluchCisza);
+  el.voiceTranscript.textContent = czyste;
+  askVoice(czyste);
+}
+
+/** Stan „słucham pytania" z własnym odliczaniem powrotu.
+ *  Bez tego Cosmos zostawałby w nasłuchu pytania w nieskończoność, gdyby
+ *  ktoś powiedział „Hej, Kosmos" i się rozmyślił. */
+function czekajNaPytanie() {
+  setVoiceState('listening');
+  el.voiceTranscript.textContent = '';
+  clearTimeout(nasluchCisza);
+  nasluchCisza = setTimeout(() => {
+    if (voiceMode && voiceState === 'listening') backToWake();
+  }, NASLUCH_CISZA_MS);
+}
+
+/** Jedno miejsce na zmianę „czy reagujemy na to, co słychać".
+ *  Przy własnym strumieniu to naprawdę wycisza wejście; przy Web Speech API
+ *  zostaje starym znacznikiem, bo tam wyciszyć się nie da. */
+function ustawGluchote(wlacz) {
+  voiceDeaf = Boolean(wlacz);
+  if (nasluch) nasluch.gluchy(voiceDeaf);
+}
+
+/** Uproszczona postać zdania — rozpoznawanie dopieszcza interpunkcję
+ *  i wielkość liter jeszcze po tym, jak wynik uzna za ostateczny. */
+function odciskWyniku(wyniki, indeks) {
+  const r = wyniki && wyniki[indeks];
+  return r && r[0] ? String(r[0].transcript).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') : '';
+}
+
+/** Zapamiętaj, że wszystko do `doIndeksu` już przerobiliśmy. */
+function oznaczZuzyte(wyniki, doIndeksu) {
+  voiceZuzyteDo = doIndeksu;
+  voiceOdcisk = doIndeksu > 0 ? odciskWyniku(wyniki, doIndeksu - 1) : '';
+}
+
+/** Wytnij słowo budzące — wszystkie wystąpienia, nie tylko pierwsze. Przy
+ *  ciągłym nasłuchu „Hej Kosmos" bywa rozpoznane kilka razy pod rząd. */
+function bezSlowaBudzacego(tekst) {
+  return String(tekst).replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
+    .replace(/\s{2,}/g, ' ').trim()
+    /* Rozpoznawanie lubi rozbić „Hej Kosmos" na dwa wyniki, więc po wycięciu
+       pełnej frazy zostaje sierotą samo „Hej". Ucinamy je tylko na POCZĄTKU
+       i tylko wtedy, gdy coś po nim jest — w środku zdania to już treść. */
+    .replace(/^(?:(?:hej|hey|ok(?:ej)?)[\s,.!]+)+(?=\S)/i, '');
+}
+
+/** Czy rozpoznawacz zaczął numerować wyniki od nowa? */
+function wynikiOdNowa(wyniki) {
+  if (!voiceZuzyteDo) return false;
+  // Lista wciąż rośnie ponad znacznik → to ta sama sesja, tylko dłuższa.
+  if (wyniki.length > voiceZuzyteDo) return false;
+  return odciskWyniku(wyniki, voiceZuzyteDo - 1) !== voiceOdcisk;
+}
 
 function startVoiceRecognizer() {
-  if (!voiceMode || voiceRec) return;
+  if (!voiceMode) return;
+  if (silnikNasluchu() === 'whisper') { startNasluchWlasny(); return; }
+  if (voiceRec) return;
   const SR = getSR();
   if (!SR) return;
 
@@ -3876,13 +4946,31 @@ function startVoiceRecognizer() {
   rec.interimResults = true;
 
   rec.onresult = (e) => {
-    if (!voiceMode || voiceDeaf) return;
+    if (!voiceMode) return;
+    rec.__ostatniaDlugosc = e.results.length;
+    rec.__ostatnieWyniki = e.results;
+    // Zanim cokolwiek odczytamy: czy to jeszcze ta sama numeracja?
+    if (wynikiOdNowa(e.results)) oznaczZuzyte(e.results, 0);
+    if (voiceDeaf) {
+      // Głuchy nie znaczy „nie słyszy" — znaczy „nie reaguje". Wszystko, co
+      // wpadło w tym czasie (czyli głos samego Cosmosa), znika z rozważań.
+      oznaczZuzyte(e.results, e.results.length);
+      return;
+    }
 
     if (voiceState === 'wake') {
-      const latest = [...e.results].slice(-3).map((r) => r[0].transcript).join(' ');
+      const swieze = [];
+      for (let i = Math.max(0, voiceZuzyteDo); i < e.results.length; i++) {
+        swieze.push(e.results[i][0].transcript);
+      }
+      const latest = swieze.join(' ');
       const match = latest.match(WAKE_RE);
       if (!match) return;
-      const after = latest.slice(latest.search(WAKE_RE) + match[0].length).trim();
+      // Wszystkie wystąpienia, nie tylko pierwsze: przy ciągłym nasłuchu
+      // „Hej Kosmos" bywa rozpoznane kilka razy pod rząd i wcześniej lądowało
+      // w treści pytania jako „HejHejHej kosmosHej kosmos Co widzisz".
+      const after = bezSlowaBudzacego(latest);
+      oznaczZuzyte(e.results, e.results.length);
       chime(880);
       if (after.length > 5) { askVoice(after); return; }
       voiceHeard = '';
@@ -3893,9 +4981,9 @@ function startVoiceRecognizer() {
 
     if (voiceState !== 'listening') return;
     let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    for (let i = Math.max(e.resultIndex, voiceZuzyteDo); i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) voiceHeard += r[0].transcript;
+      if (r.isFinal) { voiceHeard += r[0].transcript; oznaczZuzyte(e.results, i + 1); }
       else interim += r[0].transcript;
     }
     el.voiceTranscript.textContent = (voiceHeard + ' ' + interim).trim();
@@ -3905,7 +4993,10 @@ function startVoiceRecognizer() {
     clearTimeout(voiceSilence);
     voiceSilence = setTimeout(() => {
       if (!voiceMode || voiceState !== 'listening') return;
-      const text = voiceHeard.trim();
+      /* Ostatnia zapora przed „HejHejHej kosmos Co widzisz": gdyby słowo
+         budzące zdążyło wpaść do pytania — obojętne, czy przez opóźnione
+         rozpoznanie, czy przez restart numeracji — tu i tak wypada. */
+      const text = bezSlowaBudzacego(voiceHeard);
       voiceHeard = '';
       if (text) askVoice(text);
       else backToWake();
@@ -3915,13 +5006,15 @@ function startVoiceRecognizer() {
   // Chrome i tak utnie sesję po ~60 s — wznawiamy ten sam obiekt.
   rec.onend = () => {
     voiceRec = null;
+    // Nowa sesja zaczyna liczyć wyniki od zera, więc znacznik też musi.
+    oznaczZuzyte(null, 0);
     if (!voiceMode) return;
     setTimeout(() => { if (voiceMode) startVoiceRecognizer(); }, 250);
   };
   rec.onerror = (ev) => {
     if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
       voiceRec = null;
-      el.voiceTranscript.textContent = t('voice.micDenied');
+      el.voiceTranscript.textContent = t('voice.micDenied', { msg: ev.error });
       voiceMode = false;
       return;
     }
@@ -3934,8 +5027,12 @@ function startVoiceRecognizer() {
 function backToWake() {
   if (!voiceMode) return;
   clearTimeout(voiceSilence);
+  clearTimeout(nasluchCisza);
   voiceHeard = '';
-  voiceDeaf = false;
+  if (voiceRec && voiceRec.__ostatniaDlugosc) {
+    oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
+  }
+  ustawGluchote(false);
   setVoiceState('wake');
   el.voiceTranscript.textContent = '';
   startVoiceRecognizer();
@@ -3944,8 +5041,29 @@ function backToWake() {
 /** Zadaj pytanie, nie słuchając własnej odpowiedzi. */
 function askVoice(text) {
   clearTimeout(voiceSilence);
-  voiceDeaf = true;
+  /* Druga zapora przed sprzężeniem. Znacznik zużycia załatwia typowy
+     przypadek, ale rozpoznawanie bywa opóźnione i zdanie Cosmosa potrafi
+     domknąć się już po odmilczeniu. Jeśli „pytanie" jest tym, co przed chwilą
+     sam powiedział — nie odpowiadamy na własne słowa. */
+  if (voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
+    backToWake();
+    return;
+  }
+  ustawGluchote(true);
   handleVoiceQuery(text);
+}
+
+/** Czy dwa zdania to praktycznie to samo? Porównujemy zbiory słów, bo
+ *  rozpoznawanie mowy gubi końcówki i interpunkcję. */
+function toSamoZdanie(a, b) {
+  const slowa = (x) => new Set(String(x).toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 2));
+  const A = slowa(a);
+  const B = slowa(b);
+  if (A.size < 3) return false;                  // za krótkie, by wnioskować
+  let wspolne = 0;
+  for (const w of A) if (B.has(w)) wspolne++;
+  return wspolne / A.size > 0.7;
 }
 
 // Nazwy używane w pozostałej części pliku — zostawiamy je jako cienkie przejścia,
@@ -3954,7 +5072,13 @@ function startWakeListening() { backToWake(); }
 function startQueryListening() {
   if (!voiceMode) return;
   voiceHeard = '';
-  voiceDeaf = false;
+  // Wracamy do słuchania dopiero teraz — wszystko sprzed tej chwili to był
+  // głos Cosmosa albo cisza, i nie może wrócić jako pytanie.
+  if (voiceRec && voiceRec.__ostatniaDlugosc) {
+    oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
+  }
+  ustawGluchote(false);
+  if (silnikNasluchu() === 'whisper') { startVoiceRecognizer(); czekajNaPytanie(); return; }
   setVoiceState('listening');
   el.voiceTranscript.textContent = '';
   startVoiceRecognizer();
@@ -4054,6 +5178,7 @@ const overlays = [
   { id: 'learn-modal', close: closeLearn },
   { id: 'kb-modal', close: () => { el.kbModal.style.display = 'none'; } },
   { id: 'studio-modal', close: () => { el.studioModal.style.display = 'none'; } },
+  { id: 'plener-modal', close: zamknijPlener },
   { id: 'settings-modal', close: closeSettings },
 ];
 
@@ -4260,11 +5385,11 @@ function openSettings() {
   el.modelSelectLocal.style.display = 'none';
   refreshModelInfoBoxes();
   loadMicList();
+  odswiezWyborNasluchu();
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
-  odswiezArchiwum();
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
   loadStats();
@@ -4892,6 +6017,63 @@ el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
 $('set-mic').addEventListener('change', (e) => {
   localStorage.setItem('cosmos.micId', e.target.value);
 });
+$('set-stt').addEventListener('change', (e) => {
+  localStorage.setItem('cosmos.sttEngine', e.target.value);
+  odswiezWyborNasluchu();
+});
+
+/* Który silnik ZADZIAŁA, a nie który jest wybrany. To dwie różne rzeczy:
+   „Własny strumień" przy wyłączonym komputerze domowym nie ma dokąd wysłać
+   dźwięku i Cosmos po cichu wraca do przeglądarki. Milcząca zmiana zachowania
+   to dokładnie ten rodzaj rzeczy, po której człowiek myśli, że coś zepsuł. */
+/* Mój sprzęt. Do tej pory dało się go ustawić wyłącznie przez `/api/gear`
+   curlem — czyli w praktyce wcale, a plan zdjęciowy liczył dla domyślnego
+   korpusu i nie wiedział nic o dronie. */
+async function wczytajSprzet() {
+  try {
+    const d = await (await fetch('/api/gear')).json();
+    $('gear-body').value = d.korpus || '';
+    $('gear-lenses').value = d.obiektywy || '';
+    $('gear-extras').value = d.dodatki || '';
+  } catch { /* offline — pola zostają puste, zapis i tak zadziała później */ }
+}
+
+/* Zapis pod przyciskiem, nie przy pisaniu — poprawka po obejrzeniu własnej
+   roboty na zrzucie ekranu.
+
+   Pierwsza wersja zapisywała sprzęt na bieżąco, z opóźnieniem. Działało, ale
+   stworzyło w jednym oknie dwa różne modele zapisu: „Korpus", „Obiektywy"
+   i „Reszta sprzętu" zapisywały się same, a stojące tuż obok „Profil"
+   i „Lokalizacja" — dopiero po kliknięciu. Pola tekstowe zachowujące się
+   inaczej niż sąsiednie pola tekstowe to nie wygoda, tylko zagadka.
+
+   Po przeniesieniu sprzętu do Pleneru zostaje ta sama zasada, tylko własny
+   przycisk: „Zapisz sprzęt". `/api/gear` i tak zawsze było osobną trasą —
+   doklejenie go do przycisku Ustawień było wyłącznie skutkiem tego, że pola
+   przypadkiem tam stały. */
+/* Błąd LECI DALEJ, nie jest połykany. Dopóki zapis wisiał pod przyciskiem
+   Ustawień razem z profilem i lokalizacją, ciche `catch` było spójne z resztą.
+   Teraz sprzęt ma własny przycisk i własne potwierdzenie „Zapisane." — a to
+   potwierdzenie po nieudanym żądaniu byłoby zwykłym kłamstwem. */
+async function zapiszSprzet() {
+  const r = await fetch('/api/gear', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      korpus: $('gear-body').value,
+      obiektywy: $('gear-lenses').value,
+      dodatki: $('gear-extras').value,
+    }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+}
+
+function odswiezWyborNasluchu() {
+  const sel = $('set-stt');
+  sel.value = localStorage.getItem('cosmos.sttEngine') || 'auto';
+  const silnik = silnikNasluchu() === 'whisper' ? t('set.sttWhisper') : t('set.sttBrowser');
+  $('set-stt-now').textContent = t('set.sttNow', { silnik });
+}
 $('check-model-cloud').addEventListener('click', () => checkModelField('cloud'));
 $('check-model-local').addEventListener('click', () => checkModelField('local'));
 $('mic-refresh').addEventListener('click', loadMicList);
@@ -4945,7 +6127,12 @@ async function refreshStatus() {
     setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? t('stat.online') : t('stat.offline'));
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
     if (senses.online) {
-      const active = Object.entries(senses.caps).filter(([, v]) => v).map(([k]) => k);
+      /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
+         (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i
+         „dokumenty (docling)" to dwie różne jakości odczytu — z tym drugim
+         Cosmos czyta skany i tabele, z pierwszym nie. */
+      const active = Object.entries(senses.caps).filter(([, v]) => v)
+        .map(([k, v]) => (typeof v === 'string' ? `${k} (${v})` : k));
       setStatusRow(el.statusSenses, true, active.length ? t('stat.active', { n: active.length }) : t('stat.online'));
       el.statusSenses.title = active.length ? t('stat.sensesTip', { list: active.join(', ') }) : t('stat.online');
     } else {

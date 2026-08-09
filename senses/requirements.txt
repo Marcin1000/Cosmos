@@ -24,7 +24,18 @@ mediapipe
 # bge-m3 (~2 GB, domyślny) lub lżejszy: ustaw EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 sentence-transformers
 
+# PTAKI — gatunek z nagrania (BirdNET, endpoint /ptak)
+# Ciężkie: ciągnie za sobą TensorFlow. Instaluj tylko, jeśli fotografujesz ptaki.
+# birdnetlib
+# librosa
+# resampy
+# tensorflow
+
 # BAZA WIEDZY — ekstrakcja tekstu z dokumentów (endpoint /extract)
+# Gdy jest docling albo markitdown, /extract używa ICH — czytają skany (OCR),
+# zachowują tabele i układ kolumn. Bez nich zostają cztery czytniki niżej.
+# docling
+# markitdown
 pypdf
 python-docx
 openpyxl

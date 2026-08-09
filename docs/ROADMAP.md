@@ -780,6 +780,932 @@ Testy sprawdzają liczby wobec faktów **spoza naszego kodu**: astronomicznych
 godzin wschodu i zachodu pod Warszawą (4:16 i 21:00 w przesilenie letnie),
 wysokości Słońca w południe (61,4° latem, 13,6° zimą) i reguły „słoneczne 16".
 
+## ✅ Partia 31 — poprawki z realnego użycia archiwum i głosu (GOTOWE)
+
+Cztery rozmowy Marcina odsłoniły sześć usterek, z których żadnej nie wyłapałby
+test sprawdzający, czy kod robi to, co kod robi.
+
+- [x] **OneDrive nie pobierał EXIF-u ani GPS-u** — 2106 plików z czerwca,
+      wszystkie z `lat`, `lon` i `swiatlo` na `null`. Przy jednoczesnym
+      `$expand` Microsoft Graph oddaje tylko okrojony, domyślny zestaw
+      właściwości; facety `photo` i `location` trzeba wymienić w `$select`
+      z nazwy. Bez tego indeks wygląda na kompletny i nie jest
+- [x] **Zdjęcia bez GPS-u nie wypadają już z filtra pory światła** — liczy
+      się ją wtedy dla domu użytkownika, a wpis dostaje
+      `swiatloPrzyblizone: true`. Zmiana lokalizacji przelicza całe archiwum
+- [x] **Zestawienia podają POKRYCIE danych** — „6 zdjęć 50 mm w tym roku"
+      brzmi jak fakt, a przy 2100 plikach bez zapisanej ogniskowej jest
+      rozmiarem luki w metadanych. Odpowiedź niesie teraz `zDanymi`
+      i `bezDanych`, a prompt każe to zgłaszać zamiast podawać wynik jak fakt
+- [x] **Surowy tok myślenia przestał wyciekać jako odpowiedź** — awaryjne
+      „pokaż myślenie, gdy nie ma treści" miało sens przy modelach, którym
+      kończy się budżet, ale w praktyce wyrzucało na ekran angielskie
+      rozumowanie urwane w połowie zdania. Teraz pada jedno zdanie, co się
+      stało i co zmienić, a myślenie ląduje w zwijanym panelu
+- [x] **Cosmos przestał twierdzić, że spełnia nieistniejącą prośbę** —
+      „Przysłona f/2.8 zostaje, bo o głębię ostrości prosiłeś", podczas gdy
+      przysłonę narzucił sobie sam model. Prompt mówi teraz wprost, żeby nie
+      podawać `glebia` z własnej inicjatywy: wymusza mocny filtr ND i psuje
+      resztę doboru
+
+**Tryb głosowy: koniec sprzężenia.** Cosmos odpowiadał na własne słowa —
+„jeśli potrzebujesz czegoś jeszcze, daj znać" wracało jako pytanie i pętla
+się zamykała. Osobno słowo budzące dublowało się w transkrypcji
+(„HejHejHej kosmosHej kosmos Co widzisz").
+
+Mechanizm: rozpoznawacz jest CIĄGŁY, więc gdy Cosmos mówi, dalej transkrybuje —
+tylko wyniki ignorujemy. Zostają jednak w `e.results`, a gałąź słowa budzącego
+czytała trzy OSTATNIE wyniki niezależnie od tego, czy były już widziane.
+
+- [x] **Znacznik zużycia** — wszystko, co padło w czasie głuchoty, jest z góry
+      oznaczone jako przerobione i nie może wrócić jako pytanie
+- [x] **Druga zapora** — pytanie pokrywające się w ponad 70% ze zdaniem, które
+      Cosmos przed chwilą wypowiedział, jest odrzucane. Rozpoznawanie bywa
+      opóźnione i zdanie potrafi domknąć się już po odmilczeniu
+- [x] **Słowo budzące usuwane ze WSZYSTKICH wystąpień**, nie tylko z pierwszego
+
+Zestaw `glos-bez-sprzezenia` odtwarza dokładnie ten scenariusz i został
+sprawdzony przez cofnięcie poprawki — bez niej wypada.
+
+**Domknięcie: znacznik zużycia zjadał własne pytania.** Pełna bateria pokazała
+to, czego nowy zestaw nie mógł złapać — zapora przed echem działała za dobrze
+i tłumiła też prawdziwe pytania. Zestaw `tryb-glosowy` wypadł na „pytanie nie
+trafiło do transkrypcji" i „cisza nie zakończyła pytania".
+
+Przyczyna była w założeniu, nie w kodzie: **znacznik oparty na samym indeksie
+nie potrafi się cofnąć.** Raz podniesiony, przepuszcza tylko wyniki o indeksie
+wyższym. Jeśli lista wyników nie urośnie ponad znacznik — bo rozpoznawacz podał
+kolejną wypowiedź jako nową listę od zera — świeże pytanie wypada poniżej
+i znika bez śladu.
+
+Czy przeglądarka Marcina naprawdę tak robi, tego nie sprawdziłem i nie twierdzę
+— specyfikacja Web Speech API tego nie rozstrzyga, a Androida nie mam pod ręką.
+Sprawdzone jest co innego i wystarczy: zestaw `tryb-glosowy` podaje każdą
+wypowiedź jako osobną listę i po poprawce ochrony przed echem **cały wsad
+użytkownika przepadał**. Znacznik, który nie umie się cofnąć, jest wadą sam
+w sobie — niezależnie od tego, która przeglądarka go do tego zmusi.
+
+- [x] **Znacznik ma teraz ODCISK** ostatniego zużytego wyniku obok indeksu.
+      Jeśli lista nie urosła ponad znacznik, a tego wyniku już w niej nie ma —
+      numeracja ruszyła od nowa i znacznik wraca do zera. Rosnąca lista (ta
+      sama sesja) nie uruchamia zerowania, więc echo nadal jest tłumione
+- [x] **Słowo budzące wycinane także z gotowego pytania** — obojętne, czy
+      wsiąkło przez opóźnione rozpoznanie, czy przez restart numeracji
+- [x] **Sierota po słowie budzącym** — rozpoznawanie lubi rozbić „Hej Kosmos"
+      na dwa wyniki, więc po wycięciu frazy zostawało samo „Hej". Ucinamy je
+      tylko na początku i tylko wtedy, gdy coś po nim jest
+
+**Drugie domknięcie: myślenie schowane za kliknięciem.** Ta sama bateria
+wyłożyła też poprawkę „tok myślenia nie jest odpowiedzią". Rozumowanie
+przestało udawać odpowiedź — słusznie — ale trafiało do panelu ZWINIĘTEGO, więc
+przy modelu, który przepalił cały budżet na myślenie, na ekranie zostawało samo
+ostrzeżenie i nic więcej. Panel jest teraz otwarty dokładnie wtedy, gdy myślenie
+jest jedyną treścią wiadomości: nie ma czego przykrywać. Przy normalnej
+odpowiedzi zostaje zwinięty, tak jak był.
+
+Morał na przyszłość, ten sam co zwykle: nowe zestawy sprawdzały, czy zapora
+tłumi echo i czy rozumowanie nie udaje odpowiedzi. Jedno i drugie potwierdziły.
+Że zapora tłumi przy okazji prawdziwe pytania, a rozumowanie znika za
+kliknięciem — pokazała dopiero **stara** bateria. Poprawka celuje w to, co
+zgłoszone; skutki uboczne łapie tylko całość. Dlatego po każdej poprawce leci
+cała bateria, nie sam nowy zestaw.
+
+## ✅ Partia 32 — luki, przez które Cosmos „głupiał" (GOTOWE)
+
+Dwa zgłoszenia Marcina: „nie pokazuje zdjęć, które wyszukał" oraz „napisałem,
+jakich obiektywów użyję, i zgłupiał, nie umiał odpowiedzieć". Wyglądały na
+dwie niezwiązane usterki. Mają jedną przyczynę:
+
+> **Narzędzie nie miało gdzie przyjąć tego, co powiedział człowiek — albo nie
+> miało co zrobić, gdy coś poszło nie tak.**
+
+To nie są usterki do załatania po kolei. To jest klasa błędu, więc i poprawka
+jest dla całej klasy.
+
+### Obiektywy — parametr, którego nie było
+
+Cosmos znał tylko KORPUS, a listę przysłon miał przypisaną do korpusu. To jest
+bez sensu: przysłona jest cechą szkła. Gdy Marcin napisał, czego użyje, model
+nie miał gdzie tego odłożyć — gubił informację albo odpowiadał od rzeczy.
+
+- [x] **Parser zapisu obiektywu** — „RF 24-70mm f/2.8L IS USM", „24-70 f2.8",
+      „50mm 1.8", „18-135 f/3.5-5.6", „Sigma 18-35 1.8", „EF 24-105 1:4",
+      „RF 100-500mm F4.5-7.1". Katalog nazwanych szkieł jest tylko wygodą —
+      sedno to parser, bo obejmuje każdy obiektyw, także nieznany
+- [x] **Zoomy ze zmienną jasnością** — przy 500 mm szkło f/4.5-7.1 ma f/7.1,
+      nie f/4.5. Obiecywanie tego pierwszego to półtorej działki błędu
+- [x] **Przysłony bierzemy z obiektywu, nie z korpusu** — koniec doradzania
+      f/1.4 komuś, kto ma zoom f/4. Sprawdzone liczbowo: ten sam zmierzch daje
+      ISO 200 na f/1.8 i ISO 800 na f/4, czyli dokładnie dwie działki różnicy
+- [x] **Kilka obiektywów naraz** — „mam 24-70 f/2.8 i 70-200 f/4"; Cosmos
+      wybiera szkło pod ogniskową, a gdy żadne nie sięga, mówi to wprost
+
+Osobno pułapka po stronie przeglądarki: parametry `[PLAN:]` dzieliły się po
+spacjach, a „24-70 f/2.8" spację ma. Wartość urywała się na „24-70", przysłona
+przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8 — **odpowiedź brzmiała
+sensownie i była nieprawdziwa**.
+
+### Miejsce podane nazwą
+
+Ta sama luka, inne narzędzie. Cosmos umiał zamienić współrzędne na nazwę, ale
+nie odwrotnie. Na „w sobotę kręcę w Krakowie" model musiał zgadnąć szerokość
+i długość z pamięci — a złota godzina policzona dla złego punktu wygląda
+równie wiarygodnie jak policzona dla dobrego.
+
+- [x] **`miejsce=Kraków`** w `[PLAN:]`; zamianę robi serwer przez Nominatim,
+      z pamięcią podręczną i kolejką (regulamin: najwyżej jedno zapytanie na
+      sekundę). Nieznana nazwa daje jasną odmowę, nie cichy wynik dla domu
+
+### Grafiki — jedno źródło to była wada konstrukcyjna
+
+Wyszukiwanie obrazów stało na DuckDuckGo, i to na skrobanym ze strony żetonie
+`vqd`. Zależność od czegoś, czego nikt nam nie obiecał: format już się zmieniał,
+a adresom centrów danych łatwo odmówić. Gdy odmawiał — Cosmos pisał „szukam
+zdjęć" i nie pokazywał nic.
+
+- [x] **Trzy źródła odpytywane równolegle** — DuckDuckGo (najszerszy zasięg),
+      Wikimedia Commons i Openverse (prawdziwe API, bez żetonów, materiał na
+      jasnych licencjach). Równolegle, nie po kolei: koszt to jeden najwolniejszy
+      strzał, a nie trzy przeterminowania jedno po drugim
+- [x] **Wyniki przeplatane, nie sklejane** — inaczej DuckDuckGo zajmowałby
+      wszystkie osiem miejsc i materiał na jasnej licencji nie pokazałby się
+      nigdy. Przy okazji awarię jednego źródła widać od razu
+- [x] **Licencja i źródło przy każdym zdjęciu** — dla kogoś, kto montuje film,
+      „czy wolno mi tego użyć" to nie ozdobnik
+- [x] **`node scripts/grafiki.js`** — sprawdza, które źródła działają Z TEGO
+      SERWERA. Tego pytania nie da się rozstrzygnąć znikąd indziej
+
+### Dwie ciche awarie, przez które „nie było zdjęć"
+
+- [x] **Kafelek bez miniatury już nie znika.** Kod usuwał go, żeby „nie
+      zostawiać dziury w siatce" — i gdy proxy odrzucało wszystkie miniatury,
+      Cosmos pisał „znalazłem 8 zdjęć" nad pustym miejscem. Teraz próbuje po
+      kolei: przez proxy → prosto z serwera obrazka → widoczny kafelek
+      z odnośnikiem. Zawsze widać tyle kafelków, ile zapowiedziała odpowiedź
+- [x] **Nieudane szukanie wraca do MODELU**, nie tylko do użytkownika.
+      Wcześniej pętla narzędzi kończyła się w tym miejscu: człowiek widział
+      „nie znalazłem", a model nie dowiadywał się o niczym. Następne zdanie —
+      choćby samo „Kraków" — trafiało w próżnię, bo model nie wiedział, że
+      przed chwilą coś nie wyszło. **To było właśnie to „zgłupiał".** Teraz
+      może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało
+
+### Zestaw `scenariusze` — łapanie usterek przed zgłoszeniem
+
+Marcin poprosił, żeby przewidywać problemy, zanim się pojawią. Nowy zestaw nie
+bada pojedynczych funkcji, tylko cztery KLASY sytuacji: człowiek podaje coś,
+czego kontrakt nie przewiduje · wartość spoza listy · brak danych do policzenia ·
+usługa zewnętrzna odmawia. Do tego śmieci na wejściu HTTP.
+
+Reguła wspólna, sprawdzana w każdym z szesnastu przypadków: **Cosmos ma
+odpowiedzieć i powiedzieć, czego zabrakło.** Nie wolno mu milczeć, wywalić się
+ani — najgorsze — podać wyniku, który wygląda poprawnie, a policzony jest nie
+dla tego, o co pytano. Zestaw wyłapał od razu jedną taką: nieznany korpus
+wpadał po cichu w Canona R6 II, choć sufit ISO i zapas ze stabilizacji są inne.
+
+### Audyt potrafił po cichu sprawdzić NIE TEN kod
+
+Znalezione przy okazji, przez ściganie jednej uwagi, którą łatwo było machnąć
+ręką: „w logu rozruchu jest słowo «error»". Okazała się wierzchołkiem czegoś
+poważniejszego.
+
+Sekcja „Rozruch próbny" uruchamia serwer na porcie 3499 i puka we wszystkie
+trasy. Sprzątanie po sobie robiła jednym `process.kill(-pid)` — a to czasem nie
+wystarczało i serwer zostawał. Przy NASTĘPNYM audycie nowy proces padał na
+`EADDRINUSE`… i audyt **i tak meldował „✓ serwer wstaje"**, bo pukał w stary
+serwer z poprzedniego przebiegu. Sprawdzał więc kod sprzed poprawek i nie mówił
+o tym ani słowa. Jedynym śladem była ta jedna niewinna uwaga.
+
+- [x] **Port sprawdzany PRZED startem** — zajęty port to teraz błąd audytu,
+      nie cicha zamiana serwera na cudzy
+- [x] **Sprzątanie musi się udać** — SIGTERM, potem SIGKILL, do grupy i do
+      samego procesu, z czekaniem aż port faktycznie zwolniony. Nieudane
+      zamknięcie jest zgłaszane jako problem
+- [x] **Uwaga o „error" pokazuje teraz TREŚĆ linii**, a nie sam fakt, że słowo
+      padło — bo to właśnie brak treści kazał ją zignorować
+
+Morał, wart zapamiętania osobno: **narzędzie do wykrywania usterek, które samo
+może po cichu skłamać, jest gorsze niż jego brak** — bo zielony wynik zamyka
+temat. Uwagi audytu warto ścigać do końca, nawet te wyglądające na kosmetykę.
+
+## ✅ Partia 33 — CO fotografujesz, KIEDY i GDZIE (GOTOWE)
+
+Marcin zapytał, czy „pokaż zdjęcia, które wykonałem rano i wieczorem
+w Krakowie" zadziała. Nie działało, z pięciu niezależnych powodów. Przy okazji
+doszły dwa jego warunki: temat zdjęcia ma wpływać na plan, a sprzęt ma być
+dowolny, „bo zawsze mogę go zmienić".
+
+### Jeden słownik tematów, dwa zastosowania
+
+`lib/tematy.js` odpowiada na dwa pytania naraz — „jak to fotografować"
+i „które pliki są z tej kategorii". Gdyby słowniki były dwa, rozjechałyby się
+przy pierwszej zmianie.
+
+- [x] **22 kategorie**: ptaki w locie, dzikie i domowe zwierzęta, wyścig,
+      pojazdy statycznie, ulica, portret, sesja, ludzie w ruchu, koncert, mecz,
+      ślub, wydarzenia rodzinne, krajobraz, góry, las, morze, jezioro,
+      kanion i klify, architektura, gwiazdy, makro
+- [x] **Lista jest OTWARTA** — to był warunek postawiony wprost. „Pociągi
+      towarowe" dostają neutralne nastawy i zdanie „tego tematu nie mam
+      w słowniku", a nie odmowę
+- [x] **Temat steruje nastawami**: 1/1600 s i 300-600 mm na ptaka w locie,
+      f/8 na krajobraz, otwarcie na portret. Do tego rada praktyczna, która
+      zwykle jest cenniejsza niż liczby — „ekspozycja pod suknię, cienie
+      podnosisz później", „reguła 500", „polaryzator ODEJMUJE odbicie"
+- [x] **Kategorie w archiwum z nazw folderów** — OneDrive nie ma tagów, ale
+      „Wesele Kasi" i „Ptaki Biebrza" to gotowa klasyfikacja, tylko zapisana
+      po ludzku. Plus obiekty z YOLO, gdy zmysły działają
+
+Dopasowanie po fragmencie okazało się za luźne i dało dwa absurdy: „robię
+ZDJĘCIA rowerów" trafiało w koncert (w środku słowa „zdjęcia" siedzi „dj"),
+a „wyścig motocykli" w sesję statyczną. Teraz dopasowujemy do POCZĄTKU słowa,
+rdzenie trzyliterowe wymagają trafienia dokładnego („tort" na urodzinach
+przestał być torem wyścigowym), a słowa przesądzające biją dłuższe ogólniejsze.
+
+### Dowolny sprzęt
+
+- [x] **Klasy zamiast katalogu**: dron / telefon / pełna klatka / APS-C,
+      rozpoznawane po nazwie („Sony A7 IV", „DJI Air 3", „Fujifilm X-T5").
+      Z klasy bierzemy sufit ISO, zapas ze stabilizacji i mnożnik ogniskowej
+- [x] **Mnożnik naprawdę użyty** — na APS-C 200 mm kadruje jak 300 mm i tak
+      samo szybko widać poruszenie, więc czas z drgań liczy się po przeliczeniu
+- [x] Podstawienie klasy jest **powiedziane wprost**, nie milczące
+
+### Pora dnia, miejsce, podglądy
+
+- [x] **`poraDnia` = rano / południe / wieczór / noc**, liczona z KĄTA
+      GODZINNEGO. Kusiło, żeby patrzeć na azymut (wschód = rano), ale to działa
+      tylko na półkuli północnej — a Marcin lata po świecie. Filtr przyjmuje
+      kilka wartości naraz, bo tak brzmi prawdziwe pytanie: „rano i wieczorem"
+- [x] **`miejsce=Kraków` w archiwum** — nazwa na współrzędne, a promień
+      z obwiedni Nominatim: miasto dostaje 25 km, region jak Mazury
+      kilkadziesiąt. Jeden sztywny promień gubiłby albo region, albo miasto
+- [x] **Miniatury dociągane W CHWILI PYTANIA** (`/api/archive/thumb`).
+      Adresy z Microsoft Graph są podpisane i WYGASAJĄ — zapisane przy
+      indeksowaniu byłyby martwe dokładnie wtedy, gdy mają się pokazać
+- [x] **Archiwum wreszcie POKAZUJE zdjęcia**, a nie tylko o nich pisze. Siatka
+      miniatur była podpięta wyłącznie pod wyszukiwanie w internecie; wynik
+      z archiwum szedł do modelu jako tekst i Marcin dostawał listę nazw
+- [x] **Klik otwiera pełny ekran w Cosmosie** — to własny plik, więc nie ma
+      dokąd go „odsyłać" nową kartą
+
+### Dwa błędy złapane po drodze, oba przez sprawdzenie z rzeczywistością
+
+- [x] **EV nocy było zawyżone o ponad SIEDEM działek.** Tabela mówiła +1 dla
+      nocy bezksiężycowej. Kontrola: rozgwieżdżone niebo fotografuje się 20 s
+      przy f/2.8 i ISO 3200, co daje EV = −6,4. Każda nocna porada była nie ta
+- [x] **Ekspozycji dłuższej niż sekunda nie dało się WYRAZIĆ.** Czas był
+      zawsze ułamkiem, więc na gwiazdy Cosmos radził 1/30 s zamiast 20 s.
+      Teraz zdjęcia nocne wydłużają czas zamiast dobijać ISO, z granicą
+      z reguły 500. Kontrola: 24 mm f/2.8 → 20 s ISO 3200, czyli dokładnie to,
+      co się w praktyce ustawia
+
+Trzecia rzecz, tym razem bez poprawki, bo się nie da: **Microsoft Graph nie
+oddaje modelu obiektywu.** Facet `photo` ma korpus, czas, ISO i ogniskową,
+`LensModel` z EXIF-u nie przychodzi. Zostawiamy `null` zamiast zgadywać po
+ogniskowej — grupowanie po obiektywie pokaże wtedy niskie pokrycie, czyli
+powie prawdę zamiast oddać pustą listę jako fakt.
+
+## ✅ Partia 34 — podział server.js (GOTOWE)
+
+Audyt od kilku partii powtarzał to samo: `server.js` przekroczył próg 2600
+linii i doszedł do 2858. Warunek Marcina brzmiał krótko: „tylko tutaj nic nie
+może się zepsuć".
+
+Wyszły trzy podsystemy o czystych granicach:
+
+- [x] **`lib/pamiec.js`** (259 linii) — pamięć długotrwała i embeddingi.
+      Najbardziej naturalna granica w całym pliku: to jest podsystem, nie
+      zbiór funkcji
+- [x] **`lib/nagrywanie.js`** — nagrywanie procedur Playwrightem
+- [x] **`lib/pomysly.js`** — backlog usprawnień, które Cosmos proponuje sam
+      sobie do akceptacji
+
+Wszystkie trzy dostają zależności przez `utworz()`, tak jak `archiwum`
+i `onedrive` — nie sięgają po globalne stany serwera. **2858 → 2500 linii.**
+
+### Czego `node --check` nie widzi
+
+Podział wyglądał na udany po każdym kroku: składnia poprawna, serwer wstawał.
+A jednak siedem razy pod rząd okazywało się, że coś jest zepsute — tylko widać
+to dopiero po wywołaniu konkretnej trasy:
+
+- granice bloków wyznaczone „na oko" po numerach linii wciągnęły do modułów
+  **cudzy kod**: `handleKb` i obsługa treningu trafiły do nagrywania,
+  a `handlePolish` do pomysłów
+- `__dirname` po przeniesieniu do `lib/` zaczął wskazywać inny katalog —
+  nagrywarka startowałaby w złym miejscu
+- sześć nazw zostało bez definicji: `kbItems`, `capabilityText`, `genId`,
+  `sanitizeStep`, `saveProcedures`, `dodajProcedure`
+
+Każdą z nich wyłapał test dymny na żywym serwerze, jedną po drugiej. To jest
+metoda działająca, ale kosztowna — stąd:
+
+- [x] **Nowa kontrola w audycie: „nazwa wołana w module bez definicji".**
+      Wycina napisy i komentarze, zbiera definicje lokalne, parametry
+      i destrukturyzacje, a potem sprawdza WYWOŁANIA (`nazwa(`). Wywołań
+      nie da się pomylić ze zmienną pętli, więc fałszywych alarmów praktycznie
+      nie ma
+
+Nowa kontrola od razu znalazła ósmą usterkę, tym razem NIE z podziału:
+**`tsName` wołane w `lib/nauka.js`, a definiowane w `lib/studio.js`** i nigdzie
+niewstrzykiwane. Zapis wzorca nauki z kamery wywaliłby się na `tsName is not
+defined`. Leżało to tam od wcześniejszej partii i nie wyszło ani w baterii,
+ani w rozruchu próbnym — trzeba by kliknąć dokładnie tę jedną ścieżkę.
+
+Sama kontrola wymagała trzech podejść i to jest osobna lekcja:
+
+1. wycinanie napisów wyrażeniem regularnym **rozjechało się na literałach
+   wzorców z cudzysłowem w środku** (`/vqd=["']([^"']+)/`) — parser połknął
+   pół pliku razem z definicjami i zgłosił dziesięć nieistniejących usterek
+2. czytanie surowego źródła utonęło w polskiej prozie: „wyświetlenie (patrz
+   niżej)" wygląda dla wzorca jak wywołanie funkcji — sto dziesięć alarmów
+3. dopiero mały automat stanowy, który odróżnia napis od wzorca, dał wynik
+   czysty: **zero fałszywych alarmów, jedna prawdziwa usterka**
+
+Trzydzieści linijek automatu zamiast jednego wyrażenia regularnego to koszt
+mniejszy niż jeden fałszywy alarm, który uczy ignorować całe narzędzie.
+
+Morał jest ten sam co przy porcie audytu: **poprawna składnia nie znaczy
+działający kod**, a przy przenoszeniu kodu między plikami różnica między
+jednym a drugim jest właśnie tam, gdzie mieszkają usterki.
+
+## ✅ Partia 35 — SearXNG i EXIF przez `Range` (GOTOWE)
+
+Z przeglądu pięciu list „awesome" i trendów GitHuba wyszły dwie rzeczy warte
+zrobienia od razu. Obie zamykają problemy, które sami sobie zostawiliśmy.
+
+### SearXNG — własna metawyszukiwarka jako pierwsze źródło
+
+- [x] **Grafiki i strony** idą najpierw przez `SEARXNG_URL`, gdy operator go
+      ustawi. Bez ustawienia nic się nie zmienia — źródło po prostu nie istnieje
+- [x] **Awaria SearXNG nie kończy sprawy** — Cosmos spada do DuckDuckGo przy
+      stronach i do Commons/Openverse przy grafikach
+- [x] Komunikat 403 mówi wprost, co poprawić: świeży SearXNG ma wyłączone
+      wyjście JSON i trzeba dopisać `- json` do `search.formats`. To najczęstsza
+      pomyłka przy stawianiu i szkoda, żeby wyglądała jak awaria sieci
+
+Uczciwie o granicach: **to nie znosi blokad.** SearXNG na tym samym VPS-ie
+wychodzi z tego samego adresu IP i też może dostać captchę. Przewaga jest inna
+i trwalsza — utrzymywaniem kilkunastu silników i nadążaniem za zmianami ich
+formatów zajmuje się projekt z pięcioletnią historią, a nie nasze trzy scrapery.
+To jest dokładnie zasada Marcina: brać z zewnątrz to, co ktoś już utrzymuje,
+i nie gubić przy tym swojej tożsamości. Cosmos zostaje interfejsem i logiką.
+
+### Obiektyw z OneDrive — luka, o której powiedziałem, że jest nie do zasypania
+
+Twierdziłem, że modelu obiektywu nie da się wyciągnąć, bo facet `photo`
+w Microsoft Graph go nie zawiera. Pierwsza część jest prawdą, wniosek był
+przedwczesny: **EXIF siedzi w pierwszych kilkudziesięciu kilobajtach pliku,
+a Graph obsługuje nagłówek `Range`.**
+
+- [x] `dociagnijExif()` pobiera **128 KB zamiast całego pliku** i czyta je
+      naszym `lib/exif.js`, który tag `0xa434` zna od Partii 27
+- [x] Osobna trasa `/api/archive/lenses` uzupełnia obiektyw paczkami, bo to
+      jedno żądanie na plik — za dużo, żeby robić przy każdym indeksowaniu
+- [x] **Zero nowych zależności.** Przy 2100 zdjęciach to ~250 MB jednorazowo
+      zamiast kilkunastu gigabajtów
+
+Morał wart zapamiętania: „usługa tego nie oddaje" i „tego nie da się zdobyć"
+to dwa różne zdania, a ja podałem pierwsze jako drugie.
+
+### Z przeglądu list — co zostało odnotowane, a nie zrobione
+
+- **Silero VAD** i **huggingface/speech-to-speech** — realna naprawa trybu
+  głosowego: własny strumień audio zamiast Web Speech API. Znika wtedy dźwięk
+  mikrofonu, słyszenie samego siebie i pętle naraz
+- **Immich** (110 tys. ★) — wyszukiwanie semantyczne zdjęć przez CLIP. Wart
+  podejścia, nie całego stosu: to Docker z Postgresem i kontenerem ML
+- **sqlite-vec** — wektory bez serwera, gdy pamięć przerośnie liczenie w JS
+- **BirdNET-Analyzer** — gatunek ptaka z dźwięku; dla kogoś, kto fotografuje
+  żurawie, to nie ciekawostka
+- **SolarHam / NOAA SWPC** (z awesome-astrophotography) — dane o aktywności
+  geomagnetycznej. Zorza w Polsce bywa i jest do przewidzenia; pasuje do
+  planu zdjęciowego tak samo jak pogoda
+- **OpenCut**, **claude-video** (z trendów) — montaż i czytanie wideo
+- **ExifTool / Exiv2** (z awesome-OpenSourcePhotography) — potwierdzają, że
+  `LensModel` to standardowy tag; naszego czytnika nie trzeba zastępować
+
+## ✅ Partia 36 — zorza polarna z danych NOAA (GOTOWE)
+
+Z listy awesome-astrophotography: **SolarHam** i dane **NOAA SWPC**. Zorzę
+w Polsce widać kilka razy w roku, jest do przewidzenia z kilkunastu godzin
+wyprzedzeniem, a przegapienie jej boli. Pasuje do planu zdjęciowego dokładnie
+tak jak pogoda — i tak samo jest tylko DODATKIEM, który nie może go zablokować.
+
+- [x] **Bieżące Kp i prognoza na trzy doby** z NOAA — publicznie, bez klucza
+- [x] **Próg Kp policzony dla MIEJSCA**, nie ogólny. To jest sedno: „Kp 7" nic
+      nie znaczy bez odpowiedzi na pytanie „a gdzie stoisz". W Tromsø zorza
+      jest przy Kp 0, w Zakopanem trzeba Kp 8
+- [x] **Pytamy tylko po zmroku** — przy Słońcu wysoko odpowiedź jest znana
+      z góry i byłoby to marnowanie sekundy przy każdym planie
+- [x] Awaria NOAA nie zabiera ustawień ekspozycji; sprawdzone w `scenariusze`
+- [x] `node scripts/zorza.js` — diagnostyka z serwera, jak przy grafikach
+
+### Liczba, którą trzeba było skorygować
+
+Pierwsza wersja przyjmowała, że łunę nad horyzontem widać **8° poniżej** owalu
+zorzowego. Wychodziło z tego, że w Gdańsku zorza jest przy **Kp 3** — a Kp 3 to
+spokojny dzień, w którym nikt w Polsce niczego nie widzi.
+
+Kontrola z rzeczywistości: w Polsce zorzę widać przy Kp 6-7, a wielką burzę
+z maja 2024 (Kp 8-9) widziano w całym kraju. Po zmianie zapasu na 4° progi
+wychodzą **Gdańsk 5 · Warszawa 6 · Kraków 7 · Zakopane 8** — i to się zgadza.
+
+Osobno przyznane wprost w kodzie i w odpowiedzi: szerokość geomagnetyczną
+liczymy przybliżeniem DIPOLOWYM, a tablice „Kp → granica owalu" opierają się
+na szerokości SKORYGOWANEJ, która dla Polski wypada o 2-3° niżej. Próg jest
+więc lekko optymistyczny i Cosmos tego nie ukrywa.
+
+### Czego NIE potwierdziłem
+
+Kształtu odpowiedzi NOAA nie sprawdziłem na żywym API — kontener testowy ma
+zablokowane wyjście, więc atrapa jest zbudowana z dokumentacji. Sprawdza to,
+czy Cosmos POPRAWNIE CZYTA taki kształt (a to niebanalne: bieżące Kp to lista
+obiektów, prognoza — lista TABLIC z wierszem nagłówka). Czy prawdziwe API
+oddaje dokładnie to, rozstrzyga dopiero `node scripts/zorza.js` na serwerze.
+
+## ✅ Partia 37 — reszta z przeglądu list (GOTOWE)
+
+Partia 35 zamknęła dwie rzeczy z przeglądu i wypisała resztę jako „odnotowane,
+a nie zrobione". Marcin przypomniał, że prosił o WDROŻENIE, i miał rację.
+Tu jest reszta — z jednym zastrzeżeniem, które trzeba powiedzieć wprost:
+**żadnego z tych projektów nie wciągamy w całości.** Immich to Docker z
+Postgresem i kontenerem ML, BirdNET to TensorFlow. Bierzemy z nich POMYSŁ
+i realizujemy go częściami, które już mamy — to ta sama zasada, dla której
+SearXNG jest dobrym wyborem, a pisanie własnego scrapera nie było.
+
+### Nasłuch własnym strumieniem — realna naprawa trybu głosowego
+
+To był największy dług. Marcin zgłaszał trzy rzeczy naraz: mikrofon ciągle
+się włącza i wyłącza, Cosmos słyszy sam siebie, i wpada w pętlę. Łataliśmy to
+w Partii 31 znacznikami zużycia i odciskami wyników — działało, ale było
+obchodzeniem cudzego automatu. Wszystkie trzy objawy mają jedną przyczynę:
+**Web Speech API nie da się wyciszyć bez zwolnienia mikrofonu.**
+
+- [x] `public/nasluch.js` — mikrofon otwierany RAZ na całą sesję głosową.
+      Nic go nie przejmuje, więc Android nie ma czego sygnalizować dźwiękiem
+- [x] Wypowiedzi wycinane z sygnału po energii, z ruchomym progiem szumu tła
+      (szybko w dół, wolno w górę — jeden przejeżdżający samochód nie może
+      ogłuchnąć Cosmosa na kilka minut)
+- [x] **„Głuchy" znaczy naprawdę głuchy**: gdy Cosmos mówi, próbki lecą do
+      kosza. Nie ma czego rozpoznać, więc pętla jest NIEMOŻLIWA, a nie tylko
+      mało prawdopodobna. Zestaw `nasluch-wlasny` sprawdza to osobnym testem
+- [x] Przedbieg 320 ms, żeby nie ginęła pierwsza głoska — „Kosmos" zaczyna
+      się od cichego „k", a próg przekracza dopiero samogłoska
+- [x] Wybór silnika w Ustawieniach, z pokazaniem, który DZIAŁA (a nie tylko
+      który jest wybrany) — przy wyłączonych zmysłach Cosmos wraca do
+      przeglądarki i musi to powiedzieć
+
+To pomysł z **Silero VAD** i **huggingface/speech-to-speech**, sprowadzony do
+zera zależności. Silero jest mądrzejsze — sieć neuronowa odróżnia mowę od
+trzaśnięcia drzwiami — ale wymagałoby ONNX w przeglądarce. Przy włączonych
+zmysłach sam Whisper i tak przepuszcza nagranie przez własny VAD.
+
+**Wymaga Whispera w zmysłach**, więc to jest WYBÓR silnika, nie zamiennik.
+I ma swoją cenę, powiedzianą wprost w Ustawieniach: pytanie leci na komputer
+domowy i wraca, więc odpowiedź zaczyna się o sekundę-dwie później niż przy
+rozpoznawaniu w przeglądarce. Za to nie trzeba zgadywać, czy Cosmos właśnie
+usłyszał sam siebie.
+
+#### Liczba, którą trzeba było skorygować (znów)
+
+Pierwsza wersja odrzucała za krótkie wypowiedzi, mierząc długość CAŁEJ zebranej
+paczki. A w paczce siedzi też przedbieg i 700 ms ciszy domykającej — razem
+ponad sekunda. Stuknięcie w biurko trwające 0,13 s wychodziło więc na
+„wypowiedź długą na 1,2 s" i szło do Whispera. Test 6a wyłapał to od razu;
+teraz liczymy ramki, w których NAPRAWDĘ coś było słychać.
+
+### Co widać na zdjęciu — to, co daje Immich, bez stosu Immicha
+
+Materiał z OneDrive nie ma o sobie ŻADNEJ informacji o treści: Microsoft Graph
+oddaje datę, aparat i GPS. Kategorie tematyczne zgadujemy z nazw folderów, więc
+„Wesele Kasi" działa, a „IMG_4471.JPG" nie mówi nic — a takich jest większość.
+
+- [x] `/api/archive/vision` — YOLO ze zmysłów ogląda **miniaturę**, nie plik.
+      Detekcja na 800 px daje ten sam wynik co na 40 megapikselach, a ściąga
+      kilkadziesiąt kilobajtów zamiast dwudziestu megabajtów
+- [x] Wykryte obiekty wpadają w kategoryzację tematyczną SAME, przy zapisie
+      wpisu — „pokaż zdjęcia z psem" zaczyna działać bez drugiego przejścia
+- [x] Próg pewności 0,45, wyżej niż w podglądzie na żywo. Przy podglądzie
+      fałszywy alarm mija po klatce; tutaj zapisuje się w indeksie na stałe
+- [x] Pole `obejrzane` osobno od `obiekty`. Bez tego rozróżnienia krajobraz,
+      na którym YOLO słusznie nie widzi nic z 80 klas, wracałby do kolejki
+      w nieskończoność i paczka mieliłaby w kółko te same pliki
+- [x] **Przyciski w Ustawieniach** — dla tego i dla obiektywów z Partii 35.
+      Do tej pory dało się je uruchomić wyłącznie curlem, co znaczy: nikt ich
+      nigdy nie uruchomił. Pętla po paczkach siedzi w przeglądarce, więc widać
+      postęp i „Przerwij" działa natychmiast
+
+Czego NIE robimy: **CLIP-a i wyszukiwania semantycznego po wektorach.** Immich
+robi to lepiej, ale za cenę drugiej bazy danych obok naszej. Nasze wektory
+(**sqlite-vec** z listy) mają sens dopiero, gdy liczenie kosinusa w JS przestanie
+wyrabiać — przy dwóch tysiącach wpisów jest do tego bardzo daleko.
+
+### Ptak z dźwięku — BirdNET
+
+Ptaka słychać znacznie dalej, niż go widać, i to słuch decyduje, gdzie postawić
+statyw. Dla kogoś, kto fotografuje żurawie, to nie ciekawostka.
+
+- [x] `senses/service.py` → `/ptak`, `CAPS["birdnet"]` (opcjonalna zależność,
+      jak wszystkie pozostałe zmysły)
+- [x] Przycisk 🐦 w nakładce głosowej: 8 s nagrania, wynik czytany na głos
+- [x] Nagranie **bez „ulepszaczy"** i w pełnej częstotliwości — redukcja szumu
+      w telefonie wycina dokładnie te ciche, wysokie tony, które są tu całą
+      treścią, a przy 16 kHz próbkowania połowa gatunków traci to, po czym się
+      je rozpoznaje
+- [x] **Współrzędne dokłada serwer**, nie przeglądarka. BirdNET zawęża listę do
+      gatunków, które w danym tygodniu naprawdę występują pod tymi
+      współrzędnymi — bez tego czajka z Biebrzy potrafi wyjść jako gatunek
+      z Ameryki Południowej o podobnym głosie
+
+### Czytanie wideo — klatki wycinane w przeglądarce
+
+Pomysł z **claude-video** (z trendów). Model nie czyta wideo, model czyta
+KLATKI — cała różnica jest w tym, gdzie się je wycina.
+
+- [x] Klip wrzucony do rozmowy → cztery klatki ze środków równych odcinków
+      (nie od zera: pierwsza klatka filmu to zwykle czarne pole albo klaps)
+- [x] Do tego notatka, CO to jest. Bez niej model dostaje cztery niepowiązane
+      zdjęcia i opisuje je jak cztery różne sceny
+- [x] Zero wysyłki: minuta z R6 II to 300-500 MB, a `<video>` + `<canvas>` to
+      dekoder sprzętowy, który i tak siedzi w każdym urządzeniu. Działa też
+      przy wyłączonych zmysłach i bez ffmpega na VPS-ie
+
+### Podział server.js — drugi raz
+
+Plik znów przebił 2600 linii. Wyszło `lib/archiwum-trasy.js` (242 linie):
+sześć tras jednego indeksu plus dwa pomocniki, których nie używa nic poza nimi.
+Zależności przez `utworz()`, tak jak przy poprzednim podziale — i tak jak wtedy
+pilnuje tego kontrola „wołane, ale niezdefiniowane" ze `scripts/audyt.js`,
+bo osiem usterek z Partii 34 przeszło `node --check` bez mrugnięcia.
+
+### Karty ujęć — video-shotcraft po swojemu
+
+Z trendów: **video-shotcraft** (4 tys. ★), sto kilkadziesiąt „kart przepisów"
+na ujęcia. Sam zapisałem wtedy, że to TREŚĆ, nie kod, i że asystent planu
+mógłby z niej czerpać w trybie wideo.
+
+Nie kopiujemy cudzej listy — po pierwsze to czyjaś praca, po drugie karty
+pisane pod produkcję filmową („crane down over the crowd") są bezużyteczne dla
+człowieka, który stoi sam z gimbalem i jednym korpusem. Bierzemy POMYSŁ: plan
+ujęć to lista do odhaczenia z konkretnymi liczbami, nie akapit o kompozycji.
+
+- [x] `lib/ujecia.js` — 15 kart, 22 zestawy tematyczne. Każda karta ma
+      ogniskową, ruch kamery, czas trwania i jedno zdanie „po co to jest"
+- [x] **Zestaw zależy od TEMATU** — tego samego słownika z `lib/tematy.js`,
+      którym przeszukujemy archiwum. Wesele to nie wyścig
+- [x] **Ujęcia są filtrowane przez SPRZĘT**, a POMINIĘTE oddajemy osobno,
+      z powodem. „Nie ma na liście" i „nie masz drona" to dla kogoś, kto
+      planuje sobotę, dwie zupełnie różne informacje
+- [x] **Ogniskowa policzona dla TWOJEGO szkła**, nie ze środka teoretycznego
+      zakresu: ujęcie ustalające chce 14-35 mm, a z 24-105 wychodzi 30 mm —
+      bo poniżej 24 mm nie masz czym
+- [x] Kolejność jest kolejnością KRĘCENIA, nie montażu. Ustalające najpierw,
+      bo światło z niego ucieka najszybciej; detale zrobisz o każdej porze
+- [x] Tylko przy `tryb=wideo`. Przy zdjęciu pytanie brzmi „jakie nastawy",
+      nie „co nakręcić"
+
+Przy okazji zamknięta luka, która była tu od początku: **sprzęt dostał wreszcie
+pola w Ustawieniach.** Do tej pory `/api/gear` dało się ustawić wyłącznie
+curlem, czyli w praktyce nikt tego nie zrobił — plan liczył dla domyślnego
+korpusu i nie wiedział nic o dronie. Doszło trzecie pole, „reszta sprzętu",
+bo dron i gimbal nie wpływają na ekspozycję, ale przesądzają o ujęciach.
+
+### Czytanie dokumentów — anydoc i doc7, w wersji pythonowej
+
+**firecrawl/anydoc** (11 tys. ★ w pięć dni) i **doc7** robią jedno: 97 formatów
+→ Markdown, z rozumieniem układu strony. Sam napisałem, że anydoc łamie zasadę
+zera zależności w rdzeniu i musiałby wylądować w `senses/`. Tam właśnie ląduje
+— tyle że jako odpowiednik z pythonowego świata, bo anydoc to Rust z wiązaniami
+Node, a strefa zmysłów jest pythonowa.
+
+- [x] `/extract` próbuje najpierw **docling** (IBM) albo **markitdown**
+      (Microsoft), jeśli któryś jest zainstalowany
+- [x] Różnica jest realna na dwóch rzeczach, na których pypdf przegrywa
+      zawsze: **skany** (docling ma OCR, pypdf oddaje pustą stronę bez słowa)
+      i **układ** (tabela w PDF-ie to dla pypdf ciąg luźnych liczb, a dla
+      doclinga tabela Markdown, którą model przeczyta)
+- [x] Awaria mocniejszego czytnika NIE kończy sprawy — cztery sprawdzone
+      gałęzie (pypdf, python-docx, openpyxl, python-pptx) zostają jako zapas
+      i przejmują robotę bez słowa do użytkownika
+- [x] Panel zmysłów pokazuje **nazwę** czytnika, nie samo „jest": „dokumenty
+      (docling)" i „dokumenty" to dwie różne jakości odczytu
+
+### Trzy awarie, na które nie chciałem czekać
+
+Standardowa prośba Marcina: przewidzieć problemy, zanim się pojawią. W nowym
+trybie głosowym widzę trzy realne i wszystkie na jego sprzęcie.
+
+**Cicha głuchota.** Najgorsza awaria tego modułu nie jest głośna — mikrofon
+przestaje dawać próbki, a ekran dalej pokazuje „SŁUCHAM…". Człowiek mówi do
+telefonu i nie rozumie, czemu nic się nie dzieje. Trzy drogi do tego stanu,
+żadna nie rzuca wyjątkiem: wygaszony ekran usypia AudioContext, rozmowa
+przychodząca zabiera mikrofon, odłączone słuchawki kończą ścieżkę.
+
+- [x] Pilnowane z trzech stron naraz: stan kontekstu, zdarzenia `ended`/`mute`
+      na ścieżce oraz — bo tamte potrafią milczeć — licznik czasu od ostatniej
+      ramki (2,5 s to ponad sto przegapionych ramek, na pewno awaria)
+- [x] Najpierw PRÓBA ODZYSKANIA, bo dwie z trzech przyczyn mijają same
+      i wystarczy wziąć wejście od nowa. Dopiero potem komunikat — jedna
+      próba, nie pętla wznowień co dwie sekundy
+- [x] Zgłoszenie RAZ na epizod. Ten sam komunikat powtarzany w kółko jest
+      równie bezużyteczny jak jego brak
+
+**Whisper w kółko odmawia.** Jeden błąd to przypadek — GPU zajęte, dziura
+w Tailscale. Trzy pod rząd znaczą, że zmysłów nie ma, a trwanie przy nich
+skazuje tryb głosowy na milczenie. Po trzeciej awarii Cosmos wraca do
+rozpoznawania przeglądarki i MÓWI o tym: milcząca zmiana zachowania to
+dokładnie ten rodzaj rzeczy, po której człowiek myśli, że coś zepsuł.
+
+**H.265 z R6 II.** Canon nagrywa 4K w HEVC, a Chrome na Windowsie dekoduje go
+tylko z rozszerzeniem od Microsoftu. Bez rozpoznania tego przypadku komunikat
+brzmiałby „ta przeglądarka nie zna tego kodowania" — prawda, z której nic nie
+wynika. Teraz Cosmos nazywa kodek po imieniu i podaje dwa wyjścia: proxy
+w H.264 albo doinstalowanie rozszerzenia.
+
+Wszystkie trzy mają testy. Sekcja 9 zestawu `nasluch-wlasny` wyzwala każdą
+z dróg do głuchoty osobno i sprawdza też rzecz nieoczywistą: że po powrocie
+dźwięku KOLEJNA awaria znów zostanie zgłoszona.
+
+### Czego z listy świadomie nie robimy
+
+- **OpenCut** — montaż wideo. Zapisałem wtedy „Ty montujesz filmy, więc to nie
+  jest ciekawostka" i to prawda, ale wniosek jest inny: OpenCut to KOMPLETNA
+  aplikacja webowa, alternatywa dla CapCuta. Wbudowanie jej w Cosmosa znaczy
+  utrzymywanie drugiego programu w środku pierwszego, a Marcin i tak montuje
+  w Premiere. Wartość z tej strony bierzemy inaczej i już ją mamy: karty ujęć
+  mówią, CO nakręcić, a czytanie klipu mówi, co na nagraniu wyszło
+- **sqlite-vec** — sam napisałem: „przy 2 tys. wpisów w porządku, przy 100 tys.
+  już nie". Dziś jest tych wpisów około dwóch tysięcy. Doszłaby natywna
+  biblioteka npm w rdzeniu — dokładnie to, czego zasada zabrania — żeby
+  rozwiązać problem, którego nie ma. Próg jest konkretny: gdy pamięć
+  długotrwała przekroczy kilkadziesiąt tysięcy wpisów
+- **Immich w całości** — Docker z Postgresem i osobnym kontenerem ML, druga
+  baza obok naszej. Wartość (wyszukiwanie po TREŚCI zdjęcia) bierzemy wyżej,
+  częściami, które już mamy
+- **ExifTool / Exiv2** — potwierdziły tylko, że `LensModel` to standardowy tag.
+  Naszego czytnika nie trzeba zastępować
+
+## ✅ Partia 38 — audyt całości: co znalazłem, patrząc, a nie uruchamiając (GOTOWE)
+
+Marcin poprosił o skrupulatny przegląd wszystkiego: UI, UX i backendu. Sam
+`scripts/audyt.js` pokazywał **0 problemów** — i to jest dokładnie powód, dla
+którego trzeba było spojrzeć własnymi oczami. Narzędzie sprawdza to, o co je
+zapytano; nie sprawdza tego, o czym nikt nie pomyślał.
+
+### Trzy usterki, których narzędzie nie widziało
+
+**Placeholder wyświetlany dosłownie.** Na zrzucie ekranu z trybu głosowego
+stało: `Brak dostępu do mikrofonu: {msg}`. Klucz istnieje, tłumaczenie
+istnieje, parytet PL/EN pełny — po prostu nikt nie przekazał danych. Żadna
+z dotychczasowych kontroli nie mogła tego złapać, bo wszystkie sprawdzały
+OBECNOŚĆ tekstu, nie jego kompletność. Jedna instancja na 80 kluczy
+z placeholderem, ale klasa realna, więc doszła kontrola stała.
+
+**Dwa modele zapisu w jednym oknie.** Dodane w Partii 37 pola sprzętu
+zapisywały się same, z opóźnieniem, a stojące tuż obok „Profil"
+i „Lokalizacja" — dopiero po kliknięciu „Zapisz". Trzy pola tekstowe
+zachowujące się inaczej niż dwa sąsiednie pola tekstowe to nie jest wygoda,
+tylko zagadka. Sprzęt trafił pod przycisk, jak reszta. Mikrofon zostaje przy
+zapisie natychmiastowym: lista rozwijana czyta się jako wybór dokonany
+w chwili kliknięcia, a pole tekstowe jako brudnopis.
+
+**Zapis, który potrafi zniszczyć dane.** `writeFileSync` nie jest
+niepodzielny — najpierw obcina plik do zera, potem dopisuje treść. Restart
+usługi w złym momencie zostawia plik pusty. Przy `archiwum.json` zauważyłem to
+od razu i zrobiłem tam zapis przez plik tymczasowy, a reszta została po
+staremu — i to była niespójność po ZŁEJ stronie. Indeks zdjęć odbudowuje się
+jednym kliknięciem „Indeksuj teraz"; rozmowy, pamięć długotrwała i baza wiedzy
+nie odbudowują się wcale.
+
+- [x] `zapiszAtomowo()` w rdzeniu, użyte w jedenastu miejscach: rozmowy,
+      indeks rozmów, baza wiedzy, pamięć, oś czasu, profil, lokalizacja,
+      sprzęt, poświadczenia OneDrive i przywracanie kopii zapasowej
+- [x] Tryb dostępu ustawiany NA PLIKU TYMCZASOWYM. Token OneDrive zapisany
+      najpierw jawnie, a obcięty do 0600 sekundę później, jest przez tę
+      sekundę do odczytania przez każdego na maszynie
+- [x] Zestaw `zapis-nie-gubi-danych` MODELUJE awarię („proces zginął po
+      obcięciu, przed dopisaniem") i pokazuje obie strony obok siebie:
+      przy zapisie wprost zostaje 0 z 54 bajtów, przy atomowym — 54 z 54
+
+### Dwa miejsca, w których audyt kłamał
+
+To gorsze niż usterka w kodzie, bo podważa zaufanie do wszystkiego, co
+narzędzie mówi.
+
+- [x] **Trasy przeniesione do modułów zniknęły spod kontroli.** Audyt szukał
+      ich tylko w `server.js`. Zauważyłem po liczbie: 52 trasy przed podziałem
+      archiwum, 45 po nim. Po poprawce widocznych 85, sprawdzanych rozruchem 58
+- [x] **Klucze budowane dynamicznie liczone jako martwe.** `t('event.' + typ)`
+      ożywia wszystkie `event.*`, a lista „bez użycia" podawała je do
+      skasowania. 34 → 28, i teraz tej liście można ufać na tyle, żeby coś
+      z niej usunąć
+
+### Wydajność zmierzona, nie oszacowana
+
+Archiwum przy **2100 wpisach** — tyle Marcin ma naprawdę:
+
+| Operacja | Czas |
+|---|---|
+| filtr pory dnia | 0,5 ms |
+| zestawienie po ogniskowej | 0,8 ms |
+| filtr promieniowy (25 km) | 0,7 ms |
+| jednorazowe zaindeksowanie całości | 683 ms |
+| rozmiar indeksu w pamięci | 896 kB |
+
+To jest też odpowiedź na pytanie o **sqlite-vec**, którego świadomie nie
+wdrożyliśmy. Zapytania idą poniżej milisekundy, a liczenie w JS ma zapas
+rzędu wielkości. Baza wektorowa rozwiązywałaby tu problem, którego nie ma.
+
+### Co sprawdziłem i było dobre
+
+Ścieżki plików (brak przejścia w górę drzewa — `startsWith` po `path.join`,
+identyfikatory z bazy wiedzy generowane po stronie serwera), limit rozmiaru
+ciała żądania, sprzątanie po strumieniu zdarzeń (interwał i słuchacz zwalniane
+przy zamknięciu i przy błędzie), ograniczenia wzrostu danych (zdarzenia, oś
+czasu), zero pustych `catch` bez wyjaśnienia, brak przepełnień poziomych na
+telefonie, brak błędów JS w konsoli.
+
+## ✅ Partia 39 — DJI i Canon: cztery rzeczy z przeglądu repozytoriów (GOTOWE)
+
+Marcin przysłał kilkadziesiąt zrzutów z repozytoriami wokół DJI i poprosił
+o przeszukanie reszty, w tym Canona. Jedno ustalenie przestawiło całą listę:
+
+**Konsumenckiego Mavica 3 nie da się sterować programowo.** DJI nie wyda dla
+niego Mobile SDK — v5 obsługuje wyłącznie serię Enterprise. To przekreśla
+`HeyMavic`, `mavicmini`, `CustomSDKMavicMini`, `DJIWindowsSDK`,
+`mavic-air-tracking-control`, `Mavic-Missions` i resztę tej rodziny. Dobra
+wiadomość: kieruje uwagę na PLIKI, które dron już zapisuje — a tam leżała
+największa dziura w Cosmosie.
+
+### Telemetria klipów — koniec z archiwum, które nie zna wideo
+
+O zdjęciach Cosmos wiedział wszystko. O klipach nie wiedział NIC, bo Microsoft
+Graph oddaje dla wideo samą datę i rozmiar. „Pokaż ujęcia znad jeziora
+o zachodzie" dotyczyło więc wyłącznie fotografii — i nikt tego nie zauważył,
+bo brak wyników wygląda jak brak materiału.
+
+Tymczasem Mavic 3 zapisuje obok każdego nagrania plik `.SRT`, a w nim DLA
+KAŻDEJ KLATKI: ISO, czas, przysłonę, korektę ekspozycji, ogniskową, GPS
+i dwie wysokości. Zestaw pól jest dokładnie taki, jak kolumny naszego indeksu.
+
+- [x] `lib/srt.js` — oba formaty (nowy z nawiasami, stary `GPS(lon,lat,alt)`),
+      zero zależności, jak `lib/exif.js`
+- [x] Z tysiąca klatek robimy JEDEN wpis plus ślad lotu w rozdzielczości
+      sekundowej. Klip minutowy to 1800 klatek; wszystkie w indeksie
+      rozsadziłyby go i nic nie dały
+- [x] `/api/archive/telemetry` paczkami, jak obiektywy i rozpoznawanie treści
+- [x] **Klip dostaje porę światła tak samo jak zdjęcie** — to jest cała
+      wartość: nagrania wpadają do tych samych pytań co fotografie
+
+Dwie pułapki, które trzeba było ominąć. `Shutter:60` w starym formacie znaczy
+**1/60 s, nie 60 sekund** — wzięte dosłownie dałoby minutową ekspozycję
+z lecącego drona. A `GPS(lon,lat,alt)` ma **długość PIERWSZĄ**, odwrotnie niż
+podpowiada nazwa; zamiana miejscami przenosi materiał z Biebrzy do Somalii
+i nikt tego nie zauważy, dopóki nie spojrzy na mapę.
+
+#### Liczba, którą trzeba było poprawić
+
+Pierwsza wersja liczyła długość klipu jako liczbę klatek podzieloną przez 30.
+Mavic 3 nagrywa też 24, 25, 48, 50 i 120 kl./s, więc dwuminutowy materiał
+w 60 kl./s wychodził na cztery minuty. Znacznik czasu SubRip jest w pliku
+wprost i nie trzeba niczego zakładać.
+
+### Dane lotu ze zdjęć — XMP, którego EXIF nie ma
+
+DJI wpisuje wysokość nad punktem startu i kąty gimbala do **XMP**, czyli
+drugiego segmentu APP1 obok EXIF-u. Nasz czytnik znał tylko ten pierwszy.
+
+- [x] `czytajXmpDrona()` w `lib/exif.js` — oba zapisy DJI (atrybut i znacznik)
+- [x] Czytane **za darmo**, przy okazji dociągania obiektywu: to ten sam
+      pobrany kawałek pliku, drugi przebieg po dwóch tysiącach zdjęć byłby
+      marnotrawstwem
+- [x] Poprawka przy okazji: zdjęcie z drona nigdy nie ma obiektywu, więc
+      wracało do kolejki przy każdym przebiegu. Licznik „zostało" nie zszedłby
+      nigdy do zera
+
+### Canon CCAPI — R6 II jako urządzenie, nie temat rozmowy
+
+**Potwierdzone: firmware 1.7.0 do R6 Mark II dodaje Camera Control API.**
+REST po HTTP, JSON, przez Wi-Fi — czyli zero zależności, samo `fetch`.
+
+To jest naprawa czegoś, co leżało odłogiem. `senses/tether.py` steruje
+aparatem przez gPhoto2 po kablu, a to na Windowsie wymaga WSL — więc
+w praktyce nigdy nie ruszyło.
+
+- [x] `lib/canon.js` + trzy trasy: stan, nastawy, migawka
+- [x] **Ścieżek nie zaszywamy.** CCAPI ma kilka wersji i każdy model wystawia
+      inny podzbiór; pytamy `GET /ccapi`, aparat sam mówi, co potrafi
+- [x] Wartość spoza listy `ability` nie leci do aparatu — komunikat mówi,
+      co aparat przyjmie, zamiast oddawać „Invalid parameter"
+- [x] W panelu planu: nastawy z aparatu obok policzonych, ze znacznikiem
+      „≠ policzone" i przyciskiem „Ustaw w aparacie"
+- [x] **Autofokus przy zdalnym strzale domyślnie WYŁĄCZONY.** Aparat na
+      statywie z ręczną ostrością (astro, makro, stacking) przeostrzyłby się
+      przy każdym zdjęciu i cała seria byłaby do wyrzucenia
+
+Granica powiedziana wprost w kodzie, w `.env.example` i w komunikacie błędu:
+to działa tylko wtedy, gdy Cosmos i aparat są w tej samej sieci. Serwer na
+VPS-ie nie dosięgnie aparatu stojącego w domu.
+
+### Misja waypointowa — plik KMZ dla drona
+
+`senses/flightplan.py` liczył wysokość, pokrycie i liczbę zdjęć, ale nie umiał
+oddać tego dronowi. Plan zostawał liczbą na ekranie do ręcznego przepisania.
+
+- [x] `lib/kmz.js` — WPML w dwóch plikach (`wpmz/template.kml`,
+      `wpmz/waylines.wpml`) spakowanych **własnym zapisem ZIP**. Node ma
+      `zlib.crc32`, reszta nagłówka to kilkanaście liczb; biblioteka do
+      spakowania dwóch plików tekstowych byłaby zależnością większą niż problem
+- [x] Siatka nalotu układana „wężem" — powrót na początek każdej linii to
+      przelot na pusto, przy dziesięciu liniach po 300 m trzy kilometry
+      baterii wyrzucone
+- [x] Bzdury odrzucane PRZED lotem, nie na lotnisku: jeden punkt, sto punktów,
+      900 m wysokości, 40 m/s
+- [x] Plik sprawdzany **cudzą implementacją** — Pythonowym `zipfile`
+      i parserem XML. Własnym kodem potwierdzilibyśmy tylko, że umiemy
+      odczytać to, co sami zapisaliśmy
+
+### Czego NIE potwierdziłem
+
+**Ani jeden wygenerowany KMZ nie przeszedł przez prawdziwego drona.**
+Struktura WPML jest odtworzona z dokumentacji i otwartych generatorów;
+kontener jest zweryfikowany, semantyka nie. Do tego na KONSUMENCKIM Mavicu 3
+nie ma oficjalnej drogi wgrania własnego KMZ — trzeba utworzyć w DJI Fly
+zastępczą misję i podmienić jej plik. Działa, ale jest obejściem.
+
+CCAPI nie widziało prawdziwego aparatu — atrapa jest zbudowana z dokumentacji.
+Telemetria SRT nie widziała pliku z prawdziwej karty.
+
+### Czego świadomie nie robimy
+
+- **Wszystko wokół M3T/M3M** (Thermogram, IRMapper, `m3m_radcal`,
+  `metashape_ortho`, `harpia`, datasety termiczne) — to osprzęt, którego
+  Marcin nie ma. Jakaś jedna trzecia przysłanych zrzutów
+- **FreeFCC-USB, dji-mavic-fcc** — zdejmowanie ograniczeń mocy nadajnika.
+  W UE wychodzi poza dopuszczalne CE
+- **Odblokowywanie baterii, DroneID przez SDR, modele w Simulinku i Webots,
+  klony stron DJI** — szum
+- **MMT** (154★) — dobre narzędzie do porządkowania plików, ale nakłada się
+  na istniejącą ścieżkę do OneDrive, zamiast dokładać
+- **Nakładka telemetryczna na wideo** (dronetrace, GPStitch, OVRLEY) — to
+  renderowanie ffmpegiem. Cosmos oddaje dane, obraz robi się w Premierze
+
+## ✅ Partia 40 — Plener: foto i wideo dostają własne miejsce (GOTOWE)
+
+Pytanie Marcina było krótkie: *„skoro te funkcjonalności foto/wideo to duża
+partia, to może trzeba wydzielić osobną pozycję w menu tylko na to?"*.
+Zanim odpowiedziałem, policzyłem, gdzie te funkcje właściwie są:
+
+| Funkcja | Gdzie mieszkała | Kiedy widoczna |
+|---|---|---|
+| sprzęt (korpus, obiektywy, dodatki) | Ustawienia, między mikrofonem a profilem | zawsze |
+| plan zdjęciowy | podpanel **wewnątrz podglądu kamery** | tylko przy włączonej kamerze i znanej lokalizacji |
+| aparat po Wi-Fi | wiersz w tamtym podpanelu | jw. |
+| archiwum materiału | Ustawienia | zawsze |
+| rozpoznawanie ptaków | nakładka trybu głosowego | tylko w trybie głosowym |
+| **misja KMZ** | — | **nigdzie** |
+| **karty ujęć** | — | **nigdzie** |
+
+Dwie ostatnie pozycje rozstrzygnęły sprawę. `/api/plan/mission` i `lib/ujecia.js`
+były zbudowane, przetestowane i całkowicie nieosiągalne z interfejsu: misję dało
+się pobrać wyłącznie żądaniem HTTP, a listę ujęć zobaczyć tylko wtedy, gdy model
+sam zdecydował się użyć narzędzia `[PLAN:]`. Bateria tego nie łapała, bo trasy
+odpowiadały — więc wszystko „działało".
+
+- [x] **Nowa pozycja „Plener"** w panelu bocznym, tuż nad Nauką. Stoi obok Studia
+      świadomie: w Studiu obraz się **generuje**, w Plenerze się go **kręci**
+- [x] **Plan zdjęciowy bez kamery** — dla nazwy MIEJSCA i wybranej GODZINY.
+      To nie jest przeniesione pole, tylko nowa zdolność: „co zabrać w sobotę
+      do Krakowa na 18:30" wcześniej nie miało w interfejsie odpowiedzi
+- [x] **Karty ujęć na ekranie** — z ogniskową, ruchem kamery i czasem trwania,
+      plus lista pominiętych z powodem („wymaga drona"). Każdą pozycję da się
+      **odhaczyć** i postęp przeżywa przeliczenie planu — bez tego „lista do
+      odhaczenia" byłaby obietnicą na wyrost. Stan siedzi w przeglądarce, bo
+      „nakręciłem" to fakt o jednym dniu zdjęciowym, a nie o Marcinie
+- [x] **Misja waypointowa z formularza** — siatka nalotu → plik `.kmz` do pobrania
+- [x] **Aparat po Wi-Fi** przeniesiony z podglądu kamery; doszła zdalna migawka
+      (świadomie tylko pod ludzkim palcem — model tego narzędzia nie dostaje)
+- [x] **Sprzęt i archiwum** przeprowadzone z Ustawień; w Ustawieniach został
+      drogowskaz, bo szukanie ich tam jest odruchem po miesiącach
+- [x] `tests/zestawy/plener.js` — sprawdza całą drogę z interfejsu, w tym
+      pobrany KMZ **cudzą implementacją** (`zipfile` + parser XML)
+
+### Błąd wyłapany przy okazji: reguła 180° zaokrąglana do drabinki zdjęciowej
+
+Test interfejsu pokazał „1/60" tam, gdzie przy 25 kl./s ma być 1/50 — czas wideo
+przechodził przez `najblizszy(CZASY, …)`, czyli przez klasyczną drabinkę czasów
+aparatu, w której pięćdziesiątki nie ma. Dwa skutki, oba realne:
+
+1. reguła 180° przestawała być regułą — 1/60 przy 25 kl./s to kąt 150°,
+2. **pod polską siecią 50 Hz** świetlówki i LED-y migoczą 100 razy na sekundę,
+   więc 1/50 i 1/100 są czasami bezpiecznymi, a 1/60 daje przewijające się pasy
+   w każdej hali, kościele i biurze.
+
+W trybie filmowym aparat oferuje pełną drabinkę wideo, więc nie ma czego
+zaokrąglać. Czas jest teraz dokładnie `1/(2×klatki)`, a przy klatkażach, które
+nie dzielą się na 50 (np. 60 kl./s), plan sam ostrzega o migotaniu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

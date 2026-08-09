@@ -109,10 +109,13 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   // rozmowy i licznik „35 rozmów" rośnie z każdym przebiegiem.
   const dataDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cosmos-test-'));
   if (rozmowy) zasiejRozmowy(dataDir, rozmowy);
-  return uruchom('node', ['server.js'], {
+  const proc = uruchom('node', ['server.js'], {
     cwd: KORZEN,
     env: { ...process.env, PORT: String(port), COSMOS_DATA_DIR: dataDir, NVIDIA_API_KEY: 'test', ...env },
   });
+  // Zestaw sprawdzający TRWAŁOŚĆ zapisu musi wiedzieć, gdzie ten zapis ląduje.
+  proc.katalogDanych = dataDir;
+  return proc;
 }
 
 const atrapaNode = (plik, port) => uruchom('node', [path.join(ATRAPY, plik)],
@@ -135,6 +138,7 @@ const PORTY_ATRAP = {
   'mock-tempo.js': [7115],
   'mock-echo-systemu.js': [7116],
   'mock-grafiki.js': [7117],
+  'mock-canon.js': [7120],
   // atrapa Open-Meteo + Microsoft Graph tworzona wprost w zestawie
   'mockllm.py': [7099],
 };
@@ -216,7 +220,8 @@ const SRODOWISKA = {
       SENSES_CACHE_MS: '0',
     },
   },
-  // Wyszukiwanie grafik: atrapa DDG (żeton vqd → i.js → miniatura).
+  // Wyszukiwanie grafik: atrapa wszystkich trzech źródeł (DDG z żetonem vqd,
+  // Commons, Openverse) plus miniatura przez proxy.
   grafiki: {
     port: 3410,
     // Echo systemu jest tu po to, żeby sprawdzić, czy model W OGÓLE wie
@@ -224,11 +229,30 @@ const SRODOWISKA = {
     atrapy: [['mock-grafiki.js', null], ['mock-echo-systemu.js', null]],
     env: {
       IMAGE_SEARCH_URL: 'http://127.0.0.1:7117/',
+      COMMONS_API_URL: 'http://127.0.0.1:7117/commons',
+      OPENVERSE_API_URL: 'http://127.0.0.1:7117/openverse',
+      GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
+      SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
+      SWPC_KP_URL: 'http://127.0.0.1:7117/swpc/kp',
+      SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
     },
   },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },
+  /* Aparat Canon po CCAPI + geokodowanie. Potrzebne razem, bo drogę „policz
+     plan → wyślij nastawy do aparatu" da się sprawdzić dopiero wtedy, gdy
+     plan ma dla czego się policzyć. */
+  aparat: {
+    port: 3411,
+    atrapy: [['mock-canon.js', null], ['mock-grafiki.js', null]],
+    env: {
+      CANON_CCAPI_URL: 'http://127.0.0.1:7120',
+      GEOCODE_SEARCH_URL: 'http://127.0.0.1:7117/geokoduj',
+      SWPC_KP_URL: 'http://127.0.0.1:7117/swpc/kp',
+      SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
+    },
+  },
   // Zmysły podłączone, model nieistotny — Kinect, mowa, wykrywanie.
   zmysly: {
     port: 3407,
@@ -283,7 +307,8 @@ async function srodowisko(nazwa) {
     throw new Error(`Serwer testowy na ${cfg.port} nie wstał (środowisko „${nazwa}")`);
   }
 
-  const wynik = { port: cfg.port, adres, koniec: () => procesy.forEach(zabij) };
+  const wynik = { port: cfg.port, adres, katalogDanych: srv.katalogDanych,
+    koniec: () => procesy.forEach(zabij) };
   wstale.set(nazwa, wynik);
   return wynik;
 }

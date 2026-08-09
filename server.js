@@ -29,15 +29,22 @@ const { modelInfo, modelNotForChat, modelNotAChatPartner, modelToolLevel } = req
 const {
   KORZEN, PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SEARCH_URL, SECRETS,
   loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, saveJsonFile, genId, fireflyEnabled, imageProviders, studioTasks,
+  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, studioTasks,
 } = require('./lib/rdzen.js');
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
-const { SPRZET, evZeSlonca, dobierz, evZPomiaru, orientacja } = require('./lib/ekspozycja.js');
+const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
+  rozpoznajObiektywy } = require('./lib/ekspozycja.js');
 const { pogodaDla } = require('./lib/pogoda.js');
+const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
+const { prognozaZorzy } = require('./lib/zorza.js');
+const { rozpoznajTemat } = require('./lib/tematy.js');
+const { planUjec } = require('./lib/ujecia.js');
+const canon = require('./lib/canon.js');
+const { misjaKmz, siatka } = require('./lib/kmz.js');
 const archiwum_ = require('./lib/archiwum.js');
 const archiwum = archiwum_.utworz(DATA_DIR);
 const onedrive_ = require('./lib/onedrive.js');
@@ -151,265 +158,23 @@ const MIME = {
 
 
 // ---------------------------------------------------------------------------
-// Pamięć długotrwała (RAG) — fakty zapisane przez użytkownika.
-// Embeddingi liczy usługa zmysłów (/embed); bez niej działa
-// wyszukiwanie słów kluczowych.
 // ---------------------------------------------------------------------------
-
-const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
-
-let memories = [];
-try { memories = JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8')); } catch { /* brak pliku */ }
-
-function saveMemories() {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(MEMORY_FILE, JSON.stringify(memories, null, 2));
-  } catch (err) {
-    console.error('Nie udało się zapisać pamięci:', err.message);
-  }
-}
-
-// timeoutMs: przy indeksowaniu (upload) dajemy modelowi czas na start (60 s),
-// ale przy wyszukiwaniu w trakcie rozmowy czekamy krótko (5 s), żeby
-// niedostępna usługa zmysłów nie opóźniała odpowiedzi czatu.
-// Embeddingi: lokalnie przez zmysły (bge-m3 na Twoim GPU) albo z chmury NVIDII.
-// „auto" = najpierw zmysły (za darmo, prywatnie), a gdy są offline — chmura.
-// Dzięki temu baza wiedzy działa w pełni także wtedy, gdy komputer domowy śpi.
-const EMBED = {
-  provider: (process.env.EMBED_PROVIDER || 'auto').toLowerCase(), // auto | senses | nvidia | off
-  nvidiaModel: process.env.NVIDIA_EMBED_MODEL || 'nvidia/llama-nemotron-embed-1b-v2',
-};
-
-async function embedViaSenses(texts, timeoutMs) {
-  try {
-    const r = await fetch(`${SENSES_URL}/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texts }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!Array.isArray(d.vectors) || !d.vectors.length) return null;
-    return { vectors: d.vectors, model: `senses:${d.vectors[0].length}` };
-  } catch {
-    return null;
-  }
-}
-
-async function embedViaNvidia(texts, timeoutMs, inputType) {
-  const ep = ENDPOINTS.cloud;
-  if (!ep.apiKey) return null;
-  // Modele wyszukiwawcze rozróżniają pytanie od dokumentu (input_type). Gdy
-  // dany model tego pola nie przyjmuje, powtarzamy żądanie bez niego.
-  for (const withType of [true, false]) {
-    try {
-      const body = { input: texts, model: EMBED.nvidiaModel, encoding_format: 'float' };
-      if (withType) {
-        body.input_type = inputType === 'query' ? 'query' : 'passage';
-        body.truncate = 'END';
-      }
-      const r = await fetch(`${ep.baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(ep) },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!r.ok) {
-        if (withType && (r.status === 400 || r.status === 422)) continue;  // spróbuj bez input_type
-        return null;
-      }
-      const d = await r.json();
-      const rows = Array.isArray(d.data) ? [...d.data] : [];
-      if (!rows.length) return null;
-      rows.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-      const vectors = rows.map((x) => x.embedding).filter(Array.isArray);
-      if (vectors.length !== texts.length) return null;
-      return { vectors, model: `nvidia:${EMBED.nvidiaModel}` };
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-/** Zwraca { vectors, model } albo null. `model` znakuje wektory — patrz sameModel(). */
-/* Bezpiecznik na wolne embeddingi.
- *
- * Gdy usługa raz nie wyrobiła się w budżecie, następne wywołania z krótkim
- * budżetem (te z rozmowy) nie czekają wcale — od razu idzie dopasowanie po
- * słowach kluczowych, a rozmowa rusza bez zwłoki. Po minucie próbujemy
- * ponownie: usługa mogła po prostu wstawać albo liczyć coś ciężkiego.
- *
- * Bez tego cisza 1,2 s wracała przy KAŻDEJ wiadomości — dokładnie ten rodzaj
- * drobnego tarcia, który sprawia, że narzędzie „jakoś tak mierzi".
- */
-const embedAwaria = { do: 0 };
-const EMBED_KARENCJA_MS = 60000;
-/* Poniżej tego budżetu wywołanie uznajemy za „z rozmowy" — takie odpuszczamy
-   po awarii. Przeliczanie w tle (60 s) idzie zawsze, bo nikt na nie nie czeka. */
-const EMBED_BUDZET_ROZMOWY_MS = 5000;
-
-async function embedTexts(texts, timeoutMs = 60000, inputType = 'passage') {
-  if (!texts || !texts.length || EMBED.provider === 'off') return null;
-  if (timeoutMs <= EMBED_BUDZET_ROZMOWY_MS && Date.now() < embedAwaria.do) return null;
-  const order = EMBED.provider === 'senses' ? ['senses']
-    : EMBED.provider === 'nvidia' ? ['nvidia']
-    : ['senses', 'nvidia'];
-  for (const src of order) {
-    const out = src === 'senses'
-      ? await embedViaSenses(texts, timeoutMs)
-      : await embedViaNvidia(texts, timeoutMs, inputType);
-    if (out) { embedAwaria.do = 0; return out; }
-  }
-  // Nikt nie odpowiedział — przez chwilę nie zatrzymujemy dla nich rozmowy.
-  embedAwaria.do = Date.now() + EMBED_KARENCJA_MS;
-  return null;
-}
-
-/** Który dostawca embeddingów realnie zadziała przy obecnej konfiguracji. */
-function embedStatus(sensesHasEmbed) {
-  if (EMBED.provider === 'off') return { provider: 'off', model: null, opis: 'wyłączone' };
-  const cloudReady = Boolean(ENDPOINTS.cloud.apiKey);
-  if (EMBED.provider === 'nvidia') {
-    return { provider: cloudReady ? 'nvidia' : null, model: EMBED.nvidiaModel,
-      opis: cloudReady ? `chmura NVIDIA (${EMBED.nvidiaModel})` : 'brak NVIDIA_API_KEY' };
-  }
-  if (EMBED.provider === 'senses') {
-    return { provider: sensesHasEmbed ? 'senses' : null, model: 'bge-m3',
-      opis: sensesHasEmbed ? 'zmysły lokalnie' : 'zmysły offline — wyszukiwanie po słowach kluczowych' };
-  }
-  if (sensesHasEmbed) return { provider: 'senses', model: 'bge-m3', opis: 'zmysły lokalnie' };
-  if (cloudReady) {
-    return { provider: 'nvidia', model: EMBED.nvidiaModel,
-      opis: `zmysły offline → chmura NVIDIA (${EMBED.nvidiaModel})` };
-  }
-  return { provider: null, model: null, opis: 'brak — wyszukiwanie po słowach kluczowych' };
-}
-
-/** Wektory z różnych modeli są nieporównywalne — pilnujemy zgodności znacznika. */
-function sameModel(item, model) {
-  return Boolean(item.embedding) && (item.embModel || null) === model;
-}
-
-function cosine(a, b) {
-  let dot = 0, na = 0, nb = 0;
-  const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
-  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
-}
-
-function keywords(text) {
-  return new Set(
-    text.toLowerCase().split(/[^a-ząćęłńóśźż0-9]+/i).filter((w) => w.length >= 4)
-  );
-}
-
-function keywordScore(query, text) {
-  const q = keywords(query);
-  if (!q.size) return 0;
-  const t = keywords(text);
-  let hits = 0;
-  for (const w of q) if (t.has(w)) hits++;
-  return hits / Math.sqrt(q.size * Math.max(t.size, 1));
-}
-
-/* Przeliczanie wektorów w tle. NIE w ścieżce czatu.
- *
- * Wektory z różnych modeli są nieporównywalne, więc po zmianie dostawcy
- * embeddingów trzeba przeliczyć całą pamięć. Kiedyś robiliśmy to wewnątrz
- * `searchMemory`, z limitem 60 s — użytkownik patrzył w pustkę, zanim model
- * w ogóle dostał prompt. Pomiar: 5 s ciszy przy KAŻDEJ wiadomości, gdy
- * usługa embeddingów była wolna. Teraz pamięć doucza się sama, w tle,
- * a rozmowa idzie dalej na dopasowaniu słów kluczowych.
- */
-let uzupelnianieTrwa = false;
-function uzupelnijWektoryWTle(qmodel) {
-  if (uzupelnianieTrwa) return;
-  const brakujace = memories.filter((m) => !sameModel(m, qmodel));
-  if (!brakujace.length) return;
-  uzupelnianieTrwa = true;
-  setTimeout(async () => {
-    try {
-      const embs = await embedTexts(brakujace.map((m) => m.text), 60000, 'passage');
-      if (embs) {
-        brakujace.forEach((m, i) => { m.embedding = embs.vectors[i]; m.embModel = embs.model; });
-        saveMemories();
-      }
-    } catch { /* następnym razem */ } finally { uzupelnianieTrwa = false; }
-  }, 0);
-}
-
-/* Ile wolno czekać na embedding zapytania, zanim odpuścimy i użyjemy słów
-   kluczowych. Przywołanie pamięci jest miłym dodatkiem — wstrzymywanie dla
-   niego całej rozmowy nie jest. */
-const BUDZET_PAMIECI_MS = Number(process.env.MEMORY_SEARCH_BUDGET_MS || 1200);
-
-async function searchMemory(query, limit = 4) {
-  if (!memories.length || !query || !query.trim()) return [];
-
-  let qvec = null, qmodel = null;
-  const q = await embedTexts([query], BUDZET_PAMIECI_MS, 'query');
-  if (q) {
-    qvec = q.vectors[0];
-    qmodel = q.model;
-    uzupelnijWektoryWTle(qmodel);   // w tle, nie blokuje odpowiedzi
-  }
-
-  const threshold = qvec ? 0.35 : 0.15;
-  return memories
-    .map((m) => ({
-      m,
-      score: (qvec && sameModel(m, qmodel)) ? cosine(qvec, m.embedding) : keywordScore(query, m.text),
-    }))
-    .filter((s) => s.score > threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => s.m);
-}
-
-function memoryContextLines(items) {
-  if (!items.length) return '';
-  const lines = items.map((m) => {
-    const d = new Date(m.time).toLocaleDateString('pl-PL');
-    return `- [zapisano ${d}] ${m.text}`;
-  });
-  return 'PAMIĘĆ DŁUGOTRWAŁA — fakty, które użytkownik kazał Ci wcześniej zapamiętać ' +
-         '(przywołane, bo pasują do bieżącej rozmowy):\n' + lines.join('\n');
-}
-
-async function handleMemory(req, res) {
-  const url = new URL(req.url, 'http://localhost');
-  if (req.method === 'GET') {
-    return sendJson(res, 200, {
-      memories: memories.map(({ id, text, time, embedding }) => ({
-        id, text, time, hasEmbedding: Boolean(embedding),
-      })),
-    });
-  }
-  if (req.method === 'POST') {
-    let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const text = String(data.text || '').trim().slice(0, 2000);
-    if (!text) return sendJson(res, 400, { error: 'Puste pole text.' });
-    const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, time: Date.now(), embedding: null };
-    const vecs = await embedTexts([text], 60000, 'passage');
-    if (vecs) { item.embedding = vecs.vectors[0]; item.embModel = vecs.model; }
-    memories.push(item);
-    saveMemories();
-    return sendJson(res, 200, { ok: true, id: item.id, hasEmbedding: Boolean(item.embedding), total: memories.length });
-  }
-  if (req.method === 'DELETE') {
-    const id = url.searchParams.get('id');
-    const before = memories.length;
-    memories = memories.filter((m) => m.id !== id);
-    if (memories.length !== before) saveMemories();
-    return sendJson(res, 200, { ok: true, total: memories.length });
-  }
-  res.writeHead(405);
-  res.end();
-}
+// Pamięć długotrwała (RAG) — całość w lib/pamiec.js.
+// Tutaj tylko spięcie zależności i cienkie przejścia dla reszty pliku.
+// ---------------------------------------------------------------------------
+const pamiec_ = require('./lib/pamiec.js').utworz({
+  katalogDanych: DATA_DIR,
+  sensesUrl: SENSES_URL,
+  chmura: () => ENDPOINTS.cloud,
+  sendJson,
+  readJson,
+});
+const handleMemory = (req, res) => pamiec_.handleMemory(req, res);
+const searchMemory = (q, limit) => pamiec_.searchMemory(q, limit);
+const memoryContextLines = (items) => pamiec_.memoryContextLines(items);
+const embedTexts = (texts, timeoutMs, inputType) => pamiec_.embedTexts(texts, timeoutMs, inputType);
+const embedStatus = (sensesHasEmbed) => pamiec_.embedStatus(sensesHasEmbed);
+const { cosine, sameModel, keywordScore } = pamiec_;
 
 // ---------------------------------------------------------------------------
 // Baza wiedzy — pliki, linki i notatki użytkownika.
@@ -431,8 +196,7 @@ try { convIndex = JSON.parse(fs.readFileSync(CONV_INDEX, 'utf8')); } catch { /* 
 
 function saveConvIndex() {
   try {
-    fs.mkdirSync(CONV_DIR, { recursive: true });
-    fs.writeFileSync(CONV_INDEX, JSON.stringify(convIndex));
+    zapiszAtomowo(CONV_INDEX, JSON.stringify(convIndex));
   } catch (err) {
     console.error('Nie udało się zapisać indeksu rozmów:', err.message);
   }
@@ -470,13 +234,42 @@ function searchConversationsContent(query) {
   return out.slice(0, 30);
 }
 
+/* SPRZĘT użytkownika — domyślny zestaw do planu zdjęciowego.
+ *
+ * Osobno od profilu, bo profil jest wolnym tekstem DLA MODELU, a to są dane
+ * DLA NARZĘDZIA: z nich liczy się przysłona i ogniskowa. Marcin podał swój
+ * zestaw raz („24-105 f/4, 70-200 f/4, 50 f/1.8") i nie ma powodu, żeby
+ * wpisywał go przy każdym pytaniu — a model nie ma powodu go zgadywać.
+ *
+ * Podanie obiektywu w rozmowie ZAWSZE wygrywa z tym zapisem: sprzęt bywa
+ * pożyczony, a jedno zdanie w czacie jest świeższe niż ustawienie sprzed
+ * miesiąca.
+ */
+const SPRZET_FILE = path.join(DATA_DIR, 'sprzet.json');
+let userSprzet = { korpus: '', obiektywy: '', dodatki: '' };
+try { userSprzet = { ...userSprzet, ...JSON.parse(fs.readFileSync(SPRZET_FILE, 'utf8')) }; }
+catch { /* brak — panel Ustawień pozwoli uzupełnić */ }
+function saveSprzet(dane) {
+  userSprzet = {
+    korpus: String((dane && dane.korpus) || '').slice(0, 120),
+    obiektywy: String((dane && dane.obiektywy) || '').slice(0, 400),
+    /* Dron, gimbal, statyw, slider. Osobne pole, bo to NIE jest optyka —
+       nie wpływa na ekspozycję, ale przesądza, których ujęć da się w ogóle
+       nakręcić. Wpisywane jak człowiek mówi: „Mavic 3, Ronin-S, statyw". */
+    dodatki: String((dane && dane.dodatki) || '').slice(0, 300),
+  };
+  try {
+    zapiszAtomowo(SPRZET_FILE, JSON.stringify(userSprzet));
+  } catch (err) { console.error('Nie udało się zapisać sprzętu:', err.message); }
+}
+
 // Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
 const PROFILE_FILE = path.join(DATA_DIR, 'profile.txt');
 let userProfile = '';
 try { userProfile = fs.readFileSync(PROFILE_FILE, 'utf8'); } catch { /* brak */ }
 function saveProfile(text) {
   userProfile = String(text || '').slice(0, 4000);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(PROFILE_FILE, userProfile); }
+  try { zapiszAtomowo(PROFILE_FILE, userProfile); }
   catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
 }
 
@@ -496,15 +289,28 @@ try { userWspolrzedne = JSON.parse(fs.readFileSync(WSPOLRZEDNE_FILE, 'utf8')); }
 if (!userWspolrzedne && BRIEFING.lat && BRIEFING.lon) {
   userWspolrzedne = { lat: Number(BRIEFING.lat), lon: Number(BRIEFING.lon) };
 }
+/* Archiwum potrzebuje domu do liczenia pory światła dla zdjęć bez GPS-u.
+   Ustawiamy TU, a nie przy tworzeniu indeksu: `userWspolrzedne` deklarowane
+   jest niżej niż `archiwum`, więc wcześniejsze odwołanie trafiało w martwą
+   strefę czasową i serwer w ogóle nie wstawał. */
+if (userWspolrzedne) archiwum.ustawDom(userWspolrzedne);
 
 function saveLocation(text, wspolrzedne) {
   userLocation = String(text || '').trim().slice(0, 200);
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LOCATION_FILE, userLocation); }
+  try { zapiszAtomowo(LOCATION_FILE, userLocation); }
   catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
     userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
-    try { fs.writeFileSync(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
-    catch (err) { console.error('Nie udało się zapisać współrzędnych:', err.message); }
+    try { zapiszAtomowo(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
+    catch (err) { console.error('Nie udalo sie zapisac wspolrzednych:', err.message); }
+    /* Archiwum liczy pore swiatla dla zdjec bez GPS-u wzgledem domu, wiec
+       zmiana lokalizacji musi je przeliczyc - inaczej wpisy dodane wczesniej
+       zostaja z `null` mimo ze jest juz z czego je policzyc. */
+    if (typeof archiwum !== 'undefined') {
+      archiwum.ustawDom(userWspolrzedne);
+      const ile = archiwum.przeliczSwiatlo();
+      if (ile) addEvent('archiwum', `przeliczono pore swiatla dla ${ile} plikow`);
+    }
   }
 }
 
@@ -582,7 +388,7 @@ async function handleConversations(req, res, pathname) {
       const conv = JSON.parse(fs.readFileSync(convPath(id), 'utf8'));
       conv.title = entry.title;
       conv.pinned = entry.pinned || false;
-      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+      zapiszAtomowo(convPath(id), JSON.stringify(conv));
     } catch { /* plik mógł zniknąć — indeks i tak zaktualizowany */ }
     sortConvIndex();
     saveConvIndex();
@@ -611,8 +417,7 @@ async function handleConversations(req, res, pathname) {
     conv.updatedAt = Date.now();
     if (!conv.createdAt) conv.createdAt = conv.updatedAt;
     try {
-      fs.mkdirSync(CONV_DIR, { recursive: true });
-      fs.writeFileSync(convPath(id), JSON.stringify(conv));
+      zapiszAtomowo(convPath(id), JSON.stringify(conv));
     } catch (err) {
       return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
     }
@@ -650,7 +455,7 @@ try { kbItems = JSON.parse(fs.readFileSync(KB_INDEX, 'utf8')); } catch { /* brak
 function saveKb() {
   try {
     fs.mkdirSync(KB_FILES, { recursive: true });
-    fs.writeFileSync(KB_INDEX, JSON.stringify(kbItems));
+    zapiszAtomowo(KB_INDEX, JSON.stringify(kbItems));
   } catch (err) {
     console.error('Nie udało się zapisać bazy wiedzy:', err.message);
   }
@@ -861,45 +666,11 @@ const oczekiwaneStany = new Set();
 const escapeHtmlSerwer = (s) => String(s || '').replace(/[&<>"]/g,
   (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[z]));
 
-/* Archiwum materiału. Indeks jest pasywny — źródła (OneDrive, dysk przez
-   zmysły) wpychają wpisy, a zapytania działają nawet wtedy, gdy te źródła
-   są offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu
-   w terenie przy wyłączonym komputerze domowym. */
-async function handleArchiwum(req, res, p) {
-  if (p === '/api/archive/add' && req.method === 'POST') {
-    let d;
-    try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    if (!Array.isArray(d.wpisy)) return sendJson(res, 400, { error: 'Brak tablicy `wpisy`.' });
-    if (d.wpisy.length > 5000) return sendJson(res, 413, { error: 'Najwyżej 5000 wpisów naraz.' });
-    const wynik = archiwum.dodaj(d.wpisy);
-    if (wynik.dodanych) addEvent('archiwum', `zindeksowano ${wynik.dodanych} plików (razem ${wynik.razem})`);
-    return sendJson(res, 200, wynik);
-  }
-  if (p === '/api/archive/search' && req.method === 'GET') {
-    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
-    const limit = Math.min(Number(q.limit) || 40, 200);
-    const wyniki = archiwum.szukaj(q);
-    return sendJson(res, 200, { znaleziono: wyniki.length, wyniki: wyniki.slice(0, limit) });
-  }
-  if (p === '/api/archive/stats' && req.method === 'GET') {
-    const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
-    if (!q.pole) return sendJson(res, 200, archiwum.podsumowanie());
-    const grupy = archiwum.zestawienie(q.pole, q);
-    if (!grupy) return sendJson(res, 400, { error: `Nie umiem grupować po „${q.pole}".` });
-    return sendJson(res, 200, { pole: q.pole, grupy });
-  }
-  if (p === '/api/archive/source' && req.method === 'DELETE') {
-    const zrodlo = new URL(req.url, 'http://localhost').searchParams.get('zrodlo') || '';
-    if (!zrodlo) return sendJson(res, 400, { error: 'Podaj `zrodlo`.' });
-    return sendJson(res, 200, { usunieto: archiwum.usunZrodlo(zrodlo) });
-  }
-  return sendJson(res, 404, { error: 'Nieznana trasa archiwum.' });
-}
-
 /* Asystent planu zdjęciowego — to, czego nie ma żaden asystent w chmurze.
    ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
    sprzęt. Cosmos wie wszystko troje, więc może policzyć konkretne nastawy
    zamiast opowiadać ogólniki o „złotej godzinie". */
+
 async function handlePlanZdjeciowy(req, res) {
   let d;
   try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -908,15 +679,35 @@ async function handlePlanZdjeciowy(req, res) {
      `Number(null)` to ZERO, nie NaN — pierwsza wersja przy braku lokalizacji
      liczyła więc światło dla punktu 0°N 0°E na Atlantyku i oddawała to jako
      poprawną odpowiedź. Stąd jawne sprawdzenie „czy w ogóle jest wartość". */
+  /* Nazwa miejsca ma pierwszeństwo przed zapisaną lokalizacją, bo znaczy
+     „planuję zdjęcia TAM", a nie „stoję tutaj". Kiedyś takiego parametru nie
+     było wcale: na „w sobotę kręcę w Krakowie" model musiał zgadnąć
+     współrzędne z pamięci albo zignorować miejsce — a złota godzina policzona
+     dla złego punktu wygląda tak samo wiarygodnie jak dla dobrego. */
+  let zNazwy = null;
+  let miejsceNieznane = '';
+  if (d.miejsce && !(Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lon)))) {
+    zNazwy = await wspolrzedneMiejsca(String(d.miejsce));
+    if (!zNazwy) miejsceNieznane = String(d.miejsce).slice(0, 80);
+  }
+
   const zapis = userWspolrzedne || {};
-  const surowyLat = d.lat ?? zapis.lat;
-  const surowyLon = d.lon ?? zapis.lon;
+  const surowyLat = d.lat ?? (zNazwy && zNazwy.lat) ?? zapis.lat;
+  const surowyLon = d.lon ?? (zNazwy && zNazwy.lon) ?? zapis.lon;
   const lat = surowyLat === null || surowyLat === undefined ? NaN : Number(surowyLat);
   const lon = surowyLon === null || surowyLon === undefined ? NaN : Number(surowyLon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return sendJson(res, 400, {
-      error: 'Nie znam Twoich współrzędnych. Ustaw lokalizację w Ustawieniach '
-        + '(przycisk „📍 Wykryj") albo podaj lat i lon w żądaniu.',
+      error: miejsceNieznane
+        ? `Nie udało się ustalić współrzędnych miejsca „${miejsceNieznane}". `
+          + 'Podaj je dokładniej (np. „Kraków, Polska") albo wprost jako lat i lon.'
+        /* Komunikat musi podać drogę, którą da się przejść STĄD. „Podaj lat
+           i lon w żądaniu" to instrukcja dla programisty, a nie dla człowieka
+           patrzącego na panel — a tuż nad tym napisem jest pole „Miejsce",
+           w które wystarczy wpisać nazwę. */
+        : 'Nie znam Twoich współrzędnych. Wpisz nazwę miejsca w polu „Miejsce" '
+          + '(Plener → Plan zdjęciowy) albo ustaw lokalizację na stałe '
+          + 'w Ustawieniach przyciskiem „📍 Wykryj".',
     });
   }
 
@@ -928,7 +719,14 @@ async function handlePlanZdjeciowy(req, res) {
   /* Zachmurzenie: z prognozy, chyba że użytkownik wybrał je ręcznie w panelu.
      Ręczny wybór wygrywa — stoisz na miejscu i widzisz niebo lepiej niż
      model pogodowy dla kwadratu kilometra. */
-  const pogoda = d.zachmurzenie ? null : await pogodaDla(lat, lon, kiedy);
+  /* Pogoda i zorza lecą RÓWNOLEGLE i obie są tylko dodatkiem — żadna nie może
+     wstrzymać planu. Zorzy nie pytamy w biały dzień: przy Słońcu wysoko nad
+     horyzontem odpowiedź jest znana z góry i byłoby to marnowanie sekundy. */
+  const ciemnoBedzie = swiatlo.teraz.wysokosc < 6;
+  const [pogoda, zorza] = await Promise.all([
+    d.zachmurzenie ? Promise.resolve(null) : pogodaDla(lat, lon, kiedy),
+    ciemnoBedzie ? prognozaZorzy(lat, lon).catch(() => null) : Promise.resolve(null),
+  ]);
   const zachmurzenie = d.zachmurzenie || (pogoda && pogoda.zachmurzenie) || 'bezchmurnie';
 
   /* EV liczymy ze Słońca, a gdy przeglądarka zmierzyła jasność podglądu —
@@ -943,16 +741,57 @@ async function handlePlanZdjeciowy(req, res) {
     zrodloEv = 'pomiar z kamery + pozycja Słońca';
   }
 
+  /* Obiektywy przychodzą tak, jak je człowiek napisał („24-70 f/2.8 i 70-200 f/4”),
+     bo wpisuje je Marcin w rozmowie, a nie formularz. Rozbiciem zajmuje się
+     `rozpoznajObiektywy`; gdy nic nie da się odczytać, `dobierz` po prostu
+     liczy jak dawniej — dla korpusu. */
+  /* Gdy w pytaniu nie padł żaden obiektyw, bierzemy zestaw zapisany
+     w Plenerze. Podanie szkła wprost zawsze wygrywa. */
+  const zPytania = Array.isArray(d.obiektyw)
+    ? d.obiektyw.flatMap((x) => rozpoznajObiektywy(String(x)))
+    : rozpoznajObiektywy(d.obiektyw || '');
+  const zUstawien = zPytania.length ? [] : rozpoznajObiektywy(userSprzet.obiektywy || '');
+  const szkla = zPytania.length ? zPytania : zUstawien;
+  const nieRozpoznane = (d.obiektyw && !zPytania.length) ? String(d.obiektyw).slice(0, 120) : '';
+
   const ustawienia = dobierz(ev, {
-    sprzet: d.sprzet, tryb: d.tryb, klatki: d.klatki,
+    sprzet: d.sprzet || userSprzet.korpus || undefined, tryb: d.tryb, klatki: d.klatki,
     ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
+    obiektyw: szkla, temat: d.temat,
+  });
+  if (nieRozpoznane) {
+    ustawienia.powody.unshift(`Nie odczytałem obiektywu z „${nieRozpoznane}" — policzyłem dla samego `
+      + 'korpusu. Podaj ogniskową i jasność, np. „24-70 f/2.8", a policzę dla tego szkła.');
+  }
+
+  /* LISTA UJĘĆ — tylko przy wideo, bo tylko tam ma sens. Przy zdjęciu pytanie
+     brzmi „jakie nastawy", a przy filmie „co w ogóle nakręcić, żeby dało się
+     to potem zmontować" — i to jest pytanie, na które nikt nie odpowiada
+     liczbami. Lista jest przefiltrowana przez SPRZĘT: bez drona nie ma ujęć
+     z góry, a POMINIĘTE oddajemy osobno, bo „nie ma na liście" i „nie masz
+     czym" to dla planującego dzień dwie różne informacje. */
+  const ujecia = d.tryb === 'zdjecie' ? null : planUjec({
+    temat: (rozpoznajTemat(d.temat || '') || {}).klucz,
+    obiektywy: szkla,
+    dron: /dron|mavic|dji|air\s?\d|mini\s?\d/i.test(sprzetTekst(d)),
+    gimbal: /gimbal|ronin|crane|osmo|ibis|stabiliz/i.test(sprzetTekst(d)),
+    statyw: !/bez statyw/i.test(sprzetTekst(d)),
+    slider: /slider|wózek|dolly/i.test(sprzetTekst(d)),
   });
 
   const kadr = orientacja(Number(d.szerokosc), Number(d.wysokosc));
   const czas = (x) => (x ? x.toISOString() : null);
 
+  if (miejsceNieznane) {
+    ustawienia.powody.unshift(`Nie znalazłem miejsca „${miejsceNieznane}" — policzyłem dla `
+      + 'zapisanej lokalizacji. Podaj nazwę dokładniej albo współrzędne.');
+  }
+
   sendJson(res, 200, {
-    miejsce: userLocation || null,
+    // Gdy liczymy dla PODANEGO miejsca, to jego nazwa jest tu istotna —
+    // inaczej odpowiedź mówiłaby o domu, a liczby dotyczyły Krakowa.
+    miejsce: (zNazwy && zNazwy.nazwa) || userLocation || null,
+    miejsceZNazwy: Boolean(zNazwy),
     wspolrzedne: { lat, lon },
     slonce: {
       wysokosc: swiatlo.teraz.wysokosc,
@@ -971,9 +810,19 @@ async function handlePlanZdjeciowy(req, res) {
     kadr,
     zrodloEv,
     pogoda,
+    zorza,
     zachmurzenie,
     ustawienia,
+    ujecia,
   });
+}
+
+/* Wszystko, co użytkownik napisał o sprzęcie, w jednym worku — dodatki
+ * (dron, gimbal, statyw) wpisuje się raz w Plenerze albo rzuca w zdaniu
+ * „lecę z Mavikiem", a nie wypełnia formularza z polami wyboru. */
+function sprzetTekst(d) {
+  return [d.sprzet, d.dodatki, userSprzet.korpus, userSprzet.dodatki]
+    .filter(Boolean).join(' ');
 }
 
 async function extractKbText(name, mime, buf) {
@@ -1113,7 +962,7 @@ const TIMELINE_FILE = path.join(DATA_DIR, 'timeline.json');
 let timeline = [];
 try { timeline = JSON.parse(fs.readFileSync(TIMELINE_FILE, 'utf8')); } catch { /* brak */ }
 function saveTimeline() {
-  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TIMELINE_FILE, JSON.stringify(timeline)); }
+  try { zapiszAtomowo(TIMELINE_FILE, JSON.stringify(timeline)); }
   catch (err) { console.error('Nie udało się zapisać osi czasu:', err.message); }
 }
 
@@ -1247,7 +1096,7 @@ async function capabilityManifest() {
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
       eksport: STUDIO.exportDir || null },
-    wiedza: { rozmowy: convIndex.length, pamiec: memories.length, bazaWiedzy: kbItems.length,
+    wiedza: { rozmowy: convIndex.length, pamiec: pamiec_.ile(), bazaWiedzy: kbItems.length,
       profil: userProfile.trim().length > 0, migawki: timeline.length },
     nauka: { wzorce: wzorce().length, procedury: procedury().length, rutyny: rutyny().length,
       nagrywanieEkranu: playwright, automatyzacjaOdczytu: playwright,
@@ -1256,6 +1105,16 @@ async function capabilityManifest() {
       kalendarz: Boolean(BRIEFING.ics) },
     teren: { photoscan: moduleExists('senses', 'photoscan.py'),
       terrain: moduleExists('senses', 'terrain.py') },
+    /* Plener. Bez tego wpisu Cosmos na pytanie „co potrafisz" nie wymieniał
+       ani misji waypointowej, ani kart ujęć — a od kiedy mają interfejs,
+       jest dokąd odesłać człowieka zamiast tłumaczyć trasę HTTP. */
+    plener: {
+      sprzet: [userSprzet.korpus, userSprzet.obiektywy, userSprzet.dodatki].filter(Boolean).join(' · ') || null,
+      aparatPoWifi: canon.skonfigurowany(),
+      misjaKmz: true,
+      kartyUjec: true,
+      archiwum: onedrive.skonfigurowany(),
+    },
     trening: { przykladyChat: buildTrainingDataset('chat').count,
       skrypt: moduleExists('training', 'qlora_example.py') },
     brakujace: missing,
@@ -1294,6 +1153,11 @@ function capabilityText(m) {
     `Dom: urządzenia=${m.dom.urzadzenia.join(', ') || 'brak'}, odprawa=${yes(m.dom.odprawa)}`,
     `Teren z drona: analiza nasłonecznienia/cieni/widoku/objętości=${yes(m.teren.terrain)} `
       + `(senses/terrain.py), fotogrametria=${yes(m.teren.photoscan)}`,
+    `Plener (panel boczny „Plener") — foto i wideo: plan zdjęciowy dla dowolnego miejsca `
+      + 'i godziny, lista ujęć do nakręcenia z ogniskowymi, misja waypointowa dla drona '
+      + `do pobrania jako .kmz, aparat Canon po Wi-Fi=${yes(m.plener.aparatPoWifi)}, `
+      + `archiwum materiału=${yes(m.plener.archiwum)}. Sprzęt użytkownika: `
+      + `${m.plener.sprzet || 'niepodany — poproś o uzupełnienie w Plenerze'}`,
     `Trening własnego modelu: przykładów=${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}`,
     '',
     'JAK SIĘ UCZYSZ (za zgodą użytkownika): możesz zapamiętywać fakty, zapisywać notatki, '
@@ -1308,51 +1172,24 @@ function capabilityText(m) {
   return lines.join('\n');
 }
 
-// --- Backlog usprawnień: pomysły Cosmosa na samego siebie, zatwierdzane przez Ciebie ---
-const IMPROVE_FILE = path.join(DATA_DIR, 'improvements.json');
-let improvements = [];
-try { improvements = JSON.parse(fs.readFileSync(IMPROVE_FILE, 'utf8')); } catch { /* brak */ }
-const saveImprovements = () => saveJsonFile(IMPROVE_FILE, improvements);
+// --- Backlog usprawnień: pomysły Cosmosa na samego siebie ---
+//     Całość w lib/pomysly.js; tutaj zostaje tylko spięcie zależności.
+const pomysly_ = require('./lib/pomysly.js').utworz({
+  katalogDanych: DATA_DIR,
+  saveJsonFile,
+  sendJson,
+  readJson,
+  addEvent,
+  llmComplete,
+  manifest: () => capabilityManifest(),
+  opisZdolnosci: (m) => capabilityText(m),
+  profil: () => userProfile,
+  tematyRozmow: () => convIndex.slice(0, 25).map((c) => c.title).filter(Boolean),
+  pozycjeWiedzy: () => kbItems.slice(-25).map((it) => it.name).filter(Boolean),
+});
+const handleImprovements = (req, res, pathname) => pomysly_.handleImprovements(req, res, pathname);
+const handleSuggest = (req, res) => pomysly_.handleSuggest(req, res);
 
-async function handleImprovements(req, res, pathname) {
-  if (pathname === '/api/improvements' && req.method === 'GET') {
-    return sendJson(res, 200, { improvements });
-  }
-  if (pathname === '/api/improvements' && req.method === 'POST') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const text = String(data.text || '').trim().slice(0, 1000);
-    if (!text) return sendJson(res, 400, { error: 'Pusty pomysł.' });
-    const item = { id: genId(), text, zrodlo: data.zrodlo === 'model' ? 'model' : 'ja',
-      status: 'nowy', createdAt: Date.now() };
-    improvements.push(item);
-    saveImprovements();
-    addEvent('rozwój', `nowy pomysł na usprawnienie: ${text.slice(0, 80)}`);
-    return sendJson(res, 200, { ok: true, id: item.id });
-  }
-  if (pathname === '/api/improvements' && req.method === 'PUT') {
-    let data; try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const it = improvements.find((x) => x.id === data.id);
-    if (!it) return sendJson(res, 404, { error: 'Nie znaleziono.' });
-    if (['nowy', 'zaakceptowany', 'odrzucony', 'zrobione'].includes(data.status)) it.status = data.status;
-    saveImprovements();
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/improvements' && req.method === 'DELETE') {
-    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    improvements = improvements.filter((x) => x.id !== id);
-    saveImprovements();
-    return sendJson(res, 200, { ok: true });
-  }
-  res.writeHead(405); res.end();
-}
-
-/** Zamień surową wypowiedź w precyzyjny prompt.
- *
- * Dyktowana wiadomość jest z natury luźna: powtórzenia, „yyy", myśl zmieniana
- * w połowie zdania. Model dostaje ją do przepisania — ma zachować INTENCJĘ
- * i wszystkie szczegóły, a uporządkować formę. Zwracamy sam tekst, bez
- * komentarzy, żeby dało się nim po prostu podmienić zawartość pola.
- */
 async function handlePolish(req, res) {
   let data;
   try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
@@ -1385,104 +1222,20 @@ async function handlePolish(req, res) {
 }
 
 /** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
-async function handleSuggest(req, res) {
-  const m = await capabilityManifest();
-  const titles = convIndex.slice(0, 25).map((c) => c.title).filter(Boolean);
-  const kbNames = kbItems.slice(-25).map((it) => it.name).filter(Boolean);
-  const known = improvements.map((i) => i.text.slice(0, 60));
-
-  const context = [
-    capabilityText(m),
-    userProfile.trim() ? '\nPROFIL UŻYTKOWNIKA:\n' + userProfile.trim() : '',
-    titles.length ? '\nOSTATNIE TEMATY ROZMÓW:\n- ' + titles.join('\n- ') : '',
-    kbNames.length ? '\nCO JEST W BAZIE WIEDZY:\n- ' + kbNames.join('\n- ') : '',
-    known.length ? '\nJUŻ ZAPROPONOWANE (nie powtarzaj):\n- ' + known.join('\n- ') : '',
-  ].filter(Boolean).join('\n');
-
-  const lang = (req.headers['x-cosmos-lang'] === 'en') ? 'en' : 'pl';
-  const instruction = lang === 'en'
-    ? 'You are Cosmos. Based on your real capabilities and this user\'s context, propose 4 concrete, '
-      + 'personal ways they could use you that they probably have not thought of. Skip anything already '
-      + 'listed. For each: a bold one-line title, two sentences on the value, and a short "How:" line with '
-      + 'the exact steps or what to enable. Only propose things your listed capabilities actually allow.'
-    : 'Jesteś Cosmosem. Na podstawie swoich REALNYCH możliwości i kontekstu tego użytkownika zaproponuj '
-      + '4 konkretne, osobiste sposoby wykorzystania siebie, na które on prawdopodobnie nie wpadł. '
-      + 'Pomiń to, co już zaproponowane. Każdy pomysł: pogrubiony tytuł w jednej linii, dwa zdania '
-      + 'o wartości, oraz krótka linia „Jak:" z dokładnymi krokami albo co włączyć. '
-      + 'Proponuj wyłącznie rzeczy, na które pozwalają wymienione możliwości. Bez lania wody.';
-
-  try {
-    const text = await llmComplete([
-      { role: 'system', content: instruction },
-      { role: 'user', content: context },
-    ], { endpoint: 'cloud', maxTokens: 900 });
-    addEvent('rozwój', 'Cosmos zaproponował nowe zastosowania');
-    return sendJson(res, 200, { ok: true, text });
-  } catch (err) {
-    return sendJson(res, 502, { error: 'suggest-failed', message: err.message });
-  }
-}
-
-// --- Nagrywanie procedur (opcjonalny moduł Playwright, wymaga ekranu) ---
-const RECORDER_SCRIPT = path.join(__dirname, 'automation', 'recorder.js');
-let recordJob = null; // { child, status, outFile, startedAt, log:[] }
-const RECORD_OUT = path.join(TRAIN_DIR, 'recording.json');
-
-function recLog(line) {
-  if (!recordJob) return;
-  for (const l of String(line).split('\n')) { const s = l.replace(/\s+$/, ''); if (s) recordJob.log.push(s); }
-  if (recordJob.log.length > 100) recordJob.log = recordJob.log.slice(-100);
-}
-
-async function handleRecord(req, res, pathname) {
-  if (pathname === '/api/procedures/record/status' && req.method === 'GET') {
-    return sendJson(res, 200, {
-      recording: Boolean(recordJob && recordJob.status === 'recording'),
-      status: recordJob ? recordJob.status : 'idle',
-      log: recordJob ? recordJob.log.slice(-20) : [],
-    });
-  }
-  if (pathname === '/api/procedures/record/start' && req.method === 'POST') {
-    let available = false; try { require.resolve('playwright'); available = true; } catch { /* */ }
-    if (!available) return sendJson(res, 400, { error: 'no-playwright', message: 'Moduł automatyzacji nie jest zainstalowany (npm install playwright).' });
-    if (recordJob && recordJob.status === 'recording') return sendJson(res, 409, { error: 'busy', message: 'Nagrywanie już trwa.' });
-    let data = {}; try { data = await readJson(req); } catch { /* */ }
-    const url = String(data.url || '').slice(0, 500);
-    fs.mkdirSync(TRAIN_DIR, { recursive: true });
-    try { fs.unlinkSync(RECORD_OUT); } catch { /* */ }
-    const args = [RECORDER_SCRIPT];
-    if (/^https?:\/\//i.test(url)) { args.push('--url', url); }
-    recordJob = { status: 'recording', startedAt: Date.now(), outFile: RECORD_OUT, log: [], child: null };
-    let child;
-    try { child = spawn('node', args, { cwd: path.join(__dirname, 'automation'), env: { ...process.env, COSMOS_RECORD_OUT: RECORD_OUT }, stdio: ['ignore', 'pipe', 'pipe'] }); }
-    catch (err) { recordJob.status = 'error'; return sendJson(res, 500, { error: 'spawn-failed', message: err.message }); }
-    recordJob.child = child;
-    child.stdout.on('data', (d) => recLog(d));
-    child.stderr.on('data', (d) => recLog(d));
-    child.on('close', () => { if (recordJob && recordJob.status === 'recording') recordJob.status = 'ready'; });
-    addEvent('nauka', 'rozpoczęto nagrywanie procedury');
-    return sendJson(res, 200, { ok: true });
-  }
-  if (pathname === '/api/procedures/record/stop' && req.method === 'POST') {
-    if (!recordJob) return sendJson(res, 400, { error: 'not-recording' });
-    let data = {}; try { data = await readJson(req); } catch { /* */ }
-    // zatrzymaj proces (nagrywarka flushuje kroki przy SIGTERM/zamknięciu okna)
-    if (recordJob.child && recordJob.status === 'recording') { try { recordJob.child.kill('SIGTERM'); } catch { /* */ } }
-    await new Promise((r) => setTimeout(r, 600)); // daj czas na flush
-    let parsed = { steps: [] };
-    try { parsed = JSON.parse(fs.readFileSync(RECORD_OUT, 'utf8')); } catch { /* brak */ }
-    recordJob.status = 'idle';
-    if (parsed.error) return sendJson(res, 400, { error: parsed.error, message: 'Nagrywanie nie powiodło się (brak ekranu lub przeglądarki).' });
-    const steps = Array.isArray(parsed.steps) ? parsed.steps.slice(0, 60).map(sanitizeStep) : [];
-    if (!steps.length) return sendJson(res, 200, { ok: true, id: null, steps: [], message: 'Nie zarejestrowano żadnych kroków.' });
-    const name = String(data.name || '').trim().slice(0, 120) || `Nagranie ${new Date().toLocaleString('pl-PL')}`;
-    const item = { id: genId(), name, description: 'Nagrana automatycznie.', scope: 'web', steps, createdAt: Date.now(), updatedAt: Date.now() };
-    dodajProcedure(item); saveProcedures();
-    addEvent('nauka', `zapisano nagraną procedurę: ${name} (${steps.length} kroków)`);
-    return sendJson(res, 200, { ok: true, id: item.id, steps, name });
-  }
-  res.writeHead(405); res.end();
-}
+// --- Nagrywanie procedur (opcjonalny moduł Playwright) ---
+//     Całość w lib/nagrywanie.js; tutaj tylko spięcie zależności.
+const nagrywanie_ = require('./lib/nagrywanie.js').utworz({
+  katalogTreningu: TRAIN_DIR,
+  skryptNagrywarki: path.join(__dirname, 'automation', 'recorder.js'),
+  katalogAutomatyzacji: path.join(__dirname, 'automation'),
+  sendJson,
+  readJson,
+  addEvent,
+  sanitizeStep: nauka_.sanitizeStep,
+  saveProcedures: nauka_.saveProcedures,
+  dodajProcedure: nauka_.dodajProcedure,
+});
+const handleRecord = (req, res, pathname) => nagrywanie_.handleRecord(req, res, pathname);
 
 async function handleTrainRun(req, res, pathname) {
   if (pathname === '/api/train/env' && req.method === 'GET') {
@@ -1698,11 +1451,11 @@ async function handleEvents(req, res) {
 // API: proxy do usługi percepcji (Cosmos Senses)
 // ---------------------------------------------------------------------------
 
-async function proxySenses(req, res, targetPath, { json = false } = {}) {
+async function proxySenses(req, res, targetPath, { json = false, search = '' } = {}) {
   let upstream;
   try {
     const body = await readBodyBuffer(req);
-    upstream = await fetch(`${SENSES_URL}${targetPath}`, {
+    upstream = await fetch(`${SENSES_URL}${targetPath}${search}`, {
       method: 'POST',
       headers: { 'Content-Type': req.headers['content-type'] || (json ? 'application/json' : 'application/octet-stream') },
       body,
@@ -1904,11 +1657,28 @@ async function handleChat(req, res) {
         + '  rok=2026 · miesiac=06 · typ=zdjecie|wideo · aparat=R6 · obiektyw=RF50 ·\n'
         + '  ogniskowa=50 · ogniskowaOd=24 ogniskowaDo=70 · isoOd=1600 · przyslonaDo=2.8 ·\n'
         + '  swiatlo=złota godzina|niebieska godzina|ostre światło|zmierzch|noc ·\n'
-        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo\n'
+        + '  poraDnia=rano|poludnie|wieczor|noc (można kilka po przecinku: „rano,wieczor") ·\n'
+        + '  miejsce=Kraków (nazwa miejsca albo regionu — Cosmos sam zamieni ją na '
+        + 'współrzędne i dobierze promień; NIE podawaj lat/lon z pamięci) ·\n'
+        + '  temat=ptaki-w-locie|zwierzeta-dzikie|zwierzeta-domowe|wyscig|pojazdy-statycznie|\n'
+        + '    ulica|portret|sesja-moda|ludzie-w-ruchu|koncert|mecz|slub|wydarzenie-rodzinne|\n'
+        + '    krajobraz|gory|las|woda-wybrzeze|jezioro|kanion-klif|architektura|noc-gwiazdy|makro\n'
+        + '    (można kilka po przecinku) ·\n'
+        + '  obiekt=person · grupuj=ogniskowa|aparat|rok|miesiac|obiektyw|swiatlo|poraDnia|temat\n'
+        + 'PORA DNIA to co innego niż PORA ŚWIATŁA: złota godzina bywa rano i wieczorem, '
+        + 'więc „zdjęcia z rana i z wieczora" to poraDnia=rano,wieczor, a nie swiatlo=.\n'
+        + 'TEMAT jest zgadywany z nazw folderów i plików, więc bywa niepełny — przy '
+        + 'niskim pokryciu powiedz to wprost, zamiast podawać liczbę jak fakt.\n'
         + 'Z `grupuj` dostaniesz zestawienie liczbowe zamiast listy plików — tego '
         + 'używaj przy pytaniach „ile" i „najczęściej".\n'
         + 'Pora światła jest policzona z pozycji Słońca nad miejscem zdjęcia, '
-        + 'nie zgadnięta z godziny — możesz na niej polegać.',
+        + 'nie zgadnięta z godziny. Gdy zdjęcie nie ma GPS-u, liczy się ją dla domu '
+        + 'użytkownika, a wpis dostaje `swiatloPrzyblizone: true` — wtedy powiedz, '
+        + 'że to przybliżenie.\n'
+        + 'ZAWSZE PATRZ NA POKRYCIE DANYCH. Zestawienie oddaje `zDanymi` i `bezDanych`. '
+        + 'Gdy większość plików nie ma wypełnionego pola, liczba NIE JEST odpowiedzią '
+        + 'na pytanie „ile” — jest rozmiarem luki w metadanych. Powiedz to wprost, '
+        + 'zamiast podawać wynik jak fakt.',
     });
   }
 
@@ -1925,11 +1695,32 @@ async function handleChat(req, res) {
         + 'wszystkie są opcjonalne:\n'
         + '  tryb=wideo|zdjecie · klatki=25 · sprzet=canon-r6ii|mavic-3|telefon · '
         + 'ogniskowa=50 · ruch=statyczne|spacer|szybkie · glebia=2.8 · '
+        + 'obiektyw=24-70 f/2.8 (można kilka po przecinku: „24-70 f/2.8, 70-200 f/4”) · '
+        + 'temat=CO fotografuje (ptaki w locie, jelenie, wyścig motocykli, portret, '
+        + 'koncert, ślub, góry, las, jezioro, klify, gwiazdy… — pisz WŁASNYMI SŁOWAMI, '
+        + 'lista jest otwarta; z tego wychodzą czas migawki, ogniskowa i przysłona) · '
+        + '(glebia PODAWAJ TYLKO wtedy, gdy użytkownik wprost prosił o określoną '
+        + 'głębię ostrości — narzucona z własnej inicjatywy wymusza mocny filtr ND '
+        + 'i psuje resztę doboru) · '
         + 'zachmurzenie=bezchmurnie|lekkie|pochmurno|deszcz · kiedy=2026-06-21T19:30 · '
-        + 'lat=52.02 lon=20.90 (inne miejsce niż domyślne)\n'
+        + 'miejsce=Kraków (gdy zdjęcia planowane są GDZIE INDZIEJ niż lokalizacja '
+        + 'użytkownika — Cosmos sam zamieni nazwę na współrzędne; NIE zgaduj lat/lon '
+        + 'z pamięci) · lat=52.02 lon=20.90 (gdy znasz je dokładnie)\n'
         + 'ZACHMURZENIE POMIŃ, chyba że użytkownik sam je poda — bez niego Cosmos '
         + 'bierze prognozę pogody dla tego miejsca i tej godziny.\n'
         + 'Przykład: [PLAN: tryb=wideo klatki=25 sprzet=canon-r6ii]\n'
+        + 'LISTA UJĘĆ: przy `tryb=wideo` dostajesz pole `ujecia` — gotowy zestaw ujęć '
+        + 'dobrany do TEMATU i przefiltrowany przez posiadany sprzęt, każde z ogniskową, '
+        + 'ruchem kamery i czasem trwania. Podaj je jako listę do odhaczenia w kolejności '
+        + 'KRĘCENIA, nie przepisuj jako opowieści. Pole `ujecia.pominiete` mówi, czego NIE '
+        + 'da się nakręcić tym sprzętem i dlaczego — POWIEDZ O TYM WPROST. Przemilczenie '
+        + 'wygląda, jakby Cosmos o tych ujęciach zapomniał, a nie jakby ich świadomie nie '
+        + 'proponował.\n'
+        + 'ZORZA: przy Słońcu poniżej horyzontu dostajesz też pole `zorza` — bieżące Kp '
+        + 'z NOAA, prognozę i PRÓG Kp dla tego miejsca. „Kp 7" samo w sobie nic nie znaczy: '
+        + 'porównaj je z `progNadHoryzontem`. Gdy `szansa` to „brak", powiedz wprost, '
+        + 'że zorzy nie będzie, zamiast owijać. Zawsze dodaj, że zasłoni ją zachmurzenie '
+        + 'i Księżyc, a patrzeć trzeba na PÓŁNOC.\n'
         + 'Dostaniesz pozycję Słońca, prognozę, godziny złotej i niebieskiej oraz policzone '
         + 'czas/przysłonę/ISO. NIE zgaduj tych liczb sam — Twoja wiedza nie obejmuje '
         + 'dzisiejszej daty ani miejsca, w którym stoi użytkownik.',
@@ -2048,7 +1839,17 @@ async function handleChat(req, res) {
         'NIE proponuj wizji artystycznych — po prostu użyj [GRAFIKA:].\n' +
         'Możesz poprosić o grafiki dla kilku rzeczy naraz, oddzielając je średnikiem: ' +
         '[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc; Valldemossa]. Nie pytaj ' +
-        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.',
+        'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.\n' +
+        /* Marcin: „zdjęcia się nie pokazywały, a jak podałem mu, że Kraków, to
+           zgłupiał". Samo doprecyzowanie jest najzwyklejszą rzeczą w rozmowie,
+           a model traktował je jak nowy, niezrozumiały temat. */
+        'ZAPYTANIE MA BYĆ KONKRETNE: „rynek" nie znajdzie nic sensownego, ' +
+        '„Rynek Główny Kraków" znajdzie. Dodawaj miejsce, nazwę własną albo kontekst ' +
+        'z rozmowy.\n' +
+        'GDY UŻYTKOWNIK DOPOWIADA jedno słowo albo nazwę (np. samo „Kraków”) po tym, ' +
+        'jak prosił o zdjęcia — to jest DOPRECYZOWANIE POPRZEDNIEJ PROŚBY, nie nowy ' +
+        'temat i nie pytanie o miasto. Połącz to z tym, o co prosił wcześniej, ' +
+        'i po prostu poszukaj jeszcze raz.',
     });
   }
 
@@ -2454,7 +2255,17 @@ studio_.polacz({ KB_FILES, addEvent, kbAddFile, kbItemMeta, kbItems });
 urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
 trening_.polacz({ addEvent, convIndex, convPath, userProfile });
 nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
-  keywordScore, sameModel, saveKb });
+  keywordScore, sameModel, saveKb, tsName });
+
+/* Trasy archiwum materiału. Sam indeks jest PASYWNY — źródła (OneDrive, dysk
+   przez zmysły) wpychają wpisy, a zapytania działają, gdy te źródła są
+   offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu w terenie
+   przy wyłączonym komputerze domowym. Całość tras: lib/archiwum-trasy.js. */
+const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
+  archiwum, onedrive, SENSES_URL, sendJson, readJson, addEvent,
+  sensesState, wspolrzedneMiejsca,
+});
+const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -2491,6 +2302,94 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
     if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
     if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
+    /* CANON CCAPI — aparat jako urządzenie, nie tylko temat rozmowy.
+       Trzy trasy, bo tyle wystarczy: co tam stoi, co ma ustawione, i zmień to.
+       Wyzwalanie migawki jest osobno i celowo nie ma go w podpowiedziach dla
+       modelu — zdjęcie ma robić człowiek, a nie model, któremu wydawało się,
+       że to dobry moment. */
+    /* MISJA WAYPOINTOWA → plik KMZ. `senses/flightplan.py` liczy już wysokość,
+       pokrycie i liczbę zdjęć; tu domykamy pętlę i oddajemy to dronowi.
+       Odpowiedź jest PLIKIEM, nie JSON-em — trafia prosto do pobrania. */
+    if (p === '/api/plan/mission' && req.method === 'POST') {
+      let d;
+      try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      try {
+        const punkty = Array.isArray(d.punkty) && d.punkty.length
+          ? d.punkty
+          : siatka({
+            lat: Number(d.lat), lon: Number(d.lon),
+            szerokoscM: Number(d.szerokoscM) || 200,
+            dlugoscM: Number(d.dlugoscM) || 200,
+            odstepM: Number(d.odstepM) || 50,
+            kierunek: Number(d.kierunek) || 0,
+          });
+        const buf = misjaKmz(punkty, d);
+        const nazwa = String(d.nazwa || 'misja').replace(/[^\w-]+/g, '-').slice(0, 40);
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.google-earth.kmz',
+          'Content-Length': buf.length,
+          'Content-Disposition': `attachment; filename="${nazwa}.kmz"`,
+        });
+        addEvent('plan', `misja waypointowa: ${punkty.length} punktów`);
+        return res.end(buf);
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
+    if (p === '/api/canon/status' && req.method === 'GET') {
+      return sendJson(res, 200, await canon.stan());
+    }
+    if (p === '/api/canon/settings') {
+      if (!canon.skonfigurowany()) {
+        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+      }
+      try {
+        if (req.method === 'GET') {
+          const w = await canon.nastawy();
+          return sendJson(res, 200, { ...w, liczby: canon.naLiczby(w.nastawy) });
+        }
+        if (req.method === 'PUT') {
+          const d = await readJson(req);
+          const zmiany = [];
+          /* Kolejność ma znaczenie: najpierw ISO, potem przysłona, na końcu
+             czas. Aparat sam koryguje pozostałe nastawy pod tę, którą właśnie
+             zmieniono, więc ustawienie czasu jako ostatniego zostawia go
+             takim, jakiego chcieliśmy. */
+          for (const nazwa of ['iso', 'przyslona', 'czas']) {
+            if (d[nazwa] === undefined || d[nazwa] === null || d[nazwa] === '') continue;
+            zmiany.push(await canon.ustaw(nazwa, d[nazwa]));
+          }
+          if (!zmiany.length) return sendJson(res, 400, { error: 'Nie podano żadnej nastawy.' });
+          addEvent('aparat', `nastawy zmienione: ${zmiany.map((z) => `${z.nazwa}=${z.wartosc}`).join(', ')}`);
+          return sendJson(res, 200, { ok: true, zmiany });
+        }
+      } catch (err) {
+        return sendJson(res, 502, { error: err.message });
+      }
+    }
+    if (p === '/api/canon/shutter' && req.method === 'POST') {
+      if (!canon.skonfigurowany()) {
+        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+      }
+      let d = {};
+      try { d = await readJson(req); } catch { /* domyślne */ }
+      try {
+        const w = await canon.migawka({ af: d.af === true });
+        addEvent('aparat', 'migawka wyzwolona zdalnie');
+        return sendJson(res, 200, w);
+      } catch (err) {
+        return sendJson(res, 502, { error: err.message });
+      }
+    }
+
+    if (p === '/api/gear') {
+      if (req.method === 'GET') return sendJson(res, 200, userSprzet);
+      if (req.method === 'PUT') {
+        try { saveSprzet(await readJson(req)); return sendJson(res, 200, { ok: true, ...userSprzet }); }
+        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      }
+    }
     if (p === '/api/profile') {
       if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });
       if (req.method === 'POST') {
@@ -2519,7 +2418,7 @@ const server = http.createServer(async (req, res) => {
       } catch { /* brak katalogu */ }
       return sendJson(res, 200, {
         conversations: convIndex.length,
-        memories: memories.length,
+        memories: pamiec_.ile(),
         kbItems: kbItems.length,
         kbBytes,
         profileChars: userProfile.length,
@@ -2533,7 +2432,7 @@ const server = http.createServer(async (req, res) => {
       const convs = convIndex.map((meta) => {
         try { return JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { return null; }
       }).filter(Boolean);
-      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories, profile: userProfile };
+      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories: pamiec_.lista(), profile: userProfile };
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -2568,8 +2467,7 @@ const server = http.createServer(async (req, res) => {
           if (!conv || !conv.id) continue;
           const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
           try {
-            fs.mkdirSync(CONV_DIR, { recursive: true });
-            fs.writeFileSync(convPath(id), JSON.stringify(conv));
+            zapiszAtomowo(convPath(id), JSON.stringify(conv));
             const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt || Date.now(), updatedAt: conv.updatedAt || Date.now(), pinned: conv.pinned || false };
             const i = convIndex.findIndex((c) => c.id === id);
             if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
@@ -2578,7 +2476,7 @@ const server = http.createServer(async (req, res) => {
         }
         sortConvIndex(); saveConvIndex();
       }
-      if (Array.isArray(bundle.memories)) { memories = bundle.memories; saveMemories(); }
+      if (Array.isArray(bundle.memories)) pamiec_.ustawListe(bundle.memories);
       if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
       return sendJson(res, 200, { ok: true, restored });
     }
@@ -2614,6 +2512,18 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
     if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
     if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
+    /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
+       bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
+       Współrzędne dokłada SERWER z ustawień — przeglądarka nie musi ich znać,
+       a BirdNET bez nich zawęża listę gatunków do całego świata zamiast do
+       tego, co w tym tygodniu naprawdę lata nad Twoją łąką. */
+    if (p === '/api/ptak' && req.method === 'POST') {
+      const w = userWspolrzedne;
+      const qs = w && Number.isFinite(w.lat)
+        ? `?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}`
+        : '';
+      return await proxySenses(req, res, '/ptak', { search: qs });
+    }
     if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
     if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
     if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
@@ -2647,7 +2557,7 @@ function start(port = PORT) {
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
-      console.log(`  → Pamięć:  ${memories.length} wpisów (data/memory.json)`);
+      console.log(`  → Pamięć:  ${pamiec_.ile()} wpisów (data/memory.json)`);
       console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
       console.log(`  → Rozmowy: ${convIndex.length} (data/conversations/)`);
       console.log(`  → Logowanie: ${authEnabled() ? 'WŁĄCZONE' : 'wyłączone (tryb domowy/localhost)'}`);
