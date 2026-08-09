@@ -139,6 +139,8 @@ const PORTY_ATRAP = {
   'mock-echo-systemu.js': [7116],
   'mock-grafiki.js': [7117],
   'mock-canon.js': [7120],
+  // atrapa kształtów prognozy SWPC stawiana wprost w zestawie zorza-ksztalty
+  'ksztalty-swpc': [7789],
   // atrapa Open-Meteo + Microsoft Graph tworzona wprost w zestawie
   'mockllm.py': [7099],
 };

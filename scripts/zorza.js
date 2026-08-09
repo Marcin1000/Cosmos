@@ -44,6 +44,36 @@ const miejsce = podane
   : zapisaneWspolrzedne();
 const { lat, lon } = miejsce;
 
+/** Co dokładnie przyszło pod tym adresem — kształt i początek treści. */
+async function pokazSurowe(adres) {
+  const w = (t) => console.log(`  ${' '.repeat(12)}   ${t}`);
+  try {
+    const r = await fetch(adres, {
+      headers: { Accept: 'application/json', 'User-Agent': 'Cosmos/2.0 (prywatny asystent)' },
+      signal: AbortSignal.timeout(7000),
+    });
+    const tekst = await r.text();
+    w(`HTTP ${r.status} · ${r.headers.get('content-type') || 'bez typu'} · ${tekst.length} B`);
+    let dane = null;
+    try { dane = JSON.parse(tekst); } catch { /* nie JSON */ }
+    if (dane === null) {
+      w('treść nie jest JSON-em:');
+      w(JSON.stringify(tekst.slice(0, 200)));
+    } else if (Array.isArray(dane)) {
+      w(`tablica, ${dane.length} pozycji`);
+      for (const wiersz of dane.slice(0, 3)) w(JSON.stringify(wiersz).slice(0, 180));
+      if (!dane.length) w('→ produkt naprawdę pusty; to stan po stronie NOAA, nie nasz błąd');
+      else w('→ pozycje są, ale nie rozpoznaliśmy w nich czasu i Kp — wklej mi te wiersze');
+    } else {
+      w(`obiekt, klucze: ${Object.keys(dane).slice(0, 8).join(', ')}`);
+      w(JSON.stringify(dane).slice(0, 200));
+      w('→ spodziewaliśmy się tablicy; NOAA zmieniła kształt — wklej mi to');
+    }
+  } catch (e) {
+    w(`nie udało się pobrać treści do podejrzenia: ${e.message}`);
+  }
+}
+
 /** Zapytaj źródło i powiedz WPROST, co z niego wyszło. */
 async function zrodlo(nazwa, adres, wywolaj) {
   const start = Date.now();
@@ -53,9 +83,11 @@ async function zrodlo(nazwa, adres, wywolaj) {
     const ile = Array.isArray(wynik) ? wynik.length : (wynik ? 1 : 0);
     if (!ile) {
       console.log(`  ${nazwa.padEnd(12)} ⚠ odpowiedziało (${ms} ms), ale nie dało ani jednej wartości`);
-      console.log(`  ${' '.repeat(12)}   → adres odpowiada, więc to nie sieć: albo zmienił się kształt`);
-      console.log(`  ${' '.repeat(12)}     danych po stronie NOAA, albo produkt jest chwilowo pusty.`);
-      console.log(`  ${' '.repeat(12)}     Sprawdź gołym okiem: curl -s "${adres}" | head -c 400`);
+      /* Pokazujemy SUROWĄ odpowiedź od razu. Poprzednia wersja odsyłała do
+         `curl`-a — i to była praca zrzucona na człowieka za coś, co skrypt
+         ma pod ręką. Bez treści nie da się odróżnić „NOAA zmieniła układ
+         kolumn" od „produkt naprawdę pusty", a to są dwie różne naprawy. */
+      await pokazSurowe(adres);
       return null;
     }
     console.log(`  ${nazwa.padEnd(12)} ✓ ${ile} ${Array.isArray(wynik) ? 'wpisów' : 'wartość'} (${ms} ms)`);
