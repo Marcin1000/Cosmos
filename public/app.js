@@ -3759,8 +3759,19 @@ async function liczPlanPlener() {
     pokazUjecia(d.ujecia);
     // Misja dostaje współrzędne z planu — przepisywanie ich z mapy do dwóch
     // pól to najprostszy sposób na literówkę w miejscu, w którym boli.
+    /* Współrzędne misji idą za planem, chyba że wpisano je RĘCZNIE.
+
+       Pierwsza wersja uzupełniała je tylko wtedy, gdy oba pola były puste —
+       i to była cicha, groźna usterka. Panel liczy plan zaraz po otwarciu,
+       jeszcze dla zapisanej lokalizacji, więc pola wypełniały się domem.
+       Potem człowiek wpisywał „Zakopane", przeliczał plan — a w misji dalej
+       siedziały współrzędne domu, bo pola nie były już puste. Wychodził
+       z tego plik lotu nad zupełnie innym miejscem i nic tego nie zdradzało.
+       W narzędziu, które steruje dronem, to najgorszy możliwy rodzaj błędu. */
     plenerWspolrzedne = d.wspolrzedne || null;
-    if (plenerWspolrzedne && !$('mis-lat').value && !$('mis-lon').value) wstawWspolrzedne();
+    plenerMiejsce = d.miejsce || null;
+    if (plenerWspolrzedne && !misjaReczna) wstawWspolrzedne();
+    opiszZrodloMisji();
   } catch {
     $('fp-light').textContent = t('offline.title');
   } finally {
@@ -3888,15 +3899,41 @@ function pokazUjecia(u) {
 
 /* ---- misja drona ---- */
 let plenerWspolrzedne = null;
+let plenerMiejsce = null;
+let misjaReczna = false;
 
 function wstawWspolrzedne() {
   if (!plenerWspolrzedne) return;
   $('mis-lat').value = Number(plenerWspolrzedne.lat).toFixed(5);
   $('mis-lon').value = Number(plenerWspolrzedne.lon).toFixed(5);
 }
+
+/* Skąd są te współrzędne — napisane wprost pod polami. Dwie liczby same
+   z siebie nie mówią, czy to Zakopane, czy dom; a różnicy nie widać, dopóki
+   dron nie stoi w polu. */
+function opiszZrodloMisji() {
+  const el = $('mis-skad');
+  if (!el) return;
+  if (misjaReczna) { el.textContent = t('pl.misManual'); el.className = 'field-hint plener-warn'; return; }
+  el.className = 'field-hint';
+  el.textContent = plenerWspolrzedne
+    ? t('pl.misFromPlan', { miejsce: plenerMiejsce || `${Number(plenerWspolrzedne.lat).toFixed(3)}, ${Number(plenerWspolrzedne.lon).toFixed(3)}` })
+    : '';
+}
+
+for (const id of ['mis-lat', 'mis-lon']) {
+  // Ręczny wpis wygrywa z planem — ale tylko dopóki człowiek go nie cofnie.
+  $(id).addEventListener('input', () => {
+    misjaReczna = Boolean($('mis-lat').value || $('mis-lon').value);
+    opiszZrodloMisji();
+  });
+}
+
 $('mis-here').addEventListener('click', () => {
-  if (!plenerWspolrzedne) { liczPlanPlener().then(wstawWspolrzedne); return; }
+  misjaReczna = false;
+  if (!plenerWspolrzedne) { liczPlanPlener(); return; }
   wstawWspolrzedne();
+  opiszZrodloMisji();
 });
 
 $('mis-go').addEventListener('click', async (e) => {
