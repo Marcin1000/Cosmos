@@ -813,12 +813,14 @@
             <label class="plener-num"><span data-i18n="pl.speed">prędkość [m/s]</span>
               <input type="number" id="mis-speed" value="6" min="1" max="15" step="1"></label>
           </div>
+          <span class="field-hint" id="mis-lot" role="status"></span>
           <span class="field-hint" id="mis-skad" role="status"></span>
           <div class="field-row">
             <button type="button" class="btn-primary" id="mis-go" data-i18n="pl.misGo">Pobierz .kmz</button>
             <button type="button" class="btn-secondary" id="mis-here" data-i18n="pl.misHere">📍 Z planu</button>
           </div>
           <div class="plener-out mono" id="mis-out" role="status"></div>
+          <span class="field-hint plener-warn" data-i18n="pl.misAgl">⚠ Wysokość jest liczona względem PUNKTU STARTU, nie względem terenu (WPML: relativeToStartPoint). W górach i na pofałdowanym terenie zbocze może wejść w trasę lotu — dobierz wysokość do najwyższego punktu obszaru, a nie do miejsca, z którego startujesz.</span>
           <span class="field-hint plener-warn" data-i18n="pl.misWarn">⚠ Plik jest zbudowany według dokumentacji WPML, ale nie przeszedł jeszcze przez prawdziwego drona — pierwszy import sprawdź na pustym polu i z ręką na drążkach. Za zgodność lotu z przepisami (strefy, zasięg wzrokowy, wysokość) odpowiadasz Ty, nie Cosmos.</span>
         </div>
 

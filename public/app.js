@@ -3936,6 +3936,55 @@ $('mis-here').addEventListener('click', () => {
   opiszZrodloMisji();
 });
 
+/* ILE TO WŁAŚCIWIE LOTU — policzone PRZED pobraniem pliku.
+ *
+ * Pola „200 × 200, co 50 m" nie mówią nic o tym, czy to trzy minuty, czy
+ * czterdzieści. A różnica jest zasadnicza: misja dłuższa niż jedna bateria
+ * przerwie się w połowie, dron wróci do domu, a człowiek dowie się o tym
+ * stojąc w polu. Liczba linii i długość trasy wychodzą z tych samych wzorów
+ * co `siatka()` w lib/kmz.js — zestaw `plener` porównuje jedno z drugim,
+ * żeby nie rozjechały się przy pierwszej poprawce. */
+const MAVIC_MINUT = 18;      // realny zapas na misję, z rezerwą na powrót
+
+function oszacujNalot() {
+  const szer = Number($('mis-w').value) || 0;
+  const dl = Number($('mis-l').value) || 0;
+  const odstep = Number($('mis-odstep').value) || 0;
+  const predkosc = Number($('mis-speed').value) || 0;
+  if (!(szer > 0 && dl > 0 && odstep > 0 && predkosc > 0)) return null;
+  const linii = Math.max(2, Math.ceil(szer / odstep) + 1);
+  const metry = linii * dl + (linii - 1) * odstep;
+  // +15% na zakręty i rozpędzanie — dron nie leci całej trasy z prędkością zadaną.
+  const minuty = (metry / predkosc) * 1.15 / 60;
+  return { linii, punktow: linii * 2, metry, minuty };
+}
+
+function pokazNalot() {
+  const el = $('mis-lot');
+  if (!el) return;
+  const o = oszacujNalot();
+  if (!o) { el.textContent = ''; return; }
+  const czesci = [t('pl.misLines', { n: o.linii, p: o.punktow }),
+    t('pl.misDist', { km: (o.metry / 1000).toFixed(2) }),
+    t('pl.misTime', { min: Math.round(o.minuty) })];
+  el.className = 'field-hint';
+  el.textContent = czesci.join(' · ');
+  /* Dwa progi, oba twarde. 99 punktów to limit formatu WPML — powyżej plik
+     i tak zostanie odrzucony, więc lepiej powiedzieć to teraz niż w polu. */
+  if (o.punktow > 99) {
+    el.className = 'field-hint plener-err';
+    el.textContent += ' — ' + t('pl.misTooMany');
+  } else if (o.minuty > MAVIC_MINUT) {
+    el.className = 'field-hint plener-warn';
+    el.textContent += ' — ' + t('pl.misTooLong', { min: MAVIC_MINUT });
+  }
+}
+
+for (const id of ['mis-w', 'mis-l', 'mis-odstep', 'mis-speed']) {
+  $(id).addEventListener('input', pokazNalot);
+}
+pokazNalot();
+
 $('mis-go').addEventListener('click', async (e) => {
   const b = e.currentTarget;
   const out = $('mis-out');

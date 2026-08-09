@@ -255,6 +255,43 @@ if (!maPrzegladarke()) {
   await pg.fill('#mis-w', '200');
   await pg.fill('#mis-l', '300');
   await pg.fill('#mis-odstep', '50');
+  await pg.waitForTimeout(200);
+
+  /* 4d. Oszacowanie nalotu MUSI zgadzać się z tym, co naprawdę wyjdzie
+     w pliku. Liczba linii jest policzona w przeglądarce, a punkty generuje
+     `siatka()` na serwerze — dwa niezależne kawałki kodu, które łatwo
+     rozjechać przy pierwszej poprawce. Wtedy człowiek planuje lot na trzy
+     minuty, a leci dwadzieścia. */
+  const lot = (await pg.textContent('#mis-lot') || '').trim();
+  console.log(`4d. oszacowanie nalotu: „${lot}"`);
+  const { siatka } = require('../../lib/kmz.js');
+  const naprawde = siatka({ lat: 50.06, lon: 19.94, szerokoscM: 200, dlugoscM: 300, odstepM: 50 });
+  const zPola = Number((lot.match(/\((\d+)\s*punkt/) || [])[1]);
+  console.log(`    przeglądarka mówi ${zPola} punktów, siatka() daje ${naprawde.length}`);
+  if (zPola !== naprawde.length) {
+    fail.push(`oszacowanie rozjechało się z siatką: ${zPola} vs ${naprawde.length} punktów`);
+  }
+  if (!/km/.test(lot) || !/min/.test(lot)) fail.push(`oszacowanie nie podaje trasy i czasu: „${lot}"`);
+
+  /* Obszar nie do przelecenia na jednej baterii ma o tym POWIEDZIEĆ, zanim
+     dron stanie w polu — a nie przerwać misję w połowie. */
+  await pg.fill('#mis-w', '2000');
+  await pg.fill('#mis-l', '2000');
+  await pg.fill('#mis-odstep', '50');
+  await pg.waitForTimeout(300);
+  const zaDuzo = (await pg.textContent('#mis-lot') || '').trim();
+  console.log(`4e. obszar 2×2 km co 50 m → „${zaDuzo.slice(0, 120)}"`);
+  if (!/limit|bateri/i.test(zaDuzo)) fail.push(`ogromny obszar nie dostał ostrzeżenia: „${zaDuzo}"`);
+  await pg.fill('#mis-w', '200');
+  await pg.fill('#mis-l', '300');
+  await pg.waitForTimeout(200);
+
+  // Wysokość względem punktu startu to sprawa bezpieczeństwa, nie drobiazg.
+  const ostrzezenia = await pg.evaluate(() => [...document.querySelectorAll('#plener-modal .plener-warn')]
+    .map((e) => e.textContent).join(' '));
+  if (!/PUNKTU STARTU|TAKEOFF POINT/.test(ostrzezenia)) {
+    fail.push('brak ostrzeżenia, że wysokość liczy się od punktu startu, a nie od terenu');
+  }
   const pobranie = pg.waitForEvent('download', { timeout: 15000 });
   await pg.click('#mis-go');
   let plik = '';
