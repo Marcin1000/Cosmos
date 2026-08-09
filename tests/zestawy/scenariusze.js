@@ -141,7 +141,12 @@ const { srodowisko } = require('../pomoc');
     if (z.progNadHoryzontem !== 5) fail.push(`próg łuny dla Gdańska ${z.progNadHoryzontem}, oczekiwano 5`);
     // Atrapa daje szczyt Kp 7,33 — powyżej progu 5, więc szansa MUSI być.
     if (z.szansa === 'brak') fail.push('Kp 7,3 powyżej progu 5, a Cosmos mówi „brak"');
-    if (!z.prognoza?.length) fail.push('prognoza Kp pusta — zły odczyt tablicy z nagłówkiem');
+    /* Pusta prognoza to dokładnie ten stan, który przez długi czas przechodził
+       niezauważony: atrapa oddawała tablicę tablic z nagłówkiem, czytnik brał
+       kolumny po indeksie, oba zgadzały się ze sobą — a NOAA oddaje tablicę
+       OBIEKTÓW i na żywo wychodziło zero wpisów. Atrapa mówi teraz tym samym
+       kształtem co NOAA, więc to sprawdzenie wreszcie coś znaczy. */
+    if (!z.prognoza?.length) fail.push('prognoza Kp pusta — czytnik nie poradził sobie z kształtem z NOAA');
     if (z.prognoza?.some((x) => new Date(x.kiedy.replace(' ', 'T') + 'Z') < Date.now() - 4 * 3600e3)) {
       fail.push('w prognozie została wczorajsza burza');
     }

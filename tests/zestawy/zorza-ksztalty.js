@@ -15,9 +15,15 @@
    wpływu: brak wiersza nagłówka, przestawione kolumny, obiekty zamiast
    tablic. Danych jest za każdym razem tyle samo — ma wyjść to samo.
 
-   ⚠ Czego to NIE dowodzi: że NOAA oddaje którykolwiek z tych układów.
-   Żywego API nie widziałem z tego kontenera ani razu. To jest odporność
-   na zmianę kształtu, a nie potwierdzenie kształtu.
+   POTWIERDZONE NA ŻYWO (serwer Marcina, 2026-08-09): NOAA oddaje
+   `tablicę obiektów (81; time_tag, kp, observed, noaa_scale)` — czyli układ
+   „obiekty zamiast tablic" z listy niżej. Tak też wygląda teraz atrapa
+   w `mock-grafiki.js`. Pozostałe trzy układy zostają w tym zestawie
+   celowo: raz już nas zaskoczyli, a rozpoznawanie pól nic nie kosztuje.
+
+   ⚠ Czego to nadal NIE dowodzi: że układ nie zmieni się jutro. Z tego
+   kontenera nie widzę NOAA ani razu (403), więc potwierdzenie przychodzi
+   z wydruku `scripts/zorza.js` u Marcina, nie z mojego przebiegu.
 */
 const http = require('node:http');
 const { zwolnijPorty } = require('../pomoc');
