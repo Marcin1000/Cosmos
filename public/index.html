@@ -324,7 +324,7 @@
           </label>
           <label class="field">
             <span class="field-label" data-i18n="set.maxTokens">Maks. tokenów odpowiedzi</span>
-            <input type="number" id="set-maxtokens" min="16" max="32768" step="16" value="2048" class="mono">
+            <input type="number" id="set-maxtokens" min="16" max="32768" step="16" value="4096" class="mono">
           </label>
         </div>
 
@@ -961,6 +961,12 @@
   <!-- ============ PODGLĄD OBRAZU (pełny ekran) ============ -->
   <div class="img-viewer" id="img-viewer" style="display:none">
     <div class="img-viewer-bar">
+      <!-- Przejście do strony, z której zdjęcie pochodzi. Widoczne tylko dla
+           zdjęć z internetu — własnych plików nie ma dokąd „odesłać". -->
+      <a class="icon-btn" id="img-viewer-source" target="_blank" rel="noopener noreferrer"
+         data-i18n-title="img.source" title="Przejdź do źródła" aria-label="Przejdź do źródła" hidden>
+        <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
       <button class="icon-btn" id="img-viewer-download" data-i18n-title="img.download" title="Pobierz obraz" aria-label="Pobierz obraz">
         <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -969,6 +975,9 @@
       </button>
     </div>
     <img id="img-viewer-img" alt="">
+    <!-- Tytuł, serwis i licencja. Przy zdjęciach z Commons to nie ozdoba,
+         tylko warunek legalnego użycia. -->
+    <div class="img-viewer-caption" id="img-viewer-caption" hidden></div>
   </div>
 
   <!-- ================= MODAL: KAMERA ================= -->

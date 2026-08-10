@@ -2440,6 +2440,23 @@ kbd {
 }
 .img-viewer-bar .icon-btn { color: #e9ecf5; background: rgba(255, 255, 255, .08); }
 .img-viewer-bar .icon-btn:hover { background: rgba(255, 255, 255, .18); }
+/* Odnośnik do źródła jest kotwicą, nie przyciskiem — musi wyglądać tak samo
+   jak sąsiedzi, inaczej pasek narzędzi rozjeżdża się na dwa style. */
+.img-viewer-bar a.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+/* Podpis: tytuł, serwis, licencja. Przy Commons to warunek legalnego użycia,
+   a nie ozdoba — dlatego jest zawsze widoczny, a nie schowany w `title`. */
+.img-viewer-caption {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(233, 236, 245, .82);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+  pointer-events: none;
+}
 
 /* Miniatura w rozmowie zaprasza do kliknięcia — wcześniej nic nie wskazywało,
    że obraz da się powiększyć. */

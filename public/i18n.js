@@ -138,6 +138,7 @@ const I18N = {
     'attachment': 'załącznik',
     'img.openHint': 'Kliknij, aby powiększyć',
     'img.download': 'Pobierz obraz',
+    'img.source': 'Przejdź do źródła',
 
     // — wspólne —
     'close': 'Zamknij',
@@ -832,6 +833,7 @@ const I18N = {
     'attachment': 'attachment',
     'img.openHint': 'Click to enlarge',
     'img.download': 'Download image',
+    'img.source': 'Go to source',
 
     'close': 'Close',
     'loading': 'Loading…',

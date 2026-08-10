@@ -2152,6 +2152,53 @@ która zachowuje się jak prawdziwa: prosi o grafiki, próbuje poprosić o te sa
 jeszcze raz, po odcięciu dopisuje tekst. Na starym kodzie zgłasza wszystkie
 trzy usterki z ekranu Marcina naraz.
 
+## ✅ Partia 48 — urwane odpowiedzi i zdjęcia bez podglądu (GOTOWE)
+
+Dwa zgłoszenia z tej samej rozmowy o Majorce.
+
+### „Nie chciałbym żeby odpowiedzi były urwane"
+
+Plan tygodniowej wycieczki kończył się w środku adresu:
+
+```
+[Majorka: 31 atrakcji…](https://www.gancarczyk.com/majorka-atrakcje-wynajem-samochodu
+```
+
+To nie była awaria sieci. Model wyczerpał `max_tokens` i zamknął strumień
+z `finish_reason: "length"` — powiedział wprost „nie skończyłem". **Nikt tego
+pola nie czytał**, więc kikut lądował w rozmowie jak gotowa odpowiedź.
+
+- [x] Powód zakończenia jest czytany. Przy `length` Cosmos prosi o dalszy
+      ciąg (do trzech dopisków) i **dokleja go bez spacji** — urwany adres
+      musi się skleić w jeden link, a nie w dwa kawałki
+- [x] Nie pytamy o odpowiedź od nowa: to drugie tyle tokenów i INNY tekst niż
+      ten, który użytkownik zdążył przeczytać
+- [x] Prośba o dokończenie idzie poza historią rozmowy — nie zostaje w niej
+      jako pytanie, którego nikt nie zadał
+- [x] Domyślny budżet z 2048 na **4096** tokenów. Dociąganie to łata;
+      za ciasny domyślny limit to przyczyna
+- [x] Gdy skończy się limit rund na zdjęcia, ostatnia runda ma dać TEKST.
+      Wcześniej rozmowa kończyła się na „🖼️ Zdjęcia: Andratx, Fornalutx…"
+      i ciszy — plan urywał się bez zdania domykającego
+
+### „Chciałbym kliknąć zdjęcie i zobaczyć je większe"
+
+Kliknięcie w kafelek wyrzucało od razu na obcą stronę w nowej karcie. Nie dało
+się nawet obejrzeć zdjęcia.
+
+- [x] Kliknięcie otwiera podgląd **w Cosmosie**, w pełnej rozdzielczości
+      (`full`), z powrotem do miniatury, gdy obcy host odmówi
+- [x] W pasku podglądu przycisk „przejdź do źródła"
+- [x] Podpis: tytuł, serwis i licencja. Przy Wikimedia Commons to nie ozdoba,
+      tylko warunek legalnego użycia
+- [x] `href` kafelka zostaje prawdziwy, więc Ctrl+klik i „otwórz w nowej
+      karcie" dalej prowadzą do źródła — nie zamieniamy jednego ograniczenia
+      na drugie
+
+Nowy zestaw `urwana-odpowiedz` sprawdza sklejenie po ODNOŚNIKU, nie po tekście:
+tylko doklejenie bez spacji daje poprawny `href`. Na starym kodzie zgłasza
+„adres nie skleił się w całość" i pokazuje kikut `…majorka-atrakcje-wynajem`.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

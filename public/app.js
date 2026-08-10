@@ -20,7 +20,11 @@ const DEFAULT_SETTINGS = {
   modelLocal: '',
   systemPrompt: '',
   temperature: 0.6,
-  maxTokens: 2048,
+  /* 2048 to było za mało na rzeczy, o które Marcin realnie prosi. Plan
+     tygodniowej wycieczki w tabeli wyczerpywał budżet w połowie sekcji
+     „Źródła" i odpowiedź kończyła się w środku adresu. Dokańczanie urwanych
+     odpowiedzi to łata; sensowny domyślny budżet to profilaktyka. */
+  maxTokens: 4096,
   speak: false,
 };
 
@@ -852,13 +856,25 @@ function photosGrid(photos) {
     img.alt = p.title || t('photo.found');
     img.loading = 'lazy';
 
-    /* Zdjęcie z archiwum otwiera się NA PEŁNYM EKRANIE w Cosmosie, a nie
-       w nowej karcie: to własny plik Marcina, więc nie ma dokąd go „odesłać".
-       Zdjęcia z internetu zostają odnośnikiem do źródła. */
-    if (p.podglad) {
-      a.href = '#';
-      a.addEventListener('click', (e) => { e.preventDefault(); openImageViewer(p.podglad); });
-    }
+    /* Kliknięcie otwiera podgląd W COSMOSIE, nie nową kartę.
+       Marcin: „lepiej by było gdybym mógł je kliknąć żeby się rozwinęły
+       w większym ekranie z wyższą rozdzielczością i wtedy z możliwością
+       przejścia do źródła". Wcześniej kliknięcie wyrzucało od razu na obcą
+       stronę i nie dawało nawet obejrzeć zdjęcia.
+
+       `href` zostaje prawdziwy, więc środkowy przycisk myszy, Ctrl+klik
+       i „otwórz w nowej karcie" dalej prowadzą do źródła — odbieranie tego
+       byłoby zamianą jednego ograniczenia na drugie. */
+    a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      openImageViewer(p.podglad || p.full || p.thumb, {
+        zapas: p.podglad ? '' : (wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`),
+        zrodlo: p.podglad ? '' : (p.source || ''),
+        tytul: p.title || '',
+        opis: [p.zrodlo, p.licencja].filter(Boolean).join(' · '),
+      });
+    });
 
     /* Co się dzieje, gdy miniatura nie chce się wczytać.
 
@@ -935,17 +951,52 @@ function openTextViewer(nazwa, tekst) {
   document.body.appendChild(tlo);
 }
 
-function openImageViewer(src) {
+/** Podgląd na pełnym ekranie.
+ *
+ *  @param {string} src   adres obrazu w najlepszej dostępnej rozdzielczości
+ *  @param {object} opcje `zapas` — czym podmienić, gdy `src` się nie wczyta
+ *                        (pełny plik bywa na hoście, który odmawia);
+ *                        `zrodlo` — strona, z której zdjęcie pochodzi;
+ *                        `tytul`, `opis` — podpis pod obrazem
+ */
+function openImageViewer(src, opcje = {}) {
   const box = $('img-viewer');
   const img = $('img-viewer-img');
+  const zrodlo = $('img-viewer-source');
+  const podpis = $('img-viewer-caption');
+
+  /* Pełny plik idzie z obcego hosta i czasem nie dojedzie — wtedy zamiast
+     pustego czarnego ekranu pokazujemy to, co już było widać w siatce. */
+  img.onerror = null;
+  if (opcje.zapas && opcje.zapas !== src) {
+    img.onerror = () => { img.onerror = null; img.src = opcje.zapas; imageViewerSrc = opcje.zapas; };
+  }
   img.src = src;
+  img.alt = opcje.tytul || '';
+
+  if (zrodlo) {
+    zrodlo.hidden = !opcje.zrodlo;
+    if (opcje.zrodlo) zrodlo.href = opcje.zrodlo;
+  }
+  if (podpis) {
+    const tekst = [opcje.tytul, opcje.opis].filter(Boolean).join(' · ');
+    podpis.textContent = tekst;
+    podpis.hidden = !tekst;
+  }
+
   box.style.display = '';
   imageViewerSrc = src;
 }
 
 function closeImageViewer() {
   $('img-viewer').style.display = 'none';
-  $('img-viewer-img').removeAttribute('src');
+  const img = $('img-viewer-img');
+  img.onerror = null;
+  img.removeAttribute('src');
+  const zrodlo = $('img-viewer-source');
+  if (zrodlo) zrodlo.hidden = true;
+  const podpis = $('img-viewer-caption');
+  if (podpis) { podpis.textContent = ''; podpis.hidden = true; }
   imageViewerSrc = '';
 }
 
@@ -1927,6 +1978,7 @@ async function streamOnce(conv, opcje = {}) {
   /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
      bieg. W obu razach numer znamy PRZED wysłaniem żądania — inaczej zerwanie
      połączenia w pierwszej sekundzie zostawiłoby odpowiedź bez adresu. */
+  lastFinish = '';
   const podpiecie = Boolean(opcje.bieg);
   const biegId = opcje.bieg || nowyBiegId();
   zapamietajBieg({ id: biegId, convId: conv.id, ostatnie: (Number(opcje.od) || 0) - 1 });
@@ -1942,7 +1994,9 @@ async function streamOnce(conv, opcje = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           endpoint,
-          messages: toApiMessages(conv),
+          // `dodatkowe` to dopisek na jedną turę, poza historią rozmowy —
+          // służy dokańczaniu odpowiedzi uciętej limitem długości.
+          messages: [...toApiMessages(conv), ...(opcje.dodatkowe || [])],
           model: modelOverride || undefined,
           temperature: settings.temperature,
           max_tokens: settings.maxTokens,
@@ -2007,6 +2061,12 @@ async function streamOnce(conv, opcje = {}) {
         try {
           const json = JSON.parse(data);
           const d = json.choices?.[0]?.delta || {};
+          /* Powód zakończenia. „length" znaczy: model NIE skończył zdania,
+             tylko wyczerpał budżet tokenów. Przez długi czas nikt tego nie
+             czytał i odpowiedź urywała się w pół adresu — Marcin dostał plan
+             Majorki kończący się na „…wynajem-samochodu". */
+          const powod = json.choices?.[0]?.finish_reason;
+          if (powod) lastFinish = powod;
           const delta = d.content ?? json.choices?.[0]?.text ?? '';
           // różni dostawcy nazywają to pole inaczej
           const reason = d.reasoning_content ?? d.reasoning ?? '';
@@ -2136,6 +2196,42 @@ async function wznowBieg() {
 
 // Model, który faktycznie odpowiedział, gdy różni się od wybranego.
 let lastModelNote = '';
+
+/* Dlaczego model przestał pisać. „length" = wyczerpał budżet tokenów, czyli
+   odpowiedź jest URWANA, a nie skończona. */
+let lastFinish = '';
+
+/** Dokończ odpowiedź uciętą limitem długości.
+ *
+ *  Marcin: „Wydaje mi się, że odpowiedź na końcu jest urwana. Nie chciałbym
+ *  żeby odpowiedzi były urwane." Plan Majorki kończył się w połowie adresu
+ *  źródła — model wyczerpał `max_tokens` na środku zdania, a Cosmos pokazywał
+ *  ten kikut jak gotową odpowiedź.
+ *
+ *  Nie pytamy o odpowiedź od nowa: to kosztuje drugie tyle tokenów i daje
+ *  INNY tekst niż ten, który użytkownik zdążył przeczytać. Prosimy o dalszy
+ *  ciąg i doklejamy go do tego, co już jest.
+ */
+const DOPISKI_MAX = 3;
+async function dokoncz(conv, tekst) {
+  let pelny = tekst;
+  for (let i = 0; i < DOPISKI_MAX && lastFinish === 'length'; i++) {
+    const ciag = await streamOnce(conv, {
+      dodatkowe: [
+        { role: 'assistant', content: pelny },
+        { role: 'user', content: 'Twoja odpowiedź urwała się, bo skończył się '
+          + 'budżet długości — nie dlatego, że skończyłeś. Kontynuuj DOKŁADNIE '
+          + 'od miejsca, w którym przerwałeś: bez powtarzania napisanego, bez '
+          + 'wstępu, bez przepraszania. Jeśli urwało się w połowie słowa albo '
+          + 'adresu, dokończ to słowo. Doprowadź odpowiedź do końca.' },
+      ],
+    });
+    if (!ciag.trim()) break;
+    // Bez spacji: ciąg dalszy potrafi zacząć się w środku wyrazu.
+    pelny += ciag;
+  }
+  return pelny;
+}
 
 // Tok myślenia z ostatniej tury — awaryjne źródło treści, gdy `content` był pusty.
 let lastReasoning = '';
@@ -2305,7 +2401,7 @@ async function runGeneration(conv, podpiecie = null) {
         dodajWynikNarzedzia(conv, t('search.enough'), marker[1].trim());
         const last = await streamOnce(conv);
         // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
-        const trescOstatnia = stripSearchMarker(last);
+        const trescOstatnia = stripSearchMarker(await dokoncz(conv, last));
         let samoMyslenie = false;
         if (!trescOstatnia && lastReasoning) {
           lastThink = lastReasoning;
@@ -2541,6 +2637,24 @@ async function runGeneration(conv, podpiecie = null) {
          oba, użytkownik prosił o zdjęcia — generowanie było jego drugim
          wyborem, nie pierwszym. */
       const fotoMarker = acc.match(PHOTO_MARKER_RE);
+      /* Limit rund wyczerpany, a model wciąż prosi o kolejne zdjęcia. Tak
+         skończyła się rozmowa o Majorce: ostatnią rzeczą na ekranie było
+         „🖼️ Zdjęcia: Andratx, Fornalutx, Porto Cristo, Cala Pi" i cisza —
+         plan urwał się w połowie, bez zdania domykającego. Zamiast po prostu
+         przestać, mówimy modelowi wprost, żeby dokończył tekstem. */
+      if (fotoMarker && depth === MAX_SEARCHES) {
+        dodajWynikNarzedzia(conv,
+          'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY — nie dostaniesz już kolejnych. '
+          + 'Nie używaj więcej [GRAFIKA:]. Dokończ teraz odpowiedź tekstem: '
+          + 'domknij plan i napisz wprost, dla których miejsc zdjęć nie '
+          + 'pokazałeś, żeby użytkownik mógł o nie poprosić osobno.',
+          t('chat.photosQuery'));
+        const last = await streamOnce(conv);
+        finalText = stripSearchMarker(await dokoncz(conv, last)) || t('emptyReply');
+        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
+        saveConversations();
+        break;
+      }
       if (fotoMarker) {
         // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
         const wszystkie = fotoMarker[1].split(';')
@@ -2696,7 +2810,8 @@ async function runGeneration(conv, podpiecie = null) {
          angielsku, urwane w połowie zdania i pokazuje deliberację, której
          użytkownik widzieć nie powinien. Teraz mówimy wprost, co się stało,
          a samo myślenie ląduje w zwijanym panelu, gdzie jego miejsce. */
-      const trescOdpowiedzi = stripSearchMarker(acc);
+      // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
+      const trescOdpowiedzi = stripSearchMarker(await dokoncz(conv, acc));
       let mysliZamiastTresci = '';
       if (!trescOdpowiedzi && lastReasoning) {
         mysliZamiastTresci = lastReasoning;
