@@ -161,6 +161,71 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   }
   fs.rmSync(staryKatalog, { recursive: true, force: true });
 
+  /* --- 5. Dławienie (429) to prośba o zwolnienie, nie awaria --------------
+     Marcin, po włączeniu sześciu równoległych żądań: „Przerwane: kolejka nie
+     maleje (50963 do zrobienia). Powód: Graph 429". Cała paczka przepadała,
+     bo 429 leciało jako zwykły błąd — a Microsoft prosił tylko o zwolnienie
+     i podał w nagłówku, na ile.
+
+     Stawiamy prawdziwy serwer HTTP udający Graph: pierwsze żądania odbija
+     z 429 i `Retry-After: 1`, potem zaczyna odpowiadać. Klient OneDrive ma to
+     przeczekać i dowieźć plik, a nie rzucić wyjątkiem. */
+  const http = require('http');
+  let odbite = 0;
+  let przepuszczone = 0;
+  const serwer = http.createServer((req, res) => {
+    if (/oauth2/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_in: 3600 }));
+    }
+    if (odbite < 3) {
+      odbite++;
+      res.writeHead(429, { 'Retry-After': '1' });
+      return res.end('throttled');
+    }
+    przepuszczone++;
+    res.writeHead(206, { 'Content-Type': 'application/octet-stream' });
+    // Kawałek bez EXIF-u wystarczy: sprawdzamy DROGĘ, nie parser.
+    return res.end(Buffer.from('\xff\xd8\xff\xe0nic', 'binary'));
+  });
+  await new Promise((r) => serwer.listen(0, r));
+  const port = serwer.address().port;
+
+  const katalogOd = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-od-'));
+  fs.writeFileSync(path.join(katalogOd, 'onedrive.json'),
+    JSON.stringify({ refresh_token: 'y', access_token: '', wygasa: 0, od: Date.now() }));
+  /* Adresy Microsoftu są w module na stałe, więc podmieniamy je przez
+     zmienne środowiskowe modułu — tak samo jak w innych zestawach. */
+  const kod = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'onedrive.js'), 'utf8')
+    .replace(/const GRAF = '[^']*'/, `const GRAF = 'http://127.0.0.1:${port}'`)
+    .replace(/const TOKEN = '[^']*'/, `const TOKEN = 'http://127.0.0.1:${port}/oauth2/token'`);
+  const podmieniony = path.join(katalogOd, 'onedrive-test.js');
+  fs.writeFileSync(podmieniony, kod.replace(/require\('\.\//g, `require('${path.join(__dirname, '..', '..', 'lib')}/`));
+  const od = require(podmieniony).utworz({
+    katalogDanych: katalogOd, clientId: 'a', clientSecret: 'b', redirectUri: 'http://x',
+  });
+
+  const start429 = Date.now();
+  let bladDlawienia = '';
+  try {
+    await od.dociagnijExif('abc');
+  } catch (err) {
+    bladDlawienia = err.message;
+  }
+  const czekano = Date.now() - start429;
+  console.log(`5. odbić 429: ${odbite}, przepuszczonych: ${przepuszczone}, `
+    + `czekano ${czekano} ms, błąd: ${bladDlawienia || 'brak'}`);
+  if (bladDlawienia) {
+    fail.push(`429 kończy się błędem (${bladDlawienia}) zamiast odczekaniem — paczka przepada`);
+  }
+  if (!przepuszczone) fail.push('po dławieniu nie doszło ani jedno żądanie — nie ma ponowienia');
+  if (czekano < 900) fail.push(`odczekano ${czekano} ms mimo Retry-After: 1 — nagłówek jest ignorowany`);
+  if (typeof od.zdlawienia !== 'function' || od.zdlawienia() < 1) {
+    fail.push('dławienie nie jest liczone — panel nie ma jak o nim powiedzieć');
+  }
+  serwer.close();
+  fs.rmSync(katalogOd, { recursive: true, force: true });
+
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEMPO ARCHIWUM OK');
   process.exit(fail.length ? 1 : 0);

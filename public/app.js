@@ -674,6 +674,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
   paczkiPrzerwane = false;
   let suma = 0;
   let poprzednioZostalo = Infinity;
+  let bezPostepu = 0;
   try {
     for (;;) {
       const r = await fetch(adres, {
@@ -693,11 +694,28 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
          wyżej są dalej spełnione. To była pętla bez końca waląca w serwer
          co sekundę. Brak postępu kończy zadanie z komunikatem, nie po cichu. */
       if (Number(w.zostalo) >= poprzednioZostalo) {
+        /* …ale DŁAWIENIE to nie awaria. Microsoft odpowiada 429 i prosi
+           o zwolnienie; poddanie się w tym miejscu było błędem — Marcin
+           zobaczył „Przerwane: kolejka nie maleje. Powód: Graph 429" i musiał
+           zaczynać od nowa. Odczekujemy i próbujemy dalej, coraz rzadziej.
+           Dopiero gdy pięć podejść z rzędu nic nie da, uznajemy, że stoimy. */
+        const dlawi = /429/.test((w.bledy || []).join(' ')) || Number(w.zdlawione) > 0;
+        if (dlawi && bezPostepu < 5) {
+          bezPostepu++;
+          const czekaj = 15000 * bezPostepu;
+          stanEl.textContent = t('arch.throttled', {
+            zostalo: w.zostalo, sekund: Math.round(czekaj / 1000),
+          });
+          await new Promise((r) => setTimeout(r, czekaj));
+          if (paczkiPrzerwane) break;
+          continue;
+        }
         stanEl.textContent = t('arch.batchStuck', {
           zostalo: w.zostalo, powod: (w.bledy || [])[0] || '—',
         });
         return;
       }
+      bezPostepu = 0;
       poprzednioZostalo = Number(w.zostalo);
     }
     stanEl.textContent = koniec(suma);
