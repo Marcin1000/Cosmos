@@ -213,6 +213,9 @@ const I18N = {
     'plan.cameraErr': 'Aparat połączony, ale nie oddaje nastaw.',
     'plan.mismatch': '≠ policzone',
     'arch.batchStuck': 'Przerwane: kolejka nie maleje ({zostalo} do zrobienia). Powód: {powod}',
+    /* 429 z Graph to nie awaria, tylko „zwolnij". Poddanie się w tym miejscu
+       kazało zaczynać całe dociąganie od nowa. */
+    'arch.throttled': 'Microsoft każe zwolnić (429). Czekam {sekund} s i próbuję dalej — {zostalo} do zrobienia.',
     'arch.indexing': 'Indeksuję… dodano {n} plików.',
     'arch.indexError': '⚠ Indeksowanie przerwane: {msg}',
     'arch.empty': 'Archiwum jest puste.',
@@ -906,6 +909,7 @@ const I18N = {
     'plan.cameraErr': 'Camera connected but not returning its settings.',
     'plan.mismatch': '≠ computed',
     'arch.batchStuck': 'Stopped: the queue is not shrinking ({zostalo} left). Reason: {powod}',
+    'arch.throttled': 'Microsoft is throttling (429). Waiting {sekund}s and retrying — {zostalo} left.',
     'arch.indexing': 'Indexing… {n} files added.',
     'arch.indexError': '⚠ Indexing stopped: {msg}',
     'arch.empty': 'The archive is empty.',

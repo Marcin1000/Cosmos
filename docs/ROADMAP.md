@@ -2251,6 +2251,54 @@ Nowy zestaw `tempo-archiwum` mierzy wszystkie trzy: bajty na wpis, tyknięcia
 pętli zdarzeń podczas zapisu i szczyt równoległych żądań. Na starym kodzie
 zgłasza cztery usterki naraz.
 
+## ✅ Partia 50 — dwie usterki z jednego przyspieszenia (GOTOWE)
+
+Przyspieszenie archiwum z Partii 49 przyniosło u Marcina dwie awarie pod rząd.
+Obie warto zapisać, bo obie miały tę samą wadę procesu.
+
+### 1. Serwer nie wstawał po aktualizacji
+
+„Coś się zepsuło. Tailscale mam connected. Nie działa i na desktop ani na
+mobile." Czyszczenie adresów miniatur ze starych indeksów stało NAD
+definicjami: `zapiszWkrotce()` sięgało po `zapisZaplanowany` i `ZAPIS_MS`
+z martwej strefy `let`/`const`, więc moduł rzucał `ReferenceError`.
+
+Bateria świeciła 83/83, bo **warunek zapala się wyłącznie na indeksie
+zapisanym przez starszą wersję**, a wszystkie zestawy budowały archiwum od
+zera. Napisałem migrację i nie sprawdziłem jej na niczym, co wymaga migracji.
+
+- [x] Blok przeniesiony pod definicje
+- [x] `tempo-archiwum` punkt 4: pisze plik indeksu RĘCZNIE, tak jak zapisała
+      go poprzednia wersja, i sprawdza wczytanie, kompletność, wyczyszczenie
+      i zapis na dysk
+
+### 2. „Przerwane: kolejka nie maleje. Powód: Graph 429"
+
+Sześć równoległych żądań przekroczyło to, co przyjmuje konto Marcina. Graph
+odpowiadał 429 — a to nie awaria, tylko prośba o zwolnienie, z nagłówkiem
+`Retry-After` mówiącym na ile. Leciało jako zwykły błąd, więc cała paczka
+trzystu plików przepadała, kolejka nie malała i przeglądarka słusznie
+zatrzymywała zadanie.
+
+- [x] Wspólny hamulec w `lib/onedrive.js`: 429/503/509 → odczekaj tyle, ile
+      każe `Retry-After` (bez nagłówka: 5, 10, 20, 40 s) i powtórz to samo
+      żądanie. Przerwa jest WSPÓLNA dla wszystkich robotników — gdyby każdy
+      odczekiwał osobno, pozostali waliliby dalej w zamknięte drzwi
+- [x] Domyślnie cztery naraz zamiast sześciu
+- [x] Panel mówi „Microsoft każe zwolnić (429), czekam N s i próbuję dalej",
+      zamiast kończyć zadanie. Poddajemy się dopiero po pięciu podejściach
+      bez postępu
+- [x] `tempo-archiwum` punkt 5: prawdziwy serwer HTTP udający Graph odbija
+      trzy pierwsze żądania z `Retry-After: 1`. Bez hamulca zestaw zgłasza
+      cztery usterki naraz
+
+### Wspólny wniosek
+
+Obie usterki żyły w miejscach, których żaden zestaw nie odwiedzał: w przejściu
+ze starego stanu i w odpowiedzi, której atrapy nigdy nie dawały. Szybkość
+zmierzyłem rzetelnie i to była dobra robota — ale mierzyłem tylko drogę,
+którą sam wybrałem.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
