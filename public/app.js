@@ -645,7 +645,13 @@ async function odswiezArchiwum() {
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
       przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 100,
       etykieta: (w) => t('arch.teleProgress', { ile: w.odczytane, zostalo: w.zostalo }),
-      koniec: (suma) => t('arch.teleDone', { ile: suma }),
+      /* „Odczytano z 0 klipów" nie mówi NIC o przyczynie — a przyczyny są trzy
+         i wymagają różnych reakcji: pliki puste, zwykłe napisy zamiast
+         telemetrii, albo wariant formatu, którego nie znamy. Dlatego przy
+         zerowym wyniku pokazujemy próbkę odrzuconego pliku. */
+      koniec: (suma, w) => (suma || !w || !w.probka
+        ? t('arch.teleDone', { ile: suma, bez: (w && w.bezTelemetrii) || 0 })
+        : t('arch.teleNone', { bez: w.bezTelemetrii || 0, probka: w.probka })),
     }));
   }
 
@@ -675,6 +681,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
   let suma = 0;
   let poprzednioZostalo = Infinity;
   let bezPostepu = 0;
+  let ostatni = null;          // ostatnia odpowiedź serwera — do komunikatu końcowego
   try {
     for (;;) {
       const r = await fetch(adres, {
@@ -683,6 +690,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
         body: JSON.stringify({ ile }),
       });
       const w = await readJsonSafe(r);
+      ostatni = w;
       if (!r.ok) { stanEl.textContent = w.error || `HTTP ${r.status}`; return; }
       suma += Number(w.uzupelnione || w.opisane || w.odczytane || 0);
       stanEl.textContent = etykieta(w);
@@ -718,7 +726,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
       bezPostepu = 0;
       poprzednioZostalo = Number(w.zostalo);
     }
-    stanEl.textContent = koniec(suma);
+    stanEl.textContent = koniec(suma, ostatni);
   } catch (err) {
     stanEl.textContent = String(err.message);
   } finally {
