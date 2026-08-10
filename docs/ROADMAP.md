@@ -2069,6 +2069,34 @@ i `[PLAN:]` rozwija przeglądarka. Karta zamknięta dokładnie w połowie
 wyszukiwania zapisze więc turę modelu sprzed wyszukania, a nie odpowiedź po
 nim. Przeniesienie całej pętli na serwer to osobna, dużo większa zmiana.
 
+## ✅ Partia 46 — nazwy ujęć nachodziły na plakietki na telefonie (GOTOWE)
+
+Marcin, ze zrzutu z Galaxy S25: „Teksty w ujęciach wchodzą na siebie".
+„przebitka" leżała na plakietce ROZWINIĘCIE, „wyjście z kadru" na DOMKNIĘCIE.
+
+Nagłówek karty ujęcia to `flex`: ptaszek, nazwa, rola, liczby. Nazwa miała
+`flex: 1; min-width: 0`, więc mogła się skurczyć **poniżej własnego
+najdłuższego słowa** — a słowo nie ma gdzie się złamać. Zmierzone na 360 px:
+pudełko nazwy „upływ czasu w kadrze" miało **22 px szerokości i 86 px
+wysokości** (cztery linie), a napis wylewał się w prawo, na plakietkę.
+
+- [x] Rola i liczby jako jedna grupa `.plener-shot-meta` — schodzą do drugiej
+      linii razem, zamiast wypychać nazwę do zera
+- [x] `min-width: 7em` zamiast `0` i `overflow-wrap: anywhere` na nazwę
+- [x] `margin-left: auto` zamiast `justify-content: space-between` — przy
+      zawijaniu `space-between` odklejał nazwę od ptaszka, do którego należy
+
+### Pierwsza wersja sprawdzenia nie wykrywała niczego
+
+Zestaw porównywał `getBoundingClientRect()` elementów nagłówka i na starym,
+zepsutym kodzie meldował „nachodzeń: 0". Bo usterka polegała właśnie na tym,
+że **pudełka się nie stykały** — wylewał się z nich napis. Prostokąty pudełek
+mówiły, że wszystko jest w porządku, a na ekranie jedno leżało na drugim.
+
+- [x] Mierzymy `Range.getClientRects()`, czyli prostokąty samych linii tekstu
+      — to, co widać. Na starym kodzie zestaw zgłasza:
+      „spłaszczony plan teleobiektywem × rozwinięcie (26×13 px)"
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

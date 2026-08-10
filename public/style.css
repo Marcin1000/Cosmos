@@ -1894,15 +1894,32 @@ kbd {
 }
 .plener-shot-head {
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: 4px 10px;
   flex-wrap: wrap;
 }
-/* `flex: 1` trzyma nazwę przy polu wyboru i wypycha liczby na prawo. Bez tego
-   `space-between` rozrzuca trzy elementy po równo i nazwa ląduje na środku,
-   oderwana od ptaszka, do którego należy. */
-.plener-shot-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+/* Rola i liczby jadą razem i razem schodzą do drugiej linii, gdy zabraknie
+   miejsca. `margin-left: auto` zastępuje `space-between` — przy zawijaniu
+   `space-between` rozrzucał elementy po równo i nazwa odklejała się od
+   ptaszka, do którego należy. */
+.plener-shot-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+}
+/* `min-width` z jednostką, nie zero. Przy zerze pudełko nazwy kurczyło się
+   poniżej najdłuższego słowa, a słowo nie ma gdzie się złamać — wylewało się
+   poza swoje miejsce i „przebitka" nachodziła na plakietkę ROZWINIĘCIE.
+   Widać to było dopiero na telefonie. `overflow-wrap` domyka sprawę dla nazw
+   dłuższych niż cała szerokość ekranu. */
+.plener-shot-name {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1 1 55%;
+  min-width: 7em;
+  overflow-wrap: anywhere;
+}
 .plener-shot-nums { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
 /* Rola ujęcia: otwarcie / rozwinięcie / domknięcie. Kolorem odróżniamy tylko
    początek i koniec — środek jest tłem, na które te dwa mają się odcinać. */

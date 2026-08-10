@@ -4236,7 +4236,14 @@ function pokazUjecia(u) {
     const liczby = document.createElement('span');
     liczby.className = 'plener-shot-nums mono';
     liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
-    glowa.append(ptaszek, nazwa, rola, liczby);
+    /* Rola i liczby jako JEDNA grupa. Osobno, w zwykłym `flex-wrap`, nazwa
+       ujęcia mogła się skurczyć poniżej własnego słowa i „przebitka" wchodziła
+       na plakietkę ROZWINIĘCIE — widać to było na telefonie. Zgrupowane
+       przenoszą się do drugiej linii razem i nazwa dostaje całą pierwszą. */
+    const meta = document.createElement('span');
+    meta.className = 'plener-shot-meta';
+    meta.append(rola, liczby);
+    glowa.append(ptaszek, nazwa, meta);
 
     const ruch = document.createElement('div');
     ruch.className = 'plener-shot-move';
