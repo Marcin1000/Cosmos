@@ -279,6 +279,19 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   serwer.close();
   fs.rmSync(katalogOd, { recursive: true, force: true });
 
+  /* --- 7. Panel MUSI umieć powiedzieć, czy praca się skończyła -----------
+     Po wielogodzinnym dociąganiu panel pokazywał wyłącznie „W archiwum:
+     59 421 plików". Żeby dowiedzieć się, czy zostało coś do zrobienia, trzeba
+     było kliknąć przycisk — czyli uruchomić zadanie po to, by się przekonać,
+     że nie ma go po co uruchamiać. */
+  const p7 = archiwum.postep();
+  console.log(`7. postęp: ${p7.zDanymi} z ${p7.zdjec} zdjęć ma dane, zostało ${p7.zostaloZdjec}`);
+  if (p7.zdjec !== N) fail.push(`postęp widzi ${p7.zdjec} zdjęć zamiast ${N}`);
+  if (p7.zDanymi !== 60) fail.push(`postęp mówi o ${p7.zDanymi} uzupełnionych zamiast 60`);
+  if (p7.zostaloZdjec !== N - 60) {
+    fail.push(`postęp mówi „zostało ${p7.zostaloZdjec}" zamiast ${N - 60}`);
+  }
+
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEMPO ARCHIWUM OK');
   process.exit(fail.length ? 1 : 0);

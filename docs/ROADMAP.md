@@ -2299,6 +2299,39 @@ ze starego stanu i w odpowiedzi, której atrapy nigdy nie dawały. Szybkość
 zmierzyłem rzetelnie i to była dobra robota — ale mierzyłem tylko drogę,
 którą sam wybrałem.
 
+## ✅ Partia 51 — pusty plik, ślepy panel (GOTOWE)
+
+### Cztery puste pliki zatrzymały 56 tysięcy
+
+„Przerwane: kolejka nie maleje (4 do zrobienia). Powód: Graph 416". `416`
+(„Requested Range Not Satisfiable") dostajemy dla plików **pustych**: prosimy
+o bajty 0-N, a w pliku nie ma ani jednego. To samo `404` i `410` — plik
+skasowany między indeksowaniem a odczytem.
+
+- [x] `404`, `410`, `416` znaczą „tego pliku nigdy nie przeczytasz": zwracamy
+      pusto zamiast rzucać, wpis dostaje znacznik „sprawdzony", kolejka rusza
+- [x] Bez ponawiania — czekanie na odpowiedź, która znaczy „nigdy", to
+      35 sekund straty na plik
+
+### „Telemetria odczytana z 0 klipów" nie mówiło nic
+
+A przyczyny są trzy i wymagają różnych reakcji: pliki puste, zwykłe napisy
+zamiast telemetrii, albo wariant formatu DJI, którego czytnik nie zna.
+
+- [x] Komunikat podaje liczbę plików bez telemetrii, a przy zerowym wyniku
+      pokazuje **początek pierwszego odrzuconego pliku** — jedyna droga, żeby
+      odróżnić te trzy przypadki bez zgadywania
+
+### Panel nie umiał powiedzieć, czy praca się skończyła
+
+Po kilku godzinach dociągania stan brzmiał „W archiwum: 59 421 plików" i tyle.
+Żeby dowiedzieć się, czy coś zostało, trzeba było **kliknąć przycisk** — czyli
+uruchomić zadanie po to, by się przekonać, że nie ma go po co uruchamiać.
+
+- [x] `/api/onedrive/status` oddaje postęp; panel pisze „Dane z plików: 56 003
+      z 59 421 zdjęć (zostało 0) · telemetria do wczytania: 0 klipów"
+- [x] Liczone jednym przebiegiem, bez czterech kopii indeksu na każde otwarcie
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

@@ -47,6 +47,14 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   ekran telefonu, przełączenie aplikacji, zamknięta karta czy zerwane Wi-Fi jej nie
   przerywają: po powrocie Cosmos podpina się do tej samej odpowiedzi, a tę, po którą
   nikt nie wrócił, sam dopisuje do rozmowy
+- ✂️ **Odpowiedzi nie urywają się** — gdy modelowi skończy się budżet długości
+  (`finish_reason: length`), Cosmos prosi o dalszy ciąg i skleja go bezszwowo,
+  zamiast pokazywać zdanie ucięte w połowie
+- 🔗 **Źródła w odpowiedziach z internetu** — sekcja „Źródła:" z klikalnymi linkami
+  przy każdej odpowiedzi opartej na wyszukiwaniu; przy odpowiedzi z własnej wiedzy
+  Cosmos mówi to wprost, zamiast wymyślać przypisy
+- 🔍 **Podgląd zdjęć** — kliknięcie otwiera obraz w pełnej rozdzielczości w Cosmosie,
+  z podpisem (serwis, licencja) i przyciskiem przejścia do źródła
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
 - 🔎 **Zarządzanie rozmowami**: wyszukiwarka (po tytule i treści), przypinanie, zmiana
   nazwy, eksport, regeneracja odpowiedzi, edycja własnej wiadomości, skróty klawiszowe
@@ -593,7 +601,17 @@ w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
 | 🎬 **Ujęcia do nakręcenia** | lista z liczbami (ogniskowa, ruch, czas trwania) ułożona jako **otwarcie → rozwinięcie → domknięcie**, każda pozycja **do odhaczenia**, plus **czego się nie da i dlaczego** | `lib/ujecia.js`, dobierane po temacie, filtrowane przez sprzęt; kadry z drona liczone na **optyce drona**, nie na obiektywach korpusu |
 | 📷 **Aparat po Wi-Fi** | co aparat ma ustawione teraz, „Ustaw w aparacie", zdalna migawka | Canon CCAPI (`CANON_CCAPI_URL`); wiersz znika, gdy aparat nie odpowiada |
 | 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
-| 🗂 **Archiwum materiału** | OneDrive: indeksowanie, obiektywy z EXIF-u, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
+| 🗂 **Archiwum materiału** | OneDrive: indeksowanie, dane z plików (data, aparat, obiektyw, ISO, GPS) czytane z EXIF-u przez żądanie zakresu, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
+
+**Archiwum sprawdzone na 59 tysiącach plików** — i to zmieniło w nim trzy rzeczy,
+których nie widać na małym zbiorze. Indeks nie trzyma już adresów miniatur
+(1,2 kB na plik, wygasają po godzinie, nikt ich nie czyta — 70 z 98 MB pliku);
+zapis idzie w tle, bo `writeFileSync` na stumegabajtowym indeksie blokował serwer
+na 5 s; pliki dociągane są po cztery naraz, a nie jeden po drugim. Gdy Microsoft
+odpowie `429` („zwolnij"), Cosmos czeka tyle, ile każe nagłówek `Retry-After`,
+i próbuje dalej — dławienie to nie awaria. Odpowiedzi, które znaczą „tego pliku
+nigdy nie przeczytasz" (`404`, `410`, `416` dla pustego pliku), oznaczają wpis
+jako przerobiony, żeby cztery puste pliki nie zatrzymały kolejki na 56 tysiącach.
 
 Dwie z tych rzeczy — misja `.kmz` i karty ujęć — do tej pory istniały wyłącznie
 jako trasa HTTP i jako narzędzie modelu. Działały, ale nie było ich jak uruchomić
