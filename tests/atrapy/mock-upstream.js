@@ -38,10 +38,20 @@ function makeMock(port, name) {
            naprawdę: model prosi o grafiki → dostaje je z powrotem → próbuje
            poprosić o TE SAME jeszcze raz → zostaje odcięty i dopiero wtedy
            przypisuje zdjęcia do planu. */
+        /* Odpowiedź ucięta budżetem tokenów. Prawdziwy dostawca wysyła wtedy
+           `finish_reason: "length"` w ostatnim zdarzeniu — bez tego nie da się
+           odróżnić „skończyłem" od „zabrakło mi miejsca". Drugie żądanie,
+           z prośbą o kontynuację, dostaje resztę i normalne `stop`. */
+        const urwij = /urwana/i.test(lastText) && !flat.includes('Kontynuuj DOKŁADNIE');
+        const dokancza = flat.includes('Kontynuuj DOKŁADNIE');
         const juzOdcieto = flat.includes('ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ');
         const poZdjeciach = flat.includes('ZDJĘCIA POKAZANE UŻYTKOWNIKOWI');
         let text;
-        if (juzOdcieto) {
+        if (urwij) {
+          text = 'Plan na tydzień. Dzień 1 — Palma. Źródła: [Przewodnik](https://przyklad.pl/majorka-atrakcje-wynajem';
+        } else if (dokancza) {
+          text = '-samochodu)\n\nGotowe.';
+        } else if (juzOdcieto) {
           text = 'Dzień 1 — Katedra La Seu, zdjęcia wyżej. Dzień 3 — plaża Es Trenc.';
         } else if (poZdjeciach) {
           text = 'Jeszcze raz to samo.\n\n[GRAFIKA: Katedra La Seu Palma]';
@@ -71,6 +81,8 @@ function makeMock(port, name) {
         let i = 0;
         const timer = setInterval(() => {
           if (i >= tokens.length) {
+            // Tak kończy prawdziwy dostawca: osobne zdarzenie z powodem.
+            res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: urwij ? 'length' : 'stop' }] })}\n\n`);
             res.write('data: [DONE]\n\n'); res.end(); clearInterval(timer); return;
           }
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: tokens[i] } }] })}\n\n`);

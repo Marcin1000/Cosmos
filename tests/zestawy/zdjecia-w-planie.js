@@ -96,13 +96,55 @@ if (!maPrzegladarke()) {
   console.log(`5. ruchów narzędzi udających pytania użytkownika: ${udajacePytania.length}`);
   if (udajacePytania.length) fail.push('wynik narzędzia narysował się jako wiadomość użytkownika');
 
+  /* ---- 6. Kliknięcie w zdjęcie otwiera podgląd, a nie obcą stronę ----
+     Marcin: „lepiej by było gdybym mógł je kliknąć żeby się rozwinęły
+     w większym ekranie z wyższą rozdzielczością i wtedy z możliwością
+     przejścia do źródła — bo teraz jak klikam na zdjęcie to automatycznie
+     przechodzę do linka z tym zdjęciem w kolejnej zakładce". */
+  const kartPrzed = pg.context().pages().length;
+  await pg.click('.photo-tile');
+  await pg.waitForTimeout(400);
+  const podglad = await pg.evaluate(() => {
+    const box = document.getElementById('img-viewer');
+    const img = document.getElementById('img-viewer-img');
+    const zrodlo = document.getElementById('img-viewer-source');
+    const podpis = document.getElementById('img-viewer-caption');
+    return {
+      widoczny: Boolean(box) && box.style.display !== 'none',
+      src: img ? img.getAttribute('src') : '',
+      zrodloWidoczne: Boolean(zrodlo) && !zrodlo.hidden,
+      zrodloAdres: zrodlo ? zrodlo.getAttribute('href') : '',
+      podpis: podpis && !podpis.hidden ? podpis.textContent.trim() : '',
+    };
+  });
+  const kartPo = pg.context().pages().length;
+  console.log(`6. po kliknięciu w zdjęcie: podgląd ${podglad.widoczny ? 'otwarty' : 'ZAMKNIĘTY'}, `
+    + `nowych kart ${kartPo - kartPrzed}`);
+  console.log(`   źródło: ${podglad.zrodloWidoczne ? podglad.zrodloAdres : 'BRAK'}`);
+  console.log(`   podpis: „${podglad.podpis}"`);
+  if (!podglad.widoczny) fail.push('kliknięcie w zdjęcie nie otwiera podglądu w Cosmosie');
+  if (kartPo > kartPrzed) fail.push('kliknięcie w zdjęcie wyrzuca na obcą stronę w nowej karcie');
+  if (!podglad.src) fail.push('podgląd otwarty bez obrazu');
+  if (!podglad.zrodloWidoczne || !/^https?:/.test(podglad.zrodloAdres || '')) {
+    fail.push('z podglądu nie da się przejść do źródła zdjęcia');
+  }
+  /* Podpis to nie ozdoba: przy zdjęciach z Commons nazwa serwisu i licencja
+     są warunkiem legalnego użycia. */
+  if (!podglad.podpis) fail.push('podgląd nie mówi, skąd jest zdjęcie ani na jakiej licencji');
+
+  await pg.keyboard.press('Escape');
+  await pg.waitForTimeout(300);
+  const poEscape = await pg.evaluate(() => document.getElementById('img-viewer').style.display !== 'none');
+  console.log(`   Escape zamyka podgląd: ${poEscape ? 'NIE' : 'tak'}`);
+  if (poEscape) fail.push('Escape nie zamyka podglądu zdjęcia');
+
   /* Instrukcje w promptcie (format źródeł, „jednym znacznikiem") sprawdza
      zestaw `szukanie-grafik` — tam stoi atrapa oddająca wiadomości systemowe
      jako treść, czyli jedyne miejsce, w którym widać, co model naprawdę
      dostaje. Tutaj mamy atrapę udającą model, nie echo. */
 
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/zdjecia-w-planie.png`, fullPage: true });
-  console.log(`6. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
+  console.log(`7. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   if (bledy.length) fail.push(`błędy JS: ${bledy.join(' | ')}`);
 
   await b.close();
