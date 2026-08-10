@@ -603,8 +603,19 @@ async function odswiezArchiwum() {
   } else if (!d.polaczony) {
     stanEl.textContent = t('arch.notConnected');
   } else {
+    /* Sam licznik plików nie mówi, czy uzupełnianie się skończyło. Po kilku
+       godzinach dociągania jedyną drogą było kliknięcie przycisku jeszcze raz
+       i zobaczenie zera — czyli uruchomienie zadania, żeby dowiedzieć się,
+       że nie ma go po co uruchamiać. */
+    const pst = d.postep;
     stanEl.textContent = d.wArchiwum
       ? t('arch.connected', { n: d.wArchiwum.toLocaleString() })
+        + (pst ? ' ' + t('arch.progress', {
+          zDanymi: pst.zDanymi.toLocaleString(),
+          zdjec: pst.zdjec.toLocaleString(),
+          zostalo: pst.zostaloZdjec.toLocaleString(),
+          klipy: pst.doTelemetrii.toLocaleString(),
+        }) : '')
       : `${t('arch.notConnected').replace(/[^.]*$/, '')} ${t('arch.empty')}`.trim();
   }
 

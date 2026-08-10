@@ -615,6 +615,8 @@ async function handleOneDrive(req, res, p) {
             dodanych: indeksowanie.dodanych, blad: indeksowanie.blad }
         : null,
       wArchiwum: archiwum.ile(),
+      // Ile z tego ma już dane z plików — patrz `postep()` w lib/archiwum.js.
+      postep: archiwum.postep(),
     });
   }
 
