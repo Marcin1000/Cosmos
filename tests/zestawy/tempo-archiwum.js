@@ -223,6 +223,59 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   if (typeof od.zdlawienia !== 'function' || od.zdlawienia() < 1) {
     fail.push('dławienie nie jest liczone — panel nie ma jak o nim powiedzieć');
   }
+  /* --- 6. Plik, którego NIGDY nie da się przeczytać, nie blokuje kolejki ---
+     Marcin: „Przerwane: kolejka nie maleje (4 do zrobienia). Powód: Graph 416".
+     416 („Requested Range Not Satisfiable") dostajemy dla plików PUSTYCH:
+     prosimy o bajty 0-N, a w pliku nie ma ani jednego. Cztery puste `.SRT`
+     zatrzymały całe zadanie, bo wpis nigdy nie dostawał znacznika
+     „sprawdzony" i wracał w każdej paczce. To samo dotyczy 404 i 410 —
+     pliku skasowanego między indeksowaniem a odczytem.
+
+     Ponawianie tu NIE POMAGA: te odpowiedzi znaczą „nigdy", nie „później". */
+  const beznadziejne = http.createServer((req, res) => {
+    if (/oauth2/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_in: 3600 }));
+    }
+    res.writeHead(/pusty/.test(req.url) ? 416 : 404);
+    return res.end();
+  });
+  await new Promise((r) => beznadziejne.listen(0, r));
+  const port2 = beznadziejne.address().port;
+  const kod2 = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'onedrive.js'), 'utf8')
+    .replace(/const GRAF = '[^']*'/, `const GRAF = 'http://127.0.0.1:${port2}'`)
+    .replace(/const TOKEN = '[^']*'/, `const TOKEN = 'http://127.0.0.1:${port2}/oauth2/token'`)
+    .replace(/require\('\.\//g, `require('${path.join(__dirname, '..', '..', 'lib')}/`);
+  const katalogOd2 = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-od2-'));
+  fs.writeFileSync(path.join(katalogOd2, 'onedrive.json'),
+    JSON.stringify({ refresh_token: 'y', access_token: '', wygasa: 0, od: Date.now() }));
+  const plik2 = path.join(katalogOd2, 'onedrive-test.js');
+  fs.writeFileSync(plik2, kod2);
+  const od2 = require(plik2).utworz({
+    katalogDanych: katalogOd2, clientId: 'a', clientSecret: 'b', redirectUri: 'http://x',
+  });
+
+  const start416 = Date.now();
+  const wyniki = { srt: 'nie próbowano', exif: 'nie próbowano', blad: '' };
+  try {
+    wyniki.srt = JSON.stringify(await od2.dociagnijSrt('pusty'));
+    wyniki.exif = JSON.stringify(await od2.dociagnijExif('zniknal'));
+  } catch (err) {
+    wyniki.blad = err.message;
+  }
+  const czas416 = Date.now() - start416;
+  console.log(`6. pusty .SRT (416) → ${wyniki.srt}, skasowane zdjęcie (404) → ${wyniki.exif}`
+    + `${wyniki.blad ? `, błąd: ${wyniki.blad}` : ''} · ${czas416} ms`);
+  if (wyniki.blad) {
+    fail.push(`416/404 kończy się błędem (${wyniki.blad}) — cztery puste pliki zatrzymają całą kolejkę`);
+  }
+  if (wyniki.srt !== '""') fail.push(`pusty .SRT oddał ${wyniki.srt} zamiast pustego tekstu`);
+  if (wyniki.exif !== 'null') fail.push(`skasowane zdjęcie oddało ${wyniki.exif} zamiast null`);
+  // Ponawianie „nigdy" byłoby czekaniem na darmo — 4 próby po 5 s to 35 sekund.
+  if (czas416 > 3000) fail.push(`odczekano ${czas416} ms na odpowiedzi, które znaczą „nigdy"`);
+  beznadziejne.close();
+  fs.rmSync(katalogOd2, { recursive: true, force: true });
+
   serwer.close();
   fs.rmSync(katalogOd, { recursive: true, force: true });
 

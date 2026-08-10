@@ -205,7 +205,10 @@ const I18N = {
     'arch.visionDone': 'Gotowe — treść rozpoznana na {ile} zdjęciach.',
     'arch.tele': 'Wczytaj telemetrię klipów',
     'arch.teleProgress': 'Telemetria wczytana: {ile} · zostało {zostalo}',
-    'arch.teleDone': 'Gotowe — telemetria odczytana z {ile} klipów.',
+    'arch.teleDone': 'Gotowe — telemetria odczytana z {ile} klipów ({bez} plików .SRT bez telemetrii).',
+    /* Zero odczytanych klipów to nie jest odpowiedź — to pytanie. Próbka
+       z odrzuconego pliku mówi, czy to napisy, czy nieznany wariant DJI. */
+    'arch.teleNone': 'Żaden z {bez} plików .SRT nie zawierał telemetrii DJI. Początek pierwszego: „{probka}" — wyślij to, jeśli chcesz, żeby Cosmos nauczył się tego formatu.',
     'plan.apply': 'Ustaw w aparacie',
     'plan.applying': 'Ustawiam…',
     'plan.applyErr': 'Aparat odmówił: {msg}',
@@ -901,7 +904,8 @@ const I18N = {
     'arch.visionDone': 'Done — content recognised on {ile} photos.',
     'arch.tele': 'Read clip telemetry',
     'arch.teleProgress': 'Telemetry read: {ile} · {zostalo} left',
-    'arch.teleDone': 'Done — telemetry read from {ile} clips.',
+    'arch.teleDone': 'Done — telemetry read from {ile} clips ({bez} .SRT files without telemetry).',
+    'arch.teleNone': 'None of the {bez} .SRT files contained DJI telemetry. Start of the first one: “{probka}” — send it over if you want Cosmos to learn this format.',
     'plan.apply': 'Apply to camera',
     'plan.applying': 'Applying…',
     'plan.applyErr': 'The camera refused: {msg}',
