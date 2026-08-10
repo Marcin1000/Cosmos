@@ -164,7 +164,13 @@ function saveConversationsSoon(ms = 800) {
   zapisZaChwile = setTimeout(() => { zapisZaChwile = null; saveConversations(); }, ms);
 }
 
-function saveConversations() {
+/** @param {boolean} natychmiast — pomiń 400 ms zwłoki i wyślij zapis od razu.
+ *
+ *  Zwłoka jest dobra przy pisaniu (jeden zapis zamiast dziesięciu), ale zła
+ *  przed startem generowania: gdy karta zamknie się w tej ćwierci sekundy,
+ *  serwer dokończy odpowiedź i nie będzie miał jej gdzie dopisać, bo plik
+ *  rozmowy jeszcze nie istnieje. */
+function saveConversations(natychmiast = false) {
   clearTimeout(zapisZaChwile);
   zapisZaChwile = null;
   if (!activeConversation) return;
@@ -187,14 +193,15 @@ function saveConversations() {
 
   const snapshot = JSON.stringify(activeConversation);
   const id = activeConversation.id;
+  const wyslij = () => fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: snapshot,
+  }).catch(() => { /* offline — zostaje kopia w localStorage */ });
+
   clearTimeout(convSaveTimer);
-  convSaveTimer = setTimeout(() => {
-    fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: snapshot,
-    }).catch(() => { /* offline — zostaje kopia w localStorage */ });
-  }, 400);
+  if (natychmiast) wyslij();
+  else convSaveTimer = setTimeout(wyslij, 400);
 }
 
 function cacheConvIndex() {
@@ -1261,6 +1268,29 @@ function newConversation() {
   el.input.focus();
 }
 
+/* Rozmowy zapisane, zanim ruch narzędzia dostał flagę `search`, wciąż mają
+   w środku dymek z pytaniem, którego nikt nie zadał. Poprawka w kodzie ich nie
+   naprawi — siedzą już na dysku. Domykamy je przy wczytaniu; to zmiana tylko
+   w wyglądzie, treść dalej idzie do modelu tak samo. */
+const PREFIKSY_NARZEDZI = [
+  'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum',
+  'WYNIK Z ARCHIWUM UŻYTKOWNIKA',
+  'WYNIKI WYSZUKIWANIA',
+  'WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW',
+  'DANE PLANU ZDJĘCIOWEGO',
+];
+function naprawStareRuchyNarzedzi(conv) {
+  if (!conv?.messages) return conv;
+  for (const m of conv.messages) {
+    if (m.role !== 'user' || m.search || typeof m.content !== 'string') continue;
+    if (PREFIKSY_NARZEDZI.some((p) => m.content.startsWith(p))) {
+      m.search = true;
+      m.searchQuery = m.searchQuery || t('chat.archiveQuery');
+    }
+  }
+  return conv;
+}
+
 async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
@@ -1271,9 +1301,9 @@ async function selectConversation(id) {
   try {
     const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error();
-    activeConversation = await res.json();
+    activeConversation = naprawStareRuchyNarzedzi(await res.json());
   } catch {
-    activeConversation = loadJson('cosmos.conv.' + id, null); // podgląd offline
+    activeConversation = naprawStareRuchyNarzedzi(loadJson('cosmos.conv.' + id, null)); // podgląd offline
   }
   renderMessages();
 }
@@ -1694,10 +1724,85 @@ function toApiMessages(conv) {
   return api;
 }
 
+/* ============ KOLEJKA WIADOMOŚCI ============
+   Do tej pory pole tekstowe było w trakcie odpowiedzi martwe: `sendMessage`
+   wychodziło od razu przy `isGenerating`, a przycisk był wyszarzony. Myśl,
+   która przyszła w trakcie czytania odpowiedzi, trzeba było albo trzymać
+   w głowie, albo przerywać generowanie.
+
+   Teraz wiadomość wysłana w trakcie ODCZEKUJE i idzie sama, gdy Cosmos
+   skończy. Kolejka jest widoczna nad polem i da się z niej wyjąć wpis —
+   „wyślę to za chwilę" musi być odwracalne, bo w połowie odpowiedzi często
+   okazuje się, że pytanie było niepotrzebne. */
+let kolejka = [];
+
+function renderKolejka() {
+  const box = $('queue-box');
+  if (!box) return;
+  box.innerHTML = '';
+  box.hidden = !kolejka.length;
+  if (!kolejka.length) return;
+  for (const [i, poz] of kolejka.entries()) {
+    const el2 = document.createElement('div');
+    el2.className = 'queue-item';
+    const txt = document.createElement('span');
+    txt.className = 'queue-text';
+    // `poz.images` to LICZBA załączników, nie tablica — samo zdjęcie bez
+    // podpisu musi się w kolejce czymś przedstawić, inaczej widać samo „…".
+    txt.textContent = poz.text || (poz.images ? t('queue.image') : '…');
+    const usun = document.createElement('button');
+    usun.type = 'button';
+    usun.className = 'queue-del';
+    usun.textContent = '×';
+    usun.title = t('queue.remove');
+    usun.addEventListener('click', () => { kolejka.splice(i, 1); renderKolejka(); });
+    el2.append(txt, usun);
+    box.appendChild(el2);
+  }
+}
+
+/** Po zakończeniu generowania — wyślij następną z kolejki. */
+async function ruszKolejke() {
+  if (isGenerating || !kolejka.length) return;
+  const poz = kolejka.shift();
+  renderKolejka();
+  const conv = ensureConversation(poz.text || '');
+  conv.messages.push({ role: 'user', content: poz.content });
+  saveConversations(true);          // patrz sendMessage — zaraz rusza generowanie
+  renderSidebar();
+  renderMessages();
+  await runGeneration(conv);
+  // Kolejka bywa dłuższa niż jedna pozycja — po tej odpowiedzi bierzemy następną.
+  ruszKolejke();
+}
+
 async function sendMessage() {
   const text = el.input.value.trim();
   const gotowe = pendingDocs.filter((d) => !d.loading);
-  if ((!text && !pendingImages.length && !gotowe.length) || isGenerating) return;
+  if (!text && !pendingImages.length && !gotowe.length) return;
+
+  /* Cosmos jeszcze mówi — bierzemy wiadomość do kolejki zamiast ją zgubić.
+     Pole czyścimy tak samo jak przy zwykłym wysłaniu, żeby nie było
+     wątpliwości, czy wiadomość „poszła". */
+  if (isGenerating) {
+    const content = (pendingImages.length || gotowe.length)
+      ? {
+          text,
+          ...(pendingImages.length ? { images: [...pendingImages] } : {}),
+          ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
+        }
+      : text;
+    kolejka.push({ text, content, images: pendingImages.length });
+    pendingImages = [];
+    pendingDocs = [];
+    renderAttachments();
+    el.input.value = '';
+    autosizeInput();
+    updateSendButton();
+    updateTokenEstimate();
+    renderKolejka();
+    return;
+  }
 
   const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
   const content = (pendingImages.length || gotowe.length)
@@ -1713,7 +1818,9 @@ async function sendMessage() {
   pendingImages = [];
   pendingDocs = [];
   renderAttachments();
-  saveConversations();
+  // Bez zwłoki: za chwilę ruszy generowanie, które ma prawo przeżyć zamknięcie
+  // karty — a serwer dopisze odpowiedź tylko do rozmowy, która już istnieje.
+  saveConversations(true);
 
   el.input.value = '';
   autosizeInput();
@@ -1724,7 +1831,51 @@ async function sendMessage() {
 }
 
 // jedno przejście streamingu — zwraca zebrany tekst odpowiedzi
-async function streamOnce(conv) {
+/* ============ BIEG: ODPOWIEDŹ ŻYJE NA SERWERZE ============
+   Marcin: „Jak wychodzę ze strony lub aplikacji (…) wszystko jest przerywane
+   i jest napisane że connection error. Chciałbym żeby to działało też w tle."
+
+   Serwer prowadzi odpowiedź do końca niezależnie od tego, czy przeglądarka
+   patrzy (lib/biegi.js). Tutaj jest druga połowa: przeglądarka pamięta numer
+   biegu i numer ostatniego odebranego zdarzenia, więc po zerwaniu Wi-Fi,
+   zgaszeniu ekranu albo odświeżeniu strony wraca dokładnie w to miejsce.
+
+   Nie ma tu ponawiania zapytania do modelu. Wracamy do TEJ SAMEJ odpowiedzi,
+   nie prosimy o nową — druga odpowiedź na to samo pytanie kosztuje tokeny
+   i bywa inna niż ta, którą użytkownik zdążył zobaczyć. */
+const BIEG_KLUCZ = 'cosmos.bieg';
+const BIEG_PROB = 6;
+
+let biegBiezacy = null;      // { id, convId, ostatnie }
+
+function nowyBiegId() {
+  const raw = (crypto.randomUUID && crypto.randomUUID())
+    || (Math.random().toString(36).slice(2) + Date.now().toString(36));
+  return String(raw).replace(/[^a-z0-9-]/gi, '').slice(0, 64);
+}
+
+function zapamietajBieg(b) {
+  biegBiezacy = b;
+  try {
+    if (b) localStorage.setItem(BIEG_KLUCZ, JSON.stringify(b));
+    else localStorage.removeItem(BIEG_KLUCZ);
+  } catch { /* tryb prywatny — trudno, zostaje wznowienie w tej samej karcie */ }
+}
+
+const pauza = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Powiedz serwerowi, że odpowiedź dotarła i nie musi jej zapisywać awaryjnie. */
+function potwierdzOdbior(id) {
+  if (!id) return;
+  fetch('/api/chat/odebrane', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bieg: id }),
+    keepalive: true,      // ma dolecieć nawet gdy karta zamyka się w tej sekundzie
+  }).catch(() => { /* nie doleciało — serwer zapisze sam, czyli bezpiecznie */ });
+}
+
+async function streamOnce(conv, opcje = {}) {
   const msg = document.createElement('div');
   msg.className = 'msg msg-assistant';
   msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
@@ -1773,23 +1924,35 @@ async function streamOnce(conv) {
     }
   };
 
+  /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
+     bieg. W obu razach numer znamy PRZED wysłaniem żądania — inaczej zerwanie
+     połączenia w pierwszej sekundzie zostawiłoby odpowiedź bez adresu. */
+  const podpiecie = Boolean(opcje.bieg);
+  const biegId = opcje.bieg || nowyBiegId();
+  zapamietajBieg({ id: biegId, convId: conv.id, ostatnie: (Number(opcje.od) || 0) - 1 });
+
   try {
     const modelOverride = endpoint === 'local' ? settings.modelLocal
       : endpoint === 'cloud' ? settings.modelCloud : '';
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint,
-        messages: toApiMessages(conv),
-        model: modelOverride || undefined,
-        temperature: settings.temperature,
-        max_tokens: settings.maxTokens,
-        kbSelected: [...kbSelected],
-        useSearch: settings.offline ? false : undefined,
-      }),
-      signal: abortController.signal,
-    });
+    let res = podpiecie
+      ? await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${Number(opcje.od) || 0}`,
+        { signal: abortController.signal })
+      : await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          messages: toApiMessages(conv),
+          model: modelOverride || undefined,
+          temperature: settings.temperature,
+          max_tokens: settings.maxTokens,
+          kbSelected: [...kbSelected],
+          useSearch: settings.offline ? false : undefined,
+          bieg: biegId,
+          rozmowa: conv.id,
+        }),
+        signal: abortController.signal,
+      });
 
     if (!res.ok) {
       let errText = t('httpErr', { status: res.status });
@@ -1797,6 +1960,7 @@ async function streamOnce(conv) {
         const data = await readJsonSafe(res);
         errText = data.error || errText;
       } catch { /* ignore */ }
+      zapamietajBieg(null);
       throw new Error(errText);
     }
 
@@ -1810,42 +1974,108 @@ async function streamOnce(conv) {
       lastModelNote = '';
     }
 
-    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let koniecBiegu = false;      // serwer powiedział „to już wszystko"
+    let bladBiegu = '';
+    let proby = 0;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const events = buffer.split('\n\n');
-      buffer = events.pop();
-
-      for (const event of events) {
-        for (const line of event.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const json = JSON.parse(data);
-            const d = json.choices?.[0]?.delta || {};
-            const delta = d.content ?? json.choices?.[0]?.text ?? '';
-            // różni dostawcy nazywają to pole inaczej
-            const reason = d.reasoning_content ?? d.reasoning ?? '';
-            if (reason) {
-              think += reason;
-              schedulePaint();
-            }
-            if (delta) {
-              acc += delta;
-              schedulePaint();
-            }
-          } catch { /* niepełny fragment — pomijamy */ }
+    /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer — po nim wracamy
+       we właściwe miejsce, więc wznowienie nie powtarza połowy zdania ani jej
+       nie gubi. */
+    const zjedzZdarzenie = (event) => {
+      let typ = '';
+      for (const line of event.split('\n')) {
+        if (line.startsWith('id:')) {
+          const n = Number(line.slice(3).trim());
+          if (Number.isFinite(n) && biegBiezacy) biegBiezacy.ostatnie = n;
+          continue;
         }
+        if (line.startsWith('event:')) { typ = line.slice(6).trim(); continue; }
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') continue;
+        if (typ === 'koniec') {
+          koniecBiegu = true;
+          try { bladBiegu = JSON.parse(data).blad || ''; } catch { /* bez szczegółów */ }
+          continue;
+        }
+        /* Serwer nie pamięta początku tej odpowiedzi (bufor urwany limitem).
+           Mówimy o tym wprost — pokazanie samego dalszego ciągu wyglądałoby
+           jak odpowiedź, która zaczyna się w połowie zdania. */
+        if (typ === 'luka') { acc += t('bieg.luka') + '\n\n'; schedulePaint(); continue; }
+        try {
+          const json = JSON.parse(data);
+          const d = json.choices?.[0]?.delta || {};
+          const delta = d.content ?? json.choices?.[0]?.text ?? '';
+          // różni dostawcy nazywają to pole inaczej
+          const reason = d.reasoning_content ?? d.reasoning ?? '';
+          if (reason) {
+            think += reason;
+            schedulePaint();
+          }
+          if (delta) {
+            acc += delta;
+            schedulePaint();
+          }
+        } catch { /* niepełny fragment — pomijamy */ }
       }
+    };
+
+    /* Pętla przeżywania. Zerwane połączenie NIE jest tu błędem — jest
+       normalnym stanem telefonu, który zgasił ekran. Wracamy do biegu od
+       ostatniego numeru; poddajemy się dopiero, gdy serwer przestaje o nim
+       wiedzieć albo gdy nie da się wrócić po kilku próbach. */
+    while (!koniecBiegu) {
+      const reader = res.body.getReader();
+      let rozlaczone = false;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+          for (const event of events) if (event.trim()) zjedzZdarzenie(event);
+          if (koniecBiegu) break;
+        }
+      } catch (err) {
+        if (abortController.signal.aborted) throw err;
+        rozlaczone = true;
+      }
+      if (koniecBiegu) break;
+      if (buffer.trim()) { zjedzZdarzenie(buffer); buffer = ''; }
+      if (koniecBiegu) break;
+
+      // Strumień się skończył, a serwer nie powiedział „koniec”. Wracamy.
+      if (++proby > BIEG_PROB) {
+        if (rozlaczone) throw new Error(t('bieg.zerwane'));
+        break;                       // serwer bez biegów — kończymy po staremu
+      }
+      await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
+      const od = (biegBiezacy?.ostatnie ?? -1) + 1;
+      let wrot;
+      try {
+        wrot = await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
+          { signal: abortController.signal });
+      } catch (err) {
+        if (abortController.signal.aborted) throw err;
+        continue;                    // sieci nadal nie ma — próbujemy dalej
+      }
+      /* 404 = serwer już nie pamięta tego biegu. Przy podpięciu po odświeżeniu
+         to zwykły koniec (odpowiedź wylądowała w rozmowie), przy zerwaniu
+         w locie — utrata. W obu razach nie ma czego dalej czytać. */
+      if (!wrot.ok) break;
+      res = wrot;
     }
     clearInterval(waitTimer);
+    zapamietajBieg(null);
+    /* „Mam tę odpowiedź." Bez tego serwer po dwudziestu sekundach dopisze ją
+       do rozmowy jeszcze raz, bo z jego strony wygląda to jak odpowiedź, po
+       którą nikt nie przyszedł. Zgadywanie po tym, czy gniazdo było otwarte,
+       już próbowaliśmy — myliło się w obie strony. */
+    potwierdzOdbior(biegId);
+    if (bladBiegu) throw new Error(bladBiegu);
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
     if (!acc.trim() && think.trim()) {
@@ -1858,11 +2088,50 @@ async function streamOnce(conv) {
     return acc;
   } catch (err) {
     clearInterval(waitTimer);
+    zapamietajBieg(null);
     if (err.name === 'AbortError') {
       err.partial = acc;
     }
     throw err;
   }
+}
+
+/* Powrót do odpowiedzi, która powstawała, gdy strona była zamknięta.
+   Wywoływane raz, przy starcie. Nie pyta o nic modelu — podpina się do tego,
+   co serwer już policzył albo właśnie liczy. */
+async function wznowBieg() {
+  let zapis = null;
+  try { zapis = JSON.parse(localStorage.getItem(BIEG_KLUCZ) || 'null'); } catch { /* śmieci */ }
+  if (!zapis || !zapis.id) return;
+
+  let dane;
+  try {
+    const r = await fetch('/api/chat/biegi');
+    if (!r.ok) return;
+    dane = await r.json();
+  } catch { return; }                 // serwer offline — wznowienie poczeka
+
+  const b = (dane.biegi || []).find((x) => x.id === zapis.id);
+  /* Bieg skończył się, gdy nas nie było. Serwer zapisał odpowiedź do rozmowy
+     sam (lib/biegi.js), więc nie ma czego dociągać — wystarczy posprzątać
+     znacznik, żeby nie próbować w nieskończoność. */
+  if (!b || !b.trwa) { zapamietajBieg(null); return; }
+
+  const conv = zapis.convId && activeId === zapis.convId ? activeConversation : null;
+  if (!conv) {
+    // Rozmowa z biegiem nie jest tą otwartą — przełączamy się na nią.
+    if (!zapis.convId) { zapamietajBieg(null); return; }
+    await selectConversation(zapis.convId);
+    if (!activeConversation) { zapamietajBieg(null); return; }
+  }
+  const cel = activeConversation;
+  if (!cel) { zapamietajBieg(null); return; }
+  /* Od zera, nie od zapamiętanego numeru. Po przeładowaniu ekran jest pusty,
+     więc potrzebujemy CAŁEJ odpowiedzi — wznowienie od połowy pokazałoby
+     wypowiedź zaczynającą się w środku zdania. Numer w zapisie służy tylko
+     wznowieniu bez przeładowania (zerwane Wi-Fi), gdzie początek już jest
+     narysowany, i tam siedzi w pamięci, nie w localStorage. */
+  await runGeneration(cel, { bieg: zapis.id, od: 0 });
 }
 
 // Model, który faktycznie odpowiedział, gdy różni się od wybranego.
@@ -1908,6 +2177,65 @@ function stripSearchMarker(s) {
     .replace(/\[ARCHIWUM:?[^\]]*\]/gi, '')
     .trim();
 }
+/* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
+   To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
+
+   Odpowiedź archiwum szła do modelu jako `JSON.stringify(dane).slice(0, 12000)`.
+   Brzmi niewinnie, dopóki się nie policzy: sam adres jednej miniatury z OneDrive
+   to 1248 znaków podpisanego tokenu, przy ~520 znakach reszty wpisu. Czyli
+   z dwunastu tysięcy znaków mieściło się SZEŚĆ plików, a 71% tego, co czytał
+   model, stanowiły adresy obrazków — których on nawet nie ogląda, bo w tym
+   samym promptcie piszemy mu, że miniatury już pokazaliśmy człowiekowi.
+   Do tego `slice` tnie napis w połowie JSON-a, więc model dostawał składniowo
+   zepsuty dokument.
+
+   Efekt na żywym archiwum: przy 59 421 plikach model widział sześć najnowszych
+   (bo sortujemy od najnowszych — czyli akurat zrzuty ekranu z telefonu),
+   dostawał polecenie „odpowiadaj na podstawie tych danych, nie zgaduj"
+   i uczciwie meldował, że w archiwum nie ma zdjęć z aparatu. To nie była
+   halucynacja. To był poprawny wniosek z próbki, którą sami mu podsunęliśmy.
+
+   Dlatego: miniatury i identyfikatory wylatują, wpisy skracamy do pól, które
+   naprawdę niosą treść, a na górze stoi jawne zdanie o tym, ILE tego jest
+   i CZEGO model nie widzi. „Pokazuję 40 z 59 421" to zupełnie inna przesłanka
+   niż „oto twoje archiwum". */
+const ARCH_LIMIT_ZNAKOW = 12000;
+
+function naKontekst(dane) {
+  if (!dane || typeof dane !== 'object') return JSON.stringify(dane);
+  if (!Array.isArray(dane.wyniki)) return JSON.stringify(dane, null, 1).slice(0, ARCH_LIMIT_ZNAKOW);
+
+  const chude = dane.wyniki.map((w) => {
+    const o = {};
+    for (const [k, v] of Object.entries(w)) {
+      // `miniatura` to 1,2 kB podpisanego adresu; `id` i `rozmiar` nic nie wnoszą.
+      if (k === 'miniatura' || k === 'id' || k === 'rozmiar') continue;
+      if (v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
+      o[k] = v;
+    }
+    return o;
+  });
+
+  /* Ile wpisów zmieści się w budżecie — liczone, a nie zgadywane. Bez
+     miniatur wchodzi ich kilkadziesiąt zamiast sześciu. */
+  let ile = chude.length;
+  let tresc = '';
+  while (ile > 0) {
+    tresc = JSON.stringify({ ...dane, wyniki: chude.slice(0, ile) }, null, 1);
+    if (tresc.length <= ARCH_LIMIT_ZNAKOW) break;
+    ile = Math.floor(ile * 0.8);
+  }
+
+  const znaleziono = Number(dane.znaleziono) || 0;
+  const naglowek = znaleziono > ile
+    ? `UWAGA: widzisz ${ile} z ${znaleziono} pasujących plików, posortowane OD NAJNOWSZYCH. `
+      + 'To jest PRÓBKA, nie całe archiwum — nie wyciągaj z niej wniosków o tym, czego '
+      + 'w archiwum NIE MA. Jeśli chcesz wiedzieć, co tam jest w całości, poproś '
+      + 'o zestawienie (grupuj=aparat, grupuj=rok, grupuj=temat) albo zawęź filtry.\n'
+    : '';
+  return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
+}
+
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
 /* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
    na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
@@ -1925,26 +2253,44 @@ const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
 const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
-async function runGeneration(conv) {
+/* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
+   protokół rozmowy — ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
+   jedno od drugiego na ekranie, to flaga `search`: z nią mamy zwijany blok
+   „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
+   Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
+   Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
+function dodajWynikNarzedzia(conv, tresc, etykieta) {
+  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta });
+  saveConversations();
+  renderMessages();
+}
+
+async function runGeneration(conv, podpiecie = null) {
   isGenerating = true;
   setGeneratingUI(true);
   if (voiceMode) setVoiceState('thinking');
   let finalText = '';
 
   const MAX_SEARCHES = 3;
+  /* Zapytania do archiwum, które już poszły w tej turze. Model potrafi
+     wywołać trzy razy DOKŁADNIE ten sam filtr i trzy razy dostać to samo
+     zero — widać to było w rozmowie o Mazurach, gdzie „Przeszukuję Twoje
+     archiwum…" pojawiło się kilka razy pod rząd bez zmiany parametrów.
+     Limit głębokości tego nie łapie, bo formalnie to różne kroki. */
+  const pytaniaArchiwum = new Set();
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
-      const acc = await streamOnce(conv);
+      /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
+         odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
+         zapytania do modelu i mają dostać własne biegi. */
+      const acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
       const marker = acc.match(SEARCH_MARKER_RE);
 
       // Ostatnia runda: model nadal chce szukać, ale limit wyczerpany. Zamiast
       // pokazać użytkownikowi surowe [SZUKAJ: …] — a tak działo się wcześniej —
       // każemy mu odpowiedzieć tym, co już zebrał.
       if (marker && depth === MAX_SEARCHES) {
-        conv.messages.push({ role: 'user', content: t('search.enough'), search: true,
-          searchQuery: marker[1].trim() });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, t('search.enough'), marker[1].trim());
         const last = await streamOnce(conv);
         // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
         const trescOstatnia = stripSearchMarker(last);
@@ -1975,9 +2321,7 @@ async function runGeneration(conv) {
           setVoiceState('thinking');
         }
         const resultsText = await webSearch(q);
-        conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, resultsText, q);
         continue;
       }
 
@@ -1993,6 +2337,24 @@ async function runGeneration(conv) {
           const v = kawalek.slice(i + 1);
           if (k === 'grupuj') grupuj = v; else q.set(k, v);
         }
+
+        /* Ten sam filtr drugi raz nie przyniesie innej odpowiedzi. Zamiast
+           pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
+           — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
+           w pół zdania. */
+        const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
+        if (pytaniaArchiwum.has(odcisk)) {
+          dodajWynikNarzedzia(conv,
+            'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
+            + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
+            + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
+            + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
+            + 'i napisz wprost, czego nie udało się znaleźć.',
+            t('chat.archiveQuery'));
+          continue;
+        }
+        pytaniaArchiwum.add(odcisk);
+
         const before = stripSearchMarker(acc.replace(archMarker[0], ''));
         conv.messages.push({
           role: 'assistant',
@@ -2039,17 +2401,12 @@ async function runGeneration(conv) {
           renderMessages();
         }
 
-        conv.messages.push({
-          role: 'user',
-          content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-            + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
-            + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
-            + JSON.stringify(dane, null, 1).slice(0, 12000),
-          search: true,
-          searchQuery: t('chat.archiveQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv,
+          'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
+          + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
+          + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
+          + naKontekst(dane),
+          t('chat.archiveQuery'));
         continue;
       }
 
@@ -2090,15 +2447,10 @@ async function runGeneration(conv) {
         } catch (err) {
           plan = { error: err.message };
         }
-        conv.messages.push({
-          role: 'user',
-          content: 'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
-            + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
-          search: true,
-          searchQuery: t('chat.planQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv,
+          'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
+          + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
+          t('chat.planQuery'));
         continue;
       }
 
@@ -2162,17 +2514,10 @@ async function runGeneration(conv) {
           ...(svg.length ? {} : {}),
         });
         // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
-        conv.messages.push({
-          role: 'user',
-          content: t('chat.runResult', {
-            out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
-            err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
-          }),
-          search: true,
-          searchQuery: t('chat.runQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, t('chat.runResult', {
+          out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
+          err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
+        }), t('chat.runQuery'));
         continue;
       }
 
@@ -2221,20 +2566,15 @@ async function runGeneration(conv) {
            może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
         const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
         if (depth < MAX_SEARCHES) {
-          conv.messages.push({
-            role: 'user',
-            content: `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
-              + (powod ? `Powód techniczny: ${powod}\n` : '')
-              + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
-              + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
-              + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
-              + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
-              + 'czego dokładnie szukać.',
-            search: true,
-            searchQuery: t('chat.photosQuery'),
-          });
-          saveConversations();
-          renderMessages();
+          dodajWynikNarzedzia(conv,
+            `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
+            + (powod ? `Powód techniczny: ${powod}\n` : '')
+            + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
+            + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
+            + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
+            + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
+            + 'czego dokładnie szukać.',
+            t('chat.photosQuery'));
           continue;
         }
         conv.messages.push({
@@ -2330,6 +2670,11 @@ async function runGeneration(conv) {
     isGenerating = false;
     abortController = null;
     setGeneratingUI(false);
+    /* Zapis bez zwłoki. Przeglądarka właśnie potwierdziła serwerowi, że ma
+       odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie —
+       te 400 ms zwłoki byłyby jedynym momentem, w którym gotowa odpowiedź
+       nie istnieje nigdzie poza pamięcią karty. */
+    saveConversations(true);
     renderMessages();
     if (voiceMode) {
       if (finalText) {
@@ -2344,11 +2689,28 @@ async function runGeneration(conv) {
     } else {
       if (settings.speak && finalText) speakText(finalText);
       el.input.focus();
+      /* Kolejka rusza dopiero TU, po `isGenerating = false` i po odmalowaniu
+         ekranu. W trybie głosowym jej nie ruszamy — tam rozmowa idzie
+         mikrofonem i dorzucanie pisanych wiadomości mieszałoby dwa kanały. */
+      ruszKolejke();
     }
   }
 }
 
 function stopGeneration() {
+  /* Odkąd zamknięcie karty NIE przerywa generowania, samo `abort()` w
+     przeglądarce już nie wystarcza: rozłączyłoby tylko widza, a serwer
+     spokojnie dokończyłby odpowiedź i zapisał ją do rozmowy. Stop musi
+     dotrzeć tam, gdzie naprawdę trzymane jest połączenie z modelem. */
+  const id = biegBiezacy?.id;
+  if (id) {
+    fetch('/api/chat/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bieg: id }),
+    }).catch(() => { /* i tak zaraz przerwiemy po swojej stronie */ });
+  }
+  zapamietajBieg(null);
   if (abortController) abortController.abort();
 }
 
@@ -2412,7 +2774,11 @@ async function polishPrompt() {
 
 function updateSendButton() {
   const empty = el.input.value.trim() === '' && pendingImages.length === 0;
-  el.sendBtn.disabled = empty || isGenerating || !serverReachable;
+  /* `isGenerating` NIE blokuje już wysyłania — wiadomość idzie do kolejki.
+     Sam przycisk i tak jest w tym czasie schowany na rzecz „zatrzymaj"
+     (patrz `setGeneratingUI`), ale Enter w polu działa dalej i to jest sedno:
+     myśl, która przyszła w trakcie odpowiedzi, ma się dać zapisać od razu. */
+  el.sendBtn.disabled = empty || !serverReachable;
   updatePolishButton();
 }
 
@@ -3870,7 +4236,14 @@ function pokazUjecia(u) {
     const liczby = document.createElement('span');
     liczby.className = 'plener-shot-nums mono';
     liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
-    glowa.append(ptaszek, nazwa, rola, liczby);
+    /* Rola i liczby jako JEDNA grupa. Osobno, w zwykłym `flex-wrap`, nazwa
+       ujęcia mogła się skurczyć poniżej własnego słowa i „przebitka" wchodziła
+       na plakietkę ROZWINIĘCIE — widać to było na telefonie. Zgrupowane
+       przenoszą się do drugiej linii razem i nazwa dostaje całą pierwszą. */
+    const meta = document.createElement('span');
+    meta.className = 'plener-shot-meta';
+    meta.append(rola, liczby);
+    glowa.append(ptaszek, nazwa, meta);
 
     const ruch = document.createElement('div');
     ruch.className = 'plener-shot-move';
@@ -6329,7 +6702,9 @@ function startApp() {
   setEndpoint(endpoint);
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();
-  loadConversations();
+  /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
+     powstawała w tle — wznowienie musi mieć do czego wrócić. */
+  loadConversations().then(wznowBieg).catch(() => { /* wznowienie nie może blokować startu */ });
   renderMessages();
   updateSendButton();
   loadServerConfig();

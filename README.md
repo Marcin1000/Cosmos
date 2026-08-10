@@ -41,6 +41,12 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   zużyje cały budżet na myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi
 - ✦ **Dopracowanie promptu** — przycisk obok mikrofonu przepisuje podyktowaną wypowiedź
   na precyzyjny prompt; drugie kliknięcie przywraca Twoją wersję
+- ⌛ **Kolejka wiadomości** — pisz w trakcie odpowiedzi. Wiadomość ląduje w widocznej
+  kolejce nad polem, idzie sama po zakończeniu i da się ją stamtąd wyjąć
+- 🌙 **Praca w tle** — odpowiedź żyje na serwerze, nie w karcie przeglądarki. Zgaszony
+  ekran telefonu, przełączenie aplikacji, zamknięta karta czy zerwane Wi-Fi jej nie
+  przerywają: po powrocie Cosmos podpina się do tej samej odpowiedzi, a tę, po którą
+  nikt nie wrócił, sam dopisuje do rozmowy
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
 - 🔎 **Zarządzanie rozmowami**: wyszukiwarka (po tytule i treści), przypinanie, zmiana
   nazwy, eksport, regeneracja odpowiedzi, edycja własnej wiadomości, skróty klawiszowe
@@ -683,7 +689,11 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 
 | Endpoint | Metoda | Opis |
 |---|---|---|
-| `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji i pamięci, strumień SSE |
+| `/api/chat` | POST | Rozmowa (tekst + obrazy) + kontekst percepcji i pamięci, strumień SSE. Z polem `bieg` (identyfikator nadany przez przeglądarkę) odpowiedź staje się **biegiem**: żyje na serwerze i nie ginie po zamknięciu karty |
+| `/api/chat/bieg?id=&od=` | GET | Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia, którego przeglądarka jeszcze nie ma; wcześniejsze serwer odtwarza z bufora |
+| `/api/chat/biegi` | GET | Co się teraz liczy — po odświeżeniu strony przeglądarka po tym poznaje, czy jest do czego wracać |
+| `/api/chat/odebrane` | POST | „Mam tę odpowiedź i zapisałem ją u siebie" — odwołuje zapis awaryjny po stronie serwera |
+| `/api/chat/stop` | POST | Świadome przerwanie biegu. Odkąd rozłączenie nie przerywa generowania, Stop musi dolecieć tam, gdzie trzymane jest połączenie z modelem |
 | `/api/models?endpoint=` | GET | Lista modeli danego endpointu |
 | `/api/models/check` | POST | Sprawdza jednym najtańszym żądaniem, czy dany model działa na tym koncie i czy czyta obrazy. Zwraca `{model, silnik, rozmowa, obrazy, niepewne, inneZadanie, blad, podpowiedz, bladObrazy}` |
 | `/api/status` | GET | Dostępność chmury, lokalnego GPU i zmysłów |
@@ -978,7 +988,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 68 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 71 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

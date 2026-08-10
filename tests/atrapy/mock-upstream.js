@@ -29,8 +29,17 @@ function makeMock(port, name) {
           res.writeHead(200,{'Content-Type':'application/json'});
           return res.end(JSON.stringify({choices:[{message:{role:'assistant',content:out}}]}));
         }
+        /* Kolejkowanie wiadomości da się sprawdzić tylko wtedy, gdy istnieje
+           „w trakcie odpowiedzi". Atrapa domyślnie kończy w kilkadziesiąt
+           milisekund — szybciej, niż test zdąży cokolwiek napisać. Słowo
+           „powoli" w pytaniu rozciąga strumień na kilkanaście sekund. */
+        const powoli = /powoli/i.test(lastText);
         let text;
-        if (hasResults) {
+        if (powoli) {
+          text = ('Odpowiadam powoli, żeby dało się w tym czasie napisać kolejną wiadomość. '
+            + 'Strumień leci token po tokenie i trwa na tyle długo, że kolejka ma co obsłużyć. ')
+            .repeat(4);
+        } else if (hasResults) {
           text = 'To **Samsung Galaxy S24** — 6.2" AMOLED 120 Hz, Exynos 2400, aparat 50 MP, ceny od ok. 3799 zł.\n\nŹródła: gsmarena.com, samsung.com.';
         } else if (/jaki to telefon/i.test(lastText)) {
           text = 'Rozpoznaję smartfon Samsunga — sprawdzę dokładny model.\n\n[SZUKAJ: Samsung Galaxy S24 specyfikacja cena]';
@@ -54,7 +63,7 @@ function makeMock(port, name) {
           }
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: tokens[i] } }] })}\n\n`);
           i++;
-        }, 8);
+        }, powoli ? 60 : 8);
       });
       return;
     }

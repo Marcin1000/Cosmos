@@ -212,6 +212,45 @@ function sortConvIndex() {
   convIndex.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
 }
 
+/** Dopisz wiadomość do rozmowy PO STRONIE SERWERA.
+ *
+ *  Normalnie rozmowy zapisuje przeglądarka, całym dokumentem. Ta furtka jest
+ *  dla jednego przypadku: odpowiedź skończyła się, gdy nikogo już nie było
+ *  przy ekranie. Bez niej „praca w tle" znaczyłaby tylko tyle, że serwer
+ *  dokończył czytanie od modelu i wyrzucił wynik.
+ *
+ *  Zabezpieczenie przed dublem: wiadomość niesie `bieg` — identyfikator biegu,
+ *  który ją wyprodukował. Gdy przeglądarka wróci i zapisze rozmowę po swojemu,
+ *  jej wersja nadpisze plik w całości, więc dubla nie będzie. Gdyby jednak
+ *  dopisywano dwa razy z tym samym `bieg`, drugi raz pomijamy.
+ */
+function dopiszWiadomoscDoRozmowy(id, wiadomosc) {
+  const plik = convPath(id);
+  let conv;
+  try { conv = JSON.parse(fs.readFileSync(plik, 'utf8')); } catch { return false; }
+  if (!Array.isArray(conv.messages)) return false;
+  if (wiadomosc.bieg && conv.messages.some((m) => m.bieg === wiadomosc.bieg)) return false;
+  /* Drugi pas bezpieczeństwa: przeglądarka mogła już zapisać tę samą
+     odpowiedź pod swoją postacią (bez znacznika biegu). Dwie identyczne
+     wypowiedzi pod rząd to dla użytkownika ewidentna usterka. */
+  const ostatnia = conv.messages[conv.messages.length - 1];
+  if (ostatnia && ostatnia.role === 'assistant' && typeof ostatnia.content === 'string'
+      && typeof wiadomosc.content === 'string'
+      && ostatnia.content.trim() === wiadomosc.content.trim()) return false;
+  conv.messages.push(wiadomosc);
+  conv.updatedAt = Date.now();
+  zapiszAtomowo(plik, JSON.stringify(conv));
+  const meta = convIndex.find((c) => c.id === id);
+  if (meta) { meta.updatedAt = conv.updatedAt; sortConvIndex(); saveConvIndex(); }
+  return true;
+}
+
+/* Biegi — trwające odpowiedzi modelu, które należą do serwera, a nie do karty
+   przeglądarki. Zamknięcie karty ich nie przerywa; patrz lib/biegi.js. */
+const biegi_ = require('./lib/biegi.js').utworz({
+  zapiszOdpowiedz: dopiszWiadomoscDoRozmowy,
+});
+
 // Wyszukiwanie po TREŚCI rozmów (skan plików) — zwraca dopasowania z fragmentem.
 function searchConversationsContent(query) {
   const q = query.trim().toLowerCase();
@@ -1658,6 +1697,8 @@ async function handleChat(req, res) {
         + 'nakręciłem 50 mm", „pokaż ujęcia z czerwca o zachodzie", „mam coś z tego '
         + 'miejsca" — zakończ odpowiedź osobną linią: [ARCHIWUM: filtry].\n'
         + 'Filtry (wszystkie opcjonalne, oddzielone spacjami):\n'
+        + '  folder=Mazury 2026 (FRAGMENT ŚCIEŻKI albo nazwy katalogu — bez wielkości '
+        + 'liter i bez ogonków; „mazury" znajdzie też „/Zdjęcia Mazury 2024 Dron/”) ·\n'
         + '  rok=2026 · miesiac=06 · typ=zdjecie|wideo · aparat=R6 · obiektyw=RF50 ·\n'
         + '  ogniskowa=50 · ogniskowaOd=24 ogniskowaDo=70 · isoOd=1600 · przyslonaDo=2.8 ·\n'
         + '  swiatlo=złota godzina|niebieska godzina|ostre światło|zmierzch|noc ·\n'
@@ -1679,6 +1720,18 @@ async function handleChat(req, res) {
         + 'nie zgadnięta z godziny. Gdy zdjęcie nie ma GPS-u, liczy się ją dla domu '
         + 'użytkownika, a wpis dostaje `swiatloPrzyblizone: true` — wtedy powiedz, '
         + 'że to przybliżenie.\n'
+        + 'GDY UŻYTKOWNIK MÓWI O FOLDERZE — użyj `folder=`, a NIE `miejsce=`. '
+        + 'To on porządkuje materiał katalogami i nazwa katalogu jest pewniejsza '
+        + 'niż GPS, którego w plikach zwykle nie ma.\n'
+        + 'LISTA PLIKÓW TO PRÓBKA, NIE CAŁE ARCHIWUM. Dostajesz kilkadziesiąt '
+        + 'najnowszych wpisów i jest to napisane w nagłówku wyniku. NIGDY nie '
+        + 'wnioskuj z niej o tym, czego w archiwum NIE MA („same zrzuty ekranu”, '
+        + '„brak zdjęć z aparatu”) — na to jest `grupuj`, który liczy CAŁOŚĆ. '
+        + 'Gdy szukasz materiału z aparatu, a widzisz same telefony, zrób '
+        + '[ARCHIWUM: grupuj=aparat …] zamiast orzekać.\n'
+        + 'NIE POWTARZAJ TEGO SAMEGO ZAPYTANIA. Jeśli filtr dał zero, zmień go '
+        + '(inny rok, `folder=` zamiast `miejsce=`, szerszy zakres) albo powiedz '
+        + 'wprost, czego nie znalazłeś. Kolejne identyczne wywołanie da to samo zero.\n'
         + 'ZAWSZE PATRZ NA POKRYCIE DANYCH. Zestawienie oddaje `zDanymi` i `bezDanych`. '
         + 'Gdy większość plików nie ma wypełnionego pola, liczba NIE JEST odpowiedzią '
         + 'na pytanie „ile” — jest rozmiarem luki w metadanych. Powiedz to wprost, '
@@ -1968,8 +2021,28 @@ async function handleChat(req, res) {
     stream: true,
   };
 
+  /* Identyfikator biegu nadaje przeglądarka — musi go znać ZANIM wyśle
+     żądanie, bo inaczej nie miałaby po czym wrócić, gdyby połączenie padło
+     w pierwszej sekundzie. Bez `bieg` trasa działa po staremu (zwykłe proxy),
+     co zostawia furtkę dla starych klientów i dla testów. */
+  const biegId = typeof payload.bieg === 'string' && /^[a-z0-9-]{8,64}$/i.test(payload.bieg)
+    ? payload.bieg : '';
+
   const abort = new AbortController();
-  req.on('close', () => abort.abort());
+  /* Było tu `req.on('close', () => abort.abort())` i wyglądało to na przyczynę
+     zgłoszenia Marcina („wychodzę ze strony i wszystko jest przerywane").
+     Zmierzone: ta linia NIGDY nie działała. `readJson(req)` na początku funkcji
+     wyczerpuje strumień żądania, więc `close` leci od razu po wczytaniu korpusu
+     — w momencie podpięcia `req.closed` jest już `true` i uchwyt nie ma czego
+     złapać. Sonda: klient zrywa połączenie po 1,2 s, a bieg rośnie dalej
+     (184 → 612 znaków) i kończy się normalnie.
+
+     Prawdziwa strata była gdzie indziej: odpowiedź istniała WYŁĄCZNIE
+     w przeglądarce. Serwer dopisywał ją do martwego gniazda i wyrzucał, nie
+     zapisując nigdzie — po powrocie nie było do czego wracać. To naprawiają
+     biegi. Uchwyt zostawiamy na starej ścieżce (bez `bieg`), gdzie i tak jest
+     martwy, a usunięcie go tylko zaciemniłoby diff. */
+  if (!biegId) req.on('close', () => abort.abort());
 
   let upstream;
   try {
@@ -2043,25 +2116,61 @@ async function handleChat(req, res) {
     return sendJson(res, upstream.status, { error: `${where} ${scrubSecrets(message)}${hint}` });
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-    // Który model faktycznie odpowiedział. Przy zdjęciu bywa inny niż wybrany,
-    // a podmiana za plecami użytkownika byłaby nieuczciwa.
-    'X-Cosmos-Model': encodeURIComponent(model),
-    ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
-  });
-
-  try {
-    for await (const chunk of upstream.body) {
-      res.write(chunk);
+  if (!biegId) {
+    // Stara droga: zwykłe proxy bajt w bajt. Zostaje dla klientów sprzed
+    // biegów i dla wywołań, którym praca w tle jest niepotrzebna.
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      // Który model faktycznie odpowiedział. Przy zdjęciu bywa inny niż wybrany,
+      // a podmiana za plecami użytkownika byłaby nieuczciwa.
+      'X-Cosmos-Model': encodeURIComponent(model),
+      ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
+    });
+    try {
+      for await (const chunk of upstream.body) res.write(chunk);
+    } catch {
+      /* klient przerwał lub upstream padł — kończymy strumień */
     }
-  } catch {
-    /* klient przerwał lub upstream padł — kończymy strumień */
+    return res.end();
   }
-  res.end();
+
+  /* Bieg. Od tej chwili odpowiedź należy do serwera: czytamy ją do końca
+     niezależnie od tego, czy ktoś patrzy. Przeglądarka, która właśnie wysłała
+     to żądanie, jest po prostu pierwszym widzem — takim samym jak ta, która
+     podepnie się za pięć minut z telefonu. */
+  const bieg = biegi_.zacznij({
+    id: biegId,
+    rozmowaId: typeof payload.rozmowa === 'string' ? payload.rozmowa : '',
+    model,
+    podmienionyZ: swappedFrom,
+  });
+  bieg.przerwij = () => abort.abort();
+  biegi_.podepnij(biegId, 0, res);
+
+  /* Świadomie BEZ `await`: trasa oddaje sterowanie, a pompa dalej przelewa
+     strumień do biegu. Gdyby tu było `await`, żądanie HTTP trzymałoby bieg
+     przy życiu i wróciłby dokładnie ten problem, który naprawiamy. */
+  (async () => {
+    const dekoder = new TextDecoder();
+    let ogon = '';
+    try {
+      for await (const chunk of upstream.body) {
+        ogon += dekoder.decode(chunk, { stream: true });
+        // Bloki SSE, nie bajty: numerowanie zdarzeń wymaga całych bloków,
+        // bo po nich klient wraca („mam do 137, dawaj resztę").
+        const bloki = ogon.split('\n\n');
+        ogon = bloki.pop();
+        for (const blok of bloki) if (blok.trim()) biegi_.dopisz(bieg, blok);
+      }
+      if (ogon.trim()) biegi_.dopisz(bieg, ogon);
+      biegi_.zakoncz(bieg);
+    } catch (err) {
+      biegi_.zakoncz(bieg, abort.signal.aborted ? '' : (err.message || 'Strumień modelu przerwany.'));
+    }
+  })();
 }
 
 /** Sprawdź, czy model naprawdę działa NA TYM KONCIE — i czy czyta obrazy.
@@ -2290,6 +2399,35 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
     if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
     if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    /* Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia,
+       którego przeglądarka jeszcze nie ma — dzięki temu wznowienie po
+       zerwanym Wi-Fi nie powtarza połowy zdania ani jej nie gubi. */
+    if (p === '/api/chat/bieg' && req.method === 'GET') {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      if (biegi_.podepnij(q.get('id') || '', q.get('od'), res)) return;
+      return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy — serwer jej nie pamięta.' });
+    }
+    // Co się teraz liczy. Przeglądarka pyta o to po odświeżeniu strony.
+    if (p === '/api/chat/biegi' && req.method === 'GET') {
+      return sendJson(res, 200, { biegi: biegi_.lista() });
+    }
+    /* „Mam tę odpowiedź i zapisałem ją u siebie." Dopiero to odwołuje zapis
+       awaryjny — patrz komentarz przy `potwierdz` w lib/biegi.js. */
+    if (p === '/api/chat/odebrane' && req.method === 'POST') {
+      let dane = {};
+      try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
+      return sendJson(res, 200, { ok: biegi_.potwierdz(String(dane.bieg || '')) });
+    }
+    /* Przerwanie musi być ŚWIADOME. Odkąd zamknięcie karty nie przerywa
+       generowania, przycisk Stop jest jedyną drogą — i musi docierać do
+       serwera, bo to on trzyma połączenie z modelem. */
+    if (p === '/api/chat/stop' && req.method === 'POST') {
+      let dane = {};
+      try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
+      const b = biegi_.daj(String(dane.bieg || ''));
+      if (b && b.przerwij) b.przerwij();
+      return sendJson(res, 200, { ok: Boolean(b) });
+    }
     if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
     if (p === '/api/events') return await handleEvents(req, res);
     // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast

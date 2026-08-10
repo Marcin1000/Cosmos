@@ -1881,6 +1881,222 @@ Sprawdzone przy okazji i NIEbędące usterką: przecinek dziesiętny w polach
 Nazwa obiektywu z `rozpoznajObiektywy` zawiera już jasność, a kod doklejał
 drugą. Widoczne gołym okiem, niewidoczne dla wszystkich ówczesnych sprawdzeń.
 
+## ✅ Partia 43 — archiwum na 59 421 plikach: cztery przyczyny jednej porażki (GOTOWE)
+
+Marcin zapytał „pokaż zdjęcia, które zrobiłem w tym roku na Mazurach".
+Cosmos przez kilkanaście wywołań narzędzia nie znalazł nic, a na koniec
+orzekł, że w archiwum **nie ma zdjęć z aparatu — same zrzuty ekranu**.
+Nieprawda; Canon leżał w indeksie od początku.
+
+Najważniejsze w tej partii jest to, czego NIE było: **halucynacji**. Model
+dostał polecenie „odpowiadaj na podstawie tych danych, nie zgaduj" i zrobił
+dokładnie to. Wnioski były poprawne — przesłanki nie.
+
+### 1. Do modelu szło sześć plików z pięćdziesięciu dziewięciu tysięcy
+
+Wynik archiwum leciał jako `JSON.stringify(dane).slice(0, 12000)`. Sam adres
+jednej miniatury z OneDrive to **1248 znaków** podpisanego tokenu, przy ~520
+znakach reszty wpisu. Rachunek: w budżecie mieściło się **6 plików**, a **71%**
+tego, co czytał model, stanowiły adresy obrazków — których nawet nie ogląda,
+bo w tym samym promptcie piszemy mu, że miniatury pokazaliśmy już człowiekowi.
+`slice` do tego ucinał napis w połowie JSON-a, więc dokument był składniowo
+zepsuty.
+
+Ponieważ sortujemy od najnowszych, tych sześć plików to zawsze były ostatnie
+zrzuty ekranu z telefonu.
+
+- [x] `naKontekst()` wycina miniatury, identyfikatory i puste pola, i dopasowuje
+      liczbę wpisów do budżetu zamiast ciąć napis na ślepo
+- [x] Na górze stoi zdanie **„widzisz N z 59 421, to jest PRÓBKA"** wraz
+      z zakazem wnioskowania z niej o tym, czego w archiwum nie ma
+- [x] Zmierzone: **8 wpisów z niepoprawnym JSON-em → 40 wpisów, poprawny JSON,
+      o 30% krótszy kontekst**
+
+### 2. Folderów nie dało się przeszukiwać, choć ścieżki są w indeksie
+
+`sciezka` zapisywana od zawsze, filtry tekstowe obejmowały aparat, obiektyw,
+miejsce i nazwę. Marcin porządkuje materiał katalogami („Mazury 2026",
+„Zdjęcia Mazury 2024 Dron") i to jest jego prawdziwy indeks.
+
+- [x] Filtr `folder=` porównujący fragment ścieżki bez ogonków i wielkości
+      liter — „zdjecia mazury" trafia w „/Zdjęcia Mazury 2024 Dron/"
+- [x] Model dostał instrukcję: **gdy człowiek mówi o folderze, użyj `folder=`,
+      a nie `miejsce=`**
+
+### 3. Zdjęcia z Canona nie miały się czym przedstawić
+
+Microsoft Graph czyta metadane z JPEG-ów, ale CR2/CR3 nie rusza — facet `photo`
+przychodzi pusty. Dociąganie EXIF-u istniało i działało, tylko z przeczytanego
+pliku zapisywało **wyłącznie obiektyw**, wyrzucając datę, aparat, ISO, przysłonę,
+czas, ogniskową i GPS. Każde zdjęcie z R6 II miało więc `aparat: null` i datę
+**wgrania** zamiast daty zrobienia — w wynikach nie do odróżnienia od zrzutu
+ekranu.
+
+- [x] Backfill zapisuje wszystko, co przeczytał; dane z pliku wygrywają z tym,
+      co dał Graph
+- [x] Znacznik `exifCzytany` — bez niego pliki bez obiektywu (RAW-y, skany)
+      wracały do kolejki w nieskończoność i paczka mieliła w kółko te same
+- [x] Przycisk nazywa się teraz **„Dociągnij dane z plików"**, bo to robi
+
+### 4. „Mazury" to dla Nominatim wieś w obwodzie lwowskim
+
+Geokodowanie szło bez preferencji kraju, więc pierwszym wynikiem na świecie
+była Мазури (49,82 N 23,04 E), promień 5 km. Marcin trzy razy potwierdzał
+„chodzi o Polskę" i trzy razy dostawał to samo, bo do Nominatim leciało samo
+słowo „Mazury".
+
+- [x] `GEOCODE_COUNTRY` (domyślnie `pl`): pytamy najpierw w kraju użytkownika,
+      a gdy tam nic nie ma — ponownie globalnie, żeby „Toskania" dalej działała
+
+### 5. Model pytał archiwum w kółko tym samym filtrem
+
+- [x] Powtórzone zapytanie nie idzie do serwera; model dostaje wprost „to jest
+      to samo pytanie, zmień filtry albo odpowiedz tym, co wiesz". Kręcenie się
+      w kółko wypalało budżet tokenów i **urywało odpowiedź w pół zdania** —
+      stąd obcięte wypowiedzi na zrzutach
+
+⚠ Czego ta partia NIE naprawia: pracy w tle. Zamknięcie karty nadal przerywa
+generowanie („connection error"), bo odpowiedź żyje w strumieniu SSE do
+przeglądarki. To osobna zmiana architektoniczna, opisana Marcinowi wcześniej.
+
+## ✅ Partia 44 — kolejka wiadomości i rozmowa, która wznawiała się sama (GOTOWE)
+
+Dwie uwagi z jednej rozmowy Marcina.
+
+### Pisanie w trakcie odpowiedzi
+
+Do tej pory pole tekstowe było w czasie generowania martwe: `sendMessage`
+wychodziło od razu przy `isGenerating`. Myśl, która przyszła w połowie
+czytania, trzeba było trzymać w głowie albo przerywać odpowiedź.
+
+- [x] Wiadomość napisana w trakcie ląduje w **widocznej** kolejce nad polem —
+      nie „gdzieś", tylko na ekranie, z treścią
+- [x] Rusza sama po zakończeniu odpowiedzi, w kolejności napisania
+- [x] Da się ją **wyjąć** przed wysłaniem; w połowie odpowiedzi często okazuje
+      się, że pytanie było niepotrzebne
+- [x] W trybie głosowym kolejka nie rusza — tam rozmowa idzie mikrofonem
+      i mieszanie dwóch kanałów wprowadzałoby chaos
+
+### „Bez napisania przeze mnie kolejnej wiadomości Cosmos sam się wznawiał"
+
+Znaleziona przyczyna, nie hipoteza. Wynik narzędzia wraca do modelu jako
+wiadomość z rolą `user` — taki jest protokół rozmowy. Na ekranie odróżnia je
+**jedynie** flaga `search`: z nią rysuje się zwijany blok „Przeszukuję…", bez
+niej zwykły dymek użytkownika. Jedna gałąź jej nie ustawiała — ta dopisana
+w Partii 43, odcinająca powtórzone zapytanie do archiwum. Efekt: w rozmowie
+pojawiało się długie pytanie, którego Marcin nie napisał, a model grzecznie na
+nie odpowiadał. Wiadomość szła też na dysk, więc wracała przy każdym wczytaniu
+rozmowy.
+
+- [x] Wszystkie ruchy narzędzi (wyszukiwarka, archiwum, plan, uruchamianie
+      kodu, grafiki) idą jedną furtką `dodajWynikNarzedzia`, która flagi
+      pominąć nie potrafi
+- [x] Zestaw pilnuje, żeby nikt jej nie obszedł: w `runGeneration` nie może
+      zostać ani jedna surowa wstawka `role: 'user'` (przed poprawką było 7)
+- [x] Rozmowy zapisane wcześniej naprawiają się przy wczytaniu — dymek chowa
+      się do zwijanego bloku
+
+## ✅ Partia 45 — praca w tle: odpowiedź przestaje mieszkać w karcie (GOTOWE)
+
+Marcin: „Jak wychodzę ze strony lub aplikacji zainstalowanej czy to na
+desktopie czy na mobile to wszystko jest przerywane i jest napisane że
+connection error. Chciałbym żeby to działało wszystko też w tle jak Claude."
+
+### Przyczyna okazała się inna, niż wyglądała
+
+Podejrzenie padło na jedną linię w trasie czatu:
+
+```js
+req.on('close', () => abort.abort());
+```
+
+Wygląda jak dokładny opis usterki: przeglądarka się rozłącza, serwer przerywa
+żądanie do modelu. **Pomiar to obalił.** `readJson(req)` na początku funkcji
+wyczerpuje strumień żądania, więc `close` leci od razu po wczytaniu korpusu —
+w chwili podpinania uchwytu `req.closed` jest już `true` i nie ma czego złapać.
+Sonda: klient zrywa połączenie po 1,2 s, a odpowiedź rośnie dalej
+(184 → 384 → 584 → 612 znaków) i kończy się normalnie. **Ta linia nigdy nie
+działała.**
+
+Prawdziwa przyczyna była prostsza i gorsza: odpowiedź istniała **wyłącznie
+w przeglądarce**. Serwer czytał ją od modelu do końca, dopisywał do gniazda,
+którego nikt już nie słuchał, i wyrzucał — nigdzie jej nie zapisując. Zamknięta
+karta znaczyła: model policzył swoje, zapłaciliśmy za tokeny, wyniku nie ma
+i nie będzie. „Connection error" był tylko tym, co z tego widać.
+
+### Bieg — odpowiedź należy do serwera
+
+- [x] `lib/biegi.js`: trwająca odpowiedź to **bieg**. Przeglądarka jest widzem,
+      nie właścicielem; odejście widza nie jest poleceniem przerwania
+- [x] Każde zdarzenie SSE dostaje numer (`id:`), więc powrót zaczyna się
+      dokładnie tam, gdzie się skończyło — bez powtórzonego pół zdania i bez luki
+- [x] `/api/chat/bieg?id=&od=` — powrót z dowolnego urządzenia, także po
+      odświeżeniu strony; `/api/chat/biegi` mówi, czy jest do czego wracać
+- [x] Odpowiedź, po którą nikt nie wrócił, serwer **sam dopisuje do rozmowy**
+- [x] Zerwane Wi-Fi w trakcie: przeglądarka wraca sama, z narastającą przerwą,
+      do sześciu prób — bez pytania modelu drugi raz
+- [x] Stop dolatuje do serwera (`/api/chat/stop`). Odkąd rozłączenie nie
+      przerywa generowania, przerwanie musi być świadome
+
+### Kto zapisuje — zgadywanie się nie sprawdziło
+
+Pierwsza wersja rozstrzygała to po tym, czy w chwili końca był podłączony widz.
+Gniazdo po przeładowanej stronie potrafi jeszcze chwilę żyć: serwer widział
+widza, którego już nie było, odpuszczał zapis awaryjny i odpowiedź przepadała
+mimo całej maszynerii.
+
+- [x] Przeglądarka mówi wprost `/api/chat/odebrane`. Brak potwierdzenia znaczy
+      „nikt jej nie ma" i wtedy zapisuje serwer. Zero dubli, zero zgubionych
+
+### Zestaw `praca-w-tle` — mierzy to, co robił Marcin
+
+Zadaje pytanie, **zamyka kartę** w połowie odpowiedzi, czyta plik rozmowy
+z dysku serwera. Potem to samo z przeładowaniem strony w trakcie. Każdy punkt
+sprawdzony przez zepsucie kodu:
+
+| Wyłączone | Co zgłasza zestaw |
+|---|---|
+| pole `bieg` w żądaniu | „odpowiedź przepadła po zamknięciu karty" |
+| wznowienie po starcie | „przeglądarka nie podpięła się do trwającego biegu" |
+| `/api/chat/stop` | „Stop nie dotarł do serwera — odpowiedź rosła dalej" |
+
+Odróżnienie „przeglądarka wróciła i dociągnęła" od „serwer zapisał sierotę"
+idzie po znaczniku `bieg` w wiadomości — bez tego zestaw przechodziłby także
+wtedy, gdyby wznowienia w ogóle nie było.
+
+⚠ Czego to nadal NIE robi: pętli narzędzi w tle. `[SZUKAJ:]`, `[ARCHIWUM:]`
+i `[PLAN:]` rozwija przeglądarka. Karta zamknięta dokładnie w połowie
+wyszukiwania zapisze więc turę modelu sprzed wyszukania, a nie odpowiedź po
+nim. Przeniesienie całej pętli na serwer to osobna, dużo większa zmiana.
+
+## ✅ Partia 46 — nazwy ujęć nachodziły na plakietki na telefonie (GOTOWE)
+
+Marcin, ze zrzutu z Galaxy S25: „Teksty w ujęciach wchodzą na siebie".
+„przebitka" leżała na plakietce ROZWINIĘCIE, „wyjście z kadru" na DOMKNIĘCIE.
+
+Nagłówek karty ujęcia to `flex`: ptaszek, nazwa, rola, liczby. Nazwa miała
+`flex: 1; min-width: 0`, więc mogła się skurczyć **poniżej własnego
+najdłuższego słowa** — a słowo nie ma gdzie się złamać. Zmierzone na 360 px:
+pudełko nazwy „upływ czasu w kadrze" miało **22 px szerokości i 86 px
+wysokości** (cztery linie), a napis wylewał się w prawo, na plakietkę.
+
+- [x] Rola i liczby jako jedna grupa `.plener-shot-meta` — schodzą do drugiej
+      linii razem, zamiast wypychać nazwę do zera
+- [x] `min-width: 7em` zamiast `0` i `overflow-wrap: anywhere` na nazwę
+- [x] `margin-left: auto` zamiast `justify-content: space-between` — przy
+      zawijaniu `space-between` odklejał nazwę od ptaszka, do którego należy
+
+### Pierwsza wersja sprawdzenia nie wykrywała niczego
+
+Zestaw porównywał `getBoundingClientRect()` elementów nagłówka i na starym,
+zepsutym kodzie meldował „nachodzeń: 0". Bo usterka polegała właśnie na tym,
+że **pudełka się nie stykały** — wylewał się z nich napis. Prostokąty pudełek
+mówiły, że wszystko jest w porządku, a na ekranie jedno leżało na drugim.
+
+- [x] Mierzymy `Range.getClientRects()`, czyli prostokąty samych linii tekstu
+      — to, co widać. Na starym kodzie zestaw zgłasza:
+      „spłaszczony plan teleobiektywem × rozwinięcie (26×13 px)"
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

@@ -405,7 +405,69 @@ print('ZIP OK, punktow: %d' % n)
   if (!przeskok.plener) fail.push('odsyłacz z Ustawień nie otwiera Pleneru');
   if (przeskok.ustawienia) fail.push('Ustawienia zostały otwarte pod Plenerem — dwa okna na sobie');
 
-  console.log(`8. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
+  /* ---- 8. Nagłówki ujęć na telefonie: nic nie wchodzi na nic ----
+     Marcin, ze zrzutu z Galaxy S25: „Teksty w ujęciach wchodzą na siebie".
+     Nazwa „przebitka" nachodziła na plakietkę ROZWINIĘCIE. Przyczyna była
+     w CSS: pudełko nazwy miało `min-width: 0`, więc kurczyło się poniżej
+     najdłuższego słowa, a słowo nie ma gdzie się złamać i wylewało się poza
+     swoje miejsce. Na 1280 px to się nie zdarza — dlatego mierzymy TU, na
+     szerokości telefonu, i mierzymy GEOMETRIĘ, nie obecność klas. */
+  await pg.setViewportSize({ width: 360, height: 740 });
+  await pg.waitForTimeout(500);
+  await pg.click('#fp-go');
+  await pg.waitForTimeout(1500);
+  const nachodzenia = await pg.evaluate(() => {
+    /* Mierzymy TEKST, nie pudełka. Pierwsza wersja tego sprawdzenia brała
+       `getBoundingClientRect()` elementów i nie wykrywała niczego — bo
+       usterka polegała właśnie na tym, że pudełko nazwy kurczyło się do
+       22 px, a NAPIS wylewał się poza nie i malował po plakietce. Prostokąty
+       pudełek się przy tym nie stykały. `Range.getClientRects()` daje
+       prostokąty samych linii tekstu, czyli to, co widać na ekranie. */
+    const liniePisma = (el) => {
+      const zakres = document.createRange();
+      zakres.selectNodeContents(el);
+      return [...zakres.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+    };
+    const zle = [];
+    for (const glowa of document.querySelectorAll('.plener-shot-head')) {
+      const czesci = [...glowa.querySelectorAll('*')]
+        .filter((e) => !e.children.length && e.textContent.trim())
+        .map((e) => ({ t: e.textContent.trim().slice(0, 24), linie: liniePisma(e) }))
+        .filter((x) => x.linie.length);
+      for (let i = 0; i < czesci.length; i++) {
+        for (let j = i + 1; j < czesci.length; j++) {
+          for (const a of czesci[i].linie) {
+            for (const bb of czesci[j].linie) {
+              // Zachodzenie o mniej niż 2 px to zaokrąglenia układu.
+              const poziomo = Math.min(a.right, bb.right) - Math.max(a.left, bb.left);
+              const pionowo = Math.min(a.bottom, bb.bottom) - Math.max(a.top, bb.top);
+              if (poziomo > 2 && pionowo > 2) {
+                zle.push(`„${czesci[i].t}" × „${czesci[j].t}" (${Math.round(poziomo)}×${Math.round(pionowo)} px)`);
+              }
+            }
+          }
+        }
+      }
+    }
+    return [...new Set(zle)];
+  });
+  const szerokoscTresci = await pg.evaluate(() => {
+    let prawo = 0;
+    for (const e of document.querySelectorAll('.plener-shot-head *')) {
+      if (e.children.length || !e.textContent.trim()) continue;
+      const z = document.createRange();
+      z.selectNodeContents(e);
+      for (const r of z.getClientRects()) prawo = Math.max(prawo, r.right);
+    }
+    return prawo - window.innerWidth;
+  });
+  console.log(`8. na 360 px: nachodzeń ${nachodzenia.length}, wyjście poza ekran ${Math.round(szerokoscTresci)} px`);
+  for (const n of nachodzenia.slice(0, 4)) console.log(`   • ${n}`);
+  if (nachodzenia.length) fail.push(`na telefonie teksty w ujęciach wchodzą na siebie: ${nachodzenia.slice(0, 3).join('; ')}`);
+  if (szerokoscTresci > 2) fail.push(`nagłówek ujęcia wystaje ${Math.round(szerokoscTresci)} px poza ekran telefonu`);
+  await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/plener-360.png`, fullPage: true });
+
+  console.log(`9. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   if (bledy.length) fail.push(`błędy JS: ${bledy.join(' | ')}`);
 
   await b.close();
