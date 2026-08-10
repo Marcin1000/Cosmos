@@ -34,9 +34,21 @@ function makeMock(port, name) {
            milisekund — szybciej, niż test zdąży cokolwiek napisać. Słowo
            „powoli" w pytaniu rozciąga strumień na kilkanaście sekund. */
         const powoli = /powoli/i.test(lastText);
+        /* Ścieżka „zdjęcia do planu". Trzy tury, bo tak wygląda ta rozmowa
+           naprawdę: model prosi o grafiki → dostaje je z powrotem → próbuje
+           poprosić o TE SAME jeszcze raz → zostaje odcięty i dopiero wtedy
+           przypisuje zdjęcia do planu. */
+        const juzOdcieto = flat.includes('ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ');
+        const poZdjeciach = flat.includes('ZDJĘCIA POKAZANE UŻYTKOWNIKOWI');
         let text;
-        if (powoli) {
-          text = ('Odpowiadam powoli, żeby dało się w tym czasie napisać kolejną wiadomość. '
+        if (juzOdcieto) {
+          text = 'Dzień 1 — Katedra La Seu, zdjęcia wyżej. Dzień 3 — plaża Es Trenc.';
+        } else if (poZdjeciach) {
+          text = 'Jeszcze raz to samo.\n\n[GRAFIKA: Katedra La Seu Palma]';
+        } else if (/zdj[eę]cia miejsc/i.test(lastText)) {
+          text = 'Proszę.\n\n[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc]';
+        } else if (powoli) {
+          text = /* powoli */ ('Odpowiadam powoli, żeby dało się w tym czasie napisać kolejną wiadomość. '
             + 'Strumień leci token po tokenie i trwa na tyle długo, że kolejka ma co obsłużyć. ')
             .repeat(4);
         } else if (hasResults) {

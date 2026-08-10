@@ -125,9 +125,19 @@ function selftestyPythona() {
   const padly = [...wyniki, ...py].filter((w) => w.kod !== 0);
   console.log('\n' + '='.repeat(70));
   console.log(`WYNIK: ${wyniki.length + py.length - padly.length} zdanych, ${padly.length} niezdanych`);
+  /* Ostatnie czternaście linii to za mało, gdy zestaw kończy się wyjątkiem:
+     ślad stosu Playwrighta ma sam kilkanaście linii i wypycha z widoku
+     WSZYSTKIE `console.log` zestawu. Tak przepadła informacja, na którym
+     kroku wywrócił się `pasek-offline` — zostało samo „element is not
+     visible", bez pojęcia, którego elementu i po czym.
+     Dlatego: najpierw własne wypisy zestawu (to jego opowieść o tym, co
+     mierzył), potem ogon całości. */
   for (const w of padly) {
     console.log(`\n──── ${w.nazwa} ────`);
-    console.log(w.wyjscie.trim().split('\n').slice(-14).join('\n'));
+    const linie = w.wyjscie.trim().split('\n');
+    const wlasne = linie.filter((l) => /^\s*(\d+[a-z]?\.|[·•✓✗⚠]|\s{3}\S)/.test(l));
+    if (wlasne.length) console.log(wlasne.slice(-20).join('\n'));
+    console.log(linie.slice(-14).join('\n'));
   }
   process.exit(padly.length ? 1 : 0);
 })();

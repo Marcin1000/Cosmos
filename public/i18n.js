@@ -453,8 +453,13 @@ const I18N = {
 
     // — czat / narzędzia —
     'chat.searching': '🔍 *Szukam w internecie: „{q}"…*',
+    'chat.searched': '🔍 *Szukane w internecie: „{q}"*',
     'chat.genImage': '🎨 *Generuję obraz — to zwykle trwa od kilkunastu sekund do minuty…*',
     'chat.findingPhotos': '🖼️ *Szukam zdjęć: {q}…*',
+    /* Wersja PO znalezieniu. Bez niej „Szukam zdjęć…" zostawało na ekranie na
+       zawsze — Marcin patrzył na gotowe zdjęcia i na wiszący pod nimi
+       komunikat, że Cosmos ich właśnie szuka. */
+    'chat.photosFound': '🖼️ *Zdjęcia: {q}*',
     'chat.photosDone': 'Znalazłem {n} zdjęć.',
     'chat.photosNone': '⚠ Nie znalazłem zdjęć. {msg}',
     'chat.photosNoneVoice': 'Nie znalazłem zdjęć.',
@@ -579,7 +584,15 @@ const I18N = {
     'set.noModels': 'Endpoint nie zwrócił żadnych modeli.',
     'search.err': 'WYNIKI WYSZUKIWANIA („{q}"): błąd — {e}\nOdpowiedz na podstawie własnej wiedzy i zaznacz, że nie udało się sprawdzić internetu.',
     'search.none': 'WYNIKI WYSZUKIWANIA („{q}"): brak wyników.\nOdpowiedz na podstawie własnej wiedzy i zaznacz brak wyników.',
-    'search.results': 'WYNIKI WYSZUKIWANIA („{q}"):\n{lines}\n\nOdpowiedz teraz na pytanie użytkownika na podstawie tych wyników i podaj źródła.',
+    /* Format źródeł podajemy WPROST. „podaj źródła" to za mało: model wypisywał
+       „【1†L1-L4】", czyli zapis, który nic nie znaczy dla człowieka i w który
+       nie da się kliknąć. Adresy ma w wynikach — niech ich użyje. */
+    'search.results': 'WYNIKI WYSZUKIWANIA („{q}"):\n{lines}\n\n'
+      + 'Odpowiedz teraz na pytanie użytkownika na podstawie tych wyników. '
+      + 'Na końcu odpowiedzi dodaj sekcję „Źródła:" i wypisz w niej użyte strony '
+      + 'jako linki markdown [tytuł](adres), po jednej w wierszu. NIE używaj '
+      + 'zapisów typu [1] ani 【1†L1-L4】 — dla użytkownika nic nie znaczą i nie '
+      + 'da się w nie kliknąć.',
     'search.enough': 'LIMIT WYSZUKIWAŃ WYCZERPANY. Nie szukaj więcej — nie użyjesz już [SZUKAJ:]. '
       + 'Odpowiedz teraz najlepiej, jak potrafisz, na podstawie zebranych wyników i własnej wiedzy. '
       + 'Jeśli czegoś nie udało się ustalić, napisz wprost czego i podaj adresy, pod którymi '
@@ -1127,8 +1140,10 @@ const I18N = {
     'voice.birdErr': '🐦 Identification failed: {msg}',
 
     'chat.searching': '🔍 *Searching the internet: “{q}”…*',
+    'chat.searched': '🔍 *Searched the internet: “{q}”*',
     'chat.genImage': '🎨 *Generating the image — this usually takes from a few seconds to a minute…*',
     'chat.findingPhotos': '🖼️ *Looking for photos: {q}…*',
+    'chat.photosFound': '🖼️ *Photos: {q}*',
     'chat.photosDone': 'Found {n} photos.',
     'chat.photosNone': '⚠ No photos found. {msg}',
     'chat.photosNoneVoice': 'No photos found.',
@@ -1252,7 +1267,11 @@ const I18N = {
     'set.noModels': 'The endpoint returned no models.',
     'search.err': 'SEARCH RESULTS (“{q}”): error — {e}\nAnswer from your own knowledge and note that the internet could not be checked.',
     'search.none': 'SEARCH RESULTS (“{q}”): no results.\nAnswer from your own knowledge and note that there were no results.',
-    'search.results': 'SEARCH RESULTS (“{q}”):\n{lines}\n\nNow answer the user\'s question based on these results and cite the sources.',
+    'search.results': 'SEARCH RESULTS (“{q}”):\n{lines}\n\n'
+      + 'Now answer the user\'s question based on these results. End your answer '
+      + 'with a “Sources:” section listing the pages you used as markdown links '
+      + '[title](url), one per line. Do NOT use markers like [1] or 【1†L1-L4】 — '
+      + 'they mean nothing to the reader and cannot be clicked.',
     'search.enough': 'SEARCH LIMIT REACHED. Do not search again — [SEARCH:] will not be honoured. '
       + 'Answer now as best you can from the results gathered and your own knowledge. '
       + 'If something could not be established, say plainly what, and give the addresses '

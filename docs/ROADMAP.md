@@ -2097,6 +2097,61 @@ mówiły, że wszystko jest w porządku, a na ekranie jedno leżało na drugim.
       — to, co widać. Na starym kodzie zestaw zgłasza:
       „spłaszczony plan teleobiektywem × rozwinięcie (26×13 px)"
 
+## ✅ Partia 47 — zdjęcia leżały obok planu zamiast w nim (GOTOWE)
+
+Marcin poprosił o plan tygodniowej wycieczki na Majorkę, a potem „ze zdjęciami
+proszę". Dostał osiem zdjęć **jednej** katedry, pod nimi wiszący komunikat
+„🖼️ Szukam zdjęć: Katedra La Seu Palma de Mallorca…" — i ciszę. Sześć
+pozostałych dni planu nie doczekało się niczego.
+
+Cztery osobne przyczyny, cztery osobne poprawki.
+
+### 1. Komunikat o trwającej czynności nigdy się nie kończył
+
+„Szukam zdjęć…" był zwykłą wiadomością asystenta. Zdjęcia dochodziły pod nią
+i zostawało zapewnienie, że Cosmos właśnie ich szuka.
+
+- [x] Po znalezieniu wiadomość jest PRZEPISYWANA na „🖼️ Zdjęcia: …"
+- [x] To samo przy wyszukiwaniu w internecie: „Szukam…" → „Szukane…"
+
+### 2. Po pokazaniu zdjęć pętla się kończyła
+
+W gałęzi grafik stało `break`. Model nie miał już jak powiedzieć, co to za
+miejsca — zdjęcia lądowały obok planu, nieprzypisane do żadnego dnia.
+
+- [x] Głos wraca do modelu: dostaje listę pokazanych zestawów z poleceniem
+      „przypisz je do miejsc z planu, a o resztę przystanków poproś JEDNYM
+      znacznikiem"
+- [x] Hamulec `pytaniaGrafik` — powtórzona prośba o te same zdjęcia zostaje
+      odcięta, tak jak w archiwum. Bez tego jedna katedra zjadłaby wszystkie
+      rundy
+
+### 3. Model prosił o jedno miejsce z siedmiu i to zapowiadał
+
+Napisał „oto propozycje zapytań o zdjęcia… po ich wykonaniu otrzymasz
+fotografie", jakby znacznik był propozycją do zatwierdzenia.
+
+- [x] Prompt: przy planie, liście miejsc albo trasie — wszystkie kluczowe
+      punkty w JEDNYM znaczniku, do czterech. „Jedno miejsce z siedmiu to nie
+      jest odpowiedź na »ze zdjęciami proszę«"
+- [x] Prompt: nie zapowiadaj wyszukiwania, po prostu dodaj znacznik
+
+### 4. Źródła w formacie, w który nie da się kliknąć
+
+Model wypisywał `【1†L1-L4】`. Instrukcja mówiła „podaj źródła" i nie mówiła jak,
+a adresy miał w wynikach.
+
+- [x] Format podany wprost: sekcja „Źródła:" i linki markdown `[tytuł](adres)`,
+      po jednej w wierszu; `[1]` i `【1†L1-L4】` wymienione jako zakazane
+- [x] Zasada dotyczy KAŻDEGO tematu, nie tylko podróży: ilekroć odpowiedź
+      opiera się na wynikach z internetu. Gdy model odpowiada z własnej wiedzy
+      — ma to napisać wprost, a nie wymyślać źródła
+
+Nowy zestaw `zdjecia-w-planie` przechodzi całą tę drogę na atrapie modelu,
+która zachowuje się jak prawdziwa: prosi o grafiki, próbuje poprosić o te same
+jeszcze raz, po odcięciu dopisuje tekst. Na starym kodzie zgłasza wszystkie
+trzy usterki z ekranu Marcina naraz.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

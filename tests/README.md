@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (71 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (72 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -61,6 +61,7 @@ Dostępne środowiska (`pomoc.js` → `SRODOWISKA`):
 | `aparat` | Canon po CCAPI + geokodowanie — droga „policz plan → wyślij do aparatu” |
 | `zmysly` | Kinect, mowa, wykrywanie — bez modelu |
 | `tlo` | praca w tle — jak `pelne`, ale z krótkim `COSMOS_BIEG_SIEROTA_MS` |
+| `grafikiWRozmowie` | model proszący o grafiki **i** źródła, które je oddają |
 | `goly` | sam serwer, żadnych atrap |
 
 ### Umowy z atrapą `mock-upstream`
@@ -74,6 +75,7 @@ ustawił sytuację, której inaczej nie da się wywołać:
 | `jaki to telefon` | oddaje `[SZUKAJ: …]` — uruchamia pętlę wyszukiwania |
 | `wygeneruj grafikę` | oddaje `[OBRAZ: …]` |
 | `zapamiętaj` | oddaje `[AKCJA: zapamiętaj \| …]` |
+| `zdjęcia miejsc` | oddaje `[GRAFIKA: A; B]`, potem próbuje powtórzyć to samo, a po odcięciu dopisuje tekst — trzy tury, tak jak w prawdziwej rozmowie |
 
 Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.
