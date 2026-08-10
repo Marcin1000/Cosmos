@@ -680,7 +680,9 @@ async function handleOneDrive(req, res, p) {
         console.error('Indeksowanie OneDrive:', err.message);
       } finally {
         indeksowanie.trwa = false;
-        archiwum.zapisz();
+        // `zapisz()` jest asynchroniczny — czekamy, żeby „indeksowanie
+        // skończone" znaczyło też „zapisane na dysk".
+        await archiwum.zapisz();
       }
     })();
     return sendJson(res, 202, { ruszylo: true });

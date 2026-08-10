@@ -2199,6 +2199,58 @@ Nowy zestaw `urwana-odpowiedz` sprawdza sklejenie po ODNOŚNIKU, nie po tekście
 tylko doklejenie bez spacji daje poprawny `href`. Na starym kodzie zgłasza
 „adres nie skleił się w całość" i pokazuje kikut `…majorka-atrakcje-wynajem`.
 
+## ✅ Partia 49 — „strasznie wolno to idzie": tempo archiwum (GOTOWE)
+
+Marcin po pierwszej paczce dociągania danych z plików: licznik 71 → 96
+uzupełnionych, 55 tysięcy w kolejce. „Chyba potrwa parę dni. Strasznie wolno to
+idzie, a jeszcze trzeba zrobić rozpoznanie treści i wczytać telemetrię klipów."
+
+Zmierzone, nie wywnioskowane. Trzy przyczyny, dwie nie tam, gdzie się ich
+szukało.
+
+### 1. Zapis indeksu blokował cały serwer na 5 sekund
+
+`writeFileSync` na indeksie **97,8 MB** trwał **5,2 s** i zatrzymywał pętlę
+zdarzeń — w tym czasie serwer nie obsługiwał ŻADNEGO żądania. Zapis był
+odkładany o sekundę, więc przy dociąganiu stał dłużej, niż pracował.
+
+- [x] Zapis asynchroniczny (`fs.promises`), nakładające się składane w jeden
+- [x] Odstęp z 1 s na 3 s (`COSMOS_ARCHIWUM_ZAPIS_MS`)
+
+### 2. Siedemdziesiąt megabajtów adresów, których nikt nie czyta
+
+Z 98 MB indeksu **70 MB stanowiły adresy miniatur z OneDrive** — po 1,2 kB
+podpisanego adresu na plik. Przeglądarka nigdy z nich nie korzystała: podgląd
+idzie przez `/api/archive/thumb?id=`, bo adresy Microsoftu wygasają po
+godzinie. Przepisywaliśmy je przy każdym zapisie za darmo.
+
+- [x] `miniatura` nie trafia już do indeksu, a stare wpisy czyszczą się przy
+      wczytaniu — indeks chudnie przy pierwszym restarcie
+- [x] Zmierzone: **1720 → 472 bajty na wpis**, zapis **5,2 s → 0,4 s**
+
+### 3. Pliki szły JEDEN PO DRUGIM
+
+Każdy plik to jedno żądanie zakresu do Microsoftu. Sekwencyjnie opóźnienie
+łącza sumuje się tyle razy, ile jest plików — przy 56 tysiącach to godziny
+czystego czekania przy zerowym obciążeniu procesora.
+
+- [x] Sześciu robotników z jednej kolejki (`ONEDRIVE_RUWNOLEGLE`), tak samo
+      przy EXIF-ie i przy telemetrii klipów
+- [x] Paczki większe: 100 → 300 (EXIF), 25 → 100 (telemetria)
+- [x] Zmierzone na atrapie z opóźnieniem 50 ms: **3735 ms → 539 ms** na 60
+      plików, szczyt równoległych żądań 1 → 6
+
+### Czego przyczyną NIE było
+
+`indexOf` w `dodaj()` — wygląda na koszt kwadratowy po liczbie wpisów
+i było pierwszym podejrzanym. Zmierzone: **132 ms na 500 aktualizacji
+z końca 59-tysięcznej tablicy**. Gdybym poszedł za intuicją zamiast za
+pomiarem, przepisałbym niewłaściwą rzecz i tempo zostałoby takie samo.
+
+Nowy zestaw `tempo-archiwum` mierzy wszystkie trzy: bajty na wpis, tyknięcia
+pętli zdarzeń podczas zapisu i szczyt równoległych żądań. Na starym kodzie
+zgłasza cztery usterki naraz.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

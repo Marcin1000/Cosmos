@@ -172,8 +172,10 @@ function zaladujNaKontekst() {
 
   /* ---- 5. Znacznik `exifCzytany` przeżywa zapis i odczyt ----
      Zapis jest opóźniony o sekundę (`zapiszWkrotce`), więc wymuszamy go
-     wprost — inaczej sprawdzalibyśmy wyścig z debounce'em, a nie trwałość. */
-  a.zapisz();
+     wprost — inaczej sprawdzalibyśmy wyścig z debounce'em, a nie trwałość.
+     `zapisz()` jest ASYNCHRONICZNY (blokujący zatrzymywał serwer na 5 s przy
+     dużym indeksie), więc trzeba na niego poczekać. */
+  await a.zapisz();
   const b = utworz(katalog);
   const poWczytaniu = b.szukaj({ folder: 'Mazury 2026' }).find((w) => w.id === przed.id);
   console.log(`5. po ponownym wczytaniu z dysku: exifCzytany=${poWczytaniu && poWczytaniu.exifCzytany}`);

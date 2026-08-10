@@ -629,8 +629,11 @@ async function odswiezArchiwum() {
      od indeksowania i dlatego paczkami. Do tej pory dało się je uruchomić
      wyłącznie ręcznie curlem, co znaczy: nikt ich nigdy nie uruchomił. */
   if (d.wArchiwum) {
+    /* Paczki większe, odkąd serwer bierze pliki po sześć naraz: przy setce
+       połowa czasu szła na narzut samej paczki, a licznik na ekranie i tak
+       odświeża się co kilkanaście sekund. */
     przycisk(t('arch.lenses'), (e) => uzupelniajPaczkami({
-      przycisk: e.currentTarget, adres: '/api/archive/lenses', ile: 100,
+      przycisk: e.currentTarget, adres: '/api/archive/lenses', ile: 300,
       etykieta: (w) => t('arch.lensesProgress', { ile: w.uzupelnione, zostalo: w.zostalo }),
       koniec: (suma) => t('arch.lensesDone', { ile: suma }),
     }));
@@ -640,7 +643,7 @@ async function odswiezArchiwum() {
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
-      przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 25,
+      przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 100,
       etykieta: (w) => t('arch.teleProgress', { ile: w.odczytane, zostalo: w.zostalo }),
       koniec: (suma) => t('arch.teleDone', { ile: suma }),
     }));
