@@ -1669,8 +1669,16 @@ async function handleChat(req, res) {
         'informacji (modele urządzeń, ceny, specyfikacje, wiadomości, fakty, których nie znasz), ' +
         'NIE zgaduj — zakończ swoją odpowiedź osobną linią dokładnie w formacie: [SZUKAJ: zapytanie]. ' +
         'Otrzymasz wtedy wiadomość „WYNIKI WYSZUKIWANIA” i na jej podstawie udzielisz pełnej ' +
-        'odpowiedzi, podając źródła. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
+        'odpowiedzi. Gdy znasz odpowiedź lub pytanie dotyczy rozmowy/obrazu, ' +
         'odpowiadaj normalnie, bez [SZUKAJ:].\n' +
+        /* „Podaj źródła" bez podanego formatu kończyło się zapisem „【1†L1-L4】",
+           w który nie da się kliknąć i który nikomu nic nie mówi. */
+        'ŹRÓDŁA: ilekroć odpowiadasz na podstawie wyników z internetu — nieważne, ' +
+        'czy chodzi o pogodę, sprzęt, przepisy czy plan podróży — zakończ ' +
+        'odpowiedź sekcją „Źródła:" i wypisz strony jako linki markdown ' +
+        '[tytuł](adres), po jednej w wierszu. Nie używaj zapisów typu [1] ani ' +
+        '【1†L1-L4】. Gdy odpowiadasz z własnej wiedzy, bez wyszukiwania, nie ' +
+        'wymyślaj źródeł — napisz wprost, że to Twoja wiedza, i zaproponuj sprawdzenie.\n' +
         /* Bez tej zasady model przy „znajdź coś w okolicy" bez znanej lokalizacji
            kręcił się w kółko: „mam szukać czy zapytać? instrukcja każe szukać,
            ale nie mam czego". Cztery ekrany rozważań, zero odpowiedzi. */
@@ -1897,6 +1905,17 @@ async function handleChat(req, res) {
         'Możesz poprosić o grafiki dla kilku rzeczy naraz, oddzielając je średnikiem: ' +
         '[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc; Valldemossa]. Nie pytaj ' +
         'użytkownika, które z wymienionych miejsc chce zobaczyć — pokaż kilka najlepszych.\n' +
+        /* Marcin poprosił „ze zdjęciami proszę" do siedmiodniowego planu Majorki
+           i dostał osiem zdjęć jednej katedry. Model potraktował znacznik jak
+           zapowiedź („oto propozycje zapytań o zdjęcia") i wysłał jedno miejsce
+           z siedmiu. Obie te rzeczy trzeba powiedzieć wprost. */
+        'GDY PROŚBA DOTYCZY PLANU, LISTY MIEJSC ALBO TRASY — wymień w JEDNYM ' +
+        'znaczniku wszystkie kluczowe punkty (do czterech), po średniku. Jedno ' +
+        'miejsce z siedmiu to nie jest odpowiedź na „ze zdjęciami proszę".\n' +
+        'NIE ZAPOWIADAJ WYSZUKIWANIA. Nie pisz „oto propozycje zapytań o zdjęcia" ' +
+        'ani „po ich wykonaniu otrzymasz zdjęcia" — po prostu dodaj znacznik. ' +
+        'Zdjęcia pojawią się od razu, a Ty dostaniesz je z powrotem i wtedy ' +
+        'przypiszesz je do miejsc z planu.\n' +
         /* Marcin: „zdjęcia się nie pokazywały, a jak podałem mu, że Kraków, to
            zgłupiał". Samo doprecyzowanie jest najzwyklejszą rzeczą w rozmowie,
            a model traktował je jak nowy, niezrozumiały temat. */

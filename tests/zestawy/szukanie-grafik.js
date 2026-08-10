@@ -67,6 +67,27 @@ const { srodowisko } = require('../pomoc');
     fail.push('nic nie odróżnia „znajdź zdjęcia" od „wygeneruj obraz"');
   }
 
+  /* Marcin poprosił „ze zdjęciami proszę" do siedmiodniowego planu Majorki
+     i dostał zdjęcia JEDNEGO miejsca, poprzedzone zapowiedzią „oto propozycje
+     zapytań o zdjęcia". Obie rzeczy wynikały z tego, czego prompt NIE mówił. */
+  const jednymZnacznikiem = /JEDNYM\s+znaczniku/.test(prompt);
+  console.log(`7b. prompt żąda kilku miejsc w jednym znaczniku: ${jednymZnacznikiem ? 'tak' : 'NIE'}`);
+  if (!jednymZnacznikiem) {
+    fail.push('prompt nie żąda kilku miejsc naraz — stąd jedno zdjęcie z siedmiu przystanków planu');
+  }
+  if (!/NIE ZAPOWIADAJ WYSZUKIWANIA/.test(prompt)) {
+    fail.push('prompt nie zabrania zapowiadania — stąd „oto propozycje zapytań o zdjęcia"');
+  }
+
+  /* Źródła. „Podaj źródła" bez formatu kończyło się zapisem 【1†L1-L4】 —
+     nie linkiem, nie tytułem, tylko czymś, w co nie da się kliknąć. */
+  const format = /Źródła:/.test(prompt) && /\[tytuł\]\(adres\)/.test(prompt);
+  console.log(`7c. prompt podaje FORMAT źródeł: ${format ? 'tak' : 'NIE'}`);
+  if (!format) fail.push('prompt każe podać źródła, ale nie mówi jak — stąd 【1†L1-L4】');
+  if (!/【/.test(prompt)) {
+    fail.push('prompt nie wymienia zapisu 【…】 jako zakazanego — model sam z niego nie zrezygnuje');
+  }
+
   // 8. mniejszy model też musi umieć szukać zdjęć — tylko krótszym tekstem
   const krotki = await promptDla('nvidia/nvidia-nemotron-nano-9b-v2');
   console.log(`8. mniejszy model — [GRAFIKA:] ${/GRAFIKA:/.test(krotki) ? 'jest' : 'BRAK'}`);

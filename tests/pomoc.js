@@ -254,6 +254,21 @@ const SRODOWISKA = {
       COSMOS_BIEG_SIEROTA_MS: '1200',
     },
   },
+  /* Zdjęcia W ROZMOWIE: model, który prosi o grafiki, i źródła, które je
+     oddają. Środowisko `grafiki` ma same źródła (atrapa echa zamiast modelu),
+     a `pelne` ma model bez źródeł — drogi „model prosi → zdjęcia lądują na
+     ekranie → model przypisuje je do planu" nie dało się dotąd przejść. */
+  grafikiWRozmowie: {
+    port: 3413,
+    atrapy: [['mock-upstream.js', null], ['mock-grafiki.js', null]],
+    env: {
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:9099/v1',
+      IMAGE_SEARCH_URL: 'http://127.0.0.1:7117/',
+      COMMONS_API_URL: 'http://127.0.0.1:7117/commons',
+      OPENVERSE_API_URL: 'http://127.0.0.1:7117/openverse',
+      SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
+    },
+  },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },
   /* Aparat Canon po CCAPI + geokodowanie. Potrzebne razem, bo drogę „policz

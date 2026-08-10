@@ -2259,6 +2259,14 @@ const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
    „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
    Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
    Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
+/* „Katedra La Seu" i „katedra la seu" to to samo pytanie o zdjęcia. Bez
+   ujednolicenia model prosiłby o tę samą rzecz raz po raz, tylko inaczej
+   zapisaną, i wypalał limit rund na jednym budynku. */
+function bezOgonkowKlient(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/ł/gi, 'l').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 function dodajWynikNarzedzia(conv, tresc, etykieta) {
   conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta });
   saveConversations();
@@ -2278,6 +2286,10 @@ async function runGeneration(conv, podpiecie = null) {
      archiwum…" pojawiło się kilka razy pod rząd bez zmiany parametrów.
      Limit głębokości tego nie łapie, bo formalnie to różne kroki. */
   const pytaniaArchiwum = new Set();
+  /* To samo dla zdjęć. Odkąd po pokazaniu grafik oddajemy głos modelowi,
+     musi istnieć hamulec: bez niego „pokaż zdjęcia" potrafiłoby zjeść
+     wszystkie rundy na jednym miejscu z planu. */
+  const pytaniaGrafik = new Set();
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
@@ -2309,10 +2321,13 @@ async function runGeneration(conv, podpiecie = null) {
       if (marker && depth < MAX_SEARCHES) {
         const q = marker[1].trim();
         const before = acc.replace(marker[0], '').trim();
-        conv.messages.push({
+        // Ta sama zasada co przy zdjęciach: komunikat o trwającej czynności
+        // ma się domknąć, kiedy czynność się skończy.
+        const szukanie = {
           role: 'assistant',
           content: (before ? before + '\n\n' : '') + t('chat.searching', { q }),
-        });
+        };
+        conv.messages.push(szukanie);
         saveConversations();
         renderMessages();
         if (voiceMode) {
@@ -2321,6 +2336,7 @@ async function runGeneration(conv, podpiecie = null) {
           setVoiceState('thinking');
         }
         const resultsText = await webSearch(q);
+        szukanie.content = (before ? before + '\n\n' : '') + t('chat.searched', { q });
         dodajWynikNarzedzia(conv, resultsText, q);
         continue;
       }
@@ -2527,13 +2543,30 @@ async function runGeneration(conv, podpiecie = null) {
       const fotoMarker = acc.match(PHOTO_MARKER_RE);
       if (fotoMarker) {
         // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
-        const zapytania = fotoMarker[1].split(';')
+        const wszystkie = fotoMarker[1].split(';')
           .map((s) => s.trim()).filter(Boolean).slice(0, 4);
         const before = stripSearchMarker(acc.replace(fotoMarker[0], ''));
-        conv.messages.push({
+        /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
+           dostaniu wyniku lubi poprosić o to samo jeszcze raz — a drugi raz
+           te same zdjęcia to dla użytkownika po prostu usterka. */
+        const zapytania = wszystkie.filter((q) => !pytaniaGrafik.has(bezOgonkowKlient(q)));
+        if (!zapytania.length && depth < MAX_SEARCHES) {
+          dodajWynikNarzedzia(conv,
+            `ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ: ${wszystkie.join(', ')}. `
+            + 'Nie proś o nie ponownie. Albo poproś o INNE miejsca z planu, '
+            + 'albo dokończ odpowiedź tekstem.',
+            t('chat.photosQuery'));
+          continue;
+        }
+        /* Trzymamy tę wiadomość, bo za chwilę trzeba ją PRZEPISAĆ. Wisiała
+           w rozmowie na zawsze jako „Szukam zdjęć: Katedra La Seu…" — pod nią
+           gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich właśnie
+           szuka. Komunikat o trwającej czynności musi się kiedyś skończyć. */
+        const szukanie = {
           role: 'assistant',
           content: (before ? before + '\n\n' : '') + t('chat.findingPhotos', { q: zapytania.join(', ') }),
-        });
+        };
+        conv.messages.push(szukanie);
         saveConversations();
         renderMessages();
         // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
@@ -2546,6 +2579,9 @@ async function runGeneration(conv, podpiecie = null) {
         }));
         const znalezione = zestawy.filter((z) => z.photos.length);
         if (znalezione.length) {
+          // Czynność się skończyła — komunikat przestaje mówić „szukam".
+          szukanie.content = (before ? before + '\n\n' : '')
+            + t('chat.photosFound', { q: znalezione.map((z) => z.q).join(', ') });
           for (const z of znalezione) {
             conv.messages.push({
               role: 'assistant',
@@ -2554,6 +2590,33 @@ async function runGeneration(conv, podpiecie = null) {
           }
           finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
           saveConversations();
+          renderMessages();
+
+          /* Oddajemy głos modelowi zamiast kończyć turę. Wcześniej było tu
+             `break` i wyglądało to tak: Marcin prosi „ze zdjęciami proszę"
+             do siedmiodniowego planu, dostaje osiem zdjęć jednej katedry
+             i ciszę. Zdjęcia leżały obok planu, nieprzypisane do żadnego dnia,
+             a pozostałe przystanki nie doczekały się niczego.
+
+             Model musi wiedzieć, CO dostał — i że wolno mu poprosić o resztę
+             miejsc jednym znacznikiem. Powtórzone zapytania odcinamy tak samo
+             jak w archiwum, żeby nie kręcił się w kółko po tej samej katedrze. */
+          for (const z of znalezione) pytaniaGrafik.add(bezOgonkowKlient(z.q));
+          if (depth < MAX_SEARCHES) {
+            const doZrobienia = zapytania.filter((q) => !znalezione.some((z) => z.q === q));
+            dodajWynikNarzedzia(conv,
+              'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI (już je widzi — nie opisuj ich '
+              + 'po kolei i nie zapowiadaj):\n'
+              + znalezione.map((z) => `• ${z.q} — ${z.photos.length} szt.`).join('\n')
+              + (doZrobienia.length ? `\nBEZ WYNIKÓW: ${doZrobienia.join(', ')}` : '')
+              + '\n\nDokończ teraz odpowiedź: przypisz te zdjęcia do miejsc z planu '
+              + 'jednym–dwoma zdaniami na miejsce. Jeśli plan ma jeszcze inne '
+              + 'przystanki bez zdjęć, poproś o nie JEDNYM znacznikiem '
+              + '[GRAFIKA: miejsce1; miejsce2; miejsce3] — nie po jednym na raz. '
+              + 'Nie proś ponownie o to, co już masz powyżej.',
+              t('chat.photosQuery'));
+            continue;
+          }
           break;
         }
 
