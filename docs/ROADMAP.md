@@ -1996,7 +1996,78 @@ rozmowy.
 - [x] Rozmowy zapisane wcześniej naprawiają się przy wczytaniu — dymek chowa
       się do zwijanego bloku
 
-⚠ Nadal NIE naprawione: praca w tle. Zamknięcie karty przerywa generowanie.
+## ✅ Partia 45 — praca w tle: odpowiedź przestaje mieszkać w karcie (GOTOWE)
+
+Marcin: „Jak wychodzę ze strony lub aplikacji zainstalowanej czy to na
+desktopie czy na mobile to wszystko jest przerywane i jest napisane że
+connection error. Chciałbym żeby to działało wszystko też w tle jak Claude."
+
+### Przyczyna okazała się inna, niż wyglądała
+
+Podejrzenie padło na jedną linię w trasie czatu:
+
+```js
+req.on('close', () => abort.abort());
+```
+
+Wygląda jak dokładny opis usterki: przeglądarka się rozłącza, serwer przerywa
+żądanie do modelu. **Pomiar to obalił.** `readJson(req)` na początku funkcji
+wyczerpuje strumień żądania, więc `close` leci od razu po wczytaniu korpusu —
+w chwili podpinania uchwytu `req.closed` jest już `true` i nie ma czego złapać.
+Sonda: klient zrywa połączenie po 1,2 s, a odpowiedź rośnie dalej
+(184 → 384 → 584 → 612 znaków) i kończy się normalnie. **Ta linia nigdy nie
+działała.**
+
+Prawdziwa przyczyna była prostsza i gorsza: odpowiedź istniała **wyłącznie
+w przeglądarce**. Serwer czytał ją od modelu do końca, dopisywał do gniazda,
+którego nikt już nie słuchał, i wyrzucał — nigdzie jej nie zapisując. Zamknięta
+karta znaczyła: model policzył swoje, zapłaciliśmy za tokeny, wyniku nie ma
+i nie będzie. „Connection error" był tylko tym, co z tego widać.
+
+### Bieg — odpowiedź należy do serwera
+
+- [x] `lib/biegi.js`: trwająca odpowiedź to **bieg**. Przeglądarka jest widzem,
+      nie właścicielem; odejście widza nie jest poleceniem przerwania
+- [x] Każde zdarzenie SSE dostaje numer (`id:`), więc powrót zaczyna się
+      dokładnie tam, gdzie się skończyło — bez powtórzonego pół zdania i bez luki
+- [x] `/api/chat/bieg?id=&od=` — powrót z dowolnego urządzenia, także po
+      odświeżeniu strony; `/api/chat/biegi` mówi, czy jest do czego wracać
+- [x] Odpowiedź, po którą nikt nie wrócił, serwer **sam dopisuje do rozmowy**
+- [x] Zerwane Wi-Fi w trakcie: przeglądarka wraca sama, z narastającą przerwą,
+      do sześciu prób — bez pytania modelu drugi raz
+- [x] Stop dolatuje do serwera (`/api/chat/stop`). Odkąd rozłączenie nie
+      przerywa generowania, przerwanie musi być świadome
+
+### Kto zapisuje — zgadywanie się nie sprawdziło
+
+Pierwsza wersja rozstrzygała to po tym, czy w chwili końca był podłączony widz.
+Gniazdo po przeładowanej stronie potrafi jeszcze chwilę żyć: serwer widział
+widza, którego już nie było, odpuszczał zapis awaryjny i odpowiedź przepadała
+mimo całej maszynerii.
+
+- [x] Przeglądarka mówi wprost `/api/chat/odebrane`. Brak potwierdzenia znaczy
+      „nikt jej nie ma" i wtedy zapisuje serwer. Zero dubli, zero zgubionych
+
+### Zestaw `praca-w-tle` — mierzy to, co robił Marcin
+
+Zadaje pytanie, **zamyka kartę** w połowie odpowiedzi, czyta plik rozmowy
+z dysku serwera. Potem to samo z przeładowaniem strony w trakcie. Każdy punkt
+sprawdzony przez zepsucie kodu:
+
+| Wyłączone | Co zgłasza zestaw |
+|---|---|
+| pole `bieg` w żądaniu | „odpowiedź przepadła po zamknięciu karty" |
+| wznowienie po starcie | „przeglądarka nie podpięła się do trwającego biegu" |
+| `/api/chat/stop` | „Stop nie dotarł do serwera — odpowiedź rosła dalej" |
+
+Odróżnienie „przeglądarka wróciła i dociągnęła" od „serwer zapisał sierotę"
+idzie po znaczniku `bieg` w wiadomości — bez tego zestaw przechodziłby także
+wtedy, gdyby wznowienia w ogóle nie było.
+
+⚠ Czego to nadal NIE robi: pętli narzędzi w tle. `[SZUKAJ:]`, `[ARCHIWUM:]`
+i `[PLAN:]` rozwija przeglądarka. Karta zamknięta dokładnie w połowie
+wyszukiwania zapisze więc turę modelu sprzed wyszukania, a nie odpowiedź po
+nim. Przeniesienie całej pętli na serwer to osobna, dużo większa zmiana.
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,

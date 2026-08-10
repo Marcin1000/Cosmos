@@ -164,7 +164,13 @@ function saveConversationsSoon(ms = 800) {
   zapisZaChwile = setTimeout(() => { zapisZaChwile = null; saveConversations(); }, ms);
 }
 
-function saveConversations() {
+/** @param {boolean} natychmiast — pomiń 400 ms zwłoki i wyślij zapis od razu.
+ *
+ *  Zwłoka jest dobra przy pisaniu (jeden zapis zamiast dziesięciu), ale zła
+ *  przed startem generowania: gdy karta zamknie się w tej ćwierci sekundy,
+ *  serwer dokończy odpowiedź i nie będzie miał jej gdzie dopisać, bo plik
+ *  rozmowy jeszcze nie istnieje. */
+function saveConversations(natychmiast = false) {
   clearTimeout(zapisZaChwile);
   zapisZaChwile = null;
   if (!activeConversation) return;
@@ -187,14 +193,15 @@ function saveConversations() {
 
   const snapshot = JSON.stringify(activeConversation);
   const id = activeConversation.id;
+  const wyslij = () => fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: snapshot,
+  }).catch(() => { /* offline — zostaje kopia w localStorage */ });
+
   clearTimeout(convSaveTimer);
-  convSaveTimer = setTimeout(() => {
-    fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: snapshot,
-    }).catch(() => { /* offline — zostaje kopia w localStorage */ });
-  }, 400);
+  if (natychmiast) wyslij();
+  else convSaveTimer = setTimeout(wyslij, 400);
 }
 
 function cacheConvIndex() {
@@ -1761,7 +1768,7 @@ async function ruszKolejke() {
   renderKolejka();
   const conv = ensureConversation(poz.text || '');
   conv.messages.push({ role: 'user', content: poz.content });
-  saveConversations();
+  saveConversations(true);          // patrz sendMessage — zaraz rusza generowanie
   renderSidebar();
   renderMessages();
   await runGeneration(conv);
@@ -1811,7 +1818,9 @@ async function sendMessage() {
   pendingImages = [];
   pendingDocs = [];
   renderAttachments();
-  saveConversations();
+  // Bez zwłoki: za chwilę ruszy generowanie, które ma prawo przeżyć zamknięcie
+  // karty — a serwer dopisze odpowiedź tylko do rozmowy, która już istnieje.
+  saveConversations(true);
 
   el.input.value = '';
   autosizeInput();
@@ -1822,7 +1831,51 @@ async function sendMessage() {
 }
 
 // jedno przejście streamingu — zwraca zebrany tekst odpowiedzi
-async function streamOnce(conv) {
+/* ============ BIEG: ODPOWIEDŹ ŻYJE NA SERWERZE ============
+   Marcin: „Jak wychodzę ze strony lub aplikacji (…) wszystko jest przerywane
+   i jest napisane że connection error. Chciałbym żeby to działało też w tle."
+
+   Serwer prowadzi odpowiedź do końca niezależnie od tego, czy przeglądarka
+   patrzy (lib/biegi.js). Tutaj jest druga połowa: przeglądarka pamięta numer
+   biegu i numer ostatniego odebranego zdarzenia, więc po zerwaniu Wi-Fi,
+   zgaszeniu ekranu albo odświeżeniu strony wraca dokładnie w to miejsce.
+
+   Nie ma tu ponawiania zapytania do modelu. Wracamy do TEJ SAMEJ odpowiedzi,
+   nie prosimy o nową — druga odpowiedź na to samo pytanie kosztuje tokeny
+   i bywa inna niż ta, którą użytkownik zdążył zobaczyć. */
+const BIEG_KLUCZ = 'cosmos.bieg';
+const BIEG_PROB = 6;
+
+let biegBiezacy = null;      // { id, convId, ostatnie }
+
+function nowyBiegId() {
+  const raw = (crypto.randomUUID && crypto.randomUUID())
+    || (Math.random().toString(36).slice(2) + Date.now().toString(36));
+  return String(raw).replace(/[^a-z0-9-]/gi, '').slice(0, 64);
+}
+
+function zapamietajBieg(b) {
+  biegBiezacy = b;
+  try {
+    if (b) localStorage.setItem(BIEG_KLUCZ, JSON.stringify(b));
+    else localStorage.removeItem(BIEG_KLUCZ);
+  } catch { /* tryb prywatny — trudno, zostaje wznowienie w tej samej karcie */ }
+}
+
+const pauza = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Powiedz serwerowi, że odpowiedź dotarła i nie musi jej zapisywać awaryjnie. */
+function potwierdzOdbior(id) {
+  if (!id) return;
+  fetch('/api/chat/odebrane', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bieg: id }),
+    keepalive: true,      // ma dolecieć nawet gdy karta zamyka się w tej sekundzie
+  }).catch(() => { /* nie doleciało — serwer zapisze sam, czyli bezpiecznie */ });
+}
+
+async function streamOnce(conv, opcje = {}) {
   const msg = document.createElement('div');
   msg.className = 'msg msg-assistant';
   msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
@@ -1871,23 +1924,35 @@ async function streamOnce(conv) {
     }
   };
 
+  /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
+     bieg. W obu razach numer znamy PRZED wysłaniem żądania — inaczej zerwanie
+     połączenia w pierwszej sekundzie zostawiłoby odpowiedź bez adresu. */
+  const podpiecie = Boolean(opcje.bieg);
+  const biegId = opcje.bieg || nowyBiegId();
+  zapamietajBieg({ id: biegId, convId: conv.id, ostatnie: (Number(opcje.od) || 0) - 1 });
+
   try {
     const modelOverride = endpoint === 'local' ? settings.modelLocal
       : endpoint === 'cloud' ? settings.modelCloud : '';
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint,
-        messages: toApiMessages(conv),
-        model: modelOverride || undefined,
-        temperature: settings.temperature,
-        max_tokens: settings.maxTokens,
-        kbSelected: [...kbSelected],
-        useSearch: settings.offline ? false : undefined,
-      }),
-      signal: abortController.signal,
-    });
+    let res = podpiecie
+      ? await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${Number(opcje.od) || 0}`,
+        { signal: abortController.signal })
+      : await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          messages: toApiMessages(conv),
+          model: modelOverride || undefined,
+          temperature: settings.temperature,
+          max_tokens: settings.maxTokens,
+          kbSelected: [...kbSelected],
+          useSearch: settings.offline ? false : undefined,
+          bieg: biegId,
+          rozmowa: conv.id,
+        }),
+        signal: abortController.signal,
+      });
 
     if (!res.ok) {
       let errText = t('httpErr', { status: res.status });
@@ -1895,6 +1960,7 @@ async function streamOnce(conv) {
         const data = await readJsonSafe(res);
         errText = data.error || errText;
       } catch { /* ignore */ }
+      zapamietajBieg(null);
       throw new Error(errText);
     }
 
@@ -1908,42 +1974,108 @@ async function streamOnce(conv) {
       lastModelNote = '';
     }
 
-    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let koniecBiegu = false;      // serwer powiedział „to już wszystko"
+    let bladBiegu = '';
+    let proby = 0;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const events = buffer.split('\n\n');
-      buffer = events.pop();
-
-      for (const event of events) {
-        for (const line of event.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const json = JSON.parse(data);
-            const d = json.choices?.[0]?.delta || {};
-            const delta = d.content ?? json.choices?.[0]?.text ?? '';
-            // różni dostawcy nazywają to pole inaczej
-            const reason = d.reasoning_content ?? d.reasoning ?? '';
-            if (reason) {
-              think += reason;
-              schedulePaint();
-            }
-            if (delta) {
-              acc += delta;
-              schedulePaint();
-            }
-          } catch { /* niepełny fragment — pomijamy */ }
+    /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer — po nim wracamy
+       we właściwe miejsce, więc wznowienie nie powtarza połowy zdania ani jej
+       nie gubi. */
+    const zjedzZdarzenie = (event) => {
+      let typ = '';
+      for (const line of event.split('\n')) {
+        if (line.startsWith('id:')) {
+          const n = Number(line.slice(3).trim());
+          if (Number.isFinite(n) && biegBiezacy) biegBiezacy.ostatnie = n;
+          continue;
         }
+        if (line.startsWith('event:')) { typ = line.slice(6).trim(); continue; }
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') continue;
+        if (typ === 'koniec') {
+          koniecBiegu = true;
+          try { bladBiegu = JSON.parse(data).blad || ''; } catch { /* bez szczegółów */ }
+          continue;
+        }
+        /* Serwer nie pamięta początku tej odpowiedzi (bufor urwany limitem).
+           Mówimy o tym wprost — pokazanie samego dalszego ciągu wyglądałoby
+           jak odpowiedź, która zaczyna się w połowie zdania. */
+        if (typ === 'luka') { acc += t('bieg.luka') + '\n\n'; schedulePaint(); continue; }
+        try {
+          const json = JSON.parse(data);
+          const d = json.choices?.[0]?.delta || {};
+          const delta = d.content ?? json.choices?.[0]?.text ?? '';
+          // różni dostawcy nazywają to pole inaczej
+          const reason = d.reasoning_content ?? d.reasoning ?? '';
+          if (reason) {
+            think += reason;
+            schedulePaint();
+          }
+          if (delta) {
+            acc += delta;
+            schedulePaint();
+          }
+        } catch { /* niepełny fragment — pomijamy */ }
       }
+    };
+
+    /* Pętla przeżywania. Zerwane połączenie NIE jest tu błędem — jest
+       normalnym stanem telefonu, który zgasił ekran. Wracamy do biegu od
+       ostatniego numeru; poddajemy się dopiero, gdy serwer przestaje o nim
+       wiedzieć albo gdy nie da się wrócić po kilku próbach. */
+    while (!koniecBiegu) {
+      const reader = res.body.getReader();
+      let rozlaczone = false;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+          for (const event of events) if (event.trim()) zjedzZdarzenie(event);
+          if (koniecBiegu) break;
+        }
+      } catch (err) {
+        if (abortController.signal.aborted) throw err;
+        rozlaczone = true;
+      }
+      if (koniecBiegu) break;
+      if (buffer.trim()) { zjedzZdarzenie(buffer); buffer = ''; }
+      if (koniecBiegu) break;
+
+      // Strumień się skończył, a serwer nie powiedział „koniec”. Wracamy.
+      if (++proby > BIEG_PROB) {
+        if (rozlaczone) throw new Error(t('bieg.zerwane'));
+        break;                       // serwer bez biegów — kończymy po staremu
+      }
+      await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
+      const od = (biegBiezacy?.ostatnie ?? -1) + 1;
+      let wrot;
+      try {
+        wrot = await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
+          { signal: abortController.signal });
+      } catch (err) {
+        if (abortController.signal.aborted) throw err;
+        continue;                    // sieci nadal nie ma — próbujemy dalej
+      }
+      /* 404 = serwer już nie pamięta tego biegu. Przy podpięciu po odświeżeniu
+         to zwykły koniec (odpowiedź wylądowała w rozmowie), przy zerwaniu
+         w locie — utrata. W obu razach nie ma czego dalej czytać. */
+      if (!wrot.ok) break;
+      res = wrot;
     }
     clearInterval(waitTimer);
+    zapamietajBieg(null);
+    /* „Mam tę odpowiedź." Bez tego serwer po dwudziestu sekundach dopisze ją
+       do rozmowy jeszcze raz, bo z jego strony wygląda to jak odpowiedź, po
+       którą nikt nie przyszedł. Zgadywanie po tym, czy gniazdo było otwarte,
+       już próbowaliśmy — myliło się w obie strony. */
+    potwierdzOdbior(biegId);
+    if (bladBiegu) throw new Error(bladBiegu);
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
     if (!acc.trim() && think.trim()) {
@@ -1956,11 +2088,50 @@ async function streamOnce(conv) {
     return acc;
   } catch (err) {
     clearInterval(waitTimer);
+    zapamietajBieg(null);
     if (err.name === 'AbortError') {
       err.partial = acc;
     }
     throw err;
   }
+}
+
+/* Powrót do odpowiedzi, która powstawała, gdy strona była zamknięta.
+   Wywoływane raz, przy starcie. Nie pyta o nic modelu — podpina się do tego,
+   co serwer już policzył albo właśnie liczy. */
+async function wznowBieg() {
+  let zapis = null;
+  try { zapis = JSON.parse(localStorage.getItem(BIEG_KLUCZ) || 'null'); } catch { /* śmieci */ }
+  if (!zapis || !zapis.id) return;
+
+  let dane;
+  try {
+    const r = await fetch('/api/chat/biegi');
+    if (!r.ok) return;
+    dane = await r.json();
+  } catch { return; }                 // serwer offline — wznowienie poczeka
+
+  const b = (dane.biegi || []).find((x) => x.id === zapis.id);
+  /* Bieg skończył się, gdy nas nie było. Serwer zapisał odpowiedź do rozmowy
+     sam (lib/biegi.js), więc nie ma czego dociągać — wystarczy posprzątać
+     znacznik, żeby nie próbować w nieskończoność. */
+  if (!b || !b.trwa) { zapamietajBieg(null); return; }
+
+  const conv = zapis.convId && activeId === zapis.convId ? activeConversation : null;
+  if (!conv) {
+    // Rozmowa z biegiem nie jest tą otwartą — przełączamy się na nią.
+    if (!zapis.convId) { zapamietajBieg(null); return; }
+    await selectConversation(zapis.convId);
+    if (!activeConversation) { zapamietajBieg(null); return; }
+  }
+  const cel = activeConversation;
+  if (!cel) { zapamietajBieg(null); return; }
+  /* Od zera, nie od zapamiętanego numeru. Po przeładowaniu ekran jest pusty,
+     więc potrzebujemy CAŁEJ odpowiedzi — wznowienie od połowy pokazałoby
+     wypowiedź zaczynającą się w środku zdania. Numer w zapisie służy tylko
+     wznowieniu bez przeładowania (zerwane Wi-Fi), gdzie początek już jest
+     narysowany, i tam siedzi w pamięci, nie w localStorage. */
+  await runGeneration(cel, { bieg: zapis.id, od: 0 });
 }
 
 // Model, który faktycznie odpowiedział, gdy różni się od wybranego.
@@ -2094,7 +2265,7 @@ function dodajWynikNarzedzia(conv, tresc, etykieta) {
   renderMessages();
 }
 
-async function runGeneration(conv) {
+async function runGeneration(conv, podpiecie = null) {
   isGenerating = true;
   setGeneratingUI(true);
   if (voiceMode) setVoiceState('thinking');
@@ -2109,7 +2280,10 @@ async function runGeneration(conv) {
   const pytaniaArchiwum = new Set();
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
-      const acc = await streamOnce(conv);
+      /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
+         odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
+         zapytania do modelu i mają dostać własne biegi. */
+      const acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
       const marker = acc.match(SEARCH_MARKER_RE);
 
       // Ostatnia runda: model nadal chce szukać, ale limit wyczerpany. Zamiast
@@ -2496,6 +2670,11 @@ async function runGeneration(conv) {
     isGenerating = false;
     abortController = null;
     setGeneratingUI(false);
+    /* Zapis bez zwłoki. Przeglądarka właśnie potwierdziła serwerowi, że ma
+       odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie —
+       te 400 ms zwłoki byłyby jedynym momentem, w którym gotowa odpowiedź
+       nie istnieje nigdzie poza pamięcią karty. */
+    saveConversations(true);
     renderMessages();
     if (voiceMode) {
       if (finalText) {
@@ -2519,6 +2698,19 @@ async function runGeneration(conv) {
 }
 
 function stopGeneration() {
+  /* Odkąd zamknięcie karty NIE przerywa generowania, samo `abort()` w
+     przeglądarce już nie wystarcza: rozłączyłoby tylko widza, a serwer
+     spokojnie dokończyłby odpowiedź i zapisał ją do rozmowy. Stop musi
+     dotrzeć tam, gdzie naprawdę trzymane jest połączenie z modelem. */
+  const id = biegBiezacy?.id;
+  if (id) {
+    fetch('/api/chat/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bieg: id }),
+    }).catch(() => { /* i tak zaraz przerwiemy po swojej stronie */ });
+  }
+  zapamietajBieg(null);
   if (abortController) abortController.abort();
 }
 
@@ -6503,7 +6695,9 @@ function startApp() {
   setEndpoint(endpoint);
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();
-  loadConversations();
+  /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
+     powstawała w tle — wznowienie musi mieć do czego wrócić. */
+  loadConversations().then(wznowBieg).catch(() => { /* wznowienie nie może blokować startu */ });
   renderMessages();
   updateSendButton();
   loadServerConfig();

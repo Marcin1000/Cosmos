@@ -240,6 +240,20 @@ const SRODOWISKA = {
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
     },
   },
+  /* Praca w tle: odpowiedź, która przeżywa zamknięcie karty. To samo co
+     `pelne`, ale z mocno skróconym czasem zapisu odpowiedzi, po którą nikt nie
+     wrócił — w produkcji to 20 s, bo warto dać przeglądarce szansę na powrót
+     po mrugnięciu sieci. W teście czekanie 20 s na każdy przebieg to strata. */
+  tlo: {
+    port: 3412,
+    atrapy: [['mock-upstream.js', null]],
+    env: {
+      LOCAL_API_KEY: 'test',
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:9099/v1',
+      LOCAL_BASE_URL: 'http://127.0.0.1:9098/v1',
+      COSMOS_BIEG_SIEROTA_MS: '1200',
+    },
+  },
   // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },
   /* Aparat Canon po CCAPI + geokodowanie. Potrzebne razem, bo drogę „policz

@@ -1126,6 +1126,8 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | Podgląd z Kinecta zatrzymuje się po chwili | Sprawdź okno z `python service.py` — przy zerwanym strumieniu Cosmos przechodzi na pojedyncze klatki, więc obraz zwalnia zamiast zniknąć |
 | „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
 | W rozmowie pojawia się pytanie, którego nie napisałeś, i Cosmos sam na nie odpowiada | Naprawione. To był wynik wewnętrznego narzędzia (odcięcie powtórzonego zapytania do archiwum) narysowany jako zwykła wiadomość. Po aktualizacji chowa się do zwijanego bloku „Przeszukuję…", a stare rozmowy naprawiają się przy wczytaniu |
+| Wychodzę ze strony albo gaśnie ekran telefonu i odpowiedź się urywa („connection error") | Naprawione. Odpowiedź powstaje teraz na serwerze, nie w karcie. Wróć na stronę — Cosmos podepnie się do tej samej odpowiedzi, a jeśli skończyła się bez Ciebie, znajdziesz ją w rozmowie. Uwaga: gdy zamkniesz kartę dokładnie w trakcie przeszukiwania internetu albo archiwum, zapisze się tura sprzed wyszukiwania |
+| Zatrzymałem odpowiedź, ale chcę mieć pewność, że serwer też przestał | Przycisk Stop wysyła przerwanie do serwera, nie tylko chowa kursor. Po Stopie odpowiedź w rozmowie już nie rośnie |
 | Chcę dopisać myśl, kiedy Cosmos jeszcze odpowiada | Pisz normalnie i naciśnij Enter — wiadomość ląduje w kolejce nad polem i pójdzie sama, gdy odpowiedź się skończy. Kliknij ✕ obok, jeśli w międzyczasie przestała być potrzebna |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |

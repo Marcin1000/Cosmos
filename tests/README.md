@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (70 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (71 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -60,6 +60,7 @@ Dostępne środowiska (`pomoc.js` → `SRODOWISKA`):
 | `grafiki` | wyszukiwanie grafik, geokodowanie, SWPC (zorza) |
 | `aparat` | Canon po CCAPI + geokodowanie — droga „policz plan → wyślij do aparatu” |
 | `zmysly` | Kinect, mowa, wykrywanie — bez modelu |
+| `tlo` | praca w tle — jak `pelne`, ale z krótkim `COSMOS_BIEG_SIEROTA_MS` |
 | `goly` | sam serwer, żadnych atrap |
 
 ### Umowy z atrapą `mock-upstream`
