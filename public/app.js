@@ -1908,6 +1908,65 @@ function stripSearchMarker(s) {
     .replace(/\[ARCHIWUM:?[^\]]*\]/gi, '')
     .trim();
 }
+/* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
+   To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
+
+   Odpowiedź archiwum szła do modelu jako `JSON.stringify(dane).slice(0, 12000)`.
+   Brzmi niewinnie, dopóki się nie policzy: sam adres jednej miniatury z OneDrive
+   to 1248 znaków podpisanego tokenu, przy ~520 znakach reszty wpisu. Czyli
+   z dwunastu tysięcy znaków mieściło się SZEŚĆ plików, a 71% tego, co czytał
+   model, stanowiły adresy obrazków — których on nawet nie ogląda, bo w tym
+   samym promptcie piszemy mu, że miniatury już pokazaliśmy człowiekowi.
+   Do tego `slice` tnie napis w połowie JSON-a, więc model dostawał składniowo
+   zepsuty dokument.
+
+   Efekt na żywym archiwum: przy 59 421 plikach model widział sześć najnowszych
+   (bo sortujemy od najnowszych — czyli akurat zrzuty ekranu z telefonu),
+   dostawał polecenie „odpowiadaj na podstawie tych danych, nie zgaduj"
+   i uczciwie meldował, że w archiwum nie ma zdjęć z aparatu. To nie była
+   halucynacja. To był poprawny wniosek z próbki, którą sami mu podsunęliśmy.
+
+   Dlatego: miniatury i identyfikatory wylatują, wpisy skracamy do pól, które
+   naprawdę niosą treść, a na górze stoi jawne zdanie o tym, ILE tego jest
+   i CZEGO model nie widzi. „Pokazuję 40 z 59 421" to zupełnie inna przesłanka
+   niż „oto twoje archiwum". */
+const ARCH_LIMIT_ZNAKOW = 12000;
+
+function naKontekst(dane) {
+  if (!dane || typeof dane !== 'object') return JSON.stringify(dane);
+  if (!Array.isArray(dane.wyniki)) return JSON.stringify(dane, null, 1).slice(0, ARCH_LIMIT_ZNAKOW);
+
+  const chude = dane.wyniki.map((w) => {
+    const o = {};
+    for (const [k, v] of Object.entries(w)) {
+      // `miniatura` to 1,2 kB podpisanego adresu; `id` i `rozmiar` nic nie wnoszą.
+      if (k === 'miniatura' || k === 'id' || k === 'rozmiar') continue;
+      if (v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
+      o[k] = v;
+    }
+    return o;
+  });
+
+  /* Ile wpisów zmieści się w budżecie — liczone, a nie zgadywane. Bez
+     miniatur wchodzi ich kilkadziesiąt zamiast sześciu. */
+  let ile = chude.length;
+  let tresc = '';
+  while (ile > 0) {
+    tresc = JSON.stringify({ ...dane, wyniki: chude.slice(0, ile) }, null, 1);
+    if (tresc.length <= ARCH_LIMIT_ZNAKOW) break;
+    ile = Math.floor(ile * 0.8);
+  }
+
+  const znaleziono = Number(dane.znaleziono) || 0;
+  const naglowek = znaleziono > ile
+    ? `UWAGA: widzisz ${ile} z ${znaleziono} pasujących plików, posortowane OD NAJNOWSZYCH. `
+      + 'To jest PRÓBKA, nie całe archiwum — nie wyciągaj z niej wniosków o tym, czego '
+      + 'w archiwum NIE MA. Jeśli chcesz wiedzieć, co tam jest w całości, poproś '
+      + 'o zestawienie (grupuj=aparat, grupuj=rok, grupuj=temat) albo zawęź filtry.\n'
+    : '';
+  return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
+}
+
 const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
 /* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
    na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
@@ -1932,6 +1991,12 @@ async function runGeneration(conv) {
   let finalText = '';
 
   const MAX_SEARCHES = 3;
+  /* Zapytania do archiwum, które już poszły w tej turze. Model potrafi
+     wywołać trzy razy DOKŁADNIE ten sam filtr i trzy razy dostać to samo
+     zero — widać to było w rozmowie o Mazurach, gdzie „Przeszukuję Twoje
+     archiwum…" pojawiło się kilka razy pod rząd bez zmiany parametrów.
+     Limit głębokości tego nie łapie, bo formalnie to różne kroki. */
+  const pytaniaArchiwum = new Set();
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       const acc = await streamOnce(conv);
@@ -1993,6 +2058,27 @@ async function runGeneration(conv) {
           const v = kawalek.slice(i + 1);
           if (k === 'grupuj') grupuj = v; else q.set(k, v);
         }
+
+        /* Ten sam filtr drugi raz nie przyniesie innej odpowiedzi. Zamiast
+           pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
+           — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
+           w pół zdania. */
+        const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
+        if (pytaniaArchiwum.has(odcisk)) {
+          conv.messages.push({
+            role: 'user',
+            content: 'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
+              + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
+              + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
+              + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
+              + 'i napisz wprost, czego nie udało się znaleźć.',
+          });
+          saveConversations();
+          renderMessages();
+          continue;
+        }
+        pytaniaArchiwum.add(odcisk);
+
         const before = stripSearchMarker(acc.replace(archMarker[0], ''));
         conv.messages.push({
           role: 'assistant',
@@ -2044,7 +2130,7 @@ async function runGeneration(conv) {
           content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
             + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
             + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
-            + JSON.stringify(dane, null, 1).slice(0, 12000),
+            + naKontekst(dane),
           search: true,
           searchQuery: t('chat.archiveQuery'),
         });

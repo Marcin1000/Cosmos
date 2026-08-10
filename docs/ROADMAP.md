@@ -1881,6 +1881,84 @@ Sprawdzone przy okazji i NIEbędące usterką: przecinek dziesiętny w polach
 Nazwa obiektywu z `rozpoznajObiektywy` zawiera już jasność, a kod doklejał
 drugą. Widoczne gołym okiem, niewidoczne dla wszystkich ówczesnych sprawdzeń.
 
+## ✅ Partia 43 — archiwum na 59 421 plikach: cztery przyczyny jednej porażki (GOTOWE)
+
+Marcin zapytał „pokaż zdjęcia, które zrobiłem w tym roku na Mazurach".
+Cosmos przez kilkanaście wywołań narzędzia nie znalazł nic, a na koniec
+orzekł, że w archiwum **nie ma zdjęć z aparatu — same zrzuty ekranu**.
+Nieprawda; Canon leżał w indeksie od początku.
+
+Najważniejsze w tej partii jest to, czego NIE było: **halucynacji**. Model
+dostał polecenie „odpowiadaj na podstawie tych danych, nie zgaduj" i zrobił
+dokładnie to. Wnioski były poprawne — przesłanki nie.
+
+### 1. Do modelu szło sześć plików z pięćdziesięciu dziewięciu tysięcy
+
+Wynik archiwum leciał jako `JSON.stringify(dane).slice(0, 12000)`. Sam adres
+jednej miniatury z OneDrive to **1248 znaków** podpisanego tokenu, przy ~520
+znakach reszty wpisu. Rachunek: w budżecie mieściło się **6 plików**, a **71%**
+tego, co czytał model, stanowiły adresy obrazków — których nawet nie ogląda,
+bo w tym samym promptcie piszemy mu, że miniatury pokazaliśmy już człowiekowi.
+`slice` do tego ucinał napis w połowie JSON-a, więc dokument był składniowo
+zepsuty.
+
+Ponieważ sortujemy od najnowszych, tych sześć plików to zawsze były ostatnie
+zrzuty ekranu z telefonu.
+
+- [x] `naKontekst()` wycina miniatury, identyfikatory i puste pola, i dopasowuje
+      liczbę wpisów do budżetu zamiast ciąć napis na ślepo
+- [x] Na górze stoi zdanie **„widzisz N z 59 421, to jest PRÓBKA"** wraz
+      z zakazem wnioskowania z niej o tym, czego w archiwum nie ma
+- [x] Zmierzone: **8 wpisów z niepoprawnym JSON-em → 40 wpisów, poprawny JSON,
+      o 30% krótszy kontekst**
+
+### 2. Folderów nie dało się przeszukiwać, choć ścieżki są w indeksie
+
+`sciezka` zapisywana od zawsze, filtry tekstowe obejmowały aparat, obiektyw,
+miejsce i nazwę. Marcin porządkuje materiał katalogami („Mazury 2026",
+„Zdjęcia Mazury 2024 Dron") i to jest jego prawdziwy indeks.
+
+- [x] Filtr `folder=` porównujący fragment ścieżki bez ogonków i wielkości
+      liter — „zdjecia mazury" trafia w „/Zdjęcia Mazury 2024 Dron/"
+- [x] Model dostał instrukcję: **gdy człowiek mówi o folderze, użyj `folder=`,
+      a nie `miejsce=`**
+
+### 3. Zdjęcia z Canona nie miały się czym przedstawić
+
+Microsoft Graph czyta metadane z JPEG-ów, ale CR2/CR3 nie rusza — facet `photo`
+przychodzi pusty. Dociąganie EXIF-u istniało i działało, tylko z przeczytanego
+pliku zapisywało **wyłącznie obiektyw**, wyrzucając datę, aparat, ISO, przysłonę,
+czas, ogniskową i GPS. Każde zdjęcie z R6 II miało więc `aparat: null` i datę
+**wgrania** zamiast daty zrobienia — w wynikach nie do odróżnienia od zrzutu
+ekranu.
+
+- [x] Backfill zapisuje wszystko, co przeczytał; dane z pliku wygrywają z tym,
+      co dał Graph
+- [x] Znacznik `exifCzytany` — bez niego pliki bez obiektywu (RAW-y, skany)
+      wracały do kolejki w nieskończoność i paczka mieliła w kółko te same
+- [x] Przycisk nazywa się teraz **„Dociągnij dane z plików"**, bo to robi
+
+### 4. „Mazury" to dla Nominatim wieś w obwodzie lwowskim
+
+Geokodowanie szło bez preferencji kraju, więc pierwszym wynikiem na świecie
+była Мазури (49,82 N 23,04 E), promień 5 km. Marcin trzy razy potwierdzał
+„chodzi o Polskę" i trzy razy dostawał to samo, bo do Nominatim leciało samo
+słowo „Mazury".
+
+- [x] `GEOCODE_COUNTRY` (domyślnie `pl`): pytamy najpierw w kraju użytkownika,
+      a gdy tam nic nie ma — ponownie globalnie, żeby „Toskania" dalej działała
+
+### 5. Model pytał archiwum w kółko tym samym filtrem
+
+- [x] Powtórzone zapytanie nie idzie do serwera; model dostaje wprost „to jest
+      to samo pytanie, zmień filtry albo odpowiedz tym, co wiesz". Kręcenie się
+      w kółko wypalało budżet tokenów i **urywało odpowiedź w pół zdania** —
+      stąd obcięte wypowiedzi na zrzutach
+
+⚠ Czego ta partia NIE naprawia: pracy w tle. Zamknięcie karty nadal przerywa
+generowanie („connection error"), bo odpowiedź żyje w strumieniu SSE do
+przeglądarki. To osobna zmiana architektoniczna, opisana Marcinowi wcześniej.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
