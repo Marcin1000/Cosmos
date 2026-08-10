@@ -41,6 +41,8 @@ GPU (np. RTX 3080) oraz przez chmurę NVIDIA — przełączasz jednym kliknięci
   zużyje cały budżet na myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi
 - ✦ **Dopracowanie promptu** — przycisk obok mikrofonu przepisuje podyktowaną wypowiedź
   na precyzyjny prompt; drugie kliknięcie przywraca Twoją wersję
+- ⌛ **Kolejka wiadomości** — pisz w trakcie odpowiedzi. Wiadomość ląduje w widocznej
+  kolejce nad polem, idzie sama po zakończeniu i da się ją stamtąd wyjąć
 - 🗂️ Wiele rozmów z historią, renderowanie Markdown, kopiowanie kodu
 - 🔎 **Zarządzanie rozmowami**: wyszukiwarka (po tytule i treści), przypinanie, zmiana
   nazwy, eksport, regeneracja odpowiedzi, edycja własnej wiadomości, skróty klawiszowe
@@ -978,7 +980,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 69 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 70 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

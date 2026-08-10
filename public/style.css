@@ -1743,6 +1743,40 @@ kbd {
 .plan-camera > span { flex: 1; min-width: 0; }
 .plan-camera-off { color: var(--text-faint); }
 
+/* Kolejka wiadomości napisanych w trakcie odpowiedzi. Wygląda jak to, czym
+   jest: czekający wpis, nie wysłana wiadomość — stąd przygaszenie i kreska
+   z boku zamiast dymka. */
+.queue-box { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-left: 2px solid var(--border-strong);
+  background: var(--bg-elevated);
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.queue-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-del {
+  background: none;
+  border: 0;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  flex: none;
+}
+.queue-del:hover { color: var(--danger); }
+
 /* ---------------------------- PLENER ----------------------------
    Sekcje wyglądają jak w Studiu i to jest zamierzone: to dwa okna tej samej
    rangi — jedno o obrazie generowanym, drugie o kręconym. Człowiek nie

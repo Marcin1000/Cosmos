@@ -1959,6 +1959,45 @@ słowo „Mazury".
 generowanie („connection error"), bo odpowiedź żyje w strumieniu SSE do
 przeglądarki. To osobna zmiana architektoniczna, opisana Marcinowi wcześniej.
 
+## ✅ Partia 44 — kolejka wiadomości i rozmowa, która wznawiała się sama (GOTOWE)
+
+Dwie uwagi z jednej rozmowy Marcina.
+
+### Pisanie w trakcie odpowiedzi
+
+Do tej pory pole tekstowe było w czasie generowania martwe: `sendMessage`
+wychodziło od razu przy `isGenerating`. Myśl, która przyszła w połowie
+czytania, trzeba było trzymać w głowie albo przerywać odpowiedź.
+
+- [x] Wiadomość napisana w trakcie ląduje w **widocznej** kolejce nad polem —
+      nie „gdzieś", tylko na ekranie, z treścią
+- [x] Rusza sama po zakończeniu odpowiedzi, w kolejności napisania
+- [x] Da się ją **wyjąć** przed wysłaniem; w połowie odpowiedzi często okazuje
+      się, że pytanie było niepotrzebne
+- [x] W trybie głosowym kolejka nie rusza — tam rozmowa idzie mikrofonem
+      i mieszanie dwóch kanałów wprowadzałoby chaos
+
+### „Bez napisania przeze mnie kolejnej wiadomości Cosmos sam się wznawiał"
+
+Znaleziona przyczyna, nie hipoteza. Wynik narzędzia wraca do modelu jako
+wiadomość z rolą `user` — taki jest protokół rozmowy. Na ekranie odróżnia je
+**jedynie** flaga `search`: z nią rysuje się zwijany blok „Przeszukuję…", bez
+niej zwykły dymek użytkownika. Jedna gałąź jej nie ustawiała — ta dopisana
+w Partii 43, odcinająca powtórzone zapytanie do archiwum. Efekt: w rozmowie
+pojawiało się długie pytanie, którego Marcin nie napisał, a model grzecznie na
+nie odpowiadał. Wiadomość szła też na dysk, więc wracała przy każdym wczytaniu
+rozmowy.
+
+- [x] Wszystkie ruchy narzędzi (wyszukiwarka, archiwum, plan, uruchamianie
+      kodu, grafiki) idą jedną furtką `dodajWynikNarzedzia`, która flagi
+      pominąć nie potrafi
+- [x] Zestaw pilnuje, żeby nikt jej nie obszedł: w `runGeneration` nie może
+      zostać ani jedna surowa wstawka `role: 'user'` (przed poprawką było 7)
+- [x] Rozmowy zapisane wcześniej naprawiają się przy wczytaniu — dymek chowa
+      się do zwijanego bloku
+
+⚠ Nadal NIE naprawione: praca w tle. Zamknięcie karty przerywa generowanie.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

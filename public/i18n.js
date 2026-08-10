@@ -500,6 +500,8 @@ const I18N = {
     'plan.needLocation': 'Ustaw lokalizację w Ustawieniach (📍 Wykryj), żeby policzyć światło.',
 
     // ---- Plener: foto i wideo w jednym miejscu ----
+    'queue.image': '(załącznik)',
+    'queue.remove': 'Usuń z kolejki',
     'plener': 'Plener',
     'pl.sub': 'Sprzęt, światło, aparat, dron i archiwum — wszystko, czym się kręci naprawdę.',
     'pl.gear': 'Mój sprzęt',
@@ -1170,6 +1172,8 @@ const I18N = {
     'plan.needLocation': 'Set your location in Settings (📍 Detect) to compute the light.',
 
     // ---- Field: photo and video in one place ----
+    'queue.image': '(attachment)',
+    'queue.remove': 'Remove from queue',
     'plener': 'Field',
     'pl.sub': 'Gear, light, camera, drone and archive — everything you actually shoot with.',
     'pl.gear': 'My gear',

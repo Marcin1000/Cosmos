@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (69 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (70 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -55,8 +55,24 @@ Dostępne środowiska (`pomoc.js` → `SRODOWISKA`):
 | `czterySilniki` | NVIDIA + lokalny + OpenAI + Anthropic |
 | `rozumujacy` | strumień z `reasoning_content`, pętla wyszukiwania |
 | `katalogModeli` | lista modeli, z których większość konto odrzuca |
+| `tempo` | modele o różnej płynności, w tym jeden kapryśny i jeden rozumujący |
+| `kontekst` | atrapa oddaje wiadomości systemowe jako treść — widać, co model dostaje |
+| `grafiki` | wyszukiwanie grafik, geokodowanie, SWPC (zorza) |
+| `aparat` | Canon po CCAPI + geokodowanie — droga „policz plan → wyślij do aparatu” |
 | `zmysly` | Kinect, mowa, wykrywanie — bez modelu |
 | `goly` | sam serwer, żadnych atrap |
+
+### Umowy z atrapą `mock-upstream`
+
+Słowo w pytaniu zmienia zachowanie atrapy — to jedyny sposób, żeby zestaw
+ustawił sytuację, której inaczej nie da się wywołać:
+
+| Słowo w pytaniu | Co robi atrapa |
+|---|---|
+| `powoli` | rozciąga strumień na kilkanaście sekund — bez tego nie istnieje „w trakcie odpowiedzi” i nie ma czego kolejkować |
+| `jaki to telefon` | oddaje `[SZUKAJ: …]` — uruchamia pętlę wyszukiwania |
+| `wygeneruj grafikę` | oddaje `[OBRAZ: …]` |
+| `zapamiętaj` | oddaje `[AKCJA: zapamiętaj \| …]` |
 
 Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.

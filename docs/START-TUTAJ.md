@@ -1125,6 +1125,8 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | ✦ „Dopracuj prompt": „Brak klucza API dla chmury NVIDIA" | Przepisywanie idzie przez ten sam model co czat. Uzupełnij `NVIDIA_API_KEY` albo przełącz się na „Lokalnie" (Ollama musi działać) |
 | Podgląd z Kinecta zatrzymuje się po chwili | Sprawdź okno z `python service.py` — przy zerwanym strumieniu Cosmos przechodzi na pojedyncze klatki, więc obraz zwalnia zamiast zniknąć |
 | „Brak numpy" / „Brak zależności", choć instalowałeś | Nie aktywowałeś środowiska. Znak zachęty musi zaczynać się od `(.venv)` — wpisz `.venv\Scripts\activate` w folderze `senses` |
+| W rozmowie pojawia się pytanie, którego nie napisałeś, i Cosmos sam na nie odpowiada | Naprawione. To był wynik wewnętrznego narzędzia (odcięcie powtórzonego zapytania do archiwum) narysowany jako zwykła wiadomość. Po aktualizacji chowa się do zwijanego bloku „Przeszukuję…", a stare rozmowy naprawiają się przy wczytaniu |
+| Chcę dopisać myśl, kiedy Cosmos jeszcze odpowiada | Pisz normalnie i naciśnij Enter — wiadomość ląduje w kolejce nad polem i pójdzie sama, gdy odpowiedź się skończy. Kliknij ✕ obok, jeśli w międzyczasie przestała być potrzebna |
 | Błąd 404 przy czacie | Zły identyfikator modelu — **Ustawienia → Pobierz listę** |
 | Model wideo/obraz zwraca błąd | Sprawdź, czy klucz w `.env` jest poprawny i ma środki |
 | Chcę zacząć od zera | Zatrzymaj serwer, usuń folder `data`, uruchom ponownie |

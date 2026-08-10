@@ -1261,6 +1261,29 @@ function newConversation() {
   el.input.focus();
 }
 
+/* Rozmowy zapisane, zanim ruch narzędzia dostał flagę `search`, wciąż mają
+   w środku dymek z pytaniem, którego nikt nie zadał. Poprawka w kodzie ich nie
+   naprawi — siedzą już na dysku. Domykamy je przy wczytaniu; to zmiana tylko
+   w wyglądzie, treść dalej idzie do modelu tak samo. */
+const PREFIKSY_NARZEDZI = [
+  'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum',
+  'WYNIK Z ARCHIWUM UŻYTKOWNIKA',
+  'WYNIKI WYSZUKIWANIA',
+  'WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW',
+  'DANE PLANU ZDJĘCIOWEGO',
+];
+function naprawStareRuchyNarzedzi(conv) {
+  if (!conv?.messages) return conv;
+  for (const m of conv.messages) {
+    if (m.role !== 'user' || m.search || typeof m.content !== 'string') continue;
+    if (PREFIKSY_NARZEDZI.some((p) => m.content.startsWith(p))) {
+      m.search = true;
+      m.searchQuery = m.searchQuery || t('chat.archiveQuery');
+    }
+  }
+  return conv;
+}
+
 async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
@@ -1271,9 +1294,9 @@ async function selectConversation(id) {
   try {
     const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error();
-    activeConversation = await res.json();
+    activeConversation = naprawStareRuchyNarzedzi(await res.json());
   } catch {
-    activeConversation = loadJson('cosmos.conv.' + id, null); // podgląd offline
+    activeConversation = naprawStareRuchyNarzedzi(loadJson('cosmos.conv.' + id, null)); // podgląd offline
   }
   renderMessages();
 }
@@ -1694,10 +1717,85 @@ function toApiMessages(conv) {
   return api;
 }
 
+/* ============ KOLEJKA WIADOMOŚCI ============
+   Do tej pory pole tekstowe było w trakcie odpowiedzi martwe: `sendMessage`
+   wychodziło od razu przy `isGenerating`, a przycisk był wyszarzony. Myśl,
+   która przyszła w trakcie czytania odpowiedzi, trzeba było albo trzymać
+   w głowie, albo przerywać generowanie.
+
+   Teraz wiadomość wysłana w trakcie ODCZEKUJE i idzie sama, gdy Cosmos
+   skończy. Kolejka jest widoczna nad polem i da się z niej wyjąć wpis —
+   „wyślę to za chwilę" musi być odwracalne, bo w połowie odpowiedzi często
+   okazuje się, że pytanie było niepotrzebne. */
+let kolejka = [];
+
+function renderKolejka() {
+  const box = $('queue-box');
+  if (!box) return;
+  box.innerHTML = '';
+  box.hidden = !kolejka.length;
+  if (!kolejka.length) return;
+  for (const [i, poz] of kolejka.entries()) {
+    const el2 = document.createElement('div');
+    el2.className = 'queue-item';
+    const txt = document.createElement('span');
+    txt.className = 'queue-text';
+    // `poz.images` to LICZBA załączników, nie tablica — samo zdjęcie bez
+    // podpisu musi się w kolejce czymś przedstawić, inaczej widać samo „…".
+    txt.textContent = poz.text || (poz.images ? t('queue.image') : '…');
+    const usun = document.createElement('button');
+    usun.type = 'button';
+    usun.className = 'queue-del';
+    usun.textContent = '×';
+    usun.title = t('queue.remove');
+    usun.addEventListener('click', () => { kolejka.splice(i, 1); renderKolejka(); });
+    el2.append(txt, usun);
+    box.appendChild(el2);
+  }
+}
+
+/** Po zakończeniu generowania — wyślij następną z kolejki. */
+async function ruszKolejke() {
+  if (isGenerating || !kolejka.length) return;
+  const poz = kolejka.shift();
+  renderKolejka();
+  const conv = ensureConversation(poz.text || '');
+  conv.messages.push({ role: 'user', content: poz.content });
+  saveConversations();
+  renderSidebar();
+  renderMessages();
+  await runGeneration(conv);
+  // Kolejka bywa dłuższa niż jedna pozycja — po tej odpowiedzi bierzemy następną.
+  ruszKolejke();
+}
+
 async function sendMessage() {
   const text = el.input.value.trim();
   const gotowe = pendingDocs.filter((d) => !d.loading);
-  if ((!text && !pendingImages.length && !gotowe.length) || isGenerating) return;
+  if (!text && !pendingImages.length && !gotowe.length) return;
+
+  /* Cosmos jeszcze mówi — bierzemy wiadomość do kolejki zamiast ją zgubić.
+     Pole czyścimy tak samo jak przy zwykłym wysłaniu, żeby nie było
+     wątpliwości, czy wiadomość „poszła". */
+  if (isGenerating) {
+    const content = (pendingImages.length || gotowe.length)
+      ? {
+          text,
+          ...(pendingImages.length ? { images: [...pendingImages] } : {}),
+          ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
+        }
+      : text;
+    kolejka.push({ text, content, images: pendingImages.length });
+    pendingImages = [];
+    pendingDocs = [];
+    renderAttachments();
+    el.input.value = '';
+    autosizeInput();
+    updateSendButton();
+    updateTokenEstimate();
+    renderKolejka();
+    return;
+  }
 
   const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
   const content = (pendingImages.length || gotowe.length)
@@ -1984,6 +2082,18 @@ const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
 const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
 const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
+/* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
+   protokół rozmowy — ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
+   jedno od drugiego na ekranie, to flaga `search`: z nią mamy zwijany blok
+   „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
+   Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
+   Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
+function dodajWynikNarzedzia(conv, tresc, etykieta) {
+  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta });
+  saveConversations();
+  renderMessages();
+}
+
 async function runGeneration(conv) {
   isGenerating = true;
   setGeneratingUI(true);
@@ -2006,10 +2116,7 @@ async function runGeneration(conv) {
       // pokazać użytkownikowi surowe [SZUKAJ: …] — a tak działo się wcześniej —
       // każemy mu odpowiedzieć tym, co już zebrał.
       if (marker && depth === MAX_SEARCHES) {
-        conv.messages.push({ role: 'user', content: t('search.enough'), search: true,
-          searchQuery: marker[1].trim() });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, t('search.enough'), marker[1].trim());
         const last = await streamOnce(conv);
         // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
         const trescOstatnia = stripSearchMarker(last);
@@ -2040,9 +2147,7 @@ async function runGeneration(conv) {
           setVoiceState('thinking');
         }
         const resultsText = await webSearch(q);
-        conv.messages.push({ role: 'user', content: resultsText, search: true, searchQuery: q });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, resultsText, q);
         continue;
       }
 
@@ -2065,16 +2170,13 @@ async function runGeneration(conv) {
            w pół zdania. */
         const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
         if (pytaniaArchiwum.has(odcisk)) {
-          conv.messages.push({
-            role: 'user',
-            content: 'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
-              + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
-              + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
-              + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
-              + 'i napisz wprost, czego nie udało się znaleźć.',
-          });
-          saveConversations();
-          renderMessages();
+          dodajWynikNarzedzia(conv,
+            'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
+            + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
+            + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
+            + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
+            + 'i napisz wprost, czego nie udało się znaleźć.',
+            t('chat.archiveQuery'));
           continue;
         }
         pytaniaArchiwum.add(odcisk);
@@ -2125,17 +2227,12 @@ async function runGeneration(conv) {
           renderMessages();
         }
 
-        conv.messages.push({
-          role: 'user',
-          content: 'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-            + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
-            + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
-            + naKontekst(dane),
-          search: true,
-          searchQuery: t('chat.archiveQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv,
+          'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
+          + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
+          + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
+          + naKontekst(dane),
+          t('chat.archiveQuery'));
         continue;
       }
 
@@ -2176,15 +2273,10 @@ async function runGeneration(conv) {
         } catch (err) {
           plan = { error: err.message };
         }
-        conv.messages.push({
-          role: 'user',
-          content: 'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
-            + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
-          search: true,
-          searchQuery: t('chat.planQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv,
+          'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
+          + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
+          t('chat.planQuery'));
         continue;
       }
 
@@ -2248,17 +2340,10 @@ async function runGeneration(conv) {
           ...(svg.length ? {} : {}),
         });
         // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
-        conv.messages.push({
-          role: 'user',
-          content: t('chat.runResult', {
-            out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
-            err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
-          }),
-          search: true,
-          searchQuery: t('chat.runQuery'),
-        });
-        saveConversations();
-        renderMessages();
+        dodajWynikNarzedzia(conv, t('chat.runResult', {
+          out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
+          err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
+        }), t('chat.runQuery'));
         continue;
       }
 
@@ -2307,20 +2392,15 @@ async function runGeneration(conv) {
            może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
         const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
         if (depth < MAX_SEARCHES) {
-          conv.messages.push({
-            role: 'user',
-            content: `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
-              + (powod ? `Powód techniczny: ${powod}\n` : '')
-              + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
-              + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
-              + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
-              + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
-              + 'czego dokładnie szukać.',
-            search: true,
-            searchQuery: t('chat.photosQuery'),
-          });
-          saveConversations();
-          renderMessages();
+          dodajWynikNarzedzia(conv,
+            `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
+            + (powod ? `Powód techniczny: ${powod}\n` : '')
+            + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
+            + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
+            + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
+            + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
+            + 'czego dokładnie szukać.',
+            t('chat.photosQuery'));
           continue;
         }
         conv.messages.push({
@@ -2430,6 +2510,10 @@ async function runGeneration(conv) {
     } else {
       if (settings.speak && finalText) speakText(finalText);
       el.input.focus();
+      /* Kolejka rusza dopiero TU, po `isGenerating = false` i po odmalowaniu
+         ekranu. W trybie głosowym jej nie ruszamy — tam rozmowa idzie
+         mikrofonem i dorzucanie pisanych wiadomości mieszałoby dwa kanały. */
+      ruszKolejke();
     }
   }
 }
@@ -2498,7 +2582,11 @@ async function polishPrompt() {
 
 function updateSendButton() {
   const empty = el.input.value.trim() === '' && pendingImages.length === 0;
-  el.sendBtn.disabled = empty || isGenerating || !serverReachable;
+  /* `isGenerating` NIE blokuje już wysyłania — wiadomość idzie do kolejki.
+     Sam przycisk i tak jest w tym czasie schowany na rzecz „zatrzymaj"
+     (patrz `setGeneratingUI`), ale Enter w polu działa dalej i to jest sedno:
+     myśl, która przyszła w trakcie odpowiedzi, ma się dać zapisać od razu. */
+  el.sendBtn.disabled = empty || !serverReachable;
   updatePolishButton();
 }
 
