@@ -499,25 +499,38 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      „Dociągnij dane z plików" podmienia ją na datę zrobienia zdjęcia. Gdyby
      indeks rodzeństwa tego nie zauważał (liczba wpisów się nie zmienia!),
      parowanie po dociągnięciu danych działałoby na starych datach. */
+  const podglad = async (id) => {
+    pytano.length = 0;
+    await trasyPary.handleArchiwum(
+      { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent(`onedrive:${id}`) },
+      resT, '/api/archive/thumb');
+    return pytano.join(', ');
+  };
   archPary.dodaj([zdj('H-raw', '/Nowe/7777.CR3', '2026-08-10T09:00:00')]);
+  /* Zanim EXIF poprawi datę, RAW ma datę WGRANIA — a JPG akurat tę samą co
+     zupełnie inne zdjęcie (`H-inny`). Tak wygląda archiwum przed dociągnięciem
+     danych i tak powstaje fałszywa para, którą trzeba potem rozpiąć. */
   archPary.dodaj([zdj('H-jpg', '/Nowe/jpg/7777.JPG', '2026-01-01T00:00:00')]);
-  pytano.length = 0;
-  await trasyPary.handleArchiwum(
-    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:H-raw') },
-    resT, '/api/archive/thumb');
-  const przedExifem = pytano.join(', ');
-  // Różne daty → to jeszcze nie jest para, więc RAW idzie po sobie.
+  archPary.dodaj([zdj('H-inny', '/Nowe/jpg/7777.PNG', '2026-01-01T00:00:00')]);
+  const przedExifem = await podglad('H-raw');
+  const falszywaPara = await podglad('H-inny');
+  // Dociągnięcie danych z pliku podmienia datę wgrania na datę zdjęcia.
   archPary.dodaj([zdj('H-jpg', '/Nowe/jpg/7777.JPG', '2026-08-10T09:00:00')]);
-  pytano.length = 0;
-  await trasyPary.handleArchiwum(
-    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:H-raw') },
-    resT, '/api/archive/thumb');
-  console.log(`8c. przed zrównaniem dat: ${przedExifem} → po: ${pytano.join(', ')}`);
+  const poExifie = await podglad('H-raw');
+  const poRozpieciu = await podglad('H-inny');
+  console.log(`8c. RAW przed dociągnięciem daty: ${przedExifem} → po: ${poExifie}`);
+  console.log(`    kadr obok, sklejony starą datą: ${falszywaPara} → po: ${poRozpieciu}`);
   if (przedExifem !== '7777.CR3') {
     fail.push(`przy różnych datach sparowano mimo wszystko (${przedExifem}) — klucz ignoruje sekundę`);
   }
-  if (pytano[0] !== '7777.JPG') {
-    fail.push('po zrównaniu dat nadal pytamy o RAW — indeks kadrów nie odświeża się po dociągnięciu EXIF-u');
+  if (poExifie !== '7777.JPG') {
+    fail.push('po zrównaniu dat nadal pytamy o RAW — indeks kadrów nie widzi nowej daty');
+  }
+  /* To jest sprawdzian sprzątania po starym kluczu. Gdy przy zmianie daty
+     zostawilibyśmy identyfikator w poprzednim koszyku, `H-inny` dalej miałby
+     „bliźniaka", którego już nie ma — i brałby podgląd cudzego zdjęcia. */
+  if (poRozpieciu !== '7777.PNG') {
+    fail.push(`po rozpięciu pary sąsiad bierze podgląd z ${poRozpieciu} — stary klucz nie posprzątany`);
   }
   serwerMini.close();
   fs.rmSync(katalogPar, { recursive: true, force: true });
