@@ -342,30 +342,54 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      Pomiar z instrumentacji u Marcina: „adres 628 ms · pobranie 6805 ms
      (99 kB) · YOLO 220 ms". Dziewięćdziesiąt procent czasu to czekanie na
      miniaturę z Microsoftu, przy karcie graficznej stojącej na 18%. Powód:
-     dla CR3 Graph MUSI wygenerować podgląd u siebie, bo w RAW nie ma
-     gotowej miniatury w rozmiarze „large" — dla JPG oddaje plik z półki.
+     dla RAW-a Graph MUSI wygenerować podgląd u siebie, bo w pliku nie ma
+     gotowej miniatury w rozmiarze „large" — dla JPG oddaje plik z półki
+     (w tej samej paczce: 451 ms przy 74 kB).
 
-     A Marcin fotografuje w RAW+JPEG, więc obok `3B9A4860.CR3` leży
-     `3B9A4860.JPG`: ten sam kadr, ta sama sekunda. Bez parowania płacimy
-     dwa razy, i to droższą stroną.
+     PIERWSZA WERSJA TEGO PAROWANIA ZNALAZŁA U MARCINA ZERO PAR, bo grupowała
+     po ścieżce bez rozszerzenia — a on trzyma pliki inaczej. Jego słowami:
+     „nie raz robiłem tak, że rozdzielałem jpg i raw w dwóch folderach albo
+     jpg trafiały do podfolderu z jpg w folderze zawierającym pliki RAW",
+     do tego RAW-y to CR3, CR2, format Nikona i Samsunga.
 
-     Sprawdzamy jedno i drugie: że żądań jest o połowę mniej ORAZ że pytamy
-     o JPG, nie o CR3. Sam spadek liczby żądań dałoby się osiągnąć przypadkiem
-     — pytając zawsze o pierwszy plik z pary. */
+     Dlatego kluczem jest NAZWA PLIKU I SEKUNDA ZDJĘCIA. Ten zestaw odtwarza
+     wszystkie cztery układy naraz — i dwie pułapki, w które taki klucz może
+     wpaść: serię zdjęć w tej samej sekundzie (różne kadry, nie wolno sklejać)
+     i przewinięty licznik aparatu (ta sama nazwa, inny wyjazd). */
   const katalogPar = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-pary-'));
   const archPary = require('../../lib/archiwum.js').utworz(katalogPar);
-  const pary = [];
-  for (let i = 0; i < 10; i++) {
-    for (const rozsz of ['CR3', 'JPG']) {
-      pary.push({
-        id: `onedrive:3B9A48${i}.${rozsz}`, zrodlo: 'onedrive', typ: 'zdjecie',
-        nazwa: `3B9A48${i}.${rozsz}`,
-        sciezka: `/Zdjęcia/Mazury 2026/3B9A48${i}.${rozsz}`,
-        kiedy: '2026-06-21T10:00:00.000Z',
-      });
-    }
-  }
-  archPary.dodaj(pary);
+  const zdj = (id, sciezka, kiedy, extra) => ({
+    id: `onedrive:${id}`, zrodlo: 'onedrive', typ: 'zdjecie',
+    nazwa: sciezka.split('/').pop(), sciezka, kiedy, ...extra,
+  });
+  archPary.dodaj([
+    // A. RAW i JPG obok siebie, ten sam folder.
+    zdj('A-raw', '/Mazury 2026/3B9A4860.CR3', '2026-06-21T10:00:00'),
+    zdj('A-jpg', '/Mazury 2026/3B9A4860.JPG', '2026-06-21T10:00:00'),
+    /* B. Rozdzielone na dwa osobne foldery, RAW Nikona. Data zapisana raz ze
+       spacją, raz z „T" — bo Graph oddaje jeden format, a EXIF drugi, i po
+       dociągnięciu danych z plików w indeksie leżą oba. */
+    zdj('B-raw', '/RAW Nikon/DSC_1000.NEF', '2025-08-14 19:30:12'),
+    zdj('B-jpg', '/JPG Nikon/DSC_1000.JPG', '2025-08-14T19:30:12'),
+    // C. JPG w podfolderze „jpg" wewnątrz folderu z RAW-ami, CR2.
+    zdj('C-raw', '/Wesele Kasi/IMG_2001.CR2', '2024-09-07T14:05:33'),
+    zdj('C-jpg', '/Wesele Kasi/jpg/IMG_2001.JPG', '2024-09-07T14:05:33'),
+    // D. Sam RAW, format Samsunga — bliźniaka nie ma i mieć nie będzie.
+    zdj('D-raw', '/Telefon/SAM_9001.SRW', '2023-05-01T08:00:00'),
+    /* E. PUŁAPKA: seria z Canona, dwa różne kadry w tej samej sekundzie.
+       Sama data by je skleiła i drugie zdjęcie dostałoby cudze etykiety. */
+    zdj('E-1', '/Seria/3B9A5000.CR3', '2026-07-02T11:11:11'),
+    zdj('E-2', '/Seria/3B9A5001.CR3', '2026-07-02T11:11:11'),
+    /* F. PUŁAPKA: licznik w aparacie się przewinął. Ta sama nazwa pliku,
+       dwa różne wyjazdy — sama nazwa by je skleiła. */
+    zdj('F-1', '/Wyjazd 2019/DSC_0001.JPG', '2019-04-11T07:00:00'),
+    zdj('F-2', '/Wyjazd 2022/DSC_0001.JPG', '2022-04-11T07:00:00'),
+    /* G. Bliźniak obejrzany PRZED wprowadzeniem parowania — u Marcina takich
+       jest kilkanaście tysięcy. Etykiety mają się przepisać za darmo. */
+    zdj('G-raw', '/Stare/9999.CR3', '2020-01-01T12:00:00'),
+    zdj('G-jpg', '/Stare/9999.JPG', '2020-01-01T12:00:00',
+      { obejrzane: true, obiekty: ['dog'] }),
+  ]);
 
   const serwerMini = http.createServer((req, res) => {
     if (/detect/.test(req.url)) {
@@ -384,7 +408,12 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     onedrive: {
       polaczony: () => true,
       graf: async (sciezkaGraf) => {
-        pytano.push(decodeURIComponent(String(sciezkaGraf).split('/items/')[1].split('/')[0]));
+        /* Zapisujemy NAZWĘ PLIKU, nie identyfikator: cała rzecz w tym zestawie
+           polega na tym, o który plik z kadru pytamy, a `A-jpg` tego nie
+           pokazuje. Nazwy się powtarzają (pułapka F) i o to właśnie chodzi. */
+        const id = decodeURIComponent(String(sciezkaGraf).split('/items/')[1].split('/')[0]);
+        const w = archPary.szukaj({ zrodlo: 'onedrive' }).find((x) => x.id === `onedrive:${id}`);
+        pytano.push(w ? w.nazwa : id);
         return { url: `http://127.0.0.1:${portMini}/mini.jpg` };
       },
     },
@@ -399,21 +428,49 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   await trasyPary.handleArchiwum(
     { method: 'POST', url: '/api/archive/vision' }, resP, '/api/archive/vision');
 
-  const raw = pytano.filter((x) => /\.CR3$/i.test(x)).length;
   const d8 = resP.dane || {};
-  console.log(`8. 20 plików (10 par RAW+JPG): żądań ${pytano.length}, w tym o RAW ${raw}`);
-  console.log(`   opisane ${d8.opisane}, z pary ${d8.zParowania}, zostało ${d8.zostalo}`);
-  if (pytano.length !== 10) {
-    fail.push(`o miniaturę pytano ${pytano.length} razy przy 10 parach — RAW i JPG nie są łączone`);
+  console.log(`8. 13 plików w 9 kadrach: żądań ${pytano.length} → ${pytano.join(', ')}`);
+  console.log(`   oznaczone ${d8.sprawdzone}, opisane ${d8.opisane}, `
+    + `z pary ${d8.zParowania}, zostało ${d8.zostalo}`);
+  /* Osiem żądań: siedem kadrów płatnych (A, B, C, D, E×2, F×2 to osiem…
+     policzmy uczciwie: A, B, C, D, E-1, E-2, F-1, F-2 = osiem) plus G za
+     darmo z obejrzanego bliźniaka. */
+  if (pytano.length !== 8) {
+    fail.push(`o miniaturę pytano ${pytano.length} razy zamiast 8 — grupowanie kadrów nie działa`);
   }
-  if (raw) fail.push(`pytano o ${raw} plików CR3 — Graph musi je generować, JPG oddaje z półki`);
-  if (d8.opisane !== 20) fail.push(`opisano ${d8.opisane} z 20 — etykieta nie trafia na oba pliki z pary`);
-  if (d8.zParowania !== 10) fail.push(`zParowania=${d8.zParowania} zamiast 10 — panel nie pokaże zysku`);
-  if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 — pary wracają w kółko`);
-  const zPary = archPary.szukaj({ zrodlo: 'onedrive' })
-    .filter((w) => (w.obiekty || []).includes('boat')).length;
-  console.log(`   plików z etykietą „boat": ${zPary}`);
-  if (zPary !== 20) fail.push(`etykietę dostało ${zPary} plików zamiast 20`);
+  // Z każdej pary ma iść JPG, nigdy RAW — to jest cała oszczędność.
+  for (const rawZPary of ['3B9A4860.CR3', 'DSC_1000.NEF', 'IMG_2001.CR2', '9999.CR3']) {
+    if (pytano.includes(rawZPary)) {
+      fail.push(`pytano o ${rawZPary}, choć obok leży JPG — to 8 s zamiast pół sekundy`);
+    }
+  }
+  for (const jpgZPary of ['3B9A4860.JPG', 'DSC_1000.JPG', 'IMG_2001.JPG']) {
+    if (!pytano.includes(jpgZPary)) fail.push(`nie zapytano o ${jpgZPary} — kadr wypadł z paczki`);
+  }
+  // Pułapki: seria w tej samej sekundzie i przewinięty licznik — osobne kadry.
+  if (!(pytano.includes('3B9A5000.CR3') && pytano.includes('3B9A5001.CR3'))) {
+    fail.push('seria z tej samej sekundy została sklejona — drugi kadr dostał cudze etykiety');
+  }
+  if (pytano.filter((x) => x === 'DSC_0001.JPG').length !== 2) {
+    fail.push('dwa zdjęcia o tej samej nazwie z różnych lat zostały sklejone w jeden kadr');
+  }
+  if (d8.sprawdzone !== 12) fail.push(`oznaczono ${d8.sprawdzone} z 12 nieobejrzanych plików`);
+  if (d8.zParowania !== 4) {
+    fail.push(`zParowania=${d8.zParowania} zamiast 4 (A, B, C i darmowe G) — panel nie pokaże zysku`);
+  }
+  if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 — kadry wracają w kółko`);
+  const poId8 = new Map(archPary.szukaj({ zrodlo: 'onedrive' }).map((w) => [w.id, w]));
+  const et = (id) => (poId8.get(`onedrive:${id}`) || {}).obiekty || [];
+  console.log(`   RAW z pary A: [${et('A-raw')}], RAW z pary G (darmowy): [${et('G-raw')}]`);
+  for (const id of ['A-raw', 'A-jpg', 'B-raw', 'B-jpg', 'C-raw', 'C-jpg', 'D-raw']) {
+    if (!et(id).includes('boat')) fail.push(`${id} nie dostał etykiety z rozpoznania`);
+  }
+  /* G to inny sprawdzian niż reszta: etykiety mają przyjść Z BLIŹNIAKA
+     („dog"), a nie z atrapy YOLO („boat"). Gdyby przyszło „boat", znaczyłoby
+     to, że i tak zapytaliśmy — czyli darmowa ścieżka nie zadziałała. */
+  if (!et('G-raw').includes('dog') || et('G-raw').includes('boat')) {
+    fail.push(`G-raw ma [${et('G-raw')}] zamiast [dog] — etykiety nie przeszły z obejrzanego bliźniaka`);
+  }
 
   /* --- 8b. Podgląd RAW-a też idzie przez JPG-owego bliźniaka --------------
      Ta sama cena dotyczy panelu archiwum i siatki zdjęć w rozmowie: każdy
@@ -422,22 +479,58 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   pytano.length = 0;
   const resT = {};
   await trasyPary.handleArchiwum(
-    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:3B9A483.CR3') },
+    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:B-raw') },
     resT, '/api/archive/thumb');
-  console.log(`8b. podgląd CR3 → pytano o ${pytano.join(', ') || 'nic'}`);
-  if (pytano.length !== 1 || /\.CR3$/i.test(pytano[0])) {
-    fail.push(`podgląd RAW-a pyta o ${pytano.join(', ')} — siedem sekund na kafelek`);
+  console.log(`8b. podgląd NEF-a z osobnego folderu → pytano o ${pytano.join(', ') || 'nic'}`);
+  if (pytano.length !== 1 || pytano[0] !== 'DSC_1000.JPG') {
+    fail.push(`podgląd RAW-a pyta o ${pytano.join(', ')} zamiast o DSC_1000.JPG — 8 s na kafelek`);
   }
   /* Plik BEZ bliźniaka ma iść po sobie samym, a nie zniknąć po drodze. */
-  archPary.dodaj([{ id: 'onedrive:sam.CR3', zrodlo: 'onedrive', typ: 'zdjecie',
-    nazwa: 'sam.CR3', sciezka: '/Zdjęcia/sam.CR3', kiedy: '2026-06-21T10:00:00.000Z' }]);
   pytano.length = 0;
   await trasyPary.handleArchiwum(
-    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:sam.CR3') },
+    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:D-raw') },
     resT, '/api/archive/thumb');
   console.log(`    RAW bez pary → pytano o ${pytano.join(', ') || 'nic'}`);
-  if (pytano[0] !== 'sam.CR3') {
+  if (pytano[0] !== 'SAM_9001.SRW') {
     fail.push(`RAW bez bliźniaka poszedł po ${pytano.join(', ')} zamiast po sobie`);
+  }
+  /* --- 8c. Dociągnięcie EXIF-u zmienia datę — indeks kadrów MUSI to zauważyć
+     Do RAW-ów Graph nie czyta EXIF-u i wpisuje datę WGRANIA pliku; dopiero
+     „Dociągnij dane z plików" podmienia ją na datę zrobienia zdjęcia. Gdyby
+     indeks rodzeństwa tego nie zauważał (liczba wpisów się nie zmienia!),
+     parowanie po dociągnięciu danych działałoby na starych datach. */
+  const podglad = async (id) => {
+    pytano.length = 0;
+    await trasyPary.handleArchiwum(
+      { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent(`onedrive:${id}`) },
+      resT, '/api/archive/thumb');
+    return pytano.join(', ');
+  };
+  archPary.dodaj([zdj('H-raw', '/Nowe/7777.CR3', '2026-08-10T09:00:00')]);
+  /* Zanim EXIF poprawi datę, RAW ma datę WGRANIA — a JPG akurat tę samą co
+     zupełnie inne zdjęcie (`H-inny`). Tak wygląda archiwum przed dociągnięciem
+     danych i tak powstaje fałszywa para, którą trzeba potem rozpiąć. */
+  archPary.dodaj([zdj('H-jpg', '/Nowe/jpg/7777.JPG', '2026-01-01T00:00:00')]);
+  archPary.dodaj([zdj('H-inny', '/Nowe/jpg/7777.PNG', '2026-01-01T00:00:00')]);
+  const przedExifem = await podglad('H-raw');
+  const falszywaPara = await podglad('H-inny');
+  // Dociągnięcie danych z pliku podmienia datę wgrania na datę zdjęcia.
+  archPary.dodaj([zdj('H-jpg', '/Nowe/jpg/7777.JPG', '2026-08-10T09:00:00')]);
+  const poExifie = await podglad('H-raw');
+  const poRozpieciu = await podglad('H-inny');
+  console.log(`8c. RAW przed dociągnięciem daty: ${przedExifem} → po: ${poExifie}`);
+  console.log(`    kadr obok, sklejony starą datą: ${falszywaPara} → po: ${poRozpieciu}`);
+  if (przedExifem !== '7777.CR3') {
+    fail.push(`przy różnych datach sparowano mimo wszystko (${przedExifem}) — klucz ignoruje sekundę`);
+  }
+  if (poExifie !== '7777.JPG') {
+    fail.push('po zrównaniu dat nadal pytamy o RAW — indeks kadrów nie widzi nowej daty');
+  }
+  /* To jest sprawdzian sprzątania po starym kluczu. Gdy przy zmianie daty
+     zostawilibyśmy identyfikator w poprzednim koszyku, `H-inny` dalej miałby
+     „bliźniaka", którego już nie ma — i brałby podgląd cudzego zdjęcia. */
+  if (poRozpieciu !== '7777.PNG') {
+    fail.push(`po rozpięciu pary sąsiad bierze podgląd z ${poRozpieciu} — stary klucz nie posprzątany`);
   }
   serwerMini.close();
   fs.rmSync(katalogPar, { recursive: true, force: true });

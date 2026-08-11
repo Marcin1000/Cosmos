@@ -27,9 +27,10 @@ import base64
 import io
 import os
 import tempfile
+import threading
 from datetime import datetime
 
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 import uvicorn
 
@@ -475,16 +476,35 @@ async def tts(request: Request):
     return Response(content=data, media_type="audio/wav")
 
 
+# ROZPOZNAWANIE NIE MOŻE STAĆ NA PĘTLI ZDARZEŃ.
+#
+# Rozpoznawanie treści całego archiwum wysyła tu kilkanaście zdjęć naraz.
+# Przy `async def` cała ta praca — dekodowanie base64 i sama detekcja —
+# wykonuje się NA PĘTLI ZDARZEŃ uvicorna, więc żądania nie tylko ustawiają się
+# w kolejce (to akurat w porządku, karta jest jedna), ale blokują też
+# `/health`. Cosmos odpytuje `/health`, żeby wiedzieć, czy zmysły żyją — i
+# w środku wielogodzinnego przebiegu dostawałby ciszę, po czym uznawał komputer
+# domowy za wyłączony i przechodził na rozpoznawanie z przeglądarki.
+#
+# `def` bez `async` FastAPI odsyła do puli wątków: pętla zdarzeń zostaje wolna,
+# `/health` odpowiada od razu. Ciało żądania FastAPI parsuje ZA NAS (stąd
+# `payload: dict = Body(...)`), bo w funkcji bez `async` nie ma jak zaczekać na
+# `request.json()`. Sama detekcja nadal idzie pojedynczo, bo model jest jeden
+# i nie jest bezpieczny wielowątkowo — stąd zamek. Przy 220 ms na zdjęcie
+# i 8 s czekania na miniaturę kolejka przed kartą nie jest wąskim gardłem.
+YOLO_ZAMEK = threading.Lock()
+
+
 @app.post("/detect")
-async def detect(request: Request):
+def detect(payload: dict = Body(...)):
     """{"image": dataURL} -> {"objects": [{label, conf, box}], "summary": "..."}"""
     if not CAPS["yolo"]:
         return JSONResponse({"error": "YOLO niezainstalowany (pip install ultralytics)."}, status_code=501)
-    payload = await request.json()
     img = decode_image(payload)
     if img is None:
         return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
-    results = get_yolo()(img, verbose=False)[0]
+    with YOLO_ZAMEK:
+        results = get_yolo()(img, verbose=False)[0]
     objects = []
     for b in results.boxes:
         objects.append({
