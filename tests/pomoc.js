@@ -118,8 +118,11 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   return proc;
 }
 
+/* `PORT` podajemy tylko wtedy, gdy środowisko naprawdę o niego prosi —
+   inaczej atrapy czytające `process.env.PORT` dostawałyby napis „undefined"
+   i próbowały na nim stanąć. */
 const atrapaNode = (plik, port) => uruchom('node', [path.join(ATRAPY, plik)],
-  { cwd: ATRAPY, env: { ...process.env, PORT: String(port) } });
+  { cwd: ATRAPY, env: port ? { ...process.env, PORT: String(port) } : { ...process.env } });
 const atrapaPy = (plik) => uruchom('python3', [path.join(ATRAPY, plik)], { cwd: ATRAPY });
 
 // ---------------------------------------------------------------------------
@@ -228,7 +231,10 @@ const SRODOWISKA = {
     port: 3410,
     // Echo systemu jest tu po to, żeby sprawdzić, czy model W OGÓLE wie
     // o nowym narzędziu — bez tego nadal odpowiadałby „nie umiem".
-    atrapy: [['mock-grafiki.js', null], ['mock-echo-systemu.js', null]],
+    /* Echo systemu na WŁASNYM porcie, nie na wspólnym 7116: to środowisko
+       bywa uruchomione równolegle ze środowiskiem „kontekst", a sprzątanie
+       portów przed startem zabijało wtedy cudzą, działającą atrapę. */
+    atrapy: [['mock-grafiki.js', null], ['mock-echo-systemu.js', 7118]],
     env: {
       IMAGE_SEARCH_URL: 'http://127.0.0.1:7117/',
       COMMONS_API_URL: 'http://127.0.0.1:7117/commons',
@@ -237,7 +243,7 @@ const SRODOWISKA = {
       SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
       SWPC_KP_URL: 'http://127.0.0.1:7117/swpc/kp',
       SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
-      NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:7118/v1',
     },
   },
   /* Praca w tle: odpowiedź, która przeżywa zamknięcie karty. To samo co
@@ -322,12 +328,17 @@ async function srodowisko(nazwa) {
      Zdarzyło się naprawdę: nowa trasa dawała 404, choć istniała. */
   await zwolnijPorty([cfg.port]);
 
-  // Atrapy też muszą być świeże — patrz komentarz przy PORTY_ATRAP.
-  for (const [plik] of cfg.atrapy) await zwolnijPorty(PORTY_ATRAP[plik] || []);
+  /* Atrapy też muszą być świeże — patrz komentarz przy PORTY_ATRAP. Gdy wpis
+     podaje WŁASNY port, zwalniamy tylko jego: atrapa echa systemu stoi
+     w dwóch środowiskach naraz i sprzątanie po nazwie pliku kazało im
+     zabijać sobie nawzajem działającą atrapę. */
+  for (const [plik, port] of cfg.atrapy) {
+    await zwolnijPorty(port ? [port] : (PORTY_ATRAP[plik] || []));
+  }
 
   const procesy = [];
-  for (const [plik] of cfg.atrapy) {
-    procesy.push(plik.endsWith('.py') ? atrapaPy(plik) : atrapaNode(plik));
+  for (const [plik, port] of cfg.atrapy) {
+    procesy.push(plik.endsWith('.py') ? atrapaPy(plik) : atrapaNode(plik, port));
   }
   if (cfg.atrapy.length) await new Promise((r) => setTimeout(r, 1500));
 

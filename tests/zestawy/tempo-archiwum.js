@@ -151,9 +151,19 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     if (ile !== 2) fail.push(`po wczytaniu starego indeksu jest ${ile} wpisów zamiast 2 — migracja gubi dane`);
     if (zostalyAdresy) fail.push('adresy miniatur zostały w starym indeksie — nie chudnie po aktualizacji');
 
-    // Posprzątany indeks ma też TRAFIĆ NA DYSK, inaczej sprzątamy przy każdym starcie.
-    await new Promise((r) => setTimeout(r, 3600));
-    const naDysku = fs.readFileSync(path.join(staryKatalog, 'archiwum.json'), 'utf8');
+    /* Posprzątany indeks ma też TRAFIĆ NA DYSK, inaczej sprzątamy przy każdym
+       starcie. Czekamy NA WARUNEK, nie odmierzoną chwilę: pierwsza wersja
+       spała 3600 ms przy odstępie zapisu 3000 ms i przechodziła sama, a padała
+       pod obciążeniem całej baterii — czyli mierzyła zajętość maszyny, nie
+       zachowanie kodu. Sto prób co 100 ms to dziesięć sekund zapasu i ta sama
+       informacja przy usterce. */
+    const plikStarego = path.join(staryKatalog, 'archiwum.json');
+    let naDysku = '';
+    for (let i = 0; i < 100; i++) {
+      naDysku = fs.readFileSync(plikStarego, 'utf8');
+      if (!naDysku.includes('1drv.com')) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     console.log(`   plik na dysku bez adresów: ${!naDysku.includes('1drv.com')}`);
     if (naDysku.includes('1drv.com')) {
       fail.push('posprzątany indeks nie został zapisany — czyszczenie powtórzy się przy każdym starcie');
@@ -585,13 +595,14 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
 
   let zapytan = 0;
   let dlawienD = 0;
+  let dlawSie = true;
   const trasyD = require('../../lib/archiwum-trasy.js').utworz({
     archiwum: archDlaw,
     onedrive: {
       polaczony: () => true,
       // Co drugie żądanie „kosztuje" dławienie — tak jak Graph przy RAW-ach.
       graf: async () => {
-        if (++zapytan % 2 === 0) dlawienD++;
+        if (dlawSie && ++zapytan % 2 === 0) dlawienD++;
         await new Promise((r) => setTimeout(r, 20));
         return { url: `http://127.0.0.1:${portD}/mini.jpg` };
       },
@@ -608,7 +619,6 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   const resD = {};
   await trasyD.handleArchiwum(
     { method: 'POST', url: '/api/archive/vision' }, resD, '/api/archive/vision');
-  serwerD.close();
   const d8d = resD.dane || {};
   console.log(`8d. przy ciągłym dławieniu pula ${d8d.rownolegle} → ${d8d.dolPuli}, `
     + `oznaczono ${d8d.sprawdzone} z 40`);
@@ -621,6 +631,39 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      nie powód, żeby cokolwiek pominąć. */
   if (d8d.sprawdzone !== 40) {
     fail.push(`oznaczono ${d8d.sprawdzone} z 40 — zwalnianie puli gubi pliki`);
+  }
+
+  /* --- 8e. Nauka MUSI przeżyć paczkę ------------------------------------
+     To jest usterka, którą zgłosił Marcin jednym zdaniem: „w ciągu 60 sekund
+     potrafi zejść prawie 1000, ale później czeka dość sporo czasu, czyli leci
+     to takimi falami". Panel pokazywał cztery paczki `pula 16→16` po
+     kilkanaście sekund i piątą `pula 16→8` z przestojem 264 s.
+
+     Powód: `dozwolone` żyło wewnątrz obsługi żądania, więc każda paczka
+     zaczynała od pełnego gazu, dostawała po łapach i zapominała. Regulacja,
+     która resetuje się co paczkę, nie jest regulacją.
+
+     Tu druga paczka rusza po tej samej atrapie co pierwsza i MA zacząć od
+     tego, czego nauczyła się poprzednia. */
+  archDlaw.dodaj(Array.from({ length: 20 }, (_, i) => zdj(
+    `e${i}`, `/Mazury 2026/3B9A8${String(i).padStart(3, '0')}.CR3`,
+    `2026-07-1${i % 9}T0${i % 10}:00:00`)));
+  // Atrapa PRZESTAJE dławić — mimo to pula nie może od razu wrócić na pełny
+  // gaz, bo powrót jest rozłożony w czasie, nie liczony w udanych żądaniach.
+  dlawSie = false;
+  const resE = {};
+  await trasyD.handleArchiwum(
+    { method: 'POST', url: '/api/archive/vision' }, resE, '/api/archive/vision');
+  serwerD.close();
+  const d8e = resE.dane || {};
+  console.log(`8e. druga paczka po nauce: pula ${d8e.rownolegle} → ${d8e.dolPuli}, `
+    + `oznaczono ${d8e.sprawdzone} z 20`);
+  if (d8e.dolPuli >= d8e.rownolegle) {
+    fail.push(`druga paczka wystartowała od pełnej puli (${d8e.dolPuli}) `
+      + '— nauka nie przeżywa paczki i tempo leci falami');
+  }
+  if (d8e.sprawdzone !== 20) {
+    fail.push(`oznaczono ${d8e.sprawdzone} z 20 w drugiej paczce — pamięć puli gubi pliki`);
   }
   fs.rmSync(katalogDlaw, { recursive: true, force: true });
 
@@ -648,20 +691,32 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   await archZapis.zapisz();            // pierwszy zapis podaje koszt kolejnym
   const OKNO_MS = 3000;
   const KROK_MS = 5;
-  let tyk9 = 0;
-  const zegar9 = setInterval(() => { tyk9++; }, KROK_MS);
-  const koniec9 = Date.now() + OKNO_MS;
-  let i9 = 0;
-  while (Date.now() < koniec9) {
-    // Tak wygląda rozpoznawanie: co chwilę oznaczamy kolejne pliki.
-    archZapis.dodaj([{ ...wpisy[i9++ % wpisy.length], obiekty: ['dog'], obejrzane: true }]);
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  clearInterval(zegar9);
-  const mozliwe = Math.round(OKNO_MS / KROK_MS);
-  const zablokowane = Math.max(0, Math.round((1 - tyk9 / mozliwe) * 100));
+  /* Liczba tyknięć MUSI mieć punkt odniesienia zmierzony tu i teraz, a nie
+     wyliczony z okna i kroku. Pierwsza wersja porównywała do teoretycznych
+     600 tyknięć i pod obciążeniem całej baterii pokazywała „32% zablokowane"
+     przy zdrowym kodzie — mierzyła zajętość maszyny, nie zachowanie zapisu.
+     Najpierw więc ten sam przebieg BEZ archiwum, potem z archiwum; liczy się
+     różnica, a obciążenie skraca się po obu stronach. */
+  const przemiel = async (naKrok) => {
+    let tyk = 0;
+    const zegar = setInterval(() => { tyk++; }, KROK_MS);
+    const koniec = Date.now() + OKNO_MS;
+    let i = 0;
+    while (Date.now() < koniec) {
+      naKrok(i++);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    clearInterval(zegar);
+    return tyk;
+  };
+  const tykBaza = await przemiel(() => {});
+  // Tak wygląda rozpoznawanie: co chwilę oznaczamy kolejne pliki.
+  const tyk9 = await przemiel((i) => {
+    archZapis.dodaj([{ ...wpisy[i % wpisy.length], obiekty: ['dog'], obejrzane: true }]);
+  });
+  const zablokowane = Math.max(0, Math.round((1 - tyk9 / Math.max(1, tykBaza)) * 100));
   console.log(`9. przy ciągłym oznaczaniu pętla zdarzeń stała ${zablokowane}% czasu `
-    + `(${tyk9} z ${mozliwe} tyknięć)`);
+    + `(${tyk9} tyknięć wobec ${tykBaza} bez archiwum)`);
   if (zablokowane > 25) {
     fail.push(`zapis indeksu zamraża serwer na ${zablokowane}% czasu pracy `
       + '— pobrania stoją, a stopery tykają dalej');
