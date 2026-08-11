@@ -5,6 +5,15 @@
    znaczyły. */
 const http = require('http');
 
+/* Port z otoczenia, bo tej atrapy potrzebują DWA środowiska naraz („kontekst"
+   i „grafiki"). Na jednym, wpisanym na stałe porcie zestawy ubijały sobie
+   nawzajem atrapę: sprzątanie portów przed startem środowiska zabija to, co
+   na nim stoi, a drugie środowisko czekało potem 1,5 s na własną — i w tym
+   oknie żądanie pierwszego wracało błędem połączenia zamiast treścią promptu.
+   Objaw: `plan-zdjeciowy` padał raz na kilka przebiegów CAŁEJ baterii,
+   a uruchomiony osobno przechodził zawsze. */
+const PORT = Number(process.env.PORT) || 7116;
+
 http.createServer((req, res) => {
   /* Udaje uśpiony komputer domowy: połączenie przyjęte, odpowiedzi brak.
      Adres nieistniejący nie nadaje się do tego testu — w kontenerze odbija
@@ -31,4 +40,4 @@ http.createServer((req, res) => {
     res.write('data: [DONE]\n\n');
     res.end();
   });
-}).listen(7116, () => console.log('atrapa echa systemu na 7116'));
+}).listen(PORT, () => console.log(`atrapa echa systemu na ${PORT}`));

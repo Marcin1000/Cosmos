@@ -2699,6 +2699,37 @@ jest zasobem, którego Microsoft pilnuje limitem. Kolejnym krokiem, gdyby
 zaszła potrzeba, jest `POST /$batch`: do dwudziestu zapytań o adres w jednym
 obiegu.
 
+## ✅ Partia 60 — trzy testy, które mierzyły obciążenie maszyny (GOTOWE)
+
+Wyszło przy okazji: bateria padała raz na kilka przebiegów, za każdym razem
+gdzie indziej. Uruchamiana pojedynczo — zawsze zielona. To najgorszy możliwy
+stan baterii, bo uczy ignorowania czerwonego.
+
+Trzy różne przyczyny, wszystkie tego samego rodzaju: **test mierzył, jak
+zajęta jest maszyna, zamiast jak zachowuje się kod.**
+
+1. **Dwa środowiska dzieliły jeden port atrapy.** `kontekst` i `grafiki`
+   stawiały atrapę echa systemu na 7116, a sprzątanie portów przed startem
+   środowiska zabija to, co na nim stoi. Drugie środowisko czekało potem
+   1,5 s na własną atrapę — i w tym oknie żądanie pierwszego wracało błędem
+   połączenia zamiast treścią promptu. Padał `plan-zdjeciowy` albo
+   `szukanie-grafik`, zależnie od tego, kto kogo ubił.
+   Naprawione: atrapa czyta port z otoczenia (`grafiki` dostaje 7118),
+   a sprzątanie zwalnia tylko port podany we wpisie. Mechanizm przekazania
+   portu istniał w `atrapaNode(plik, port)` od dawna — po prostu nikt go
+   nie wołał z drugim argumentem
+2. **`tempo-archiwum` punkt 4 spał 3600 ms** przy odstępie zapisu 3000 ms.
+   Sześćset milisekund zapasu wystarcza samotnie, nie wystarcza pod
+   obciążeniem. Teraz czeka NA WARUNEK, do dziesięciu sekund
+3. **`tempo-archiwum` punkt 9 porównywał tyknięcia zegara do teoretycznych
+   600.** Pod obciążeniem baterii pokazywał „32% zablokowane" przy zdrowym
+   kodzie. Teraz mierzy najpierw ten sam przebieg BEZ archiwum i porównuje
+   do niego — obciążenie skraca się po obu stronach. Rozdzielenie zostało
+   ostre: **1% wobec 63%** na kodzie sprzed poprawki zapisu
+
+Sprawdzone sześcioma pełnymi przebiegami baterii: trzy przed poprawkami
+(dwa pady), trzy po (42/42, 42/42, 42/42).
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
