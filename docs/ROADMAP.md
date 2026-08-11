@@ -2617,6 +2617,48 @@ zakresowe — tak jak już robimy z EXIF-em, który schodzi w ~250 ms na 128 kB.
 To osobna partia i wymaga czytnika struktury CR3/CR2/NEF; do tego czasu
 RAW-y bez JPG-owego bliźniaka pozostają wąskim gardłem.
 
+## ✅ Partia 58 — podgląd wyjęty z pliku RAW zamiast renderowany (GOTOWE)
+
+Adaptacyjna pula z poprzedniej partii zadziałała (16→4 przy dławieniu,
+16→16 bez), ale tempo spadło do **0,38 zdjęcia na sekundę**, bo kolejka
+weszła w folder prawie czysto RAW-owy: 103 RAW-y na 11 JPG-ów, potem 108 na 5.
+
+I wtedy pomiar powiedział rzecz rozstrzygającą: `pobranie` RAW-a wynosiło
+**11,5 s przy puli 4 i 11,5 s przy puli 16**. Czyli to nie jest problem
+przepustowości ani równoległości po naszej stronie — to koszt renderowania
+podglądu z RAW-a po stronie Microsoftu. Tej ściany nie da się obejść niczym,
+co robimy z liczbą robotników. `szczyt YOLO 3` przy puli 16 potwierdzał:
+karta graficzna stała bezczynnie.
+
+Ale każdy aparat zapisuje gotowy podgląd JPEG **wewnątrz** pliku RAW — to
+z niego korzysta ekranik z tyłu korpusu. Graph obsługuje `Range`, tą samą
+drogą od dawna dociągamy EXIF i wiadomo, że jest szybka.
+
+- [x] `lib/raw-podglad.js` — czytnik dwóch rodzin formatów, zero zależności:
+      **TIFF-owe** (CR2 6180 plików, DNG 870, NEF 34, TIF 78) po tagach IFD,
+      z przejściem przez SubIFD-y; **ISO-BMFF** (CR3 6786) po pudełkach,
+      z `PRVW` wewnątrz `moov`
+- [x] Bierzemy WIĘKSZY podgląd, nie pierwszy z brzegu — każdy RAW ma obok
+      właściwego podglądu miniaturkę 160×120, na której nie ma czego
+      rozpoznawać, a wynik zapisałby się w indeksie na stałe
+- [x] Wielopaskowy zapis przy kompresji JPEG jest ODRZUCANY: to właściwe dane
+      RAW pocięte na kafelki, nie podgląd
+- [x] `onedrive.kawalekPliku(id, od, ile)` — dowolny zakres bajtów, z obsługą
+      serwera, który zignoruje `Range` i przyśle całość
+- [x] **Powrót do miniatury z Graph przy CZYMKOLWIEK nieoczekiwanym.** To nie
+      jest uprzejmość wobec dziwnych plików, tylko warunek, pod którym w ogóle
+      warto było ten czytnik pisać: gorzej niż było być nie może
+
+Zestaw `podglad-z-rawa` (nowy, 8 punktów): pliki składane bajt po bajcie, bo
+prawdziwego CR3 w repozytorium nie ma i nie będzie. Najważniejszy punkt jest
+szósty — siedem plików, których czytnik nie rozumie (pusty, obcięty, losowe
+bajty, TIFF bez podglądu, BMFF bez `moov`), i **zero zgadywania** na nich.
+Punkt ósmy sprawdza całą drogę: dla CR3 i CR2 o miniaturę nie pytamy wcale,
+dla pliku bez podglądu pytamy jak dotąd i nic nie przepada.
+
+Panel pokazuje `RAW ×103 (z pliku 103)`, więc od razu widać, którą drogą
+poszły obrazki.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
