@@ -2332,6 +2332,61 @@ uruchomić zadanie po to, by się przekonać, że nie ma go po co uruchamiać.
       z 59 421 zdjęć (zostało 0) · telemetria do wczytania: 0 klipów"
 - [x] Liczone jednym przebiegiem, bez czterech kopii indeksu na każde otwarcie
 
+## ✅ Partia 52 — „wiem, że mam te zdjęcia" (GOTOWE)
+
+Marcin, po zakończeniu dociągania danych: „Pokaż ujęcia z zachodu słońca
+z Mazur" → cztery rundy „nie udało się znaleźć". Potem „zdjęcia z Mazur do 14"
+→ zero. Potem „po 14" → 804 pliki, wszystkie wieczorne. Napisał: „wiem, kiedy
+robiłem zdjęcia na Mazurach (…) jest dużo więcej zdjęć wykonanych przed
+południem i po południu".
+
+Miał rację. Archiwum go okłamało z **trzech niezależnych powodów**.
+
+### 1. Nie było filtra po zegarze
+
+Istniały `od`/`do` (konkretne daty z godziną) i `poraDnia`. `poraDnia` wygląda
+jak odpowiedź na „przed 14", ale liczy się z **położenia Słońca**: zdjęcie
+z 14:27 ma `poraDnia: wieczor`, bo Słońce jest już na zachód od południa.
+Model, pytany o zegarek, sięgał po astronomię i dostawał wynik wyglądający na
+prawdziwy.
+
+- [x] `godzinaOd=` / `godzinaDo=` — godzina zegarowa 0–23, górna granica
+      wyłączna („do 14" = przed czternastą). Rozumie też „14:30"
+- [x] Instrukcja mówi wprost: **zegar to nie pora dnia**, i że filtrowanie
+      pytania o zegar przez `poraDnia` daje odpowiedź, która wygląda na
+      prawdziwą i nie jest
+
+### 2. `miejsce=Mazury` nie mogło zadziałać
+
+Ten filtr zamienia nazwę na współrzędne i filtruje po promieniu — a zdjęcia
+z lustrzanki nie mają GPS. 804 pliki leżały w katalogu „/Mazury 2026/"
+i były niewidoczne dla zapytania o miejsce. Model przez cztery rundy
+tłumaczył, że folder nazywa się pewnie inaczej. **Nie nazywał się.**
+
+- [x] Zero wyników po `miejsce=` + trafienie tej samej nazwy w ścieżkach =
+      wynik niesie `zamiastMiejsca`: „804 pliki mają »Mazury« w ścieżce,
+      powtórz z `folder=`". Przy poprawnym wyniku podpowiedzi nie ma
+- [x] Instrukcja: gdy dostaniesz `zamiastMiejsca`, to jest gotowa odpowiedź —
+      nie tłumacz użytkownikowi, że pewnie nazwał folder inaczej
+
+### 3. `przeliczSwiatlo()` naprawiał połowę rachunku
+
+Znalezione przy pisaniu zestawu, nie w zgłoszeniu. Po ustawieniu lokalizacji
+funkcja przeliczała `swiatlo` dla plików bez GPS — ale **nie** `poraDnia`,
+liczone z tego samego położenia Słońca. Kto ustawił dom PO zindeksowaniu,
+dostawał indeks z wypełnioną fazą światła i pustą porą dnia, więc
+`poraDnia=rano` cicho zwracało zero.
+
+- [x] Oba pola odświeżają się razem
+
+### Zestaw, który najpierw nic nie mierzył
+
+Punkt 2 przechodził, pokazując `poraDnia: null` dla wszystkich wpisów —
+bo w teście nie było ustawionego domu. Guard `>= 18` nie miał czego sprawdzać
+i test świecił na zielono, nie mierząc niczego. Dopiero odtworzenie sytuacji
+z serwera Marcina (dom ustawiony, GPS brak) pokazało prawdę: **14:15 → wieczor**.
+Przy okazji wyszła usterka nr 3.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
