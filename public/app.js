@@ -671,7 +671,7 @@ async function odswiezArchiwum() {
             zPliku: c.zPliku ? t('arch.visionFromFile', { ile: c.zPliku }) : '',
           })).join('')
         + t('arch.visionPool', { n: w.rownolegle, dolPuli: w.dolPuli, sufitPuli: w.sufitPuli,
-          szczytYolo: w.szczytYolo, sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
+          szczytYolo: w.szczytYolo, srednioNaraz: w.srednioNaraz, naZadanie: w.naZadanie }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({

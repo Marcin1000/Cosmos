@@ -2773,6 +2773,41 @@ odniesienia, raz w okno właściwe. Teraz zestaw czeka, aż plik przestanie się
 zmieniać — to jest warunek „nie ma zaległych zapisów", a nie zgadywanka
 o długości odstępu.
 
+## ✅ Partia 62 — rozpoznawanie treści przerobione do końca (GOTOWE)
+
+Marcin: „Dobra teraz jest stabilnie. Doszło tak do zera. Więc już wszystko
+zostało przerobione." Ponowne kliknięcie oddaje „rozpoznana na 0 zdjęciach"
+— kolejka pusta. **Cały materiał z OneDrive ma rozpoznaną treść.**
+
+Regulacja zbiegła do `ściana 3` i tam została, bez ani jednego przestoju
+na karze. Tyle akurat przyjmuje konto Marcina i to jest odpowiedź, której
+przez cały ten czas szukaliśmy — nie dało się jej odgadnąć, dało się ją
+tylko zmierzyć.
+
+Droga, w skrócie i w liczbach:
+
+| krok | tempo | co było wąskim gardłem |
+|---|---|---|
+| stan wyjściowy | 0,83/s | wszystko po kolei, jedno żądanie naraz |
+| pula 3 → 6 | 1,28/s | czekanie na Microsoft, zrównoleglone |
+| zapis indeksu przestał zamrażać serwer | 2,98/s | `JSON.stringify` 28 MB co 3 s |
+| podgląd wyjęty z pliku RAW | — | Graph renderował podgląd z CR3 po 11,5 s |
+| pula pamięta ścianę | stabilnie do zera | powrót na pełny gaz prosto w karę |
+
+- [x] Ostatnia poprawka pomiaru: zamiast „sprawność N%" panel pokazuje
+      **„średnio N naraz"** — ilu robotników naprawdę pracowało. Procent
+      liczył się względem pułapu z `.env`, więc przy ścianie 3 i pułapie 16
+      maksimum możliwe wynosiło 19%: pokazane „12%" wyglądało na katastrofę,
+      a było dwiema trzecimi tego, co się dało. Liczba robotników porównuje
+      się wprost z sąsiednim „pula 16→3, ściana 3", procent wymagał
+      mianownika, którego nikt nie widział
+
+### Co z tego wynika na przyszłość
+
+Kolejny przebieg (po dowgraniu nowych zdjęć) zacznie od ściany 3 i będzie
+próbował wyżej co dziesięć minut. Gdyby Microsoft kiedyś poluzował, sam się
+o tym dowie; gdyby zacisnął — zejdzie niżej bez pytania.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
