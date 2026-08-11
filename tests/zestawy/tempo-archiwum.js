@@ -554,6 +554,76 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   serwerMini.close();
   fs.rmSync(katalogPar, { recursive: true, force: true });
 
+  /* --- 8d. Pula schodzi sama, gdy Graph prosi o zwolnienie ---------------
+     Po podniesieniu do szesnastu tempo u Marcina SPADŁO do 0,73 zdjęcia na
+     sekundę — poniżej stanu sprzed wszystkich poprawek. Panel pokazał
+     dlaczego: „Graph prosił o zwolnienie 4× · przestój na karze 890 s",
+     przy paczce z przewagą RAW-ów (111 RAW-ów na 9 JPG-ów).
+
+     Właściwa liczba robotników nie jest stała — zależy od tego, na jaki
+     fragment archiwum akurat trafi paczka. Do tego przerwa po 429 jest
+     wspólna, więc po jej końcu wszyscy ruszali w tej samej milisekundzie
+     i od razu zbierali kolejne 429: stado biegnące na tę samą ścianę.
+
+     Tu atrapa Graph odbija co drugie żądanie z 429. Pula MA sama zejść. */
+  const katalogDlaw = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-dlaw-'));
+  const archDlaw = require('../../lib/archiwum.js').utworz(katalogDlaw);
+  archDlaw.dodaj(Array.from({ length: 40 }, (_, i) => zdj(
+    `d${i}`, `/Mazury 2026/3B9A9${String(i).padStart(3, '0')}.CR3`,
+    `2026-07-0${1 + (i % 9)}T1${i % 10}:00:00`)));
+
+  const serwerD = http.createServer((req, res) => {
+    if (/detect/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ objects: [] }));
+    }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+    return res.end(Buffer.from('\xff\xd8\xff\xe0mini', 'binary'));
+  });
+  await new Promise((r) => serwerD.listen(0, r));
+  const portD = serwerD.address().port;
+
+  let zapytan = 0;
+  let dlawienD = 0;
+  const trasyD = require('../../lib/archiwum-trasy.js').utworz({
+    archiwum: archDlaw,
+    onedrive: {
+      polaczony: () => true,
+      // Co drugie żądanie „kosztuje" dławienie — tak jak Graph przy RAW-ach.
+      graf: async () => {
+        if (++zapytan % 2 === 0) dlawienD++;
+        await new Promise((r) => setTimeout(r, 20));
+        return { url: `http://127.0.0.1:${portD}/mini.jpg` };
+      },
+      zdlawienia: () => dlawienD,
+      czekano: () => 0,
+    },
+    SENSES_URL: `http://127.0.0.1:${portD}`,
+    sendJson: (res2, kod, dane) => { res2.kod = kod; res2.dane = dane; },
+    readJson: async () => ({ ile: 40 }),
+    addEvent: () => {},
+    sensesState: async () => ({ online: true, caps: { yolo: true } }),
+    wspolrzedneMiejsca: async () => null,
+  });
+  const resD = {};
+  await trasyD.handleArchiwum(
+    { method: 'POST', url: '/api/archive/vision' }, resD, '/api/archive/vision');
+  serwerD.close();
+  const d8d = resD.dane || {};
+  console.log(`8d. przy ciągłym dławieniu pula ${d8d.rownolegle} → ${d8d.dolPuli}, `
+    + `oznaczono ${d8d.sprawdzone} z 40`);
+  if (!(d8d.dolPuli < d8d.rownolegle)) {
+    fail.push(`pula została na ${d8d.dolPuli} mimo ${d8d.zdlawien} dławień `
+      + '— po karze całe stado rusza naraz i zbiera kolejną');
+  }
+  if (d8d.dolPuli < 2) fail.push(`pula zeszła do ${d8d.dolPuli} — poniżej dwóch praca staje`);
+  /* Schodzenie NIE MOŻE gubić plików: dławienie to prośba o zwolnienie,
+     nie powód, żeby cokolwiek pominąć. */
+  if (d8d.sprawdzone !== 40) {
+    fail.push(`oznaczono ${d8d.sprawdzone} z 40 — zwalnianie puli gubi pliki`);
+  }
+  fs.rmSync(katalogDlaw, { recursive: true, force: true });
+
   /* --- 9. Zapis indeksu nie może zjadać pętli zdarzeń w trakcie pracy -----
      To jest usterka, którą wykryła arytmetyka, a nie komunikat błędu.
      U Marcina, przy dwunastu robotnikach i zmierzonych 6,1 s na żądanie,

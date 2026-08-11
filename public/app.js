@@ -672,7 +672,7 @@ async function odswiezArchiwum() {
           adres: w.czasyRaw.adres, pobranie: w.czasyRaw.pobranie,
           yolo: w.czasyRaw.yolo, kb: w.czasyRaw.kb,
         }) : '')
-        + t('arch.visionPool', { n: w.rownolegle, szczytYolo: w.szczytYolo,
+        + t('arch.visionPool', { n: w.rownolegle, dolPuli: w.dolPuli, szczytYolo: w.szczytYolo,
           sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));

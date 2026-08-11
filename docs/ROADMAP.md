@@ -2573,6 +2573,50 @@ Tempo mimo dławień: **985 zdjęć w 5,5 minuty (2,98/s)** wobec 1,28/s na
 dwunastu i 0,84/s na sześciu. Od pierwszego pomiaru w tej sprawie
 (30 zdjęć w 36 s, czyli 0,83/s) to **3,6 raza szybciej**.
 
+## ✅ Partia 57 — właściwa liczba robotników nie jest stała (GOTOWE)
+
+Po zejściu z 24 na 16 tempo **spadło do 0,73 zdjęcia na sekundę** — poniżej
+stanu sprzed wszystkich poprawek. To nie było pogorszenie kodu, tylko wejście
+kolejki w inny fragment archiwum, i dopiero rozdzielone stopery to pokazały:
+
+```
+paczka „JPG-owa":  JPG ×96  pobranie 1957 ms · RAW ×16  pobranie 13031 ms
+paczka „RAW-owa":  JPG ×9   pobranie  629 ms · RAW ×111 pobranie 14101 ms
+                   Graph prosił o zwolnienie 4× · przestój na karze
+```
+
+Pierwsze paczki mieliły zrzuty ekranu i zdjęcia z telefonu; teraz weszły
+w foldery z CR3. **Dla RAW-a to Microsoft musi wygenerować podgląd i to
+JEMU kończą się zasoby** — stąd 429 dokładnie tam, gdzie RAW-ów jest dużo.
+Przy okazji widać, że dokładanie robotników wtedy nie pomaga, tylko szkodzi:
+pobranie RAW-a wzrosło z 8 s do 13-14 s.
+
+Gorsze było zachowanie PO karze. Przerwa jest wspólna dla całej puli, więc
+po jej końcu wszystkich szesnastu ruszało w tej samej milisekundzie i od razu
+zbierało kolejne 429. Stado biegnące na tę samą ścianę.
+
+- [x] Pula **schodzi sama**: przy dławieniu połowa dopuszczalnej
+      równoległości (nie mniej niż dwa), po dwudziestu udanych żądaniach
+      dokładamy po jednym z powrotem, aż do pułapu. `YOLO_RUWNOLEGLE` jest
+      teraz sufitem, nie wartością do zgadywania
+- [x] Start robotników rozsunięty w czasie, żeby pierwsza fala też nie szła ławą
+- [x] Panel pokazuje `pula 16→4` — do ilu trzeba było zejść w tej paczce
+- [x] Przestój na karze liczony **zegarowo**, nie jako suma po robotnikach.
+      Pierwsza wersja pokazała „przestój 890 s" w paczce trwającej dwie
+      i pół minuty: prawdziwe arytmetycznie, bezużyteczne w odbiorze
+
+`tempo-archiwum` 8d: przy atrapie odbijającej co drugie żądanie pula schodzi
+**16 → 2** i nie gubi ani jednego pliku (40 z 40). Bez połowienia zostaje na 16.
+
+### Co z tego wynika dla RAW-ów
+
+Ścieżka „poproś Graph o miniaturę" dla RAW-a kosztuje 8-14 s i **nie da się
+tego obejść równoległością**, bo to obciążenie po stronie Microsoftu. Realne
+wyjście to wyciągnąć podgląd JPEG zaszyty w samym pliku RAW przez żądanie
+zakresowe — tak jak już robimy z EXIF-em, który schodzi w ~250 ms na 128 kB.
+To osobna partia i wymaga czytnika struktury CR3/CR2/NEF; do tego czasu
+RAW-y bez JPG-owego bliźniaka pozostają wąskim gardłem.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
