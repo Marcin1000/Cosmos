@@ -654,6 +654,7 @@ async function odswiezArchiwum() {
          co poprawić — te same 1,63 s mogą być wolnym łączem do Microsoftu,
          wolnym łączem do domu albo zatkanym YOLO. */
       etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo })
+        + (w.zParowania ? ' · ' + t('arch.visionPaired', { ile: w.zParowania }) : '')
         + (w.czasy ? ' · ' + t('arch.visionTimes', {
           adres: w.czasy.adres, pobranie: w.czasy.pobranie, yolo: w.czasy.yolo,
           kb: w.czasy.kb, n: w.rownolegle,

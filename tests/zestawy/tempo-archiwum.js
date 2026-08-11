@@ -338,6 +338,110 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     fail.push(`postęp mówi „zostało ${p7.zostaloZdjec}" zamiast ${N - 60}`);
   }
 
+  /* --- 8. RAW i JPG to JEDNO zdjęcie -------------------------------------
+     Pomiar z instrumentacji u Marcina: „adres 628 ms · pobranie 6805 ms
+     (99 kB) · YOLO 220 ms". Dziewięćdziesiąt procent czasu to czekanie na
+     miniaturę z Microsoftu, przy karcie graficznej stojącej na 18%. Powód:
+     dla CR3 Graph MUSI wygenerować podgląd u siebie, bo w RAW nie ma
+     gotowej miniatury w rozmiarze „large" — dla JPG oddaje plik z półki.
+
+     A Marcin fotografuje w RAW+JPEG, więc obok `3B9A4860.CR3` leży
+     `3B9A4860.JPG`: ten sam kadr, ta sama sekunda. Bez parowania płacimy
+     dwa razy, i to droższą stroną.
+
+     Sprawdzamy jedno i drugie: że żądań jest o połowę mniej ORAZ że pytamy
+     o JPG, nie o CR3. Sam spadek liczby żądań dałoby się osiągnąć przypadkiem
+     — pytając zawsze o pierwszy plik z pary. */
+  const katalogPar = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-pary-'));
+  const archPary = require('../../lib/archiwum.js').utworz(katalogPar);
+  const pary = [];
+  for (let i = 0; i < 10; i++) {
+    for (const rozsz of ['CR3', 'JPG']) {
+      pary.push({
+        id: `onedrive:3B9A48${i}.${rozsz}`, zrodlo: 'onedrive', typ: 'zdjecie',
+        nazwa: `3B9A48${i}.${rozsz}`,
+        sciezka: `/Zdjęcia/Mazury 2026/3B9A48${i}.${rozsz}`,
+        kiedy: '2026-06-21T10:00:00.000Z',
+      });
+    }
+  }
+  archPary.dodaj(pary);
+
+  const serwerMini = http.createServer((req, res) => {
+    if (/detect/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ objects: [{ label: 'boat', conf: 0.9 }] }));
+    }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+    return res.end(Buffer.from('\xff\xd8\xff\xe0mini', 'binary'));
+  });
+  await new Promise((r) => serwerMini.listen(0, r));
+  const portMini = serwerMini.address().port;
+
+  const pytano = [];
+  const trasyPary = require('../../lib/archiwum-trasy.js').utworz({
+    archiwum: archPary,
+    onedrive: {
+      polaczony: () => true,
+      graf: async (sciezkaGraf) => {
+        pytano.push(decodeURIComponent(String(sciezkaGraf).split('/items/')[1].split('/')[0]));
+        return { url: `http://127.0.0.1:${portMini}/mini.jpg` };
+      },
+    },
+    SENSES_URL: `http://127.0.0.1:${portMini}`,
+    sendJson: (res2, kod, dane) => { res2.kod = kod; res2.dane = dane; },
+    readJson: async () => ({ ile: 20 }),
+    addEvent: () => {},
+    sensesState: async () => ({ online: true, caps: { yolo: true } }),
+    wspolrzedneMiejsca: async () => null,
+  });
+  const resP = {};
+  await trasyPary.handleArchiwum(
+    { method: 'POST', url: '/api/archive/vision' }, resP, '/api/archive/vision');
+
+  const raw = pytano.filter((x) => /\.CR3$/i.test(x)).length;
+  const d8 = resP.dane || {};
+  console.log(`8. 20 plików (10 par RAW+JPG): żądań ${pytano.length}, w tym o RAW ${raw}`);
+  console.log(`   opisane ${d8.opisane}, z pary ${d8.zParowania}, zostało ${d8.zostalo}`);
+  if (pytano.length !== 10) {
+    fail.push(`o miniaturę pytano ${pytano.length} razy przy 10 parach — RAW i JPG nie są łączone`);
+  }
+  if (raw) fail.push(`pytano o ${raw} plików CR3 — Graph musi je generować, JPG oddaje z półki`);
+  if (d8.opisane !== 20) fail.push(`opisano ${d8.opisane} z 20 — etykieta nie trafia na oba pliki z pary`);
+  if (d8.zParowania !== 10) fail.push(`zParowania=${d8.zParowania} zamiast 10 — panel nie pokaże zysku`);
+  if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 — pary wracają w kółko`);
+  const zPary = archPary.szukaj({ zrodlo: 'onedrive' })
+    .filter((w) => (w.obiekty || []).includes('boat')).length;
+  console.log(`   plików z etykietą „boat": ${zPary}`);
+  if (zPary !== 20) fail.push(`etykietę dostało ${zPary} plików zamiast 20`);
+
+  /* --- 8b. Podgląd RAW-a też idzie przez JPG-owego bliźniaka --------------
+     Ta sama cena dotyczy panelu archiwum i siatki zdjęć w rozmowie: każdy
+     kafelek z CR3 to siedem sekund czekania, aż Microsoft wygeneruje podgląd.
+     Skoro obok leży JPG z tym samym kadrem, nie ma po co o RAW pytać. */
+  pytano.length = 0;
+  const resT = {};
+  await trasyPary.handleArchiwum(
+    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:3B9A483.CR3') },
+    resT, '/api/archive/thumb');
+  console.log(`8b. podgląd CR3 → pytano o ${pytano.join(', ') || 'nic'}`);
+  if (pytano.length !== 1 || /\.CR3$/i.test(pytano[0])) {
+    fail.push(`podgląd RAW-a pyta o ${pytano.join(', ')} — siedem sekund na kafelek`);
+  }
+  /* Plik BEZ bliźniaka ma iść po sobie samym, a nie zniknąć po drodze. */
+  archPary.dodaj([{ id: 'onedrive:sam.CR3', zrodlo: 'onedrive', typ: 'zdjecie',
+    nazwa: 'sam.CR3', sciezka: '/Zdjęcia/sam.CR3', kiedy: '2026-06-21T10:00:00.000Z' }]);
+  pytano.length = 0;
+  await trasyPary.handleArchiwum(
+    { method: 'GET', url: '/api/archive/thumb?id=' + encodeURIComponent('onedrive:sam.CR3') },
+    resT, '/api/archive/thumb');
+  console.log(`    RAW bez pary → pytano o ${pytano.join(', ') || 'nic'}`);
+  if (pytano[0] !== 'sam.CR3') {
+    fail.push(`RAW bez bliźniaka poszedł po ${pytano.join(', ')} zamiast po sobie`);
+  }
+  serwerMini.close();
+  fs.rmSync(katalogPar, { recursive: true, force: true });
+
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEMPO ARCHIWUM OK');
   process.exit(fail.length ? 1 : 0);
