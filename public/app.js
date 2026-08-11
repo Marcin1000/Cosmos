@@ -648,18 +648,30 @@ async function odswiezArchiwum() {
       etykieta: (w) => t('arch.lensesProgress', { ile: w.uzupelnione, zostalo: w.zostalo }),
       koniec: (suma) => t('arch.lensesDone', { ile: suma }),
     }));
+    /* Paczka po 200, nie po 50. Robotników jest kilkanaście i biorą z jednej
+       kolejki, więc na końcu paczki część z nich stoi bezczynnie, czekając na
+       ostatnie sztuki. Przy pięćdziesięciu plikach ten ogon to kilkanaście
+       procent czasu; przy dwustu — kilka. Przy okazji rzadziej płacimy za
+       zbudowanie kolejki po stronie serwera. */
     przycisk(t('arch.vision'), (e) => uzupelniajPaczkami({
-      przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 50,
+      przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 200,
       /* Rozbicie na etapy w widocznym miejscu. „1,63 s na zdjęcie" nie mówi,
          co poprawić — te same 1,63 s mogą być wolnym łączem do Microsoftu,
-         wolnym łączem do domu albo zatkanym YOLO. */
+         wolnym łączem do domu albo zatkanym YOLO. RAW osobno od JPG-a, bo
+         średnia z obu nie rozstrzyga, czy drogie są RAW-y, czy wszystko. */
       etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo })
         + (w.zParowania ? ' · ' + t('arch.visionPaired', { ile: w.zParowania }) : '')
         + (w.zdlawien ? ' · ' + t('arch.visionThrottled', { ile: w.zdlawien }) : '')
-        + (w.czasy ? ' · ' + t('arch.visionTimes', {
-          adres: w.czasy.adres, pobranie: w.czasy.pobranie, yolo: w.czasy.yolo,
-          kb: w.czasy.kb, n: w.rownolegle,
-        }) : ''),
+        + (w.czasy && w.czasy.ile ? ' · ' + t('arch.visionTimes', {
+          rodzaj: 'JPG', ile: w.czasy.ile,
+          adres: w.czasy.adres, pobranie: w.czasy.pobranie, yolo: w.czasy.yolo, kb: w.czasy.kb,
+        }) : '')
+        + (w.czasyRaw && w.czasyRaw.ile ? ' · ' + t('arch.visionTimes', {
+          rodzaj: 'RAW', ile: w.czasyRaw.ile,
+          adres: w.czasyRaw.adres, pobranie: w.czasyRaw.pobranie,
+          yolo: w.czasyRaw.yolo, kb: w.czasyRaw.kb,
+        }) : '')
+        + t('arch.visionPool', { n: w.rownolegle, sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({

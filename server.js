@@ -2761,7 +2761,22 @@ function start(port = PORT) {
   });
 }
 
+/* Zapis indeksu PRZED zamknięciem. Zapis archiwum jest odkładany w czasie,
+   a odstęp dobiera się do jego kosztu — przy 28 MB to kilkanaście sekund.
+   Bez tego `systemctl restart` w środku indeksowania albo rozpoznawania
+   treści wyrzucałby do kosza całą pracę od ostatniego zapisu. Timer zapisu
+   jest `unref`-owany, więc sam z siebie przy wyjściu nie zdąży. */
+function zamknijPorzadnie(sygnal) {
+  process.on(sygnal, () => {
+    archiwum.zapisz()
+      .catch((err) => console.error('Nie udało się dopisać archiwum:', err.message))
+      .finally(() => process.exit(0));
+  });
+}
+
 if (require.main === module) {
+  zamknijPorzadnie('SIGTERM');
+  zamknijPorzadnie('SIGINT');
   start();
 }
 

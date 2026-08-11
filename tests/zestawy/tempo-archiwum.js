@@ -535,6 +535,51 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   serwerMini.close();
   fs.rmSync(katalogPar, { recursive: true, force: true });
 
+  /* --- 9. Zapis indeksu nie może zjadać pętli zdarzeń w trakcie pracy -----
+     To jest usterka, którą wykryła arytmetyka, a nie komunikat błędu.
+     U Marcina, przy dwunastu robotnikach i zmierzonych 6,1 s na żądanie,
+     powinno wychodzić 1,95 żądania na sekundę. Wychodziło 1,07 — czterdzieści
+     pięć procent czasu ginęło POZA mierzonymi etapami.
+
+     Powód: zapis jest asynchroniczny, ale `JSON.stringify` już nie. Na jego
+     archiwum (57 728 wpisów, 28 MB) stringify trwa 497 ms, a cały zapis
+     zamraża pętlę zdarzeń na ~650 ms. Przy stałym odstępie trzech sekund
+     serwer zamierał co trzecią sekundę na dwie trzecie sekundy — i wtedy
+     dwanaście pobrań stało w miejscu, a stopery tykały dalej, więc pomiar
+     `pobranie` sam się zawyżał.
+
+     Tu ustawiamy odstęp podłogowy na 50 ms i mielimy przez trzy sekundy.
+     Ze stałym odstępem to znaczy zapis goniący zapis; z odstępem dobranym
+     do kosztu — najwyżej jeden. Liczymy tyknięcia zegara, bo tylko one mówią,
+     czy serwer w tym czasie mógł cokolwiek obsłużyć. */
+  process.env.COSMOS_ARCHIWUM_ZAPIS_MS = '50';
+  const katalogZapis = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-zapis-'));
+  const archZapis = require('../../lib/archiwum.js').utworz(katalogZapis);
+  archZapis.dodaj(wpisy.map((w) => ({ ...w, miniatura: undefined })));
+  await archZapis.zapisz();            // pierwszy zapis podaje koszt kolejnym
+  const OKNO_MS = 3000;
+  const KROK_MS = 5;
+  let tyk9 = 0;
+  const zegar9 = setInterval(() => { tyk9++; }, KROK_MS);
+  const koniec9 = Date.now() + OKNO_MS;
+  let i9 = 0;
+  while (Date.now() < koniec9) {
+    // Tak wygląda rozpoznawanie: co chwilę oznaczamy kolejne pliki.
+    archZapis.dodaj([{ ...wpisy[i9++ % wpisy.length], obiekty: ['dog'], obejrzane: true }]);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  clearInterval(zegar9);
+  const mozliwe = Math.round(OKNO_MS / KROK_MS);
+  const zablokowane = Math.max(0, Math.round((1 - tyk9 / mozliwe) * 100));
+  console.log(`9. przy ciągłym oznaczaniu pętla zdarzeń stała ${zablokowane}% czasu `
+    + `(${tyk9} z ${mozliwe} tyknięć)`);
+  if (zablokowane > 25) {
+    fail.push(`zapis indeksu zamraża serwer na ${zablokowane}% czasu pracy `
+      + '— pobrania stoją, a stopery tykają dalej');
+  }
+  fs.rmSync(katalogZapis, { recursive: true, force: true });
+  delete process.env.COSMOS_ARCHIWUM_ZAPIS_MS;
+
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEMPO ARCHIWUM OK');
   process.exit(fail.length ? 1 : 0);
