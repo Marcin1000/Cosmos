@@ -279,6 +279,52 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   serwer.close();
   fs.rmSync(katalogOd, { recursive: true, force: true });
 
+  /* --- 6b. Rozpoznawanie treści też idzie równolegle ---------------------
+     Marcin, po uruchomieniu: „schodzi po 30 w ciągu około 36 sekund", przy
+     55 206 w kolejce — osiemnaście godzin. Każde zdjęcie to TRZY kolejki po
+     sieci: adres miniatury z Graph, pobranie miniatury, wysyłka do YOLO na
+     komputer domowy. Sekwencyjnie sumują się wszystkie trzy.
+
+     Równolegle mniej niż przy EXIF-ie, bo na końcu stoi jedna karta graficzna
+     — ale pobieranie następnej miniatury ma się dziać w tle rozpoznawania
+     poprzedniej i to jest cały zysk. */
+  let terazYolo = 0;
+  let szczytYolo = 0;
+  const trasyYolo = require('../../lib/archiwum-trasy.js').utworz({
+    archiwum,
+    onedrive: {
+      polaczony: () => true,
+      graf: async () => {
+        terazYolo++; szczytYolo = Math.max(szczytYolo, terazYolo);
+        await new Promise((r) => setTimeout(r, 30));
+        terazYolo--;
+        return { url: 'http://127.0.0.1:1/mini.jpg' };
+      },
+    },
+    SENSES_URL: 'http://127.0.0.1:1',
+    sendJson: (res2, kod, dane) => { res2.kod = kod; res2.dane = dane; },
+    readJson: async () => ({ ile: 30 }),
+    addEvent: () => {},
+    sensesState: async () => ({ online: true, caps: { yolo: true } }),
+    wspolrzedneMiejsca: async () => null,
+  });
+  const resY = {};
+  const tY = Date.now();
+  await trasyYolo.handleArchiwum(
+    { method: 'POST', url: '/api/archive/vision' }, resY, '/api/archive/vision');
+  console.log(`6b. rozpoznawanie: szczyt równoległych żądań ${szczytYolo}, ${Date.now() - tY} ms`);
+  if (szczytYolo < 2) {
+    fail.push('rozpoznawanie treści idzie zdjęcie po zdjęciu — trzy kolejki po sieci sumują się 55 tysięcy razy');
+  }
+  /* Pliki, których nie udało się przerobić, NIE mogą zostać oznaczone jako
+     obejrzane — inaczej awaria sieci cicho wykreśla je z kolejki na zawsze.
+     Tu wszystkie padają (adres 127.0.0.1:1 nie istnieje), więc kolejka
+     ma zostać nietknięta. */
+  console.log(`    po samych błędach zostało: ${resY.dane && resY.dane.zostalo}`);
+  if (resY.dane && resY.dane.opisane) {
+    fail.push('opisano zdjęcia mimo braku zmysłów — wynik jest zmyślony');
+  }
+
   /* --- 7. Panel MUSI umieć powiedzieć, czy praca się skończyła -----------
      Po wielogodzinnym dociąganiu panel pokazywał wyłącznie „W archiwum:
      59 421 plików". Żeby dowiedzieć się, czy zostało coś do zrobienia, trzeba
