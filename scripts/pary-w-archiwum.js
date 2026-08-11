@@ -95,12 +95,23 @@ console.log(`\nDO ROZPOZNANIA ZOSTAŁO: ${kolejka.length} plików`);
 console.log(`  żądań do Microsoftu pójdzie: ${zapytamy}`);
 console.log(`  z tego o drogi RAW: ${zapytamyORaw} (${proc(zapytamyORaw, zapytamy)})`);
 console.log(`  plików z etykietą bez żądania: ${zaDarmo}`);
-/* Widełki, nie jedna liczba: 8 s to zmierzone pobranie miniatury RAW-a,
-   0,7 s to zmierzone pobranie gotowego JPG-a. */
-const rownolegle = Number(process.env.YOLO_RUWNOLEGLE) || 12;
-const sekund = (zapytamyORaw * 8 + (zapytamy - zapytamyORaw) * 0.7) / rownolegle;
+/* SZACUNEK Z JEDNEJ LICZBY, nie z dwóch zmyślonych.
+ *
+ *  Pierwsza wersja rozdzielała RAW (8 s) i JPG (0,7 s) i wyszło jej 1,7 h,
+ *  podczas gdy realne tempo dawało dziewięć. Pomyłka była w tym drugim
+ *  składniku: pomiar u Marcina pokazał, że wolno idą TAKŻE tanie pliki
+ *  — pobranie 7959 ms przy 32 kB — więc rozbicie na typy dawało fałszywą
+ *  precyzję. Do czasu, aż będzie pomiar osobno dla RAW-a i osobno dla JPG-a
+ *  (panel go teraz pokazuje), lepsza jest jedna uczciwa liczba z odczytu.
+ *
+ *  Wstaw swoją: MS_ZADANIE=3000 node scripts/pary-w-archiwum.js
+ *  Odczytasz ją z panelu — pozycja „realnie N ms/żądanie". */
+const rownolegle = Number(process.env.YOLO_RUWNOLEGLE) || 24;
+const msZadanie = Number(process.env.MS_ZADANIE) || 6100;
+const sekund = (zapytamy * (msZadanie / 1000)) / rownolegle;
 console.log(`  szacowany czas przy ${rownolegle} naraz: ${(sekund / 3600).toFixed(1)} h`);
-console.log('  (szacunek z pomiaru: RAW ~8 s, JPG ~0,7 s na miniaturę)');
+console.log(`  (przy ${msZadanie} ms na żądanie — podmień przez MS_ZADANIE=...,`);
+console.log('   wartość odczytasz z panelu: „realnie N ms/żądanie")');
 
 if (przyklady.length) {
   console.log('\nPrzykładowe sparowane kadry:');

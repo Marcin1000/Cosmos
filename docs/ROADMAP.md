@@ -2481,6 +2481,65 @@ naraz plus obie pułapki: **11 → 8 żądań**, o RAW z pary **4 → 0**, etyki
 z obejrzanego bliźniaka za darmo. Na kluczu po ścieżce ten sam zestaw znajduje
 1 parę z 4 — czyli dokładnie to, co Marcin zobaczył u siebie.
 
+## ✅ Partia 55 — zapis indeksu zamrażał serwer co trzy sekundy (GOTOWE)
+
+Tej usterki nie zgłosił żaden komunikat. Znalazła ją arytmetyka.
+
+Po podniesieniu puli do dwunastu tempo wzrosło z 253 do 383 zdjęć na pięć
+minut — ale rachunek się nie spinał. Dwunastu robotników przy zmierzonych
+6,1 s na żądanie powinno dawać **1,95 żądania na sekundę**; wychodziło
+**1,07**. Czterdzieści pięć procent czasu ginęło poza mierzonymi etapami.
+
+Zmierzone lokalnie na archiwum wielkości Marcinowego (57 728 wpisów, 28 MB):
+
+```
+JSON.stringify (blokuje): 497 ms
+pełny zapisz(): 877 ms, pętla zdarzeń zablokowana ~650 ms
+```
+
+Zapis był asynchroniczny — ale `JSON.stringify` już nie. Przy stałym odstępie
+trzech sekund serwer zamierał **co trzecią sekundę na dwie trzecie sekundy**.
+W tym czasie dwanaście pobrań stało w miejscu, a stopery tykały dalej, więc
+pomiar `pobranie` sam się zawyżał: te „8 s na miniaturę" to po części był
+nasz własny zapis.
+
+- [x] Odstęp zapisu dobiera się do jego kosztu: dwudziestokrotność ostatniego
+      zapisu, czyli najwyżej **5% czasu na zapisywanie**. Małe archiwum
+      zapisuje się jak dotąd, Marcinowe co kilkanaście sekund
+      (`COSMOS_ARCHIWUM_ZAPIS_MS` to teraz podłoga, nie stała)
+- [x] Cosmos dopisuje indeks **przed zamknięciem** (SIGTERM/SIGINT). Bez tego
+      dłuższy odstęp oznaczałby, że `systemctl restart` w środku pracy
+      wyrzuca do kosza wszystko od ostatniego zapisu
+- [x] Paczka rozpoznawania 50 → **200 plików**. Przy kilkunastu robotnikach
+      ogon paczki (część puli stoi, czekając na ostatnie sztuki) to przy
+      pięćdziesięciu kilkanaście procent czasu, przy dwustu — kilka
+- [x] Pula 12 → **24**: przez pięć paczek po dwanaście Graph nie poprosił
+      o zwolnienie ani razu, więc zapas był
+- [x] Panel pokazuje `sprawność N%` i `realnie N ms/żądanie` — czyli dokładnie
+      ten rachunek, który wykrył usterkę, na stałe i na widoku
+
+Zmierzone na atrapie (`tempo-archiwum` punkt 9): przy ciągłym oznaczaniu
+plików pętla zdarzeń stoi **65% → 1-2%** czasu.
+
+### Czego pomiar NIE potwierdził
+
+Że drogie są RAW-y. Pobrania w kolejnych paczkach: 2257 ms (71 kB), 5371 ms
+(127 kB), 3644 ms (85 kB), 7772 ms (**38 kB**), 7959 ms (**32 kB**) — czas nie
+ma nic wspólnego z rozmiarem, a najwolniejsze były najmniejsze pliki. Do tego
+diagnostyka pokazała, że RAW-y to tylko 19% żądań, więc gdyby to one kosztowały
+osiem sekund, średnia wyszłaby dwa razy niższa niż wychodziła. Panel liczy
+teraz `pobranie` **osobno dla RAW-a i osobno dla JPG-a**; dopóki nie ma tego
+odczytu, hipoteza „to koszt generowania podglądu z RAW-a" pozostaje
+nierozstrzygnięta.
+
+### Co pokazała diagnostyka archiwum
+
+`scripts/pary-w-archiwum.js` na prawdziwym archiwum: 57 728 zdjęć, z tego
+**JPG 42 527**, CR3 6786, CR2 6180, DNG 870, JPEG 809, PNG 444, TIF 78, NEF 34.
+Par: 7638 kadrów (16%). Czyli intuicja „archiwum głównie RAW-owe" była
+nietrafiona — i dlatego samo parowanie mogło dać najwyżej kilkanaście procent,
+a resztę musiała dać równoległość i usunięcie zamrożeń.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
