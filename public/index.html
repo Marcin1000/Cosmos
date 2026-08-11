@@ -872,6 +872,11 @@
     <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
          w którym stoisz, więc działa w terenie z telefonu. -->
     <div class="plan-box" id="plan-box" hidden>
+      <!-- Tytuł, bo bez niego to są po prostu trzy listy rozwijane pod
+           obrazem z kamery i nie wiadomo, czego dotyczą. Inny niż w Plenerze
+           („Plan zdjęciowy”), bo i rzecz jest inna: tam liczy się dla miejsca
+           i godziny, tu dla JASNOŚCI TEGO KADRU, na który patrzysz. -->
+      <div class="plan-box-title mono" data-i18n="live.planTitle">Nastawy na ten kadr</div>
       <div class="plan-row">
         <select id="plan-gear" class="mono" aria-label="Sprzęt">
           <option value="canon-r6ii">Canon R6 II</option>

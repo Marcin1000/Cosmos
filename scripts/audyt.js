@@ -60,7 +60,18 @@ console.log(`    PL ${pl.length} · EN ${en.length}`);
   : ok('parytet PL/EN pełny');
 const wszystkie = new Set([...pl, ...en]);
 const uzyteApp = [...new Set([...app.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
-const uzyteHtml = [...new Set([...html.matchAll(/data-i18n(?:-ph|-aria|-title)?="([^"]+)"/g)].map((m) => m[1]))];
+/* WSZYSTKIE warianty atrybutu, nie tylko cztery pierwsze z brzegu.
+   Regexp bez `-html` i bez `data-prompt-key` podawał jako martwe pięć kluczy,
+   które są w interfejsie używane: `kb.hint`, `learn.procIntro` i podpowiedzi
+   startowe `sug1p`–`sug4p`. Lista „bez użycia" ma wartość tylko wtedy, gdy da
+   się na jej podstawie coś skasować — a skasowanie tych pięciu zabrałoby
+   objaśnienia z bazy wiedzy, z nauki procedur i treść czterech przycisków
+   startowych. Fałszywy alarm w audycie jest gorszy niż brak kontroli, bo
+   wygląda na wynik pomiaru. */
+const uzyteHtml = [...new Set([
+  ...[...html.matchAll(/data-i18n(?:-ph|-aria|-title|-html)?="([^"]+)"/g)].map((m) => m[1]),
+  ...[...html.matchAll(/data-prompt-key="([^"]+)"/g)].map((m) => m[1]),
+])];
 // Klucz zakończony kropką to prefiks budowany z danych (`t('event.' + typ)`),
 // a nie brakujące tłumaczenie. Kod ma dla nich zapasową etykietę.
 const braki = [...uzyteApp, ...uzyteHtml].filter((k) => !wszystkie.has(k) && !k.endsWith('.'));

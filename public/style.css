@@ -574,9 +574,25 @@ kbd {
   border-radius: 10px;
   background: var(--bg-elev);
 }
-.plan-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.plan-box-title {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+/* Siatka, nie rząd. Trzy listy wciśnięte na siłę w szerokość telefonu ucinały
+   napisy w połowie — Marcin widział „🌤 Z pro” i nie miał jak się domyślić,
+   że to zachmurzenie. Przy 120 px na pole zawijają się do dwóch wierszy,
+   zamiast się skracać. Tak samo robi to Plener. */
+.plan-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
 .plan-row select {
-  flex: 1;
+  width: 100%;
   min-width: 0;            /* bez tego pole rozpycha panel na wąskim telefonie */
   font-size: 12px;
   /* 34 px wysokości, nie 27. Ten panel jest używany w terenie, palcem,

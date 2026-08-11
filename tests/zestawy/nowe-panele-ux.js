@@ -217,6 +217,52 @@ const WASKI = { width: 360, height: 740 };
   }
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-plan-360.png` });
 
+  /* 6b. Trzy rzeczy, o które Marcin zapytał wprost, patrząc na ten panel
+     w telefonie: „nie wiem, czy tak to miało być".
+
+     — Pudełko nastaw NIE MIAŁO TYTUŁU. Trzy listy rozwijane pojawiały się
+       pod obrazem z kamery i nic nie mówiło, czego dotyczą.
+     — Napisy w listach BYŁY UCINANE („🌤 Z pro" zamiast „Z prognozy”), bo
+       trzy pola wciśnięte w szerokość telefonu nie mają jak się zmieścić.
+     — Ta sama treść co pod obrazem migała DRUGI RAZ w dymku nad panelem. */
+  console.log('6b. czytelność pudełka nastaw');
+  const tytul = await pg.textContent('.plan-box-title').catch(() => null);
+  console.log(`   tytuł pudełka: ${JSON.stringify(tytul)}`);
+  if (!tytul || !tytul.trim()) {
+    fail.push('pudełko nastaw bez tytułu — trzy listy rozwijane bez wyjaśnienia, czego dotyczą');
+  }
+  const uciete = await pg.evaluate(() => [...document.querySelectorAll('#plan-box select')]
+    .filter((s) => s.scrollWidth > s.clientWidth + 1)
+    .map((s) => `${s.id}: „${s.options[s.selectedIndex].text}"`));
+  console.log(`   pola z uciętym napisem: ${uciete.length ? uciete.join(', ') : 'brak'}`);
+  if (uciete.length) fail.push(`ucięte napisy w listach nastaw: ${uciete.join(', ')}`);
+
+  /* Dymek zdarzeń percepcji ma milczeć, gdy podgląd jest otwarty — pod
+     obrazem stoi to samo, na stałe zamiast na sześć sekund. */
+  console.log('6c. dymek percepcji przy otwartym podglądzie');
+  const dymek = await pg.evaluate(() => {
+    const pasek = document.getElementById('event-flash');
+    if (!pasek) return 'brak paska zdarzeń';
+    pasek.hidden = true;
+    obsluzZdarzenie({ type: 'sylwetka', summary: 'osoba prawdopodobnie stoi' });
+    const przyOtwartym = !pasek.hidden;
+    // …i ma się pokazać, gdy podglądu nie ma: wtedy nie widać tego nigdzie indziej.
+    document.getElementById('live-panel').style.display = 'none';
+    pasek.hidden = true;
+    obsluzZdarzenie({ type: 'sylwetka', summary: 'osoba prawdopodobnie stoi' });
+    const przyZamknietym = !pasek.hidden;
+    document.getElementById('live-panel').style.display = '';
+    return { przyOtwartym, przyZamknietym };
+  });
+  console.log(`   dymek: przy otwartym podglądzie ${JSON.stringify(dymek.przyOtwartym)}, `
+    + `przy zamkniętym ${JSON.stringify(dymek.przyZamknietym)}`);
+  if (dymek.przyOtwartym) {
+    fail.push('dymek percepcji miga nad panelem, choć to samo widać pod obrazem');
+  }
+  if (!dymek.przyZamknietym) {
+    fail.push('dymek percepcji milczy także przy zamkniętym podglądzie — wtedy nie widać tego nigdzie');
+  }
+
   /* 7. Dotyk. Cele mniejsze niż ~32 px trudno trafić palcem; wytyczne mówią
      o 44 px, ale przyciski pomocnicze w gęstym panelu bywają mniejsze
      i to jest świadomy kompromis — pilnujemy dolnej granicy. */

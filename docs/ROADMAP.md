@@ -2808,6 +2808,65 @@ Kolejny przebieg (po dowgraniu nowych zdjęć) zacznie od ściany 3 i będzie
 próbował wyżej co dziesięć minut. Gdyby Microsoft kiedyś poluzował, sam się
 o tym dowie; gdyby zacisnął — zejdzie niżej bez pytania.
 
+## ✅ Partia 63 — audyt UI/UX panelu kamery (GOTOWE)
+
+Marcin, patrząc na panel kamery w telefonie: „Zastanawia mnie ten dolny panel
+z wyborem sprzętu, klatkarza itd. Nie wiem, czy tak to miało być. (…) przy
+włączonych zmysłach i kinekcie nad oknem kamery pojawia się opis słowny co
+widzi kinect. Też nie wiem, czy to jest potrzebne i czy musi być w tym miejscu."
+
+Obie wątpliwości trafiły w usterki, nie w decyzje projektowe.
+
+### 1. Pudełko nastaw było MARTWE przy wyłączonych zmysłach
+
+`odswiezPlan()` stało w `liveDetect()` **pod** wyjściem „brak YOLO". Przy
+wyłączonym komputerze domowym pudełko było widoczne (bo lokalizacja ustawiona)
+i pokazywało w kółko myślnik — trzy listy rozwijane i kreska pod nimi.
+Tymczasem do policzenia ekspozycji karta graficzna nie jest potrzebna w ogóle:
+wystarczy położenie Słońca (liczy serwer) i jasność klatki (liczy przeglądarka).
+
+- [x] Nastawy liczą się niezależnie od zmysłów
+
+### 2. Trzy listy rozwijane bez tytułu i z uciętymi napisami
+
+Nie było nic, co by mówiło, czego te listy dotyczą — stąd pytanie „czy tak to
+miało być". Do tego `display:flex` wciskał trzy pola w szerokość telefonu
+i napisy się ucinały: Marcin widział „🌤 Z pro" i nie miał jak się domyślić,
+że to zachmurzenie.
+
+- [x] Tytuł „NASTAWY NA TEN KADR" — inny niż w Plenerze („Plan zdjęciowy"),
+      bo i rzecz jest inna: tam liczy się dla miejsca i godziny, tu dla
+      jasności kadru, na który patrzysz
+- [x] Siatka `auto-fit minmax(120px, 1fr)` zamiast rzędu — pola zawijają się
+      do dwóch wierszy, zamiast skracać napisy. Tak samo robi to Plener
+
+### 3. Opis nad oknem kamery był DRUGĄ KOPIĄ tego samego
+
+Dymek zdarzeń percepcji istnieje po to, żeby przy ZAMKNIĘTYM podglądzie
+dowiedzieć się, że Cosmos kogoś zobaczył. Przy otwartym ta sama treść stoi już
+pod obrazem — i to na stałe, a nie na sześć sekund. Na zrzucie Marcina widać
+jedno i drugie naraz: „Sylwetka: widoczna sylwetka, osoba prawdopodobnie stoi"
+w dymku i „person (po lewej) · 🧍 widoczna sylwetka…" pod obrazem.
+
+- [x] Dymek milczy dla zdarzeń `kamera` i `sylwetka`, gdy podgląd jest otwarty.
+      Czujniki, urządzenia i rutyny lecą dalej — ich w podglądzie nie widać
+- [x] Przy zmianie postawy linijka pod obrazem podmienia ogon, zamiast go
+      doklejać. Doklejanie dawało przez ułamek sekundy dwie postawy naraz
+
+`nowe-panele-ux` 6b i 6c sprawdzają tytuł, brak ucięć i milczenie dymka przy
+otwartym podglądzie — oraz to, że przy zamkniętym dymek nadal działa.
+
+### Audyt sam podawał fałszywy alarm
+
+Lista „klucze bez użycia" wymieniała **25** pozycji, z czego pięć jest w pełni
+używanych: regexp nie znał wariantu `data-i18n-html` ani atrybutu
+`data-prompt-key`. Skasowanie ich zabrałoby objaśnienia z bazy wiedzy, z nauki
+procedur i treść czterech przycisków startowych. Po poprawce lista ma 19 pozycji
+i wszystkie są prawdziwe. Fałszywy alarm w audycie jest gorszy niż brak
+kontroli, bo wygląda na wynik pomiaru.
+
+- [x] Wykrywanie martwych tłumaczeń zna wszystkie warianty atrybutu
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
