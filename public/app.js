@@ -662,6 +662,7 @@ async function odswiezArchiwum() {
       etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo })
         + (w.zParowania ? ' · ' + t('arch.visionPaired', { ile: w.zParowania }) : '')
         + (w.zdlawien ? ' · ' + t('arch.visionThrottled', { ile: w.zdlawien }) : '')
+        + (w.czekanieS ? ' · ' + t('arch.visionWaited', { ile: w.czekanieS }) : '')
         + (w.czasy && w.czasy.ile ? ' · ' + t('arch.visionTimes', {
           rodzaj: 'JPG', ile: w.czasy.ile,
           adres: w.czasy.adres, pobranie: w.czasy.pobranie, yolo: w.czasy.yolo, kb: w.czasy.kb,
@@ -671,7 +672,8 @@ async function odswiezArchiwum() {
           adres: w.czasyRaw.adres, pobranie: w.czasyRaw.pobranie,
           yolo: w.czasyRaw.yolo, kb: w.czasyRaw.kb,
         }) : '')
-        + t('arch.visionPool', { n: w.rownolegle, sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
+        + t('arch.visionPool', { n: w.rownolegle, szczytYolo: w.szczytYolo,
+          sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({

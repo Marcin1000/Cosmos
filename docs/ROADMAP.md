@@ -2540,6 +2540,39 @@ Par: 7638 kadrów (16%). Czyli intuicja „archiwum głównie RAW-owe" była
 nietrafiona — i dlatego samo parowanie mogło dać najwyżej kilkanaście procent,
 a resztę musiała dać równoległość i usunięcie zamrożeń.
 
+## ✅ Partia 56 — RAW jednak drogi, a dwadzieścia cztery to za dużo (GOTOWE)
+
+Rozdzielenie pomiaru na RAW i JPG rozstrzygnęło spór z poprzedniej partii —
+**na moją niekorzyść**. Odczyty z pięciu paczek:
+
+| | JPG | RAW |
+|---|---|---|
+| pobranie | 764–1529 ms | 7408–8210 ms |
+
+Czyli hipoteza „Graph generuje podgląd z RAW-a u siebie i to jest ten koszt"
+była trafna, a moje późniejsze wątpliwości — nie. Wątpliwości brały się stąd,
+że średnia z obu typów wyglądała na jednolicie wysoką; przy 19% RAW-ów
+w kolejce po prostu nie dało się tego rozdzielić bez osobnych stoperów.
+
+Drugie odkrycie było mniej przyjemne: przy dwudziestu czterech robotnikach
+Graph zaczął prosić o zwolnienie (dwie paczki z pięciu), a kara okazała się
+kosztowna. Panel pokazał `adres 20415 ms` i `adres 17150 ms` — to nie był
+zamulony Microsoft, tylko **nasza własna kara wliczona w czas etapu**.
+Przerwa po 429 jest wspólna dla całej puli, więc kilkanaście sekund kary
+zatrzymuje wszystkich naraz.
+
+- [x] Przestój na karze liczony OSOBNO od etapu (`onedrive.czekano()`),
+      bo inaczej pomiar wskazuje winnego po drugiej stronie zamiast u nas
+- [x] Pula 24 → **16**: powyżej zysk z kolejnego robotnika zjada kara za to,
+      że jest
+- [x] Licznik `szczytYolo` — ile rozpoznań stoi jednocześnie w kolejce do
+      karty. Bez niego nie da się odróżnić „karta wyrabia" od „karta jest
+      wąskim gardłem, a my dokładamy robotników na darmo"
+
+Tempo mimo dławień: **985 zdjęć w 5,5 minuty (2,98/s)** wobec 1,28/s na
+dwunastu i 0,84/s na sześciu. Od pierwszego pomiaru w tej sprawie
+(30 zdjęć w 36 s, czyli 0,83/s) to **3,6 raza szybciej**.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

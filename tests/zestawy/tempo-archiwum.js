@@ -223,6 +223,18 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   if (typeof od.zdlawienia !== 'function' || od.zdlawienia() < 1) {
     fail.push('dławienie nie jest liczone — panel nie ma jak o nim powiedzieć');
   }
+  /* Kara MUSI się liczyć osobno od etapu, w którym wypadła. Bez tego panel
+     pokazał Marcinowi „adres 20415 ms" i wyglądało to na zamulony Microsoft,
+     a było naszą własną karą za zbyt szybkie pytanie — czyli sygnałem do
+     obniżenia równoległości, a nie do szukania winy po drugiej stronie. */
+  const przeczekane = typeof od.czekano === 'function' ? od.czekano() : -1;
+  console.log(`   z tego przestój na karze: ${przeczekane} ms`);
+  if (przeczekane < 900) {
+    fail.push(`przestój na karze policzony jako ${przeczekane} ms — wlicza się w czas etapu i pomiar kłamie`);
+  }
+  if (przeczekane > czekano) {
+    fail.push('przestój na karze większy niż całe żądanie — licznik liczy coś innego');
+  }
   /* --- 6. Plik, którego NIGDY nie da się przeczytać, nie blokuje kolejki ---
      Marcin: „Przerwane: kolejka nie maleje (4 do zrobienia). Powód: Graph 416".
      416 („Requested Range Not Satisfiable") dostajemy dla plików PUSTYCH:
@@ -459,6 +471,13 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     fail.push(`zParowania=${d8.zParowania} zamiast 4 (A, B, C i darmowe G) — panel nie pokaże zysku`);
   }
   if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 — kadry wracają w kółko`);
+  /* Licznik szczytu rozpoznań: bez niego nie da się odróżnić „karta wyrabia"
+     od „karta jest wąskim gardłem, a my dokładamy robotników na darmo". */
+  console.log(`   szczyt jednoczesnych rozpoznań: ${d8.szczytYolo}, przestój na karze ${d8.czekanieS} s`);
+  if (!(d8.szczytYolo >= 1)) fail.push('szczyt rozpoznań nie jest liczony — panel nie pokaże, gdzie jest sufit');
+  if (d8.szczytYolo > d8.rownolegle) {
+    fail.push(`szczyt rozpoznań ${d8.szczytYolo} przy puli ${d8.rownolegle} — licznik liczy coś innego`);
+  }
   const poId8 = new Map(archPary.szukaj({ zrodlo: 'onedrive' }).map((w) => [w.id, w]));
   const et = (id) => (poId8.get(`onedrive:${id}`) || {}).obiekty || [];
   console.log(`   RAW z pary A: [${et('A-raw')}], RAW z pary G (darmowy): [${et('G-raw')}]`);
