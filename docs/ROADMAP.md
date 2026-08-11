@@ -2387,6 +2387,29 @@ i test świecił na zielono, nie mierząc niczego. Dopiero odtworzenie sytuacji
 z serwera Marcina (dom ustawiony, GPS brak) pokazało prawdę: **14:15 → wieczor**.
 Przy okazji wyszła usterka nr 3.
 
+## ✅ Partia 53 — rozpoznawanie treści też szło po jednym (GOTOWE)
+
+Marcin, po uruchomieniu: „schodzi po 30 w ciągu około 36 sekund", przy
+55 206 w kolejce. To osiemnaście godzin.
+
+Przy EXIF-ie i telemetrii zrównoleglenie już było — rozpoznawanie treści
+zostało sekwencyjne, a jest najdroższe z całej trójki: **trzy kolejki po sieci
+na każde zdjęcie** (adres miniatury z Graph, pobranie miniatury, wysyłka do
+YOLO na komputer domowy przez Tailscale). Sekwencyjnie sumują się wszystkie
+trzy, a procesor VPS-a stoi bezczynnie.
+
+- [x] Pula trzech robotników (`YOLO_RUWNOLEGLE`), nie czterech jak przy
+      EXIF-ie: na końcu stoi **jedna karta graficzna**, więc nie ma sensu
+      ustawiać przed nią długiej kolejki. Zysk bierze się z tego, że
+      pobieranie następnej miniatury dzieje się w tle rozpoznawania
+      poprzedniej
+- [x] Plik, którego nie udało się przerobić, NIE dostaje znacznika
+      `obejrzane` — awaria sieci nie może cicho wykreślić zdjęcia z kolejki
+      na zawsze. Zestaw sprawdza to wprost, na atrapie, w której wszystko pada
+
+Zmierzone na atrapie: szczyt równoległych żądań **1 → 3**, ten sam zestaw
+zdjęć w **930 ms → 325 ms**.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
