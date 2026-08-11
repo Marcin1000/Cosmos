@@ -2659,6 +2659,46 @@ dla pliku bez podglądu pytamy jak dotąd i nic nie przepada.
 Panel pokazuje `RAW ×103 (z pliku 103)`, więc od razu widać, którą drogą
 poszły obrazki.
 
+## ✅ Partia 59 — regulacja, która resetowała się co paczkę (GOTOWE)
+
+Czytnik podglądu z RAW-a zadziałał: kolejka spadła z 32 134 do 15 740,
+a `pobranie` wynosi teraz **182-222 ms** zamiast 11 500 ms. Ale Marcin opisał
+to, co zostało, jednym zdaniem, które od razu wskazało usterkę:
+
+> „w ciągu 60 sekund potrafi zejść prawie 1000, ale później czeka dość sporo
+> czasu, czyli leci to takimi falami"
+
+Panel potwierdzał co do liczby: cztery paczki `pula 16→16` po kilkanaście
+sekund, a piąta `pula 16→8` z **przestojem 264 s**.
+
+Dwa błędy, oba moje, oba w regulacji z poprzedniej partii:
+
+1. **`dozwolone` żyło wewnątrz obsługi żądania.** Każda paczka zaczynała od
+   pełnego gazu, dostawała po łapach i zapominała. Regulacja, która resetuje
+   się co paczkę, nie jest regulacją.
+2. **Powrót „+1 po dwudziestu udanych"** przy dziewięciu żądaniach na sekundę
+   znaczył powrót na pełną prędkość w dwie sekundy. Zejście o połowę i powrót
+   w dwie sekundy to nie jest tłumienie — to dokładnie ta fala.
+
+- [x] Stan puli przeżywa paczkę (poza obsługą żądania)
+- [x] Powrót rozłożony w CZASIE, nie w liczbie żądań: najwyżej +1 na
+      piętnaście sekund (`YOLO_WZROST_MS`)
+- [x] `adres` bez doliczonej kary — panel pokazywał „adres 16083 ms" dla
+      zwykłego JPG-a, co kieruje szukanie winy na Microsoft, podczas gdy to
+      była nasza własna pauza. `graf()` przyjmuje teraz obiekt pomiaru
+      i oddaje, ile to konkretne żądanie przestało
+
+`tempo-archiwum` 8e: druga paczka po tej samej atrapie startuje z `16→2`,
+a nie z `16→16`. Przy przywróconym resecie zestaw pada dokładnie na tym.
+
+### Gdzie teraz jest czas
+
+Po tej partii `pobranie` przestało być tematem (182-222 ms). Zostaje `adres`
+— jedno wywołanie Graph na zdjęcie po adres miniatury, 769-831 ms — i to ono
+jest zasobem, którego Microsoft pilnuje limitem. Kolejnym krokiem, gdyby
+zaszła potrzeba, jest `POST /$batch`: do dwudziestu zapytań o adres w jednym
+obiegu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

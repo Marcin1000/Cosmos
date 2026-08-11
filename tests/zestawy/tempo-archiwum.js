@@ -585,13 +585,14 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
 
   let zapytan = 0;
   let dlawienD = 0;
+  let dlawSie = true;
   const trasyD = require('../../lib/archiwum-trasy.js').utworz({
     archiwum: archDlaw,
     onedrive: {
       polaczony: () => true,
       // Co drugie żądanie „kosztuje" dławienie — tak jak Graph przy RAW-ach.
       graf: async () => {
-        if (++zapytan % 2 === 0) dlawienD++;
+        if (dlawSie && ++zapytan % 2 === 0) dlawienD++;
         await new Promise((r) => setTimeout(r, 20));
         return { url: `http://127.0.0.1:${portD}/mini.jpg` };
       },
@@ -608,7 +609,6 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   const resD = {};
   await trasyD.handleArchiwum(
     { method: 'POST', url: '/api/archive/vision' }, resD, '/api/archive/vision');
-  serwerD.close();
   const d8d = resD.dane || {};
   console.log(`8d. przy ciągłym dławieniu pula ${d8d.rownolegle} → ${d8d.dolPuli}, `
     + `oznaczono ${d8d.sprawdzone} z 40`);
@@ -621,6 +621,39 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      nie powód, żeby cokolwiek pominąć. */
   if (d8d.sprawdzone !== 40) {
     fail.push(`oznaczono ${d8d.sprawdzone} z 40 — zwalnianie puli gubi pliki`);
+  }
+
+  /* --- 8e. Nauka MUSI przeżyć paczkę ------------------------------------
+     To jest usterka, którą zgłosił Marcin jednym zdaniem: „w ciągu 60 sekund
+     potrafi zejść prawie 1000, ale później czeka dość sporo czasu, czyli leci
+     to takimi falami". Panel pokazywał cztery paczki `pula 16→16` po
+     kilkanaście sekund i piątą `pula 16→8` z przestojem 264 s.
+
+     Powód: `dozwolone` żyło wewnątrz obsługi żądania, więc każda paczka
+     zaczynała od pełnego gazu, dostawała po łapach i zapominała. Regulacja,
+     która resetuje się co paczkę, nie jest regulacją.
+
+     Tu druga paczka rusza po tej samej atrapie co pierwsza i MA zacząć od
+     tego, czego nauczyła się poprzednia. */
+  archDlaw.dodaj(Array.from({ length: 20 }, (_, i) => zdj(
+    `e${i}`, `/Mazury 2026/3B9A8${String(i).padStart(3, '0')}.CR3`,
+    `2026-07-1${i % 9}T0${i % 10}:00:00`)));
+  // Atrapa PRZESTAJE dławić — mimo to pula nie może od razu wrócić na pełny
+  // gaz, bo powrót jest rozłożony w czasie, nie liczony w udanych żądaniach.
+  dlawSie = false;
+  const resE = {};
+  await trasyD.handleArchiwum(
+    { method: 'POST', url: '/api/archive/vision' }, resE, '/api/archive/vision');
+  serwerD.close();
+  const d8e = resE.dane || {};
+  console.log(`8e. druga paczka po nauce: pula ${d8e.rownolegle} → ${d8e.dolPuli}, `
+    + `oznaczono ${d8e.sprawdzone} z 20`);
+  if (d8e.dolPuli >= d8e.rownolegle) {
+    fail.push(`druga paczka wystartowała od pełnej puli (${d8e.dolPuli}) `
+      + '— nauka nie przeżywa paczki i tempo leci falami');
+  }
+  if (d8e.sprawdzone !== 20) {
+    fail.push(`oznaczono ${d8e.sprawdzone} z 20 w drugiej paczce — pamięć puli gubi pliki`);
   }
   fs.rmSync(katalogDlaw, { recursive: true, force: true });
 
