@@ -2428,30 +2428,58 @@ w rozmiarze „large". Karta graficzna w domu stała w tym czasie na 18% i 46 °
 A Marcin fotografuje w RAW+JPEG, więc obok `3B9A4860.CR3` leży
 `3B9A4860.JPG` — ten sam kadr, ta sama sekunda, ten sam folder.
 
-- [x] Kolejka rozpoznawania grupuje pliki po ścieżce bez rozszerzenia
-      i pyta o **najtańszy** z pary (JPG/PNG/HEIC przed CR3/ARW/NEF/DNG).
-      Etykiety dostaje całe rodzeństwo, z jednego rozpoznania
-- [x] Gdy tańszy plik padnie (404, zniknął), próbujemy kolejnego z tej samej
-      pary — jeden zepsuty plik nie kasuje całej grupy
+- [x] Kolejka rozpoznawania grupuje pliki w KADRY i pyta o **najtańszy** plik
+      w kadrze (JPG/PNG/HEIC przed CR3/CR2/NEF/SRW/ARW/DNG). Etykiety dostaje
+      całe rodzeństwo, z jednego rozpoznania
+- [x] Gdy tańszy plik padnie (404, zniknął), próbujemy kolejnego z tego
+      samego kadru — jeden zepsuty plik nie kasuje pary
+- [x] Bliźniak obejrzany WCZEŚNIEJ oddaje etykiety za darmo, bez żądania.
+      U Marcina kilkanaście tysięcy plików przeszło rozpoznanie, zanim
+      parowanie w ogóle powstało
 - [x] `/api/archive/thumb` idzie tą samą drogą: kafelek z RAW-em w panelu
       archiwum i w siatce zdjęć w rozmowie ładuje się przez JPG-owego
-      bliźniaka. Rodzeństwo liczy `archiwum.rodzenstwo(id)` — indeks po
-      ścieżce bez rozszerzenia, budowany raz i odświeżany przy zmianie
-      liczby wpisów
-- [x] Pula podniesiona z trzech robotników do **sześciu** (`YOLO_RUWNOLEGLE`,
-      górny limit 12). Pierwotna obawa — „na końcu stoi jedna karta graficzna"
-      — okazała się nietrafiona: karta dostaje 220 ms pracy na siedem sekund
-      czekania. Nie dwanaście, bo po drugiej stronie jest limit żądań Graph
-      i 429 kosztuje więcej, niż daje kolejny wątek
-- [x] Panel pokazuje zysk wprost: „… · N z pary RAW+JPG · na żądanie: …"
+      bliźniaka
+- [x] Pula podniesiona z trzech robotników do **dwunastu** (`YOLO_RUWNOLEGLE`,
+      górny limit 32). Pierwotna obawa — „na końcu stoi jedna karta graficzna"
+      — okazała się nietrafiona: karta dostaje 220 ms pracy na osiem sekund
+      czekania
+- [x] Panel pokazuje zysk i hamulec wprost: „… · N z pary RAW+JPG · Graph
+      prosił o zwolnienie N× · na żądanie: …". Licznik dławień jest po to, żeby
+      `YOLO_RUWNOLEGLE` dało się ustawiać z odczytu, a nie na wyczucie
+- [x] Limit czasu na pobranie miniatury 20 → 30 s. Przerwane pobranie to nie
+      tylko strata tej pracy: plik wraca do kolejki i Microsoft generuje
+      podgląd DRUGI raz
+- [x] `/detect` w zmysłach zdjęte z pętli zdarzeń (`def` zamiast `async def`
+      + zamek na modelu). Przy kilkunastu zdjęciach naraz `async` blokowałby
+      też `/health`, a Cosmos uznawał wtedy komputer domowy za wyłączony
 
-Zmierzone na atrapie (`tempo-archiwum`, punkty 8 i 8b): 20 plików w 10 parach
-to **20 → 10 żądań**, z czego **o RAW: 10 → 0**. Podgląd CR3 pyta o `.JPG`;
-RAW bez bliźniaka nadal idzie po sobie.
+### Pierwsza wersja klucza znalazła ZERO par
 
-Spodziewane u Marcina: kolejka **48 576 → ~24 300** pozycji do rozpoznania,
-a każda z nich tańsza — bo pytamy o gotowy JPG zamiast o wygenerowanie
-podglądu z RAW-a.
+Grupowanie szło po pełnej ścieżce bez rozszerzenia. Na atrapie działało,
+u Marcina nie znalazło **ani jednej pary** — w panelu nie pojawiło się „N
+z pary" ani razu. Powód podał on sam:
+
+> „Z reguły pracowałem na RAW, dlatego jest tylko kilka folderów, gdzie RAW
+> i JPG tego samego zdjęcia są obecne. Dodatkowo nieraz robiłem tak, że
+> rozdzielałem jpg i raw w dwóch folderach, albo jpg trafiały do podfolderu
+> z jpg w folderze zawierającym pliki RAW. RAW-y też mogą mieć różne formaty:
+> cr3, cr2 i też samsungowy oraz nikonowy."
+
+Klucz to teraz **nazwa pliku + sekunda zdjęcia** (`archiwum.rodzenstwo`).
+Przetrwa każde z tych ułożeń i nie obchodzi go rozszerzenie RAW-a. Sekunda
+jest w kluczu, bo licznik w aparacie się przewija (`DSC_0001` z dwóch
+wyjazdów); nazwa jest, bo seria z Canona ma kilka klatek w tej samej sekundzie.
+Obie pułapki są w zestawie.
+
+Do tego jedna rzecz, której nie widać z zewnątrz: indeks kadrów unieważnia się
+nie tylko przy zmianie liczby wpisów, ale i przy zmianie daty na wpisie
+istniejącym — bo do RAW-ów Graph wpisuje datę WGRANIA, a dopiero „Dociągnij
+dane z plików" podmienia ją na datę zrobienia zdjęcia (punkt 8c).
+
+Zmierzone na atrapie (`tempo-archiwum` 8, 8b, 8c) — cztery układy Marcina
+naraz plus obie pułapki: **11 → 8 żądań**, o RAW z pary **4 → 0**, etykiety
+z obejrzanego bliźniaka za darmo. Na kluczu po ścieżce ten sam zestaw znajduje
+1 parę z 4 — czyli dokładnie to, co Marcin zobaczył u siebie.
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
