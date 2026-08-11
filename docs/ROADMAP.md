@@ -2730,6 +2730,49 @@ zajęta jest maszyna, zamiast jak zachowuje się kod.**
 Sprawdzone sześcioma pełnymi przebiegami baterii: trzy przed poprawkami
 (dwa pady), trzy po (42/42, 42/42, 42/42).
 
+## ✅ Partia 61 — regulacja musi PAMIĘTAĆ, gdzie jest ściana (GOTOWE)
+
+Pamięć między paczkami pomogła, ale nie rozwiązała sprawy. Marcin:
+„około 4 minut przestoju pomiędzy falami". Panel, paczka po paczce:
+
+```
+pula 16→16 · sprawność 62% · realnie 114 ms/żądanie   (szybko)
+pula 16→16 · sprawność 61% · realnie 113 ms/żądanie   (szybko)
+pula 16→16 · sprawność 60% · realnie 113 ms/żądanie   (szybko)
+pula 16→4  · sprawność  3% · realnie 2278 ms/żądanie · przestój na karze 248 s
+pula 16→10 · sprawność 40% · realnie 158 ms/żądanie   (wraca w górę)
+```
+
+Widać cały cykl: rozpęd, ściana, kara, powrót — i znowu. Powód: po dławieniu
+pula wracała do **pułapu z `.env`**, czyli tam, gdzie już raz dostała.
+Regulacja, która nie pamięta, na czym się przewróciła, będzie się przewracać
+w kółko.
+
+Kary nie da się skrócić — jej długość podaje Microsoft w `Retry-After`
+i wynosi tu około czterech minut postoju CAŁEJ puli, bo przerwa jest wspólna.
+Jedyne wyjście to jej nie wywoływać.
+
+- [x] Pula zapamiętuje **ścianę**: poziom, przy którym Graph powiedział dość.
+      Powrót idzie do ściany, nie do pułapu z `.env`
+- [x] Ściana też odtaje, ale dziesięć razy wolniej niż sama pula
+      (`YOLO_SUFIT_MS`) — jedno dławienie z gorszej godziny nie może
+      zabetonować pesymizmu do końca przebiegu
+- [x] Panel pokazuje `pula 16→4, ściana 7` — czyli i bieżący stan,
+      i to, czego regulacja się nauczyła
+
+`tempo-archiwum` 8f: atrapa dławi, gdy naraz leci więcej niż sześć żądań.
+Po sześciu paczkach ściana schodzi z 16 do 7, a w trzech ostatnich paczkach
+jest **zero dławień**. Bez pamięci o ścianie ten sam zestaw kończy ze ścianą
+na 16.
+
+### Przy okazji, znowu: test, który mierzył zajętość maszyny
+
+Punkt 9 skakał między 1% a 35% bez żadnej zmiany w kodzie. Wsypanie
+dwudziestu tysięcy wpisów planowało zapis, który wpadał raz w okno
+odniesienia, raz w okno właściwe. Teraz zestaw czeka, aż plik przestanie się
+zmieniać — to jest warunek „nie ma zaległych zapisów", a nie zgadywanka
+o długości odstępu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
