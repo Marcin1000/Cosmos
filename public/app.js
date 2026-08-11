@@ -650,7 +650,14 @@ async function odswiezArchiwum() {
     }));
     przycisk(t('arch.vision'), (e) => uzupelniajPaczkami({
       przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 50,
-      etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo }),
+      /* Rozbicie na etapy w widocznym miejscu. „1,63 s na zdjęcie" nie mówi,
+         co poprawić — te same 1,63 s mogą być wolnym łączem do Microsoftu,
+         wolnym łączem do domu albo zatkanym YOLO. */
+      etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo })
+        + (w.czasy ? ' · ' + t('arch.visionTimes', {
+          adres: w.czasy.adres, pobranie: w.czasy.pobranie, yolo: w.czasy.yolo,
+          kb: w.czasy.kb, n: w.rownolegle,
+        }) : ''),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
