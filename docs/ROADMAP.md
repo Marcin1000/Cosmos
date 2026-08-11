@@ -2410,6 +2410,49 @@ trzy, a procesor VPS-a stoi bezczynnie.
 Zmierzone na atrapie: szczyt równoległych żądań **1 → 3**, ten sam zestaw
 zdjęć w **930 ms → 325 ms**.
 
+## ✅ Partia 54 — RAW i JPG to jedno zdjęcie (GOTOWE)
+
+Zrównoleglenie z partii 53 pomogło, ale za mało: **30 zdjęć w ~36 s**, potem
+**184 w 5 minut**. Zamiast zgadywać, gdzie ucieka czas, wstawiliśmy trzy
+stopery — po jednym na etap — i pierwsza paczka odpowiedziała sama:
+
+```
+adres 628 ms · pobranie 6805 ms (99 kB) · YOLO 220 ms · 3 naraz
+```
+
+**89% czasu to pobranie 99 kilobajtów.** To nie jest wolne łącze: dociąganie
+EXIF-u brało 128 kB na plik przy ~500 kB/s z tego samego VPS-a. To Microsoft
+**generuje podgląd u siebie**, bo w pliku CR3 nie ma gotowej miniatury
+w rozmiarze „large". Karta graficzna w domu stała w tym czasie na 18% i 46 °C.
+
+A Marcin fotografuje w RAW+JPEG, więc obok `3B9A4860.CR3` leży
+`3B9A4860.JPG` — ten sam kadr, ta sama sekunda, ten sam folder.
+
+- [x] Kolejka rozpoznawania grupuje pliki po ścieżce bez rozszerzenia
+      i pyta o **najtańszy** z pary (JPG/PNG/HEIC przed CR3/ARW/NEF/DNG).
+      Etykiety dostaje całe rodzeństwo, z jednego rozpoznania
+- [x] Gdy tańszy plik padnie (404, zniknął), próbujemy kolejnego z tej samej
+      pary — jeden zepsuty plik nie kasuje całej grupy
+- [x] `/api/archive/thumb` idzie tą samą drogą: kafelek z RAW-em w panelu
+      archiwum i w siatce zdjęć w rozmowie ładuje się przez JPG-owego
+      bliźniaka. Rodzeństwo liczy `archiwum.rodzenstwo(id)` — indeks po
+      ścieżce bez rozszerzenia, budowany raz i odświeżany przy zmianie
+      liczby wpisów
+- [x] Pula podniesiona z trzech robotników do **sześciu** (`YOLO_RUWNOLEGLE`,
+      górny limit 12). Pierwotna obawa — „na końcu stoi jedna karta graficzna"
+      — okazała się nietrafiona: karta dostaje 220 ms pracy na siedem sekund
+      czekania. Nie dwanaście, bo po drugiej stronie jest limit żądań Graph
+      i 429 kosztuje więcej, niż daje kolejny wątek
+- [x] Panel pokazuje zysk wprost: „… · N z pary RAW+JPG · na żądanie: …"
+
+Zmierzone na atrapie (`tempo-archiwum`, punkty 8 i 8b): 20 plików w 10 parach
+to **20 → 10 żądań**, z czego **o RAW: 10 → 0**. Podgląd CR3 pyta o `.JPG`;
+RAW bez bliźniaka nadal idzie po sobie.
+
+Spodziewane u Marcina: kolejka **48 576 → ~24 300** pozycji do rozpoznania,
+a każda z nich tańsza — bo pytamy o gotowy JPG zamiast o wygenerowanie
+podglądu z RAW-a.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
