@@ -667,6 +667,95 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   }
   fs.rmSync(katalogDlaw, { recursive: true, force: true });
 
+  /* --- 8f. Regulacja MA ZBIEGAĆ do poziomu, którego Graph nie odrzuca -----
+     Pamięć między paczkami nie wystarczyła. Marcin: „około 4 minut przestoju
+     pomiędzy falami", a panel: `pula 16→4`, `przestój na karze 248 s`.
+     Powód: po dławieniu pula wracała do PUŁAPU Z `.env` — czyli tam, gdzie
+     już raz dostała po łapach. Regulacja bez pamięci o ścianie kręci się
+     w kółko: rozpęd, kara, rozpęd, kara.
+
+     Kara jest podana przez Microsoft w `Retry-After` i nie ma jak jej
+     skrócić. Jedyne wyjście to jej NIE WYWOŁYWAĆ — czyli znaleźć poziom,
+     przy którym Graph milczy, i tam zostać.
+
+     Atrapa dławi dokładnie wtedy, gdy naraz leci więcej niż sześć żądań. */
+  const katalogSciana = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-sciana-'));
+  const archSciana = require('../../lib/archiwum.js').utworz(katalogSciana);
+  const serwerS = http.createServer((req, res) => {
+    if (/detect/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ objects: [] }));
+    }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+    return res.end(Buffer.from('\xff\xd8\xff\xe0mini', 'binary'));
+  });
+  await new Promise((r) => serwerS.listen(0, r));
+  const portS = serwerS.address().port;
+
+  const PRZYJMUJE = 6;
+  let wLocieS = 0;
+  let dlawienS = 0;
+  const trasyS = require('../../lib/archiwum-trasy.js').utworz({
+    archiwum: archSciana,
+    onedrive: {
+      polaczony: () => true,
+      graf: async () => {
+        wLocieS++;
+        if (wLocieS > PRZYJMUJE) dlawienS++;      // tyle akurat przyjmuje
+        await new Promise((r) => setTimeout(r, 15));
+        wLocieS--;
+        return { url: `http://127.0.0.1:${portS}/mini.jpg` };
+      },
+      zdlawienia: () => dlawienS,
+      czekano: () => 0,
+    },
+    SENSES_URL: `http://127.0.0.1:${portS}`,
+    sendJson: (res2, kod, dane) => { res2.kod = kod; res2.dane = dane; },
+    readJson: async () => ({ ile: 60 }),
+    addEvent: () => {},
+    sensesState: async () => ({ online: true, caps: { yolo: true } }),
+    wspolrzedneMiejsca: async () => null,
+  });
+
+  // Powrót do ściany ma tu iść szybko, żeby zestaw nie trwał minutami —
+  // sprawdzamy KIERUNEK zbieżności, nie zegar.
+  process.env.YOLO_WZROST_MS = '10';
+  let ostatniS = {};
+  let dlawienNaKoniec = 0;
+  for (let p = 0; p < 6; p++) {
+    archSciana.dodaj(Array.from({ length: 60 }, (_, i) => zdj(
+      `s${p}-${i}`, `/Seria ${p}/IMG_${String(i).padStart(4, '0')}.JPG`,
+      `2026-0${1 + p}-1${i % 9}T0${i % 10}:00:00`)));
+    const przed = dlawienS;
+    const resS = {};
+    await trasyS.handleArchiwum(
+      { method: 'POST', url: '/api/archive/vision' }, resS, '/api/archive/vision');
+    ostatniS = resS.dane || {};
+    if (p >= 3) dlawienNaKoniec += dlawienS - przed;   // trzy ostatnie paczki
+  }
+  delete process.env.YOLO_WZROST_MS;
+  serwerS.close();
+  console.log(`8f. atrapa przyjmuje ${PRZYJMUJE} naraz: po sześciu paczkach `
+    + `ściana ${ostatniS.sufitPuli}, pula ${ostatniS.dolPuli}, `
+    + `dławień w trzech ostatnich paczkach: ${dlawienNaKoniec}`);
+  /* Ściana ma wylądować PRZY limicie atrapy, niekoniecznie co do jednego:
+     regulacja uczy się z tego, przy jakim poziomie dostała, więc zatrzymuje
+     się o krok wyżej, jeśli tego kroku już nigdy nie dotknęła. Sprawdzamy
+     rzecz właściwą — że zeszła DALEKO poniżej pułapu z `.env` i wylądowała
+     w okolicy prawdziwego limitu, zamiast wracać na 16. */
+  if (!(ostatniS.sufitPuli <= PRZYJMUJE + 1)) {
+    fail.push(`ściana została na ${ostatniS.sufitPuli} przy limicie ${PRZYJMUJE} `
+      + '— regulacja wraca tam, gdzie już dostała, i tempo leci falami');
+  }
+  if (dlawienNaKoniec) {
+    fail.push(`w trzech ostatnich paczkach nadal ${dlawienNaKoniec} dławień `
+      + '— regulacja nie zbiega do poziomu, który Graph przyjmuje');
+  }
+  if (ostatniS.zostalo !== 0) {
+    fail.push(`w kolejce zostało ${ostatniS.zostalo} — zbieganie do ściany gubi pliki`);
+  }
+  fs.rmSync(katalogSciana, { recursive: true, force: true });
+
   /* --- 9. Zapis indeksu nie może zjadać pętli zdarzeń w trakcie pracy -----
      To jest usterka, którą wykryła arytmetyka, a nie komunikat błędu.
      U Marcina, przy dwunastu robotnikach i zmierzonych 6,1 s na żądanie,
@@ -689,6 +778,18 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   const archZapis = require('../../lib/archiwum.js').utworz(katalogZapis);
   archZapis.dodaj(wpisy.map((w) => ({ ...w, miniatura: undefined })));
   await archZapis.zapisz();            // pierwszy zapis podaje koszt kolejnym
+  /* Zanim zaczniemy mierzyć, wszystko ma być CICHO. Wsypanie dwudziestu
+     tysięcy wpisów zaplanowało zapis, który bez tego wpadał w środek pomiaru
+     — raz w okno odniesienia, raz w okno właściwe, i wynik skakał między
+     1% a 35% bez żadnej zmiany w kodzie. Czekamy, aż plik przestanie się
+     zmieniać: to jest warunek „nie ma zaległych zapisów", a nie zgadywanka
+     o długości odstępu. */
+  const plikZapisu = path.join(katalogZapis, 'archiwum.json');
+  for (let i = 0, stabilnie = 0; i < 150 && stabilnie < 8; i++) {
+    const przed = fs.statSync(plikZapisu).mtimeMs;
+    await new Promise((r) => setTimeout(r, 100));
+    stabilnie = fs.statSync(plikZapisu).mtimeMs === przed ? stabilnie + 1 : 0;
+  }
   const OKNO_MS = 3000;
   const KROK_MS = 5;
   /* Liczba tyknięć MUSI mieć punkt odniesienia zmierzony tu i teraz, a nie
