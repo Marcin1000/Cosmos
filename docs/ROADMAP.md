@@ -3081,6 +3081,83 @@ porcji, porządek przez cały wynik), `data-i-ponowne-indeksowanie` (data z nazw
 scalanie, wpisy sprzed `dataZrodlo`), `znaczniki-nie-wyciekaja` (13 przypadków
 czyszczenia, w tym pięć sprawdzających, czego ruszać NIE WOLNO).
 
+## ✅ Partia 66 — czarne pasy na telefonie (GOTOWE)
+
+Marcin, po wdrożeniu partii 65: „na desktopie wygląda dobrze, ale na mobile
+to cały czas nie wygląda dobrze". Na zrzutach wąski pasek obrazu pośrodku
+i czarne pasy zajmujące 68% szerokości panelu.
+
+### Dwie fałszywe diagnozy po drodze
+
+Obie warto zapisać, bo obie brzmiały sensownie.
+
+**Pierwsza:** proporcja się nie ustawia, bo `liveMediaSize()` wisi wyłącznie
+w pętli `liveDetect()`, a status na zrzucie mówi wprost, że rozpoznawanie nie
+działa. Napisany na to zestaw **przeszedł na starym kodzie** — `liveDetect`
+chodzi na timerze niezależnie od YOLO i proporcję ustawia.
+
+**Druga:** Android podaje `videoWidth/videoHeight` poziomo mimo pionowego
+kadru. Pomiar geometrii z prawdziwych rozmiarów okna Marcina to wykluczył:
+proporcja była ustawiona poprawnie na 9:16.
+
+### Co było naprawdę
+
+**1. Sufit wysokości sceny — dołożony dzień wcześniej w partii 65.** Kadr 9:16
+dzieli dostępną wysokość przez 0,5625, więc wyliczona szerokość panelu spadała
+poniżej dolnej granicy 200 px. Granica ją podnosiła, scena chciała być wyższa
+niż zostało miejsca, i ścinał ją sufit — **łamiąc proporcję**. Zamiana
+`object-fit` z `cover` na `contain`, też z partii 65, sprawiła że rozjazd
+przestał być przycinany i zrobił się widoczny.
+
+Dobieranie dolnej granicy (200 → 150 → 110) naprawiało jeden przypadek i psuło
+inny — znak, że zły jest model, nie liczba.
+
+- [x] Sufit usunięty. Jedna zasada bez wyjątków: **scena zawsze ma kształt
+      kadru**, a wielkość bierze z szerokości panelu. Gdy miejsca zabraknie
+      nawet przy najwęższym panelu, ustępuje dolna część i to ona się przewija
+- [x] `object-fit: cover` wraca do małego podglądu jako zabezpieczenie —
+      nie dlatego, że ładniejszy, tylko dlatego, że **inaczej się psuje**:
+      przy rozjeździe traci brzegi kadru, a nie cały panel
+
+**2. Status na osiem linijek.** Zmierzone na wąskim telefonie: 144 px
+komunikatu o wyłączonym rozpoznawaniu przy panelu wysokim na 441 px. Jedna
+trzecia panelu na instrukcję do przeczytania raz w życiu.
+
+- [x] Dwie linijki z rozwijaniem na dotknięcie, jak pudełko nastaw. Wszystkie
+      komunikaty idą przez `ustawStatusKamery()`, bo „czy się mieści" da się
+      sprawdzić dopiero po wstawieniu tekstu. Chrome spadł z 291 px do 201 px
+
+**3. Panel liczony pod pustsze pudełko.** Rozwinięcie nastaw przelicza panel
+natychmiast, a `odswiezPlan()` dopełnia treść dopiero po odpowiedzi serwera.
+Panel zastygał policzony pod pudełko o kilka wierszy niższe i treść wystawała
+o 50 px — to jest ta „mała przesuwalna ramka" widoczna także na desktopie.
+
+- [x] `pokazPlan()` przelicza panel po wpisaniu treści
+- [x] Pomiar zbiega się w sześciu rundach zamiast trzech
+
+Efekt na oknie 390×844 z kadrem pionowym: obraz **196 px → 615 px**,
+czarne pasy **68% → 0%**.
+
+### Zestaw znowu był zielony przy zepsutym układzie
+
+`panel-kamery-miesci` pilnował wysokości i przewijania, ale nigdy KSZTAŁTU —
+więc przepuszczał pasek obrazu w czarnej ramce bez słowa. Drugi raz z rzędu
+ten sam wzorzec: zestaw sprawdzał to, co łatwo zmierzyć, a nie to, na co
+użytkownik patrzy.
+
+- [x] Asercja o proporcji sceny (rozjazd > 5% = czarne pasy)
+- [x] Asercja o kolejności ustępowania przepisana z progu wziętego z sufitu
+      („obraz > 260 px") na zasadę: **dół wolno przewijać dopiero wtedy, gdy
+      panel dobił do swojej dolnej granicy** i nie ma już czym ustąpić
+- [x] Czekanie na USTABILIZOWANIE układu zamiast `waitForTimeout(400)` —
+      stały czas łapał panel w połowie zbieżności i zgłaszał usterkę,
+      której w gotowym układzie nie ma
+- [x] Timer podglądu zatrzymywany przed wymuszeniem kadru pionowego, bo
+      inaczej `liveDetect` cofał proporcję w trakcie pomiaru
+
+Nowy zestaw `proporcja-bez-zmyslow`: podgląd przy WYŁĄCZONYCH zmysłach, czyli
+w sytuacji Marcina z telefonu przy zgaszonym komputerze domowym.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
