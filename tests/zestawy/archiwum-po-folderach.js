@@ -183,6 +183,54 @@ function zaladujNaKontekst() {
     fail.push('`exifCzytany` nie przeżywa zapisu — kolejka zacznie się od nowa po restarcie');
   }
 
+  /* --- 6. WYKLUCZENIE FOLDERU -------------------------------------------
+     Marcin: „Zdjęcia najnowsze z wyłączeniem folderu Mazury 2026 i tak
+     pokazuje zdjęcia z tego folderu." Filtrów było dwadzieścia i ani jednego
+     ODEJMUJĄCEGO — model układał zapytanie bez wykluczenia i pisał
+     w odpowiedzi, że folder pominął. Bywało to prawdą przez przypadek,
+     gdy najnowsze pliki i tak leżały gdzie indziej. */
+  const wszystkie = b.szukaj({});
+  const bezMazur = b.szukaj({ bezFolderu: 'Mazury 2026' });
+  const zostalyMazury = bezMazur.filter((w) => /Mazury 2026/i.test(w.sciezka || '')).length;
+  console.log(`6. wykluczenie folderu: ${wszystkie.length} → ${bezMazur.length}, `
+    + `zostało z Mazur: ${zostalyMazury}`);
+  if (zostalyMazury) {
+    fail.push(`po wykluczeniu „Mazury 2026" zostało ${zostalyMazury} plików z tego folderu`);
+  }
+  if (bezMazur.length >= wszystkie.length) {
+    fail.push('wykluczenie folderu niczego nie odjęło — filtr jest ignorowany');
+  }
+  // Wykluczenie NIE MOŻE zjeść wszystkiego: reszta archiwum ma zostać.
+  if (!bezMazur.length) fail.push('wykluczenie folderu usunęło całe archiwum');
+  // Kilka nazw naraz — „oprócz Mazur i zrzutów ekranu" to jedno pytanie.
+  const bezDwoch = b.szukaj({ bezFolderu: 'Mazury 2026, Z aparatu' });
+  console.log(`   dwa wykluczenia naraz: ${bezDwoch.length} plików`);
+  if (bezDwoch.length >= bezMazur.length) fail.push('drugie wykluczenie po przecinku nie działa');
+
+  /* --- 7. APARAT DOPASOWANY PO SŁOWACH -----------------------------------
+     Marcin, patrząc na OneDrive: „mój canon to tak naprawdę u niego
+     EOS R6 Mark II". EXIF zapisuje „Canon EOS R6m2", OneDrive pokazuje
+     „EOS R6 Mark II" — a dopasowanie całą frazą znaczyło, że naturalne
+     „aparat=Canon R6" nie trafia w NIC, bo taki ciąg nie występuje nigdzie. */
+  const kat7 = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-aparat-'));
+  const a7 = utworz(kat7);
+  a7.dodaj([
+    { id: 'x1', zrodlo: 'dysk', typ: 'zdjecie', nazwa: 'a.CR3', sciezka: '/a.CR3',
+      kiedy: '2026-06-01T10:00:00', aparat: 'Canon EOS R6m2' },
+    { id: 'x2', zrodlo: 'dysk', typ: 'zdjecie', nazwa: 'b.JPG', sciezka: '/b.JPG',
+      kiedy: '2026-06-01T10:00:01', aparat: 'Canon EOS R6 Mark II' },
+    { id: 'x3', zrodlo: 'dysk', typ: 'zdjecie', nazwa: 'c.JPG', sciezka: '/c.JPG',
+      kiedy: '2026-06-01T10:00:02', aparat: 'Canon EOS R5' },
+    { id: 'x4', zrodlo: 'dysk', typ: 'zdjecie', nazwa: 'd.JPG', sciezka: '/d.JPG',
+      kiedy: '2026-06-01T10:00:03', aparat: 'Samsung SM-A515F' },
+  ]);
+  for (const [pyt, ile] of [['Canon R6', 2], ['R6', 2], ['canon eos r6', 2], ['R5', 1], ['Canon', 3]]) {
+    const zn = a7.szukaj({ aparat: pyt }).length;
+    console.log(`7. aparat=„${pyt}" → ${zn} (spodziewane ${ile})`);
+    if (zn !== ile) fail.push(`aparat=„${pyt}" znalazł ${zn} zamiast ${ile}`);
+  }
+  fs.rmSync(kat7, { recursive: true, force: true });
+
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nARCHIWUM PO FOLDERACH OK');
   process.exit(fail.length ? 1 : 0);

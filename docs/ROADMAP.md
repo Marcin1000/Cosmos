@@ -2915,9 +2915,11 @@ zawsze o jedną zmianę do tyłu — a doszły dwie: pudełko nastaw i status, k
 przy wyłączonych zmysłach ma trzy wiersze.
 
 - [x] Panel to kolumna elastyczna z `max-height: calc(100dvh - 40px)`.
-      Paski biorą tyle, ile potrzebują, obraz dostaje resztę i **kurczy się**,
-      gdy jej brakuje (`flex: 1 3` — ustępuje trzy razy chętniej niż treść
-      pod nim). Cokolwiek jeszcze tu dołożymy, zmieści się samo
+      Paski biorą tyle, ile potrzebują, a **szerokość** panelu liczy się
+      z dostępnej wysokości i zmierzonej proporcji obrazu (`--live-chrome`,
+      `--live-arn`). Obraz nie kurczy się w pionie — kurczenie łamałoby
+      proporcję, czyli dawało albo obcięty kadr, albo czarne pasy.
+      Cokolwiek jeszcze tu dołożymy, zmieści się samo
 
 ### 2. Nie było jak przewinąć
 
@@ -2937,11 +2939,147 @@ i tak brakowało miejsca.
       pierwszą klatką i dla Kinecta, który taki właśnie jest
 
 Nowy zestaw `panel-kamery-miesci`: cztery okna (390×640, 390×844, 1440×700,
-1440×900) × trzy stany (zwinięte, rozwinięte, powiększone) = **12 przypadków**.
-Nie sprawdza żadnej konkretnej liczby pikseli, tylko własność, która ma być
-prawdziwa zawsze: panel mieści się w oknie, nagłówek jest widoczny, a do
-przycisku migawki da się dojechać — albo jest w panelu, albo treść się przewija.
-Na starym układzie pierwszy przypadek pada: „mieści się: false, nagłówek ucięty".
+1440×900) × pięć stanów (zwinięte, rozwinięte, powiększone, kadr pionowy 9:16
+powiększony i w rogu) = **20 przypadków**. Nie sprawdza żadnej konkretnej liczby
+pikseli, tylko własność, która ma być prawdziwa zawsze: panel mieści się w oknie,
+nagłówek jest widoczny, a do przycisku migawki da się dojechać — albo jest
+w panelu, albo treść się przewija. Na starym układzie pierwszy przypadek pada:
+„mieści się: false, nagłówek ucięty".
+
+## ✅ Partia 65 — archiwum „raz a porządnie" (GOTOWE)
+
+Marcin po pierwszym poważnym użyciu archiwum przysłał trzy zapisy rozmów
+i listę tego, co nie działa: „Tam jest szereg problemów i bugów. Chcę się
+wszystkich pozbyć, wykluczyć lub naprawić."
+
+### 1. Nie dało się obejrzeć całego wyniku
+
+„Chciałbym móc przejrzeć wszystkie np. zdjęcia z wyszukania, a nie mieć
+informacje typu »pokazałem Ci 20, ale jest 311«."
+
+Trasa przyjmowała `limit`, ale nie umiała pominąć początku listy, więc każde
+zapytanie oddawało ten sam jej kawałek. Do 311. pliku nie dało się dojść inaczej
+niż zawężaniem filtrów aż do skutku — a do zdjęcia bez wyróżniającej cechy nie
+dało się dojść w ogóle.
+
+Sedno naprawy jest podziałem ról, nie większym limitem: **model** dostaje próbkę
+i ma prawo jej nie przekraczać (kontekst kosztuje), **człowiek** dostaje przycisk
+pod siatką i dochodzi nim do ostatniego pliku.
+
+- [x] `/api/archive/search` przyjmuje `pomin=` i oddaje `zostalo`.
+      Parametr nie nazywa się `od`, bo `od` znaczy „od tej daty" — pierwsza
+      wersja użyła właśnie `od` i zestaw natychmiast to złapał: `od=24` wpadało
+      do filtra dat, druga porcja wracała pusta, co wyglądałoby na koniec wyników
+- [x] Pasek „pokazane 24 z 311" z przyciskiem po następną porcję
+- [x] Nagłówek dla modelu mówi wprost, że **próbka ogranicza jego, a nie
+      użytkownika** — bez tego dalej przepraszałby za limit
+
+### 2. „Nie idzie od najnowszych"
+
+„Nie idzie od najnowszych zdjęć, bo pokazuje zdjęcia gór z 2022 roku."
+
+Sortowanie było poprawne. Kłamała data. Microsoft Graph wypełnia
+`photo.takenDateTime` dla JPEG-ów, ale dla RAW-ów Canona już nie — spadaliśmy
+wtedy na `createdDateTime`, czyli **moment wgrania pliku do chmury**. Zdjęcie
+zrobione w 2022 i wgrane w 2026 uczciwie lądowało na szczycie listy.
+
+- [x] Pole `dataZrodlo` (`exif` / `nazwa` / `plik`) — bez niego nie da się
+      odróżnić momentu zrobienia zdjęcia od momentu wgrania
+- [x] Data czytana z NAZWY pliku, gdy EXIF-u brak: `20220814_153012.jpg`,
+      `PXL_…`, `Screenshot_…`, `2022-08-14 15.30.12.jpg` (tak nazywa OneDrive
+      wysyłki z telefonu). Nic nie kosztuje, a ratuje właśnie te pliki, które
+      mają najbardziej bezużyteczną datę systemową
+
+### 3. Ponowne indeksowanie kasowało całą pracę
+
+To nie wyszło z użycia, tylko z czytania kodu przy okazji punktu 2 — i jest
+najgroźniejszą rzeczą z całej listy, bo niszczy dane nieodwracalnie i widać
+to dopiero po fakcie.
+
+`dodaj()` podmieniało znany wpis **w całości**. Dla nowego pliku poprawne, dla
+znanego katastrofalne: jedno kliknięcie „indeksuj OneDrive" po dograniu nowej
+sesji — czyli czynność normalna i oczekiwana — kasowało `obejrzane`, `obiekty`,
+`obiektyw`, dane lotu i poprawione daty. 55 tysięcy plików przemielonych
+rozpoznawaniem treści i osobny przebieg po EXIF: do powtórzenia, bez jednego
+ostrzeżenia, przy indeksowaniu wyglądającym na udane, bo liczba plików się zgadza.
+
+- [x] `scal()` — listowanie z Grapha wygrywa tam, gdzie faktycznie coś niesie;
+      pola z późniejszych przebiegów przeżywają, dopóki nowy wpis ich nie wypełni
+- [x] Data porównywana po ŹRÓDLE (exif > nazwa > plik), bo Graph zawsze poda
+      jakąś. Przy równym źródle wygrywa nowsze — inaczej ochrona danych
+      zamieniłaby się w zamrażarkę i poprawki z Lightrooma nigdy by nie weszły
+- [x] Wpisy sprzed wprowadzenia `dataZrodlo` czytane po `exifCzytany`, inaczej
+      pierwsze przeindeksowanie cofnęłoby daty właśnie tym 55 tysiącom plików
+
+### 4. Wykluczanie folderu i nazwa aparatu
+
+„Zdjęcia najnowsze z wyłączeniem folderu Mazury 2026 i tak pokazuje zdjęcia
+z tego folderu." Filtrów było dwadzieścia i **ani jednego odejmującego** —
+model układał zapytanie bez wykluczenia i pisał, że folder pominął. Bywało to
+prawdą przez przypadek.
+
+„Widzę na OneDrive, że mój canon to tak naprawdę u niego EOS R6 Mark II."
+EXIF zapisuje `Canon EOS R6m2`, OneDrive pokazuje `EOS R6 Mark II` —
+dopasowanie całą frazą znaczyło, że naturalne `aparat=Canon R6` nie trafiało
+w NIC, bo taki ciąg nie występuje nigdzie.
+
+- [x] `bezFolderu=` z listą po przecinku („oprócz Mazur i Krakowa" to jedno pytanie)
+- [x] `aparat`, `obiektyw`, `miejsce`, `nazwa` dopasowywane PO SŁOWACH
+
+### 5. Znaczniki wyciekały na ekran
+
+W zapisie rozmowy stało gołe `[ARCHIWUM: grupuj=rok]`, a niżej pusty blok kodu.
+Czyszczenie istniało, ale zakładało, że model zawsze napisze znacznik w całości
+i poza płotem. Nie zawsze pisze: kończy się budżet tokenów (znacznik bez
+domykającego `]`) albo opakowuje polecenie w ```blok``` (po usunięciu zostaje
+pusty płot). Do tego przerwana odpowiedź szła na ekran zupełnie bez czyszczenia
+— a urywa się najczęściej właśnie w trakcie sięgania po narzędzie.
+
+- [x] Wzorzec na znacznik urwany **na końcu tekstu** — i tylko tam, żeby nie
+      zjadać nawiasów i odnośników ze środka zdania
+- [x] Płot, w którym po usunięciu znacznika nie zostało nic, znika razem z nim
+- [x] `err.partial` też przechodzi przez czyszczenie
+
+### 6. Kamera: duży podgląd, a pod nim wąski pasek
+
+„Okno podglądu jest duże, a pod nim małe okienko przesuwalne. To nie wygląda
+dobrze i nie jest użyteczne."
+
+Dwie przyczyny. Pierwsza: pomiar zjadał własny ogon — `--live-chrome` liczyło się
+z **już ściśniętej** dolnej części, więc wychodziło, że paski są niskie, więc
+obrazowi wolno być duży, więc dół musi się ścisnąć jeszcze bardziej. Układ
+zastygał dokładnie w tym, co Marcin opisał. Druga: w jednej kolumnie obraz
+i nastawy dzielą tę samą wysokość i konkurują o nią — zmierzone przy 1440×700
+dawało obraz **189 px** pod 470 px sterowania, czyli „powiększenie" pokazywało
+obraz mniejszy niż panel w rogu.
+
+- [x] Pomiar dolicza `scrollHeight - clientHeight`, czyli to, co już nie mieści
+      się w dolnej części — dopiero POTRZEBA jest właściwą liczbą
+- [x] Sufit na wysokość obrazu na wypadek, gdy szerokość dobiła do dolnej
+      granicy (kadr pionowy 9:16 dzieli szerokość przez 0,5625)
+- [x] Na ekranie ≥ 900 px powiększony panel ma **dwie kolumny**: obraz z lewej,
+      nastawy z prawej. Konkurencja o wysokość znika, rosną oba naraz —
+      przy 1440×700 obraz 189 px → **567 px**
+- [x] Pomiar powtarza się, dopóki liczba się zmienia (do trzech rund) — przy
+      przejściu między układem jedno- i dwukolumnowym jedno przejście mierzy
+      stan sprzed przebudowy
+
+### Zestaw, który był zielony przy zepsutym układzie
+
+`panel-kamery-miesci` przepuszczał ten stan bez słowa, bo pytał tylko „czy panel
+się mieści" i „czy da się dojechać do migawki" — a na jedno i drugie ściśnięty
+pasek przewijania odpowiada TAK. Zielony zestaw przy układzie, który użytkownik
+nazwał zepsutym, jest gorszy niż brak zestawu: daje spokój bez pokrycia.
+
+- [x] Dołożona własność o **kolejności ustępowania**: gdy brakuje miejsca,
+      najpierw kurczy się obraz, a dopiero gdy zszedł do minimum, wolno zwinąć
+      dół w pasek. Dół przewijający się przy dużym obrazie to usterka, nawet
+      jeśli wszystko „się mieści"
+
+Trzy nowe zestawy: `przegladanie-wynikow` (311 plików, przejście wszystkich
+porcji, porządek przez cały wynik), `data-i-ponowne-indeksowanie` (data z nazwy,
+scalanie, wpisy sprzed `dataZrodlo`), `znaczniki-nie-wyciekaja` (13 przypadków
+czyszczenia, w tym pięć sprawdzających, czego ruszać NIE WOLNO).
 
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,

@@ -773,7 +773,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
 | `/api/plan/mission` | POST | Misja waypointowa dla DJI jako plik `.kmz` (WPML) — z listy punktów albo z siatki nalotu |
 | `/api/archive/add` | POST | Dołożenie paczki wpisów do archiwum (źródła wpychają) |
-| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie |
+| `/api/archive/search` | GET | Wyszukiwanie w archiwum: rok, sprzęt, ogniskowa, GPS, pora światła, pora dnia, temat, miejsce po nazwie, wykluczanie folderu (`bezFolderu=`). Stronicowanie przez `pomin=` — nie `od=`, bo `od` znaczy „od tej daty" |
 | `/api/archive/lenses` | POST | Dociągnięcie modelu obiektywu z EXIF-u (pierwsze 128 KB pliku przez `Range`) |
 | `/api/archive/vision` | POST | Co WIDAĆ na zdjęciu — YOLO ze zmysłów po miniaturze z OneDrive, paczkami |
 | `/api/archive/telemetry` | POST | Telemetria klipów DJI z plików `.SRT` — GPS, wysokość, ISO, czas, przysłona, ogniskowa |
@@ -1029,7 +1029,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 77 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 80 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

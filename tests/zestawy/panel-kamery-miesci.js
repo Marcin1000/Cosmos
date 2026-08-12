@@ -93,6 +93,25 @@ const OKNA = [
       if (r.scena >= 0 && r.scena < 100) {
         fail.push(`${nazwa} / ${tryb}: obraz skurczył się do ${r.scena} px`);
       }
+      /* DUŻY PODGLĄD NIE MOŻE BYĆ OKUPIONY MAŁYM OKIENKIEM POD NIM.
+       *
+       *  Marcin: „okno podglądu jest duże, a pod nim małe okienko przesuwalne.
+       *  To nie wygląda dobrze i nie jest użyteczne. Źle to wygląda."
+       *
+       *  Poprzednia wersja tego zestawu przepuszczała ten stan bez słowa,
+       *  bo pytała tylko „czy panel się mieści" i „czy da się dojechać do
+       *  migawki" — a na jedno i drugie ścisnięty pasek przewijania odpowiada
+       *  TAK. Zestaw był zielony przy układzie, który użytkownik nazwał
+       *  zepsutym; to gorsze niż brak zestawu, bo daje spokój bez pokrycia.
+       *
+       *  Właściwa zasada jest o kolejności ustępowania: gdy brakuje miejsca,
+       *  najpierw kurczy się OBRAZ, a dopiero gdy zszedł do swojego minimum,
+       *  wolno zwinąć dół w przewijalny pasek. Więc dół przewijający się przy
+       *  dużym obrazie to usterka, nawet jeśli wszystko „się mieści". */
+      if (r.przewija && r.scena > 260) {
+        fail.push(`${nazwa} / ${tryb}: dół przewija się, choć obraz ma aż ${r.scena} px `
+          + '— to jest „duże okno podglądu, a pod nim małe okienko przesuwalne"');
+      }
     };
 
     console.log(`\n${nazwa}`);
@@ -103,6 +122,23 @@ const OKNA = [
     await pg.click('#live-expand');
     await pg.waitForTimeout(600);
     await sprawdz('powiększony + rozwinięte');
+
+    /* KADR PIONOWY — telefon trzymany normalnie. Atrapa kamery w Chromium
+       jest pozioma, więc proporcję podstawiamy ręcznie; inaczej ten zestaw
+       nigdy nie zobaczyłby przypadku, w którym panel realnie się rozjeżdżał.
+       Przy 340 px szerokości kadr 9:16 daje scenę wysoką na 604 px, czyli
+       więcej, niż zostaje na telefonie po paskach przeglądarki. */
+    await pg.evaluate(() => {
+      const panel = document.getElementById('live-panel');
+      panel.style.setProperty('--live-ar', '9 / 16');
+      panel.style.setProperty('--live-arn', String(9 / 16));
+      dopasujPanelKamery();
+    });
+    await pg.waitForTimeout(400);
+    await sprawdz('pionowy kadr 9:16');
+    await pg.click('#live-expand');            // z powrotem do rogu
+    await pg.waitForTimeout(500);
+    await sprawdz('pionowy kadr w rogu');
     if (viewport.height === 640) {
       await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/kamera-390x640.png` });
     }

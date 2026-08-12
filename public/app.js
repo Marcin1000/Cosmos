@@ -251,6 +251,13 @@ function msgImages(m) {
 function msgPhotos(m) {
   return typeof m.content === 'string' ? [] : (m.content?.photos || []);
 }
+/* Wynik z archiwum bywa dłuższy niż jedna porcja miniatur. Tu leży wszystko,
+   czego trzeba, by dobrać następną: zapytanie, na którym pliku skończyliśmy
+   i ile ich jest razem. Bez tego przycisk „pokaż kolejne" nie miałby czego
+   powtórzyć. */
+function msgDalej(m) {
+  return typeof m.content === 'string' ? null : (m.content?.dalej || null);
+}
 // Wczytane dokumenty: na ekranie kafelek z nazwą, do modelu pełna treść.
 function msgDocs(m) {
   return typeof m.content === 'string' ? [] : (m.content?.docs || []);
@@ -978,6 +985,78 @@ function photosGrid(photos) {
   return wrap;
 }
 
+/* Ile miniatur dobieramy jednym kliknięciem. Każda to osobne zapytanie do
+   OneDrive w chwili wyświetlenia, więc porcja jest kompromisem: za mała każe
+   klikać bez końca, za duża zamraża telefon na kilkanaście sekund. */
+const PORCJA_ARCHIWUM = 24;
+
+/** Pasek pod siatką: „24 z 311" i przycisk po następną porcję.
+ *
+ *  Marcin: „chciałbym móc przejrzeć wszystkie zdjęcia z wyszukania, a nie
+ *  mieć informację typu »pokazałem Ci 20, ale jest 311«". Model tego nie
+ *  załatwi — on dostaje próbkę tekstową i ma rację, że jej nie przekracza.
+ *  Przeglądanie całości to zadanie dla przeglądarki, nie dla rozmowy.
+ */
+function stopkaArchiwum(m) {
+  const d = msgDalej(m);
+  if (!d || !d.razem) return null;
+  const pokazane = msgPhotos(m).length;
+  const pasek = document.createElement('div');
+  pasek.className = 'arch-dalej';
+
+  const licznik = document.createElement('span');
+  licznik.className = 'arch-dalej-licznik mono';
+  licznik.textContent = t('arch.counter', { n: pokazane, z: d.razem });
+  pasek.appendChild(licznik);
+
+  if (d.pomin >= d.razem) return pasek;   // wszystko już na ekranie — sam licznik
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-secondary arch-dalej-btn';
+  const zostalo = d.razem - d.pomin;
+  btn.textContent = t('arch.more', { n: Math.min(PORCJA_ARCHIWUM, zostalo) });
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = t('arch.loading');
+    try {
+      const r = await fetch(`/api/archive/search?limit=${PORCJA_ARCHIWUM}&pomin=${d.pomin}&${d.q}`);
+      const dane = await readJsonSafe(r);
+      if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
+      const nowe = (Array.isArray(dane.wyniki) ? dane.wyniki : []).filter((w) => w.zrodlo === 'onedrive');
+      m.content.photos = msgPhotos(m).concat(nowe.map(naKafelek));
+      /* Przesuwamy się o CAŁĄ oddaną stronę, nie o liczbę kafelków. Pliki
+         spoza OneDrive'a (te z dysku, bez miniatury) odpadają przy filtrze,
+         a gdyby licznik szedł za kafelkami, każde kliknięcie wracałoby po
+         te same pliki i przycisk kręciłby się w miejscu. */
+      d.pomin += (Array.isArray(dane.wyniki) ? dane.wyniki.length : 0);
+      d.razem = Number(dane.znaleziono) || d.razem;
+      saveConversations();
+      renderMessages();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = t('arch.moreErr', { e: err.message });
+    }
+  });
+  pasek.appendChild(btn);
+  return pasek;
+}
+
+/** Wpis z archiwum → kafelek siatki. Jedno miejsce, bo używa tego i pierwsza
+ *  porcja, i każda dobrana potem — rozjechanie się tych dwóch dawałoby
+ *  kafelki bez podpisów w połowie siatki. */
+function naKafelek(w) {
+  const adres = `/api/archive/thumb?id=${encodeURIComponent(w.id)}`;
+  return {
+    thumb: adres,
+    podglad: adres,
+    source: '',
+    title: [w.nazwa, w.kiedy && w.kiedy.slice(0, 16).replace('T', ' ')].filter(Boolean).join(' · '),
+    zrodlo: [w.poraDnia, w.swiatlo].filter(Boolean).join(' · '),
+    licencja: w.ogniskowa ? `${w.ogniskowa} mm` : '',
+  };
+}
+
 /** Podgląd obrazu na pełnym ekranie, z pobieraniem.
  *
  * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
@@ -1172,7 +1251,11 @@ function messageElement(m, idx = -1) {
     body.prepend(imgs);
   }
   const photos = msgPhotos(m);
-  if (photos.length) body.appendChild(photosGrid(photos));
+  if (photos.length) {
+    body.appendChild(photosGrid(photos));
+    const dalej = stopkaArchiwum(m);
+    if (dalej) body.appendChild(dalej);
+  }
   const run = msgRun(m);
   if (run) body.appendChild(runPanel(run));
   const docs = msgDocs(m);
@@ -2325,14 +2408,38 @@ async function webSearch(query) {
 const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
 
 /** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
- *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran. */
+ *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran.
+ *
+ *  Marcin przysłał zapis rozmowy, w którym na ekranie stało gołe
+ *  `[ARCHIWUM: grupuj=rok]`, a kawałek niżej wisiał pusty blok kodu. Dwie
+ *  dziury, obie w tym samym miejscu:
+ *
+ *  1. ZNACZNIK URWANY. Model potrafi skończyć wypowiedź w połowie znacznika
+ *     — bo skończył mu się budżet tokenów albo Marcin nacisnął „stop".
+ *     Bez domykającego `]` żaden z wzorców nie pasował i polecenie dla modelu
+ *     zostawało na ekranie jako treść odpowiedzi.
+ *
+ *  2. PUSTY PŁOT. Model lubi opakowywać znacznik w ```blok```. Usunięcie
+ *     samego znacznika zostawiało wtedy parę płotków bez zawartości —
+ *     na ekranie pusta ramka bez wyjaśnienia, skąd się wzięła.
+ *
+ *  Kolejność ma znaczenie: najpierw znika znacznik, potem sprzątamy płoty,
+ *  które przez to opustoszały.
+ */
+const ZNACZNIKI = ['SZUKAJ', 'GRAFIKA', 'PLAN', 'ARCHIWUM', 'OBRAZ', 'AKCJA'];
+
 function stripSearchMarker(s) {
-  return String(s || '')
-    .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
-    .replace(/\[GRAFIKA:[^\]]*\]/gi, '')
-    .replace(/\[PLAN:?[^\]]*\]/gi, '')
-    .replace(/\[ARCHIWUM:?[^\]]*\]/gi, '')
-    .trim();
+  let out = String(s || '');
+  for (const z of ZNACZNIKI) {
+    out = out.replace(new RegExp(`\\[${z}:?[^\\]]*\\]`, 'gi'), '');
+    /* Urwany na końcu tekstu — i TYLKO na końcu. W środku wypowiedzi otwarty
+       nawias kwadratowy to zwykły nawias (albo odnośnik w Markdownie)
+       i nie wolno go zjadać razem z resztą zdania. */
+    out = out.replace(new RegExp(`\\[${z}:?[^\\]]*$`, 'i'), '');
+  }
+  // Płot, w którym po usunięciu znacznika nie zostało nic prócz białych znaków.
+  out = out.replace(/```[a-zA-Z-]*\s*```/g, '');
+  return out.trim();
 }
 /* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
    To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
@@ -2368,6 +2475,16 @@ function naKontekst(dane) {
       // `miniatura` to 1,2 kB podpisanego adresu; `id` i `rozmiar` nic nie wnoszą.
       if (k === 'miniatura' || k === 'id' || k === 'rozmiar') continue;
       if (v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
+      /* O ŹRÓDLE DATY MÓWIMY TYLKO WTEDY, GDY JEST SŁABE.
+         `exif` i `nazwa` niosą moment zrobienia zdjęcia i nie ma o czym
+         wspominać — powtarzanie tego przy każdym z kilkudziesięciu wpisów
+         to czysty koszt kontekstu. `plik` znaczy „to jest data WGRANIA do
+         chmury, nie data zdjęcia", a to model musi wiedzieć, zanim poda ją
+         człowiekowi jako fakt. Zamieniamy więc na czytelną flagę. */
+      if (k === 'dataZrodlo') {
+        if (v === 'plik') o.dataNiepewna = 'to data wgrania pliku, nie zrobienia zdjęcia';
+        continue;
+      }
       o[k] = v;
     }
     return o;
@@ -2389,6 +2506,11 @@ function naKontekst(dane) {
       + 'To jest PRÓBKA, nie całe archiwum — nie wyciągaj z niej wniosków o tym, czego '
       + 'w archiwum NIE MA. Jeśli chcesz wiedzieć, co tam jest w całości, poproś '
       + 'o zestawienie (grupuj=aparat, grupuj=rok, grupuj=temat) albo zawęź filtry.\n'
+      + 'PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA. Pod miniaturami ma on przycisk '
+      + '„pokaż kolejne" i dojdzie nim do ostatniego z '
+      + `${znaleziono} plików. Nie pisz mu więc, że pokazujesz tylko część, `
+      + 'nie przepraszaj za limit i nie proponuj zawężenia „żeby się zmieściło" '
+      + `— napisz po prostu, ile ich jest (${znaleziono}).\n`
     : '';
   return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
 }
@@ -2503,11 +2625,18 @@ async function runGeneration(conv, podpiecie = null) {
       if (archMarker && depth < MAX_SEARCHES) {
         const q = new URLSearchParams();
         let grupuj = '';
-        for (const kawalek of archMarker[1].trim().split(/\s+/)) {
+        /* Tniemy PRZED następnym `klucz=`, nie na każdej spacji. Wcześniej
+           `folder=Mazury 2026` rozpadało się na `folder=Mazury` plus sierotę
+           „2026", którą pętla po cichu wyrzucała — przy nazwie folderu to
+           zwykle nadal trafiało, ale `miejsce=Nowy Sącz` szukało już „Nowy",
+           a `bezFolderu=Mazury 2026` wykluczyłoby wszystkie Mazury, także
+           z innych lat. */
+        for (const kawalek of archMarker[1].trim().split(/\s+(?=[a-zA-Z]+=)/)) {
           const i = kawalek.indexOf('=');
           if (i < 1) continue;
-          const k = kawalek.slice(0, i);
-          const v = kawalek.slice(i + 1);
+          const k = kawalek.slice(0, i).trim();
+          const v = kawalek.slice(i + 1).trim();
+          if (!v) continue;
           if (k === 'grupuj') grupuj = v; else q.set(k, v);
         }
 
@@ -2540,7 +2669,7 @@ async function runGeneration(conv, podpiecie = null) {
           // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
           const adres = grupuj
             ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
-            : `/api/archive/search?limit=40&${q}`;
+            : `/api/archive/search?limit=${PORCJA_ARCHIWUM}&${q}`;
           const r = await fetch(adres);
           dane = await readJsonSafe(r);
           if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
@@ -2553,21 +2682,21 @@ async function runGeneration(conv, podpiecie = null) {
            Miniatury lecą przez `/api/archive/thumb`, bo adresy z OneDrive
            wygasają i muszą być dociągane teraz, a nie przy indeksowaniu. */
         const pliki = (dane && Array.isArray(dane.wyniki)) ? dane.wyniki : [];
-        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive').slice(0, 24);
+        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive');
         if (zPodgladem.length) {
           conv.messages.push({
             role: 'assistant',
             content: {
               text: '',
-              photos: zPodgladem.map((w) => ({
-                thumb: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
-                podglad: `/api/archive/thumb?id=${encodeURIComponent(w.id)}`,
-                source: '',
-                title: [w.nazwa, w.kiedy && w.kiedy.slice(0, 16).replace('T', ' ')]
-                  .filter(Boolean).join(' · '),
-                zrodlo: [w.poraDnia, w.swiatlo].filter(Boolean).join(' · '),
-                licencja: w.ogniskowa ? `${w.ogniskowa} mm` : '',
-              })),
+              photos: zPodgladem.map(naKafelek),
+              /* Zapamiętujemy zapytanie, żeby przycisk pod siatką mógł dobrać
+                 dalszy ciąg. `q` jest bez `limit` i bez `pomin` — te dokleja
+                 stopka, bo tylko ona wie, ile już pokazano. */
+              dalej: {
+                q: q.toString(),
+                pomin: pliki.length,
+                razem: Number(dane.znaleziono) || pliki.length,
+              },
             },
           });
           saveConversations();
@@ -2896,8 +3025,13 @@ async function runGeneration(conv, podpiecie = null) {
     }
   } catch (err) {
     if (err.name === 'AbortError') {
-      if (err.partial) {
-        conv.messages.push({ role: 'assistant', content: err.partial });
+      /* Przerwana odpowiedź też przechodzi przez czyszczenie znaczników.
+         To jedyna droga, którą tekst z modelu trafiał na ekran surowy —
+         a przerywa się najczęściej wtedy, gdy coś trwa za długo, czyli
+         dokładnie w trakcie sięgania po narzędzie. */
+      const czesc = stripSearchMarker(err.partial);
+      if (czesc) {
+        conv.messages.push({ role: 'assistant', content: czesc });
         saveConversations();
       }
     } else {
@@ -3841,12 +3975,57 @@ function liveMediaSize() {
  *  po prostu mierzymy ponownie przy każdej zmianie, a że zmiany są rzadkie
  *  i drobne, dochodzi do swojego miejsca po jednym, najwyżej dwóch krokach.
  */
-function dopasujPanelKamery() {
+function dopasujPanelKamery(krok) {
+  const runda = typeof krok === 'number' ? krok : 0;   // z `resize` przychodzi Event
   const panel = $('live-panel');
   const scena = $('live-stage');
+  const dol = $('live-body');
   if (!panel || !scena || panel.style.display === 'none') return;
-  const paski = panel.getBoundingClientRect().height - scena.getBoundingClientRect().height;
+  const przed = panel.style.getPropertyValue('--live-chrome');
+  let paski = panel.getBoundingClientRect().height - scena.getBoundingClientRect().height;
+  /* DOLICZ TO, CO JUŻ NIE MIEŚCI SIĘ W DOLNEJ CZĘŚCI.
+   *
+   *  Bez tego pomiar zjadał własny ogon. `.live-body` kurczy się i przewija,
+   *  więc gdy panel dobijał do wysokości okna, mierzyliśmy dół JUŻ ŚCIŚNIĘTY.
+   *  Wychodziło z tego, że paski są niskie, więc obrazowi wolno być duży,
+   *  więc dół musi się ścisnąć jeszcze bardziej — i układ zastygał dokładnie
+   *  w tym, co Marcin opisał: „okno podglądu jest duże, a pod nim małe
+   *  okienko przesuwalne. To nie wygląda dobrze i nie jest użyteczne".
+   *
+   *  `scrollHeight - clientHeight` to wysokość schowana za paskiem przewijania,
+   *  czyli różnica między tym, ile dół ZAJMUJE, a ile POTRZEBUJE. Dopiero
+   *  potrzeba jest właściwą liczbą do liczenia szerokości panelu. */
+  if (dol) paski += Math.max(0, dol.scrollHeight - dol.clientHeight);
   if (paski > 0) panel.style.setProperty('--live-chrome', `${Math.round(paski)}px`);
+
+  /* Osobno to, co leży NAD obrazem: nagłówek i wybór źródła. W układzie
+     dwukolumnowym (powiększony panel na szerokim ekranie) tylko te dwa paski
+     zabierają obrazowi wysokość — reszta stoi w kolumnie obok. Liczenie tam
+     z pełnego `--live-chrome` ścinałoby obraz o wysokość czegoś, co go już
+     nie dotyka. */
+  let gora = 0;
+  for (const el of panel.querySelectorAll('.live-head, .live-source')) {
+    gora += el.getBoundingClientRect().height;
+  }
+  if (gora > 0) panel.style.setProperty('--live-chrome-gora', `${Math.round(gora)}px`);
+
+  /* JEDEN POMIAR NIE WYSTARCZA, gdy układ zmienia się skokowo.
+   *
+   *  Szerokość zależy od wysokości pasków, a wysokość pasków od szerokości
+   *  (status i opisy się zawijają). Przy drobnej zmianie jedno przejście
+   *  trafia dostatecznie blisko, ale przy przejściu między układem
+   *  jedno- i dwukolumnowym skacze wszystko naraz: dolna część przenosi się
+   *  spod obrazu na bok albo z powrotem. Pierwsza runda mierzy wtedy stan
+   *  sprzed przebudowy i panel zastyga w połowie drogi — złapał to zestaw
+   *  `panel-kamery-miesci` na zwinięciu powiększonego panelu z powrotem
+   *  do rogu.
+   *
+   *  Więc powtarzamy, dopóki liczba się zmienia. Zbieżne jest to dlatego,
+   *  że każda kolejna runda startuje z układu bliższego docelowemu; limit
+   *  trzech rund jest bezpiecznikiem na wypadek układu, który oscyluje. */
+  if (runda < 3 && panel.style.getPropertyValue('--live-chrome') !== przed) {
+    requestAnimationFrame(() => dopasujPanelKamery(runda + 1));
+  }
 }
 window.addEventListener('resize', dopasujPanelKamery);
 
