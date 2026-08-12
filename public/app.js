@@ -4084,7 +4084,11 @@ async function odswiezPlan(cap) {
       body: JSON.stringify(dane),
     });
     const d = await readJsonSafe(r);
+    /* `ma-wynik` decyduje, czy zwinięty pasek pokazuje tytuł, czy same
+       nastawy — patrz komentarz w style.css przy `.plan-box.ma-wynik`.
+       Bez wyniku tytuł zostaje, bo sam myślnik nic nie mówi. */
     if (!r.ok) {
+      box.classList.remove('ma-wynik');   // znów sam myślnik → tytuł wraca
       $('plan-shot').textContent = '—';
       $('plan-light').textContent = d.error || t('plan.needLocation');
       $('plan-why').textContent = '';
@@ -4104,6 +4108,11 @@ async function odswiezPlan(cap) {
 function pokazPlan(d, pre = 'plan') {
   const u = d.ustawienia;
   $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+  /* „Jest wynik" należy do PLANU, nie do jednego wywołania. Stąd tutaj,
+     a nie w `odswiezPlan`: pudełko przy kamerze chowa wtedy tytuł ze
+     zwiniętego paska, bo liczby mówią same za siebie i nie ma po co ich
+     ściskać (patrz `.plan-box.ma-wynik` w style.css). */
+  if (pre === 'plan') { const b = $('plan-box'); if (b) b.classList.add('ma-wynik'); }
 
   const czesci = [];
   if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
@@ -4270,6 +4279,26 @@ for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
   const el = $(id);
   // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
   if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
+}
+
+/* Pudełko nastaw pamięta, czy je rozwinąłeś. Domyślnie zwinięte, bo panel
+   kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
+   ponad jedna trzecia tego panelu. Kto raz je rozwinie, ten najwyraźniej
+   chce je mieć otwarte — i nie musi tego klikać przy każdym uruchomieniu. */
+const PLAN_ROZWINIETE = 'cosmos.planRozwiniete';
+{
+  const box = $('plan-box');
+  if (box) {
+    box.open = localStorage.getItem(PLAN_ROZWINIETE) === '1';
+    box.addEventListener('toggle', () => {
+      localStorage.setItem(PLAN_ROZWINIETE, box.open ? '1' : '0');
+      /* Po rozwinięciu licz od razu. Bez tego świeżo otwarte pudełko
+         pokazywałoby poprzedni wynik nawet przez osiem sekund, a przy
+         wyłączonych zmysłach — myślnik do końca świata, bo pętla podglądu
+         odświeża plan tylko z klatki. */
+      if (box.open) { planOstatnio = 0; odswiezPlan(null); }
+    });
+  }
 }
 
 /* ============================== PLENER ==============================

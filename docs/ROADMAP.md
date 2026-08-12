@@ -2856,6 +2856,36 @@ w dymku i „person (po lewej) · 🧍 widoczna sylwetka…" pod obrazem.
 `nowe-panele-ux` 6b i 6c sprawdzają tytuł, brak ucięć i milczenie dymka przy
 otwartym podglądzie — oraz to, że przy zamkniętym dymek nadal działa.
 
+### 4. Pudełko nastaw zwinięte do jednej linijki
+
+Marcin, po zobaczeniu pomiaru: „faktycznie zabiera sporo miejsca". Panel
+kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
+ponad jedna trzecia panelu.
+
+- [x] `<details>`, nie własny przełącznik — klawiatura, czytnik ekranu
+      i „znajdź na stronie" działają wtedy same z siebie
+- [x] W zwiniętym pasku zostaje to, po co się tu patrzy: `1/50 · f/5.6 · ISO 100`.
+      Listy i uzasadnienie o jedno dotknięcie dalej
+- [x] Stan zapamiętany (`cosmos.planRozwiniete`), domyślnie zwinięte
+- [x] Rozwinięcie liczy plan OD RAZU — bez tego świeżo otwarte pudełko
+      pokazywałoby poprzedni wynik nawet przez osiem sekund
+- [x] Tytuł znika ze zwiniętego paska, GDY są już liczby. Panel ma stałe
+      ~290 px, a nastawy zajmują z tego dwie trzecie — tytuł wychodził wtedy
+      jako „NASTAWY…", czyli gorzej niż wcale. Liczby ekspozycji same mówią,
+      czym są; pełna nazwa zostaje w `title` i dla czytnika ekranu, a wraca
+      na widok, gdy wyniku jeszcze nie ma i po rozwinięciu
+
+Zmierzone: **266 px → 42 px**, panel kamery **743 → 512 px** na telefonie.
+
+### Test, który mierzył niewyświetlany element
+
+Przy okazji wyszło, że zamknięte `<details>` w Chromium chowa treść przez
+`content-visibility`, a nie `display:none`: `offsetParent` zostaje ustawiony,
+a `getBoundingClientRect()` oddaje 131×35 px dla listy, której nie widać.
+Pomocnik `wystaje()` pomijał elementy po `offsetParent`, więc po zwinięciu
+mierzyłby coś nierysowanego i zawsze świeciłby na zielono. Teraz używa
+`checkVisibility()`.
+
 ### Audyt sam podawał fałszywy alarm
 
 Lista „klucze bez użycia" wymieniała **25** pozycji, z czego pięć jest w pełni

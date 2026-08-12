@@ -90,7 +90,7 @@ const I18N = {
     // — źródło obrazu w panelu na żywo —
     'live.source': 'Źródło obrazu',
     'live.srcCamera': 'Kamera przeglądarki',
-    'live.planTitle': 'Nastawy na ten kadr',
+    'live.planTitle': 'Nastawy kadru',
     'live.srcKinectColor': 'Kinect — obraz',
     'live.srcKinectDepth': 'Kinect — głębia',
     'live.kinectErr': 'Brak obrazu z Kinecta — czy działa senses/service.py na komputerze z czujnikiem?',
@@ -800,7 +800,7 @@ const I18N = {
 
     'live.source': 'Video source',
     'live.srcCamera': 'Browser camera',
-    'live.planTitle': 'Settings for this frame',
+    'live.planTitle': 'Frame settings',
     'live.srcKinectColor': 'Kinect — colour',
     'live.srcKinectDepth': 'Kinect — depth',
     'live.kinectErr': 'No image from the Kinect — is senses/service.py running on the machine with the sensor?',
