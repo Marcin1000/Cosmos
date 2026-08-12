@@ -145,6 +145,11 @@ const zapytaj = async (qs) => {
     ['licznik „pokazane N z M"', /arch\.counter/],
     ['dobieranie po `pomin=`', /pomin=\$\{d\.pomin\}/],
     ['przesuwanie o całą stronę', /d\.pomin \+= /],
+    /* Dobrane kafelki DOPISUJEMY do istniejącej siatki. `renderMessages()`
+       kończy się wymuszonym zjazdem na dół rozmowy, więc przerysowanie
+       wyrzucałoby użytkownika spod siatki przy każdym kliknięciu — im dłużej
+       przegląda, tym dalej od niej. */
+    ['dopisywanie kafelków bez przerysowania rozmowy', /siatka\.appendChild/],
   ]) {
     if (!wzor.test(app)) fail.push(`w kliencie brakuje: ${co}`);
   }

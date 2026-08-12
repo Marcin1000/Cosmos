@@ -1024,7 +1024,8 @@ function stopkaArchiwum(m) {
       const dane = await readJsonSafe(r);
       if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
       const nowe = (Array.isArray(dane.wyniki) ? dane.wyniki : []).filter((w) => w.zrodlo === 'onedrive');
-      m.content.photos = msgPhotos(m).concat(nowe.map(naKafelek));
+      const kafelki = nowe.map(naKafelek);
+      m.content.photos = msgPhotos(m).concat(kafelki);
       /* Przesuwamy się o CAŁĄ oddaną stronę, nie o liczbę kafelków. Pliki
          spoza OneDrive'a (te z dysku, bez miniatury) odpadają przy filtrze,
          a gdyby licznik szedł za kafelkami, każde kliknięcie wracałoby po
@@ -1032,7 +1033,23 @@ function stopkaArchiwum(m) {
       d.pomin += (Array.isArray(dane.wyniki) ? dane.wyniki.length : 0);
       d.razem = Number(dane.znaleziono) || d.razem;
       saveConversations();
-      renderMessages();
+
+      /* DOPISUJEMY KAFELKI, ZAMIAST PRZERYSOWAĆ CAŁĄ ROZMOWĘ.
+         `renderMessages()` kończy się wymuszonym zjazdem na sam dół, więc
+         każde kliknięcie „pokaż kolejne" wyrzucałoby Marcina spod siatki,
+         którą właśnie ogląda — a im dłużej by przeglądał, tym dalej od niej.
+         Przy przeglądaniu trzystu zdjęć to jest różnica między narzędziem
+         a udręką. */
+      const siatka = pasek.previousElementSibling;
+      const swieze = photosGrid(kafelki);
+      if (siatka && siatka.classList.contains('photo-grid')) {
+        while (swieze.firstChild) siatka.appendChild(swieze.firstChild);
+        pasek.replaceWith(stopkaArchiwum(m));
+      } else {
+        // Siatki nie ma tam, gdzie się jej spodziewamy — wtedy lepiej
+        // przerysować i stracić pozycję, niż nie pokazać dobranych zdjęć.
+        renderMessages();
+      }
     } catch (err) {
       btn.disabled = false;
       btn.textContent = t('arch.moreErr', { e: err.message });
