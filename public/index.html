@@ -862,11 +862,15 @@
         <option value="kinect-depth" data-i18n="live.srcKinectDepth">Kinect — głębia</option>
       </select>
     </div>
-    <div class="live-stage">
+    <div class="live-stage" id="live-stage">
       <video id="live-video" autoplay playsinline muted></video>
       <img id="live-image" alt="" hidden>
       <canvas id="live-overlay"></canvas>
     </div>
+    <!-- Wszystko pod obrazem PRZEWIJA SIĘ. Panel miał `overflow: hidden`,
+         więc gdy treść nie mieściła się w oknie, przycisk migawki po prostu
+         znikał poza krawędzią i nie dało się do niego dojechać. -->
+    <div class="live-body" id="live-body">
     <div class="live-status mono" id="live-status">—</div>
 
     <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
@@ -915,6 +919,7 @@
            i nie powinna dzielić miejsca z podglądem. -->
     </details>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
+    </div>
   </div>
 
   <!-- ================= MODAL: OŚ CZASU ================= -->

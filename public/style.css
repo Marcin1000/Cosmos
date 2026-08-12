@@ -1504,6 +1504,15 @@ kbd {
 
 /* ============================ KAMERA NA ŻYWO ============================ */
 
+/* PANEL NIGDY NIE PRZERASTA OKNA — i nie liczy tego z żadnej stałej.
+   Wcześniej wysokość obrazu wynikała z odjęcia „220 px na nagłówek, wybór
+   źródła, status i przycisk". Taka stała starzeje się przy pierwszej nowej
+   rzeczy w panelu: doszło pudełko nastaw, status urósł do trzech wierszy
+   i panel przestał się mieścić na ekranie — Marcin zobaczył ucięty nagłówek
+   u góry i ucięty przycisk migawki na dole.
+   Teraz to kolumna elastyczna: paski biorą tyle, ile potrzebują, a obraz
+   dostaje resztę i kurczy się, gdy jej brakuje. Cokolwiek jeszcze tu
+   dołożymy, zmieści się samo. */
 .live-panel {
   position: fixed;
   right: 20px;
@@ -1511,11 +1520,23 @@ kbd {
   z-index: 45;
   width: 340px;
   max-width: calc(100vw - 40px);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+/* Nagłówek i wybór źródła trzymają swój rozmiar zawsze. */
+.live-head, .live-source { flex: 0 0 auto; }
+/* Reszta pod obrazem: kurczy się i PRZEWIJA, zamiast wypadać poza panel. */
+.live-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .live-head {
   display: flex;
@@ -1527,7 +1548,23 @@ kbd {
 .live-title { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint); flex: 1; }
 .live-rec { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: .1em; color: var(--danger); margin-right: 4px; }
 .live-rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
-.live-stage { position: relative; background: #000; aspect-ratio: 4/3; }
+/* PROPORCJA Z PRAWDZIWEGO OBRAZU, nie z założenia.
+   Na sztywno wpisane 4:3 przy kamerze 16:9 dawało czarne pasy nad i pod
+   kadrem — u Marcina jedna czwarta wysokości panelu na nic. `--live-ar`
+   ustawia kod, gdy strumień poda swoje wymiary; 4/3 zostaje na chwilę
+   przed pierwszą klatką i dla Kinecta, który taki właśnie jest.
+
+   Obraz NIE KURCZY SIĘ w pionie (`flex: 0 0 auto`). Kurczenie łamie
+   proporcję, a złamana proporcja to albo obcięty kadr, albo czarne pasy —
+   czyli dokładnie to, czego pilnuje zestaw `kinect-i-prompt`. Zamiast tego
+   w trybie powiększonym z dostępnej wysokości wyliczana jest SZEROKOŚĆ
+   panelu, więc obraz maleje w obu wymiarach naraz i zostaje sobą. */
+.live-stage {
+  position: relative;
+  background: #000;
+  aspect-ratio: var(--live-ar, 4/3);
+  flex: 0 0 auto;
+}
 .live-stage video, .live-stage img, .live-stage canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
@@ -1561,10 +1598,17 @@ kbd {
   right: 50%;
   bottom: 50%;
   transform: translate(50%, 50%);
-  /* Szerokość ogranicza też wysokość okna. Przy proporcji 4:3 samo obcięcie
-     wysokości sceny zostawiłoby czarne pasy po bokach — tu panel zwęża się
-     razem z obrazem. 220px to nagłówek, wybór źródła, status i przycisk. */
-  width: min(1100px, calc(100vw - 40px), calc((100dvh - 220px) * 4 / 3));
+  /* SZEROKOŚĆ WYNIKA Z DOSTĘPNEJ WYSOKOŚCI — inaczej wysoki obraz wypycha
+     przycisk migawki poza ekran. Pomysł ten sam co wcześniej, ale liczby
+     inne: stało tu `calc((100dvh - 220px) * 4 / 3)`, gdzie 220 px było
+     STAŁĄ na nagłówek, źródło, status i przycisk, a 4/3 stałą proporcją
+     obrazu. Obie się zestarzały — doszło pudełko nastaw i status o trzech
+     wierszach, a kamera Marcina jest 16:9. Teraz jedno i drugie mierzy kod
+     i podaje tutaj: `--live-chrome` (wysokość pasków) i `--live-arn`
+     (proporcja strumienia jako liczba). Odjęcie „tyle, ile zwykle zajmuje
+     reszta" jest zawsze o jedną zmianę do tyłu. */
+  width: clamp(280px, calc((100dvh - 40px - var(--live-chrome, 220px)) * var(--live-arn, 1.3333)),
+               min(1100px, calc(100vw - 40px)));
   max-width: none;
 }
 .live-panel.expanded .live-stage { background: #000; }
@@ -1580,8 +1624,18 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .live-panel { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
-  .live-panel.expanded { width: min(calc(100vw - 16px), calc((100dvh - 260px) * 4 / 3)); }
+  .live-panel {
+    width: calc(100vw - 24px);
+    right: 12px;
+    bottom: 12px;
+    /* Na telefonie pasek adresu i pasek nawigacji zabierają swoje, a `dvh`
+       już to uwzględnia — zostaje zapas na sam margines panelu. */
+    max-height: calc(100dvh - 24px);
+  }
+  .live-panel.expanded {
+    width: clamp(240px, calc((100dvh - 24px - var(--live-chrome, 240px)) * var(--live-arn, 1.3333)),
+                 calc(100vw - 16px));
+  }
 }
 
 /* ============================ GALERIA ============================ */
