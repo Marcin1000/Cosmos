@@ -838,6 +838,26 @@ kbd {
 }
 .photo-tile:hover { border-color: var(--accent); }
 
+/* Pasek pod siatką z archiwum: ile widać z ilu i przycisk po następną porcję.
+   Licznik po lewej, przycisk po prawej — przy jednej porcji zostaje sam
+   licznik i pasek nie zmienia wtedy wysokości wiadomości. */
+.arch-dalej {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.arch-dalej-licznik {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.arch-dalej-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 /* Kafelek bez miniatury. Nie znika — zniknięcie dawało „znalazłem 8 zdjęć"
    nad pustym miejscem. Zostaje widoczny odnośnik do źródła. */
 .photo-brak {
@@ -1518,7 +1538,13 @@ kbd {
   right: 20px;
   bottom: 20px;
   z-index: 45;
-  width: 340px;
+  /* SZEROKOŚĆ USTĘPUJE WYSOKOŚCI — także w rogu, nie tylko po powiększeniu.
+     Kamera w telefonie jest PIONOWA (9:16). Przy stałych 340 px szerokości
+     daje to scenę wysoką na 604 px, czyli więcej, niż zostaje na telefonie
+     po paskach przeglądarki — obraz wypychał wtedy nastawy i przycisk poza
+     panel. Skoro proporcja obrazu jest święta (inaczej pasy albo obcięty
+     kadr), to ustąpić musi szerokość: pionowy kadr daje węższy panel. */
+  width: clamp(200px, calc((100dvh - 40px - var(--live-chrome, 220px)) * var(--live-arn, 1.3333)), 340px);
   max-width: calc(100vw - 40px);
   max-height: calc(100dvh - 40px);
   display: flex;
@@ -1564,9 +1590,27 @@ kbd {
   background: #000;
   aspect-ratio: var(--live-ar, 4/3);
   flex: 0 0 auto;
+  /* SUFIT NA WYSOKOŚĆ OBRAZU — hamulec na wypadek, gdy szerokość dobiła
+     do swojej dolnej granicy i nie ma już czym ustępować.
+     Kadr pionowy 9:16 dzieli szerokość przez 0,5625, więc panel przy
+     minimalnych 200 px daje obraz wysoki na 355 px. Wysokości nie da się
+     wtedy zmniejszyć zwężaniem panelu — jest już najwęższy jak można —
+     i cała nadwyżka spadała na dolną część, która zwijała się w wąski
+     pasek do przewijania. Marcin: „duże okno podglądu, a pod nim małe
+     okienko przesuwalne. Źle to wygląda."
+     Sufit dotyczy WYŁĄCZNIE tej sytuacji: dopóki jest miejsce, proporcja
+     rządzi i sufit nawet nie dotyka obrazu. */
+  max-height: calc(100dvh - 40px - var(--live-chrome, 220px));
+  min-height: 110px;
 }
+/* `contain`, a nie `cover`. Dopóki proporcja sceny zgadza się z proporcją
+   obrazu — czyli prawie zawsze, bo `--live-ar` bierze się z prawdziwych
+   wymiarów strumienia — obie dają identyczny wynik. Różnią się dopiero tam,
+   gdzie zadziałał sufit powyżej: `cover` obcina wtedy górę i dół kadru
+   po cichu, `contain` pokazuje cały kadr z czarnymi pasami. Przy podglądzie
+   do ustawiania ujęcia obcięty kadr jest gorszy niż pasy. */
 .live-stage video, .live-stage img, .live-stage canvas {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
 }
 .live-source { padding: 6px 10px 0; }
 .live-source select {
@@ -1615,6 +1659,70 @@ kbd {
 .live-panel.expanded .live-stage video,
 .live-panel.expanded .live-stage img { object-fit: contain; }
 
+/* ---- POWIĘKSZONY NA SZEROKIM EKRANIE: NASTAWY OBOK OBRAZU, NIE POD NIM ----
+ *
+ *  Marcin o desktopie: „okno podglądu jest duże, a pod nim małe okienko
+ *  przesuwalne. To nie wygląda dobrze i nie jest użyteczne."
+ *
+ *  Jedna kolumna zmusza do wyboru, którego nie trzeba robić. Wszystko stoi
+ *  w słupku, więc obraz i nastawy dzielą się TĄ SAMĄ wysokością i konkurują
+ *  o nią: im większy podgląd, tym węższy pasek na dole. Zmierzone przed
+ *  zmianą przy 1440×700 — obraz 189 px, a pod nim 470 px sterowania.
+ *  „Powiększenie" dawało obraz MNIEJSZY niż panel w rogu.
+ *
+ *  Na szerokim ekranie ten wybór jest sztuczny: w poziomie miejsca jest
+ *  w bród i nikt z niego nie korzysta. Nastawy idą więc w drugą kolumnę,
+ *  obraz dostaje całą wysokość, a konkurencja znika — rosną oba naraz.
+ *
+ *  Szerokość panelu to nadal rachunek, nie zgadywanka: obraz zajmuje tyle,
+ *  ile wynika z jego proporcji przy pełnej wysokości, plus stała kolumna
+ *  na sterowanie. Odejmujemy przy tym `--live-chrome-gora` (nagłówek i wybór
+ *  źródła), a nie całe `--live-chrome` — dolna część leży teraz z boku
+ *  i wysokości już nie zabiera.
+ *
+ *  Próg 900 px, bo poniżej druga kolumna zwęziłaby obraz bardziej, niż
+ *  zyskałby na wysokości. Wtedy zostaje układ pionowy, tak jak na telefonie.
+ */
+@media (min-width: 900px) {
+  .live-panel.expanded {
+    --live-kolumna: 300px;
+    display: grid;
+    grid-template-columns: 1fr var(--live-kolumna);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "head  head"
+      "src   src"
+      "stage body";
+    height: calc(100dvh - 40px);
+    width: clamp(560px,
+      calc((100dvh - 40px - var(--live-chrome-gora, 90px)) * var(--live-arn, 1.3333)
+           + var(--live-kolumna)),
+      calc(100vw - 40px));
+  }
+  .live-panel.expanded .live-head { grid-area: head; }
+  .live-panel.expanded .live-source { grid-area: src; padding: 6px 10px; }
+  .live-panel.expanded .live-stage {
+    grid-area: stage;
+    align-self: start;
+    /* Sufit z układu jednokolumnowego liczył się z `--live-chrome`, czyli
+       razem z dolną częścią. Tu jej pod obrazem nie ma, więc sufit z niej
+       liczony ścinałby obraz bez powodu. */
+    max-height: none;
+  }
+  .live-panel.expanded .live-body {
+    grid-area: body;
+    min-height: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+  }
+  /* W słupku nastawy zwijały się, żeby zostawić miejsce obrazowi. W kolumnie
+     obok mają całą wysokość panelu i nie ma czego oszczędzać — pudełko stoi
+     otwarte, a przycisk migawki siada na dole kolumny. */
+  .live-panel.expanded .plan-box { border-bottom: none; }
+  .live-panel.expanded .live-body { display: flex; flex-direction: column; }
+  .live-panel.expanded #live-snapshot { margin-top: auto; }
+}
+
 .live-status {
   padding: 8px 14px;
   font-size: 11px;
@@ -1625,13 +1733,20 @@ kbd {
 
 @media (max-width: 720px) {
   .live-panel {
-    width: calc(100vw - 24px);
+    /* Ta sama zasada co na desktopie: pionowy kadr zwęża panel, zamiast
+       rozpychać go w pionie. Górna granica to szerokość ekranu. */
+    width: clamp(200px, calc((100dvh - 24px - var(--live-chrome, 220px)) * var(--live-arn, 1.3333)),
+                 calc(100vw - 24px));
     right: 12px;
     bottom: 12px;
     /* Na telefonie pasek adresu i pasek nawigacji zabierają swoje, a `dvh`
        już to uwzględnia — zostaje zapas na sam margines panelu. */
     max-height: calc(100dvh - 24px);
   }
+  /* Sufit obrazu liczony z TEGO SAMEGO marginesu co panel. Zostawiony na
+     40 px z desktopu byłby o 16 px za niski i obraz kurczyłby się mocniej,
+     niż trzeba — akurat tam, gdzie miejsca jest najmniej. */
+  .live-stage { max-height: calc(100dvh - 24px - var(--live-chrome, 220px)); }
   .live-panel.expanded {
     width: clamp(240px, calc((100dvh - 24px - var(--live-chrome, 240px)) * var(--live-arn, 1.3333)),
                  calc(100vw - 16px));
