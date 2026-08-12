@@ -3810,10 +3810,45 @@ function liveMedia() { return liveIsKinect() ? $('live-image') : $('live-video')
 
 function liveMediaSize() {
   const el = liveMedia();
-  return liveIsKinect()
+  const r = liveIsKinect()
     ? { w: el.naturalWidth, h: el.naturalHeight }
     : { w: el.videoWidth, h: el.videoHeight };
+  /* Skoro i tak znamy wymiary strumienia, niech scena ma JEGO proporcję.
+     Wpisane na stałe 4:3 przy kamerze 16:9 dawało czarne pasy nad i pod
+     kadrem — u Marcina jedna czwarta wysokości panelu zmarnowana, i to
+     wtedy, gdy panel i tak nie mieścił się na ekranie. */
+  if (r.w > 0 && r.h > 0) {
+    const panel = $('live-panel');
+    if (panel) {
+      panel.style.setProperty('--live-ar', `${r.w} / ${r.h}`);
+      panel.style.setProperty('--live-arn', String(r.w / r.h));
+    }
+  }
+  dopasujPanelKamery();
+  return r;
 }
+
+/** Podaj CSS-owi ZMIERZONĄ wysokość wszystkiego poza obrazem.
+ *
+ *  Szerokość powiększonego panelu liczy się z dostępnej wysokości, więc
+ *  trzeba wiedzieć, ile tej wysokości zabierają paski: nagłówek, wybór
+ *  źródła, status, pudełko nastaw i przycisk migawki. Wcześniej stała tam
+ *  liczba 220 wpisana w CSS — i zestarzała się przy pierwszej nowej rzeczy
+ *  w panelu. Zmierzone nie starzeje się nigdy.
+ *
+ *  Pomiar jest sprzężony: szerokość zależy od wysokości pasków, a wysokość
+ *  pasków od szerokości (status się zawija). Nie rozwiązujemy tego układu —
+ *  po prostu mierzymy ponownie przy każdej zmianie, a że zmiany są rzadkie
+ *  i drobne, dochodzi do swojego miejsca po jednym, najwyżej dwóch krokach.
+ */
+function dopasujPanelKamery() {
+  const panel = $('live-panel');
+  const scena = $('live-stage');
+  if (!panel || !scena || panel.style.display === 'none') return;
+  const paski = panel.getBoundingClientRect().height - scena.getBoundingClientRect().height;
+  if (paski > 0) panel.style.setProperty('--live-chrome', `${Math.round(paski)}px`);
+}
+window.addEventListener('resize', dopasujPanelKamery);
 
 let liveStreaming = false;
 const liveFps = 15;
@@ -4297,6 +4332,9 @@ const PLAN_ROZWINIETE = 'cosmos.planRozwiniete';
          wyłączonych zmysłach — myślnik do końca świata, bo pętla podglądu
          odświeża plan tylko z klatki. */
       if (box.open) { planOstatnio = 0; odswiezPlan(null); }
+      // Paski zmieniły wysokość → panel ma się przeliczyć od razu, a nie
+      // dopiero przy następnej klatce podglądu.
+      dopasujPanelKamery();
     });
   }
 }
@@ -4709,6 +4747,9 @@ function applyLiveExpanded() {
   const on = localStorage.getItem('cosmos.liveExpanded') === '1';
   $('live-panel').classList.toggle('expanded', on);
   $('live-expand').title = t(on ? 'live.shrink' : 'live.expand');
+  // Powiększenie zmienia szerokość, ta zmienia zawijanie statusu, a to
+  // wysokość pasków — czyli dokładnie liczbę, z której liczy się szerokość.
+  dopasujPanelKamery();
 }
 $('live-flip').addEventListener('click', async () => {
   const next = cameraFacing === 'environment' ? 'user' : 'environment';

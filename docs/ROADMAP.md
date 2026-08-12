@@ -2897,6 +2897,52 @@ kontroli, bo wygląda na wynik pomiaru.
 
 - [x] Wykrywanie martwych tłumaczeń zna wszystkie warianty atrybutu
 
+## ✅ Partia 64 — panel kamery nie mieścił się na ekranie (GOTOWE)
+
+Marcin, po zwinięciu pudełka nastaw: „Nie mieści mi się to teraz na ekranie.
+W obu przypadkach nie mogę też scrollować w dół lub w górę." Na zrzutach
+z telefonu i z desktopa widać ucięty nagłówek „KAMERA NA ŻYWO" u góry
+i ucięty przycisk migawki na dole.
+
+Trzy przyczyny, każda osobna:
+
+### 1. Wysokość liczona ze STAŁEJ
+
+Szerokość panelu w trybie powiększonym wynikała z
+`calc((100dvh - 220px) * 4 / 3)`, gdzie 220 px miało pokryć „nagłówek, wybór
+źródła, status i przycisk". Odjęcie „tyle, ile zwykle zajmuje reszta" jest
+zawsze o jedną zmianę do tyłu — a doszły dwie: pudełko nastaw i status, który
+przy wyłączonych zmysłach ma trzy wiersze.
+
+- [x] Panel to kolumna elastyczna z `max-height: calc(100dvh - 40px)`.
+      Paski biorą tyle, ile potrzebują, obraz dostaje resztę i **kurczy się**,
+      gdy jej brakuje (`flex: 1 3` — ustępuje trzy razy chętniej niż treść
+      pod nim). Cokolwiek jeszcze tu dołożymy, zmieści się samo
+
+### 2. Nie było jak przewinąć
+
+`.live-panel` miał `overflow: hidden`, więc treść, która nie zmieściła się
+w oknie, po prostu znikała za krawędzią.
+
+- [x] Wszystko pod obrazem siedzi w `.live-body` z `overflow-y: auto`
+
+### 3. Czarne pasy z nieprawdziwej proporcji
+
+Scena miała wpisane na stałe `aspect-ratio: 4/3`, a kamera Marcina jest 16:9 —
+jedna czwarta wysokości panelu szła na czarne pasy, i to wtedy, gdy panelu
+i tak brakowało miejsca.
+
+- [x] Proporcję ustawia kod z WYMIARÓW STRUMIENIA (`--live-ar`), które i tak
+      odczytujemy w każdej pętli podglądu. 4:3 zostaje jako wartość przed
+      pierwszą klatką i dla Kinecta, który taki właśnie jest
+
+Nowy zestaw `panel-kamery-miesci`: cztery okna (390×640, 390×844, 1440×700,
+1440×900) × trzy stany (zwinięte, rozwinięte, powiększone) = **12 przypadków**.
+Nie sprawdza żadnej konkretnej liczby pikseli, tylko własność, która ma być
+prawdziwa zawsze: panel mieści się w oknie, nagłówek jest widoczny, a do
+przycisku migawki da się dojechać — albo jest w panelu, albo treść się przewija.
+Na starym układzie pierwszy przypadek pada: „mieści się: false, nagłówek ucięty".
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
