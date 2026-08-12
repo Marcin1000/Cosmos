@@ -671,7 +671,7 @@ async function odswiezArchiwum() {
             zPliku: c.zPliku ? t('arch.visionFromFile', { ile: c.zPliku }) : '',
           })).join('')
         + t('arch.visionPool', { n: w.rownolegle, dolPuli: w.dolPuli, sufitPuli: w.sufitPuli,
-          szczytYolo: w.szczytYolo, sprawnosc: w.sprawnosc, naZadanie: w.naZadanie }),
+          szczytYolo: w.szczytYolo, srednioNaraz: w.srednioNaraz, naZadanie: w.naZadanie }),
       koniec: (suma) => t('arch.visionDone', { ile: suma }),
     }));
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
@@ -3926,11 +3926,22 @@ async function liveDetect() {
   const octx = overlay.getContext('2d');
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
-  if (!(senses.online && senses.caps.yolo)) return; // sam podgląd bez detekcji
-
   const cap = document.createElement('canvas');
   cap.width = w; cap.height = h;
   cap.getContext('2d').drawImage(media, 0, 0);
+
+  /* NASTAWY LICZĄ SIĘ BEZ ZMYSŁÓW. Wcześniej ten blok stał POD wyjściem
+     „brak YOLO", więc przy wyłączonym komputerze domowym plan nigdy się nie
+     wypełniał: pudełko było widoczne (bo lokalizacja ustawiona) i pokazywało
+     w kółko myślnik. Marcin zobaczył trzy listy rozwijane i kreskę pod nimi,
+     i słusznie zapytał, czy tak miało być.
+     Do policzenia ekspozycji wystarczy położenie Słońca i jasność KLATKI —
+     jedno liczy serwer, drugie przeglądarka. Karta graficzna w domu nie ma
+     z tym nic wspólnego. */
+  odswiezPlan(cap);
+
+  if (!(senses.online && senses.caps.yolo)) return; // sam podgląd bez detekcji
+
   let data;
   try {
     const res = await fetch('/api/detect', {
@@ -4003,8 +4014,13 @@ async function liveDetect() {
       });
       const poz = await readJsonSafe(res);
       if (res.ok && poz.present && poz.summary !== livePrevPose) {
+        /* Podmieniamy ogon, nie doklejamy. Doklejanie dawało w chwili ZMIANY
+           postawy linijkę z dwiema: starą (wpisaną wyżej jako `ogon`) i nową.
+           Widać to było przez ułamek sekundy i wyglądało jak usterka
+           rozpoznawania, a było usterką składania napisu. */
+        const bezOgona = $('live-status').textContent.replace(/ · 🧍 .*$/, '');
         livePrevPose = poz.summary;
-        $('live-status').textContent += ` · 🧍 ${poz.summary}`;
+        $('live-status').textContent = `${bezOgona} · 🧍 ${poz.summary}`;
         // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.
         // Do kontekstu rozmowy: model ma wiedzieć, czy stoisz, czy siedzisz.
         fetch('/api/events', {
@@ -4016,8 +4032,6 @@ async function liveDetect() {
   } else if (!objs.some((o) => o.label === 'person')) {
     livePrevPose = '';
   }
-
-  odswiezPlan(cap);
 }
 
 /* ==================== PLAN ZDJĘCIOWY ==================== */
@@ -4070,7 +4084,11 @@ async function odswiezPlan(cap) {
       body: JSON.stringify(dane),
     });
     const d = await readJsonSafe(r);
+    /* `ma-wynik` decyduje, czy zwinięty pasek pokazuje tytuł, czy same
+       nastawy — patrz komentarz w style.css przy `.plan-box.ma-wynik`.
+       Bez wyniku tytuł zostaje, bo sam myślnik nic nie mówi. */
     if (!r.ok) {
+      box.classList.remove('ma-wynik');   // znów sam myślnik → tytuł wraca
       $('plan-shot').textContent = '—';
       $('plan-light').textContent = d.error || t('plan.needLocation');
       $('plan-why').textContent = '';
@@ -4090,6 +4108,11 @@ async function odswiezPlan(cap) {
 function pokazPlan(d, pre = 'plan') {
   const u = d.ustawienia;
   $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
+  /* „Jest wynik" należy do PLANU, nie do jednego wywołania. Stąd tutaj,
+     a nie w `odswiezPlan`: pudełko przy kamerze chowa wtedy tytuł ze
+     zwiniętego paska, bo liczby mówią same za siebie i nie ma po co ich
+     ściskać (patrz `.plan-box.ma-wynik` w style.css). */
+  if (pre === 'plan') { const b = $('plan-box'); if (b) b.classList.add('ma-wynik'); }
 
   const czesci = [];
   if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
@@ -4256,6 +4279,26 @@ for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
   const el = $(id);
   // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
   if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
+}
+
+/* Pudełko nastaw pamięta, czy je rozwinąłeś. Domyślnie zwinięte, bo panel
+   kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
+   ponad jedna trzecia tego panelu. Kto raz je rozwinie, ten najwyraźniej
+   chce je mieć otwarte — i nie musi tego klikać przy każdym uruchomieniu. */
+const PLAN_ROZWINIETE = 'cosmos.planRozwiniete';
+{
+  const box = $('plan-box');
+  if (box) {
+    box.open = localStorage.getItem(PLAN_ROZWINIETE) === '1';
+    box.addEventListener('toggle', () => {
+      localStorage.setItem(PLAN_ROZWINIETE, box.open ? '1' : '0');
+      /* Po rozwinięciu licz od razu. Bez tego świeżo otwarte pudełko
+         pokazywałoby poprzedni wynik nawet przez osiem sekund, a przy
+         wyłączonych zmysłach — myślnik do końca świata, bo pętla podglądu
+         odświeża plan tylko z klatki. */
+      if (box.open) { planOstatnio = 0; odswiezPlan(null); }
+    });
+  }
 }
 
 /* ============================== PLENER ==============================
@@ -7503,7 +7546,17 @@ async function obsluzZdarzenie(z) {
     try { await enterVoiceMode(); } catch { /* brak zgody na mikrofon */ }
     return;
   }
-  // Reszta tylko mignięciem — to kontekst, nie polecenie.
+  /* Reszta tylko mignięciem — to kontekst, nie polecenie.
+   *
+   *  ALE NIE TO, CO I TAK WIDAĆ. Dymek istnieje po to, żeby przy ZAMKNIĘTYM
+   *  podglądzie dowiedzieć się, że Cosmos kogoś zobaczył. Przy otwartym
+   *  podglądzie ta sama treść stoi już pod obrazem, i to na stałe zamiast
+   *  na sześć sekund — więc dymek tylko powtarzał ją drugi raz nad panelem.
+   *  Marcin zapytał wprost, czy tak miało być; nie miało.
+   *
+   *  Czujniki, urządzenia i rutyny lecą dalej: ich w podglądzie nie widać. */
+  const podgladOtwarty = $('live-panel') && $('live-panel').style.display !== 'none';
+  if (podgladOtwarty && (z.type === 'kamera' || z.type === 'sylwetka')) return;
   if (['kamera', 'czujnik', 'sylwetka', 'urządzenie', 'rutyna'].includes(z.type)) pokazZdarzenie(z);
 }
 

@@ -871,7 +871,24 @@
 
     <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
          w którym stoisz, więc działa w terenie z telefonu. -->
-    <div class="plan-box" id="plan-box" hidden>
+    <!-- ZWINIĘTE DOMYŚLNIE. Rozwinięte pudełko zajmowało na telefonie ponad
+         jedną trzecią panelu, a panel i tak bierze 743 z 844 px ekranu.
+         W jednej linijce zostaje to, po co się tu patrzy — czas, przysłona
+         i ISO; listy i uzasadnienie są o jedno dotknięcie dalej.
+
+         `<details>`, a nie własny przełącznik: klawiatura, czytnik ekranu
+         i „znajdź na stronie" działają wtedy same z siebie.
+
+         Tytuł jest inny niż w Plenerze („Plan zdjęciowy”), bo i rzecz jest
+         inna: tam liczy się dla miejsca i godziny, tu dla JASNOŚCI TEGO
+         KADRU, na który patrzysz. -->
+    <details class="plan-box" id="plan-box" hidden>
+      <summary class="plan-box-head" data-i18n-title="live.planTitle" data-i18n-aria="live.planTitle"
+               title="Nastawy kadru" aria-label="Nastawy kadru">
+        <span class="plan-box-title mono" data-i18n="live.planTitle">Nastawy kadru</span>
+        <span class="plan-shot mono" id="plan-shot">—</span>
+        <svg class="plan-box-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </summary>
       <div class="plan-row">
         <select id="plan-gear" class="mono" aria-label="Sprzęt">
           <option value="canon-r6ii">Canon R6 II</option>
@@ -891,13 +908,12 @@
           <option value="deszcz">🌧 Deszcz</option>
         </select>
       </div>
-      <div class="plan-shot mono" id="plan-shot">—</div>
       <div class="plan-light mono" id="plan-light"></div>
       <div class="plan-why" id="plan-why"></div>
       <!-- Sterowanie aparatem po Wi-Fi jest w Plenerze, nie tutaj. Tu patrzy
            się na kadr; zmiana nastaw w aparacie to osobna, świadoma czynność
            i nie powinna dzielić miejsca z podglądem. -->
-    </div>
+    </details>
     <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
   </div>
 

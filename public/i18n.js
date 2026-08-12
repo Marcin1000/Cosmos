@@ -90,6 +90,7 @@ const I18N = {
     // — źródło obrazu w panelu na żywo —
     'live.source': 'Źródło obrazu',
     'live.srcCamera': 'Kamera przeglądarki',
+    'live.planTitle': 'Nastawy kadru',
     'live.srcKinectColor': 'Kinect — obraz',
     'live.srcKinectDepth': 'Kinect — głębia',
     'live.kinectErr': 'Brak obrazu z Kinecta — czy działa senses/service.py na komputerze z czujnikiem?',
@@ -205,7 +206,7 @@ const I18N = {
     'arch.visionProgress': 'Treść rozpoznana: {ile} · zostało {zostalo}',
     'arch.visionTimes': '{rodzaj} ×{ile}{zPliku}: adres {adres} ms · pobranie {pobranie} ms ({kb} kB) · YOLO {yolo} ms',
     'arch.visionFromFile': ' (z pliku {ile})',
-    'arch.visionPool': ' · pula {n}→{dolPuli}, ściana {sufitPuli} (szczyt YOLO {szczytYolo}), sprawność {sprawnosc}%, realnie {naZadanie} ms/żądanie',
+    'arch.visionPool': ' · pula {n}→{dolPuli}, ściana {sufitPuli} (szczyt YOLO {szczytYolo}), średnio {srednioNaraz} naraz, realnie {naZadanie} ms/żądanie',
     'arch.visionWaited': 'przestój na karze {ile} s',
     'arch.visionPaired': '{ile} z pary RAW+JPG',
     'arch.visionThrottled': 'Graph prosił o zwolnienie {ile}×',
@@ -799,6 +800,7 @@ const I18N = {
 
     'live.source': 'Video source',
     'live.srcCamera': 'Browser camera',
+    'live.planTitle': 'Frame settings',
     'live.srcKinectColor': 'Kinect — colour',
     'live.srcKinectDepth': 'Kinect — depth',
     'live.kinectErr': 'No image from the Kinect — is senses/service.py running on the machine with the sensor?',
@@ -911,7 +913,7 @@ const I18N = {
     'arch.visionProgress': 'Content recognised: {ile} · {zostalo} left',
     'arch.visionTimes': '{rodzaj} ×{ile}{zPliku}: url {adres} ms · download {pobranie} ms ({kb} kB) · YOLO {yolo} ms',
     'arch.visionFromFile': ' ({ile} from file)',
-    'arch.visionPool': ' · pool {n}→{dolPuli}, wall {sufitPuli} (YOLO peak {szczytYolo}), efficiency {sprawnosc}%, real {naZadanie} ms/request',
+    'arch.visionPool': ' · pool {n}→{dolPuli}, wall {sufitPuli} (YOLO peak {szczytYolo}), avg {srednioNaraz} working, real {naZadanie} ms/request',
     'arch.visionWaited': 'stalled on penalty {ile} s',
     'arch.visionPaired': '{ile} from RAW+JPG pairs',
     'arch.visionThrottled': 'Graph asked to slow down {ile}×',

@@ -2773,6 +2773,130 @@ odniesienia, raz w okno właściwe. Teraz zestaw czeka, aż plik przestanie się
 zmieniać — to jest warunek „nie ma zaległych zapisów", a nie zgadywanka
 o długości odstępu.
 
+## ✅ Partia 62 — rozpoznawanie treści przerobione do końca (GOTOWE)
+
+Marcin: „Dobra teraz jest stabilnie. Doszło tak do zera. Więc już wszystko
+zostało przerobione." Ponowne kliknięcie oddaje „rozpoznana na 0 zdjęciach"
+— kolejka pusta. **Cały materiał z OneDrive ma rozpoznaną treść.**
+
+Regulacja zbiegła do `ściana 3` i tam została, bez ani jednego przestoju
+na karze. Tyle akurat przyjmuje konto Marcina i to jest odpowiedź, której
+przez cały ten czas szukaliśmy — nie dało się jej odgadnąć, dało się ją
+tylko zmierzyć.
+
+Droga, w skrócie i w liczbach:
+
+| krok | tempo | co było wąskim gardłem |
+|---|---|---|
+| stan wyjściowy | 0,83/s | wszystko po kolei, jedno żądanie naraz |
+| pula 3 → 6 | 1,28/s | czekanie na Microsoft, zrównoleglone |
+| zapis indeksu przestał zamrażać serwer | 2,98/s | `JSON.stringify` 28 MB co 3 s |
+| podgląd wyjęty z pliku RAW | — | Graph renderował podgląd z CR3 po 11,5 s |
+| pula pamięta ścianę | stabilnie do zera | powrót na pełny gaz prosto w karę |
+
+- [x] Ostatnia poprawka pomiaru: zamiast „sprawność N%" panel pokazuje
+      **„średnio N naraz"** — ilu robotników naprawdę pracowało. Procent
+      liczył się względem pułapu z `.env`, więc przy ścianie 3 i pułapie 16
+      maksimum możliwe wynosiło 19%: pokazane „12%" wyglądało na katastrofę,
+      a było dwiema trzecimi tego, co się dało. Liczba robotników porównuje
+      się wprost z sąsiednim „pula 16→3, ściana 3", procent wymagał
+      mianownika, którego nikt nie widział
+
+### Co z tego wynika na przyszłość
+
+Kolejny przebieg (po dowgraniu nowych zdjęć) zacznie od ściany 3 i będzie
+próbował wyżej co dziesięć minut. Gdyby Microsoft kiedyś poluzował, sam się
+o tym dowie; gdyby zacisnął — zejdzie niżej bez pytania.
+
+## ✅ Partia 63 — audyt UI/UX panelu kamery (GOTOWE)
+
+Marcin, patrząc na panel kamery w telefonie: „Zastanawia mnie ten dolny panel
+z wyborem sprzętu, klatkarza itd. Nie wiem, czy tak to miało być. (…) przy
+włączonych zmysłach i kinekcie nad oknem kamery pojawia się opis słowny co
+widzi kinect. Też nie wiem, czy to jest potrzebne i czy musi być w tym miejscu."
+
+Obie wątpliwości trafiły w usterki, nie w decyzje projektowe.
+
+### 1. Pudełko nastaw było MARTWE przy wyłączonych zmysłach
+
+`odswiezPlan()` stało w `liveDetect()` **pod** wyjściem „brak YOLO". Przy
+wyłączonym komputerze domowym pudełko było widoczne (bo lokalizacja ustawiona)
+i pokazywało w kółko myślnik — trzy listy rozwijane i kreska pod nimi.
+Tymczasem do policzenia ekspozycji karta graficzna nie jest potrzebna w ogóle:
+wystarczy położenie Słońca (liczy serwer) i jasność klatki (liczy przeglądarka).
+
+- [x] Nastawy liczą się niezależnie od zmysłów
+
+### 2. Trzy listy rozwijane bez tytułu i z uciętymi napisami
+
+Nie było nic, co by mówiło, czego te listy dotyczą — stąd pytanie „czy tak to
+miało być". Do tego `display:flex` wciskał trzy pola w szerokość telefonu
+i napisy się ucinały: Marcin widział „🌤 Z pro" i nie miał jak się domyślić,
+że to zachmurzenie.
+
+- [x] Tytuł „NASTAWY NA TEN KADR" — inny niż w Plenerze („Plan zdjęciowy"),
+      bo i rzecz jest inna: tam liczy się dla miejsca i godziny, tu dla
+      jasności kadru, na który patrzysz
+- [x] Siatka `auto-fit minmax(120px, 1fr)` zamiast rzędu — pola zawijają się
+      do dwóch wierszy, zamiast skracać napisy. Tak samo robi to Plener
+
+### 3. Opis nad oknem kamery był DRUGĄ KOPIĄ tego samego
+
+Dymek zdarzeń percepcji istnieje po to, żeby przy ZAMKNIĘTYM podglądzie
+dowiedzieć się, że Cosmos kogoś zobaczył. Przy otwartym ta sama treść stoi już
+pod obrazem — i to na stałe, a nie na sześć sekund. Na zrzucie Marcina widać
+jedno i drugie naraz: „Sylwetka: widoczna sylwetka, osoba prawdopodobnie stoi"
+w dymku i „person (po lewej) · 🧍 widoczna sylwetka…" pod obrazem.
+
+- [x] Dymek milczy dla zdarzeń `kamera` i `sylwetka`, gdy podgląd jest otwarty.
+      Czujniki, urządzenia i rutyny lecą dalej — ich w podglądzie nie widać
+- [x] Przy zmianie postawy linijka pod obrazem podmienia ogon, zamiast go
+      doklejać. Doklejanie dawało przez ułamek sekundy dwie postawy naraz
+
+`nowe-panele-ux` 6b i 6c sprawdzają tytuł, brak ucięć i milczenie dymka przy
+otwartym podglądzie — oraz to, że przy zamkniętym dymek nadal działa.
+
+### 4. Pudełko nastaw zwinięte do jednej linijki
+
+Marcin, po zobaczeniu pomiaru: „faktycznie zabiera sporo miejsca". Panel
+kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
+ponad jedna trzecia panelu.
+
+- [x] `<details>`, nie własny przełącznik — klawiatura, czytnik ekranu
+      i „znajdź na stronie" działają wtedy same z siebie
+- [x] W zwiniętym pasku zostaje to, po co się tu patrzy: `1/50 · f/5.6 · ISO 100`.
+      Listy i uzasadnienie o jedno dotknięcie dalej
+- [x] Stan zapamiętany (`cosmos.planRozwiniete`), domyślnie zwinięte
+- [x] Rozwinięcie liczy plan OD RAZU — bez tego świeżo otwarte pudełko
+      pokazywałoby poprzedni wynik nawet przez osiem sekund
+- [x] Tytuł znika ze zwiniętego paska, GDY są już liczby. Panel ma stałe
+      ~290 px, a nastawy zajmują z tego dwie trzecie — tytuł wychodził wtedy
+      jako „NASTAWY…", czyli gorzej niż wcale. Liczby ekspozycji same mówią,
+      czym są; pełna nazwa zostaje w `title` i dla czytnika ekranu, a wraca
+      na widok, gdy wyniku jeszcze nie ma i po rozwinięciu
+
+Zmierzone: **266 px → 42 px**, panel kamery **743 → 512 px** na telefonie.
+
+### Test, który mierzył niewyświetlany element
+
+Przy okazji wyszło, że zamknięte `<details>` w Chromium chowa treść przez
+`content-visibility`, a nie `display:none`: `offsetParent` zostaje ustawiony,
+a `getBoundingClientRect()` oddaje 131×35 px dla listy, której nie widać.
+Pomocnik `wystaje()` pomijał elementy po `offsetParent`, więc po zwinięciu
+mierzyłby coś nierysowanego i zawsze świeciłby na zielono. Teraz używa
+`checkVisibility()`.
+
+### Audyt sam podawał fałszywy alarm
+
+Lista „klucze bez użycia" wymieniała **25** pozycji, z czego pięć jest w pełni
+używanych: regexp nie znał wariantu `data-i18n-html` ani atrybutu
+`data-prompt-key`. Skasowanie ich zabrałoby objaśnienia z bazy wiedzy, z nauki
+procedur i treść czterech przycisków startowych. Po poprawce lista ma 19 pozycji
+i wszystkie są prawdziwe. Fałszywy alarm w audycie jest gorszy niż brak
+kontroli, bo wygląda na wynik pomiaru.
+
+- [x] Wykrywanie martwych tłumaczeń zna wszystkie warianty atrybutu
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

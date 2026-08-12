@@ -574,9 +574,69 @@ kbd {
   border-radius: 10px;
   background: var(--bg-elev);
 }
-.plan-row { display: flex; gap: 6px; margin-bottom: 8px; }
+/* Zwinięty pasek: tytuł z lewej, nastawy z prawej, strzałka na końcu.
+   Tytuł ustępuje miejsca, gdy się nie mieści (`min-width: 0` + wielokropek);
+   nastawy nigdy — to jest jedyna rzecz, po którą się tu zagląda. */
+.plan-box-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;                 /* domyślny trójkąt precz */
+  /* 40 px wysokości: to jest cel dotykowy w terenie, często w rękawiczce. */
+  min-height: 40px;
+  margin: -10px;                    /* klikalne aż do krawędzi pudełka */
+  padding: 0 10px;
+}
+.plan-box-head::-webkit-details-marker { display: none; }
+.plan-box-title {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Zwinięty pasek z gotowym wynikiem NIE POWTARZA tytułu. Panel ma stałe
+   ~290 px, a „1/50 · f/5.6 · ISO 100" zajmuje z tego dwie trzecie — tytuł
+   wychodził wtedy jako „NASTAWY…", czyli gorzej niż wcale. Liczby ekspozycji
+   same mówią, czym są; tytuł jest potrzebny dopóty, dopóki ich nie ma,
+   i po rozwinięciu, gdzie tłumaczy trzy listy pod spodem. Pełna nazwa
+   zostaje w `title` i dla czytnika ekranu. */
+.plan-box.ma-wynik:not([open]) .plan-box-title { display: none; }
+.plan-box.ma-wynik:not([open]) .plan-shot { flex: 1 1 auto; }
+/* Po rozwinięciu tytuł dostaje własny wiersz — tu o miejsce nie ma już wojny,
+   a wciśnięty obok nastaw ucinał się tak samo jak w pasku zwiniętym. */
+.plan-box[open] .plan-box-head { flex-wrap: wrap; padding-top: 8px; }
+.plan-box[open] .plan-box-title { flex: 1 0 100%; }
+.plan-box-head .plan-shot { flex: 0 0 auto; font-size: 15px; }
+.plan-box-chev {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  transition: transform 0.15s ease;
+}
+.plan-box[open] .plan-box-chev { transform: rotate(180deg); }
+/* Odstęp pojawia się DOPIERO po rozwinięciu — zwinięty pasek ma być paskiem,
+   a nie paskiem z pustym marginesem pod spodem. */
+.plan-box[open] .plan-box-head { margin-bottom: 2px; }
+.plan-box[open] .plan-row { margin-top: 10px; }
+/* Siatka, nie rząd. Trzy listy wciśnięte na siłę w szerokość telefonu ucinały
+   napisy w połowie — Marcin widział „🌤 Z pro” i nie miał jak się domyślić,
+   że to zachmurzenie. Przy 120 px na pole zawijają się do dwóch wierszy,
+   zamiast się skracać. Tak samo robi to Plener. */
+.plan-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
 .plan-row select {
-  flex: 1;
+  width: 100%;
   min-width: 0;            /* bez tego pole rozpycha panel na wąskim telefonie */
   font-size: 12px;
   /* 34 px wysokości, nie 27. Ten panel jest używany w terenie, palcem,

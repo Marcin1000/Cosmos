@@ -603,15 +603,38 @@ w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
 | 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
 | 🗂 **Archiwum materiału** | OneDrive: indeksowanie, dane z plików (data, aparat, obiektyw, ISO, GPS) czytane z EXIF-u przez żądanie zakresu, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
 
-**Archiwum sprawdzone na 59 tysiącach plików** — i to zmieniło w nim trzy rzeczy,
-których nie widać na małym zbiorze. Indeks nie trzyma już adresów miniatur
-(1,2 kB na plik, wygasają po godzinie, nikt ich nie czyta — 70 z 98 MB pliku);
-zapis idzie w tle, bo `writeFileSync` na stumegabajtowym indeksie blokował serwer
-na 5 s; pliki dociągane są po cztery naraz, a nie jeden po drugim. Gdy Microsoft
-odpowie `429` („zwolnij"), Cosmos czeka tyle, ile każe nagłówek `Retry-After`,
-i próbuje dalej — dławienie to nie awaria. Odpowiedzi, które znaczą „tego pliku
-nigdy nie przeczytasz" (`404`, `410`, `416` dla pustego pliku), oznaczają wpis
-jako przerobiony, żeby cztery puste pliki nie zatrzymały kolejki na 56 tysiącach.
+**Archiwum przerobione w całości na 59 tysiącach plików** — indeksowanie, dane
+z plików i rozpoznana treść na każdym zdjęciu. Prawie wszystko, co w nim jest,
+wzięło się z pomiaru na tym zbiorze, bo małe archiwum nie pokazuje żadnej
+z tych rzeczy:
+
+- **Indeks nie trzyma adresów miniatur** — 1,2 kB na plik, wygasają po godzinie,
+  nikt ich nie czyta. To było 70 z 98 MB pliku.
+- **Zapis idzie w tle, a jego odstęp dobiera się do kosztu.** `JSON.stringify`
+  na 28 MB zamraża pętlę zdarzeń na pół sekundy; przy stałych trzech sekundach
+  serwer stał przez 22% czasu pracy. Teraz najwyżej 5%, a indeks dopisuje się
+  przed zamknięciem, więc restart niczego nie gubi.
+- **Podgląd do rozpoznawania wyjmujemy z WNĘTRZA pliku RAW.** Microsoft musi
+  wyrenderować podgląd z CR3 u siebie i zmierzone trwa to 8-14 s; ten sam
+  podgląd, który widać na ekraniku aparatu, siedzi w pliku i schodzi
+  żądaniem zakresowym. Obsługiwane CR3, CR2, NEF, DNG i TIF; gdy pliku nie da
+  się odczytać, wracamy po miniaturę do Graph, więc gorzej być nie może
+  (`lib/raw-podglad.js`).
+- **RAW i JPG tego samego kadru to jedno rozpoznanie.** Para poznaje się po
+  nazwie pliku i sekundzie zdjęcia, nie po ścieżce — działa też, gdy JPG-i
+  leżą w osobnym folderze albo w podfolderze obok RAW-ów.
+- **Równoległość dobiera się sama.** Gdy Graph odpowie `429`, pula schodzi
+  o połowę i **zapamiętuje ścianę**: poziom, przy którym Microsoft powiedział
+  dość. Wraca do niej powoli, nie do pułapu z `.env`. Bez tej pamięci tempo
+  szło falami: minuta pełnego gazu, potem cztery minuty postoju na karze.
+- **Odpowiedzi znaczące „nigdy"** (`404`, `410`, `416` dla pustego pliku)
+  oznaczają wpis jako przerobiony — inaczej cztery puste pliki zatrzymywały
+  kolejkę na 56 tysiącach.
+
+Panel pokazuje przy pracy wszystkie liczby, z których te decyzje wynikły:
+czasy etapów osobno dla JPG i dla RAW, ilu robotników realnie pracowało,
+gdzie stoi ściana i ile paczka przestała na karze. `node scripts/pary-w-archiwum.js`
+odpowiada bez uruchamiania czegokolwiek, ile jeszcze zostało i na jak długo.
 
 Dwie z tych rzeczy — misja `.kmz` i karty ujęć — do tej pory istniały wyłącznie
 jako trasa HTTP i jako narzędzie modelu. Działały, ale nie było ich jak uruchomić

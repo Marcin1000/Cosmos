@@ -43,7 +43,12 @@ const WASKI = { width: 360, height: 740 };
   /** Czy element wystaje poza swojego rodzica. */
   const wystaje = async (sel, gdzie) => pg.evaluate((s) => {
     const el = document.querySelector(s);
-    if (!el || el.hidden || !el.offsetParent) return null;
+    /* `checkVisibility()`, nie `offsetParent`. Zamknięte `<details>` chowa
+       treść przez `content-visibility`: rozmiar zostaje niezerowy, a element
+       nie jest rysowany. Sprawdzanie `offsetParent` kazałoby mierzyć coś,
+       czego nie widać — i pomiar wychodziłby zawsze na zielono. */
+    const widac = typeof el?.checkVisibility === 'function' ? el.checkVisibility() : Boolean(el?.offsetParent);
+    if (!el || el.hidden || !widac) return null;
     const e = el.getBoundingClientRect();
     return { poza: e.right > window.innerWidth + 1 || e.left < -1, szer: Math.round(e.width) };
   }, sel).then((r) => {
@@ -190,6 +195,23 @@ const WASKI = { width: 360, height: 740 };
   /* 6. Panel planu przy kamerze. Trzy listy rozwijane obok siebie na 360 px
      to test na `min-width: 0` — bez niego pola rozpychają panel. */
   console.log('6. plan zdjęciowy przy kamerze');
+  /* Rozwijamy PRZED wstawieniem wyniku i czekamy, aż odświeżenie wywołane
+     rozwinięciem wróci. Inaczej jego odpowiedź („brak lokalizacji") nadpisuje
+     nastawy podstawione niżej i punkt mierzy myślnik zamiast liczb. */
+  const domyslnieZwiniete = await pg.evaluate(() => {
+    document.getElementById('live-panel').style.display = '';
+    const box = document.getElementById('plan-box');
+    box.hidden = false;
+    // Stan PRZED jakimkolwiek naszym kliknięciem — świeża karta, pusta pamięć.
+    const zwiniete = !box.open;
+    box.open = true;
+    return zwiniete;
+  });
+  console.log(`   domyślnie zwinięte: ${domyslnieZwiniete}`);
+  if (!domyslnieZwiniete) {
+    fail.push('pudełko nastaw jest domyślnie rozwinięte — zabiera jedną trzecią panelu kamery');
+  }
+  await pg.waitForTimeout(600);
   await pg.evaluate(() => {
     document.getElementById('live-panel').style.display = '';
     document.getElementById('plan-box').hidden = false;
@@ -216,6 +238,105 @@ const WASKI = { width: 360, height: 740 };
     fail.push('trwająca złota godzina nie jest oznaczona — pokazałby ujemne minuty');
   }
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-plan-360.png` });
+
+  /* 6b. Trzy rzeczy, o które Marcin zapytał wprost, patrząc na ten panel
+     w telefonie: „nie wiem, czy tak to miało być".
+
+     — Pudełko nastaw NIE MIAŁO TYTUŁU. Trzy listy rozwijane pojawiały się
+       pod obrazem z kamery i nic nie mówiło, czego dotyczą.
+     — Napisy w listach BYŁY UCINANE („🌤 Z pro" zamiast „Z prognozy”), bo
+       trzy pola wciśnięte w szerokość telefonu nie mają jak się zmieścić.
+     — Ta sama treść co pod obrazem migała DRUGI RAZ w dymku nad panelem. */
+  console.log('6b. czytelność pudełka nastaw');
+  const tytul = await pg.textContent('.plan-box-title').catch(() => null);
+  console.log(`   tytuł pudełka: ${JSON.stringify(tytul)}`);
+  if (!tytul || !tytul.trim()) {
+    fail.push('pudełko nastaw bez tytułu — trzy listy rozwijane bez wyjaśnienia, czego dotyczą');
+  }
+  const uciete = await pg.evaluate(() => [...document.querySelectorAll('#plan-box select')]
+    .filter((s) => s.scrollWidth > s.clientWidth + 1)
+    .map((s) => `${s.id}: „${s.options[s.selectedIndex].text}"`));
+  console.log(`   pola z uciętym napisem: ${uciete.length ? uciete.join(', ') : 'brak'}`);
+  if (uciete.length) fail.push(`ucięte napisy w listach nastaw: ${uciete.join(', ')}`);
+  // Tytuł też się nie może uciąć — „NASTAWY…" jest gorsze niż brak tytułu.
+  const tytulUciety = await pg.evaluate(() => {
+    const el = document.querySelector('#plan-box .plan-box-title');
+    return el && el.offsetParent ? el.scrollWidth > el.clientWidth + 1 : false;
+  });
+  console.log(`   tytuł ucięty: ${tytulUciety}`);
+  if (tytulUciety) fail.push('tytuł pudełka nastaw ucina się — pokazuje „NASTAWY…" zamiast nazwy');
+
+  /* 6b2. ZWIJANIE. Panel kamery zajmuje na telefonie 743 z 844 px ekranu,
+     a rozwinięte pudełko to ponad jedna trzecia panelu. Marcin: „faktycznie
+     zabiera sporo miejsca". Zwinięte ma zostawić w pasku to, po co się tu
+     patrzy — czas, przysłonę i ISO — i schować listy oraz uzasadnienie. */
+  console.log('6b2. zwijanie pudełka nastaw');
+  const zwijanie = await pg.evaluate(() => {
+    const box = document.getElementById('plan-box');
+    const wys = () => Math.round(box.getBoundingClientRect().height);
+    box.open = true;
+    const rozwiniete = wys();
+    box.open = false;
+    const zwiniete = wys();
+    const shot = document.getElementById('plan-shot');
+    const listy = document.getElementById('plan-gear');
+    return {
+      rozwiniete,
+      zwiniete,
+      nastawyWidoczne: Boolean(shot && shot.offsetParent) && shot.textContent.trim(),
+      /* Zamknięte `<details>` chowa treść przez `content-visibility`:
+         zmierzone w Chromium `offsetParent` zostaje ustawiony, a rect ma
+         131×35 px — mimo że elementu nie widać. Jedyne, co mówi prawdę,
+         to `checkVisibility()`. */
+      listyWidoczne: Boolean(listy && listy.checkVisibility()),
+    };
+  });
+  console.log(`   wysokość: rozwinięte ${zwijanie.rozwiniete} px → zwinięte ${zwijanie.zwiniete} px`);
+  console.log(`   w zwiniętym pasku: nastawy „${zwijanie.nastawyWidoczne}", `
+    + `listy widoczne: ${zwijanie.listyWidoczne}`);
+  if (!(zwijanie.zwiniete < zwijanie.rozwiniete - 60)) {
+    fail.push(`zwinięcie oszczędza ${zwijanie.rozwiniete - zwijanie.zwiniete} px — pudełko się nie zwija`);
+  }
+  if (zwijanie.listyWidoczne) fail.push('listy nastaw widoczne mimo zwiniętego pudełka');
+  if (!/\d/.test(zwijanie.nastawyWidoczne || '')) {
+    fail.push('zwinięty pasek nie pokazuje nastaw — chowa jedyną rzecz, po którą się tu zagląda');
+  }
+  // Stan ma przetrwać zamknięcie panelu, żeby nie klikać tego za każdym razem.
+  const pamieta = await pg.evaluate(() => {
+    const box = document.getElementById('plan-box');
+    box.open = true;
+    box.dispatchEvent(new Event('toggle'));
+    return localStorage.getItem('cosmos.planRozwiniete');
+  });
+  console.log(`   zapamiętany stan po rozwinięciu: ${JSON.stringify(pamieta)}`);
+  if (pamieta !== '1') fail.push('rozwinięcie pudełka nie jest zapamiętywane');
+  await pg.evaluate(() => { document.getElementById('plan-box').open = true; });
+
+  /* Dymek zdarzeń percepcji ma milczeć, gdy podgląd jest otwarty — pod
+     obrazem stoi to samo, na stałe zamiast na sześć sekund. */
+  console.log('6c. dymek percepcji przy otwartym podglądzie');
+  const dymek = await pg.evaluate(() => {
+    const pasek = document.getElementById('event-flash');
+    if (!pasek) return 'brak paska zdarzeń';
+    pasek.hidden = true;
+    obsluzZdarzenie({ type: 'sylwetka', summary: 'osoba prawdopodobnie stoi' });
+    const przyOtwartym = !pasek.hidden;
+    // …i ma się pokazać, gdy podglądu nie ma: wtedy nie widać tego nigdzie indziej.
+    document.getElementById('live-panel').style.display = 'none';
+    pasek.hidden = true;
+    obsluzZdarzenie({ type: 'sylwetka', summary: 'osoba prawdopodobnie stoi' });
+    const przyZamknietym = !pasek.hidden;
+    document.getElementById('live-panel').style.display = '';
+    return { przyOtwartym, przyZamknietym };
+  });
+  console.log(`   dymek: przy otwartym podglądzie ${JSON.stringify(dymek.przyOtwartym)}, `
+    + `przy zamkniętym ${JSON.stringify(dymek.przyZamknietym)}`);
+  if (dymek.przyOtwartym) {
+    fail.push('dymek percepcji miga nad panelem, choć to samo widać pod obrazem');
+  }
+  if (!dymek.przyZamknietym) {
+    fail.push('dymek percepcji milczy także przy zamkniętym podglądzie — wtedy nie widać tego nigdzie');
+  }
 
   /* 7. Dotyk. Cele mniejsze niż ~32 px trudno trafić palcem; wytyczne mówią
      o 44 px, ale przyciski pomocnicze w gęstym panelu bywają mniejsze
