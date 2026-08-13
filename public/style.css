@@ -1544,6 +1544,14 @@ kbd {
      po paskach przeglądarki — obraz wypychał wtedy nastawy i przycisk poza
      panel. Skoro proporcja obrazu jest święta (inaczej pasy albo obcięty
      kadr), to ustąpić musi szerokość: pionowy kadr daje węższy panel. */
+  /* DOLNA GRANICA 150 px, NIE 200. To ona zrobiła Marcinowi czarne pasy.
+     Kadr 9:16 dzieli dostępną wysokość przez 0,5625, więc na wąskim telefonie
+     wyliczona szerokość schodziła do ~190 px — a podniesienie jej do 200
+     znaczyło, że scena chce być wyższa, niż zostało miejsca. Wtedy ścinał ją
+     sufit wysokości, proporcja pękała i obraz dostawał czarne pasy z obu
+     stron, zajmujące więcej niż on sam. Panel szeroki na 150 px z pionowym
+     kadrem jest w pełni użyteczny; panel na 200 px z paskiem obrazu pośrodku
+     nie jest. */
   width: clamp(200px, calc((100dvh - 40px - var(--live-chrome, 220px)) * var(--live-arn, 1.3333)), 340px);
   max-width: calc(100vw - 40px);
   max-height: calc(100dvh - 40px);
@@ -1590,27 +1598,47 @@ kbd {
   background: #000;
   aspect-ratio: var(--live-ar, 4/3);
   flex: 0 0 auto;
-  /* SUFIT NA WYSOKOŚĆ OBRAZU — hamulec na wypadek, gdy szerokość dobiła
-     do swojej dolnej granicy i nie ma już czym ustępować.
-     Kadr pionowy 9:16 dzieli szerokość przez 0,5625, więc panel przy
-     minimalnych 200 px daje obraz wysoki na 355 px. Wysokości nie da się
-     wtedy zmniejszyć zwężaniem panelu — jest już najwęższy jak można —
-     i cała nadwyżka spadała na dolną część, która zwijała się w wąski
-     pasek do przewijania. Marcin: „duże okno podglądu, a pod nim małe
-     okienko przesuwalne. Źle to wygląda."
-     Sufit dotyczy WYŁĄCZNIE tej sytuacji: dopóki jest miejsce, proporcja
-     rządzi i sufit nawet nie dotyka obrazu. */
-  max-height: calc(100dvh - 40px - var(--live-chrome, 220px));
-  min-height: 110px;
+  /* ANI SUFITU, ANI PODŁOGI NA WYSOKOŚĆ — i to jest wniosek z pomyłki.
+     Dołożyłem tu `max-height`, żeby obraz nie przerastał panelu, gdy
+     szerokość dobije do swojej dolnej granicy. Działało, ale ceną było
+     ZŁAMANIE PROPORCJI: scena zostawała szeroka, obraz wchodził w nią
+     w całości i zostawiał czarne pasy z obu stron. Marcin dostał tak
+     68% szerokości panelu na czarno.
+     Potem dobierałem dolną granicę szerokości — 200, 150, 110 — i każda
+     naprawiała jeden przypadek, psując inny. To był znak, że zły jest
+     model, nie liczby.
+     Właściwa zasada jest jedna i bez wyjątków: SCENA ZAWSZE MA KSZTAŁT
+     KADRU, a wielkość bierze się z szerokości panelu. Gdy miejsca zabraknie
+     nawet przy najwęższym panelu, ustępuje DOLNA CZĘŚĆ i to ona się
+     przewija — bo mały, poprawnie wykadrowany podgląd nad przewijanym
+     sterowaniem jest użyteczny, a rozjechany podgląd nie jest wart nic. */
 }
-/* `contain`, a nie `cover`. Dopóki proporcja sceny zgadza się z proporcją
-   obrazu — czyli prawie zawsze, bo `--live-ar` bierze się z prawdziwych
-   wymiarów strumienia — obie dają identyczny wynik. Różnią się dopiero tam,
-   gdzie zadziałał sufit powyżej: `cover` obcina wtedy górę i dół kadru
-   po cichu, `contain` pokazuje cały kadr z czarnymi pasami. Przy podglądzie
-   do ustawiania ujęcia obcięty kadr jest gorszy niż pasy. */
+/* `cover` w małym podglądzie — jako zabezpieczenie, nie jako główny plan.
+ *
+ *  Przez chwilę stało tu `contain`, z rozumowaniem: skoro proporcja sceny
+ *  bierze się z prawdziwych wymiarów strumienia, obie wartości dają to samo,
+ *  a różnią się dopiero po zadziałaniu sufitu wysokości — i wtedy lepiej
+ *  pokazać cały kadr niż go po cichu obciąć. Marcin przysłał zrzut
+ *  z telefonu, na którym z tego rozumowania został pasek obrazu pośrodku
+ *  i 68% szerokości panelu na czarno.
+ *
+ *  Właściwa przyczyna była w szerokości, nie tutaj (patrz dolna granica
+ *  w `clamp` niżej) i jest naprawiona. Ale wniosek o samym `object-fit`
+ *  zostaje, bo dotyczy tego, JAK KTÓRA WARTOŚĆ SIĘ PSUJE:
+ *
+ *    — gdy proporcja sceny zgadza się z kadrem, `cover` i `contain`
+ *      są nie do odróżnienia i wybór nic nie znaczy,
+ *    — gdy się rozjadą, `cover` traci brzegi kadru, a `contain` traci
+ *      większość panelu.
+ *
+ *  W podglądzie wielkości znaczka pocztowego pierwsze jest do przeżycia,
+ *  drugie nie. Sufit wysokości jest ostatnią deską ratunku na ciasnotę,
+ *  więc niech jego zadziałanie kosztuje brzegi kadru, a nie cały podgląd.
+ *
+ *  W trybie powiększonym zostaje `contain` (reguła niżej): tam panel jest
+ *  liczony pod obraz, a użytkownik prosi wprost o zobaczenie całego kadru. */
 .live-stage video, .live-stage img, .live-stage canvas {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
 .live-source { padding: 6px 10px 0; }
 .live-source select {
@@ -1704,10 +1732,6 @@ kbd {
   .live-panel.expanded .live-stage {
     grid-area: stage;
     align-self: start;
-    /* Sufit z układu jednokolumnowego liczył się z `--live-chrome`, czyli
-       razem z dolną częścią. Tu jej pod obrazem nie ma, więc sufit z niej
-       liczony ścinałby obraz bez powodu. */
-    max-height: none;
   }
   .live-panel.expanded .live-body {
     grid-area: body;
@@ -1723,13 +1747,32 @@ kbd {
   .live-panel.expanded #live-snapshot { margin-top: auto; }
 }
 
+/* STATUS ZWINIĘTY DO DWÓCH LINIJEK, z rozwijaniem na dotknięcie.
+ *
+ *  Zmierzone na wąskim telefonie: komunikat o wyłączonym rozpoznawaniu ma
+ *  osiem linijek i 144 px, przy panelu wysokim na 441 px. Jedna trzecia
+ *  panelu na zdanie, które mówi „uruchom `python service.py` na komputerze
+ *  z GPU" — czyli na instrukcję do przeczytania raz w życiu, wiszącą nad
+ *  podglądem na stałe i odbierającą miejsce obrazowi.
+ *
+ *  Ta sama zasada, co przy pudełku nastaw: to, co trzeba wiedzieć teraz,
+ *  jest widoczne; reszta czeka na dotknięcie. */
 .live-status {
   padding: 8px 14px;
   font-size: 11px;
   color: var(--text-dim);
   min-height: 18px;
   border-top: 1px solid var(--border);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
+.live-status.rozwiniety { -webkit-line-clamp: unset; }
+/* Kursor tylko wtedy, gdy naprawdę jest co rozwijać — inaczej krótki status
+   („nic nie wykryto") udawałby, że coś pod nim jest. */
+.live-status.mozna-rozwinac { cursor: pointer; }
+.live-status.mozna-rozwinac:hover { color: var(--text); }
 
 @media (max-width: 720px) {
   .live-panel {
@@ -1743,10 +1786,6 @@ kbd {
        już to uwzględnia — zostaje zapas na sam margines panelu. */
     max-height: calc(100dvh - 24px);
   }
-  /* Sufit obrazu liczony z TEGO SAMEGO marginesu co panel. Zostawiony na
-     40 px z desktopu byłby o 16 px za niski i obraz kurczyłby się mocniej,
-     niż trzeba — akurat tam, gdzie miejsca jest najmniej. */
-  .live-stage { max-height: calc(100dvh - 24px - var(--live-chrome, 220px)); }
   .live-panel.expanded {
     width: clamp(240px, calc((100dvh - 24px - var(--live-chrome, 240px)) * var(--live-arn, 1.3333)),
                  calc(100vw - 16px));

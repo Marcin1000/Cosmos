@@ -4039,12 +4039,60 @@ function dopasujPanelKamery(krok) {
    *
    *  Więc powtarzamy, dopóki liczba się zmienia. Zbieżne jest to dlatego,
    *  że każda kolejna runda startuje z układu bliższego docelowemu; limit
-   *  trzech rund jest bezpiecznikiem na wypadek układu, który oscyluje. */
-  if (runda < 3 && panel.style.getPropertyValue('--live-chrome') !== przed) {
+   *  rund jest bezpiecznikiem na wypadek układu, który oscyluje.
+   *
+   *  Rund jest sześć, nie trzy. Przy trzech zestaw złapał układ zatrzymany
+   *  w pół drogi: panel 1440×700 z rozwiniętymi nastawami kończył z dolną
+   *  częścią wystającą o 50 px, choć miał jeszcze 111 px szerokości do
+   *  oddania. Każda runda zwęża panel, przez co tekst zawija się na więcej
+   *  wierszy i paski rosną — a więc trzeba jeszcze jednej rundy. Sześć
+   *  wystarcza z zapasem, a kosztuje kilka klatek przy zdarzeniu, które
+   *  zdarza się przy otwarciu panelu i przy zmianie rozmiaru okna. */
+  if (runda < 6 && panel.style.getPropertyValue('--live-chrome') !== przed) {
     requestAnimationFrame(() => dopasujPanelKamery(runda + 1));
   }
 }
 window.addEventListener('resize', dopasujPanelKamery);
+
+/** Ustaw treść paska statusu pod obrazem i zdecyduj, czy da się go rozwinąć.
+ *
+ *  Wszystkie komunikaty idą tędy, bo „czy tekst się mieści" trzeba sprawdzić
+ *  PO jego wstawieniu, a przedtem nie da się tego przewidzieć: ten sam
+ *  komunikat ma dwie linijki na desktopie i osiem na wąskim telefonie.
+ *
+ *  @param {string} tekst treść statusu
+ */
+function ustawStatusKamery(tekst) {
+  const el = $('live-status');
+  if (!el) return;
+  el.textContent = tekst;
+  el.classList.remove('rozwiniety');
+  /* `scrollHeight > clientHeight` mierzy to, co naprawdę zostało ucięte —
+     a nie długość napisu, która o niczym nie przesądza przy zawijaniu. */
+  const uciete = el.scrollHeight > el.clientHeight + 1;
+  el.classList.toggle('mozna-rozwinac', uciete);
+  el.title = uciete ? tekst : '';
+  dopasujPanelKamery();
+}
+
+$('live-status')?.addEventListener('click', function rozwin() {
+  if (!this.classList.contains('mozna-rozwinac')) return;
+  this.classList.toggle('rozwiniety');
+  dopasujPanelKamery();
+});
+
+/* Wymiary strumienia bywają gotowe dopiero po chwili od podłączenia, więc
+   poza pomiarem przy starcie podglądu słuchamy też zdarzeń samych elementów.
+   Rejestracja jest JEDNORAZOWA, przy wczytaniu skryptu, a nie przy każdym
+   otwarciu panelu — inaczej przy trzecim włączeniu kamery ten sam pomiar
+   wisiałby na trzech nasłuchach naraz.
+
+   `addEventListener`, nie `img.onload =`: pole `onload` obrazka należy do
+   pętli pojedynczych klatek Kinecta i podmiana rozbiłaby jej awaryjny tryb. */
+for (const [id, zdarzenie] of [['live-video', 'loadedmetadata'], ['live-image', 'load']]) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(zdarzenie, () => liveMediaSize());
+}
 
 let liveStreaming = false;
 const liveFps = 15;
@@ -4084,7 +4132,7 @@ function startKinectStream() {
       }, delay);
     };
     img.onload = () => next(120);
-    img.onerror = () => { $('live-status').textContent = t('live.kinectErr'); next(2000); };
+    img.onerror = () => { ustawStatusKamery(t('live.kinectErr')); next(2000); };
     img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
   };
 
@@ -4120,7 +4168,7 @@ async function startLive() {
     } catch (err) {
       img.hidden = true;
       video.hidden = false;
-      $('live-status').textContent = `${t('cam.err')} ${err.message}`;
+      ustawStatusKamery(`${t('cam.err')} ${err.message}`);
       return;                       // panel zostaje otwarty — można zmienić źródło
     }
     img.hidden = true;
@@ -4128,11 +4176,25 @@ async function startLive() {
     video.srcObject = liveStream;
     await video.play().catch(() => {});
   }
+  /* PROPORCJĘ SCENY USTAWIAMY OD RAZU, NIE DOPIERO PRZY ROZPOZNAWANIU.
+   *
+   *  `liveMediaSize()` — jedyne miejsce, które czyta wymiary strumienia
+   *  i podaje je CSS-owi — wisiało wyłącznie w pętli `liveDetect()`.
+   *  A `liveDetect()` ma co robić tylko wtedy, gdy działają zmysły z YOLO.
+   *  Przy wyłączonym komputerze domowym scena zostawała więc na domyślnym
+   *  4:3, choć telefon podaje kadr 9:16 — i cały podgląd kurczył się do
+   *  paska pośrodku, obłożonego czarnymi pasami z obu stron. Marcin:
+   *  „na mobile to cały czas nie wygląda dobrze".
+   *
+   *  Wymiary bywają gotowe dopiero po chwili, dlatego i teraz, i na
+   *  `loadedmetadata` (wideo) albo `load` (klatka z Kinecta). Sam podgląd
+   *  z rozpoznawaniem nie ma nic wspólnego i nie ma prawa od niego zależeć. */
+  liveMediaSize();
   // Przełącznik przód/tył tylko przy kamerze przeglądarki i tylko wtedy,
   // gdy jest co przełączać. Kinect ma jeden obiektyw.
   $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
 
-  $('live-status').textContent = senses.online && senses.caps.yolo ? '…' : t('liveNoSenses');
+  ustawStatusKamery(senses.online && senses.caps.yolo ? '…' : t('liveNoSenses'));
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
 }
@@ -4196,9 +4258,9 @@ async function liveDetect() {
   // inaczej następna detekcja nadpisuje status i sylwetka miga na ułamek
   // sekundy. Zmienia się wolno, więc ostatnia znana jest nadal prawdziwa.
   const ogon = livePrevPose ? ` · 🧍 ${livePrevPose}` : '';
-  $('live-status').textContent = (objs.length
+  ustawStatusKamery((objs.length
     ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
-    : t('liveNothing')) + ogon;
+    : t('liveNothing')) + ogon);
 
   // zdarzenie percepcji z pozycją — tylko gdy zestaw obiektów się zmienił
   const sig = objs.map((o) => o.label).sort().join(',');
@@ -4217,7 +4279,7 @@ async function liveDetect() {
     }).then((r) => r.json()).then((d) => {
       const known = (d.matches || []).map((m) => m.label);
       if (known.length) {
-        $('live-status').textContent += ` · ✦ ${known.join(', ')}`;
+        ustawStatusKamery(`${$('live-status').textContent} · ✦ ${known.join(', ')}`);
         fetch('/api/events', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'nauka', summary: `rozpoznaję (nauczone): ${known.join(', ')}` }),
@@ -4251,7 +4313,7 @@ async function liveDetect() {
            rozpoznawania, a było usterką składania napisu. */
         const bezOgona = $('live-status').textContent.replace(/ · 🧍 .*$/, '');
         livePrevPose = poz.summary;
-        $('live-status').textContent = `${bezOgona} · 🧍 ${poz.summary}`;
+        ustawStatusKamery(`${bezOgona} · 🧍 ${poz.summary}`);
         // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.
         // Do kontekstu rozmowy: model ma wiedzieć, czy stoisz, czy siedzisz.
         fetch('/api/events', {
@@ -4386,6 +4448,20 @@ function pokazPlan(d, pre = 'plan') {
   // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
   planOstatnieUstawienia = u;
   odswiezAparat(u);
+
+  /* PANEL PRZELICZAMY PO WPISANIU TREŚCI, nie tylko po rozwinięciu pudełka.
+   *
+   *  Rozwinięcie nastaw woła `dopasujPanelKamery()` od razu — i to za wcześnie.
+   *  Pudełko jest wtedy jeszcze puste, bo `odswiezPlan()` dolicza światło,
+   *  czas do złotej godziny i uzasadnienia dopiero po odpowiedzi z serwera.
+   *  Panel wychodził więc policzony pod pudełko o kilka wierszy niższe, niż
+   *  będzie za moment, i dopisane linijki wystawały poza niego.
+   *
+   *  Zmierzone na oknie 1440×700: panel zastygał przy 311 px szerokości
+   *  z 50 px treści poza kadrem, choć miał się zwęzić do 200 px i zmieścić
+   *  wszystko. Zestaw `panel-kamery-miesci` widział to jako „małe okienko
+   *  przesuwalne pod dużym podglądem" i miał rację. */
+  if (pre === 'plan') dopasujPanelKamery();
 }
 
 let planOstatnieUstawienia = null;
@@ -4955,7 +5031,7 @@ $('live-flip').addEventListener('click', async () => {
     video.srcObject = s;
     if (s) video.play().catch(() => {});
   });
-  $('live-status').textContent = r.ok ? '…' : `${t('cam.err')} ${r.error.message}`;
+  ustawStatusKamery(r.ok ? '…' : `${t('cam.err')} ${r.error.message}`);
 });
 $('live-expand').addEventListener('click', () => {
   const on = $('live-panel').classList.contains('expanded');
