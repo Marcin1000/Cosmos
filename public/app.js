@@ -4054,32 +4054,93 @@ function dopasujPanelKamery(krok) {
 }
 window.addEventListener('resize', dopasujPanelKamery);
 
-/** Ustaw treść paska statusu pod obrazem i zdecyduj, czy da się go rozwinąć.
+/* Aktualna treść paska statusu. Trzymana w zmiennej, a nie odczytywana
+   z DOM-u, bo pasek bywa UKRYTY — a wtedy `textContent` mówiłby o elemencie,
+   którego nikt nie widzi. Dokładanie sylwetki i rozpoznanych rzeczy dopisuje
+   się do tej wartości. */
+let statusKamery = '';
+
+/** Ustaw pasek statusu pod obrazem i to, co chowa się pod ⓘ w nagłówku.
  *
- *  Wszystkie komunikaty idą tędy, bo „czy tekst się mieści" trzeba sprawdzić
- *  PO jego wstawieniu, a przedtem nie da się tego przewidzieć: ten sam
- *  komunikat ma dwie linijki na desktopie i osiem na wąskim telefonie.
+ *  PODZIAŁ JEST NA STAN I NA WYJAŚNIENIE, nie na krótkie i długie.
+ *  W pasku stoi to, co zmienia się na bieżąco i po co się na niego patrzy —
+ *  „person po lewej", „nic nie wykryto". Wyjaśnienia w rodzaju „uruchom
+ *  `python service.py` na komputerze z GPU" to instrukcja do przeczytania
+ *  raz w życiu; wisząc nad podglądem zabierała jedną trzecią panelu
+ *  na telefonie. Idzie więc pod ⓘ w rogu nagłówka, gdzie nie kosztuje
+ *  ani jednej linijki.
  *
- *  @param {string} tekst treść statusu
+ *  Pusty `tekst` UKRYWA pasek zamiast zostawiać pustą ramkę z obramowaniem.
+ *
+ *  @param {string} tekst  bieżący stan; pusty = pasek znika
+ *  @param {string} [szczegoly] wyjaśnienie chowane pod ⓘ; puste = ⓘ znika
  */
-function ustawStatusKamery(tekst) {
+function ustawStatusKamery(tekst, szczegoly = '') {
+  statusKamery = String(tekst || '');
   const el = $('live-status');
-  if (!el) return;
-  el.textContent = tekst;
-  el.classList.remove('rozwiniety');
-  /* `scrollHeight > clientHeight` mierzy to, co naprawdę zostało ucięte —
-     a nie długość napisu, która o niczym nie przesądza przy zawijaniu. */
-  const uciete = el.scrollHeight > el.clientHeight + 1;
-  el.classList.toggle('mozna-rozwinac', uciete);
-  el.title = uciete ? tekst : '';
+  if (el) {
+    el.textContent = statusKamery;
+    el.hidden = !statusKamery;
+  }
+  const info = $('live-info');
+  const dymek = $('live-info-box');
+  if (info && dymek) {
+    info.hidden = !szczegoly;
+    dymek.textContent = szczegoly;
+    if (!szczegoly) pokazDymekKamery(false);
+  }
   dopasujPanelKamery();
 }
 
-$('live-status')?.addEventListener('click', function rozwin() {
-  if (!this.classList.contains('mozna-rozwinac')) return;
-  this.classList.toggle('rozwiniety');
-  dopasujPanelKamery();
-});
+/** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
+ *  pojawienie się niczego nie przesuwa — o to w tej zmianie chodziło. */
+function pokazDymekKamery(widoczny) {
+  const info = $('live-info');
+  const dymek = $('live-info-box');
+  if (!info || !dymek) return;
+  dymek.hidden = !widoczny;
+  info.setAttribute('aria-expanded', widoczny ? 'true' : 'false');
+  info.classList.toggle('aktywny', widoczny);
+}
+
+{
+  const info = $('live-info');
+  const dymek = $('live-info-box');
+  if (info && dymek) {
+    /* Dotknięcie PRZEŁĄCZA na stałe, najechanie tylko podgląda.
+       Na telefonie nie ma najeżdżania, więc samo `:hover` zostawiłoby
+       treść nieosiągalną; na desktopie samo klikanie byłoby zbędnym
+       krokiem, skoro kursor i tak tam jest. Dlatego oba, a `przypiety`
+       pilnuje, żeby zjechanie kursorem nie zamknęło czegoś, co użytkownik
+       otworzył celowo. */
+    let przypiety = false;
+    info.addEventListener('click', (e) => {
+      e.stopPropagation();
+      /* Przełączamy WŁASNY stan, a nie widoczność dymka. Pierwsza wersja
+         czytała `dymek.hidden` — i wywracała się na tym, że kliknięcie myszą
+         poprzedza `mouseenter`, który dymek już pokazał. Klik odczytywał więc
+         „otwarty" i natychmiast go zamykał. Na telefonie działałoby (nie ma
+         najeżdżania), na myszy nie — czyli usterka widoczna tylko na jednym
+         z dwóch sposobów obsługi. */
+      przypiety = !przypiety;
+      pokazDymekKamery(przypiety);
+    });
+    info.addEventListener('mouseenter', () => pokazDymekKamery(true));
+    info.addEventListener('mouseleave', () => { if (!przypiety) pokazDymekKamery(false); });
+    // Kliknięcie gdziekolwiek indziej zamyka — tak jak każdy inny dymek.
+    document.addEventListener('click', () => {
+      if (!przypiety) return;
+      przypiety = false;
+      pokazDymekKamery(false);
+    });
+    dymek.addEventListener('click', (e) => e.stopPropagation());
+    info.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      przypiety = false;
+      pokazDymekKamery(false);
+    });
+  }
+}
 
 /* Wymiary strumienia bywają gotowe dopiero po chwili od podłączenia, więc
    poza pomiarem przy starcie podglądu słuchamy też zdarzeń samych elementów.
@@ -4194,7 +4255,8 @@ async function startLive() {
   // gdy jest co przełączać. Kinect ma jeden obiektyw.
   $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
 
-  ustawStatusKamery(senses.online && senses.caps.yolo ? '…' : t('liveNoSenses'));
+  ustawStatusKamery(senses.online && senses.caps.yolo ? '…' : '',
+    senses.online && senses.caps.yolo ? '' : t('liveNoSenses'));
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
 }
@@ -4206,6 +4268,9 @@ function stopLive() {
   $('live-video').srcObject = null;
   $('live-panel').style.display = 'none';
   $('plan-box').hidden = true;
+  // Dymek ⓘ nie może przetrwać zamknięcia panelu — przy następnym otwarciu
+  // wisiałby otwarty nad obrazem, opisując stan sprzed kilku godzin.
+  ustawStatusKamery('');
   livePrevObjects = '';
 }
 
@@ -4279,7 +4344,7 @@ async function liveDetect() {
     }).then((r) => r.json()).then((d) => {
       const known = (d.matches || []).map((m) => m.label);
       if (known.length) {
-        ustawStatusKamery(`${$('live-status').textContent} · ✦ ${known.join(', ')}`);
+        ustawStatusKamery(`${statusKamery} · ✦ ${known.join(', ')}`);
         fetch('/api/events', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'nauka', summary: `rozpoznaję (nauczone): ${known.join(', ')}` }),
@@ -4311,7 +4376,7 @@ async function liveDetect() {
            postawy linijkę z dwiema: starą (wpisaną wyżej jako `ogon`) i nową.
            Widać to było przez ułamek sekundy i wyglądało jak usterka
            rozpoznawania, a było usterką składania napisu. */
-        const bezOgona = $('live-status').textContent.replace(/ · 🧍 .*$/, '');
+        const bezOgona = statusKamery.replace(/ · 🧍 .*$/, '');
         livePrevPose = poz.summary;
         ustawStatusKamery(`${bezOgona} · 🧍 ${poz.summary}`);
         // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.

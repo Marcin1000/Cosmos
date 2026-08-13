@@ -1810,6 +1810,44 @@ kbd {
 .live-status.mozna-rozwinac { cursor: pointer; }
 .live-status.mozna-rozwinac:hover { color: var(--text); }
 
+/* ⓘ W NAGŁÓWKU I JEGO DYMEK.
+ *
+ *  Marcin: „to ⓘ umieśćmy gdzieś w rogu po prostu. To nam wykluczy chyba
+ *  problem." I rzeczywiście wyklucza — nie przez lepsze mieszczenie tekstu,
+ *  tylko przez wyjęcie go z układu. Dopóki wyjaśnienie stało w kolumnie nad
+ *  podglądem, każda jego długość była czyimś problemem: kłóciło się o wysokość
+ *  z obrazem i z nastawami. W rogu nagłówka nie kłóci się o nic.
+ *
+ *  Dymek jest `absolute`, więc pojawienie się go NICZEGO NIE PRZESUWA —
+ *  panel nie zmienia wysokości, pomiar `--live-chrome` nie rusza, obraz
+ *  zostaje tam, gdzie był. */
+.live-info.aktywny { color: var(--accent); }
+.live-info-box {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  /* Bardzo długie wyjaśnienie na niskim ekranie przewija się w SOBIE,
+     zamiast wychodzić poza panel. */
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Na szerokim panelu dymek nie musi się rozciągać na całą szerokość —
+   wiersz tekstu dłuższy niż ~70 znaków czyta się gorzej. */
+@media (min-width: 721px) {
+  .live-info-box { left: auto; width: min(340px, calc(100% - 20px)); }
+}
+
 /* ================== TELEFON: ODWROTNA ZASADA NIŻ NA DESKTOPIE ==================
  *
  *  Na desktopie panel pływa w rogu dużego ekranu, więc może mieć dowolną
