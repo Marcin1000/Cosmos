@@ -42,6 +42,13 @@ const ZNACZACE_PRZEWINIECIE_PX = 24;
 const OKNA = [
   ['telefon 390×640', { width: 390, height: 640 }],
   ['telefon 390×844', { width: 390, height: 844 }],
+  /* Telefon TRZYMANY POZIOMO. Marcin: „trzymając telefon w poziomie, jak kadr
+     aparatu, w głównej mierze to działa i wygląda tragicznie." Ekran ma wtedy
+     ~330 px wysokości — mniej, niż zajmują same paski panelu — więc układ
+     pionowy nie ma prawa się zmieścić. Bez tych dwóch okien zestaw w ogóle
+     nie widział przypadku, na który Marcin patrzył. */
+  ['telefon poziomo 844×390', { width: 844, height: 390 }],
+  ['telefon poziomo 740×360', { width: 740, height: 360 }],
   ['laptop 1440×700', { width: 1440, height: 700 }],
   ['desktop 1440×900', { width: 1440, height: 900 }],
 ];
@@ -123,6 +130,18 @@ async function poczekajNaUklad(pg) {
           scenaProp: scena
             ? scena.getBoundingClientRect().width / scena.getBoundingClientRect().height : 0,
           zadanaProp: Number(getComputedStyle(panel).getPropertyValue('--live-arn')) || 0,
+          /* Jak obraz wypełnia scenę: `cover` przycina brzegi, `contain`
+             dokłada czarne pasy. Ta sama różnica proporcji znaczy więc
+             co innego i nie da się jej oceniać bez tej wartości. */
+          wypelnienie: getComputedStyle(document.getElementById('live-video')).objectFit,
+          /* Układ decyduje, czy zwężenie panelu w ogóle by pomogło. */
+          dwieKolumny: getComputedStyle(panel).display === 'grid',
+          /* „Pełna szerokość" liczona MARGINESEM, nie procentem. Procent
+             zawodzi, bo `100vw` obejmuje pasek przewijania: panel szeroki
+             dokładnie na `calc(100vw - 24px)` wychodził 350 px przy oknie
+             390 px, czyli 89,7% — tuż pod progiem 90%. Margines jest tym,
+             co arkusz stylów faktycznie zadaje, więc mierzmy to samo. */
+          naCalaSzerokosc: pr.width >= window.innerWidth - 48,
         };
       });
       const miesci = r.panel <= r.okno && r.gora >= -1 && r.glowaWidoczna;
@@ -162,7 +181,15 @@ async function poczekajNaUklad(pg) {
        *  poziomym. Szerokość jest jednoznaczna: albo panel dobił do swojej
        *  dolnej granicy i naprawdę nie ma czym ustąpić, albo nie dobił
        *  i przewijanie jest przedwczesne. */
-      if (r.ileNiemiesci > ZNACZACE_PRZEWINIECIE_PX && r.panelW > podloga + 10) {
+      /* Zwężenie pomaga TYLKO w pływającym panelu jednokolumnowym. Na
+         telefonie panel z założenia bierze całą szerokość ekranu, a w układzie
+         dwukolumnowym sterowanie stoi OBOK obrazu i ma własną, stałą kolumnę —
+         zwężanie panelu nie doda mu ani piksela wysokości. W obu tych układach
+         przewijanie dolnej części jest poprawnym zachowaniem, nie usterką,
+         i pytanie „czemu panel się nie zwęził" jest źle postawione. */
+      const zwezenieBySiePrzydalo = !r.dwieKolumny && !r.naCalaSzerokosc;
+      if (zwezenieBySiePrzydalo
+          && r.ileNiemiesci > ZNACZACE_PRZEWINIECIE_PX && r.panelW > podloga + 10) {
         fail.push(`${nazwa} / ${tryb}: dół nie mieści się o ${r.ileNiemiesci} px, `
           + `choć panel ma ${r.panelW} px szerokości i mógł się zwęzić do ${podloga} px `
           + '— to jest „duże okno podglądu, a pod nim małe okienko przesuwalne"');
@@ -182,11 +209,26 @@ async function poczekajNaUklad(pg) {
        *  Zestaw pilnował wcześniej wysokości i przewijania, ale nigdy KSZTAŁTU,
        *  więc przepuszczał to bez słowa. */
       if (r.zadanaProp && r.scenaProp) {
-        const rozjazd = Math.abs(r.scenaProp - r.zadanaProp) / r.zadanaProp;
-        const pasy = Math.round(rozjazd * 100);
-        if (rozjazd > 0.05) {
-          fail.push(`${nazwa} / ${tryb}: scena ma proporcję ${r.scenaProp.toFixed(2)} `
-            + `zamiast ${r.zadanaProp.toFixed(2)} — kadr dostanie czarne pasy (~${pasy}%)`);
+        /* Ile kadru przepada, gdy proporcja sceny nie zgadza się z proporcją
+           obrazu. Przy `contain` przepada to jako CZARNE PASY (obraz mniejszy
+           od sceny), przy `cover` jako PRZYCIĘTE BRZEGI (obraz większy). */
+        const wiekszy = Math.max(r.scenaProp, r.zadanaProp);
+        const mniejszy = Math.min(r.scenaProp, r.zadanaProp);
+        const strata = Math.round((1 - mniejszy / wiekszy) * 100);
+        if (r.wypelnienie === 'contain') {
+          /* Czarne pasy nie mają prawa się pojawić w ogóle: w trybie, który
+             pokazuje cały kadr, scena ma być dokładnie jego kształtu. */
+          if (strata > 5) {
+            fail.push(`${nazwa} / ${tryb}: scena ma proporcję ${r.scenaProp.toFixed(2)} `
+              + `zamiast ${r.zadanaProp.toFixed(2)}, a obraz jest wpisywany w całości `
+              + `— czarne pasy na ~${strata}% sceny`);
+          }
+        } else if (strata > 50) {
+          /* Przycięcie jest dozwolone i celowe: na telefonie panel bierze całą
+             szerokość ekranu, a ustępuje obraz. Ale połowa kadru to już nie
+             jest podgląd tego, co widzi aparat. */
+          fail.push(`${nazwa} / ${tryb}: podgląd przycina ~${strata}% kadru `
+            + `(scena ${r.scenaProp.toFixed(2)}, kadr ${r.zadanaProp.toFixed(2)})`);
         }
       }
     };

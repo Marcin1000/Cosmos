@@ -3158,6 +3158,73 @@ użytkownik patrzy.
 Nowy zestaw `proporcja-bez-zmyslow`: podgląd przy WYŁĄCZONYCH zmysłach, czyli
 w sytuacji Marcina z telefonu przy zgaszonym komputerze domowym.
 
+## ✅ Partia 67 — telefon rządzi się odwrotną zasadą niż desktop (GOTOWE)
+
+Marcin, po partii 66: „nadal to źle działa na mobile. Pamiętaj, że to jest tak,
+jak się trzyma telefon w pionie. Trzymając telefon w poziomie, jak kadr aparatu,
+w głównej mierze to działa i wygląda tragicznie."
+
+### Zasada dobra na desktopie, absurdalna na telefonie
+
+Szerokość panelu wyliczała się z dostępnej wysokości i proporcji kadru. Na
+desktopie to poprawne: panel pływa w rogu dużego ekranu, obraz nigdy nie
+przerasta okna, a miejsca w poziomie i tak jest w bród.
+
+Na telefonie ta sama reguła mnoży wysokość przez 0,5625 (kadr 9:16) i z ekranu
+szerokiego na 352 px robi panel szeroki na 206. Wąska kolumna, w której
+„KAMERA NA ŻYWO" łamie się na dwie linijki, nazwy sprzętu nie mieszczą się
+w listach, a obok zostaje 150 px pustego ekranu.
+
+**Bo na telefonie to szerokość jest zasobem rzadkim, nie wysokość.**
+
+- [x] Panel bierze całą dostępną szerokość, a ustępuje OBRAZ: dostaje sufit
+      wysokości i przy `object-fit: cover` traci brzegi kadru
+- [x] Sufit to **55% wysokości ekranu**, a nie „reszta po paskach". Odejmowanie
+      brzmi dokładniej i było pierwszą wersją, ale przy rozwiniętych nastawach
+      paski zajmują prawie cały ekran i obraz dostawał 154 px z 650, których
+      chciał — kadr przycięty do 76% to wąski wycinek środka, nie podgląd.
+      Ułamek daje jedno i drugie: kadr traci najwyżej około połowy, a na
+      sterowanie zawsze zostaje 45% ekranu
+- [x] Powiększony panel to inna umowa — użytkownik prosi wprost o CAŁY kadr,
+      więc tam wraca liczenie szerokości z wysokości i `contain`
+
+### Telefon trzymany poziomo
+
+Osobny przypadek i to on wyglądał najgorzej. Ekran ma wtedy ~330 px wysokości,
+a sam nagłówek, wybór źródła, status i przycisk migawki zjadają ponad 200 —
+w jednej kolumnie nie ma szans, reszta wypada pod krawędź ekranu.
+
+- [x] Dwie kolumny (obraz z lewej, nastawy z prawej), czyli to samo lekarstwo
+      co na powiększony panel na desktopie, tylko próg patrzy na WYSOKOŚĆ:
+      `(max-height: 560px) and (min-width: 600px)`. Ekran niski i szeroki to
+      sytuacja, w której układ pionowy nie ma sensu — czy to telefon, czy
+      laptop z małą matrycą
+- [x] Oba stany wymienione z nazwy (`.live-panel, .live-panel.expanded`),
+      bo reguła powiększonego panelu z desktopu ma wyższą swoistość. Pierwsza
+      wersja o tym zapomniała: obraz kurczył się do 16 px, a sterowanie
+      wypadało pod ekran
+
+### Zestaw: sześć okien, w tym dwa poziome
+
+Bez okien poziomych zestaw w ogóle nie widział przypadku, na który Marcin
+patrzył. Doszły też dwie poprawki do samych asercji — obie tego rodzaju,
+że wcześniejsza wersja zadawała ŹLE POSTAWIONE pytanie:
+
+- [x] „Rozjazd proporcji = czarne pasy" jest prawdą tylko przy `contain`.
+      Przy `cover` ten sam rozjazd znaczy przycięte brzegi, czyli coś
+      dozwolonego i celowego. Asercja czyta więc `object-fit`: pasów nie wolno
+      w ogóle, przycięcia nie więcej niż połowa kadru
+- [x] „Panel mógł się zwęzić" nie ma sensu tam, gdzie zwężenie nic nie daje:
+      na telefonie panel z założenia ma pełną szerokość, a w dwóch kolumnach
+      sterowanie stoi OBOK obrazu i ma własną. Przewijanie jest tam poprawnym
+      zachowaniem, nie usterką
+- [x] „Pełna szerokość" mierzona marginesem, nie procentem — `100vw` obejmuje
+      pasek przewijania, więc panel szeroki dokładnie na `calc(100vw - 24px)`
+      wychodził 89,7% i mijał się z progiem 90%
+
+30 przypadków (6 okien × 5 stanów), wszystkie zielone. Na starym arkuszu stylów
+telefon poziomo gubi 317–423 px sterowania pod krawędzią ekranu.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
