@@ -612,7 +612,20 @@ kbd {
    a wciśnięty obok nastaw ucinał się tak samo jak w pasku zwiniętym. */
 .plan-box[open] .plan-box-head { flex-wrap: wrap; padding-top: 8px; }
 .plan-box[open] .plan-box-title { flex: 1 0 100%; }
-.plan-box-head .plan-shot { flex: 0 0 auto; font-size: 15px; }
+/* NASTAWY MOGĄ SIĘ ZAWINĄĆ, gdy panel jest wąski.
+   `flex: 0 0 auto` znaczyło „nigdy się nie kurcz", a napis „1/50 · f/5.6 ·
+   ISO 100" w foncie stałej szerokości ma swoje 190 px. W panelu kamery
+   zwężonym do 170 px wystawał o 20 px poza pudełko i wypychał poziomy pasek
+   przewijania — zmierzone: `plan-box` szerokie na 170 px, jego treść na 203.
+   Marcin: „wszystko rozjeżdża się". `min-width: 0` pozwala zejść poniżej
+   szerokości treści, a łamanie po separatorze `·` robi z jednej linijki dwie
+   zamiast ucinać ją w połowie liczby. */
+.plan-box-head .plan-shot {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
 .plan-box-chev {
   flex: 0 0 auto;
   width: 16px;
@@ -631,7 +644,12 @@ kbd {
    zamiast się skracać. Tak samo robi to Plener. */
 .plan-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  /* `min(120px, 100%)`, a nie samo `120px`. Kolumna o sztywnym minimum nie
+     umie zejść poniżej niego, więc w wąskim panelu kamery siatka robiła się
+     szersza od swojego pojemnika i wypychała poziomy pasek przewijania —
+     liczby nastaw uciekały wtedy poza prawą krawędź. Z `min()` minimum
+     ustępuje, gdy panel jest węższy niż 120 px. */
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
   gap: 6px;
   margin-bottom: 8px;
 }
@@ -1763,12 +1781,30 @@ kbd {
   color: var(--text-dim);
   min-height: 18px;
   border-top: 1px solid var(--border);
+  /* WYSOKOŚĆ LICZONA W WIERSZACH, nie zostawiona `-webkit-line-clamp`.
+   *
+   *  Sam clamp wygląda na właściwe narzędzie i był pierwszą wersją, ale
+   *  zmierzone: treść ma 107 px, element 53 px, a przeglądarka melduje
+   *  `display: flow-root` zamiast `-webkit-box`. Obcięcie brało się więc
+   *  z `overflow: hidden`, a nie z clampa — bez wielokropka i bez gwarancji,
+   *  gdzie dokładnie tnie. U Marcina zostawiało kawałek trzeciego wiersza
+   *  wchodzący pod ramkę nastaw: „ten tekst wchodzi nieładnie pod Nastawy".
+   *
+   *  `line-height` podane wprost plus `max-height` w tych samych jednostkach
+   *  daje wysokość CO DO WIERSZA, niezależnie od tego, czy clamp zadziała.
+   *  Clamp zostaje obok — tam, gdzie działa, dokłada wielokropek. */
+  line-height: 1.5;
+  --linie-statusu: 2;
+  max-height: calc(var(--linie-statusu) * 1.5em + 16px);
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: var(--linie-statusu);
   overflow: hidden;
 }
-.live-status.rozwiniety { -webkit-line-clamp: unset; }
+.live-status.rozwiniety {
+  max-height: none;
+  -webkit-line-clamp: unset;
+}
 /* Kursor tylko wtedy, gdy naprawdę jest co rozwijać — inaczej krótki status
    („nic nie wykryto") udawałby, że coś pod nim jest. */
 .live-status.mozna-rozwinac { cursor: pointer; }
