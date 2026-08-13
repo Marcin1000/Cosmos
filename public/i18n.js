@@ -307,6 +307,7 @@ const I18N = {
     'liveView': 'Podgląd kamery na żywo (detekcja)',
     'liveTitle': 'Kamera na żywo',
     'liveNothing': 'nic nie wykryto',
+    'live.infoTitle': 'Dlaczego bez rozpoznawania?',
     'liveNoSenses': 'Podgląd działa, ale bez rozpoznawania obiektów. Rozpoznawanie liczy komputer '
       + 'z GPU, nie telefon — uruchom tam `python service.py` w folderze senses. Obraz z telefonu '
       + 'i tak trafi do niego przez serwer.',
@@ -1014,6 +1015,7 @@ const I18N = {
     'liveView': 'Live camera view (detection)',
     'liveTitle': 'Live camera',
     'liveNothing': 'nothing detected',
+    'live.infoTitle': 'Why no recognition?',
     'liveNoSenses': 'Preview works, but without object recognition. Recognition runs on the machine '
       + 'with the GPU, not on the phone — start `python service.py` in the senses folder there. '
       + 'The phone\'s image still reaches it through the server.',

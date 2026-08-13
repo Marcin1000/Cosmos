@@ -848,6 +848,17 @@
       <button class="icon-btn" id="live-flip" data-i18n-title="cam.flip" title="Przełącz kamerę" aria-label="Przełącz kamerę" hidden>
         <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-13.7-5.3L4 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <!-- ⓘ W ROGU, RAZEM Z POZOSTAŁYMI IKONAMI.
+           Wyjaśnienia bywają na sześć wierszy i wiszące nad podglądem
+           zabierały jedną trzecią panelu. Tutaj nie kosztują ani jednej
+           linijki, a pojawiają się dopiero wtedy, gdy jest co wyjaśnić:
+           przycisk stoi ukryty, dopóki nie ma treści. -->
+      <button class="icon-btn live-info" id="live-info" hidden
+              aria-expanded="false" aria-controls="live-info-box"
+              data-i18n-title="live.infoTitle" data-i18n-aria="live.infoTitle"
+              title="Dlaczego bez rozpoznawania?" aria-label="Dlaczego bez rozpoznawania?">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor"/></svg>
+      </button>
       <button class="icon-btn" id="live-expand" data-i18n-title="live.expand" title="Powiększ" aria-label="Powiększ">
         <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -855,6 +866,10 @@
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <!-- Dymek ⓘ. Leży NAD treścią panelu (`position: absolute`), więc jego
+         pojawienie się niczego nie przesuwa i nie zmienia wysokości panelu —
+         a to właśnie przesuwanie było pierwotnym problemem. -->
+    <div class="live-info-box mono" id="live-info-box" role="note" hidden></div>
     <div class="live-source">
       <select id="live-source" class="mono" data-i18n-aria="live.source" aria-label="Źródło obrazu">
         <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
@@ -871,7 +886,11 @@
          więc gdy treść nie mieściła się w oknie, przycisk migawki po prostu
          znikał poza krawędzią i nie dało się do niego dojechać. -->
     <div class="live-body" id="live-body">
-    <div class="live-status mono" id="live-status">—</div>
+    <!-- STATUS ZNIKA, GDY NIE MA CO POWIEDZIEĆ.
+         Zostaje na żywe wyniki rozpoznawania („person po lewej"), a długie
+         wyjaśnienia — jak to o wyłączonym GPU — idą pod ⓘ w nagłówku panelu,
+         gdzie nie zabierają ani jednej linijki. -->
+    <div class="live-status mono" id="live-status" hidden>—</div>
 
     <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
          w którym stoisz, więc działa w terenie z telefonu. -->

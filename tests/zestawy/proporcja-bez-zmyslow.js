@@ -101,90 +101,98 @@ if (!maPrzegladarke()) {
       fail.push(`${nazwa}: czarne pasy zajmują ${pasyProc}% szerokości sceny `
         + `(strumień ${mediaProporcja.toFixed(2)}, scena ${r.scenaProporcja.toFixed(2)})`);
     }
-    /* --- STATUS NIE MOŻE WCHODZIĆ POD NASTAWY -------------------------
+    /* --- WYJAŚNIENIE POD ⓘ, A NIE NAD PODGLĄDEM ----------------------
      *
      *  Marcin: „ten tekst »Podgląd działa, ale…« wchodzi nieładnie pod
-     *  Nastawy, zarówno na mobile, jak i na desktop."
+     *  Nastawy" — a potem: „to ⓘ umieśćmy gdzieś w rogu po prostu.
+     *  To nam wykluczy chyba problem."
      *
-     *  Ten komunikat istnieje TYLKO przy wyłączonych zmysłach — ma sześć
-     *  wierszy i to on się nie mieścił. Zestaw `panel-kamery-miesci` nie mógł
-     *  tego zobaczyć, bo działa z atrapą zmysłów włączoną i status jest tam
-     *  krótki („nic nie wykryto"). Dlatego sprawdzenie jest tutaj: to jedyne
-     *  środowisko z prawdziwie długim tekstem.
+     *  Miał rację i to jest inne rozwiązanie niż lepsze mieszczenie tekstu.
+     *  Dopóki sześciowierszowe wyjaśnienie stało w kolumnie nad podglądem,
+     *  każda jego długość była czyimś problemem: kłóciło się o wysokość
+     *  z obrazem i z nastawami, a kolejne poprawki tylko przesuwały ten spór.
+     *  W rogu nagłówka nie kłóci się o nic.
      *
-     *  Mierzymy dwie rzeczy. Po pierwsze wysokość CO DO WIERSZA — ucięcie
-     *  w połowie wiersza wygląda dokładnie jak tekst wchodzący pod ramkę
-     *  poniżej. Po drugie brak poziomego rozjazdu, bo to drugie zgłoszenie
-     *  z tej samej pary zrzutów. */
+     *  Zestaw sprawdza więc WŁAŚCIWOŚĆ, nie wygląd: pokazanie wyjaśnienia
+     *  nie ma prawa przesunąć ani obrazu, ani wysokości panelu. Ten komunikat
+     *  istnieje tylko przy wyłączonych zmysłach, czyli w tym środowisku. */
     await pg.evaluate(() => {
       const box = document.getElementById('plan-box');
       if (box) box.open = true;
     });
     await pg.waitForTimeout(900);
-    const st = await pg.evaluate(() => {
-      const el = document.getElementById('live-status');
-      const body = document.getElementById('live-body');
-      const box = document.getElementById('plan-box');
-      const cs = getComputedStyle(el);
-      const er = el.getBoundingClientRect();
-      const gora = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+
+    const przed = await pg.evaluate(() => {
+      const panel = document.getElementById('live-panel');
+      const scena = document.getElementById('live-stage');
+      const status = document.getElementById('live-status');
+      const info = document.getElementById('live-info');
       return {
-        tekst: el.textContent.slice(0, 30),
-        wierszy: (er.height - gora) / parseFloat(cs.lineHeight),
-        pelnaTresc: el.scrollHeight > el.clientHeight + 1,
-        // Pudełko musi być WIDOCZNE, inaczej pomiar nie znaczy nic.
-        boxWidoczny: Boolean(box) && box.getBoundingClientRect().height > 0,
-        // Czym wysokość jest ZAGWARANTOWANA, a nie ile akurat wyszło.
-        lineHeight: cs.lineHeight,
-        maxHeight: cs.maxHeight,
-        nachodzi: box ? Math.round(er.bottom - box.getBoundingClientRect().top) : 0,
+        panelH: Math.round(panel.getBoundingClientRect().height),
+        scenaH: Math.round(scena.getBoundingClientRect().height),
+        statusWidoczny: !status.hidden && status.getBoundingClientRect().height > 0,
+        infoWidoczny: !info.hidden && info.getBoundingClientRect().width > 0,
+        dymekWidoczny: !document.getElementById('live-info-box').hidden,
+      };
+    });
+    console.log(`   pasek statusu widoczny: ${przed.statusWidoczny}, `
+      + `ⓘ w nagłówku: ${przed.infoWidoczny}, dymek otwarty: ${przed.dymekWidoczny}`);
+
+    if (przed.statusWidoczny) {
+      fail.push(`${nazwa}: pasek statusu zajmuje miejsce, choć nie ma bieżącego stanu `
+        + 'do pokazania — wyjaśnienie ma być pod ⓘ');
+    }
+    if (!przed.infoWidoczny) {
+      fail.push(`${nazwa}: brak ⓘ w nagłówku, a jest co wyjaśnić `
+        + '(zmysły wyłączone) — treść stała się nieosiągalna');
+    }
+    if (przed.dymekWidoczny) fail.push(`${nazwa}: dymek ⓘ jest otwarty sam z siebie`);
+
+    // Dotknięcie ⓘ — tak, jak robi to Marcin na telefonie.
+    await pg.click('#live-info');
+    await pg.waitForTimeout(400);
+    const po = await pg.evaluate(() => {
+      const panel = document.getElementById('live-panel');
+      const scena = document.getElementById('live-stage');
+      const dymek = document.getElementById('live-info-box');
+      const body = document.getElementById('live-body');
+      const dr = dymek.getBoundingClientRect();
+      const pr = panel.getBoundingClientRect();
+      return {
+        panelH: Math.round(pr.height),
+        scenaH: Math.round(scena.getBoundingClientRect().height),
+        widoczny: !dymek.hidden && dr.height > 0,
+        tresc: (dymek.textContent || '').slice(0, 30),
+        pelnaTresc: dymek.scrollHeight <= dymek.clientHeight + 1,
+        wPanelu: dr.left >= pr.left - 1 && dr.right <= pr.right + 1
+          && dr.top >= pr.top - 1 && dr.bottom <= pr.bottom + 1,
         zaSzeroko: body ? body.scrollWidth - body.clientWidth : 0,
       };
     });
-    console.log(`   status „${st.tekst}…": ${st.wierszy.toFixed(2)} wiersza, `
-      + `ucięty: ${st.pelnaTresc}, nachodzi na nastawy: ${st.nachodzi} px, `
-      + `poziomy rozjazd: ${st.zaSzeroko} px`);
-    if (!st.pelnaTresc) {
-      fail.push(`${nazwa}: status mieści się w całości — zestaw mierzy nie ten stan `
-        + '(komunikat o wyłączonych zmysłach ma być długi)');
+    console.log(`   po dotknięciu ⓘ: „${po.tresc}…", panel ${przed.panelH}→${po.panelH} px, `
+      + `obraz ${przed.scenaH}→${po.scenaH} px, w panelu: ${po.wPanelu}`);
+
+    if (!po.widoczny) fail.push(`${nazwa}: dotknięcie ⓘ nie pokazało wyjaśnienia`);
+    if (!/Podgl/.test(po.tresc)) {
+      fail.push(`${nazwa}: dymek ⓘ nie zawiera komunikatu o wyłączonym rozpoznawaniu `
+        + `(jest „${po.tresc}")`);
     }
-    if (Math.abs(st.wierszy - Math.round(st.wierszy)) > 0.15) {
-      fail.push(`${nazwa}: status ma ${st.wierszy.toFixed(2)} wiersza — ostatni jest ucięty `
-        + 'w połowie i wchodzi pod ramkę nastaw');
+    /* SEDNO CAŁEJ ZMIANY. Wyjaśnienie ma nie kosztować układu ani piksela —
+       dlatego dymek leży NAD treścią, a nie w kolumnie. */
+    if (po.panelH !== przed.panelH) {
+      fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość panelu `
+        + `${przed.panelH} → ${po.panelH} px — dymek przesuwa układ`);
     }
-    /* SPRAWDZAMY GWARANCJĘ, NIE PRÓBKĘ — i to jest tu najważniejsze zdanie.
-     *
-     *  Marcin widział na telefonie kawałek trzeciego wiersza wchodzący pod
-     *  ramkę nastaw. W Chromium w kontenerze ta sama wersja kodu daje 2,05
-     *  wiersza, czyli niewidoczny jeden piksel: pomiar wysokości NIE ODTWARZA
-     *  jego usterki i gdyby zestaw opierał się tylko na nim, przechodziłby
-     *  na kodzie, który u użytkownika jest zepsuty.
-     *
-     *  Bo usterka nie brała się z liczby, tylko z tego, CO tę liczbę ustala.
-     *  Przy `line-height: normal` wysokość wiersza wyznacza font urządzenia,
-     *  a obcięcie zależało od `overflow: hidden` — więc gdzie dokładnie
-     *  tnie, rozstrzygał krój pisma w telefonie. Na jednym wypadało równo
-     *  na wierszu, na innym w jego połowie.
-     *
-     *  Dlatego pytamy o mechanizm: `line-height` musi być podany wprost,
-     *  a `max-height` policzone w tych samych jednostkach. Wtedy wysokość
-     *  jest wielokrotnością wiersza Z KONSTRUKCJI, na każdym urządzeniu —
-     *  także takim, którego nigdy nie zobaczymy w tym zestawie. */
-    if (st.lineHeight === 'normal') {
-      fail.push(`${nazwa}: status ma \`line-height: normal\` — wysokość wiersza zależy `
-        + 'wtedy od fontu urządzenia i obcięcie potrafi wypaść w połowie wiersza');
+    if (po.scenaH !== przed.scenaH) {
+      fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość obrazu `
+        + `${przed.scenaH} → ${po.scenaH} px`);
     }
-    if (!st.maxHeight || st.maxHeight === 'none') {
-      fail.push(`${nazwa}: status nie ma \`max-height\` liczonego w wierszach — `
-        + 'obcięcie zależy wtedy wyłącznie od `overflow`, bez gwarancji, gdzie tnie');
+    if (!po.wPanelu) fail.push(`${nazwa}: dymek ⓘ wychodzi poza panel`);
+    if (!po.pelnaTresc) {
+      fail.push(`${nazwa}: treść nie mieści się w dymku i nie da się jej doczytać`);
     }
-    if (!st.boxWidoczny) {
-      fail.push(`${nazwa}: pudełko nastaw jest ukryte — pomiar nachodzenia nic nie znaczy`);
-    } else if (st.nachodzi > 1) {
-      fail.push(`${nazwa}: status nachodzi na pudełko nastaw o ${st.nachodzi} px`);
-    }
-    if (st.zaSzeroko > 1) {
-      fail.push(`${nazwa}: dolna część jest o ${st.zaSzeroko} px szersza niż panel `
+    if (po.zaSzeroko > 1) {
+      fail.push(`${nazwa}: dolna część jest o ${po.zaSzeroko} px szersza niż panel `
         + '— poziomy rozjazd');
     }
 

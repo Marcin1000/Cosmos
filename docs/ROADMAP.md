@@ -3285,6 +3285,52 @@ poziom tuż nad progiem dwóch kolumn, gdzie wiąże już szerokość ekranu.
 
 35 przypadków (7 okien × 5 stanów).
 
+## ✅ Partia 69 — wyjaśnienie pod ⓘ w rogu (GOTOWE)
+
+Marcin: „zróbmy tak, że on się pojawia, gdy kliknie się albo najedzie na ⓘ",
+a chwilę później: „to ⓘ umieśćmy gdzieś w rogu po prostu. To nam wykluczy
+chyba problem."
+
+Wykluczyło — i nie przez lepsze mieszczenie tekstu. **Dopóki sześciowierszowe
+wyjaśnienie stało w kolumnie nad podglądem, każda jego długość była czyimś
+problemem**: kłóciło się o wysokość z obrazem i z nastawami, a kolejne
+poprawki tylko przesuwały ten spór. Trzy partie z rzędu dotykały tego samego
+komunikatu (zwinięcie do dwóch linijek, potem gwarancja wysokości w wierszach)
+i za każdym razem chodziło o to, jak podzielić miejsce, którego nie ma.
+W rogu nagłówka nie kłóci się o nic.
+
+Podział jest na STAN i na WYJAŚNIENIE, nie na krótkie i długie:
+
+- **pasek statusu** pokazuje to, co zmienia się na bieżąco i po co się na
+  niego patrzy — „person po lewej", „nic nie wykryto". Pusty **znika**,
+  zamiast zostawiać pustą ramkę z obramowaniem,
+- **ⓘ w nagłówku** chowa wyjaśnienia w rodzaju „uruchom `python service.py`
+  na komputerze z GPU" — instrukcję do przeczytania raz w życiu.
+
+- [x] ⓘ stoi obok pozostałych ikon panelu i pojawia się dopiero wtedy, gdy
+      jest co wyjaśnić
+- [x] Dymek jest `position: absolute`, więc pokazanie go **niczego nie
+      przesuwa** — panel nie zmienia wysokości, obraz zostaje na miejscu
+- [x] Najechanie podgląda, dotknięcie przypina. Na telefonie nie ma
+      najeżdżania, więc samo `:hover` zostawiłoby treść nieosiągalną
+- [x] Treść statusu trzymana w zmiennej, nie odczytywana z DOM-u — pasek
+      bywa teraz ukryty, a dopisywanie sylwetki i rozpoznanych rzeczy musi
+      działać także wtedy
+
+### Usterka widoczna tylko przy jednym sposobie obsługi
+
+Pierwsza wersja przełącznika czytała `dymek.hidden`, żeby zdecydować, co
+zrobić po kliknięciu. Wywróciło się to na kolejności zdarzeń: `mouseenter`
+poprzedza `click`, więc dymek był już pokazany, klik odczytywał „otwarty"
+i natychmiast go zamykał. **Na telefonie działałoby bez zarzutu** — tam nie ma
+najeżdżania — a myszą nie dało się otworzyć wcale.
+
+- [x] Przełącznik trzyma własny stan, a nie zgaduje go z widoczności
+
+Zestaw `proporcja-bez-zmyslow` sprawdza teraz właściwość, a nie wygląd:
+pasek statusu nie zajmuje miejsca, ⓘ jest w nagłówku, dotknięcie pokazuje
+pełną treść, a wysokość panelu i obrazu **nie zmienia się ani o piksel**.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
