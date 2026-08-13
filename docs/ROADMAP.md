@@ -3225,6 +3225,66 @@ patrzył. Doszły też dwie poprawki do samych asercji — obie tego rodzaju,
 30 przypadków (6 okien × 5 stanów), wszystkie zielone. Na starym arkuszu stylów
 telefon poziomo gubi 317–423 px sterowania pod krawędzią ekranu.
 
+## ✅ Partia 68 — status pod nastawami i poziomy rozjazd (GOTOWE)
+
+Marcin: „już jest lepiej, ale ten tekst »Podgląd działa, ale…« wchodzi nieładnie
+pod Nastawy, zarówno na mobile, jak i na desktop. Wszystko rozjeżdża się, jak
+włączy się tryb pełnoekranowy."
+
+### 1. Obcięcie statusu bez gwarancji, gdzie tnie
+
+Zmierzone: treść statusu ma 107 px, element 53 px, a przeglądarka melduje
+`display: flow-root` zamiast `-webkit-box`. Czyli obcinał **`overflow: hidden`**,
+a nie `-webkit-line-clamp` — bez wielokropka i bez kontroli nad tym, gdzie
+przebiega cięcie. Przy `line-height: normal` wysokość wiersza wyznacza font
+urządzenia, więc na jednym telefonie wypadało równo, a na innym w połowie
+wiersza — i wtedy resztka wchodziła pod ramkę nastaw.
+
+- [x] `line-height` podany wprost i `max-height` policzone w tych samych
+      jednostkach (`calc(2 * 1.5em + 16px)`). Wysokość jest wielokrotnością
+      wiersza **z konstrukcji**, niezależnie od kroju pisma. Clamp zostaje
+      obok — tam, gdzie działa, dokłada wielokropek
+
+### 2. Poziomy rozjazd
+
+Zmierzone w wąskim panelu: `plan-box` szerokie na 170 px, jego treść na 203.
+Winowajcą była linijka nastaw `1/50 · f/5.6 · ISO 100` z `flex: 0 0 auto`,
+czyli „nigdy się nie kurcz" — w foncie stałej szerokości ma swoje 190 px
+i wypychała poziomy pasek przewijania, ucinając liczby po prawej.
+
+- [x] `flex: 0 1 auto` + `min-width: 0` + `overflow-wrap: anywhere` —
+      linijka zawija się zamiast wystawać
+- [x] `.plan-row` z `minmax(min(120px, 100%), 1fr)`: kolumna o sztywnym
+      minimum nie umiała zejść poniżej niego w wąskim panelu
+
+### Trzy pomyłki w samych zestawach
+
+Ta partia była w większej części o testach niż o kodzie — i każda pomyłka
+była innego rodzaju:
+
+- [x] **Zestaw nie mógł zobaczyć usterki.** `panel-kamery-miesci` działa
+      z atrapą zmysłów włączoną, więc status jest tam krótki („nic nie
+      wykryto"). Długi komunikat istnieje WYŁĄCZNIE przy wyłączonych zmysłach,
+      czyli w `proporcja-bez-zmyslow` — i tam trafiło sprawdzenie
+- [x] **Pomiar bez sensu, wypisany bez mrugnięcia.** „Status nachodzi na
+      nastawy o 772 px" — bo pudełko było ukryte (brak współrzędnych)
+      i mierzyliśmy odległość do elementu o zerowych wymiarach. Doszło
+      ustawienie lokalizacji i jawne sprawdzenie, że pudełko jest widoczne
+- [x] **Test przechodził na kodzie zepsutym u użytkownika.** Stary arkusz daje
+      w Chromium 2,05 wiersza, czyli niewidoczny piksel — usterki Marcina
+      nie da się w kontenerze odtworzyć. Dlatego zestaw pyta o MECHANIZM
+      (`line-height` podany wprost, `max-height` w wierszach), a nie o wynik
+      pomiaru. To jedyny sposób, by chronić urządzenia, których nigdy
+      nie zobaczymy
+
+Doszły też dwa pomiary, których wcześniej nie było w ogóle: **poziomy rozjazd**
+(`scrollWidth - clientWidth`) i **obraz wychodzący poza panel** — ten drugi jest
+groźny, bo `overflow: hidden` ucina dół kadru bez śladu, a wszystkie pozostałe
+pomiary dalej mówią „mieści się". Plus siódme okno, 620×340: najciaśniejszy
+poziom tuż nad progiem dwóch kolumn, gdzie wiąże już szerokość ekranu.
+
+35 przypadków (7 okien × 5 stanów).
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

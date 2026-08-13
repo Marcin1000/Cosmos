@@ -49,6 +49,10 @@ const OKNA = [
      nie widział przypadku, na który Marcin patrzył. */
   ['telefon poziomo 844×390', { width: 844, height: 390 }],
   ['telefon poziomo 740×360', { width: 740, height: 360 }],
+  /* Najciaśniejszy poziom, tuż nad progiem dwóch kolumn (600 px). Tu wiąże
+     już szerokość ekranu, a nie wysokość — czyli przypadek, w którym obraz
+     najłatwiej wypycha się poza panel i jest po cichu ucinany. */
+  ['telefon poziomo 620×340', { width: 620, height: 340 }],
   ['laptop 1440×700', { width: 1440, height: 700 }],
   ['desktop 1440×900', { width: 1440, height: 900 }],
 ];
@@ -142,8 +146,52 @@ async function poczekajNaUklad(pg) {
              390 px, czyli 89,7% — tuż pod progiem 90%. Margines jest tym,
              co arkusz stylów faktycznie zadaje, więc mierzmy to samo. */
           naCalaSzerokosc: pr.width >= window.innerWidth - 48,
+          /* POZIOMY ROZJAZD. Marcin: „wszystko rozjeżdża się, jak włączy się
+             tryb pełnoekranowy". Zestaw mierzył dotąd wyłącznie pion — a treść
+             szersza niż panel wypycha pasek przewijania w bok i ucina liczby
+             nastaw po prawej. */
+          zaSzerokoPanel: panel.scrollWidth - panel.clientWidth,
+          zaSzerokoDol: body ? body.scrollWidth - body.clientWidth : 0,
+          /* Status i pudełko nastaw stoją jedno nad drugim w tej samej
+             kolumnie. Jeśli status jest przycięty w pół wiersza, wygląda to
+             jak tekst wchodzący pod Nastawy. */
+          statusH: Math.round(document.getElementById('live-status').getBoundingClientRect().height),
+          statusLinia: parseFloat(getComputedStyle(document.getElementById('live-status')).lineHeight),
+          statusPion: getComputedStyle(document.getElementById('live-status')).paddingTop,
+          /* Ile obrazu wychodzi poza panel. Panel ma `overflow: hidden`, więc
+             scena wyższa niż jej miejsce jest przycinana BEZ ŚLADU — dół kadru
+             znika, a wszystkie dotychczasowe pomiary dalej mówią „mieści się".
+             Marcin widział to na zrzucie z telefonu trzymanego poziomo. */
+          scenaPozaPanelem: scena
+            ? Math.round(scena.getBoundingClientRect().bottom - pr.bottom) : 0,
         };
       });
+      /* Nic nie ma prawa być szersze niż panel. Poziomy pasek przewijania
+         w oknie wielkości panelu kamery znaczy, że któryś element nie umie
+         się zwęzić — a wtedy liczby nastaw uciekają poza prawą krawędź. */
+      if (r.zaSzerokoPanel > 1) {
+        fail.push(`${nazwa} / ${tryb}: treść panelu jest o ${r.zaSzerokoPanel} px szersza `
+          + 'niż on sam — poziomy rozjazd');
+      }
+      if (r.zaSzerokoDol > 1) {
+        fail.push(`${nazwa} / ${tryb}: dolna część jest o ${r.zaSzerokoDol} px szersza `
+          + 'niż panel — poziomy rozjazd pod obrazem');
+      }
+      /* Status ma się kończyć na pełnym wierszu. Ucięty w połowie wygląda
+         jak tekst wchodzący pod pudełko nastaw — i tak właśnie zgłosił to
+         Marcin: „ten tekst wchodzi nieładnie pod Nastawy". */
+      if (r.statusH > 0 && r.statusLinia > 0) {
+        const wiersze = (r.statusH - 16) / r.statusLinia;
+        const ulamek = Math.abs(wiersze - Math.round(wiersze));
+        if (ulamek > 0.2) {
+          fail.push(`${nazwa} / ${tryb}: status ma ${wiersze.toFixed(2)} wiersza `
+            + '— ostatni jest ucięty w połowie i wchodzi pod nastawy');
+        }
+      }
+      if (r.scenaPozaPanelem > 1) {
+        fail.push(`${nazwa} / ${tryb}: obraz wychodzi o ${r.scenaPozaPanelem} px poza panel `
+          + '— dół kadru jest ucinany bez śladu przez `overflow: hidden`');
+      }
       const miesci = r.panel <= r.okno && r.gora >= -1 && r.glowaWidoczna;
       const dojedzie = r.przyciskWPanelu || r.przewija;
       console.log(`   ${tryb}: panel ${r.panel}/${r.okno} px, obraz ${r.scena} px, `

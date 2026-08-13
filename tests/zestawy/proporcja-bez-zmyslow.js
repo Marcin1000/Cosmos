@@ -32,6 +32,14 @@ if (!maPrzegladarke()) {
   // `goly` = serwer bez atrap, więc i bez usługi zmysłów. Dokładnie sytuacja
   // Marcina z telefonu przy wyłączonym komputerze domowym.
   const env = await srodowisko('goly');
+  /* Bez współrzędnych pudełko nastaw zostaje ukryte, a wtedy pomiar „czy
+     status na nie nachodzi" mierzy odległość do elementu o zerowych wymiarach
+     i wypisuje bzdurę (772 px). Pierwsza wersja tego zestawu tak właśnie
+     zrobiła i sama się na tym złapała. */
+  await fetch(`${env.adres}/api/location`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ location: 'Złotokłos', lat: 52.0247, lon: 20.9019 }),
+  }).catch(() => {});
   const br = await przegladarka({ args: [
     '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
   ] });
@@ -93,6 +101,93 @@ if (!maPrzegladarke()) {
       fail.push(`${nazwa}: czarne pasy zajmują ${pasyProc}% szerokości sceny `
         + `(strumień ${mediaProporcja.toFixed(2)}, scena ${r.scenaProporcja.toFixed(2)})`);
     }
+    /* --- STATUS NIE MOŻE WCHODZIĆ POD NASTAWY -------------------------
+     *
+     *  Marcin: „ten tekst »Podgląd działa, ale…« wchodzi nieładnie pod
+     *  Nastawy, zarówno na mobile, jak i na desktop."
+     *
+     *  Ten komunikat istnieje TYLKO przy wyłączonych zmysłach — ma sześć
+     *  wierszy i to on się nie mieścił. Zestaw `panel-kamery-miesci` nie mógł
+     *  tego zobaczyć, bo działa z atrapą zmysłów włączoną i status jest tam
+     *  krótki („nic nie wykryto"). Dlatego sprawdzenie jest tutaj: to jedyne
+     *  środowisko z prawdziwie długim tekstem.
+     *
+     *  Mierzymy dwie rzeczy. Po pierwsze wysokość CO DO WIERSZA — ucięcie
+     *  w połowie wiersza wygląda dokładnie jak tekst wchodzący pod ramkę
+     *  poniżej. Po drugie brak poziomego rozjazdu, bo to drugie zgłoszenie
+     *  z tej samej pary zrzutów. */
+    await pg.evaluate(() => {
+      const box = document.getElementById('plan-box');
+      if (box) box.open = true;
+    });
+    await pg.waitForTimeout(900);
+    const st = await pg.evaluate(() => {
+      const el = document.getElementById('live-status');
+      const body = document.getElementById('live-body');
+      const box = document.getElementById('plan-box');
+      const cs = getComputedStyle(el);
+      const er = el.getBoundingClientRect();
+      const gora = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      return {
+        tekst: el.textContent.slice(0, 30),
+        wierszy: (er.height - gora) / parseFloat(cs.lineHeight),
+        pelnaTresc: el.scrollHeight > el.clientHeight + 1,
+        // Pudełko musi być WIDOCZNE, inaczej pomiar nie znaczy nic.
+        boxWidoczny: Boolean(box) && box.getBoundingClientRect().height > 0,
+        // Czym wysokość jest ZAGWARANTOWANA, a nie ile akurat wyszło.
+        lineHeight: cs.lineHeight,
+        maxHeight: cs.maxHeight,
+        nachodzi: box ? Math.round(er.bottom - box.getBoundingClientRect().top) : 0,
+        zaSzeroko: body ? body.scrollWidth - body.clientWidth : 0,
+      };
+    });
+    console.log(`   status „${st.tekst}…": ${st.wierszy.toFixed(2)} wiersza, `
+      + `ucięty: ${st.pelnaTresc}, nachodzi na nastawy: ${st.nachodzi} px, `
+      + `poziomy rozjazd: ${st.zaSzeroko} px`);
+    if (!st.pelnaTresc) {
+      fail.push(`${nazwa}: status mieści się w całości — zestaw mierzy nie ten stan `
+        + '(komunikat o wyłączonych zmysłach ma być długi)');
+    }
+    if (Math.abs(st.wierszy - Math.round(st.wierszy)) > 0.15) {
+      fail.push(`${nazwa}: status ma ${st.wierszy.toFixed(2)} wiersza — ostatni jest ucięty `
+        + 'w połowie i wchodzi pod ramkę nastaw');
+    }
+    /* SPRAWDZAMY GWARANCJĘ, NIE PRÓBKĘ — i to jest tu najważniejsze zdanie.
+     *
+     *  Marcin widział na telefonie kawałek trzeciego wiersza wchodzący pod
+     *  ramkę nastaw. W Chromium w kontenerze ta sama wersja kodu daje 2,05
+     *  wiersza, czyli niewidoczny jeden piksel: pomiar wysokości NIE ODTWARZA
+     *  jego usterki i gdyby zestaw opierał się tylko na nim, przechodziłby
+     *  na kodzie, który u użytkownika jest zepsuty.
+     *
+     *  Bo usterka nie brała się z liczby, tylko z tego, CO tę liczbę ustala.
+     *  Przy `line-height: normal` wysokość wiersza wyznacza font urządzenia,
+     *  a obcięcie zależało od `overflow: hidden` — więc gdzie dokładnie
+     *  tnie, rozstrzygał krój pisma w telefonie. Na jednym wypadało równo
+     *  na wierszu, na innym w jego połowie.
+     *
+     *  Dlatego pytamy o mechanizm: `line-height` musi być podany wprost,
+     *  a `max-height` policzone w tych samych jednostkach. Wtedy wysokość
+     *  jest wielokrotnością wiersza Z KONSTRUKCJI, na każdym urządzeniu —
+     *  także takim, którego nigdy nie zobaczymy w tym zestawie. */
+    if (st.lineHeight === 'normal') {
+      fail.push(`${nazwa}: status ma \`line-height: normal\` — wysokość wiersza zależy `
+        + 'wtedy od fontu urządzenia i obcięcie potrafi wypaść w połowie wiersza');
+    }
+    if (!st.maxHeight || st.maxHeight === 'none') {
+      fail.push(`${nazwa}: status nie ma \`max-height\` liczonego w wierszach — `
+        + 'obcięcie zależy wtedy wyłącznie od `overflow`, bez gwarancji, gdzie tnie');
+    }
+    if (!st.boxWidoczny) {
+      fail.push(`${nazwa}: pudełko nastaw jest ukryte — pomiar nachodzenia nic nie znaczy`);
+    } else if (st.nachodzi > 1) {
+      fail.push(`${nazwa}: status nachodzi na pudełko nastaw o ${st.nachodzi} px`);
+    }
+    if (st.zaSzeroko > 1) {
+      fail.push(`${nazwa}: dolna część jest o ${st.zaSzeroko} px szersza niż panel `
+        + '— poziomy rozjazd');
+    }
+
     await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/proporcja-bez-zmyslow-${viewport.width}.png` });
     await ctx.close();
   }
