@@ -2672,7 +2672,7 @@ async function runGeneration(conv, podpiecie = null) {
      o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
      pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
      formalnie to różne kroki. To samo dotyczy zdjęć. */
-  const stan = { archiwum: new Set(), grafiki: new Set() };
+  const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
 
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
@@ -6072,8 +6072,25 @@ function exportConversation() {
     if (m.error) continue;
     const who = m.role === 'user' ? t('exportYou') : 'Cosmos';
     if (m.search) continue;
-    lines.push(`**${who}:**`, '', msgText(m), '');
+    /* WIADOMOŚĆ BEZ TREŚCI NIE MA CO ROBIĆ W ZAPISIE.
+     *
+     *  Siatka miniatur to wiadomość z pustym tekstem i listą zdjęć. Eksport
+     *  wypisywał dla niej sam nagłówek „**Cosmos:**" i pustą linię — a zdjęć
+     *  nie wspominał w ogóle. W przysłanych przez Marcina zapisach widać
+     *  przez to puste dymki w miejscach, gdzie w rozmowie były zdjęcia:
+     *  zapis wyglądał gorzej niż sama rozmowa i sugerował, że Cosmos
+     *  odpowiedział niczym.
+     *
+     *  To jest o tyle istotne, że po tych plikach ocenia się jakość rozmów. */
+    const tekst = msgText(m);
     const imgs = msgImages(m);
+    const foty = msgPhotos(m);
+    if (!tekst && !imgs.length && !foty.length) continue;
+    lines.push(`**${who}:**`, '');
+    if (tekst) lines.push(tekst, '');
+    if (foty.length) {
+      lines.push(`_(${t('export.photos', { n: foty.length })})_`, '');
+    }
     if (imgs.length) lines.push(`_(${imgs.length} × ${t('attachment')})_`, '');
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });

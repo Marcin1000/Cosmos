@@ -172,6 +172,30 @@ function utworzNarzedzia(z) {
          pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
          — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
          w pół zdania. */
+      /* DRUGIE PYTANIE PO UDANYM PIERWSZYM — najczęstsza przyczyna tego,
+         co Marcin nazwał „rozpoczynają kolejne wznawiania odpowiedzi
+         samoczynnie".
+
+         W zapisie rozmowy „Pokaż zdjęcia z Mazur" widać jedno pytanie,
+         DWA przeszukania archiwum i dwie prawie identyczne odpowiedzi.
+         Odcinanie powtórzeń poniżej tego nie łapało, bo łapie wyłącznie
+         filtry IDENTYCZNE, a model za drugim razem zmienił drobiazg.
+
+         Zasada jest prosta: jeśli pierwsze zapytanie coś znalazło, model ma
+         dane i drugie mu nie pomoże — ma odpowiedzieć. Jeśli pierwsze dało
+         zero, drugie jest sensowne (inny rok, `folder=` zamiast `miejsce=`)
+         i wolno je zadać. Rozróżnienie idzie więc po WYNIKU, nie po liczbie
+         wywołań. */
+      if (k.stan.archiwumZWynikiem) {
+        dodajWynikNarzedzia(k.conv,
+          'MASZ JUŻ WYNIK Z ARCHIWUM w tej turze i on odpowiada na pytanie '
+          + 'użytkownika. Nie odpytuj archiwum drugi raz — napisz odpowiedź '
+          + 'na podstawie tego, co dostałeś powyżej. Kolejne zapytanie tylko '
+          + 'wydłuża czekanie i kończy się drugą, prawie taką samą odpowiedzią.',
+          t('chat.archiveQuery'));
+        return { akcja: 'dalej' };
+      }
+
       const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
       if (k.stan.archiwum.has(odcisk)) {
         dodajWynikNarzedzia(k.conv,
@@ -194,6 +218,11 @@ function utworzNarzedzia(z) {
          wyłącznie do modelu jako tekst, więc na „pokaż zdjęcia z rana"
          Marcin dostawał listę nazw plików. */
       const pliki = Array.isArray(dane.wyniki) ? dane.wyniki : [];
+      /* „Coś znalazłem" to także zestawienie liczbowe — ono również jest
+         odpowiedzią i po nim drugie pytanie jest zbędne. */
+      if (pliki.length || (dane.grupy && dane.grupy.length) || Number(dane.znaleziono) > 0) {
+        k.stan.archiwumZWynikiem = true;
+      }
       const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive');
       if (zPodgladem.length) {
         k.conv.messages.push({

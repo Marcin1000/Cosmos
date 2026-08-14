@@ -1869,7 +1869,16 @@ kbd {
  *  W małym podglądzie przycięte brzegi są do przeżycia; wąska kolumna nie.
  *  Powiększony panel pokazuje kadr w całości (`contain`) — tam jest na to miejsce.
  */
-@media (max-width: 720px) {
+/* Próg telefonu to nie tylko SZEROKOŚĆ OKNA.
+   Marcin przysłał zrzut, na którym panel zajmował dwie trzecie ekranu
+   telefonu — czyli reguła poniżej się nie zastosowała, choć urządzenie było
+   telefonem. Nie umiem tego odtworzyć w Chromium przy jego rozmiarze okna,
+   a przyczyn może być kilka (tryb „wersja na komputer", inna skala strony).
+   Zamiast zgadywać, poszerzam warunek o `pointer: coarse` — palec zamiast
+   myszy znaczy „to jest ekran dotykowy" niezależnie od tego, ile pikseli
+   raportuje okno. Ograniczenie do 1024 px zostawia tablety w trybie
+   biurkowym, gdzie pływający panel ma sens. */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .live-panel {
     width: calc(100vw - 24px);
     right: 12px;

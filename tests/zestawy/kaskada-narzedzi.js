@@ -215,6 +215,55 @@ async function uruchom(st, nazwa, acc, stan) {
     }
   }
 
+  /* --- 4c. DRUGIE PYTANIE PO UDANYM PIERWSZYM JEST ODCINANE -------------
+     Marcin: „rozpoczynają kolejne wznawiania odpowiedzi samoczynnie".
+     W zapisie „Pokaż zdjęcia z Mazur" widać jedno pytanie, DWA przeszukania
+     archiwum i dwie prawie identyczne odpowiedzi. Odcinanie powtórzeń tego
+     nie łapało, bo łapie wyłącznie filtry identyczne, a model za drugim
+     razem zmienił drobiazg. */
+  {
+    const st = stanowisko({
+      odpowiedzi: {
+        '/api/archive/search': {
+          znaleziono: 316,
+          wyniki: [{ id: 'onedrive:a', nazwa: 'a.CR3', zrodlo: 'onedrive' }],
+        },
+      },
+    });
+    const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+    await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026]', stan);
+    const poPierwszym = st.dziennik.adresy.length;
+    // INNY filtr, ale pierwszy już coś znalazł — drugie pytanie jest zbędne.
+    await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026 typ=zdjecie]', stan);
+    console.log(`4c. po udanym pierwszym: zapytań ${st.dziennik.adresy.length} `
+      + `(po pierwszym było ${poPierwszym})`);
+    if (st.dziennik.adresy.length !== poPierwszym) {
+      fail.push('drugie zapytanie po udanym pierwszym poszło mimo wszystko — '
+        + 'użytkownik dostanie dwie prawie identyczne odpowiedzi');
+    }
+    const ostatnie = st.dziennik.doModelu[st.dziennik.doModelu.length - 1].tresc;
+    if (!/MASZ JUŻ WYNIK/.test(ostatnie)) {
+      fail.push('model nie dostaje informacji, że ma już dane i ma odpowiedzieć');
+    }
+  }
+
+  /* --- 4d. ...ALE PO PUSTYM WYNIKU DRUGIE PYTANIE JEST SENSOWNE ---------
+     Gdy pierwszy filtr dał zero, drugi bywa właściwą reakcją — inny rok,
+     `folder=` zamiast `miejsce=`. Hamulec, który blokowałby i to, zamieniłby
+     jedną usterkę na drugą. */
+  {
+    const st = stanowisko({ odpowiedzi: { '/api/archive/search': { znaleziono: 0, wyniki: [] } } });
+    const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+    await uruchom(st, 'archiwum', '[ARCHIWUM: miejsce=Mazury]', stan);
+    const poPierwszym = st.dziennik.adresy.length;
+    await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury]', stan);
+    console.log(`4d. po pustym pierwszym: zapytań ${st.dziennik.adresy.length}`);
+    if (st.dziennik.adresy.length <= poPierwszym) {
+      fail.push('po pustym wyniku drugie zapytanie zostało zablokowane — '
+        + 'hamulec jest za szeroki i odcina sensowną poprawkę filtra');
+    }
+  }
+
   /* --- 5. Narzędzia kończące turę kończą ją, reszta oddaje głos ---------- */
   {
     const st = stanowisko({ odpowiedzi: { '/api/studio/image': { url: '/x.png' } } });
