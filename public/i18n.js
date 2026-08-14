@@ -230,7 +230,12 @@ const I18N = {
     'arch.indexing': 'Indeksuję… dodano {n} plików.',
     'arch.indexError': '⚠ Indeksowanie przerwane: {msg}',
     'arch.empty': 'Archiwum jest puste.',
-    'arch.confirmDisconnect': 'Odłączyć OneDrive i usunąć jego wpisy z archiwum?',
+    'arch.confirmDisconnect': 'Odłączyć OneDrive? Zaindeksowany materiał zostaje — '
+      + 'wyszukiwanie działa dalej, przestaną się tylko pokazywać miniatury.',
+    'arch.forget': 'Usuń zaindeksowane',
+    'arch.confirmForget': 'Usunąć z archiwum wszystkie wpisy z OneDrive? '
+      + 'Znikną też rozpoznane treści i dane odczytane z plików — '
+      + 'jednego i drugiego nie da się odzyskać inaczej niż licząc od nowa.',
     'set.stats': 'Statystyki',
     'set.backup': 'Kopia zapasowa',
     'backupDownload': 'Pobierz kopię',
@@ -938,7 +943,12 @@ const I18N = {
     'arch.indexing': 'Indexing… {n} files added.',
     'arch.indexError': '⚠ Indexing stopped: {msg}',
     'arch.empty': 'The archive is empty.',
-    'arch.confirmDisconnect': 'Disconnect OneDrive and remove its entries from the archive?',
+    'arch.confirmDisconnect': 'Disconnect OneDrive? The indexed material stays — '
+      + 'search keeps working, only thumbnails stop showing.',
+    'arch.forget': 'Delete indexed',
+    'arch.confirmForget': 'Delete every OneDrive entry from the archive? '
+      + 'Recognised contents and data read from the files go too — '
+      + 'neither can be recovered except by computing it all again.',
     'set.stats': 'Statistics',
     'set.backup': 'Backup',
     'backupDownload': 'Download backup',

@@ -695,11 +695,27 @@ async function handleOneDrive(req, res, p) {
     return sendJson(res, 200, { przerwano: true });
   }
 
+  /* ODŁĄCZENIE ŹRÓDŁA TO NIE TO SAMO CO USUNIĘCIE MATERIAŁU.
+   *
+   *  Stało tu `archiwum.usunZrodlo('onedrive')`, czyli odłączenie konta
+   *  kasowało CAŁY zaindeksowany materiał — u Marcina 55 tysięcy plików
+   *  razem z rozpoznanymi treściami i dociągniętym EXIF-em. Wystarczyło
+   *  odłączyć i podłączyć konto z powrotem (choćby po to, żeby odświeżyć
+   *  poświadczenia), żeby stracić godziny pracy karty graficznej.
+   *
+   *  Przeczyło to zasadzie zapisanej w nagłówku `lib/archiwum.js`: indeks
+   *  jest PASYWNY i ma działać bez połączenia — „ile klipów 50 mm w tym
+   *  roku" ma odpowiedzieć z telefonu w terenie przy wyłączonym komputerze.
+   *  Bez połączenia nie działają MINIATURY, bo podpisane adresy trzeba
+   *  dociągać na bieżąco; metadane nie mają z tym nic wspólnego.
+   *
+   *  Kasowanie zostaje dostępne, ale jako OSOBNA, świadoma decyzja:
+   *  DELETE /api/archive/source?zrodlo=onedrive. */
   if (p === '/api/onedrive/disconnect' && req.method === 'POST') {
     onedrive.rozlacz();
-    const usuniete = archiwum.usunZrodlo('onedrive');
-    addEvent('archiwum', `odłączono OneDrive (usunięto ${usuniete} wpisów)`);
-    return sendJson(res, 200, { ok: true, usunieto: usuniete });
+    const zostalo = archiwum.szukaj({ zrodlo: 'onedrive' }).length;
+    addEvent('archiwum', `odłączono OneDrive (indeks zachowany: ${zostalo} wpisów)`);
+    return sendJson(res, 200, { ok: true, usunieto: 0, zachowano: zostalo });
   }
 
   return sendJson(res, 404, { error: 'Nieznana trasa OneDrive.' });

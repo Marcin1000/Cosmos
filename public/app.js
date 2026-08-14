@@ -699,6 +699,17 @@ async function odswiezArchiwum() {
     await fetch('/api/onedrive/disconnect', { method: 'POST' }).catch(() => {});
     odswiezArchiwum();
   });
+
+  /* KASOWANIE MATERIAŁU JAKO OSOBNA DECYZJA.
+     Wcześniej robiło to odłączenie konta — jednym kliknięciem, przy okazji
+     czegoś zupełnie innego. Teraz odłączenie tylko rozłącza, a usunięcie
+     wpisów trzeba wybrać świadomie i potwierdzić ostrzeżeniem mówiącym
+     wprost, czego nie da się odzyskać. */
+  przycisk(t('arch.forget'), async () => {
+    if (!confirm(t('arch.confirmForget'))) return;
+    await fetch('/api/archive/source?zrodlo=onedrive', { method: 'DELETE' }).catch(() => {});
+    odswiezArchiwum();
+  });
 }
 
 /* Długie zadanie w paczkach, sterowane z przeglądarki.
