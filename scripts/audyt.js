@@ -59,7 +59,18 @@ console.log(`    PL ${pl.length} · EN ${en.length}`);
   ? zle(`brak parytetu: tylko PL [${tylkoPL}] tylko EN [${tylkoEN}]`)
   : ok('parytet PL/EN pełny');
 const wszystkie = new Set([...pl, ...en]);
-const uzyteApp = [...new Set([...app.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
+/* WSZYSTKIE skrypty klienta, nie sam app.js.
+   Po wydzieleniu `public/narzedzia.js` klucze używane przez narzędzia
+   (chat.searching, chat.archiveQuery, canvas.*) przestały być widziane
+   i audyt zgłosił 45 „martwych" kluczy zamiast 19. Człowiek, który by je
+   skasował, wyciąłby połowę komunikatów kaskady narzędzi — a fałszywy alarm
+   w audycie jest gorszy niż brak kontroli, bo wygląda na wynik pomiaru.
+   To już drugi raz, gdy ta lista skłamała: poprzednio przez regexp nieznający
+   `data-i18n-html`. Czytamy więc katalog, a nie wyliczankę plików. */
+const skryptyKlienta = fs.readdirSync(path.join(R, 'public'))
+  .filter((f) => f.endsWith('.js') && f !== 'i18n.js' && f !== 'sw.js')
+  .map((f) => rd(`public/${f}`)).join('\n');
+const uzyteApp = [...new Set([...skryptyKlienta.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
 /* WSZYSTKIE warianty atrybutu, nie tylko cztery pierwsze z brzegu.
    Regexp bez `-html` i bez `data-prompt-key` podawał jako martwe pięć kluczy,
    które są w interfejsie używane: `kb.hint`, `learn.procIntro` i podpowiedzi
@@ -82,7 +93,7 @@ braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystk
    `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
    da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
    w którym ginie prawdziwa robota do zrobienia. */
-const prefiksyDynamiczne = [...app.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
+const prefiksyDynamiczne = [...skryptyKlienta.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
   && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``)
   && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
