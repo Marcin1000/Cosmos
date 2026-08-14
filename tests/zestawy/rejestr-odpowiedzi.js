@@ -36,17 +36,27 @@ const fail = [];
 const KORZEN = path.join(__dirname, '..', '..');
 const serwer = fs.readFileSync(path.join(KORZEN, 'server.js'), 'utf8');
 
-/* --- 1. Reguła rejestru istnieje i jest pierwsza ------------------------- */
+/* --- 1. Reguła rejestru istnieje i jest DOPISYWANA PIERWSZA --------------
+   Liczy się kolejność w tablicy `extras`, bo tak model je czyta: instrukcja
+   późniejsza nie unieważnia wcześniejszej, ale wcześniejsza nadaje ton.
+   Sprawdzamy więc, w jakiej kolejności server.js je dokłada — opisy narzędzi
+   wchodzą jednym `zbudujInstrukcje(...)`, więc wystarczy porównać te dwa
+   miejsca. Wcześniej stało tu porównanie pozycji dwóch fraz w pliku i padło,
+   gdy opis archiwum wyprowadził się do osobnego modułu. */
 const iRejestr = serwer.indexOf('JAK ODPOWIADASZ');
-const iArchiwum = serwer.indexOf('NARZĘDZIE — ARCHIWUM MATERIAŁU');
+const iNarzedzia = serwer.indexOf('extras.push(...zbudujInstrukcje(');
 console.log(`1. reguła „JAK ODPOWIADASZ": ${iRejestr >= 0 ? `pozycja ${iRejestr}` : 'BRAK'}, `
-  + `opis archiwum: pozycja ${iArchiwum}`);
+  + `dopisanie opisów narzędzi: pozycja ${iNarzedzia}`);
 if (iRejestr < 0) {
   fail.push('brak reguły „JAK ODPOWIADASZ" — nic nie oddziela wiedzy o mechanice '
     + 'od tego, co model mówi użytkownikowi');
-} else if (iArchiwum >= 0 && iRejestr > iArchiwum) {
-  fail.push('reguła rejestru stoi PO opisie archiwum — ma iść przed nim, '
-    + 'bo dotyczy wszystkich narzędzi');
+}
+if (iNarzedzia < 0) {
+  fail.push('nie znalazłem miejsca, w którym dokładane są opisy narzędzi — '
+    + 'zestaw nie ma czego porównać i przestał cokolwiek sprawdzać');
+} else if (iRejestr >= 0 && iRejestr > iNarzedzia) {
+  fail.push('reguła rejestru jest dopisywana PO opisach narzędzi — ma iść przed nimi, '
+    + 'bo dotyczy wszystkich');
 }
 
 /* Co reguła musi obejmować. Każda pozycja odpowiada innemu cytatowi
@@ -66,17 +76,31 @@ console.log(`   punktów reguły obecnych: ${WYMAGANE.filter(([w]) => w.test(ser
   + `/${WYMAGANE.length}`);
 
 /* --- 2. Instrukcje nie podsuwają gotowych zwrotów ------------------------
-   Sprawdzamy TYLKO treść wysyłaną do modelu, nie komentarze w kodzie —
-   komentarz opisujący usterkę ma prawo cytować ją dosłownie i właśnie po to
-   istnieje. Bierzemy więc literały tekstowe z bloków `content:`. */
-function tekstyDlaModelu(zrodlo) {
-  const out = [];
-  const re = /content:\s*((?:'[^']*'|`[^`]*`|\s*\+\s*)+)/g;
-  let m;
-  while ((m = re.exec(zrodlo))) out.push(m[1]);
-  return out.join('\n');
+   Instrukcje narzędzi mieszkają teraz w osobnym module, więc SKŁADAMY JE
+   NAPRAWDĘ i czytamy to, co pojedzie do modelu. Pierwsza wersja tego zestawu
+   wyłuskiwała literały regexpem po server.js — działało, ale sprawdzało
+   tekst pliku zamiast wyniku, więc przegapiłoby każdą treść budowaną
+   warunkowo albo sklejaną w locie. */
+const { zbudujInstrukcje } = require(path.join(KORZEN, 'lib', 'instrukcje-narzedzi.js'));
+const bloki = zbudujInstrukcje({
+  // Wszystko włączone — chcemy zobaczyć KOMPLET instrukcji, nie wycinek.
+  payload: {},
+  krotko: false,
+  bezNarzedzi: false,
+  archiwum: { ile: () => 59421 },
+  userWspolrzedne: { lat: 52.0247, lon: 20.9019 },
+  procedury: () => [{ name: 'wywoływanie filmu' }],
+  urzadzenia: () => [{ name: 'lampa w salonie' }],
+  imageProviders: () => ['nvidia'],
+  KOD_WLACZONY: true,
+  capabilityText: 'opis możliwości',
+});
+const doModelu = bloki.map((b) => b.content).join('\n');
+console.log(`   złożono ${bloki.length} bloków instrukcji, ${doModelu.length} znaków`);
+if (bloki.length < 6) {
+  fail.push(`złożyło się tylko ${bloki.length} bloków instrukcji — przy wszystkim `
+    + 'włączonym powinno być co najmniej sześć; zestaw mierzy wycinek zamiast całości');
 }
-const doModelu = tekstyDlaModelu(serwer);
 
 const ZAKAZANE = [
   [/Microsoft Graph/, 'nazwa cudzej firmy — model recytował ją użytkownikowi'],
@@ -110,10 +134,11 @@ if (iNaglowek < 0) {
 /* --- 4. Rozmiar instrukcji archiwum --------------------------------------
    Nie jako sztywny limit, tylko jako czujnik: ta sekcja rosła przy każdej
    naprawie i to jej rozrost wyprodukował wycieki. Gdy znów zacznie puchnąć,
-   niech ktoś na to spojrzy, zamiast dowiedzieć się z zapisu rozmowy. */
-const start = serwer.indexOf('NARZĘDZIE — ARCHIWUM MATERIAŁU');
-const koniec = serwer.indexOf('});', start);
-const rozmiar = start >= 0 ? serwer.slice(start, koniec).length : 0;
+   niech ktoś na to spojrzy, zamiast dowiedzieć się z zapisu rozmowy.
+   Mierzymy ZŁOŻONY blok, a nie kawałek pliku — bo do modelu jedzie ten
+   pierwszy i tylko jego rozmiar cokolwiek znaczy. */
+const blokArchiwum = bloki.find((b) => /ARCHIWUM MATERIAŁU/.test(b.content));
+const rozmiar = blokArchiwum ? blokArchiwum.content.length : 0;
 const SUFIT = 6000;
 console.log(`4. instrukcja archiwum: ${rozmiar} znaków (sufit ostrzegawczy ${SUFIT})`);
 if (rozmiar > SUFIT) {

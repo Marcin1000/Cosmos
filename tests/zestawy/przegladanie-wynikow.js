@@ -136,9 +136,21 @@ const zapytaj = async (qs) => {
   if (!maPodzialRol) fail.push('nagłówek nie mówi modelowi, że próbka ogranicza jego, a nie użytkownika');
   if (!maPrzycisk) fail.push('nagłówek nie wspomina o przycisku „pokaż kolejne"');
 
-  const serwer = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
-  if (!/DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(serwer)) {
-    fail.push('instrukcja stała w server.js nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
+  /* Ta sama zasada musi być też w instrukcji STAŁEJ, nie tylko w nagłówku
+     doklejanym do wyniku — inaczej model pozna ją dopiero po pierwszym
+     zapytaniu. Składamy instrukcje naprawdę: czytanie server.js regexpem
+     przestało działać, gdy opisy narzędzi przeniosły się do osobnego
+     modułu, choć treść była bez zmian. */
+  const { zbudujInstrukcje } = require(path.join(__dirname, '..', '..', 'lib', 'instrukcje-narzedzi.js'));
+  const stala = zbudujInstrukcje({
+    payload: {}, krotko: false, bezNarzedzi: false,
+    archiwum: { ile: () => 100 },
+    userWspolrzedne: null,
+    procedury: () => [], urzadzenia: () => [], imageProviders: () => [],
+    KOD_WLACZONY: false, capabilityText: '',
+  }).map((b) => b.content).join('\n');
+  if (!/DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(stala)) {
+    fail.push('instrukcja stała nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
   }
 
   /* --- 7. Przeglądarka ma czym dobrać następną porcję ---------------------

@@ -151,8 +151,21 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
   if (!res2.dane.znaleziono) fail.push('plik z GPS w promieniu nie znalazł się po miejscu');
   if (res2.dane.zamiastMiejsca) fail.push('podpowiedź dokleja się do poprawnej odpowiedzi');
 
-  // --- 4. Model musi WIEDZIEĆ, że te filtry istnieją ----------------------
-  const prompt = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
+  /* --- 4. Model musi WIEDZIEĆ, że te filtry istnieją ----------------------
+     Czytamy ZŁOŻONE instrukcje, nie plik. Wcześniej stał tu odczyt server.js
+     i regexp po jego treści — padło, gdy opisy narzędzi wyprowadziły się do
+     `lib/instrukcje-narzedzi.js`, mimo że instrukcje były bez zmian. Sam
+     filtr działa (punkty 1-3 wyżej), więc test krzyczał o usterce, której
+     nie było. Składanie prawdziwego kontekstu jest odporne na przeprowadzki
+     i sprawdza to, co naprawdę dostaje model. */
+  const { zbudujInstrukcje } = require(path.join(__dirname, '..', '..', 'lib', 'instrukcje-narzedzi.js'));
+  const prompt = zbudujInstrukcje({
+    payload: {}, krotko: false, bezNarzedzi: false,
+    archiwum: { ile: () => 100 },
+    userWspolrzedne: { lat: 52, lon: 21 },
+    procedury: () => [], urzadzenia: () => [], imageProviders: () => [],
+    KOD_WLACZONY: false, capabilityText: '',
+  }).map((b) => b.content).join('\n');
   const maGodziny = /godzinaOd=/.test(prompt) && /godzinaDo=/.test(prompt);
   const maOstrzezenie = /ZEGAR TO NIE PORA DNIA/.test(prompt);
   const maMiejsce = /MIEJSCE DZIAŁA PO GPS/.test(prompt);

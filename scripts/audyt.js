@@ -365,6 +365,21 @@ for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
 console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
 liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
   : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
+
+/* KLIENT TEŻ MA PRÓG — i to on jest teraz największym plikiem.
+   Audyt marudził wyłącznie na server.js, więc app.js rósł niezauważony
+   do 7834 linii, czyli trzykrotności serwera. Marcin zwrócił na to uwagę
+   sam: „audyt marudzi na server.js, a to app.js jest gorsze i nikt go
+   nie pilnuje". Próg jest wysoki, bo warstwa interfejsu z natury jest
+   największa — ale ma w ogóle istnieć, żeby wzrost był widoczny. */
+const plikiKlienta = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
+const liniiApp = rd('public/app.js').split('\n').length;
+const liniiKlient = plikiKlienta.reduce((n, f) => n + rd(`public/${f}`).split('\n').length, 0);
+console.log(`    public/app.js ${liniiApp} linii + ${plikiKlienta.length - 1} modułów `
+  + `(${liniiKlient - liniiApp} linii)`);
+liniiApp < 7000 ? ok('klient zszedł poniżej 7000 linii')
+  : hmm(`public/app.js ma ${liniiApp} linii — największy plik projektu, `
+    + 'wart wydzielenia kolejnego modułu');
 // Żaden identyfikator z modułu nie może być używany bez importu — inaczej
 // serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
 const glowa = server.slice(0, server.indexOf('// ----', 2500));
