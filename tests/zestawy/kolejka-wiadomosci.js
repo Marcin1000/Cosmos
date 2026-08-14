@@ -123,10 +123,18 @@ if (!maPrzegladarke()) {
   if (!maxSzukan || Number(maxSzukan) > 4) {
     fail.push(`limit rund narzędzi to ${maxSzukan} — jedno pytanie może zająć całą sesję`);
   }
-  // Powtórzone zapytanie do archiwum ma być odcinane, a nie wysyłane ponownie.
-  if (!/pytaniaArchiwum/.test(zrodlo)) {
-    fail.push('brak odcinania powtórzonych zapytań do archiwum');
-  }
+  /* Odcinanie POWTÓRZONYCH zapytań do archiwum sprawdza teraz zestaw
+     `kaskada-narzedzi` — i sprawdza je ZACHOWANIEM: woła narzędzie dwa razy
+     tym samym filtrem i liczy, ile zapytań naprawdę poszło.
+
+     Tutaj stał wcześniej `if (!/pytaniaArchiwum/.test(zrodlo))`, czyli test
+     obecności nazwy zmiennej w pliku. Padł przy przeniesieniu kaskady do
+     `public/narzedzia.js`, mimo że hamulec działał bez zmian — bo pilnował
+     nazwy, a nie własności. Dokładnie ta kruchość, o której pisał Marcin:
+     „za dużo testów sprawdza tekst źródła, nie zachowanie".
+
+     Zostaje tu wyłącznie limit rund, bo to własność PĘTLI, która nadal
+     mieszka w app.js. */
 
   /* ---- 7. Żaden ruch narzędzia nie udaje wiadomości użytkownika ----
      Wyniki narzędzi wracają do modelu z `role: 'user'` — taki jest protokół.

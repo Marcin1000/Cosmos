@@ -145,8 +145,11 @@ const zapytaj = async (qs) => {
      Przycisk potrzebuje trzech rzeczy: zapytania, miejsca zatrzymania i sumy.
      Gdyby siatka ich nie zapamiętała, po odświeżeniu rozmowy przycisk
      zniknąłby razem z resztą wyniku. */
+  /* `dalej: { q, pomin, razem }` sprawdza teraz `kaskada-narzedzi` — woła
+     narzędzie archiwum z atrapą i patrzy, co naprawdę wylądowało w wiadomości.
+     Tutaj był na to regexp po app.js i padł, gdy kaskada przeniosła się do
+     `public/narzedzia.js`, mimo że pole powstawało bez zmian. */
   for (const [co, wzor] of [
-    ['zapamiętane zapytanie', /dalej:\s*\{/],
     ['licznik „pokazane N z M"', /arch\.counter/],
     ['dobieranie po `pomin=`', /pomin=\$\{d\.pomin\}/],
     ['przesuwanie o całą stronę', /d\.pomin \+= /],

@@ -2569,6 +2569,86 @@ function dodajWynikNarzedzia(conv, tresc, etykieta) {
   renderMessages();
 }
 
+/* Rejestr narzędzi. Budowany RAZ, przy wczytaniu skryptu — zależności są
+   stałe, a lista musi być ta sama dla każdej tury. Wszystko, co narzędzia
+   potrafią, siedzi w `public/narzedzia.js`; tutaj zostaje sama pętla. */
+const NARZEDZIA = utworzNarzedzia({
+  t,
+  saveConversations,
+  renderMessages,
+  dodajWynikNarzedzia,
+  stripSearchMarker,
+  readJsonSafe,
+  fetch: (...a) => fetch(...a),
+  webSearch,
+  naKafelek,
+  naKontekst,
+  bezOgonkowKlient,
+  zebranyMaterial,
+  zastosujZmianePlotna,
+  pokazPlotno,
+  /* Komunikat głosowy w trakcie czynności. W trybie pisanym nie ma go wcale,
+     więc narzędzia nie muszą wiedzieć, czy tryb głosowy jest włączony. */
+  async mowGlosem(tekst) {
+    if (!voiceMode) return;
+    setVoiceState('speaking');
+    await speakText(tekst);
+    setVoiceState('thinking');
+  },
+  PORCJA_ARCHIWUM,
+  WZORCE: {
+    SZUKAJ: SEARCH_MARKER_RE,
+    ARCHIWUM: ARCHIVE_RE,
+    PLAN: PLAN_RE,
+    PLOTNO_NOWE: CANVAS_NEW_RE,
+    PLOTNO_ZMIANA: CANVAS_PATCH_RE,
+    KOD: RUN_FENCE_RE,
+    GRAFIKA: PHOTO_MARKER_RE,
+    OBRAZ: IMAGE_MARKER_RE,
+  },
+});
+
+/** Domknij turę odpowiedzią modelu — JEDNO miejsce dla wszystkich narzędzi.
+ *
+ *  Ta logika była wcześniej przepisana trzy razy: przy wyczerpaniu limitu
+ *  wyszukiwań, przy wyczerpaniu limitu zdjęć i na końcu pętli. Dwie kopie
+ *  ustawiały `samoMyslenie`, trzecia nie — więc model rozumujący, któremu
+ *  budżet tokenów poszedł w całości na myślenie, po zdjęciach pokazywał
+ *  surowe rozumowanie zamiast komunikatu. Nikt tego nie zgłosił, bo trzeba
+ *  trafić w rzadki zbieg okoliczności; kopiowanie kodu samo w sobie
+ *  wystarczyło, żeby te trzy ścieżki się rozjechały.
+ *
+ *  @param {object} conv rozmowa
+ *  @param {string} surowe treść od modelu (może być urwana)
+ *  @returns {string} tekst do wypowiedzenia głosem albo pusty
+ */
+async function domknijOdpowiedz(conv, surowe) {
+  // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
+  const tresc = stripSearchMarker(await dokoncz(conv, surowe));
+  /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
+     w całości na myślenie". Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
+     jako odpowiedź — gorsze niż nic: rozumowanie jest po angielsku, urwane
+     i pokazuje deliberację, której użytkownik widzieć nie powinien. */
+  const samoMyslenie = !tresc && Boolean(lastReasoning);
+  if (samoMyslenie) lastThink = lastReasoning;
+  const finalText = samoMyslenie ? t('budgetSpentOnThinking') : (tresc || t('emptyReply'));
+
+  const akcja = finalText.match(ACTION_RE);
+  if (akcja) {
+    const widoczne = finalText.replace(akcja[0], '').trim();
+    conv.messages.push({ role: 'assistant', content: widoczne || '…',
+      think: lastThink, note: lastModelNote });
+    conv.messages.push({ role: 'action',
+      actionType: akcja[1].trim().toLowerCase(), actionText: akcja[2].trim() });
+    saveConversations();
+    return widoczne;
+  }
+  conv.messages.push({ role: 'assistant', content: finalText,
+    think: lastThink, note: lastModelNote, samoMyslenie });
+  saveConversations();
+  return finalText;
+}
+
 async function runGeneration(conv, podpiecie = null) {
   isGenerating = true;
   setGeneratingUI(true);
@@ -2576,488 +2656,67 @@ async function runGeneration(conv, podpiecie = null) {
   let finalText = '';
 
   const MAX_SEARCHES = 3;
-  /* Zapytania do archiwum, które już poszły w tej turze. Model potrafi
-     wywołać trzy razy DOKŁADNIE ten sam filtr i trzy razy dostać to samo
-     zero — widać to było w rozmowie o Mazurach, gdzie „Przeszukuję Twoje
-     archiwum…" pojawiło się kilka razy pod rząd bez zmiany parametrów.
-     Limit głębokości tego nie łapie, bo formalnie to różne kroki. */
-  const pytaniaArchiwum = new Set();
-  /* To samo dla zdjęć. Odkąd po pokazaniu grafik oddajemy głos modelowi,
-     musi istnieć hamulec: bez niego „pokaż zdjęcia" potrafiłoby zjeść
-     wszystkie rundy na jednym miejscu z planu. */
-  const pytaniaGrafik = new Set();
+  /* Pamięć jednej tury. Model potrafi wywołać trzy razy DOKŁADNIE ten sam
+     filtr i trzy razy dostać to samo zero — widać to było w rozmowie
+     o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
+     pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
+     formalnie to różne kroki. To samo dotyczy zdjęć. */
+  const stan = { archiwum: new Set(), grafiki: new Set() };
+
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
          zapytania do modelu i mają dostać własne biegi. */
       const acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
-      const marker = acc.match(SEARCH_MARKER_RE);
+      const ostatnia = depth === MAX_SEARCHES;
 
-      // Ostatnia runda: model nadal chce szukać, ale limit wyczerpany. Zamiast
-      // pokazać użytkownikowi surowe [SZUKAJ: …] — a tak działo się wcześniej —
-      // każemy mu odpowiedzieć tym, co już zebrał.
-      if (marker && depth === MAX_SEARCHES) {
-        dodajWynikNarzedzia(conv, t('search.enough'), marker[1].trim());
-        const last = await streamOnce(conv);
-        // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
-        const trescOstatnia = stripSearchMarker(await dokoncz(conv, last));
-        let samoMyslenie = false;
-        if (!trescOstatnia && lastReasoning) {
-          lastThink = lastReasoning;
-          finalText = t('budgetSpentOnThinking');
-          samoMyslenie = true;
-        } else finalText = trescOstatnia || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
-          note: lastModelNote, samoMyslenie });
-        saveConversations();
+      /* Które narzędzie zawołał model. Kolejność sprawdzania jest kolejnością
+         na liście w `narzedzia.js` i tam też jest wyjaśniona. */
+      let uzyte = null;
+      let dop = null;
+      for (const narzedzie of NARZEDZIA) {
+        const m = narzedzie.dopasuj(acc);
+        if (m) { uzyte = narzedzie; dop = m; break; }
+      }
+
+      if (!uzyte) {
+        finalText = await domknijOdpowiedz(conv, acc);
         break;
       }
 
-      if (marker && depth < MAX_SEARCHES) {
-        const q = marker[1].trim();
-        /* `stripSearchMarker`, a NIE `replace(marker[0], '')`.
-         *
-         *  Podmiana usuwa jedno wystąpienie — pierwsze. Gałąź archiwum używa
-         *  pełnego czyszczenia od dawna, ta jedna została z podmianą i nikt
-         *  tego nie zauważył, dopóki model nie napisał dziesięciu zapytań
-         *  naraz. Wykonaliśmy pierwsze, a pozostałe dziewięć stanęło
-         *  użytkownikowi na ekranie jako treść odpowiedzi — w zapisie
-         *  rozmowy o Majorce widać je wszystkie, jedno pod drugim. */
-        const before = stripSearchMarker(acc);
-        /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
-           jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć —
-           i tak powstał plan Majorki z godzinami otwarcia atrakcji, których
-           nikt nie sprawdził. Musi wiedzieć, ile z jego zapytań poszło. */
-        const ileZapytan = (acc.match(/\[SZUKAJ:/gi) || []).length;
-        // Ta sama zasada co przy zdjęciach: komunikat o trwającej czynności
-        // ma się domknąć, kiedy czynność się skończy.
-        const szukanie = {
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.searching', { q }),
-        };
-        conv.messages.push(szukanie);
-        saveConversations();
-        renderMessages();
-        if (voiceMode) {
-          setVoiceState('speaking');
-          await speakText(t('voice.searching'));
-          setVoiceState('thinking');
-        }
-        const resultsText = await webSearch(q);
-        szukanie.content = (before ? before + '\n\n' : '') + t('chat.searched', { q });
-        const uwagaOReszcie = ileZapytan > 1
-          ? `\n\nUWAGA: w tej turze poprosiłeś o ${ileZapytan} wyszukań, a wykonane `
-            + 'zostało TYLKO to jedno. Pozostałych nikt nie sprawdził i nie masz ich '
-            + 'wyników. Nie pisz o nich tak, jakbyś je miał — jedno wyszukanie na turę. '
-            + 'Jeśli reszta jest potrzebna, poproś o kolejne pojedynczo.'
-          : '';
-        dodajWynikNarzedzia(conv, resultsText + uwagaOReszcie, q);
-        continue;
-      }
-
-      // Archiwum: pytania o WŁASNY materiał użytkownika.
-      const archMarker = acc.match(ARCHIVE_RE);
-      if (archMarker && depth < MAX_SEARCHES) {
-        const q = new URLSearchParams();
-        let grupuj = '';
-        /* Tniemy PRZED następnym `klucz=`, nie na każdej spacji. Wcześniej
-           `folder=Mazury 2026` rozpadało się na `folder=Mazury` plus sierotę
-           „2026", którą pętla po cichu wyrzucała — przy nazwie folderu to
-           zwykle nadal trafiało, ale `miejsce=Nowy Sącz` szukało już „Nowy",
-           a `bezFolderu=Mazury 2026` wykluczyłoby wszystkie Mazury, także
-           z innych lat. */
-        for (const kawalek of archMarker[1].trim().split(/\s+(?=[a-zA-Z]+=)/)) {
-          const i = kawalek.indexOf('=');
-          if (i < 1) continue;
-          const k = kawalek.slice(0, i).trim();
-          const v = kawalek.slice(i + 1).trim();
-          if (!v) continue;
-          if (k === 'grupuj') grupuj = v; else q.set(k, v);
-        }
-
-        /* Ten sam filtr drugi raz nie przyniesie innej odpowiedzi. Zamiast
-           pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
-           — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
-           w pół zdania. */
-        const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
-        if (pytaniaArchiwum.has(odcisk)) {
-          dodajWynikNarzedzia(conv,
-            'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
-            + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
-            + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
-            + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
-            + 'i napisz wprost, czego nie udało się znaleźć.',
-            t('chat.archiveQuery'));
-          continue;
-        }
-        pytaniaArchiwum.add(odcisk);
-
-        const before = stripSearchMarker(acc.replace(archMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.searchingArchive'),
-        });
-        saveConversations();
-        renderMessages();
-        let dane;
-        try {
-          // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
-          const adres = grupuj
-            ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
-            : `/api/archive/search?limit=${PORCJA_ARCHIWUM}&${q}`;
-          const r = await fetch(adres);
-          dane = await readJsonSafe(r);
-          if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
-        } catch (err) { dane = { error: err.message }; }
-
-        /* PODGLĄDY, nie tylko opis słowami.
-           Do tej pory wynik archiwum szedł wyłącznie do modelu jako tekst,
-           więc na „pokaż zdjęcia z rana" Marcin dostawał listę nazw plików.
-           Siatka miniatur była podpięta tylko pod wyszukiwanie w internecie.
-           Miniatury lecą przez `/api/archive/thumb`, bo adresy z OneDrive
-           wygasają i muszą być dociągane teraz, a nie przy indeksowaniu. */
-        const pliki = (dane && Array.isArray(dane.wyniki)) ? dane.wyniki : [];
-        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive');
-        if (zPodgladem.length) {
-          conv.messages.push({
-            role: 'assistant',
-            content: {
-              text: '',
-              photos: zPodgladem.map(naKafelek),
-              /* Zapamiętujemy zapytanie, żeby przycisk pod siatką mógł dobrać
-                 dalszy ciąg. `q` jest bez `limit` i bez `pomin` — te dokleja
-                 stopka, bo tylko ona wie, ile już pokazano. */
-              dalej: {
-                q: q.toString(),
-                pomin: pliki.length,
-                razem: Number(dane.znaleziono) || pliki.length,
-              },
-            },
-          });
-          saveConversations();
-          renderMessages();
-        }
-
-        dodajWynikNarzedzia(conv,
-          'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-          + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
-          + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
-          + naKontekst(dane),
-          t('chat.archiveQuery'));
-        continue;
-      }
-
-      // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
-      const planMarker = acc.match(PLAN_RE);
-      if (planMarker && depth < MAX_SEARCHES) {
-        /* Dzielimy na `klucz=wartość`, ale wartość MOŻE mieć spacje —
-           „obiektyw=24-70 f/2.8, 70-200 f/4" to jedna wartość, nie cztery
-           parametry. Dzielenie po samych spacjach urywało ją na „24-70",
-           przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8:
-           odpowiedź brzmiała sensownie i była nieprawdziwa. Tniemy więc tylko
-           tam, gdzie po spacji zaczyna się kolejne `słowo=`. */
-        const parametry = {};
-        const ALIASY = { obiektywy: 'obiektyw', szklo: 'obiektyw', lens: 'obiektyw' };
-        for (const kawalek of planMarker[1].trim().split(/\s+(?=[a-zA-Z_]+=)/)) {
-          const i = kawalek.indexOf('=');
-          if (i <= 0) continue;
-          const k = kawalek.slice(0, i).trim().toLowerCase();
-          const v = kawalek.slice(i + 1).trim();
-          if (!v) continue;
-          parametry[ALIASY[k] || k] = /^[\d.]+$/.test(v) ? Number(v) : v;
-        }
-        const before = stripSearchMarker(acc.replace(planMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.planning'),
-        });
-        saveConversations();
-        renderMessages();
-        let plan;
-        try {
-          const r = await fetch('/api/plan', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parametry),
-          });
-          plan = await readJsonSafe(r);
-          if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
-        } catch (err) {
-          plan = { error: err.message };
-        }
-        dodajWynikNarzedzia(conv,
-          'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
-          + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
-          t('chat.planQuery'));
-        continue;
-      }
-
-      // Płótno: nowy dokument albo poprawka fragmentu w istniejącym.
-      const nowePlotno = acc.match(CANVAS_NEW_RE);
-      const zmianaPlotna = acc.match(CANVAS_PATCH_RE);
-      if (nowePlotno || zmianaPlotna) {
-        let opis;
-        if (nowePlotno) {
-          conv.canvas = {
-            title: (nowePlotno[1] || '').trim() || t('canvas.untitled'),
-            text: nowePlotno[2].replace(/\n$/, ''),
-          };
-          opis = t('canvas.created', { title: conv.canvas.title });
+      /* Limit rund wyczerpany, a model wciąż sięga po narzędzie. Zamiast
+         pokazać użytkownikowi surowy znacznik — a tak działo się kiedyś —
+         mówimy modelowi, że ma dokończyć tekstem, i domykamy turę tą samą
+         drogą co zawsze. */
+      if (ostatnia && !uzyte.zawszeDozwolone) {
+        const limit = uzyte.gdyLimit ? uzyte.gdyLimit(dop) : null;
+        if (limit) {
+          dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta);
+          const ostatniaTresc = await streamOnce(conv);
+          finalText = await domknijOdpowiedz(conv, ostatniaTresc);
         } else {
-          const wynik = zastosujZmianePlotna(conv, zmianaPlotna[1]);
-          opis = wynik.ok
-            ? t('canvas.patched', { n: wynik.ile })
-            : t('canvas.patchFailed', { msg: wynik.blad });
+          // Narzędzie bez własnego komunikatu: po prostu domknij tym, co jest.
+          finalText = await domknijOdpowiedz(conv, acc);
         }
-        const before = stripSearchMarker(acc.replace((nowePlotno || zmianaPlotna)[0], ''));
-        conv.messages.push({ role: 'assistant', content: (before ? before + '\n\n' : '') + opis });
-        saveConversations();
-        renderMessages();
-        pokazPlotno(conv);
-        finalText = opis;
         break;
       }
 
-      /* Kod sprawdzamy najpierw: wynik programu zwykle jest treścią odpowiedzi,
-         a nie dodatkiem do niej. Pętla wraca potem do modelu, żeby ten
-         zinterpretował liczby — inaczej użytkownik dostaje surowy stdout. */
-      const kodMarker = acc.match(RUN_FENCE_RE);
-      if (kodMarker && depth < MAX_SEARCHES) {
-        const kod = kodMarker[1];
-        const before = stripSearchMarker(acc.replace(kodMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.running'),
-          code: kod,
-        });
-        saveConversations();
-        renderMessages();
-        let wynik;
-        try {
-          const r = await fetch('/api/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Program dostaje treść załączników tej rozmowy jako pliki.
-            body: JSON.stringify({ code: kod, files: zebranyMaterial(conv) }),
-          });
-          wynik = await readJsonSafe(r);
-          if (!r.ok) throw new Error(wynik.error || `HTTP ${r.status}`);
-        } catch (err) {
-          wynik = { stdout: '', stderr: err.message, wyniki: [] };
-        }
-        const svg = (wynik.wyniki || []).filter((w) => /\.svg$/i.test(w.name));
-        conv.messages.push({
-          role: 'assistant',
-          content: { text: '', run: wynik },
-          ...(svg.length ? {} : {}),
-        });
-        // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
-        dodajWynikNarzedzia(conv, t('chat.runResult', {
-          out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
-          err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
-        }), t('chat.runQuery'));
-        continue;
-      }
+      const wynik = await uzyte.wykonaj({
+        acc,
+        dop,
+        conv,
+        depth,
+        ostatnia,
+        // Tekst modelu sprzed znacznika — WSZYSTKIE znaczniki wyczyszczone.
+        przed: stripSearchMarker(acc.replace(dop[0], '')),
+        stan,
+      });
 
-      /* Zdjęcia z internetu. Sprawdzane PRZED [OBRAZ:], bo gdy model wypisze
-         oba, użytkownik prosił o zdjęcia — generowanie było jego drugim
-         wyborem, nie pierwszym. */
-      const fotoMarker = acc.match(PHOTO_MARKER_RE);
-      /* Limit rund wyczerpany, a model wciąż prosi o kolejne zdjęcia. Tak
-         skończyła się rozmowa o Majorce: ostatnią rzeczą na ekranie było
-         „🖼️ Zdjęcia: Andratx, Fornalutx, Porto Cristo, Cala Pi" i cisza —
-         plan urwał się w połowie, bez zdania domykającego. Zamiast po prostu
-         przestać, mówimy modelowi wprost, żeby dokończył tekstem. */
-      if (fotoMarker && depth === MAX_SEARCHES) {
-        dodajWynikNarzedzia(conv,
-          'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY — nie dostaniesz już kolejnych. '
-          + 'Nie używaj więcej [GRAFIKA:]. Dokończ teraz odpowiedź tekstem: '
-          + 'domknij plan i napisz wprost, dla których miejsc zdjęć nie '
-          + 'pokazałeś, żeby użytkownik mógł o nie poprosić osobno.',
-          t('chat.photosQuery'));
-        const last = await streamOnce(conv);
-        finalText = stripSearchMarker(await dokoncz(conv, last)) || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
-        saveConversations();
+      if (wynik && wynik.akcja === 'koniec') {
+        finalText = wynik.finalGlos || wynik.finalText || '';
         break;
       }
-      if (fotoMarker) {
-        // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
-        const wszystkie = fotoMarker[1].split(';')
-          .map((s) => s.trim()).filter(Boolean).slice(0, 4);
-        const before = stripSearchMarker(acc.replace(fotoMarker[0], ''));
-        /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
-           dostaniu wyniku lubi poprosić o to samo jeszcze raz — a drugi raz
-           te same zdjęcia to dla użytkownika po prostu usterka. */
-        const zapytania = wszystkie.filter((q) => !pytaniaGrafik.has(bezOgonkowKlient(q)));
-        if (!zapytania.length && depth < MAX_SEARCHES) {
-          dodajWynikNarzedzia(conv,
-            `ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ: ${wszystkie.join(', ')}. `
-            + 'Nie proś o nie ponownie. Albo poproś o INNE miejsca z planu, '
-            + 'albo dokończ odpowiedź tekstem.',
-            t('chat.photosQuery'));
-          continue;
-        }
-        /* Trzymamy tę wiadomość, bo za chwilę trzeba ją PRZEPISAĆ. Wisiała
-           w rozmowie na zawsze jako „Szukam zdjęć: Katedra La Seu…" — pod nią
-           gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich właśnie
-           szuka. Komunikat o trwającej czynności musi się kiedyś skończyć. */
-        const szukanie = {
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.findingPhotos', { q: zapytania.join(', ') }),
-        };
-        conv.messages.push(szukanie);
-        saveConversations();
-        renderMessages();
-        // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
-        const zestawy = await Promise.all(zapytania.map(async (q) => {
-          try {
-            const r = await fetch(`/api/search/images?q=${encodeURIComponent(q)}`);
-            const d = await readJsonSafe(r);
-            return { q, photos: d.results || [], error: d.error || '' };
-          } catch (err) { return { q, photos: [], error: err.message }; }
-        }));
-        const znalezione = zestawy.filter((z) => z.photos.length);
-        if (znalezione.length) {
-          // Czynność się skończyła — komunikat przestaje mówić „szukam".
-          szukanie.content = (before ? before + '\n\n' : '')
-            + t('chat.photosFound', { q: znalezione.map((z) => z.q).join(', ') });
-          for (const z of znalezione) {
-            conv.messages.push({
-              role: 'assistant',
-              content: { text: zapytania.length > 1 ? z.q : '', photos: z.photos },
-            });
-          }
-          finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
-          saveConversations();
-          renderMessages();
-
-          /* Oddajemy głos modelowi zamiast kończyć turę. Wcześniej było tu
-             `break` i wyglądało to tak: Marcin prosi „ze zdjęciami proszę"
-             do siedmiodniowego planu, dostaje osiem zdjęć jednej katedry
-             i ciszę. Zdjęcia leżały obok planu, nieprzypisane do żadnego dnia,
-             a pozostałe przystanki nie doczekały się niczego.
-
-             Model musi wiedzieć, CO dostał — i że wolno mu poprosić o resztę
-             miejsc jednym znacznikiem. Powtórzone zapytania odcinamy tak samo
-             jak w archiwum, żeby nie kręcił się w kółko po tej samej katedrze. */
-          for (const z of znalezione) pytaniaGrafik.add(bezOgonkowKlient(z.q));
-          if (depth < MAX_SEARCHES) {
-            const doZrobienia = zapytania.filter((q) => !znalezione.some((z) => z.q === q));
-            dodajWynikNarzedzia(conv,
-              'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI (już je widzi — nie opisuj ich '
-              + 'po kolei i nie zapowiadaj):\n'
-              + znalezione.map((z) => `• ${z.q} — ${z.photos.length} szt.`).join('\n')
-              + (doZrobienia.length ? `\nBEZ WYNIKÓW: ${doZrobienia.join(', ')}` : '')
-              + '\n\nDokończ teraz odpowiedź: przypisz te zdjęcia do miejsc z planu '
-              + 'jednym–dwoma zdaniami na miejsce. Jeśli plan ma jeszcze inne '
-              + 'przystanki bez zdjęć, poproś o nie JEDNYM znacznikiem '
-              + '[GRAFIKA: miejsce1; miejsce2; miejsce3] — nie po jednym na raz. '
-              + 'Nie proś ponownie o to, co już masz powyżej.',
-              t('chat.photosQuery'));
-            continue;
-          }
-          break;
-        }
-
-        /* Nic nie znaleziono. Kiedyś kończyliśmy tutaj: użytkownik dostawał
-           „nie znalazłem", a MODEL nie dowiadywał się o niczym. Rozmowa
-           urywała się w pół kroku i następne zdanie użytkownika — choćby samo
-           „Kraków" — trafiało w próżnię: model nie wiedział, że przed chwilą
-           coś nie wyszło, ani czego dotyczyło. Wyglądało to jak zgłupienie.
-           Teraz niepowodzenie wraca do modelu tak samo jak wynik wyszukiwania:
-           może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
-        const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
-        if (depth < MAX_SEARCHES) {
-          dodajWynikNarzedzia(conv,
-            `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
-            + (powod ? `Powód techniczny: ${powod}\n` : '')
-            + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
-            + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
-            + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
-            + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
-            + 'czego dokładnie szukać.',
-            t('chat.photosQuery'));
-          continue;
-        }
-        conv.messages.push({
-          role: 'assistant',
-          content: t('chat.photosNone', { msg: powod }),
-          error: true,
-        });
-        finalText = t('chat.photosNoneVoice');
-        saveConversations();
-        break;
-      }
-
-      const imgMarker = acc.match(IMAGE_MARKER_RE);
-      if (imgMarker) {
-        const prompt = imgMarker[1].trim();
-        const before = acc.replace(imgMarker[0], '').trim();
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.genImage'),
-        });
-        saveConversations();
-        renderMessages();
-        if (voiceMode) {
-          setVoiceState('speaking');
-          await speakText(t('voice.generatingImage'));
-          setVoiceState('thinking');
-        }
-        try {
-          const r = await fetch('/api/studio/image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-          });
-          const d = await readJsonSafe(r);
-          if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-          conv.messages.push({
-            role: 'assistant',
-            content: { text: t('chat.imageSaved'), images: [d.url] },
-          });
-          finalText = t('chat.imageDone');
-        } catch (err) {
-          conv.messages.push({
-            role: 'assistant',
-            content: t('chat.imageErr', { msg: err.message }),
-            error: true,
-          });
-          if (voiceMode) finalText = t('chat.imageErrVoice');
-        }
-        saveConversations();
-        break;
-      }
-
-      /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
-         w całości na myślenie”. Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
-         jako odpowiedź — i to było gorsze niż nic: rozumowanie jest po
-         angielsku, urwane w połowie zdania i pokazuje deliberację, której
-         użytkownik widzieć nie powinien. Teraz mówimy wprost, co się stało,
-         a samo myślenie ląduje w zwijanym panelu, gdzie jego miejsce. */
-      // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
-      const trescOdpowiedzi = stripSearchMarker(await dokoncz(conv, acc));
-      let mysliZamiastTresci = '';
-      if (!trescOdpowiedzi && lastReasoning) {
-        mysliZamiastTresci = lastReasoning;
-        lastThink = lastReasoning;
-        finalText = t('budgetSpentOnThinking');
-      } else {
-        finalText = trescOdpowiedzi || t('emptyReply');
-      }
-      const actMarker = finalText.match(ACTION_RE);
-      if (actMarker) {
-        const shown = finalText.replace(actMarker[0], '').trim();
-        conv.messages.push({ role: 'assistant', content: shown || '…', think: lastThink, note: lastModelNote });
-        conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
-        finalText = shown;
-      } else {
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
-          note: lastModelNote, samoMyslenie: Boolean(mysliZamiastTresci) });
-      }
-      saveConversations();
-      break;
     }
   } catch (err) {
     if (err.name === 'AbortError') {
