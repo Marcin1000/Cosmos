@@ -124,15 +124,20 @@ const zapytaj = async (qs) => {
      „pokazuję tylko część, zawęź wyszukiwanie". Musi wiedzieć, że limit
      dotyczy JEGO, nie człowieka. */
   const app = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'app.js'), 'utf8');
-  const maPodzialRol = /PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA/.test(app);
-  const maPrzycisk = /pokaż kolejne/i.test(app);
+  /* Szukamy ZASADY, nie zdania. Pierwsza wersja dopasowywała dokładną frazę
+     „PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA" i padła przy przemianowaniu jej
+     na „LIMIT DOTYCZY CIEBIE…" — mimo że reguła została na miejscu i działała.
+     Test, który pilnuje brzmienia zamiast treści, zgłasza usterkę przy każdej
+     poprawce redakcyjnej i uczy, żeby go ignorować. */
+  const maPodzialRol = /DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(app);
+  const maPrzycisk = /dojdzie do ostatniego|pokaż kolejne/i.test(app);
   console.log(`6. nagłówek dla modelu: podział ról ${maPodzialRol ? 'jest' : 'BRAK'}, `
     + `wzmianka o przycisku ${maPrzycisk ? 'jest' : 'BRAK'}`);
   if (!maPodzialRol) fail.push('nagłówek nie mówi modelowi, że próbka ogranicza jego, a nie użytkownika');
   if (!maPrzycisk) fail.push('nagłówek nie wspomina o przycisku „pokaż kolejne"');
 
   const serwer = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
-  if (!/PRÓBKA OGRANICZA CIEBIE, NIE UŻYTKOWNIKA/.test(serwer)) {
+  if (!/DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(serwer)) {
     fail.push('instrukcja stała w server.js nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
   }
 

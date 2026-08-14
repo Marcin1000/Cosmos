@@ -742,8 +742,17 @@ async function handlePlanZdjeciowy(req, res) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return sendJson(res, 400, {
       error: miejsceNieznane
+        /* Komunikat mówi MODELOWI, co ma zrobić dalej — bo to on go czyta
+           jako pierwszy. Bez tego przy „Cala d'Or, Hotel Barceló Ponent Beach"
+           model dwa razy prosił Marcina o lokalizację, którą już dostał,
+           zamiast spróbować samej nazwy miejscowości. Pytanie użytkownika
+           o coś, co da się wywnioskować z jego poprzedniego zdania, jest
+           najgorszą możliwą reakcją. */
         ? `Nie udało się ustalić współrzędnych miejsca „${miejsceNieznane}". `
-          + 'Podaj je dokładniej (np. „Kraków, Polska") albo wprost jako lat i lon.'
+          + 'SPRÓBUJ JESZCZE RAZ z samą nazwą miejscowości lub regionu, bez hotelu, '
+          + 'plaży i ulicy (np. „Palma" zamiast „Palma, Hotel Barceló Ponent Beach"). '
+          + 'Dopiero gdy i to nie zadziała, zapytaj użytkownika — i nie pytaj go '
+          + 'o miejsce, które już podał.'
         /* Komunikat musi podać drogę, którą da się przejść STĄD. „Podaj lat
            i lon w żądaniu" to instrukcja dla programisty, a nie dla człowieka
            patrzącego na panel — a tuż nad tym napisem jest pole „Miejsce",
@@ -1653,6 +1662,50 @@ async function handleChat(req, res) {
         : '\nNie znasz lokalizacji użytkownika. Jeśli jest potrzebna, zapytaj o nią raz, krótko.'),
   });
 
+  /* JAK MÓWIĆ — reguła, której przez cały czas nie było, i to się mściło.
+   *
+   *  Marcin, po przeczytaniu kilku zapisów rozmów: „te rozmowy nie są
+   *  nienaganne i nie mają takiego flow, jakbym chciał". Miał rację, a duża
+   *  część winy leży w instrukcjach, które sam tu dopisywałem. Każda naprawa
+   *  dokładała modelowi zdanie o tym, JAK DZIAŁA SYSTEM — a model uczciwie
+   *  przekazywał to dalej użytkownikowi. W zapisach widać efekt:
+   *
+   *    „Wszystkie te zdjęcia mają `swiatloPrzyblizone: true`"
+   *    „użytkownik może użyć przycisku »pokaż kolejne« pod miniaturami"
+   *    „do takich wniosków służy polecenie grupowania (`grupuj=aparat`)"
+   *    „Microsoft Graph nie czyta metadanych z RAW-ów"
+   *    „(próbka z 57 728 pasujących plików)"
+   *
+   *  To są MOJE zdania z promptu, oddane człowiekowi, który pytał o zdjęcia
+   *  psa. Nazwy pól, składnia filtrów, nazwy paneli i cudza firma w jednym
+   *  akapicie — plus mówienie o rozmówcy w trzeciej osobie, bo tak brzmiały
+   *  instrukcje.
+   *
+   *  Instrukcje narzędzi zostają, bo są potrzebne, ale od teraz jest granica:
+   *  wiedza o mechanice służy do DZIAŁANIA, nie do CYTOWANIA. Ta reguła stoi
+   *  przed nimi wszystkimi, bo dotyczy każdej odpowiedzi. */
+  extras.push({
+    role: 'system',
+    content:
+      'JAK ODPOWIADASZ — obowiązuje zawsze i jest ważniejsze niż opisy narzędzi niżej.\n'
+      + 'Mówisz o ZDJĘCIACH I KLIPACH, nie o rekordach. Nigdy nie wymieniaj w odpowiedzi '
+      + 'nazw pól (swiatloPrzyblizone, dataNiepewna, zDanymi), składni filtrów '
+      + '(grupuj=, folder=, bezFolderu=), nazw narzędzi ani znaczników, formatu JSON, '
+      + 'nazw paneli w interfejsie ani firm, od których biorą się dane. To jest kuchnia. '
+      + 'Użytkownik ma dostać danie.\n'
+      + 'Gdy coś jest niepewne, powiedz to po ludzku: „ta data pochodzi z pliku, nie '
+      + 'z aparatu — może być datą wgrania", a nie „wpis ma dataNiepewna: true".\n'
+      + 'Zwracasz się do niego BEZPOŚREDNIO — „możesz", „masz". Nigdy „użytkownik może".\n'
+      + 'Nie opowiadaj, co robisz ani czego nie robisz: żadnego „nie wyciągam wniosków", '
+      + '„to moja wiedza na podstawie wyników", „przygotuję odpowiednie zapytanie". '
+      + 'Po prostu odpowiedz.\n'
+      + 'Nie wypisuj list plików ani tabel z metadanymi, jeśli o to nie poproszono — '
+      + 'miniatury już widzi. Odpowiedz na PYTANIE, które zadał.\n'
+      + 'Nie dopisuj na koniec ofert pomocy w rodzaju „jeśli chcesz, mogę zawęzić…", '
+      + 'chyba że naprawdę trzeba wybrać między konkretnymi możliwościami.\n'
+      + 'Długość odpowiedzi dobierz do pytania. Na krótkie pytanie — krótka odpowiedź.',
+  });
+
   // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
   if (userProfile.trim()) {
     extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
@@ -1759,19 +1812,18 @@ async function handleChat(req, res) {
         + '„brak zdjęć z aparatu”) — na to jest `grupuj`, który liczy CAŁOŚĆ. '
         + 'Gdy szukasz materiału z aparatu, a widzisz same telefony, zrób '
         + '[ARCHIWUM: grupuj=aparat …] zamiast orzekać.\n'
-        + 'PRÓBKA OGRANICZA CIEBIE, NIE UŻYTKOWNIKA. Miniatury dostaje on wszystkie '
-        + '— pod siatką jest przycisk „pokaż kolejne”, którym dochodzi do końca '
-        + 'wyniku. Nie pisz więc „pokazuję tylko 20 z 311”, nie przepraszaj za limit '
-        + 'i nie proponuj zawężenia po to, „żeby się zmieściło”. Podaj liczbę '
-        + 'znalezionych plików i tyle.\n'
+        + 'LIMIT DOTYCZY CIEBIE, NIE UŻYTKOWNIKA. On widzi wszystkie miniatury '
+        + 'i sam dochodzi do końca wyniku. Nie pisz więc „pokazuję tylko 20 z 311”, '
+        + 'nie przepraszaj za limit, nie proponuj zawężenia „żeby się zmieściło” '
+        + 'i nie tłumacz, jak działa przeglądanie. Podaj liczbę znalezionych '
+        + 'plików i odpowiedz na pytanie.\n'
         + 'NIE POWTARZAJ TEGO SAMEGO ZAPYTANIA. Jeśli filtr dał zero, zmień go '
         + '(inny rok, `folder=` zamiast `miejsce=`, szerszy zakres) albo powiedz '
         + 'wprost, czego nie znalazłeś. Kolejne identyczne wywołanie da to samo zero.\n'
-        + 'DATA BYWA NIEPEWNA. Wpis z polem `dataNiepewna` ma datę WGRANIA pliku '
-        + 'do chmury, nie datę zrobienia zdjęcia — Microsoft Graph nie czyta '
-        + 'metadanych z RAW-ów. Nie podawaj wtedy dnia ani godziny jako faktu; '
-        + 'powiedz, że to data wgrania, i poleć „Dociągnij dane z plików" '
-        + 'w Plenerze → Archiwum materiału, które przeczyta prawdziwy EXIF.\n'
+        + 'DATA BYWA NIEPEWNA. Wpis z polem `dataNiepewna` ma datę wgrania pliku, '
+        + 'nie datę zrobienia zdjęcia. Nie podawaj wtedy dnia ani godziny jako '
+        + 'faktu — napisz po ludzku, że ta data pochodzi z pliku, nie z aparatu. '
+        + 'Nazwy pola ani powodu technicznego NIE wymieniaj (patrz „JAK ODPOWIADASZ").\n'
         + 'ZAWSZE PATRZ NA POKRYCIE DANYCH. Zestawienie oddaje `zDanymi` i `bezDanych`. '
         + 'Gdy większość plików nie ma wypełnionego pola, liczba NIE JEST odpowiedzią '
         + 'na pytanie „ile” — jest rozmiarem luki w metadanych. Powiedz to wprost, '

@@ -2523,10 +2523,10 @@ function naKontekst(dane) {
       + 'To jest PRÓBKA, nie całe archiwum — nie wyciągaj z niej wniosków o tym, czego '
       + 'w archiwum NIE MA. Jeśli chcesz wiedzieć, co tam jest w całości, poproś '
       + 'o zestawienie (grupuj=aparat, grupuj=rok, grupuj=temat) albo zawęź filtry.\n'
-      + 'PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA. Pod miniaturami ma on przycisk '
-      + '„pokaż kolejne" i dojdzie nim do ostatniego z '
-      + `${znaleziono} plików. Nie pisz mu więc, że pokazujesz tylko część, `
-      + 'nie przepraszaj za limit i nie proponuj zawężenia „żeby się zmieściło" '
+      + 'LIMIT DOTYCZY CIEBIE, NIE UŻYTKOWNIKA. On widzi wszystkie miniatury '
+      + `i sam dojdzie do ostatniego z ${znaleziono} plików. Nie pisz mu więc, `
+      + 'że pokazujesz tylko część, nie przepraszaj za limit, nie proponuj '
+      + 'zawężenia, i nie tłumacz, jak działa przeglądanie '
       + `— napisz po prostu, ile ich jest (${znaleziono}).\n`
     : '';
   return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
@@ -2616,7 +2616,20 @@ async function runGeneration(conv, podpiecie = null) {
 
       if (marker && depth < MAX_SEARCHES) {
         const q = marker[1].trim();
-        const before = acc.replace(marker[0], '').trim();
+        /* `stripSearchMarker`, a NIE `replace(marker[0], '')`.
+         *
+         *  Podmiana usuwa jedno wystąpienie — pierwsze. Gałąź archiwum używa
+         *  pełnego czyszczenia od dawna, ta jedna została z podmianą i nikt
+         *  tego nie zauważył, dopóki model nie napisał dziesięciu zapytań
+         *  naraz. Wykonaliśmy pierwsze, a pozostałe dziewięć stanęło
+         *  użytkownikowi na ekranie jako treść odpowiedzi — w zapisie
+         *  rozmowy o Majorce widać je wszystkie, jedno pod drugim. */
+        const before = stripSearchMarker(acc);
+        /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
+           jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć —
+           i tak powstał plan Majorki z godzinami otwarcia atrakcji, których
+           nikt nie sprawdził. Musi wiedzieć, ile z jego zapytań poszło. */
+        const ileZapytan = (acc.match(/\[SZUKAJ:/gi) || []).length;
         // Ta sama zasada co przy zdjęciach: komunikat o trwającej czynności
         // ma się domknąć, kiedy czynność się skończy.
         const szukanie = {
@@ -2633,7 +2646,13 @@ async function runGeneration(conv, podpiecie = null) {
         }
         const resultsText = await webSearch(q);
         szukanie.content = (before ? before + '\n\n' : '') + t('chat.searched', { q });
-        dodajWynikNarzedzia(conv, resultsText, q);
+        const uwagaOReszcie = ileZapytan > 1
+          ? `\n\nUWAGA: w tej turze poprosiłeś o ${ileZapytan} wyszukań, a wykonane `
+            + 'zostało TYLKO to jedno. Pozostałych nikt nie sprawdził i nie masz ich '
+            + 'wyników. Nie pisz o nich tak, jakbyś je miał — jedno wyszukanie na turę. '
+            + 'Jeśli reszta jest potrzebna, poproś o kolejne pojedynczo.'
+          : '';
+        dodajWynikNarzedzia(conv, resultsText + uwagaOReszcie, q);
         continue;
       }
 
@@ -4092,6 +4111,21 @@ function ustawStatusKamery(tekst, szczegoly = '') {
   dopasujPanelKamery();
 }
 
+/** Status „nic się jeszcze nie wydarzyło" — jeden dla wszystkich miejsc,
+ *  które go potrzebują.
+ *
+ *  Wcześniej każde z nich pisało `'…'` z ręki, także przełącznik przód/tył.
+ *  Wielokropek znaczy „czekam na pierwsze rozpoznanie" i ma sens WYŁĄCZNIE
+ *  przy działających zmysłach. Przy wyłączonych nie miał go co nadpisać,
+ *  więc po przełączeniu kamery zostawał na stałe pasek z samą kropką
+ *  i kreską obramowania nad nią. Marcin: „przy zmianie kamer pojawia się
+ *  dziwna kreska pod podglądem i później nie znika".
+ */
+function ustawStatusSpoczynkowy() {
+  const zmyslyDzialaja = senses.online && senses.caps.yolo;
+  ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja ? '' : t('liveNoSenses'));
+}
+
 /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
  *  pojawienie się niczego nie przesuwa — o to w tej zmianie chodziło. */
 function pokazDymekKamery(widoczny) {
@@ -4255,8 +4289,7 @@ async function startLive() {
   // gdy jest co przełączać. Kinect ma jeden obiektyw.
   $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
 
-  ustawStatusKamery(senses.online && senses.caps.yolo ? '…' : '',
-    senses.online && senses.caps.yolo ? '' : t('liveNoSenses'));
+  ustawStatusSpoczynkowy();
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
 }
@@ -5096,7 +5129,8 @@ $('live-flip').addEventListener('click', async () => {
     video.srcObject = s;
     if (s) video.play().catch(() => {});
   });
-  ustawStatusKamery(r.ok ? '…' : `${t('cam.err')} ${r.error.message}`);
+  if (r.ok) ustawStatusSpoczynkowy();
+  else ustawStatusKamery(`${t('cam.err')} ${r.error.message}`);
 });
 $('live-expand').addEventListener('click', () => {
   const on = $('live-panel').classList.contains('expanded');
