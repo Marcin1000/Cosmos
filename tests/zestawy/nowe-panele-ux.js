@@ -212,19 +212,36 @@ const WASKI = { width: 360, height: 740 };
     fail.push('pudełko nastaw jest domyślnie rozwinięte — zabiera jedną trzecią panelu kamery');
   }
   await pg.waitForTimeout(600);
-  await pg.evaluate(() => {
-    document.getElementById('live-panel').style.display = '';
-    document.getElementById('plan-box').hidden = false;
-    pokazPlan({
+
+  /* Plan podstawiamy PRZEZ TRASĘ, a nie wywołaniem funkcji rysującej.
+     Wcześniej stało tu `pokazPlan({...})` w `page.evaluate` — i przestało
+     działać, gdy plan przeniósł się do `public/plener.js` i nie był już
+     globalną deklaracją skryptu. Tak jest zresztą lepiej: mierzymy układ
+     tego, co narysuje się po prawdziwej odpowiedzi serwera, razem z całą
+     drogą pobrania — a nie samego renderera.
+
+     Zmiana listy „tryb" wywołuje odświeżenie planu, więc wystarczy ona
+     zamiast sięgania do środka modułu. */
+  await pg.route('**/api/plan', (trasa) => trasa.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      miejsce: 'Złotokłos',
+      wspolrzedne: { lat: 52.03, lon: 20.85 },
       slonce: { wysokosc: 4.1, azymut: 303, faza: 'złota godzina', doZlotejMin: -5, doZachoduMin: 41 },
       kadr: { uklad: 'pionowo', proporcje: '9:16' },
       pogoda: { opis: 'częściowe zachmurzenie', temperatura: 18.4, opadyProc: 10 },
-      ustawienia: { czas: '1/60', przyslona: 'f/11', iso: 100, powody: [
-        'Czas 1/60 s wynika z reguły 180° przy 25 kl./s — to on daje naturalne rozmycie ruchu.',
-      ] },
-    });
-  });
-  await pg.waitForTimeout(300);
+      ustawienia: {
+        czas: '1/60',
+        przyslona: 'f/11',
+        iso: 100,
+        powody: ['Czas 1/60 s wynika z reguły 180° przy 25 kl./s — to on daje naturalne rozmycie ruchu.'],
+      },
+    }),
+  }));
+  await pg.selectOption('#plan-mode', { index: 1 }).catch(() => {});
+  await pg.waitForFunction(() => /1\/60/.test(document.getElementById('plan-shot')?.textContent || ''),
+    null, { timeout: 8000 });
   await wBok('panel planu');
   await wystaje('#plan-box', 'panel planu');
   for (const sel of ['#plan-gear', '#plan-mode', '#plan-sky']) {

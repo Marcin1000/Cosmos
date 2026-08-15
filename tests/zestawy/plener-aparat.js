@@ -104,8 +104,16 @@ const ATRAPA = 'http://127.0.0.1:7120';
   /* 6. Aparat, który przestał odpowiadać (uśpione Wi-Fi), nie może zostawić
      przycisku obiecującego działanie. To najczęstszy stan w praktyce —
      R6 II usypia Wi-Fi po kilku minutach bezczynności. */
+  /* Nie zerujemy już pamięci stanu aparatu z zewnątrz — po wydzieleniu
+     `public/plener.js` jest ona prywatna, a przypisanie do `aparatSprawdzony`
+     w `page.evaluate` tworzyłoby tylko nową zmienną globalną i niczego nie
+     resetowało. To dobrze: test, który musi sięgnąć do środka modułu, mierzy
+     jego budowę, a nie zachowanie.
+
+     Sprawdzamy więc to, co widzi Marcin. Atrapa przestaje odpowiadać, panel
+     przelicza plan — i w tym samym przebiegu ma przestać obiecywać działanie,
+     bez czekania na wygaśnięcie trzydziestosekundowej pamięci stanu. */
   await fetch(`${ATRAPA}/awaria?co=off`).catch(() => {});
-  await pg.evaluate(() => { aparatSprawdzony = 0; });
   await pg.click('#fp-go');
   await pg.waitForTimeout(2500);
   const uspiony = await pg.evaluate(() => ({

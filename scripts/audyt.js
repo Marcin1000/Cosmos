@@ -48,7 +48,7 @@ const envEx = rd('.env.example');
    przestaje pasować, nie zgłasza błędu — po prostu zwraca pustą listę,
    a pusta lista czyta się jak „wszystko w porządku". */
 sekcja('Audyt o samym sobie');
-const skryptyHtml = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+const skryptyHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
 const plikiPublic = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
 const nieczytane = skryptyHtml.filter((s) => !plikiPublic.includes(s.replace(/^\.?\//, '')));
 nieczytane.length
@@ -56,11 +56,8 @@ nieczytane.length
   : ok(`audyt czyta wszystkie ${skryptyHtml.length} skryptów wczytywanych przez stronę`);
 
 const sw = rd('public/sw.js');
-const wCache = [...sw.matchAll(/'\/([^']+\.js)'/g)].map((m) => m[1]);
-const pozaCache = skryptyHtml.map((s) => s.replace(/^\.?\//, '')).filter((s) => !wCache.includes(s));
-pozaCache.length
-  ? zle(`skrypty spoza pamięci podręcznej PWA (aplikacja padnie offline): ${pozaCache.join(', ')}`)
-  : ok(`wszystkie skrypty strony są w pamięci podręcznej service workera`);
+/* Drugie pytanie — „czy każdy skrypt jest w pamięci podręcznej PWA" — zadaje
+   sekcja 8, bo tam sprawdzane są przy okazji arkusze stylów i ikony. */
 
 // ---------------------------------------------------------------- 1 składnia
 sekcja('Składnia');
@@ -136,7 +133,18 @@ braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystk
    `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
    da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
    w którym ginie prawdziwa robota do zrobienia. */
-const prefiksyDynamiczne = [...skryptyKlienta.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
+/* Klucz budowany z danych ma DWA zapisy i trzeba znać oba:
+     t('event.' + z.type)          — sklejanie
+     t(`model.tools.${poziom}`)    — wstawka w odwrotnych apostrofach
+   Wersja znająca tylko pierwszy podawała jako martwe `model.tools.zwiezly`
+   i `model.tools.rozmowa` — dwa napisy, które w interfejsie widać za każdym
+   razem, gdy wybrany model ma ograniczony zestaw narzędzi. To TRZECI raz,
+   gdy ta sama lista skłamała w ten sam sposób: audyt zna jeden zapis,
+   a kod używa dwóch. */
+const prefiksyDynamiczne = [
+  ...[...skryptyKlienta.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/\bt\(`([a-zA-Z0-9_.]+\.)\$\{/g)].map((m) => m[1]),
+];
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
   && !skryptyKlienta.includes(`'${k}'`) && !skryptyKlienta.includes(`\`${k}\``)
   && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
@@ -234,9 +242,13 @@ sekcja('Zmienne środowiskowe');
 /* Po podziale na moduły większość `process.env` przeniosła się do lib/ —
    skanowanie samego server.js kazało audytowi uznać 24 poprawne zmienne za
    martwe. Czytamy CAŁY kod serwerowy. */
+/* `automation/` też jest kodem serwera — tam mieszka uruchamianie procedur
+   Playwrightem i to ono czyta `PLAYWRIGHT_EXECUTABLE_PATH`. Bez tego katalogu
+   audyt podawał tę zmienną jako martwy wpis w `.env.example`. */
 const kod = server + rd('senses/service.py')
   + fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`)).join('\n')
-  + fs.readdirSync(path.join(R, 'scripts')).filter((f) => f.endsWith('.js')).map((f) => rd(`scripts/${f}`)).join('\n');
+  + fs.readdirSync(path.join(R, 'scripts')).filter((f) => f.endsWith('.js')).map((f) => rd(`scripts/${f}`)).join('\n')
+  + fs.readdirSync(path.join(R, 'automation')).filter((f) => f.endsWith('.js')).map((f) => rd(`automation/${f}`)).join('\n');
 const uzyteEnv = [...new Set([
   ...[...kod.matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]),
   ...[...kod.matchAll(/os\.environ\.get\("([A-Z0-9_]+)"/g)].map((m) => m[1]),
@@ -249,7 +261,13 @@ const brakEnv = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && !dokZmyslow.inclu
 const tylkoZmysly = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && dokZmyslow.includes(v));
 brakEnv.length ? zle('nigdzie nieopisane: ' + brakEnv.join(', '))
   : ok(`${uzyteEnv.length} zmiennych, wszystkie opisane (${tylkoZmysly.length} w senses/README.md)`);
-const zbedne = [...wPrzykladzie].filter((v) => !uzyteEnv.includes(v) && !kod.includes(v));
+/* Zmienne budowane z nazwy sekretu (`COSMOS_SECRET_<NAZWA>`) nie występują
+   w kodzie dosłownie — i tak ma być, bo nazwę wymyśla użytkownik. Wpis
+   `COSMOS_SECRET_BANK_PW` w przykładzie jest wzorem do naśladowania,
+   a nie martwym kodem. */
+const prefiksyEnv = [...new Set([...kod.matchAll(/process\.env\[\s*[`'"]([A-Z0-9_]+_)/g)].map((m) => m[1]))];
+const zbedne = [...wPrzykladzie].filter((v) => !uzyteEnv.includes(v) && !kod.includes(v)
+  && !prefiksyEnv.some((p) => v.startsWith(p)));
 zbedne.length ? hmm('w .env.example, nieużywane wprost: ' + zbedne.join(', ')) : ok('brak martwych wpisów w .env.example');
 
 // ---------------------------------------------------------------- 6 dokumentacja
@@ -318,7 +336,6 @@ zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
 
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
-const sw = rd('public/sw.js');
 const wersja = (sw.match(/cosmos-v(\d+)/) || [])[1];
 const zasoby = [...sw.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]).filter((a) => a !== '/' && !a.startsWith('/api'));
 const brakZas = zasoby.filter((a) => !ist('public' + a));
@@ -328,7 +345,6 @@ const manifest = JSON.parse(rd('public/manifest.webmanifest'));
 const ikony = (manifest.icons || []).map((i) => i.src).filter((s) => !s.startsWith('data:'));
 const brakIkon = ikony.filter((i) => !ist('public/' + i.replace(/^\//, '')));
 brakIkon.length ? zle('manifest wskazuje brakujące ikony: ' + brakIkon.join(', ')) : ok('ikony z manifestu istnieją');
-const skryptyHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
 const style = [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)].map((m) => m[1]);
 const brakZasob = [...skryptyHtml, ...style].filter((s) => !s.startsWith('http')
   && !ist('public/' + s.replace(/^\//, '').split('?')[0]));
@@ -337,7 +353,14 @@ brakZasob.length ? zle('HTML ładuje nieistniejące pliki: ' + brakZasob.join(',
 const norm = (p) => '/' + p.replace(/^\//, '').split('?')[0];
 const nieWCache = [...skryptyHtml, ...style].filter((s) => !s.startsWith('http')
   && !zasoby.map(norm).includes(norm(s)));
-nieWCache.length ? hmm('poza cache offline: ' + nieWCache.join(', ')) : ok('wszystko, co ładuje HTML, jest w cache offline');
+/* To NIE jest uwaga do rozważenia, tylko usterka. Cosmos jest aplikacją
+   instalowaną (PWA) i ma działać bez sieci — skrypt spoza pamięci podręcznej
+   znaczy biały ekran w terenie, czyli dokładnie tam, gdzie Marcin go używa.
+   Przy każdym nowym module klienta łatwo o to zapomnieć: plik dopisuje się
+   do `index.html`, a do `sw.js` już nie. */
+nieWCache.length
+  ? zle('poza pamięcią podręczną offline (aplikacja padnie bez sieci): ' + nieWCache.join(', '))
+  : ok('wszystko, co ładuje HTML, jest w pamięci podręcznej offline');
 
 // ---------------------------------------------------------------- 9 bezpieczeństwo
 sekcja('Bezpieczeństwo i prywatność');

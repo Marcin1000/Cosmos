@@ -798,7 +798,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 
 ```
 server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
-public/nasluch.js  drugi silnik nasłuchu: własny strumień z mikrofonu + Whisper
+lib/instrukcje-narzedzi.js  opisy narzędzi doklejane do promptu systemowego
 lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
 lib/pamiec.js      pamięć długotrwała (RAG) i embeddingi — wektory plus słowa
 lib/pomysly.js     backlog usprawnień proponowanych przez Cosmosa do akceptacji
@@ -826,6 +826,29 @@ lib/tematy.js      CO fotografujesz: nastawy pod temat i kategorie w archiwum
 lib/ujecia.js      karty ujęć do trybu wideo — co nakręcić, czym i jak długo
 lib/grafiki.js     wyszukiwanie zdjęć w czterech źródłach naraz, z zapasem
 ```
+
+Klient dzieli się tak samo — `public/app.js` trzyma stan aplikacji i obsługę
+zdarzeń, a wszystko, co da się opisać jako „wchodzą dane, wychodzi wynik",
+mieszka obok:
+
+```
+public/app.js      stan rozmowy, kaskada odpowiedzi, kamera, ustawienia
+public/i18n.js     tłumaczenia PL/EN
+public/models.js   katalog modeli — wspólny z serwerem
+public/narzedzia.js  rejestr narzędzi modelu: jedno miejsce na jedno narzędzie
+public/widoki.js   budowniczowie DOM: siatki, panele, podglądy
+public/tekst.js    treść wiadomości i mini-renderer Markdown
+public/protokol.js znaczniki modelu i wynik archiwum → kontekst
+public/plener.js   plan zdjęciowy, karty ujęć, misja drona
+public/nasluch.js  drugi silnik nasłuchu: własny strumień z mikrofonu + Whisper
+```
+
+Granica jest ta sama, co po stronie serwera i równie sprawdzalna: moduły nie
+dostają stanu aplikacji, więc **nie mogą** po niego sięgnąć. Dzięki temu każdy
+z nich da się wczytać w Node i sprawdzić wywołaniem — bez Chromium i bez
+zgadywania z tekstu źródła. Nowy plik trzeba dopisać w dwóch miejscach:
+`public/index.html` (przed `app.js`) i `public/sw.js` (żeby działał offline).
+Audyt pilnuje obu.
 
 Zależność idzie w jedną stronę: rdzeń nie wie nic o dziedzinach. Tam, gdzie
 dziedzina potrzebuje czegoś z innej (Studio zapisuje do bazy wiedzy), serwer
@@ -1029,7 +1052,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 85 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 88 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

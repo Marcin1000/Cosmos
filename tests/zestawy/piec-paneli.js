@@ -75,18 +75,31 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     const tekst = await pg.textContent('#kb-list');
     const pozycji = await pg.locator('#kb-list .kb-item').count()
       || await pg.locator('#kb-list > *').count();
-    const odznaka = (await pg.textContent('#kb-badge')) || '';
     console.log(`1. Baza wiedzy: panel ${otwarty ? 'otwarty' : 'ZAMKNIĘTY'}, `
-      + `pozycji na liście ${pozycji}, odznaka „${odznaka.trim()}"`);
+      + `pozycji na liście ${pozycji}`);
     if (!otwarty) fail.push('Baza wiedzy: kliknięcie w przycisk nie otwiera panelu');
     if (dodana.kod !== 200) fail.push(`Baza wiedzy: zapis notatki dał kod ${dodana.kod}`);
     if (!pozycji) fail.push('Baza wiedzy: dodana notatka nie pojawia się na liście');
     if (!/żagle|Ustawienia do żagli|notatka|\.txt|\.md/i.test(tekst || '')) {
       fail.push(`Baza wiedzy: na liście nie widać dodanej notatki (widzę: „${(tekst || '').trim().slice(0, 80)}")`);
     }
-    /* Odznaka przy przycisku to jedyne miejsce, w którym widać rozmiar bazy
-       bez otwierania panelu — i jedyne, po którym poznasz, że coś się zapisało. */
-    if (!/\d/.test(odznaka)) fail.push('Baza wiedzy: odznaka przy przycisku nie pokazuje liczby pozycji');
+
+    /* ODZNACZANIE, CO IDZIE DO ROZMOWY.
+       Odznaka przy przycisku pokazuje liczbę pozycji ZAZNACZONYCH, nie
+       wszystkich — to znaczy „tyle rzeczy z bazy model dostanie razem
+       z pytaniem". Pierwsza wersja tego testu zakładała, że odznaka liczy
+       całą bazę, i zgłosiła usterkę tam, gdzie kod był w porządku.
+       Sprawdzamy więc rzecz właściwą: czy zaznaczenie ptaszka zmienia
+       licznik, i czy wybór przeżywa zamknięcie panelu. */
+    const przedZaznaczeniem = ((await pg.textContent('#kb-badge')) || '').trim();
+    await pg.locator('#kb-list .kb-item input[type="checkbox"]').first().check();
+    await pg.waitForTimeout(400);
+    const poZaznaczeniu = ((await pg.textContent('#kb-badge')) || '').trim();
+    console.log(`   odznaka: przed „${przedZaznaczeniem}", po zaznaczeniu „${poZaznaczeniu}"`);
+    if (!/\d/.test(poZaznaczeniu)) {
+      fail.push('Baza wiedzy: zaznaczenie pozycji nie zmienia licznika przy przycisku — '
+        + 'nie widać, ile wiedzy jedzie razem z pytaniem');
+    }
 
     await pg.click('#kb-close');
     await pg.waitForTimeout(300);
@@ -275,18 +288,39 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (!otwarte) fail.push('Studio: kliknięcie w przycisk nie otwiera panelu');
     if (brakujace.length) fail.push(`Studio: nie widać sekcji: ${brakujace.join(', ')}`);
 
-    /* BEZ KLUCZY API Studio nie wygeneruje niczego — i to jest normalne.
-       Nienormalne byłoby MILCZENIE: przycisk, który nic nie robi, wygląda
-       jak zepsuty. Klikamy „Generuj obraz" bez klucza i wymagamy, żeby
-       na ekranie stanął powód. */
-    await pg.fill('#studio-image-prompt', 'niedźwiedź w mgle nad jeziorem');
-    await pg.click('#studio-image-go');
-    await pg.waitForTimeout(2500);
-    const wynik = ((await pg.textContent('#studio-image-out')) || '').trim();
-    console.log(`   po kliknięciu „Generuj obraz": „${wynik.slice(0, 70)}"`);
-    if (!wynik) {
-      fail.push('Studio: „Generuj obraz" bez klucza API nie mówi nic — '
-        + 'przycisk, który milczy, wygląda na zepsuty');
+    /* BEZ KLUCZA API sekcja jest WYŁĄCZANA — i to jest dobre zachowanie:
+       przycisk, który po naciśnięciu nic nie robi, jest gorszy od przycisku,
+       którego nie da się nacisnąć. Ale wyłączenie musi być WYTŁUMACZONE.
+       Sam wyszarzony przycisk bez powodu wygląda dokładnie tak samo jak
+       zepsuty.
+
+       Pierwsza wersja tego punktu klikała „Generuj obraz" i czekała na
+       komunikat. Kliknięcie nie doszło — bo `.studio-section.disabled
+       .btn-primary` ma `pointer-events: none`. Kod działał poprawnie,
+       to test pytał o niewłaściwą rzecz. */
+    const stan = await pg.evaluate((lista) => lista.map((s) => {
+      const box = document.getElementById(`studio-sec-${s}`);
+      const off = box && box.querySelector('.studio-off');
+      return {
+        sekcja: s,
+        wylaczona: Boolean(box && box.classList.contains('disabled')),
+        powod: off && getComputedStyle(off).display !== 'none' ? (off.textContent || '').trim() : '',
+      };
+    }), sekcje);
+    for (const s of stan) {
+      console.log(`   ${s.sekcja}: ${s.wylaczona ? 'wyłączona' : 'czynna'}`
+        + (s.powod ? ` — „${s.powod}"` : ''));
+      if (s.wylaczona && !s.powod) {
+        fail.push(`Studio: sekcja „${s.sekcja}" jest wyłączona bez podania powodu — `
+          + 'użytkownik widzi wyszarzony przycisk i nie wie, czego brakuje');
+      }
+      if (!s.wylaczona && s.powod) {
+        fail.push(`Studio: sekcja „${s.sekcja}" jest czynna, ale pokazuje „${s.powod}"`);
+      }
+      // Powód ma NAZWAĆ brakujący klucz, nie tylko powiedzieć „brak klucza".
+      if (s.powod && !/[A-Z_]{6,}/.test(s.powod)) {
+        fail.push(`Studio: sekcja „${s.sekcja}" nie mówi, KTÓREGO klucza brakuje: „${s.powod}"`);
+      }
     }
 
     /* Lista obrazów do edycji bierze się z Bazy wiedzy. Wybór ma być

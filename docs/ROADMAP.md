@@ -3438,6 +3438,87 @@ kolejność dopisywania bloków).
 - [x] Puste dymki w zapisach rozmów — eksport pomijał zdjęcia
 - [x] `kategorie-modeli` brał port na sztywno, z pominięciem zwalniania
 
+## ✅ Partia 71 — podział klienta i koniec z testami po tekście źródła (GOTOWE)
+
+Cztery rzeczy, które sam wskazałem jako najbardziej niepokojące po audycie
+Partii 70. Marcin wybrał je wprost i podkreślił punkt o `app.js`.
+
+### 1. `public/app.js` — 7697 → 6372 linii
+
+Największy plik projektu, trzykrotność serwera, miejsce, gdzie mieszkało
+wszystko naraz: stan, zapisy, obsługa zdarzeń i budowanie DOM-u. Cztery nowe
+moduły, każdy wycięty po jednej granicy i tylko po niej:
+
+- [x] `public/widoki.js` (385) — budowniczowie DOM: siatka miniatur, panel
+      wyniku programu, podglądy obrazu i tekstu
+- [x] `public/tekst.js` (260) — treść wiadomości i mini-renderer Markdown
+- [x] `public/protokol.js` (183) — znaczniki modelu, wynik archiwum → kontekst
+- [x] `public/plener.js` (740) — plan zdjęciowy, karty ujęć, misja drona
+
+Wspólna zasada: moduł nie dostaje stanu aplikacji, więc **nie może** po niego
+sięgnąć. Granica jest przez to sprawdzalna, a nie umowna — i każdy z tych
+plików da się wczytać w Node.
+
+### 2. Testy po tekście źródła — zero z 88
+
+Sedno problemu, nazwane przez Marcina: „za dużo testów sprawdza tekst źródła,
+nie zachowanie". W tej sesji taki test padł **sześć razy** przy przeprowadzce
+kodu, choć funkcja działała bez zmian. Za każdym razem kusiło, żeby przestawić
+regexp na nowy plik — i za każdym razem byłoby to odłożenie problemu.
+
+| Zestaw | Było | Jest |
+|---|---|---|
+| `przegladanie-wynikow` | regexp po `app.js` | nagłówek budowany wywołaniem |
+| `rejestr-odpowiedzi` | j.w. | + sprawdzenie, że przy małym wyniku nagłówka NIE MA |
+| `archiwum-po-folderach` | wycinanie `naKontekst` przez `new Function` | `require` modułu |
+| `archiwum-nic-nie-gubi` | szukanie `usunZrodlo(` w `server.js` | odłączenie na żywym serwerze |
+| `miejsce-z-hotelem` | dwa regexpy po `server.js` | plan liczony przez trasę, komunikat z odpowiedzi |
+| `znaczniki-nie-wyciekaja` | „czy za `AbortError` jest `stripSearchMarker`" | odpowiedź NAPRAWDĘ przerwana w połowie znacznika |
+
+Każdy sprawdzony pod kątem tego, czy **pada na starym, wadliwym kodzie** —
+inaczej byłby to zielony test, który niczego nie mierzy.
+
+Zostały trzy zestawy czytające pliki źródłowe (`nasluch-wlasny`,
+`tempo-archiwum`) i robią to po to, żeby moduł WCZYTAĆ albo podmienić w nim
+adres atrapy. To nie są testy po tekście — to sposób ładowania.
+
+### 3. Pięć paneli bez własnych testów
+
+- [x] `tests/zestawy/piec-paneli.js` — Nauka, Galeria, Baza wiedzy, Studio
+      i Oś czasu, każdy drogą użytkownika: włóż dane trasą zapisu → otwórz
+      panel kliknięciem → sprawdź, że dane WIDAĆ → wykonaj główną akcję →
+      zamknij. Do tego jedno pytanie wspólne: ani jednego błędu w konsoli
+      przez cały przemarsz
+
+Zestaw od razu zgłosił dwie rzeczy — i obie okazały się **moimi błędnymi
+założeniami**, nie usterkami: odznaka przy Bazie wiedzy liczy pozycje
+ZAZNACZONE (a nie wszystkie), a wyłączona sekcja Studia świadomie blokuje
+przycisk (`pointer-events: none`), pokazując przy tym, którego klucza brakuje.
+Test pyta teraz o rzeczy właściwe.
+
+### 4. Audyt, który dwa razy skłamał
+
+- [x] Nowa sekcja 0 „Audyt o samym sobie": czy widzę każdy skrypt wczytywany
+      przez stronę, i czy moje wzorce **wciąż cokolwiek znajdują**. To drugie
+      jest najpodstępniejsze: regexp, który przestał pasować, nie zgłasza
+      błędu — oddaje pustą listę, a pusta lista czyta się jak „w porządku"
+- [x] Skanowanie identyfikatorów, wywołań `/api/` i składni objęło wszystkie
+      moduły klienta, nie sam `app.js`
+- [x] Skrypt poza pamięcią podręczną PWA to teraz **usterka**, nie uwaga —
+      znaczy biały ekran w terenie, czyli tam, gdzie Cosmos jest używany
+
+### Znalezione przy okazji
+
+- [x] **Aparat, który przestał podawać nastawy, dalej miał czynny przycisk
+      „Ustaw w aparacie".** Stan aparatu odpytujemy najwyżej raz na 30 s, więc
+      przez pół minuty po zaśnięciu Wi-Fi `online` było jeszcze prawdą. R6 II
+      usypia po kilku minutach bezczynności — to codzienność w plenerze, nie
+      przypadek brzegowy. Brak wszystkich trzech nastaw traktowany jest teraz
+      jak zniknięcie aparatu
+- [x] `tekst-nie-wpuszcza` — 14 prób wstrzyknięcia HTML, 5 adresów
+      `javascript:`, 10 form składni Markdown. Renderer jest jedyną barierą
+      między odpowiedzią modelu a `innerHTML`, a model cytuje treści z sieci
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)
