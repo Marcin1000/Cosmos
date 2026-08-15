@@ -26,13 +26,53 @@ const start = rd('docs/START-TUTAJ.md');
 const roadmap = rd('docs/ROADMAP.md');
 const envEx = rd('.env.example');
 
+/* ------------------------------------------------------- 0 audyt o samym sobie
+
+   NAJWAŻNIEJSZA SEKCJA W TYM PLIKU, choć nic o Cosmosie nie mówi.
+
+   Audyt skłamał już dwa razy i za każdym razem tak samo: podzieliłem plik,
+   a on dalej czytał tylko `public/app.js`. Raz podał 45 „martwych" kluczy
+   tłumaczeń zamiast 19 (skasowanie ich wycięłoby komunikaty kaskady narzędzi),
+   raz przestał widzieć połowę tras po wyprowadzce do `lib/`. Za każdym razem
+   wynik wyglądał jak pomiar i za każdym razem był zmyśleniem.
+
+   Wspólna przyczyna: audyt miał WYLICZANKĘ plików, a projekt się zmieniał.
+   Poprawka polega na tym, żeby wyliczanki nie było — i żeby narzędzie samo
+   sprawdzało, czy niczego nie przegapiło. Trzy pytania:
+
+     1. czy czytam każdy skrypt, który wczytuje strona,
+     2. czy każdy z nich jest w pamięci podręcznej PWA (inaczej offline pada),
+     3. czy moje wzorce w ogóle jeszcze cokolwiek znajdują.
+
+   Trzecie jest najbardziej podstępne: regexp, który po zmianie zapisu
+   przestaje pasować, nie zgłasza błędu — po prostu zwraca pustą listę,
+   a pusta lista czyta się jak „wszystko w porządku". */
+sekcja('Audyt o samym sobie');
+const skryptyHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+const plikiPublic = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
+const nieczytane = skryptyHtml.filter((s) => !plikiPublic.includes(s.replace(/^\.?\//, '')));
+nieczytane.length
+  ? zle(`strona wczytuje skrypty, których audyt nie widzi: ${nieczytane.join(', ')}`)
+  : ok(`audyt czyta wszystkie ${skryptyHtml.length} skryptów wczytywanych przez stronę`);
+
+const sw = rd('public/sw.js');
+/* Drugie pytanie — „czy każdy skrypt jest w pamięci podręcznej PWA" — zadaje
+   sekcja 8, bo tam sprawdzane są przy okazji arkusze stylów i ikony. */
+
 // ---------------------------------------------------------------- 1 składnia
 sekcja('Składnia');
 try {
-  execSync('node --check server.js && node --check public/app.js && node --check public/i18n.js '
-    + '&& node --check public/models.js && node --check public/sw.js', { cwd: R });
-  ok('pliki JavaScript parsują się bez błędu');
-} catch { zle('błąd składni w JavaScripcie'); }
+  /* Sprawdzamy KAŻDY plik JavaScript w projekcie, nie wymienioną piątkę.
+     Poprzednia wersja miała listę i nowo wydzielone moduły (`narzedzia.js`,
+     `widoki.js`, `tekst.js`, `protokol.js`) nie były w niej sprawdzane wcale. */
+  const doSprawdzenia = [
+    'server.js',
+    ...plikiPublic.map((f) => `public/${f}`),
+    ...fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => `lib/${f}`),
+  ];
+  for (const f of doSprawdzenia) execSync(`node --check ${JSON.stringify(f)}`, { cwd: R });
+  ok(`pliki JavaScript parsują się bez błędu (${doSprawdzenia.length})`);
+} catch (e) { zle('błąd składni w JavaScripcie: ' + String(e.message).split('\n')[0]); }
 try {
   const py = fs.readdirSync(path.join(R, 'senses')).filter((f) => f.endsWith('.py'));
   for (const f of py) execSync(`python3 -c "import ast;ast.parse(open('senses/${f}',encoding='utf-8').read())"`, { cwd: R });
@@ -59,7 +99,18 @@ console.log(`    PL ${pl.length} · EN ${en.length}`);
   ? zle(`brak parytetu: tylko PL [${tylkoPL}] tylko EN [${tylkoEN}]`)
   : ok('parytet PL/EN pełny');
 const wszystkie = new Set([...pl, ...en]);
-const uzyteApp = [...new Set([...app.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
+/* WSZYSTKIE skrypty klienta, nie sam app.js.
+   Po wydzieleniu `public/narzedzia.js` klucze używane przez narzędzia
+   (chat.searching, chat.archiveQuery, canvas.*) przestały być widziane
+   i audyt zgłosił 45 „martwych" kluczy zamiast 19. Człowiek, który by je
+   skasował, wyciąłby połowę komunikatów kaskady narzędzi — a fałszywy alarm
+   w audycie jest gorszy niż brak kontroli, bo wygląda na wynik pomiaru.
+   To już drugi raz, gdy ta lista skłamała: poprzednio przez regexp nieznający
+   `data-i18n-html`. Czytamy więc katalog, a nie wyliczankę plików. */
+const skryptyKlienta = fs.readdirSync(path.join(R, 'public'))
+  .filter((f) => f.endsWith('.js') && f !== 'i18n.js' && f !== 'sw.js')
+  .map((f) => rd(`public/${f}`)).join('\n');
+const uzyteApp = [...new Set([...skryptyKlienta.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]))];
 /* WSZYSTKIE warianty atrybutu, nie tylko cztery pierwsze z brzegu.
    Regexp bez `-html` i bez `data-prompt-key` podawał jako martwe pięć kluczy,
    które są w interfejsie używane: `kb.hint`, `learn.procIntro` i podpowiedzi
@@ -82,9 +133,20 @@ braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystk
    `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
    da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
    w którym ginie prawdziwa robota do zrobienia. */
-const prefiksyDynamiczne = [...app.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
+/* Klucz budowany z danych ma DWA zapisy i trzeba znać oba:
+     t('event.' + z.type)          — sklejanie
+     t(`model.tools.${poziom}`)    — wstawka w odwrotnych apostrofach
+   Wersja znająca tylko pierwszy podawała jako martwe `model.tools.zwiezly`
+   i `model.tools.rozmowa` — dwa napisy, które w interfejsie widać za każdym
+   razem, gdy wybrany model ma ograniczony zestaw narzędzi. To TRZECI raz,
+   gdy ta sama lista skłamała w ten sam sposób: audyt zna jeden zapis,
+   a kod używa dwóch. */
+const prefiksyDynamiczne = [
+  ...[...skryptyKlienta.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/\bt\(`([a-zA-Z0-9_.]+\.)\$\{/g)].map((m) => m[1]),
+];
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
-  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``)
+  && !skryptyKlienta.includes(`'${k}'`) && !skryptyKlienta.includes(`\`${k}\``)
   && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
@@ -113,12 +175,15 @@ gole.length
 // ---------------------------------------------------------------- 3 DOM
 sekcja('Zgodność kodu z HTML-em');
 const maId = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+/* Znowu WSZYSTKIE skrypty klienta, nie sam `app.js` — z tego samego powodu,
+   co przy kluczach i18n. Element tworzony w `widoki.js`, a szukany przez
+   `$()` w `app.js`, po podziale wyglądałby na sierotę. */
 const tworzone = new Set([
-  ...[...app.matchAll(/\.id\s*=\s*[`'"]([^`'"]+)/g)].map((m) => m[1]),
-  ...[...app.matchAll(/id="([a-z-]+-\$\{[^}]+\})"/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/\.id\s*=\s*[`'"]([^`'"]+)/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/id="([a-z-]+-\$\{[^}]+\})"/g)].map((m) => m[1]),
 ]);
 const dynamicznePrefiksy = [...tworzone].map((x) => x.replace(/\$\{[^}]+\}/, ''));
-const uzyteId = [...new Set([...app.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]))];
+const uzyteId = [...new Set([...skryptyKlienta.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]))];
 const brakId = uzyteId.filter((id) => !maId.has(id) && !tworzone.has(id)
   && !dynamicznePrefiksy.some((p) => id.startsWith(p)));
 brakId.length ? zle('$(id) bez odpowiednika w HTML: ' + brakId.join(', '))
@@ -150,7 +215,11 @@ const modulyKod = fs.readdirSync(path.join(R, 'lib'))
 const kodTras = server + '\n' + modulyKod;
 const trasy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname) === '(\/[^']*)'/g)].map((m) => m[1]))];
 const prefiksy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname)\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
-const wolane = [...new Set([...(app + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
+/* Wywołania liczone ze WSZYSTKICH skryptów klienta. `narzedzia.js` sięga po
+   `/api/archive/search`, `/api/run`, `/api/images`, a `widoki.js` po
+   `/api/archive/thumb` — gdyby audyt czytał sam `app.js`, przestałby pilnować,
+   czy te trasy w ogóle istnieją. */
+const wolane = [...new Set([...(skryptyKlienta + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
 const sieroty = wolane.filter((c) => !trasy.includes(c) && !prefiksy.some((p) => c.startsWith(p))
   && !trasy.some((r) => c.startsWith(r + '/')));
 sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
@@ -173,9 +242,13 @@ sekcja('Zmienne środowiskowe');
 /* Po podziale na moduły większość `process.env` przeniosła się do lib/ —
    skanowanie samego server.js kazało audytowi uznać 24 poprawne zmienne za
    martwe. Czytamy CAŁY kod serwerowy. */
+/* `automation/` też jest kodem serwera — tam mieszka uruchamianie procedur
+   Playwrightem i to ono czyta `PLAYWRIGHT_EXECUTABLE_PATH`. Bez tego katalogu
+   audyt podawał tę zmienną jako martwy wpis w `.env.example`. */
 const kod = server + rd('senses/service.py')
   + fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`)).join('\n')
-  + fs.readdirSync(path.join(R, 'scripts')).filter((f) => f.endsWith('.js')).map((f) => rd(`scripts/${f}`)).join('\n');
+  + fs.readdirSync(path.join(R, 'scripts')).filter((f) => f.endsWith('.js')).map((f) => rd(`scripts/${f}`)).join('\n')
+  + fs.readdirSync(path.join(R, 'automation')).filter((f) => f.endsWith('.js')).map((f) => rd(`automation/${f}`)).join('\n');
 const uzyteEnv = [...new Set([
   ...[...kod.matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]),
   ...[...kod.matchAll(/os\.environ\.get\("([A-Z0-9_]+)"/g)].map((m) => m[1]),
@@ -188,7 +261,13 @@ const brakEnv = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && !dokZmyslow.inclu
 const tylkoZmysly = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && dokZmyslow.includes(v));
 brakEnv.length ? zle('nigdzie nieopisane: ' + brakEnv.join(', '))
   : ok(`${uzyteEnv.length} zmiennych, wszystkie opisane (${tylkoZmysly.length} w senses/README.md)`);
-const zbedne = [...wPrzykladzie].filter((v) => !uzyteEnv.includes(v) && !kod.includes(v));
+/* Zmienne budowane z nazwy sekretu (`COSMOS_SECRET_<NAZWA>`) nie występują
+   w kodzie dosłownie — i tak ma być, bo nazwę wymyśla użytkownik. Wpis
+   `COSMOS_SECRET_BANK_PW` w przykładzie jest wzorem do naśladowania,
+   a nie martwym kodem. */
+const prefiksyEnv = [...new Set([...kod.matchAll(/process\.env\[\s*[`'"]([A-Z0-9_]+_)/g)].map((m) => m[1]))];
+const zbedne = [...wPrzykladzie].filter((v) => !uzyteEnv.includes(v) && !kod.includes(v)
+  && !prefiksyEnv.some((p) => v.startsWith(p)));
 zbedne.length ? hmm('w .env.example, nieużywane wprost: ' + zbedne.join(', ')) : ok('brak martwych wpisów w .env.example');
 
 // ---------------------------------------------------------------- 6 dokumentacja
@@ -257,7 +336,6 @@ zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
 
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
-const sw = rd('public/sw.js');
 const wersja = (sw.match(/cosmos-v(\d+)/) || [])[1];
 const zasoby = [...sw.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]).filter((a) => a !== '/' && !a.startsWith('/api'));
 const brakZas = zasoby.filter((a) => !ist('public' + a));
@@ -267,7 +345,6 @@ const manifest = JSON.parse(rd('public/manifest.webmanifest'));
 const ikony = (manifest.icons || []).map((i) => i.src).filter((s) => !s.startsWith('data:'));
 const brakIkon = ikony.filter((i) => !ist('public/' + i.replace(/^\//, '')));
 brakIkon.length ? zle('manifest wskazuje brakujące ikony: ' + brakIkon.join(', ')) : ok('ikony z manifestu istnieją');
-const skryptyHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
 const style = [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)].map((m) => m[1]);
 const brakZasob = [...skryptyHtml, ...style].filter((s) => !s.startsWith('http')
   && !ist('public/' + s.replace(/^\//, '').split('?')[0]));
@@ -276,7 +353,14 @@ brakZasob.length ? zle('HTML ładuje nieistniejące pliki: ' + brakZasob.join(',
 const norm = (p) => '/' + p.replace(/^\//, '').split('?')[0];
 const nieWCache = [...skryptyHtml, ...style].filter((s) => !s.startsWith('http')
   && !zasoby.map(norm).includes(norm(s)));
-nieWCache.length ? hmm('poza cache offline: ' + nieWCache.join(', ')) : ok('wszystko, co ładuje HTML, jest w cache offline');
+/* To NIE jest uwaga do rozważenia, tylko usterka. Cosmos jest aplikacją
+   instalowaną (PWA) i ma działać bez sieci — skrypt spoza pamięci podręcznej
+   znaczy biały ekran w terenie, czyli dokładnie tam, gdzie Marcin go używa.
+   Przy każdym nowym module klienta łatwo o to zapomnieć: plik dopisuje się
+   do `index.html`, a do `sw.js` już nie. */
+nieWCache.length
+  ? zle('poza pamięcią podręczną offline (aplikacja padnie bez sieci): ' + nieWCache.join(', '))
+  : ok('wszystko, co ładuje HTML, jest w pamięci podręcznej offline');
 
 // ---------------------------------------------------------------- 9 bezpieczeństwo
 sekcja('Bezpieczeństwo i prywatność');
@@ -365,6 +449,21 @@ for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
 console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
 liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
   : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
+
+/* KLIENT TEŻ MA PRÓG — i to on jest teraz największym plikiem.
+   Audyt marudził wyłącznie na server.js, więc app.js rósł niezauważony
+   do 7834 linii, czyli trzykrotności serwera. Marcin zwrócił na to uwagę
+   sam: „audyt marudzi na server.js, a to app.js jest gorsze i nikt go
+   nie pilnuje". Próg jest wysoki, bo warstwa interfejsu z natury jest
+   największa — ale ma w ogóle istnieć, żeby wzrost był widoczny. */
+const plikiKlienta = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
+const liniiApp = rd('public/app.js').split('\n').length;
+const liniiKlient = plikiKlienta.reduce((n, f) => n + rd(`public/${f}`).split('\n').length, 0);
+console.log(`    public/app.js ${liniiApp} linii + ${plikiKlienta.length - 1} modułów `
+  + `(${liniiKlient - liniiApp} linii)`);
+liniiApp < 7000 ? ok('klient zszedł poniżej 7000 linii')
+  : hmm(`public/app.js ma ${liniiApp} linii — największy plik projektu, `
+    + 'wart wydzielenia kolejnego modułu');
 // Żaden identyfikator z modułu nie może być używany bez importu — inaczej
 // serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
 const glowa = server.slice(0, server.indexOf('// ----', 2500));
@@ -722,8 +821,33 @@ for (const [f, t] of Object.entries({ 'server.js': server, 'public/app.js': app,
   for (const m of t.matchAll(/\b(TODO|FIXME|XXX|HACK)\b/g)) smieci.push(`${f}: ${m[1]}`);
 }
 smieci.length ? hmm('znaczniki do dokończenia: ' + smieci.join(', ')) : ok('brak TODO/FIXME w kodzie produkcyjnym');
-const debugi = (app.match(/console\.log\(/g) || []).length;
-debugi ? hmm(`console.log w app.js: ${debugi}`) : ok('brak wydruków diagnostycznych w kliencie');
+const debugi = (skryptyKlienta.match(/console\.log\(/g) || []).length;
+debugi ? hmm(`console.log w skryptach klienta: ${debugi}`) : ok('brak wydruków diagnostycznych w kliencie');
+
+/* ---------------------------------------------------------- czujniki wzorców
+   Regexp, który po zmianie zapisu przestaje pasować, nie zgłasza błędu —
+   oddaje pustą listę, a pusta lista czyta się jak „wszystko w porządku".
+   Tak właśnie audyt skłamał o trasach: po podziale `server.js` widział ich
+   45 zamiast 52 i cieszył się, że wszystkie są opisane w dokumentacji.
+
+   Progi są UMYŚLNIE niskie — to nie jest limit na rozwój projektu, tylko
+   sygnał „wzorzec przestał cokolwiek znajdować". Jeśli któraś liczba spadnie
+   poniżej, znaczy to, że zmienił się zapis w kodzie, a nie że ubyło funkcji. */
+const czujniki = [
+  ['klucze tłumaczeń (PL)', pl.length, 300],
+  ['klucze użyte w skryptach', uzyteApp.length, 150],
+  ['klucze użyte w HTML', uzyteHtml.length, 100],
+  ['identyfikatory z $()', uzyteId.length, 150],
+  ['trasy serwera', trasy.length, 40],
+  ['wywołania /api/ z klienta', wolane.length, 40],
+];
+const oslepla = czujniki.filter(([, ile, prog]) => ile < prog);
+oslepla.length
+  ? zle('wzorzec audytu przestał znajdować: '
+    + oslepla.map(([co, ile, prog]) => `${co} — ${ile} (spodziewane ≥${prog})`).join('; ')
+    + '. To nie jest usterka Cosmosa, tylko audytu — popraw wzorzec, zanim uwierzysz w resztę wyniku')
+  : ok('wszystkie wzorce audytu wciąż coś znajdują ('
+    + czujniki.map(([co, ile]) => `${co}: ${ile}`).join(', ') + ')');
 const nieczyste = execSync('git status --porcelain', { cwd: R }).toString().trim();
 nieczyste ? hmm('niezacommitowane zmiany:\n       ' + nieczyste.split('\n').join('\n       ')
 ) : ok('drzewo robocze czyste');

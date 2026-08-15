@@ -927,7 +927,10 @@ kbd {
   vertical-align: -3px;
   background: var(--accent);
   border-radius: 1px;
-  animation: blink 1s steps(2) infinite;
+  /* 1 s to było tempo zegara, nie oczekiwania. Kursor migający raz na
+     sekundę wygląda, jakby coś się zacięło — a to jedyny sygnał, że model
+     pracuje. 0,6 s czyta się jako „liczy", nie jako „stoi". */
+  animation: blink 0.6s steps(2) infinite;
 }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -1866,7 +1869,16 @@ kbd {
  *  W małym podglądzie przycięte brzegi są do przeżycia; wąska kolumna nie.
  *  Powiększony panel pokazuje kadr w całości (`contain`) — tam jest na to miejsce.
  */
-@media (max-width: 720px) {
+/* Próg telefonu to nie tylko SZEROKOŚĆ OKNA.
+   Marcin przysłał zrzut, na którym panel zajmował dwie trzecie ekranu
+   telefonu — czyli reguła poniżej się nie zastosowała, choć urządzenie było
+   telefonem. Nie umiem tego odtworzyć w Chromium przy jego rozmiarze okna,
+   a przyczyn może być kilka (tryb „wersja na komputer", inna skala strony).
+   Zamiast zgadywać, poszerzam warunek o `pointer: coarse` — palec zamiast
+   myszy znaczy „to jest ekran dotykowy" niezależnie od tego, ile pikseli
+   raportuje okno. Ograniczenie do 1024 px zostawia tablety w trybie
+   biurkowym, gdzie pływający panel ma sens. */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .live-panel {
     width: calc(100vw - 24px);
     right: 12px;

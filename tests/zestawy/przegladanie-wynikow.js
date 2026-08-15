@@ -123,37 +123,57 @@ const zapytaj = async (qs) => {
      Druga połowa skargi: nawet z działającym przyciskiem model dalej pisałby
      „pokazuję tylko część, zawęź wyszukiwanie". Musi wiedzieć, że limit
      dotyczy JEGO, nie człowieka. */
-  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'app.js'), 'utf8');
-  const maPodzialRol = /PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA/.test(app);
-  const maPrzycisk = /pokaż kolejne/i.test(app);
+  /* Budujemy nagłówek NAPRAWDĘ — tak, jak zbuduje go przeglądarka po wyniku
+     większym niż próbka.
+
+     Dwie wcześniejsze wersje czytały `public/app.js` tekstem. Pierwsza
+     dopasowywała dokładną frazę i padła przy przeredagowaniu jej z „PRÓBKA"
+     na „LIMIT". Druga szukała już samej zasady, ale i tak padła — gdy
+     `naKontekst` przeniosło się do `public/protokol.js`. Reguła w obu
+     wypadkach była na miejscu i działała; usterki nie było. */
+  const { utworzProtokol } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js'));
+  const naglowek = utworzProtokol().naKontekst({
+    znaleziono: ILE,
+    wyniki: Array.from({ length: 40 }, (_, i) => ({
+      nazwa: `3B9A${4000 + i}.CR3`, kiedy: '2026-06-14T19:12:00',
+      sciezka: `/Zdjęcia/Mazury 2026/3B9A${4000 + i}.CR3`, aparat: 'Canon EOS R6m2',
+    })),
+  });
+  const maPodzialRol = /DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(naglowek);
+  const maPrzycisk = /sam dojdzie do ostatniego/i.test(naglowek);
   console.log(`6. nagłówek dla modelu: podział ról ${maPodzialRol ? 'jest' : 'BRAK'}, `
     + `wzmianka o przycisku ${maPrzycisk ? 'jest' : 'BRAK'}`);
   if (!maPodzialRol) fail.push('nagłówek nie mówi modelowi, że próbka ogranicza jego, a nie użytkownika');
   if (!maPrzycisk) fail.push('nagłówek nie wspomina o przycisku „pokaż kolejne"');
 
-  const serwer = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
-  if (!/PRÓBKA OGRANICZA CIEBIE, NIE UŻYTKOWNIKA/.test(serwer)) {
-    fail.push('instrukcja stała w server.js nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
+  /* Ta sama zasada musi być też w instrukcji STAŁEJ, nie tylko w nagłówku
+     doklejanym do wyniku — inaczej model pozna ją dopiero po pierwszym
+     zapytaniu. Składamy instrukcje naprawdę: czytanie server.js regexpem
+     przestało działać, gdy opisy narzędzi przeniosły się do osobnego
+     modułu, choć treść była bez zmian. */
+  const { zbudujInstrukcje } = require(path.join(__dirname, '..', '..', 'lib', 'instrukcje-narzedzi.js'));
+  const stala = zbudujInstrukcje({
+    payload: {}, krotko: false, bezNarzedzi: false,
+    archiwum: { ile: () => 100 },
+    userWspolrzedne: null,
+    procedury: () => [], urzadzenia: () => [], imageProviders: () => [],
+    KOD_WLACZONY: false, capabilityText: '',
+  }).map((b) => b.content).join('\n');
+  if (!/DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(stala)) {
+    fail.push('instrukcja stała nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
   }
 
-  /* --- 7. Przeglądarka ma czym dobrać następną porcję ---------------------
-     Przycisk potrzebuje trzech rzeczy: zapytania, miejsca zatrzymania i sumy.
-     Gdyby siatka ich nie zapamiętała, po odświeżeniu rozmowy przycisk
-     zniknąłby razem z resztą wyniku. */
-  for (const [co, wzor] of [
-    ['zapamiętane zapytanie', /dalej:\s*\{/],
-    ['licznik „pokazane N z M"', /arch\.counter/],
-    ['dobieranie po `pomin=`', /pomin=\$\{d\.pomin\}/],
-    ['przesuwanie o całą stronę', /d\.pomin \+= /],
-    /* Dobrane kafelki DOPISUJEMY do istniejącej siatki. `renderMessages()`
-       kończy się wymuszonym zjazdem na dół rozmowy, więc przerysowanie
-       wyrzucałoby użytkownika spod siatki przy każdym kliknięciu — im dłużej
-       przegląda, tym dalej od niej. */
-    ['dopisywanie kafelków bez przerysowania rozmowy', /siatka\.appendChild/],
-  ]) {
-    if (!wzor.test(app)) fail.push(`w kliencie brakuje: ${co}`);
-  }
-  console.log('7. stan przycisku w kliencie: sprawdzony');
+  /* --- 7. Stan przycisku „pokaż kolejne" ---------------------------------
+     Sprawdza to teraz zestaw `widoki-buduja` — wywołaniem, na atrapie DOM-u:
+     buduje siatkę, klika przycisk i patrzy, jaki adres poleciał, ile kafelków
+     przybyło i czy rozmowa nie została przerysowana.
+
+     Stały tu wcześniej cztery regexpy po `public/app.js` („czy jest napis
+     `dalej: {`", „czy jest `pomin=${d.pomin}`"). Padły przy przeniesieniu
+     budowniczych do `public/widoki.js`, mimo że przycisk działał bez zmian —
+     PIĄTY raz w jednej sesji, gdy test pilnujący brzmienia pliku zgłosił
+     usterkę, której nie było. Dlatego nie zostały przestawione na nowy plik,
+     tylko zastąpione sprawdzeniem zachowania. */
 
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPRZEGLĄDANIE WYNIKÓW OK');

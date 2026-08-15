@@ -234,221 +234,13 @@ function currentModel() {
   return override || epConfig().model || '';
 }
 
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-// treść wiadomości: string albo { text, images: [dataURL] }
-function msgText(m) {
-  return typeof m.content === 'string' ? m.content : (m.content?.text || '');
-}
-function msgImages(m) {
-  return typeof m.content === 'string' ? [] : (m.content?.images || []);
-}
-// Zdjęcia znalezione w internecie — inna rzecz niż `images` (te są wgrane
-// albo wygenerowane). Mają źródło, więc dają się kliknąć i sprawdzić.
-function msgPhotos(m) {
-  return typeof m.content === 'string' ? [] : (m.content?.photos || []);
-}
-/* Wynik z archiwum bywa dłuższy niż jedna porcja miniatur. Tu leży wszystko,
-   czego trzeba, by dobrać następną: zapytanie, na którym pliku skończyliśmy
-   i ile ich jest razem. Bez tego przycisk „pokaż kolejne" nie miałby czego
-   powtórzyć. */
-function msgDalej(m) {
-  return typeof m.content === 'string' ? null : (m.content?.dalej || null);
-}
-// Wczytane dokumenty: na ekranie kafelek z nazwą, do modelu pełna treść.
-function msgDocs(m) {
-  return typeof m.content === 'string' ? [] : (m.content?.docs || []);
-}
-// Wynik uruchomienia programu: { stdout, stderr, wyniki, ms }.
-function msgRun(m) {
-  return typeof m.content === 'string' ? null : (m.content?.run || null);
-}
-
-/** Wszystkie załączniki tej rozmowy — program dostaje je jako pliki obok
- *  siebie, więc „policz sumę z tego arkusza" działa bez przeklejania danych. */
-function zebranyMaterial(conv) {
-  const pliki = [];
-  for (const m of conv.messages) {
-    for (const d of msgDocs(m)) {
-      if (pliki.length < 8) pliki.push({ name: d.name, text: d.text });
-    }
-  }
-  return pliki;
-}
-
-// ----------------------------------------------------------------
-// Mini-renderer Markdown (bez zewnętrznych bibliotek)
-// ----------------------------------------------------------------
-
-/** Zamień gołe adresy w tekście na klikalne odnośniki.
- *
- * Model podaje źródła raz jako `[tekst](adres)`, a raz jako sam adres w zdaniu —
- * i ta druga postać zostawała martwym tekstem, którego nie dało się kliknąć.
- * Pracujemy na HTML-u po `renderInline`, więc omijamy to, co już jest wewnątrz
- * `<a>` i `<code>`: inaczej podlinkowalibyśmy adres w atrybucie href.
- */
-function autoLink(html) {
-  const skip = /<a\b[^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>/gi;
-  const url = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*/gi;
-
-  const linkify = (chunk) => chunk.replace(url, (m) => {
-    // Znaki interpunkcyjne na końcu należą do zdania, nie do adresu.
-    // Nawias zamykający zostawiamy tylko wtedy, gdy w adresie jest otwierający.
-    let tail = '';
-    let addr = m;
-    for (;;) {
-      const last = addr.slice(-1);
-      if (/[.,;:!?…"']/.test(last)
-          || (last === ')' && (addr.match(/\(/g) || []).length < (addr.match(/\)/g) || []).length)) {
-        tail = last + tail;
-        addr = addr.slice(0, -1);
-        continue;
-      }
-      break;
-    }
-    if (!addr) return m;
-    const href = addr.startsWith('www.') ? 'https://' + addr : addr;
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${addr}</a>${tail}`;
-  });
-
-  let out = '';
-  let last = 0;
-  for (const m of html.matchAll(skip)) {
-    out += linkify(html.slice(last, m.index)) + m[0];
-    last = m.index + m[0].length;
-  }
-  return out + linkify(html.slice(last));
-}
-
-function renderInline(text) {
-  let out = escapeHtml(text);
-  out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
-  out = out.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
-  out = out.replace(/(^|[\s(])_([^_\s][^_]*)_/g, '$1<em>$2</em>');
-  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  return autoLink(out);
-}
-
-function renderMarkdown(text) {
-  const lines = text.split('\n');
-  const html = [];
-  let i = 0;
-  let para = [];
-  let listStack = null; // 'ul' | 'ol'
-
-  const flushPara = () => {
-    if (para.length) {
-      html.push(`<p>${renderInline(para.join('\n')).replace(/\n/g, '<br>')}</p>`);
-      para = [];
-    }
-  };
-  const closeList = () => {
-    if (listStack) { html.push(`</${listStack}>`); listStack = null; }
-  };
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // blok kodu ```
-    const fence = line.match(/^```(\S*)\s*$/);
-    if (fence) {
-      flushPara(); closeList();
-      const lang = fence[1] || '';
-      const code = [];
-      i++;
-      while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
-      i++;
-      html.push(
-        `<div class="code-block">` +
-        `<div class="code-block-header"><span>${escapeHtml(lang || 'kod')}</span>` +
-        `<button class="code-copy-btn" data-copy>${COPY_SVG}${t('copy')}</button></div>` +
-        `<pre><code>${escapeHtml(code.join('\n'))}</code></pre></div>`
-      );
-      continue;
-    }
-
-    // nagłówki
-    const heading = line.match(/^(#{1,4})\s+(.*)$/);
-    if (heading) {
-      flushPara(); closeList();
-      const level = heading[1].length;
-      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
-      i++; continue;
-    }
-
-    // pozioma linia
-    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      flushPara(); closeList();
-      html.push('<hr>');
-      i++; continue;
-    }
-
-    // cytat
-    if (/^>\s?/.test(line)) {
-      flushPara(); closeList();
-      const quote = [];
-      while (i < lines.length && /^>\s?/.test(lines[i])) {
-        quote.push(lines[i].replace(/^>\s?/, ''));
-        i++;
-      }
-      html.push(`<blockquote>${renderMarkdown(quote.join('\n'))}</blockquote>`);
-      continue;
-    }
-
-    // tabela
-    if (line.includes('|') && i + 1 < lines.length &&
-        /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
-      flushPara(); closeList();
-      const splitRow = (row) =>
-        row.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
-      const headers = splitRow(line);
-      i += 2;
-      const rows = [];
-      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
-        rows.push(splitRow(lines[i]));
-        i++;
-      }
-      let table = '<table><thead><tr>';
-      table += headers.map((h) => `<th>${renderInline(h)}</th>`).join('');
-      table += '</tr></thead><tbody>';
-      for (const row of rows) {
-        table += '<tr>' + row.map((c) => `<td>${renderInline(c)}</td>`).join('') + '</tr>';
-      }
-      table += '</tbody></table>';
-      html.push(table);
-      continue;
-    }
-
-    // listy
-    const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
-    const olMatch = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    if (ulMatch || olMatch) {
-      flushPara();
-      const type = ulMatch ? 'ul' : 'ol';
-      if (listStack !== type) { closeList(); html.push(`<${type}>`); listStack = type; }
-      html.push(`<li>${renderInline((ulMatch || olMatch)[1])}</li>`);
-      i++; continue;
-    }
-
-    // pusta linia
-    if (line.trim() === '') {
-      flushPara(); closeList();
-      i++; continue;
-    }
-
-    para.push(line);
-    i++;
-  }
-
-  flushPara(); closeList();
-  return html.join('');
-}
+/* Treść wiadomości i mini-renderer Markdown mieszkają w `public/tekst.js`
+   — patrz nagłówek tamtego pliku. Wchodzi string, wychodzi string, więc
+   dają się sprawdzić bez przeglądarki. */
+const {
+  escapeHtml, msgText, msgImages, msgPhotos, msgDalej, msgDocs, msgRun,
+  zebranyMaterial, autoLink, renderInline, renderMarkdown,
+} = utworzTekst({ t, COPY_SVG });
 
 // ----------------------------------------------------------------
 // Renderowanie rozmów i wiadomości
@@ -699,6 +491,17 @@ async function odswiezArchiwum() {
     await fetch('/api/onedrive/disconnect', { method: 'POST' }).catch(() => {});
     odswiezArchiwum();
   });
+
+  /* KASOWANIE MATERIAŁU JAKO OSOBNA DECYZJA.
+     Wcześniej robiło to odłączenie konta — jednym kliknięciem, przy okazji
+     czegoś zupełnie innego. Teraz odłączenie tylko rozłącza, a usunięcie
+     wpisów trzeba wybrać świadomie i potwierdzić ostrzeżeniem mówiącym
+     wprost, czego nie da się odzyskać. */
+  przycisk(t('arch.forget'), async () => {
+    if (!confirm(t('arch.confirmForget'))) return;
+    await fetch('/api/archive/source?zrodlo=onedrive', { method: 'DELETE' }).catch(() => {});
+    odswiezArchiwum();
+  });
 }
 
 /* Długie zadanie w paczkach, sterowane z przeglądarki.
@@ -848,340 +651,20 @@ function odswiezMiarePlotna() {
   $('canvas-meta').textContent = t('canvas.meta', { w: slowa, c: tekst.length });
 }
 
-/** Wynik uruchomionego programu: co wypisał, jak długo to trwało i co narysował.
- *
- *  Czas wykonania jest tu celowo widoczny. „Policzone, nie zgadnięte" ma
- *  znaczenie tylko wtedy, gdy widać, że program naprawdę się wykonał.
- */
-function runPanel(run) {
-  const box = document.createElement('div');
-  box.className = 'run-panel';
-
-  const pasek = document.createElement('div');
-  pasek.className = 'run-bar';
-  pasek.textContent = run.przerwany
-    ? t('run.timeout', { s: Math.round((run.limitMs || 10000) / 1000) })
-    : t('run.done', { ms: run.ms || 0 });
-  box.appendChild(pasek);
-
-  if (run.stdout && run.stdout.trim()) {
-    const out = document.createElement('pre');
-    out.className = 'run-out';
-    out.textContent = run.stdout.trim();
-    box.appendChild(out);
-  }
-  if (run.stderr && run.stderr.trim()) {
-    const err = document.createElement('pre');
-    err.className = 'run-out run-err';
-    err.textContent = run.stderr.trim();
-    box.appendChild(err);
-  }
-
-  for (const plik of run.wyniki || []) {
-    if (/\.svg$/i.test(plik.name)) {
-      /* SVG wstawiamy jako obrazek z data-URI, nie przez innerHTML. Program
-         pisze model, więc jego wyjście jest treścią niezaufaną — wstrzyknięte
-         do DOM-u wykonałoby skrypt w kontekście Cosmosa. W <img> nie wykona. */
-      const img = document.createElement('img');
-      img.className = 'run-svg';
-      img.alt = plik.name;
-      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(plik.text)));
-      box.appendChild(img);
-    } else {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'doc-chip';
-      chip.textContent = `📄 ${plik.name}`;
-      chip.addEventListener('click', () => openTextViewer(plik.name, plik.text));
-      box.appendChild(chip);
-    }
-  }
-  return box;
-}
-
-/** Siatka zdjęć znalezionych w internecie.
- *
- *  Miniatury lecą przez `/api/search/thumb`, a nie prosto z cudzego CDN-u:
- *  telefon nie łączy się wtedy z obcym hostem przy każdym wyniku, a zdjęcia
- *  działają też wtedy, gdy sieć ten CDN blokuje. Każdy kafelek prowadzi do
- *  strony źródłowej — zdjęcie z internetu bez źródła jest bezwartościowe.
- */
-function photosGrid(photos) {
-  const wrap = document.createElement('div');
-  wrap.className = 'photo-grid';
-  for (const p of photos) {
-    const a = document.createElement('a');
-    a.className = 'photo-tile';
-    a.href = p.source || p.full || '#';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
-    const img = document.createElement('img');
-    /* Adres własny (np. z archiwum) bierzemy wprost — proxy miniatur jest
-       od CUDZYCH hostów i tylko by tu przeszkadzało. */
-    const wlasny = /^\//.test(p.thumb || '');
-    img.src = wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
-    img.alt = p.title || t('photo.found');
-    img.loading = 'lazy';
-
-    /* Kliknięcie otwiera podgląd W COSMOSIE, nie nową kartę.
-       Marcin: „lepiej by było gdybym mógł je kliknąć żeby się rozwinęły
-       w większym ekranie z wyższą rozdzielczością i wtedy z możliwością
-       przejścia do źródła". Wcześniej kliknięcie wyrzucało od razu na obcą
-       stronę i nie dawało nawet obejrzeć zdjęcia.
-
-       `href` zostaje prawdziwy, więc środkowy przycisk myszy, Ctrl+klik
-       i „otwórz w nowej karcie" dalej prowadzą do źródła — odbieranie tego
-       byłoby zamianą jednego ograniczenia na drugie. */
-    a.addEventListener('click', (e) => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-      e.preventDefault();
-      openImageViewer(p.podglad || p.full || p.thumb, {
-        zapas: p.podglad ? '' : (wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`),
-        zrodlo: p.podglad ? '' : (p.source || ''),
-        tytul: p.title || '',
-        opis: [p.zrodlo, p.licencja].filter(Boolean).join(' · '),
-      });
-    });
-
-    /* Co się dzieje, gdy miniatura nie chce się wczytać.
-
-       Kiedyś kafelek po prostu ZNIKAŁ. Brzmi rozsądnie („nie zostawiaj dziury
-       w siatce"), a w praktyce to była najgorsza możliwa reakcja: gdy proxy
-       odrzucało wszystkie miniatury, Cosmos pisał „znalazłem 8 zdjęć" i nie
-       pokazywał ani jednego, bez śladu, co poszło nie tak. Dokładnie to
-       zgłosił Marcin.
-
-       Teraz próbujemy po kolei: przez proxy → prosto z serwera obrazka →
-       a jak i to nie wyjdzie, zostaje widoczny kafelek z odnośnikiem. Zawsze
-       widać tyle kafelków, ile zapowiedziała odpowiedź. */
-    let probowanoWprost = wlasny;   // własnego adresu nie ma po co próbować drugi raz
-    img.addEventListener('error', () => {
-      if (!probowanoWprost && /^https:\/\//i.test(p.thumb || '')) {
-        // Proxy odmówiło (nieznany host, przekroczony czas). Przeglądarka
-        // może pobrać obrazek sama — dla niej to zwykły zewnętrzny zasób.
-        probowanoWprost = true;
-        img.src = p.thumb;
-        return;
-      }
-      img.remove();
-      a.classList.add('photo-tile-pusty');
-      const info = document.createElement('span');
-      info.className = 'photo-brak';
-      info.textContent = t('photo.thumbFailed');
-      a.prepend(info);
-    });
-
-    const cap = document.createElement('span');
-    cap.className = 'photo-cap';
-    // Skąd zdjęcie i na jakiej licencji — dla kogoś, kto montuje film, to nie
-    // ozdobnik, tylko odpowiedź na pytanie „czy wolno mi tego użyć".
-    let skad = p.zrodlo || '';
-    if (!skad) { try { skad = new URL(p.source).hostname.replace(/^www\./, ''); } catch { skad = ''; } }
-    cap.textContent = [skad, p.licencja].filter(Boolean).join(' · ') || p.title || '';
-    a.append(img, cap);
-    wrap.appendChild(a);
-  }
-  return wrap;
-}
-
-/* Ile miniatur dobieramy jednym kliknięciem. Każda to osobne zapytanie do
-   OneDrive w chwili wyświetlenia, więc porcja jest kompromisem: za mała każe
-   klikać bez końca, za duża zamraża telefon na kilkanaście sekund. */
+/* Ile miniatur dobiera jedno kliknięcie „pokaż kolejne". Zostaje tutaj,
+   bo korzysta z niej i siatka, i rejestr narzędzi. */
 const PORCJA_ARCHIWUM = 24;
 
-/** Pasek pod siatką: „24 z 311" i przycisk po następną porcję.
- *
- *  Marcin: „chciałbym móc przejrzeć wszystkie zdjęcia z wyszukania, a nie
- *  mieć informację typu »pokazałem Ci 20, ale jest 311«". Model tego nie
- *  załatwi — on dostaje próbkę tekstową i ma rację, że jej nie przekracza.
- *  Przeglądanie całości to zadanie dla przeglądarki, nie dla rozmowy.
- */
-function stopkaArchiwum(m) {
-  const d = msgDalej(m);
-  if (!d || !d.razem) return null;
-  const pokazane = msgPhotos(m).length;
-  const pasek = document.createElement('div');
-  pasek.className = 'arch-dalej';
-
-  const licznik = document.createElement('span');
-  licznik.className = 'arch-dalej-licznik mono';
-  licznik.textContent = t('arch.counter', { n: pokazane, z: d.razem });
-  pasek.appendChild(licznik);
-
-  if (d.pomin >= d.razem) return pasek;   // wszystko już na ekranie — sam licznik
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'btn-secondary arch-dalej-btn';
-  const zostalo = d.razem - d.pomin;
-  btn.textContent = t('arch.more', { n: Math.min(PORCJA_ARCHIWUM, zostalo) });
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    btn.textContent = t('arch.loading');
-    try {
-      const r = await fetch(`/api/archive/search?limit=${PORCJA_ARCHIWUM}&pomin=${d.pomin}&${d.q}`);
-      const dane = await readJsonSafe(r);
-      if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
-      const nowe = (Array.isArray(dane.wyniki) ? dane.wyniki : []).filter((w) => w.zrodlo === 'onedrive');
-      const kafelki = nowe.map(naKafelek);
-      m.content.photos = msgPhotos(m).concat(kafelki);
-      /* Przesuwamy się o CAŁĄ oddaną stronę, nie o liczbę kafelków. Pliki
-         spoza OneDrive'a (te z dysku, bez miniatury) odpadają przy filtrze,
-         a gdyby licznik szedł za kafelkami, każde kliknięcie wracałoby po
-         te same pliki i przycisk kręciłby się w miejscu. */
-      d.pomin += (Array.isArray(dane.wyniki) ? dane.wyniki.length : 0);
-      d.razem = Number(dane.znaleziono) || d.razem;
-      saveConversations();
-
-      /* DOPISUJEMY KAFELKI, ZAMIAST PRZERYSOWAĆ CAŁĄ ROZMOWĘ.
-         `renderMessages()` kończy się wymuszonym zjazdem na sam dół, więc
-         każde kliknięcie „pokaż kolejne" wyrzucałoby Marcina spod siatki,
-         którą właśnie ogląda — a im dłużej by przeglądał, tym dalej od niej.
-         Przy przeglądaniu trzystu zdjęć to jest różnica między narzędziem
-         a udręką. */
-      const siatka = pasek.previousElementSibling;
-      const swieze = photosGrid(kafelki);
-      if (siatka && siatka.classList.contains('photo-grid')) {
-        while (swieze.firstChild) siatka.appendChild(swieze.firstChild);
-        pasek.replaceWith(stopkaArchiwum(m));
-      } else {
-        // Siatki nie ma tam, gdzie się jej spodziewamy — wtedy lepiej
-        // przerysować i stracić pozycję, niż nie pokazać dobranych zdjęć.
-        renderMessages();
-      }
-    } catch (err) {
-      btn.disabled = false;
-      btn.textContent = t('arch.moreErr', { e: err.message });
-    }
-  });
-  pasek.appendChild(btn);
-  return pasek;
-}
-
-/** Wpis z archiwum → kafelek siatki. Jedno miejsce, bo używa tego i pierwsza
- *  porcja, i każda dobrana potem — rozjechanie się tych dwóch dawałoby
- *  kafelki bez podpisów w połowie siatki. */
-function naKafelek(w) {
-  const adres = `/api/archive/thumb?id=${encodeURIComponent(w.id)}`;
-  return {
-    thumb: adres,
-    podglad: adres,
-    source: '',
-    title: [w.nazwa, w.kiedy && w.kiedy.slice(0, 16).replace('T', ' ')].filter(Boolean).join(' · '),
-    zrodlo: [w.poraDnia, w.swiatlo].filter(Boolean).join(' · '),
-    licencja: w.ogniskowa ? `${w.ogniskowa} mm` : '',
-  };
-}
-
-/** Podgląd obrazu na pełnym ekranie, z pobieraniem.
- *
- * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
- * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
- */
-/** Podgląd tekstu załącznika — bez biblioteki, bez zapisu, tylko do wglądu.
- *  Buduje się na żądanie i znika po zamknięciu: to okno pomocnicze, nie stan. */
-function openTextViewer(nazwa, tekst) {
-  const tlo = document.createElement('div');
-  tlo.className = 'text-viewer';
-  const okno = document.createElement('div');
-  okno.className = 'text-viewer-box';
-  const pasek = document.createElement('div');
-  pasek.className = 'text-viewer-bar';
-  const tytul = document.createElement('span');
-  tytul.textContent = nazwa;
-  const zamknij = document.createElement('button');
-  zamknij.className = 'btn-secondary';
-  zamknij.textContent = t('close');
-  const tresc = document.createElement('pre');
-  tresc.className = 'text-viewer-body';
-  tresc.textContent = tekst;
-  pasek.append(tytul, zamknij);
-  okno.append(pasek, tresc);
-  tlo.appendChild(okno);
-
-  const usun = () => { tlo.remove(); document.removeEventListener('keydown', naEscape); };
-  const naEscape = (e) => { if (e.key === 'Escape') usun(); };
-  zamknij.addEventListener('click', usun);
-  tlo.addEventListener('click', (e) => { if (e.target === tlo) usun(); });
-  document.addEventListener('keydown', naEscape);
-  document.body.appendChild(tlo);
-}
-
-/** Podgląd na pełnym ekranie.
- *
- *  @param {string} src   adres obrazu w najlepszej dostępnej rozdzielczości
- *  @param {object} opcje `zapas` — czym podmienić, gdy `src` się nie wczyta
- *                        (pełny plik bywa na hoście, który odmawia);
- *                        `zrodlo` — strona, z której zdjęcie pochodzi;
- *                        `tytul`, `opis` — podpis pod obrazem
- */
-function openImageViewer(src, opcje = {}) {
-  const box = $('img-viewer');
-  const img = $('img-viewer-img');
-  const zrodlo = $('img-viewer-source');
-  const podpis = $('img-viewer-caption');
-
-  /* Pełny plik idzie z obcego hosta i czasem nie dojedzie — wtedy zamiast
-     pustego czarnego ekranu pokazujemy to, co już było widać w siatce. */
-  img.onerror = null;
-  if (opcje.zapas && opcje.zapas !== src) {
-    img.onerror = () => { img.onerror = null; img.src = opcje.zapas; imageViewerSrc = opcje.zapas; };
-  }
-  img.src = src;
-  img.alt = opcje.tytul || '';
-
-  if (zrodlo) {
-    zrodlo.hidden = !opcje.zrodlo;
-    if (opcje.zrodlo) zrodlo.href = opcje.zrodlo;
-  }
-  if (podpis) {
-    const tekst = [opcje.tytul, opcje.opis].filter(Boolean).join(' · ');
-    podpis.textContent = tekst;
-    podpis.hidden = !tekst;
-  }
-
-  box.style.display = '';
-  imageViewerSrc = src;
-}
-
-function closeImageViewer() {
-  $('img-viewer').style.display = 'none';
-  const img = $('img-viewer-img');
-  img.onerror = null;
-  img.removeAttribute('src');
-  const zrodlo = $('img-viewer-source');
-  if (zrodlo) zrodlo.hidden = true;
-  const podpis = $('img-viewer-caption');
-  if (podpis) { podpis.textContent = ''; podpis.hidden = true; }
-  imageViewerSrc = '';
-}
-
-let imageViewerSrc = '';
-
-/** Zapisz oglądany obraz na dysk — działa i dla dataURL, i dla adresu z serwera. */
-async function downloadViewedImage() {
-  if (!imageViewerSrc) return;
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  let href = imageViewerSrc;
-  let revoke = '';
-  if (!href.startsWith('data:')) {
-    // Obraz z bazy wiedzy leci przez /api/kb/raw — `download` zadziała tylko
-    // na tym samym pochodzeniu, więc pobieramy go i zapisujemy z pamięci.
-    try {
-      const blob = await (await fetch(imageViewerSrc)).blob();
-      href = URL.createObjectURL(blob);
-      revoke = href;
-    } catch { /* zostaw oryginalny adres — przeglądarka otworzy go w karcie */ }
-  }
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = `cosmos-${stamp}.png`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  if (revoke) setTimeout(() => URL.revokeObjectURL(revoke), 10000);
-}
+/* Budowniczowie widoku (siatki, panele, podglądy) mieszkają
+   w `public/widoki.js` — patrz nagłówek tamtego pliku. Tutaj zostaje
+   samo podpięcie ich do stanu aplikacji. */
+const {
+  runPanel, photosGrid, stopkaArchiwum, naKafelek,
+  openTextViewer, openImageViewer, closeImageViewer, downloadViewedImage,
+} = utworzWidoki({
+  t, readJsonSafe, saveConversations, renderMessages,
+  msgPhotos, msgDalej, PORCJA_ARCHIWUM,
+});
 
 function messageElement(m, idx = -1) {
   const role = m.role;
@@ -2422,132 +1905,14 @@ async function webSearch(query) {
   }
 }
 
-const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
-
-/** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
- *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran.
- *
- *  Marcin przysłał zapis rozmowy, w którym na ekranie stało gołe
- *  `[ARCHIWUM: grupuj=rok]`, a kawałek niżej wisiał pusty blok kodu. Dwie
- *  dziury, obie w tym samym miejscu:
- *
- *  1. ZNACZNIK URWANY. Model potrafi skończyć wypowiedź w połowie znacznika
- *     — bo skończył mu się budżet tokenów albo Marcin nacisnął „stop".
- *     Bez domykającego `]` żaden z wzorców nie pasował i polecenie dla modelu
- *     zostawało na ekranie jako treść odpowiedzi.
- *
- *  2. PUSTY PŁOT. Model lubi opakowywać znacznik w ```blok```. Usunięcie
- *     samego znacznika zostawiało wtedy parę płotków bez zawartości —
- *     na ekranie pusta ramka bez wyjaśnienia, skąd się wzięła.
- *
- *  Kolejność ma znaczenie: najpierw znika znacznik, potem sprzątamy płoty,
- *  które przez to opustoszały.
- */
-const ZNACZNIKI = ['SZUKAJ', 'GRAFIKA', 'PLAN', 'ARCHIWUM', 'OBRAZ', 'AKCJA'];
-
-function stripSearchMarker(s) {
-  let out = String(s || '');
-  for (const z of ZNACZNIKI) {
-    out = out.replace(new RegExp(`\\[${z}:?[^\\]]*\\]`, 'gi'), '');
-    /* Urwany na końcu tekstu — i TYLKO na końcu. W środku wypowiedzi otwarty
-       nawias kwadratowy to zwykły nawias (albo odnośnik w Markdownie)
-       i nie wolno go zjadać razem z resztą zdania. */
-    out = out.replace(new RegExp(`\\[${z}:?[^\\]]*$`, 'i'), '');
-  }
-  // Płot, w którym po usunięciu znacznika nie zostało nic prócz białych znaków.
-  out = out.replace(/```[a-zA-Z-]*\s*```/g, '');
-  return out.trim();
-}
-/* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
-   To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
-
-   Odpowiedź archiwum szła do modelu jako `JSON.stringify(dane).slice(0, 12000)`.
-   Brzmi niewinnie, dopóki się nie policzy: sam adres jednej miniatury z OneDrive
-   to 1248 znaków podpisanego tokenu, przy ~520 znakach reszty wpisu. Czyli
-   z dwunastu tysięcy znaków mieściło się SZEŚĆ plików, a 71% tego, co czytał
-   model, stanowiły adresy obrazków — których on nawet nie ogląda, bo w tym
-   samym promptcie piszemy mu, że miniatury już pokazaliśmy człowiekowi.
-   Do tego `slice` tnie napis w połowie JSON-a, więc model dostawał składniowo
-   zepsuty dokument.
-
-   Efekt na żywym archiwum: przy 59 421 plikach model widział sześć najnowszych
-   (bo sortujemy od najnowszych — czyli akurat zrzuty ekranu z telefonu),
-   dostawał polecenie „odpowiadaj na podstawie tych danych, nie zgaduj"
-   i uczciwie meldował, że w archiwum nie ma zdjęć z aparatu. To nie była
-   halucynacja. To był poprawny wniosek z próbki, którą sami mu podsunęliśmy.
-
-   Dlatego: miniatury i identyfikatory wylatują, wpisy skracamy do pól, które
-   naprawdę niosą treść, a na górze stoi jawne zdanie o tym, ILE tego jest
-   i CZEGO model nie widzi. „Pokazuję 40 z 59 421" to zupełnie inna przesłanka
-   niż „oto twoje archiwum". */
-const ARCH_LIMIT_ZNAKOW = 12000;
-
-function naKontekst(dane) {
-  if (!dane || typeof dane !== 'object') return JSON.stringify(dane);
-  if (!Array.isArray(dane.wyniki)) return JSON.stringify(dane, null, 1).slice(0, ARCH_LIMIT_ZNAKOW);
-
-  const chude = dane.wyniki.map((w) => {
-    const o = {};
-    for (const [k, v] of Object.entries(w)) {
-      // `miniatura` to 1,2 kB podpisanego adresu; `id` i `rozmiar` nic nie wnoszą.
-      if (k === 'miniatura' || k === 'id' || k === 'rozmiar') continue;
-      if (v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
-      /* O ŹRÓDLE DATY MÓWIMY TYLKO WTEDY, GDY JEST SŁABE.
-         `exif` i `nazwa` niosą moment zrobienia zdjęcia i nie ma o czym
-         wspominać — powtarzanie tego przy każdym z kilkudziesięciu wpisów
-         to czysty koszt kontekstu. `plik` znaczy „to jest data WGRANIA do
-         chmury, nie data zdjęcia", a to model musi wiedzieć, zanim poda ją
-         człowiekowi jako fakt. Zamieniamy więc na czytelną flagę. */
-      if (k === 'dataZrodlo') {
-        if (v === 'plik') o.dataNiepewna = 'to data wgrania pliku, nie zrobienia zdjęcia';
-        continue;
-      }
-      o[k] = v;
-    }
-    return o;
-  });
-
-  /* Ile wpisów zmieści się w budżecie — liczone, a nie zgadywane. Bez
-     miniatur wchodzi ich kilkadziesiąt zamiast sześciu. */
-  let ile = chude.length;
-  let tresc = '';
-  while (ile > 0) {
-    tresc = JSON.stringify({ ...dane, wyniki: chude.slice(0, ile) }, null, 1);
-    if (tresc.length <= ARCH_LIMIT_ZNAKOW) break;
-    ile = Math.floor(ile * 0.8);
-  }
-
-  const znaleziono = Number(dane.znaleziono) || 0;
-  const naglowek = znaleziono > ile
-    ? `UWAGA: widzisz ${ile} z ${znaleziono} pasujących plików, posortowane OD NAJNOWSZYCH. `
-      + 'To jest PRÓBKA, nie całe archiwum — nie wyciągaj z niej wniosków o tym, czego '
-      + 'w archiwum NIE MA. Jeśli chcesz wiedzieć, co tam jest w całości, poproś '
-      + 'o zestawienie (grupuj=aparat, grupuj=rok, grupuj=temat) albo zawęź filtry.\n'
-      + 'PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA. Pod miniaturami ma on przycisk '
-      + '„pokaż kolejne" i dojdzie nim do ostatniego z '
-      + `${znaleziono} plików. Nie pisz mu więc, że pokazujesz tylko część, `
-      + 'nie przepraszaj za limit i nie proponuj zawężenia „żeby się zmieściło" '
-      + `— napisz po prostu, ile ich jest (${znaleziono}).\n`
-    : '';
-  return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
-}
-
-const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
-/* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
-   na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
-   obrazów" i proponował wizje artystyczne zamiast prawdziwej Majorki. */
-const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
-/* Kod do wykonania. Jedyne narzędzie zapisane blokiem, nie znacznikiem —
-   program nie mieści się w jednej linii. */
-const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
-/* Płótno: dokument obok rozmowy. Tworzenie i podmiana fragmentu to dwie różne
-   rzeczy — przy scenariuszu na trzy tysiące słów przepisywanie całości przy
-   każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
-const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
-const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
-const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
-const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
-const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
+/* Znaczniki modelu i wynik archiwum → kontekst: `public/protokol.js`.
+   Czysty tekst, bez DOM-u i bez stanu, więc daje się sprawdzić w Node
+   — patrz nagłówek tamtego pliku. */
+const {
+  SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
+  CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
+  ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, naKontekst, bezOgonkowKlient,
+} = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
    protokół rozmowy — ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
@@ -2555,18 +1920,90 @@ const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
    „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
    Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
    Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
-/* „Katedra La Seu" i „katedra la seu" to to samo pytanie o zdjęcia. Bez
-   ujednolicenia model prosiłby o tę samą rzecz raz po raz, tylko inaczej
-   zapisaną, i wypalał limit rund na jednym budynku. */
-function bezOgonkowKlient(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/ł/gi, 'l').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
 function dodajWynikNarzedzia(conv, tresc, etykieta) {
   conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta });
   saveConversations();
   renderMessages();
+}
+
+/* Rejestr narzędzi. Budowany RAZ, przy wczytaniu skryptu — zależności są
+   stałe, a lista musi być ta sama dla każdej tury. Wszystko, co narzędzia
+   potrafią, siedzi w `public/narzedzia.js`; tutaj zostaje sama pętla. */
+const NARZEDZIA = utworzNarzedzia({
+  t,
+  saveConversations,
+  renderMessages,
+  dodajWynikNarzedzia,
+  stripSearchMarker,
+  readJsonSafe,
+  fetch: (...a) => fetch(...a),
+  webSearch,
+  naKafelek,
+  naKontekst,
+  bezOgonkowKlient,
+  zebranyMaterial,
+  zastosujZmianePlotna,
+  pokazPlotno,
+  /* Komunikat głosowy w trakcie czynności. W trybie pisanym nie ma go wcale,
+     więc narzędzia nie muszą wiedzieć, czy tryb głosowy jest włączony. */
+  async mowGlosem(tekst) {
+    if (!voiceMode) return;
+    setVoiceState('speaking');
+    await speakText(tekst);
+    setVoiceState('thinking');
+  },
+  PORCJA_ARCHIWUM,
+  WZORCE: {
+    SZUKAJ: SEARCH_MARKER_RE,
+    ARCHIWUM: ARCHIVE_RE,
+    PLAN: PLAN_RE,
+    PLOTNO_NOWE: CANVAS_NEW_RE,
+    PLOTNO_ZMIANA: CANVAS_PATCH_RE,
+    KOD: RUN_FENCE_RE,
+    GRAFIKA: PHOTO_MARKER_RE,
+    OBRAZ: IMAGE_MARKER_RE,
+  },
+});
+
+/** Domknij turę odpowiedzią modelu — JEDNO miejsce dla wszystkich narzędzi.
+ *
+ *  Ta logika była wcześniej przepisana trzy razy: przy wyczerpaniu limitu
+ *  wyszukiwań, przy wyczerpaniu limitu zdjęć i na końcu pętli. Dwie kopie
+ *  ustawiały `samoMyslenie`, trzecia nie — więc model rozumujący, któremu
+ *  budżet tokenów poszedł w całości na myślenie, po zdjęciach pokazywał
+ *  surowe rozumowanie zamiast komunikatu. Nikt tego nie zgłosił, bo trzeba
+ *  trafić w rzadki zbieg okoliczności; kopiowanie kodu samo w sobie
+ *  wystarczyło, żeby te trzy ścieżki się rozjechały.
+ *
+ *  @param {object} conv rozmowa
+ *  @param {string} surowe treść od modelu (może być urwana)
+ *  @returns {string} tekst do wypowiedzenia głosem albo pusty
+ */
+async function domknijOdpowiedz(conv, surowe) {
+  // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
+  const tresc = stripSearchMarker(await dokoncz(conv, surowe));
+  /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
+     w całości na myślenie". Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
+     jako odpowiedź — gorsze niż nic: rozumowanie jest po angielsku, urwane
+     i pokazuje deliberację, której użytkownik widzieć nie powinien. */
+  const samoMyslenie = !tresc && Boolean(lastReasoning);
+  if (samoMyslenie) lastThink = lastReasoning;
+  const finalText = samoMyslenie ? t('budgetSpentOnThinking') : (tresc || t('emptyReply'));
+
+  const akcja = finalText.match(ACTION_RE);
+  if (akcja) {
+    const widoczne = finalText.replace(akcja[0], '').trim();
+    conv.messages.push({ role: 'assistant', content: widoczne || '…',
+      think: lastThink, note: lastModelNote });
+    conv.messages.push({ role: 'action',
+      actionType: akcja[1].trim().toLowerCase(), actionText: akcja[2].trim() });
+    saveConversations();
+    return widoczne;
+  }
+  conv.messages.push({ role: 'assistant', content: finalText,
+    think: lastThink, note: lastModelNote, samoMyslenie });
+  saveConversations();
+  return finalText;
 }
 
 async function runGeneration(conv, podpiecie = null) {
@@ -2576,469 +2013,67 @@ async function runGeneration(conv, podpiecie = null) {
   let finalText = '';
 
   const MAX_SEARCHES = 3;
-  /* Zapytania do archiwum, które już poszły w tej turze. Model potrafi
-     wywołać trzy razy DOKŁADNIE ten sam filtr i trzy razy dostać to samo
-     zero — widać to było w rozmowie o Mazurach, gdzie „Przeszukuję Twoje
-     archiwum…" pojawiło się kilka razy pod rząd bez zmiany parametrów.
-     Limit głębokości tego nie łapie, bo formalnie to różne kroki. */
-  const pytaniaArchiwum = new Set();
-  /* To samo dla zdjęć. Odkąd po pokazaniu grafik oddajemy głos modelowi,
-     musi istnieć hamulec: bez niego „pokaż zdjęcia" potrafiłoby zjeść
-     wszystkie rundy na jednym miejscu z planu. */
-  const pytaniaGrafik = new Set();
+  /* Pamięć jednej tury. Model potrafi wywołać trzy razy DOKŁADNIE ten sam
+     filtr i trzy razy dostać to samo zero — widać to było w rozmowie
+     o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
+     pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
+     formalnie to różne kroki. To samo dotyczy zdjęć. */
+  const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
          zapytania do modelu i mają dostać własne biegi. */
       const acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
-      const marker = acc.match(SEARCH_MARKER_RE);
+      const ostatnia = depth === MAX_SEARCHES;
 
-      // Ostatnia runda: model nadal chce szukać, ale limit wyczerpany. Zamiast
-      // pokazać użytkownikowi surowe [SZUKAJ: …] — a tak działo się wcześniej —
-      // każemy mu odpowiedzieć tym, co już zebrał.
-      if (marker && depth === MAX_SEARCHES) {
-        dodajWynikNarzedzia(conv, t('search.enough'), marker[1].trim());
-        const last = await streamOnce(conv);
-        // Ta sama zasada, co niżej: surowe rozumowanie nie jest odpowiedzią.
-        const trescOstatnia = stripSearchMarker(await dokoncz(conv, last));
-        let samoMyslenie = false;
-        if (!trescOstatnia && lastReasoning) {
-          lastThink = lastReasoning;
-          finalText = t('budgetSpentOnThinking');
-          samoMyslenie = true;
-        } else finalText = trescOstatnia || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
-          note: lastModelNote, samoMyslenie });
-        saveConversations();
+      /* Które narzędzie zawołał model. Kolejność sprawdzania jest kolejnością
+         na liście w `narzedzia.js` i tam też jest wyjaśniona. */
+      let uzyte = null;
+      let dop = null;
+      for (const narzedzie of NARZEDZIA) {
+        const m = narzedzie.dopasuj(acc);
+        if (m) { uzyte = narzedzie; dop = m; break; }
+      }
+
+      if (!uzyte) {
+        finalText = await domknijOdpowiedz(conv, acc);
         break;
       }
 
-      if (marker && depth < MAX_SEARCHES) {
-        const q = marker[1].trim();
-        const before = acc.replace(marker[0], '').trim();
-        // Ta sama zasada co przy zdjęciach: komunikat o trwającej czynności
-        // ma się domknąć, kiedy czynność się skończy.
-        const szukanie = {
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.searching', { q }),
-        };
-        conv.messages.push(szukanie);
-        saveConversations();
-        renderMessages();
-        if (voiceMode) {
-          setVoiceState('speaking');
-          await speakText(t('voice.searching'));
-          setVoiceState('thinking');
-        }
-        const resultsText = await webSearch(q);
-        szukanie.content = (before ? before + '\n\n' : '') + t('chat.searched', { q });
-        dodajWynikNarzedzia(conv, resultsText, q);
-        continue;
-      }
-
-      // Archiwum: pytania o WŁASNY materiał użytkownika.
-      const archMarker = acc.match(ARCHIVE_RE);
-      if (archMarker && depth < MAX_SEARCHES) {
-        const q = new URLSearchParams();
-        let grupuj = '';
-        /* Tniemy PRZED następnym `klucz=`, nie na każdej spacji. Wcześniej
-           `folder=Mazury 2026` rozpadało się na `folder=Mazury` plus sierotę
-           „2026", którą pętla po cichu wyrzucała — przy nazwie folderu to
-           zwykle nadal trafiało, ale `miejsce=Nowy Sącz` szukało już „Nowy",
-           a `bezFolderu=Mazury 2026` wykluczyłoby wszystkie Mazury, także
-           z innych lat. */
-        for (const kawalek of archMarker[1].trim().split(/\s+(?=[a-zA-Z]+=)/)) {
-          const i = kawalek.indexOf('=');
-          if (i < 1) continue;
-          const k = kawalek.slice(0, i).trim();
-          const v = kawalek.slice(i + 1).trim();
-          if (!v) continue;
-          if (k === 'grupuj') grupuj = v; else q.set(k, v);
-        }
-
-        /* Ten sam filtr drugi raz nie przyniesie innej odpowiedzi. Zamiast
-           pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
-           — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
-           w pół zdania. */
-        const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
-        if (pytaniaArchiwum.has(odcisk)) {
-          dodajWynikNarzedzia(conv,
-            'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które '
-            + 'przed chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. '
-            + 'Albo zmień filtry (inny rok, `folder=` zamiast `miejsce=`, `grupuj=` '
-            + 'zamiast listy plików), albo odpowiedz użytkownikowi tym, co już wiesz, '
-            + 'i napisz wprost, czego nie udało się znaleźć.',
-            t('chat.archiveQuery'));
-          continue;
-        }
-        pytaniaArchiwum.add(odcisk);
-
-        const before = stripSearchMarker(acc.replace(archMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.searchingArchive'),
-        });
-        saveConversations();
-        renderMessages();
-        let dane;
-        try {
-          // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
-          const adres = grupuj
-            ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
-            : `/api/archive/search?limit=${PORCJA_ARCHIWUM}&${q}`;
-          const r = await fetch(adres);
-          dane = await readJsonSafe(r);
-          if (!r.ok) throw new Error(dane.error || `HTTP ${r.status}`);
-        } catch (err) { dane = { error: err.message }; }
-
-        /* PODGLĄDY, nie tylko opis słowami.
-           Do tej pory wynik archiwum szedł wyłącznie do modelu jako tekst,
-           więc na „pokaż zdjęcia z rana" Marcin dostawał listę nazw plików.
-           Siatka miniatur była podpięta tylko pod wyszukiwanie w internecie.
-           Miniatury lecą przez `/api/archive/thumb`, bo adresy z OneDrive
-           wygasają i muszą być dociągane teraz, a nie przy indeksowaniu. */
-        const pliki = (dane && Array.isArray(dane.wyniki)) ? dane.wyniki : [];
-        const zPodgladem = pliki.filter((w) => w.zrodlo === 'onedrive');
-        if (zPodgladem.length) {
-          conv.messages.push({
-            role: 'assistant',
-            content: {
-              text: '',
-              photos: zPodgladem.map(naKafelek),
-              /* Zapamiętujemy zapytanie, żeby przycisk pod siatką mógł dobrać
-                 dalszy ciąg. `q` jest bez `limit` i bez `pomin` — te dokleja
-                 stopka, bo tylko ona wie, ile już pokazano. */
-              dalej: {
-                q: q.toString(),
-                pomin: pliki.length,
-                razem: Number(dane.znaleziono) || pliki.length,
-              },
-            },
-          });
-          saveConversations();
-          renderMessages();
-        }
-
-        dodajWynikNarzedzia(conv,
-          'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na '
-          + 'podstawie tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, '
-          + 'więc ich nie zapowiadaj ani nie opisuj plik po pliku):\n'
-          + naKontekst(dane),
-          t('chat.archiveQuery'));
-        continue;
-      }
-
-      // Plan zdjęciowy: pozycja Słońca i policzone nastawy dla miejsca użytkownika.
-      const planMarker = acc.match(PLAN_RE);
-      if (planMarker && depth < MAX_SEARCHES) {
-        /* Dzielimy na `klucz=wartość`, ale wartość MOŻE mieć spacje —
-           „obiektyw=24-70 f/2.8, 70-200 f/4" to jedna wartość, nie cztery
-           parametry. Dzielenie po samych spacjach urywało ją na „24-70",
-           przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8:
-           odpowiedź brzmiała sensownie i była nieprawdziwa. Tniemy więc tylko
-           tam, gdzie po spacji zaczyna się kolejne `słowo=`. */
-        const parametry = {};
-        const ALIASY = { obiektywy: 'obiektyw', szklo: 'obiektyw', lens: 'obiektyw' };
-        for (const kawalek of planMarker[1].trim().split(/\s+(?=[a-zA-Z_]+=)/)) {
-          const i = kawalek.indexOf('=');
-          if (i <= 0) continue;
-          const k = kawalek.slice(0, i).trim().toLowerCase();
-          const v = kawalek.slice(i + 1).trim();
-          if (!v) continue;
-          parametry[ALIASY[k] || k] = /^[\d.]+$/.test(v) ? Number(v) : v;
-        }
-        const before = stripSearchMarker(acc.replace(planMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.planning'),
-        });
-        saveConversations();
-        renderMessages();
-        let plan;
-        try {
-          const r = await fetch('/api/plan', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parametry),
-          });
-          plan = await readJsonSafe(r);
-          if (!r.ok) throw new Error(plan.error || `HTTP ${r.status}`);
-        } catch (err) {
-          plan = { error: err.message };
-        }
-        dodajWynikNarzedzia(conv,
-          'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, '
-          + 'użyj ich zamiast własnych szacunków):\n' + JSON.stringify(plan, null, 1),
-          t('chat.planQuery'));
-        continue;
-      }
-
-      // Płótno: nowy dokument albo poprawka fragmentu w istniejącym.
-      const nowePlotno = acc.match(CANVAS_NEW_RE);
-      const zmianaPlotna = acc.match(CANVAS_PATCH_RE);
-      if (nowePlotno || zmianaPlotna) {
-        let opis;
-        if (nowePlotno) {
-          conv.canvas = {
-            title: (nowePlotno[1] || '').trim() || t('canvas.untitled'),
-            text: nowePlotno[2].replace(/\n$/, ''),
-          };
-          opis = t('canvas.created', { title: conv.canvas.title });
+      /* Limit rund wyczerpany, a model wciąż sięga po narzędzie. Zamiast
+         pokazać użytkownikowi surowy znacznik — a tak działo się kiedyś —
+         mówimy modelowi, że ma dokończyć tekstem, i domykamy turę tą samą
+         drogą co zawsze. */
+      if (ostatnia && !uzyte.zawszeDozwolone) {
+        const limit = uzyte.gdyLimit ? uzyte.gdyLimit(dop) : null;
+        if (limit) {
+          dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta);
+          const ostatniaTresc = await streamOnce(conv);
+          finalText = await domknijOdpowiedz(conv, ostatniaTresc);
         } else {
-          const wynik = zastosujZmianePlotna(conv, zmianaPlotna[1]);
-          opis = wynik.ok
-            ? t('canvas.patched', { n: wynik.ile })
-            : t('canvas.patchFailed', { msg: wynik.blad });
+          // Narzędzie bez własnego komunikatu: po prostu domknij tym, co jest.
+          finalText = await domknijOdpowiedz(conv, acc);
         }
-        const before = stripSearchMarker(acc.replace((nowePlotno || zmianaPlotna)[0], ''));
-        conv.messages.push({ role: 'assistant', content: (before ? before + '\n\n' : '') + opis });
-        saveConversations();
-        renderMessages();
-        pokazPlotno(conv);
-        finalText = opis;
         break;
       }
 
-      /* Kod sprawdzamy najpierw: wynik programu zwykle jest treścią odpowiedzi,
-         a nie dodatkiem do niej. Pętla wraca potem do modelu, żeby ten
-         zinterpretował liczby — inaczej użytkownik dostaje surowy stdout. */
-      const kodMarker = acc.match(RUN_FENCE_RE);
-      if (kodMarker && depth < MAX_SEARCHES) {
-        const kod = kodMarker[1];
-        const before = stripSearchMarker(acc.replace(kodMarker[0], ''));
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.running'),
-          code: kod,
-        });
-        saveConversations();
-        renderMessages();
-        let wynik;
-        try {
-          const r = await fetch('/api/run', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Program dostaje treść załączników tej rozmowy jako pliki.
-            body: JSON.stringify({ code: kod, files: zebranyMaterial(conv) }),
-          });
-          wynik = await readJsonSafe(r);
-          if (!r.ok) throw new Error(wynik.error || `HTTP ${r.status}`);
-        } catch (err) {
-          wynik = { stdout: '', stderr: err.message, wyniki: [] };
-        }
-        const svg = (wynik.wyniki || []).filter((w) => /\.svg$/i.test(w.name));
-        conv.messages.push({
-          role: 'assistant',
-          content: { text: '', run: wynik },
-          ...(svg.length ? {} : {}),
-        });
-        // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
-        dodajWynikNarzedzia(conv, t('chat.runResult', {
-          out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
-          err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
-        }), t('chat.runQuery'));
-        continue;
-      }
+      const wynik = await uzyte.wykonaj({
+        acc,
+        dop,
+        conv,
+        depth,
+        ostatnia,
+        // Tekst modelu sprzed znacznika — WSZYSTKIE znaczniki wyczyszczone.
+        przed: stripSearchMarker(acc.replace(dop[0], '')),
+        stan,
+      });
 
-      /* Zdjęcia z internetu. Sprawdzane PRZED [OBRAZ:], bo gdy model wypisze
-         oba, użytkownik prosił o zdjęcia — generowanie było jego drugim
-         wyborem, nie pierwszym. */
-      const fotoMarker = acc.match(PHOTO_MARKER_RE);
-      /* Limit rund wyczerpany, a model wciąż prosi o kolejne zdjęcia. Tak
-         skończyła się rozmowa o Majorce: ostatnią rzeczą na ekranie było
-         „🖼️ Zdjęcia: Andratx, Fornalutx, Porto Cristo, Cala Pi" i cisza —
-         plan urwał się w połowie, bez zdania domykającego. Zamiast po prostu
-         przestać, mówimy modelowi wprost, żeby dokończył tekstem. */
-      if (fotoMarker && depth === MAX_SEARCHES) {
-        dodajWynikNarzedzia(conv,
-          'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY — nie dostaniesz już kolejnych. '
-          + 'Nie używaj więcej [GRAFIKA:]. Dokończ teraz odpowiedź tekstem: '
-          + 'domknij plan i napisz wprost, dla których miejsc zdjęć nie '
-          + 'pokazałeś, żeby użytkownik mógł o nie poprosić osobno.',
-          t('chat.photosQuery'));
-        const last = await streamOnce(conv);
-        finalText = stripSearchMarker(await dokoncz(conv, last)) || t('emptyReply');
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink, note: lastModelNote });
-        saveConversations();
+      if (wynik && wynik.akcja === 'koniec') {
+        finalText = wynik.finalGlos || wynik.finalText || '';
         break;
       }
-      if (fotoMarker) {
-        // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
-        const wszystkie = fotoMarker[1].split(';')
-          .map((s) => s.trim()).filter(Boolean).slice(0, 4);
-        const before = stripSearchMarker(acc.replace(fotoMarker[0], ''));
-        /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
-           dostaniu wyniku lubi poprosić o to samo jeszcze raz — a drugi raz
-           te same zdjęcia to dla użytkownika po prostu usterka. */
-        const zapytania = wszystkie.filter((q) => !pytaniaGrafik.has(bezOgonkowKlient(q)));
-        if (!zapytania.length && depth < MAX_SEARCHES) {
-          dodajWynikNarzedzia(conv,
-            `ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ: ${wszystkie.join(', ')}. `
-            + 'Nie proś o nie ponownie. Albo poproś o INNE miejsca z planu, '
-            + 'albo dokończ odpowiedź tekstem.',
-            t('chat.photosQuery'));
-          continue;
-        }
-        /* Trzymamy tę wiadomość, bo za chwilę trzeba ją PRZEPISAĆ. Wisiała
-           w rozmowie na zawsze jako „Szukam zdjęć: Katedra La Seu…" — pod nią
-           gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich właśnie
-           szuka. Komunikat o trwającej czynności musi się kiedyś skończyć. */
-        const szukanie = {
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.findingPhotos', { q: zapytania.join(', ') }),
-        };
-        conv.messages.push(szukanie);
-        saveConversations();
-        renderMessages();
-        // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
-        const zestawy = await Promise.all(zapytania.map(async (q) => {
-          try {
-            const r = await fetch(`/api/search/images?q=${encodeURIComponent(q)}`);
-            const d = await readJsonSafe(r);
-            return { q, photos: d.results || [], error: d.error || '' };
-          } catch (err) { return { q, photos: [], error: err.message }; }
-        }));
-        const znalezione = zestawy.filter((z) => z.photos.length);
-        if (znalezione.length) {
-          // Czynność się skończyła — komunikat przestaje mówić „szukam".
-          szukanie.content = (before ? before + '\n\n' : '')
-            + t('chat.photosFound', { q: znalezione.map((z) => z.q).join(', ') });
-          for (const z of znalezione) {
-            conv.messages.push({
-              role: 'assistant',
-              content: { text: zapytania.length > 1 ? z.q : '', photos: z.photos },
-            });
-          }
-          finalText = t('chat.photosDone', { n: znalezione.reduce((s, z) => s + z.photos.length, 0) });
-          saveConversations();
-          renderMessages();
-
-          /* Oddajemy głos modelowi zamiast kończyć turę. Wcześniej było tu
-             `break` i wyglądało to tak: Marcin prosi „ze zdjęciami proszę"
-             do siedmiodniowego planu, dostaje osiem zdjęć jednej katedry
-             i ciszę. Zdjęcia leżały obok planu, nieprzypisane do żadnego dnia,
-             a pozostałe przystanki nie doczekały się niczego.
-
-             Model musi wiedzieć, CO dostał — i że wolno mu poprosić o resztę
-             miejsc jednym znacznikiem. Powtórzone zapytania odcinamy tak samo
-             jak w archiwum, żeby nie kręcił się w kółko po tej samej katedrze. */
-          for (const z of znalezione) pytaniaGrafik.add(bezOgonkowKlient(z.q));
-          if (depth < MAX_SEARCHES) {
-            const doZrobienia = zapytania.filter((q) => !znalezione.some((z) => z.q === q));
-            dodajWynikNarzedzia(conv,
-              'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI (już je widzi — nie opisuj ich '
-              + 'po kolei i nie zapowiadaj):\n'
-              + znalezione.map((z) => `• ${z.q} — ${z.photos.length} szt.`).join('\n')
-              + (doZrobienia.length ? `\nBEZ WYNIKÓW: ${doZrobienia.join(', ')}` : '')
-              + '\n\nDokończ teraz odpowiedź: przypisz te zdjęcia do miejsc z planu '
-              + 'jednym–dwoma zdaniami na miejsce. Jeśli plan ma jeszcze inne '
-              + 'przystanki bez zdjęć, poproś o nie JEDNYM znacznikiem '
-              + '[GRAFIKA: miejsce1; miejsce2; miejsce3] — nie po jednym na raz. '
-              + 'Nie proś ponownie o to, co już masz powyżej.',
-              t('chat.photosQuery'));
-            continue;
-          }
-          break;
-        }
-
-        /* Nic nie znaleziono. Kiedyś kończyliśmy tutaj: użytkownik dostawał
-           „nie znalazłem", a MODEL nie dowiadywał się o niczym. Rozmowa
-           urywała się w pół kroku i następne zdanie użytkownika — choćby samo
-           „Kraków" — trafiało w próżnię: model nie wiedział, że przed chwilą
-           coś nie wyszło, ani czego dotyczyło. Wyglądało to jak zgłupienie.
-           Teraz niepowodzenie wraca do modelu tak samo jak wynik wyszukiwania:
-           może doprecyzować zapytanie albo uczciwie powiedzieć, co się stało. */
-        const powod = zestawy.map((z) => z.error).filter(Boolean).join('; ');
-        if (depth < MAX_SEARCHES) {
-          dodajWynikNarzedzia(conv,
-            `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
-            + (powod ? `Powód techniczny: ${powod}\n` : '')
-            + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe albo '
-            + 'brakowało w nim miejsca lub nazwy — spróbuj RAZ konkretniejszego. '
-            + 'Jeśli zapytanie było już konkretne, nie szukaj ponownie: powiedz '
-            + 'wprost, że nie udało się znaleźć zdjęć, podaj powód i zapytaj, '
-            + 'czego dokładnie szukać.',
-            t('chat.photosQuery'));
-          continue;
-        }
-        conv.messages.push({
-          role: 'assistant',
-          content: t('chat.photosNone', { msg: powod }),
-          error: true,
-        });
-        finalText = t('chat.photosNoneVoice');
-        saveConversations();
-        break;
-      }
-
-      const imgMarker = acc.match(IMAGE_MARKER_RE);
-      if (imgMarker) {
-        const prompt = imgMarker[1].trim();
-        const before = acc.replace(imgMarker[0], '').trim();
-        conv.messages.push({
-          role: 'assistant',
-          content: (before ? before + '\n\n' : '') + t('chat.genImage'),
-        });
-        saveConversations();
-        renderMessages();
-        if (voiceMode) {
-          setVoiceState('speaking');
-          await speakText(t('voice.generatingImage'));
-          setVoiceState('thinking');
-        }
-        try {
-          const r = await fetch('/api/studio/image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-          });
-          const d = await readJsonSafe(r);
-          if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-          conv.messages.push({
-            role: 'assistant',
-            content: { text: t('chat.imageSaved'), images: [d.url] },
-          });
-          finalText = t('chat.imageDone');
-        } catch (err) {
-          conv.messages.push({
-            role: 'assistant',
-            content: t('chat.imageErr', { msg: err.message }),
-            error: true,
-          });
-          if (voiceMode) finalText = t('chat.imageErrVoice');
-        }
-        saveConversations();
-        break;
-      }
-
-      /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
-         w całości na myślenie”. Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
-         jako odpowiedź — i to było gorsze niż nic: rozumowanie jest po
-         angielsku, urwane w połowie zdania i pokazuje deliberację, której
-         użytkownik widzieć nie powinien. Teraz mówimy wprost, co się stało,
-         a samo myślenie ląduje w zwijanym panelu, gdzie jego miejsce. */
-      // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
-      const trescOdpowiedzi = stripSearchMarker(await dokoncz(conv, acc));
-      let mysliZamiastTresci = '';
-      if (!trescOdpowiedzi && lastReasoning) {
-        mysliZamiastTresci = lastReasoning;
-        lastThink = lastReasoning;
-        finalText = t('budgetSpentOnThinking');
-      } else {
-        finalText = trescOdpowiedzi || t('emptyReply');
-      }
-      const actMarker = finalText.match(ACTION_RE);
-      if (actMarker) {
-        const shown = finalText.replace(actMarker[0], '').trim();
-        conv.messages.push({ role: 'assistant', content: shown || '…', think: lastThink, note: lastModelNote });
-        conv.messages.push({ role: 'action', actionType: actMarker[1].trim().toLowerCase(), actionText: actMarker[2].trim() });
-        finalText = shown;
-      } else {
-        conv.messages.push({ role: 'assistant', content: finalText, think: lastThink,
-          note: lastModelNote, samoMyslenie: Boolean(mysliZamiastTresci) });
-      }
-      saveConversations();
-      break;
     }
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -4092,6 +3127,21 @@ function ustawStatusKamery(tekst, szczegoly = '') {
   dopasujPanelKamery();
 }
 
+/** Status „nic się jeszcze nie wydarzyło" — jeden dla wszystkich miejsc,
+ *  które go potrzebują.
+ *
+ *  Wcześniej każde z nich pisało `'…'` z ręki, także przełącznik przód/tył.
+ *  Wielokropek znaczy „czekam na pierwsze rozpoznanie" i ma sens WYŁĄCZNIE
+ *  przy działających zmysłach. Przy wyłączonych nie miał go co nadpisać,
+ *  więc po przełączeniu kamery zostawał na stałe pasek z samą kropką
+ *  i kreską obramowania nad nią. Marcin: „przy zmianie kamer pojawia się
+ *  dziwna kreska pod podglądem i później nie znika".
+ */
+function ustawStatusSpoczynkowy() {
+  const zmyslyDzialaja = senses.online && senses.caps.yolo;
+  ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja ? '' : t('liveNoSenses'));
+}
+
 /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
  *  pojawienie się niczego nie przesuwa — o to w tej zmianie chodziło. */
 function pokazDymekKamery(widoczny) {
@@ -4255,8 +3305,7 @@ async function startLive() {
   // gdy jest co przełączać. Kinect ma jeden obiektyw.
   $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
 
-  ustawStatusKamery(senses.online && senses.caps.yolo ? '…' : '',
-    senses.online && senses.caps.yolo ? '' : t('liveNoSenses'));
+  ustawStatusSpoczynkowy();
   liveTimer = setInterval(liveDetect, 3000);
   setTimeout(liveDetect, 800);
 }
@@ -4392,683 +3441,12 @@ async function liveDetect() {
   }
 }
 
-/* ==================== PLAN ZDJĘCIOWY ==================== */
-
-let planOstatnio = 0;
-let planZajety = false;
-
-/** Średnia jasność kadru (0–1) — pomiar sceny, nie zgadywanka z pory dnia.
- *  Próbkujemy co dziesiąty piksel: różnica w wyniku żadna, a koszt dziesięć
- *  razy mniejszy przy klatce co sekundę. */
-function jasnoscKadru(canvas) {
-  try {
-    const g = canvas.getContext('2d', { willReadFrequently: true });
-    const d = g.getImageData(0, 0, canvas.width, canvas.height).data;
-    let suma = 0;
-    let ile = 0;
-    for (let i = 0; i < d.length; i += 40) {
-      suma += (d[i] * 0.2126 + d[i + 1] * 0.7152 + d[i + 2] * 0.0722) / 255;
-      ile++;
-    }
-    return ile ? suma / ile : null;
-  } catch { return null; }
-}
-
-/** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów —
- *  światło zmienia się w minutach, nie w klatkach. */
-async function odswiezPlan(cap) {
-  const box = $('plan-box');
-  if (!box || box.hidden) return;
-  if (planZajety || Date.now() - planOstatnio < 8000) return;
-  planZajety = true;
-  planOstatnio = Date.now();
-  try {
-    const trybPola = $('plan-mode').value;
-    const wideo = trybPola.startsWith('wideo');
-    const dane = {
-      sprzet: $('plan-gear').value,
-      tryb: wideo ? 'wideo' : 'zdjecie',
-      klatki: trybPola === 'wideo50' ? 50 : 25,
-      // Puste = „weź z prognozy". Wybór ręczny wygrywa, bo stojąc na miejscu
-      // widzisz niebo lepiej niż model pogodowy dla kwadratu kilometra.
-      ...( $('plan-sky').value ? { zachmurzenie: $('plan-sky').value } : {} ),
-      szerokosc: cap ? cap.width : 0,
-      wysokosc: cap ? cap.height : 0,
-    };
-    const j = cap ? jasnoscKadru(cap) : null;
-    if (j !== null) dane.jasnosc = j;
-    const r = await fetch('/api/plan', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dane),
-    });
-    const d = await readJsonSafe(r);
-    /* `ma-wynik` decyduje, czy zwinięty pasek pokazuje tytuł, czy same
-       nastawy — patrz komentarz w style.css przy `.plan-box.ma-wynik`.
-       Bez wyniku tytuł zostaje, bo sam myślnik nic nie mówi. */
-    if (!r.ok) {
-      box.classList.remove('ma-wynik');   // znów sam myślnik → tytuł wraca
-      $('plan-shot').textContent = '—';
-      $('plan-light').textContent = d.error || t('plan.needLocation');
-      $('plan-why').textContent = '';
-      return;
-    }
-    pokazPlan(d);
-  } catch { /* offline — panel zostaje z poprzednim wynikiem */ } finally {
-    planZajety = false;
-  }
-}
-
-/* Wypisz policzony plan. `pre` to przedrostek identyfikatorów, bo plan
-   pokazuje się w DWÓCH miejscach: pod podglądem kamery (`plan-*`, liczony
-   z jasności bieżącej klatki) i w Plenerze (`fp-*`, liczony dla miejsca
-   i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden —
-   dwie kopie tej samej funkcji rozjechałyby się przy pierwszej poprawce. */
-function pokazPlan(d, pre = 'plan') {
-  const u = d.ustawienia;
-  $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
-  /* „Jest wynik" należy do PLANU, nie do jednego wywołania. Stąd tutaj,
-     a nie w `odswiezPlan`: pudełko przy kamerze chowa wtedy tytuł ze
-     zwiniętego paska, bo liczby mówią same za siebie i nie ma po co ich
-     ściskać (patrz `.plan-box.ma-wynik` w style.css). */
-  if (pre === 'plan') { const b = $('plan-box'); if (b) b.classList.add('ma-wynik'); }
-
-  const czesci = [];
-  if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
-  czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
-  // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
-  // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.
-  if (d.pogoda) {
-    czesci.push(`${d.pogoda.opis}`
-      + (d.pogoda.temperatura !== null ? ` ${Math.round(d.pogoda.temperatura)}°C` : '')
-      + (d.pogoda.opadyProc > 30 ? ` · opady ${d.pogoda.opadyProc}%` : ''));
-  }
-  const light = $(pre + '-light');
-  light.textContent = czesci.join(' · ');
-
-  /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
-     Gdy złota godzina trwa TERAZ, mówimy to wprost zamiast pokazywać
-     ujemne minuty do jej początku. */
-  const zloty = d.slonce.doZlotejMin;
-  const zachod = d.slonce.doZachoduMin;
-  const czas = document.createElement('span');
-  czas.className = 'plan-urgent';
-  if (d.slonce.faza === 'złota godzina') {
-    czas.textContent = ` · ${t('plan.goldenNow')}`
-      + (zachod > 0 ? `, ${t('plan.toSunset', { n: zachod })}` : '');
-  } else if (zloty > 0) {
-    czas.textContent = ` · ${t('plan.toGolden', { n: zloty })}`;
-  } else if (zachod > 0) {
-    czas.textContent = ` · ${t('plan.toSunset', { n: zachod })}`;
-  }
-  if (czas.textContent) light.appendChild(czas);
-
-  const why = $(pre + '-why');
-  why.innerHTML = '';
-  for (const p of u.powody) {
-    const el = document.createElement('p');
-    el.textContent = p;
-    why.appendChild(el);
-  }
-
-  // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
-  planOstatnieUstawienia = u;
-  odswiezAparat(u);
-
-  /* PANEL PRZELICZAMY PO WPISANIU TREŚCI, nie tylko po rozwinięciu pudełka.
-   *
-   *  Rozwinięcie nastaw woła `dopasujPanelKamery()` od razu — i to za wcześnie.
-   *  Pudełko jest wtedy jeszcze puste, bo `odswiezPlan()` dolicza światło,
-   *  czas do złotej godziny i uzasadnienia dopiero po odpowiedzi z serwera.
-   *  Panel wychodził więc policzony pod pudełko o kilka wierszy niższe, niż
-   *  będzie za moment, i dopisane linijki wystawały poza niego.
-   *
-   *  Zmierzone na oknie 1440×700: panel zastygał przy 311 px szerokości
-   *  z 50 px treści poza kadrem, choć miał się zwęzić do 200 px i zmieścić
-   *  wszystko. Zestaw `panel-kamery-miesci` widział to jako „małe okienko
-   *  przesuwalne pod dużym podglądem" i miał rację. */
-  if (pre === 'plan') dopasujPanelKamery();
-}
-
-let planOstatnieUstawienia = null;
-
-/* ---- APARAT PO WI-FI (Canon CCAPI) ------------------------------------
-   Sedno nie jest w tym, że da się zdalnie zmienić ISO. Sedno jest w tym, że
-   Cosmos przestaje mówić „ustaw 1/250, f/8, ISO 200", a zaczyna mówić „masz
-   1/60, f/4, ISO 1600 — poprawiam". Do tego musi ZOBACZYĆ, co aparat ma
-   naprawdę ustawione, i porównać z tym, co sam policzył dla tego światła.
-
-   Wiersz pokazuje się dopiero, gdy aparat odpowiada. Martwy przycisk
-   „Ustaw w aparacie" u kogoś, kto nigdy nie włączył CCAPI, byłby gorszy niż
-   jego brak — obiecywałby coś, czego nie ma. */
-let aparatStan = null;
-let aparatSprawdzony = 0;
-const APARAT_CACHE_MS = 30000;
-
-async function odswiezAparat(policzone) {
-  const wiersz = $('plan-camera');
-  if (!wiersz) return;
-  /* Wiersz aparatu mieszka w Plenerze. Odpytywanie go przy zamkniętym oknie
-     to dwa żądania do aparatu co osiem sekund przez cały czas otwartego
-     podglądu — do niczego, a aparat i tak zasypia po Wi-Fi. */
-  if ($('plener-modal').style.display === 'none') return;
-
-  if (Date.now() - aparatSprawdzony > APARAT_CACHE_MS) {
-    aparatSprawdzony = Date.now();
-    try { aparatStan = await (await fetch('/api/canon/status')).json(); }
-    catch { aparatStan = null; }
-  }
-  if (!aparatStan || !aparatStan.online) {
-    // Nieskonfigurowany aparat chowamy zupełnie; skonfigurowany, ale
-    // niedostępny — pokazujemy z powodem, bo to stan do naprawienia.
-    wiersz.hidden = !(aparatStan && aparatStan.skonfigurowany);
-    if (!wiersz.hidden) {
-      $('plan-camera-now').textContent = String((aparatStan && aparatStan.powod) || '').slice(0, 120);
-      $('plan-camera-now').className = 'plan-camera-off';
-      $('plan-camera-apply').hidden = true;
-    }
-    return;
-  }
-
-  wiersz.hidden = false;
-  $('plan-camera-apply').hidden = false;
-  try {
-    const w = await (await fetch('/api/canon/settings')).json();
-    const n = w.nastawy || {};
-    const teraz = [n.czas, n.przyslona && `f/${String(n.przyslona).replace(/^f/i, '')}`,
-      n.iso && `ISO ${n.iso}`].filter(Boolean).join(' · ') || '—';
-    const el = $('plan-camera-now');
-    el.className = '';
-    el.textContent = `${aparatStan.model || t('plan.camera')}: ${teraz}`;
-    /* Zgodność liczymy, a nie porównujemy napisy: „1/250" z aparatu i 0,004 s
-       z planu to ta sama wartość zapisana inaczej. Różnica poniżej jednej
-       trzeciej działki jest w praktyce nieodróżnialna na zdjęciu. */
-    const l = w.liczby || {};
-    if (policzone && l.iso && policzone.iso) {
-      const dzialki = Math.abs(Math.log2(l.iso / policzone.iso));
-      if (dzialki > 0.34) el.textContent += ` · ${t('plan.mismatch')}`;
-    }
-  } catch {
-    $('plan-camera-now').textContent = t('plan.cameraErr');
-    $('plan-camera-now').className = 'plan-camera-off';
-  }
-}
-
-$('plan-camera-apply').addEventListener('click', async (e) => {
-  const b = e.currentTarget;
-  const u = planOstatnieUstawienia;
-  if (!u) return;
-  b.disabled = true;
-  const pierwotny = b.textContent;
-  b.textContent = t('plan.applying');
-  try {
-    const r = await fetch('/api/canon/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        iso: u.iso ? String(u.iso) : '',
-        // Aparat oczekuje swojego zapisu: „f4.0" i „1/250", nie liczb.
-        przyslona: u.przyslona ? String(u.przyslona).replace('f/', 'f') : '',
-        czas: u.czas || '',
-      }),
-    });
-    const d = await readJsonSafe(r);
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    aparatSprawdzony = 0;
-    await odswiezAparat(u);
-  } catch (err) {
-    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
-    $('plan-camera-now').className = 'plan-camera-off';
-  } finally {
-    b.disabled = false;
-    b.textContent = pierwotny;
-  }
-});
-
-/* Migawka. Świadomie TYLKO pod ludzkim palcem — model tego narzędzia nie
-   dostaje. „Zrób zdjęcie, bo wygląda na dobry moment" jest dokładnie tą
-   klasą decyzji, której maszyna nie powinna podejmować za człowieka
-   trzymającego aparat. */
-$('plan-camera-shutter').addEventListener('click', async (e) => {
-  const b = e.currentTarget;
-  b.disabled = true;
-  const pierwotny = b.textContent;
-  try {
-    const r = await fetch('/api/canon/shutter', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    });
-    const d = await readJsonSafe(r);
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    b.textContent = t('pl.shutterOk');
-  } catch (err) {
-    $('plan-camera-now').textContent = t('plan.applyErr', { msg: err.message });
-    $('plan-camera-now').className = 'plan-camera-off';
-  } finally {
-    setTimeout(() => { b.textContent = pierwotny; b.disabled = false; }, 900);
-  }
-});
-
-for (const id of ['plan-gear', 'plan-mode', 'plan-sky']) {
-  const el = $(id);
-  // Zmiana ustawienia ma dać odpowiedź od razu, a nie po ośmiu sekundach.
-  if (el) el.addEventListener('change', () => { planOstatnio = 0; odswiezPlan(null); });
-}
-
-/* Pudełko nastaw pamięta, czy je rozwinąłeś. Domyślnie zwinięte, bo panel
-   kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
-   ponad jedna trzecia tego panelu. Kto raz je rozwinie, ten najwyraźniej
-   chce je mieć otwarte — i nie musi tego klikać przy każdym uruchomieniu. */
-const PLAN_ROZWINIETE = 'cosmos.planRozwiniete';
-{
-  const box = $('plan-box');
-  if (box) {
-    box.open = localStorage.getItem(PLAN_ROZWINIETE) === '1';
-    box.addEventListener('toggle', () => {
-      localStorage.setItem(PLAN_ROZWINIETE, box.open ? '1' : '0');
-      /* Po rozwinięciu licz od razu. Bez tego świeżo otwarte pudełko
-         pokazywałoby poprzedni wynik nawet przez osiem sekund, a przy
-         wyłączonych zmysłach — myślnik do końca świata, bo pętla podglądu
-         odświeża plan tylko z klatki. */
-      if (box.open) { planOstatnio = 0; odswiezPlan(null); }
-      // Paski zmieniły wysokość → panel ma się przeliczyć od razu, a nie
-      // dopiero przy następnej klatce podglądu.
-      dopasujPanelKamery();
-    });
-  }
-}
-
-/* ============================== PLENER ==============================
-   Foto i wideo jako jedno miejsce, a nie pięć.
-
-   Powód wydzielenia jest rzeczowy, nie porządkowy. Te funkcje wyrosły
-   przez ostatnie partie do rozmiaru osobnego programu, a mieszkały tak:
-   sprzęt i archiwum w Ustawieniach, plan zdjęciowy w podpanelu podglądu
-   kamery (czyli niedostępny bez włączonej kamery), aparat po Wi-Fi jako
-   wiersz w tamtym podpanelu, ptaki w nakładce głosowej, a misja KMZ
-   i karty ujęć — nigdzie. Te dwie ostatnie dało się uruchomić wyłącznie
-   żądaniem HTTP albo przez model. To nie jest funkcja, której nie ma;
-   to funkcja, o której nie sposób się dowiedzieć.
-
-   Plan liczy się TU bez kamery: dla nazwy miejsca i dla wybranej godziny.
-   To jest ta różnica, na której zależy najbardziej — „co zabrać w sobotę
-   do Krakowa na 18:30" to inne pytanie niż „co ustawić w tej chwili”. */
-
-function otworzPlener() {
-  wczytajSprzet();
-  odswiezArchiwum();
-  $('plener-modal').style.display = '';
-  // Aparat sprawdzamy przy otwarciu, nie w tle — patrz `odswiezAparat`.
-  aparatSprawdzony = 0;
-  odswiezAparat(planOstatnieUstawienia);
-  /* Plan liczymy przy KAŻDYM otwarciu, nie tylko pierwszym. Puste okno
-     z przyciskiem „Policz" kazałoby klikać po to, co i tak zawsze chcemy
-     zobaczyć, a plan sprzed godziny jest już nieprawdą — Słońce się
-     przesunęło, a to jest cała treść tego panelu. */
-  liczPlanPlener();
-}
-
-function zamknijPlener() { $('plener-modal').style.display = 'none'; }
-
-$('plener-btn').addEventListener('click', otworzPlener);
-$('plener-close').addEventListener('click', zamknijPlener);
-$('plener-modal').addEventListener('click', (e) => {
-  if (e.target === $('plener-modal')) zamknijPlener();
-});
-$('set-open-plener').addEventListener('click', () => { closeSettings(); otworzPlener(); });
-
-/* ---- sprzęt ---- */
-$('gear-save').addEventListener('click', async (e) => {
-  const b = e.currentTarget;
-  const stan = $('gear-status');
-  b.disabled = true;
-  stan.className = 'field-hint';
-  try {
-    await zapiszSprzet();
-    stan.textContent = t('pl.gearSaved');
-    setTimeout(() => { stan.textContent = ''; }, 2500);
-    // Zestaw wpływa na ujęcia i na nastawy — plan po zapisie jest nieaktualny.
-    liczPlanPlener();
-  } catch (err) {
-    // Nieudany zapis ZOSTAJE na ekranie — inaczej człowiek wychodzi
-    // przekonany, że sprzęt jest wpisany, a plan liczy dla domyślnego korpusu.
-    stan.className = 'field-hint plener-err';
-    stan.textContent = t('pl.gearErr', { msg: err.message });
-  } finally {
-    b.disabled = false;
-  }
-});
-
-/* ---- plan ---- */
-let plenerZajety = false;
-let plenerPonow = false;
-
-async function liczPlanPlener() {
-  /* Zajęte = przelicz PO powrocie, a nie „odpuść". Zwykłe `return` znaczyło,
-     że przy szybkiej zmianie dwóch list na ekranie zostaje wynik dla pierwszej
-     — i to bez żadnego znaku, że coś przepadło. */
-  if (plenerZajety) { plenerPonow = true; return; }
-  plenerZajety = true;
-  const przycisk = $('fp-go');
-  przycisk.disabled = true;
-  try {
-    const trybPola = $('fp-mode').value;
-    const wideo = trybPola.startsWith('wideo');
-    const dane = {
-      tryb: wideo ? 'wideo' : 'zdjecie',
-      klatki: trybPola === 'wideo50' ? 50 : 25,
-    };
-    // Puste pola znaczą „weź to, co zapisane" — i muszą NIE trafić do żądania,
-    // bo pusty napis to dla serwera podana wartość, a nie jej brak.
-    if ($('fp-gear').value) dane.sprzet = $('fp-gear').value;
-    if ($('fp-sky').value) dane.zachmurzenie = $('fp-sky').value;
-    if ($('fp-place').value.trim()) dane.miejsce = $('fp-place').value.trim();
-    if ($('fp-topic').value.trim()) dane.temat = $('fp-topic').value.trim();
-    if ($('fp-when').value) {
-      const kiedy = new Date($('fp-when').value);
-      if (!Number.isNaN(kiedy.getTime())) dane.kiedy = kiedy.toISOString();
-    }
-    const r = await fetch('/api/plan', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dane),
-    });
-    const d = await readJsonSafe(r);
-    if (!r.ok) {
-      $('fp-shot').textContent = '—';
-      $('fp-light').textContent = d.error || t('plan.needLocation');
-      $('fp-why').textContent = '';
-      $('fp-shots').innerHTML = '';
-      return;
-    }
-    pokazPlan(d, 'fp');
-    pokazUjecia(d.ujecia);
-    // Misja dostaje współrzędne z planu — przepisywanie ich z mapy do dwóch
-    // pól to najprostszy sposób na literówkę w miejscu, w którym boli.
-    /* Współrzędne misji idą za planem, chyba że wpisano je RĘCZNIE.
-
-       Pierwsza wersja uzupełniała je tylko wtedy, gdy oba pola były puste —
-       i to była cicha, groźna usterka. Panel liczy plan zaraz po otwarciu,
-       jeszcze dla zapisanej lokalizacji, więc pola wypełniały się domem.
-       Potem człowiek wpisywał „Zakopane", przeliczał plan — a w misji dalej
-       siedziały współrzędne domu, bo pola nie były już puste. Wychodził
-       z tego plik lotu nad zupełnie innym miejscem i nic tego nie zdradzało.
-       W narzędziu, które steruje dronem, to najgorszy możliwy rodzaj błędu. */
-    plenerWspolrzedne = d.wspolrzedne || null;
-    plenerMiejsce = d.miejsce || null;
-    if (plenerWspolrzedne && !misjaReczna) wstawWspolrzedne();
-    opiszZrodloMisji();
-  } catch {
-    $('fp-light').textContent = t('offline.title');
-  } finally {
-    przycisk.disabled = false;
-    plenerZajety = false;
-    if (plenerPonow) { plenerPonow = false; liczPlanPlener(); }
-  }
-}
-
-$('fp-go').addEventListener('click', liczPlanPlener);
-$('fp-now').addEventListener('click', () => { $('fp-when').value = ''; liczPlanPlener(); });
-for (const id of ['fp-gear', 'fp-mode', 'fp-sky']) {
-  $(id).addEventListener('change', liczPlanPlener);
-}
-for (const id of ['fp-place', 'fp-topic']) {
-  // Enter w polu tekstowym ma liczyć — inaczej trzeba sięgać po przycisk.
-  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') liczPlanPlener(); });
-}
-$('fp-when').addEventListener('change', liczPlanPlener);
-
-/* Karty ujęć — lista pozycji do odhaczenia, z liczbami. POMINIĘTE pokazujemy
-   równie wyraźnie: „nie masz czym" to inna informacja niż „nie ma na liście",
-   a bez niej wygląda, jakby Cosmos o dronie zapomniał. */
-/* Odhaczone ujęcia. Trzymane w przeglądarce, nie na serwerze, i to jest
-   przemyślane: „nakręciłem" to stan JEDNEGO dnia zdjęciowego na JEDNYM
-   urządzeniu, a nie fakt o Marcinie wart miejsca w pamięci Cosmosa.
-   Klucz zawiera temat, więc powrót do tego samego planu wraca też do postępu,
-   a zmiana tematu zaczyna listę od nowa. */
-const KLUCZ_ODHACZONE = 'cosmos.ujecia.';
-function odhaczone(temat) {
-  try { return new Set(JSON.parse(localStorage.getItem(KLUCZ_ODHACZONE + temat) || '[]')); }
-  catch { return new Set(); }
-}
-function zapiszOdhaczone(temat, zbior) {
-  try { localStorage.setItem(KLUCZ_ODHACZONE + temat, JSON.stringify([...zbior])); }
-  catch { /* prywatne okno albo pełny dysk — lista działa dalej, tylko bez pamięci */ }
-}
-
-function pokazUjecia(u) {
-  const box = $('fp-shots');
-  box.innerHTML = '';
-  if (!u || !Array.isArray(u.ujecia) || !u.ujecia.length) return;
-
-  const temat = ($('fp-topic').value.trim() || '—').toLowerCase().slice(0, 40);
-  const zrobione = odhaczone(temat);
-
-  const tytul = document.createElement('div');
-  tytul.className = 'plener-shots-title';
-  const licznik = document.createElement('span');
-  const odswiezLicznik = () => {
-    licznik.textContent = t('pl.shots', { n: u.ujecia.length })
-      + (zrobione.size ? ` — ${t('pl.done', { n: zrobione.size })}` : '');
-  };
-  odswiezLicznik();
-  const wyczysc = document.createElement('button');
-  wyczysc.type = 'button';
-  wyczysc.className = 'plener-clear';
-  wyczysc.textContent = t('pl.clearTicks');
-  wyczysc.addEventListener('click', () => {
-    zrobione.clear();
-    zapiszOdhaczone(temat, zrobione);
-    pokazUjecia(u);
-  });
-  tytul.append(licznik, wyczysc);
-  box.appendChild(tytul);
-
-  for (const s of u.ujecia) {
-    const kar = document.createElement('div');
-    kar.className = 'plener-shot' + (zrobione.has(s.klucz) ? ' zrobione' : '');
-
-    const glowa = document.createElement('div');
-    glowa.className = 'plener-shot-head';
-    /* Odhaczanie jest sensem listy — „lista do odhaczenia" bez sposobu
-       odhaczenia byłaby obietnicą na wyrost. W terenie zaznacza się to
-       palcem, na telefonie, więc pole leży w nagłówku karty. */
-    const ptaszek = document.createElement('input');
-    ptaszek.type = 'checkbox';
-    ptaszek.className = 'plener-tick';
-    ptaszek.checked = zrobione.has(s.klucz);
-    ptaszek.setAttribute('aria-label', s.nazwa);
-    ptaszek.addEventListener('change', () => {
-      ptaszek.checked ? zrobione.add(s.klucz) : zrobione.delete(s.klucz);
-      zapiszOdhaczone(temat, zrobione);
-      kar.classList.toggle('zrobione', ptaszek.checked);
-      odswiezLicznik();
-    });
-    const nazwa = document.createElement('span');
-    nazwa.className = 'plener-shot-name';
-    nazwa.textContent = s.nazwa;
-    /* Rola ujęcia na wierzchu. Bez niej lista wygląda jak worek pomysłów
-       i dopiero po chwili widać, że są w niej trzy otwarcia i zero zakończeń
-       — co dokładnie się zdarzyło i dopiero człowiek to wyłapał. */
-    const rola = document.createElement('span');
-    rola.className = 'plener-shot-role rola-' + (s.rola || 'rozwiniecie');
-    rola.textContent = s.rolaOpis || '';
-    const liczby = document.createElement('span');
-    liczby.className = 'plener-shot-nums mono';
-    liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
-    /* Rola i liczby jako JEDNA grupa. Osobno, w zwykłym `flex-wrap`, nazwa
-       ujęcia mogła się skurczyć poniżej własnego słowa i „przebitka" wchodziła
-       na plakietkę ROZWINIĘCIE — widać to było na telefonie. Zgrupowane
-       przenoszą się do drugiej linii razem i nazwa dostaje całą pierwszą. */
-    const meta = document.createElement('span');
-    meta.className = 'plener-shot-meta';
-    meta.append(rola, liczby);
-    glowa.append(ptaszek, nazwa, meta);
-
-    const ruch = document.createElement('div');
-    ruch.className = 'plener-shot-move';
-    ruch.textContent = s.ruch + (s.naSzkle ? ` · ${s.naSzkle}` : '');
-
-    const jak = document.createElement('div');
-    jak.className = 'plener-shot-how';
-    jak.textContent = s.jak;
-
-    const poco = document.createElement('div');
-    poco.className = 'plener-shot-why';
-    poco.textContent = s.poCo;
-
-    kar.append(glowa, ruch, jak, poco);
-    box.appendChild(kar);
-  }
-
-  if (u.pominiete && u.pominiete.length) {
-    const p = document.createElement('div');
-    p.className = 'plener-skipped';
-    p.textContent = t('pl.skipped') + ' '
-      + u.pominiete.map((x) => `${x.nazwa} (${x.powod})`).join('; ');
-    box.appendChild(p);
-  }
-}
-
-/* ---- misja drona ---- */
-let plenerWspolrzedne = null;
-let plenerMiejsce = null;
-let misjaReczna = false;
-
-function wstawWspolrzedne() {
-  if (!plenerWspolrzedne) return;
-  $('mis-lat').value = Number(plenerWspolrzedne.lat).toFixed(5);
-  $('mis-lon').value = Number(plenerWspolrzedne.lon).toFixed(5);
-}
-
-/* Skąd są te współrzędne — napisane wprost pod polami. Dwie liczby same
-   z siebie nie mówią, czy to Zakopane, czy dom; a różnicy nie widać, dopóki
-   dron nie stoi w polu. */
-function opiszZrodloMisji() {
-  const el = $('mis-skad');
-  if (!el) return;
-  if (misjaReczna) { el.textContent = t('pl.misManual'); el.className = 'field-hint plener-warn'; return; }
-  el.className = 'field-hint';
-  el.textContent = plenerWspolrzedne
-    ? t('pl.misFromPlan', { miejsce: plenerMiejsce || `${Number(plenerWspolrzedne.lat).toFixed(3)}, ${Number(plenerWspolrzedne.lon).toFixed(3)}` })
-    : '';
-}
-
-for (const id of ['mis-lat', 'mis-lon']) {
-  // Ręczny wpis wygrywa z planem — ale tylko dopóki człowiek go nie cofnie.
-  $(id).addEventListener('input', () => {
-    misjaReczna = Boolean($('mis-lat').value || $('mis-lon').value);
-    opiszZrodloMisji();
-  });
-}
-
-$('mis-here').addEventListener('click', () => {
-  misjaReczna = false;
-  if (!plenerWspolrzedne) { liczPlanPlener(); return; }
-  wstawWspolrzedne();
-  opiszZrodloMisji();
-});
-
-/* ILE TO WŁAŚCIWIE LOTU — policzone PRZED pobraniem pliku.
- *
- * Pola „200 × 200, co 50 m" nie mówią nic o tym, czy to trzy minuty, czy
- * czterdzieści. A różnica jest zasadnicza: misja dłuższa niż jedna bateria
- * przerwie się w połowie, dron wróci do domu, a człowiek dowie się o tym
- * stojąc w polu. Liczba linii i długość trasy wychodzą z tych samych wzorów
- * co `siatka()` w lib/kmz.js — zestaw `plener` porównuje jedno z drugim,
- * żeby nie rozjechały się przy pierwszej poprawce. */
-const MAVIC_MINUT = 18;      // realny zapas na misję, z rezerwą na powrót
-
-function oszacujNalot() {
-  const szer = Number($('mis-w').value) || 0;
-  const dl = Number($('mis-l').value) || 0;
-  const odstep = Number($('mis-odstep').value) || 0;
-  const predkosc = Number($('mis-speed').value) || 0;
-  if (!(szer > 0 && dl > 0 && odstep > 0 && predkosc > 0)) return null;
-  const linii = Math.max(2, Math.ceil(szer / odstep) + 1);
-  const metry = linii * dl + (linii - 1) * odstep;
-  // +15% na zakręty i rozpędzanie — dron nie leci całej trasy z prędkością zadaną.
-  const minuty = (metry / predkosc) * 1.15 / 60;
-  return { linii, punktow: linii * 2, metry, minuty };
-}
-
-function pokazNalot() {
-  const el = $('mis-lot');
-  if (!el) return;
-  const o = oszacujNalot();
-  if (!o) { el.textContent = ''; return; }
-  /* Separator dziesiętny z lokalizacji przeglądarki, nie na sztywno kropka.
-     Pola współrzędnych (`type=number`) i tak pokazują polski przecinek, więc
-     „1.20 km" tuż pod „49,29691" wyglądało jak dwie różne aplikacje. */
-  const km = (o.metry / 1000).toLocaleString(undefined,
-    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const czesci = [t('pl.misLines', { n: o.linii, p: o.punktow }),
-    t('pl.misDist', { km }),
-    t('pl.misTime', { min: Math.round(o.minuty) })];
-  el.className = 'field-hint';
-  el.textContent = czesci.join(' · ');
-  /* Dwa progi, oba twarde. 99 punktów to limit formatu WPML — powyżej plik
-     i tak zostanie odrzucony, więc lepiej powiedzieć to teraz niż w polu. */
-  if (o.punktow > 99) {
-    el.className = 'field-hint plener-err';
-    el.textContent += ' — ' + t('pl.misTooMany');
-  } else if (o.minuty > MAVIC_MINUT) {
-    el.className = 'field-hint plener-warn';
-    el.textContent += ' — ' + t('pl.misTooLong', { min: MAVIC_MINUT });
-  }
-}
-
-for (const id of ['mis-w', 'mis-l', 'mis-odstep', 'mis-speed']) {
-  $(id).addEventListener('input', pokazNalot);
-}
-pokazNalot();
-
-$('mis-go').addEventListener('click', async (e) => {
-  const b = e.currentTarget;
-  const out = $('mis-out');
-  const lat = Number($('mis-lat').value);
-  const lon = Number($('mis-lon').value);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    out.textContent = t('pl.misNoCoords');
-    out.className = 'plener-out mono plener-err';
-    return;
-  }
-  b.disabled = true;
-  out.className = 'plener-out mono';
-  out.textContent = t('pl.misWorking');
-  try {
-    const r = await fetch('/api/plan/mission', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lat, lon,
-        szerokoscM: Number($('mis-w').value) || 200,
-        dlugoscM: Number($('mis-l').value) || 200,
-        odstepM: Number($('mis-odstep').value) || 50,
-        kierunek: Number($('mis-kier').value) || 0,
-        wysokosc: Number($('mis-alt').value) || 80,
-        predkosc: Number($('mis-speed').value) || 6,
-        nazwa: $('mis-name').value.trim() || 'misja',
-      }),
-    });
-    if (!r.ok) {
-      const d = await readJsonSafe(r);
-      throw new Error(d.error || `HTTP ${r.status}`);
-    }
-    const blob = await r.blob();
-    /* Pobranie przez tymczasowy odsyłacz: żądanie jest POST-em, więc zwykły
-       link nie wystarczy, a otwarcie w nowej karcie zostawiłoby pustą kartę. */
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${($('mis-name').value.trim() || 'misja').replace(/[^\w-]+/g, '-')}.kmz`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    out.textContent = t('pl.misDone', { kb: (blob.size / 1024).toFixed(1) });
-  } catch (err) {
-    out.textContent = err.message;
-    out.className = 'plener-out mono plener-err';
-  } finally {
-    b.disabled = false;
-  }
+/* Plan zdjęciowy, karty ujęć i misja drona mieszkają w `public/plener.js`
+   — patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
+   więc musi stać dokładnie tu, gdzie stał przeniesiony kod. */
+const { odswiezPlan, zamknijPlener } = utworzPlener({
+  $, el, t, readJsonSafe, closeSettings, dopasujPanelKamery,
+  odswiezArchiwum, wczytajSprzet, zapiszSprzet,
 });
 
 // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
@@ -5096,7 +3474,8 @@ $('live-flip').addEventListener('click', async () => {
     video.srcObject = s;
     if (s) video.play().catch(() => {});
   });
-  ustawStatusKamery(r.ok ? '…' : `${t('cam.err')} ${r.error.message}`);
+  if (r.ok) ustawStatusSpoczynkowy();
+  else ustawStatusKamery(`${t('cam.err')} ${r.error.message}`);
 });
 $('live-expand').addEventListener('click', () => {
   const on = $('live-panel').classList.contains('expanded');
@@ -6368,8 +4747,25 @@ function exportConversation() {
     if (m.error) continue;
     const who = m.role === 'user' ? t('exportYou') : 'Cosmos';
     if (m.search) continue;
-    lines.push(`**${who}:**`, '', msgText(m), '');
+    /* WIADOMOŚĆ BEZ TREŚCI NIE MA CO ROBIĆ W ZAPISIE.
+     *
+     *  Siatka miniatur to wiadomość z pustym tekstem i listą zdjęć. Eksport
+     *  wypisywał dla niej sam nagłówek „**Cosmos:**" i pustą linię — a zdjęć
+     *  nie wspominał w ogóle. W przysłanych przez Marcina zapisach widać
+     *  przez to puste dymki w miejscach, gdzie w rozmowie były zdjęcia:
+     *  zapis wyglądał gorzej niż sama rozmowa i sugerował, że Cosmos
+     *  odpowiedział niczym.
+     *
+     *  To jest o tyle istotne, że po tych plikach ocenia się jakość rozmów. */
+    const tekst = msgText(m);
     const imgs = msgImages(m);
+    const foty = msgPhotos(m);
+    if (!tekst && !imgs.length && !foty.length) continue;
+    lines.push(`**${who}:**`, '');
+    if (tekst) lines.push(tekst, '');
+    if (foty.length) {
+      lines.push(`_(${t('export.photos', { n: foty.length })})_`, '');
+    }
     if (imgs.length) lines.push(`_(${imgs.length} × ${t('attachment')})_`, '');
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });

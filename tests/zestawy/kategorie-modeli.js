@@ -47,12 +47,20 @@ const check = async (model) => (await fetch('http://127.0.0.1:3060/api/models/ch
   body: JSON.stringify({ endpoint: 'cloud', model }),
 })).json();
 
-up.listen(7105, async () => {
+/* PORT PRZYDZIELANY PRZEZ SYSTEM, nie wpisany na sztywno.
+   Ten zestaw jako jedyny otwierał gniazdo na stałym 7105 z pominięciem
+   zwalniania portów, które robi `tests/pomoc.js` dla wszystkich pozostałych.
+   Wystarczyło, że poprzedni przebieg nie zdążył zamknąć gniazda — albo że
+   ktoś uruchomił ten zestaw obok baterii — i całość padała na EADDRINUSE,
+   co w wyniku wygląda jak usterka w kodzie, a jest zderzeniem środowisk.
+   Port 0 znaczy „daj mi jakikolwiek wolny" i problem znika u źródła. */
+up.listen(0, async () => {
+  const portAtrapy = up.address().port;
   const fail = [];
   const { spawn } = require('child_process');
   const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3060', NVIDIA_API_KEY: 'test',
-      NEMOTRON_BASE_URL: 'http://127.0.0.1:7105/v1' } });
+      NEMOTRON_BASE_URL: `http://127.0.0.1:${portAtrapy}/v1` } });
   await new Promise((r) => setTimeout(r, 4500));
 
   // 1. identyfikator konta nie może wyjść z serwera

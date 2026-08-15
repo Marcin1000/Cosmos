@@ -69,15 +69,17 @@ function przykladoweArchiwum(a) {
   a.dodaj(wpisy);
 }
 
-/* Ta sama funkcja, którą przeglądarka buduje kontekst dla modelu —
-   wyciągnięta z `public/app.js`, żeby sprawdzać JĄ, a nie jej kopię. */
+/* Ta sama funkcja, którą przeglądarka buduje kontekst dla modelu.
+
+   Kiedyś stało tu wycinanie tekstu z `public/app.js` między `const
+   ARCH_LIMIT_ZNAKOW` a `const IMAGE_MARKER_RE` i wykonywanie go przez
+   `new Function`. Działało dokładnie do chwili, w której któraś z tych dwóch
+   nazw się przesunęła — a przy okazji sprawdzało nie tę funkcję, którą
+   uruchamia przeglądarka, tylko jej odtworzoną kopię. Po wydzieleniu
+   `public/protokol.js` wystarczy ją zwyczajnie wczytać. */
 function zaladujNaKontekst() {
-  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'app.js'), 'utf8');
-  const od = src.indexOf('const ARCH_LIMIT_ZNAKOW');
-  const doM = src.indexOf('const IMAGE_MARKER_RE', od);
-  if (od < 0 || doM < 0) throw new Error('nie znalazłem naKontekst() w public/app.js');
-  // eslint-disable-next-line no-new-func
-  return new Function(`${src.slice(od, doM)}\nreturn naKontekst;`)();
+  const { utworzProtokol } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js'));
+  return utworzProtokol().naKontekst;
 }
 
 (async () => {

@@ -3331,6 +3331,194 @@ Zestaw `proporcja-bez-zmyslow` sprawdza teraz właściwość, a nie wygląd:
 pasek statusu nie zajmuje miejsca, ⓘ jest w nagłówku, dotknięcie pokazuje
 pełną treść, a wysokość panelu i obrazu **nie zmienia się ani o piksel**.
 
+## ✅ Partia 70 — sesja poprawek: rozmowy, struktura, dane (GOTOWE)
+
+Marcin przysłał pięć zapisów rozmów i listę: „te rozmowy nie są nienaganne
+i nie mają takiego flow, jakbym chciał (…) jest dużo błędów i bugów,
+z którymi trzeba sobie poradzić".
+
+### 1. To nie były halucynacje, tylko mój prompt
+
+Cytaty z jego rozmów o zdjęciach psa i o Mazurach:
+
+> „Wszystkie te zdjęcia mają `swiatloPrzyblizone: true`"
+> „użytkownik może użyć przycisku »pokaż kolejne« pod miniaturami"
+> „Microsoft Graph nie czyta metadanych z RAW-ów"
+
+To są **zdania z instrukcji dla modelu**, oddane człowiekowi, który zapytał
+o psa. Każda wcześniejsza naprawa dokładała modelowi wyjaśnienie, jak działa
+system, a on uczciwie przekazywał je dalej. Nigdy nie było reguły
+oddzielającej „co wiesz" od „co mówisz".
+
+- [x] Reguła **JAK ODPOWIADASZ** przed opisami narzędzi: mówisz o zdjęciach,
+      nie o rekordach; bez nazw pól, składni filtrów, nazw paneli i cudzych
+      firm; wprost do rozmówcy, nie w trzeciej osobie
+- [x] Z instrukcji usunięte gotowe zwroty do recytacji
+- [x] Zestaw `rejestr-odpowiedzi` — pierwszy pomiar tej części systemu
+
+### 2. Majorka liczona dla Złotokłosu
+
+„Cala d'Or, Hotel Barceló Ponent Beach" szło do geokodera jako jedna fraza.
+Nominatim nie zna nazw hoteli, więc plan policzył się dla zapisanej
+lokalizacji, a model **dwa razy prosił o lokalizację, którą już dostał**.
+
+- [x] Stopniowe upraszczanie frazy: pełna → bez ostatniego członu → bez
+      pierwszego. Pełna idzie pierwsza, więc „Kraków, Polska" działa jak dotąd
+- [x] Komunikat błędu mówi MODELOWI, żeby ponowił z prostszą nazwą, zanim
+      zapyta użytkownika o coś, co ten już podał
+
+### 3. Dziewięć znaczników na ekranie
+
+Gałąź wyszukiwania usuwała `replace(marker[0], '')` — tylko pierwszy —
+podczas gdy gałąź archiwum od dawna czyściła wszystkie. Model napisał
+dziesięć zapytań, wykonaliśmy jedno, dziewięć zostało jako treść. Do tego
+model pisał odpowiedź tak, jakby miał wyniki wszystkich dziesięciu.
+
+- [x] Pełne czyszczenie + informacja dla modelu, ile z jego zapytań poszło
+
+### 4. Podwójna odpowiedź
+
+Jedno pytanie, dwa przeszukania archiwum, dwie prawie identyczne odpowiedzi.
+Odcinanie powtórzeń tego nie łapało, bo łapie filtry **identyczne**, a model
+za drugim razem zmieniał drobiazg.
+
+- [x] Rozróżnienie po WYNIKU: po udanym pierwszym zapytaniu drugie odcinamy,
+      po pustym wolno — bo wtedy poprawka filtra ma sens
+
+### 5. Rozbicie kaskady narzędzi
+
+`runGeneration` miało 535 linii. Obsługa „limit wyczerpany" była napisana
+**trzy razy**; dwie kopie ustawiały `samoMyslenie`, trzecia nie — więc przy
+zdjęciach model rozumujący pokazywał surowe rozumowanie po angielsku.
+
+- [x] `public/narzedzia.js` — jedno miejsce na jedno narzędzie, zależności
+      przez fabrykę, jak w `lib/`
+- [x] `runGeneration` 535 → ~120 linii
+- [x] Kaskada testowalna **w Node, bez przeglądarki**: zestaw
+      `kaskada-narzedzi` przechodzi w 0,1 s i pyta o rzeczy, na które regexp
+      po źródle nie odpowie
+
+### 6. Archiwum: dwie usterki gubiące informacje
+
+Zestaw `archiwum-nic-nie-gubi` przechodzi po **siedmiu** ścieżkach zapisu
+i dla każdej pyta o to samo: czy po operacji zostało wszystko, co było.
+
+- [x] **Odłączenie OneDrive kasowało cały materiał.** Jedno kliknięcie
+      „Odłącz", choćby po to, żeby odświeżyć poświadczenia, i znikało
+      55 tysięcy wpisów z rozpoznanymi treściami. Przeczyło to zasadzie
+      z nagłówka modułu: indeks jest pasywny i ma działać offline. Teraz
+      odłączenie tylko rozłącza; kasowanie to osobny przycisk z ostrzeżeniem
+- [x] **Wywrotka na indeksie ze starszej wersji.** Wpisy wczytują się surowe,
+      a scalanie zakładało pełny kształt — pierwsze `dodaj` rzucało wyjątkiem
+      i przerywało CAŁĄ paczkę. Stare wpisy normalizują się teraz leniwie
+
+### 7. Podział plików
+
+- [x] `lib/instrukcje-narzedzi.js` — `server.js` 2866 → 2577
+- [x] Audyt dostał próg także dla `public/app.js` (7697 linii); wcześniej
+      pilnował wyłącznie serwera, więc klient rósł niezauważony
+
+### Testy po tekście źródła — cztery razy w jednej sesji
+
+`kolejka-wiadomosci` pilnował nazwy zmiennej. `przegladanie-wynikow` szukał
+`dalej: {`. `archiwum-godziny` i `rejestr-odpowiedzi` szukały fraz promptu
+w `server.js`. Wszystkie padły przy przeprowadzkach kodu, **mimo że funkcje
+działały bez zmian**. Zamiast przestawiać regexpy na nowe pliki, każda
+własność przeniesiona tam, gdzie da się ją sprawdzić wywołaniem.
+
+Zostało 7 zestawów z 85 czytających pliki źródłowe — i każdy z nich sprawdza
+teraz rzecz, której inaczej sprawdzić się nie da (obecność reguły w prompcie,
+kolejność dopisywania bloków).
+
+### Drobne
+
+- [x] Kreska pod podglądem kamery po zmianie źródła (status `'…'` ustawiany
+      bezwarunkowo, przy wyłączonych zmysłach nie miał go co nadpisać)
+- [x] Kursor oczekiwania 1 s → 0,6 s
+- [x] Puste dymki w zapisach rozmów — eksport pomijał zdjęcia
+- [x] `kategorie-modeli` brał port na sztywno, z pominięciem zwalniania
+
+## ✅ Partia 71 — podział klienta i koniec z testami po tekście źródła (GOTOWE)
+
+Cztery rzeczy, które sam wskazałem jako najbardziej niepokojące po audycie
+Partii 70. Marcin wybrał je wprost i podkreślił punkt o `app.js`.
+
+### 1. `public/app.js` — 7697 → 6372 linii
+
+Największy plik projektu, trzykrotność serwera, miejsce, gdzie mieszkało
+wszystko naraz: stan, zapisy, obsługa zdarzeń i budowanie DOM-u. Cztery nowe
+moduły, każdy wycięty po jednej granicy i tylko po niej:
+
+- [x] `public/widoki.js` (385) — budowniczowie DOM: siatka miniatur, panel
+      wyniku programu, podglądy obrazu i tekstu
+- [x] `public/tekst.js` (260) — treść wiadomości i mini-renderer Markdown
+- [x] `public/protokol.js` (183) — znaczniki modelu, wynik archiwum → kontekst
+- [x] `public/plener.js` (740) — plan zdjęciowy, karty ujęć, misja drona
+
+Wspólna zasada: moduł nie dostaje stanu aplikacji, więc **nie może** po niego
+sięgnąć. Granica jest przez to sprawdzalna, a nie umowna — i każdy z tych
+plików da się wczytać w Node.
+
+### 2. Testy po tekście źródła — zero z 88
+
+Sedno problemu, nazwane przez Marcina: „za dużo testów sprawdza tekst źródła,
+nie zachowanie". W tej sesji taki test padł **sześć razy** przy przeprowadzce
+kodu, choć funkcja działała bez zmian. Za każdym razem kusiło, żeby przestawić
+regexp na nowy plik — i za każdym razem byłoby to odłożenie problemu.
+
+| Zestaw | Było | Jest |
+|---|---|---|
+| `przegladanie-wynikow` | regexp po `app.js` | nagłówek budowany wywołaniem |
+| `rejestr-odpowiedzi` | j.w. | + sprawdzenie, że przy małym wyniku nagłówka NIE MA |
+| `archiwum-po-folderach` | wycinanie `naKontekst` przez `new Function` | `require` modułu |
+| `archiwum-nic-nie-gubi` | szukanie `usunZrodlo(` w `server.js` | odłączenie na żywym serwerze |
+| `miejsce-z-hotelem` | dwa regexpy po `server.js` | plan liczony przez trasę, komunikat z odpowiedzi |
+| `znaczniki-nie-wyciekaja` | „czy za `AbortError` jest `stripSearchMarker`" | odpowiedź NAPRAWDĘ przerwana w połowie znacznika |
+
+Każdy sprawdzony pod kątem tego, czy **pada na starym, wadliwym kodzie** —
+inaczej byłby to zielony test, który niczego nie mierzy.
+
+Zostały trzy zestawy czytające pliki źródłowe (`nasluch-wlasny`,
+`tempo-archiwum`) i robią to po to, żeby moduł WCZYTAĆ albo podmienić w nim
+adres atrapy. To nie są testy po tekście — to sposób ładowania.
+
+### 3. Pięć paneli bez własnych testów
+
+- [x] `tests/zestawy/piec-paneli.js` — Nauka, Galeria, Baza wiedzy, Studio
+      i Oś czasu, każdy drogą użytkownika: włóż dane trasą zapisu → otwórz
+      panel kliknięciem → sprawdź, że dane WIDAĆ → wykonaj główną akcję →
+      zamknij. Do tego jedno pytanie wspólne: ani jednego błędu w konsoli
+      przez cały przemarsz
+
+Zestaw od razu zgłosił dwie rzeczy — i obie okazały się **moimi błędnymi
+założeniami**, nie usterkami: odznaka przy Bazie wiedzy liczy pozycje
+ZAZNACZONE (a nie wszystkie), a wyłączona sekcja Studia świadomie blokuje
+przycisk (`pointer-events: none`), pokazując przy tym, którego klucza brakuje.
+Test pyta teraz o rzeczy właściwe.
+
+### 4. Audyt, który dwa razy skłamał
+
+- [x] Nowa sekcja 0 „Audyt o samym sobie": czy widzę każdy skrypt wczytywany
+      przez stronę, i czy moje wzorce **wciąż cokolwiek znajdują**. To drugie
+      jest najpodstępniejsze: regexp, który przestał pasować, nie zgłasza
+      błędu — oddaje pustą listę, a pusta lista czyta się jak „w porządku"
+- [x] Skanowanie identyfikatorów, wywołań `/api/` i składni objęło wszystkie
+      moduły klienta, nie sam `app.js`
+- [x] Skrypt poza pamięcią podręczną PWA to teraz **usterka**, nie uwaga —
+      znaczy biały ekran w terenie, czyli tam, gdzie Cosmos jest używany
+
+### Znalezione przy okazji
+
+- [x] **Aparat, który przestał podawać nastawy, dalej miał czynny przycisk
+      „Ustaw w aparacie".** Stan aparatu odpytujemy najwyżej raz na 30 s, więc
+      przez pół minuty po zaśnięciu Wi-Fi `online` było jeszcze prawdą. R6 II
+      usypia po kilku minutach bezczynności — to codzienność w plenerze, nie
+      przypadek brzegowy. Brak wszystkich trzech nastaw traktowany jest teraz
+      jak zniknięcie aparatu
+- [x] `tekst-nie-wpuszcza` — 14 prób wstrzyknięcia HTML, 5 adresów
+      `javascript:`, 10 form składni Markdown. Renderer jest jedyną barierą
+      między odpowiedzią modelu a `innerHTML`, a model cytuje treści z sieci
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

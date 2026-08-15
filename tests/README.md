@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (81 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (88 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -77,6 +77,7 @@ ustawił sytuację, której inaczej nie da się wywołać:
 | `zapamiętaj` | oddaje `[AKCJA: zapamiętaj \| …]` |
 | `zdjęcia miejsc` | oddaje `[GRAFIKA: A; B]`, potem próbuje powtórzyć to samo, a po odcięciu dopisuje tekst — trzy tury, tak jak w prawdziwej rozmowie |
 | `urwana` | kończy strumień w połowie adresu z `finish_reason: "length"`, a na prośbę o kontynuację oddaje resztę |
+| `przerwij mnie` | strumień, w którym `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu — po naciśnięciu „stop” w dowolnym momencie zostaje znacznik bez zamknięcia |
 
 Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.
