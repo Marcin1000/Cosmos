@@ -33,7 +33,7 @@ function makeMock(port, name) {
            „w trakcie odpowiedzi". Atrapa domyślnie kończy w kilkadziesiąt
            milisekund — szybciej, niż test zdąży cokolwiek napisać. Słowo
            „powoli" w pytaniu rozciąga strumień na kilkanaście sekund. */
-        const powoli = /powoli/i.test(lastText);
+        const powoli = /powoli|przerwij mnie/i.test(lastText);
         /* Ścieżka „zdjęcia do planu". Trzy tury, bo tak wygląda ta rozmowa
            naprawdę: model prosi o grafiki → dostaje je z powrotem → próbuje
            poprosić o TE SAME jeszcze raz → zostaje odcięty i dopiero wtedy
@@ -57,6 +57,15 @@ function makeMock(port, name) {
           text = 'Jeszcze raz to samo.\n\n[GRAFIKA: Katedra La Seu Palma]';
         } else if (/zdj[eę]cia miejsc/i.test(lastText)) {
           text = 'Proszę.\n\n[GRAFIKA: Katedra La Seu Palma; plaża Es Trenc]';
+        } else if (/przerwij mnie/i.test(lastText)) {
+          /* Odpowiedź, którą DA SIĘ przerwać w połowie znacznika. Znacznik
+             zaczyna się wcześnie, a domykający nawias stoi na samym końcu
+             długiego strumienia — więc „stop" w dowolnym momencie zostawia
+             polecenie dla modelu bez zamknięcia. Dokładnie ta sytuacja
+             wysypywała `[ARCHIWUM: …` na ekran Marcina. */
+          text = 'Zaraz sprawdzę archiwum.\n[ARCHIWUM: grupuj=rok, '
+            + 'folder=Mazury 2026, aparat=Canon EOS R6m2, '
+            + 'i jeszcze bardzo długa lista filtrów, '.repeat(20) + ']';
         } else if (powoli) {
           text = /* powoli */ ('Odpowiadam powoli, żeby dało się w tym czasie napisać kolejną wiadomość. '
             + 'Strumień leci token po tokenie i trwa na tyle długo, że kolejka ma co obsłużyć. ')

@@ -119,16 +119,43 @@ for (const [wzor, opis] of ZAKAZANE) {
 
 /* --- 3. To samo po stronie klienta --------------------------------------
    Nagłówek doklejany do wyniku archiwum trafia do modelu tą samą drogą
-   i pierwsza wersja zawierała dokładnie ten sam błąd. */
-const app = fs.readFileSync(path.join(KORZEN, 'public', 'app.js'), 'utf8');
-const iNaglowek = app.indexOf('LIMIT DOTYCZY CIEBIE');
-const fragment = iNaglowek >= 0 ? app.slice(iNaglowek, iNaglowek + 700) : '';
-console.log(`3. nagłówek wyniku archiwum: ${iNaglowek >= 0 ? 'jest' : 'BRAK'}`);
-if (iNaglowek < 0) {
+   i pierwsza wersja zawierała dokładnie ten sam błąd.
+
+   Nie czytamy już `public/app.js` tekstem — budujemy nagłówek naprawdę,
+   podając wynik wyszukiwania większy niż próbka. Dzięki temu sprawdzenie
+   przetrwa przeprowadzkę funkcji i, co ważniejsze, mierzy to, co model
+   RZECZYWIŚCIE dostanie, a nie to, co jest wpisane w pliku. */
+const { utworzProtokol } = require(path.join(KORZEN, 'public', 'protokol.js'));
+const naglowek = utworzProtokol().naKontekst({
+  znaleziono: 311,
+  wyniki: Array.from({ length: 40 }, (_, i) => ({
+    nazwa: `3B9A${4000 + i}.CR3`, kiedy: '2026-06-14T19:12:00', aparat: 'Canon EOS R6m2',
+    sciezka: `/Zdjęcia/Mazury 2026/3B9A${4000 + i}.CR3`,
+  })),
+});
+const maRegule = /DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(naglowek);
+console.log(`3. nagłówek wyniku archiwum: ${maRegule ? 'jest' : 'BRAK'}`);
+if (!maRegule) {
   fail.push('brak nagłówka wyjaśniającego modelowi, że limit dotyczy jego, nie użytkownika');
-} else if (/pokaż kolejne/.test(fragment)) {
+}
+if (/pokaż kolejne/.test(naglowek)) {
   fail.push('nagłówek wyniku archiwum podaje modelowi nazwę przycisku — '
     + 'a on ją potem powtarza użytkownikowi');
+}
+// Liczba do podania człowiekowi ma być PEŁNA, nie rozmiarem próbki.
+if (!naglowek.includes('311')) {
+  fail.push('nagłówek nie podaje modelowi pełnej liczby znalezionych plików');
+}
+/* A gdy wynik mieści się w całości, żadnego nagłówka być nie może — inaczej
+   model tłumaczyłby się z limitu, którego nie ma. */
+{
+  const maly = utworzProtokol().naKontekst({
+    znaleziono: 3,
+    wyniki: [{ nazwa: 'a.CR3' }, { nazwa: 'b.CR3' }, { nazwa: 'c.CR3' }],
+  });
+  if (/DOTYCZY CIEBIE/i.test(maly)) {
+    fail.push('nagłówek o próbce pojawia się przy wyniku, który zmieścił się w całości');
+  }
 }
 
 /* --- 4. Rozmiar instrukcji archiwum --------------------------------------

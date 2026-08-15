@@ -123,14 +123,24 @@ const zapytaj = async (qs) => {
      Druga połowa skargi: nawet z działającym przyciskiem model dalej pisałby
      „pokazuję tylko część, zawęź wyszukiwanie". Musi wiedzieć, że limit
      dotyczy JEGO, nie człowieka. */
-  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'app.js'), 'utf8');
-  /* Szukamy ZASADY, nie zdania. Pierwsza wersja dopasowywała dokładną frazę
-     „PRÓBKA DOTYCZY CIEBIE, NIE UŻYTKOWNIKA" i padła przy przemianowaniu jej
-     na „LIMIT DOTYCZY CIEBIE…" — mimo że reguła została na miejscu i działała.
-     Test, który pilnuje brzmienia zamiast treści, zgłasza usterkę przy każdej
-     poprawce redakcyjnej i uczy, żeby go ignorować. */
-  const maPodzialRol = /DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(app);
-  const maPrzycisk = /dojdzie do ostatniego|pokaż kolejne/i.test(app);
+  /* Budujemy nagłówek NAPRAWDĘ — tak, jak zbuduje go przeglądarka po wyniku
+     większym niż próbka.
+
+     Dwie wcześniejsze wersje czytały `public/app.js` tekstem. Pierwsza
+     dopasowywała dokładną frazę i padła przy przeredagowaniu jej z „PRÓBKA"
+     na „LIMIT". Druga szukała już samej zasady, ale i tak padła — gdy
+     `naKontekst` przeniosło się do `public/protokol.js`. Reguła w obu
+     wypadkach była na miejscu i działała; usterki nie było. */
+  const { utworzProtokol } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js'));
+  const naglowek = utworzProtokol().naKontekst({
+    znaleziono: ILE,
+    wyniki: Array.from({ length: 40 }, (_, i) => ({
+      nazwa: `3B9A${4000 + i}.CR3`, kiedy: '2026-06-14T19:12:00',
+      sciezka: `/Zdjęcia/Mazury 2026/3B9A${4000 + i}.CR3`, aparat: 'Canon EOS R6m2',
+    })),
+  });
+  const maPodzialRol = /DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(naglowek);
+  const maPrzycisk = /sam dojdzie do ostatniego/i.test(naglowek);
   console.log(`6. nagłówek dla modelu: podział ról ${maPodzialRol ? 'jest' : 'BRAK'}, `
     + `wzmianka o przycisku ${maPrzycisk ? 'jest' : 'BRAK'}`);
   if (!maPodzialRol) fail.push('nagłówek nie mówi modelowi, że próbka ogranicza jego, a nie użytkownika');
@@ -153,27 +163,17 @@ const zapytaj = async (qs) => {
     fail.push('instrukcja stała nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
   }
 
-  /* --- 7. Przeglądarka ma czym dobrać następną porcję ---------------------
-     Przycisk potrzebuje trzech rzeczy: zapytania, miejsca zatrzymania i sumy.
-     Gdyby siatka ich nie zapamiętała, po odświeżeniu rozmowy przycisk
-     zniknąłby razem z resztą wyniku. */
-  /* `dalej: { q, pomin, razem }` sprawdza teraz `kaskada-narzedzi` — woła
-     narzędzie archiwum z atrapą i patrzy, co naprawdę wylądowało w wiadomości.
-     Tutaj był na to regexp po app.js i padł, gdy kaskada przeniosła się do
-     `public/narzedzia.js`, mimo że pole powstawało bez zmian. */
-  for (const [co, wzor] of [
-    ['licznik „pokazane N z M"', /arch\.counter/],
-    ['dobieranie po `pomin=`', /pomin=\$\{d\.pomin\}/],
-    ['przesuwanie o całą stronę', /d\.pomin \+= /],
-    /* Dobrane kafelki DOPISUJEMY do istniejącej siatki. `renderMessages()`
-       kończy się wymuszonym zjazdem na dół rozmowy, więc przerysowanie
-       wyrzucałoby użytkownika spod siatki przy każdym kliknięciu — im dłużej
-       przegląda, tym dalej od niej. */
-    ['dopisywanie kafelków bez przerysowania rozmowy', /siatka\.appendChild/],
-  ]) {
-    if (!wzor.test(app)) fail.push(`w kliencie brakuje: ${co}`);
-  }
-  console.log('7. stan przycisku w kliencie: sprawdzony');
+  /* --- 7. Stan przycisku „pokaż kolejne" ---------------------------------
+     Sprawdza to teraz zestaw `widoki-buduja` — wywołaniem, na atrapie DOM-u:
+     buduje siatkę, klika przycisk i patrzy, jaki adres poleciał, ile kafelków
+     przybyło i czy rozmowa nie została przerysowana.
+
+     Stały tu wcześniej cztery regexpy po `public/app.js` („czy jest napis
+     `dalej: {`", „czy jest `pomin=${d.pomin}`"). Padły przy przeniesieniu
+     budowniczych do `public/widoki.js`, mimo że przycisk działał bez zmian —
+     PIĄTY raz w jednej sesji, gdy test pilnujący brzmienia pliku zgłosił
+     usterkę, której nie było. Dlatego nie zostały przestawione na nowy plik,
+     tylko zastąpione sprawdzeniem zachowania. */
 
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPRZEGLĄDANIE WYNIKÓW OK');

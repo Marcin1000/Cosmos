@@ -100,14 +100,83 @@ const serwer = http.createServer((req, res) => {
      Wtedy komunikat błędu ma powiedzieć MODELOWI, co zrobić dalej — bo to
      on go czyta jako pierwszy, a jego reakcją było dwukrotne pytanie
      użytkownika o miejsce, które ten już podał. */
-  const fs = require('node:fs');
-  const serwerJs = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
-  const maPonow = /SPRÓBUJ JESZCZE RAZ z samą nazwą miejscowości/.test(serwerJs);
-  const maZakaz = /nie pytaj go\s*'?\s*\+?\s*'?o miejsce, które już podał/.test(serwerJs);
-  console.log(`instrukcja przy nieznanym miejscu: ponów ${maPonow ? 'jest' : 'BRAK'}, `
-    + `zakaz pytania o to samo ${maZakaz ? 'jest' : 'BRAK'}`);
-  if (!maPonow) fail.push('komunikat o nieznanym miejscu nie każe modelowi spróbować prostszej nazwy');
-  if (!maZakaz) fail.push('komunikat nie zabrania pytać użytkownika o miejsce, które już podał');
+  /* Pytamy o plan NAPRAWDĘ i czytamy odpowiedź, którą dostanie model.
+
+     Kiedyś stały tu dwa regexpy po `server.js`. Zdawały nawet wtedy, gdyby
+     ten komunikat przestał być wysyłany — bo tekst w pliku i tekst
+     w odpowiedzi to dwie różne rzeczy. Tu stawiamy serwer bez zapisanej
+     lokalizacji, pytamy o miejsce, którego atrapa geokodera nie zna,
+     i sprawdzamy, co przyszło z powrotem. */
+  const { uruchom, zabij, czekajNa, zwolnijPorty, KORZEN } = require('../pomoc');
+  const fsp = require('node:fs');
+  const PORT = 8232;
+  const dane = fsp.mkdtempSync(path.join(require('node:os').tmpdir(), 'plan-miejsce-'));
+  await zwolnijPorty([PORT]);
+  const proc = uruchom('node', ['server.js'], {
+    cwd: KORZEN,
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      COSMOS_DATA_DIR: dane,
+      NVIDIA_API_KEY: 'test',
+      GEOCODE_SEARCH_URL: `http://127.0.0.1:${port}/szukaj`,
+      GEOCODE_COUNTRY: '',
+    },
+  });
+  const adres = `http://127.0.0.1:${PORT}`;
+  try {
+    if (!await czekajNa(adres)) throw new Error('serwer testowy nie wstał');
+    const planuj = async (tresc) => {
+      const r = await fetch(`${adres}/api/plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tresc),
+      });
+      return { kod: r.status, ...(await r.json()) };
+    };
+
+    const nieznane = await planuj({ miejsce: 'Wyspa Której Nie Ma, Hotel Widmo' });
+    const komunikat = String(nieznane.error || '');
+    const maPonow = /SPRÓBUJ JESZCZE RAZ z samą nazwą miejscowości/.test(komunikat);
+    const maZakaz = /nie pytaj go o miejsce, które już podał/.test(komunikat);
+    console.log(`instrukcja przy nieznanym miejscu (kod ${nieznane.kod}): `
+      + `ponów ${maPonow ? 'jest' : 'BRAK'}, zakaz pytania o to samo ${maZakaz ? 'jest' : 'BRAK'}`);
+    if (nieznane.kod !== 400) fail.push(`nieznane miejsce dało kod ${nieznane.kod} zamiast 400`);
+    if (!maPonow) fail.push('komunikat o nieznanym miejscu nie każe modelowi spróbować prostszej nazwy');
+    if (!maZakaz) fail.push('komunikat nie zabrania pytać użytkownika o miejsce, które już podał');
+    // Nazwa, której nie udało się rozpoznać, ma być w komunikacie — inaczej
+    // model nie wie, o które z podanych miejsc chodzi.
+    if (!komunikat.includes('Wyspa Której Nie Ma')) {
+      fail.push('komunikat nie powtarza nazwy, której nie udało się rozpoznać');
+    }
+
+    /* A miejsce ZNANE ma się policzyć, i to dla niego — nie dla zapisanej
+       lokalizacji. To druga połowa skargi Marcina: plan na Majorkę wychodził
+       dla Złotokłosu. */
+    const znane = await planuj({ miejsce: "Cala d'Or, Hotel Barceló Ponent Beach" });
+    const lat = Number(znane.wspolrzedne && znane.wspolrzedne.lat);
+    console.log(`plan dla „Cala d'Or, Hotel…": kod ${znane.kod}, szerokość ${lat}, `
+      + `miejsce „${znane.miejsce}", z nazwy: ${znane.miejsceZNazwy}`);
+    if (znane.kod !== 200) {
+      fail.push(`plan dla znanej miejscowości z doklejonym hotelem dał kod ${znane.kod}`);
+    } else {
+      if (!(Math.abs(lat - 39.3776) < 0.5)) {
+        fail.push(`plan policzył się dla szerokości ${lat}, a Cala d'Or leży na 39,38 `
+          + '— czyli znowu dla zapisanej lokalizacji zamiast dla podanego miejsca');
+      }
+      /* Odpowiedź musi też NAZWAĆ miejsce, dla którego liczyła. Bez tego model
+         napisze „o zachodzie u Ciebie", choć liczby dotyczą Balearów. */
+      if (!znane.miejsceZNazwy) {
+        fail.push('odpowiedź nie zaznacza, że liczby dotyczą podanego miejsca, a nie zapisanej lokalizacji');
+      }
+      if (!/Cala d'Or/i.test(String(znane.miejsce || ''))) {
+        fail.push(`odpowiedź podaje miejsce „${znane.miejsce}" zamiast rozpoznanego Cala d'Or`);
+      }
+    }
+  } finally {
+    zabij(proc);
+    fsp.rmSync(dane, { recursive: true, force: true });
+  }
 
   serwer.close();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nMIEJSCE Z HOTELEM OK');

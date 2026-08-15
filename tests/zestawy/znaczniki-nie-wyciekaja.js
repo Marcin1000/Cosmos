@@ -64,16 +64,23 @@ const PRZYPADKI = [
 
 (async () => {
   const fail = [];
-  const env = await srodowisko('goly');
+  const env = await srodowisko('pelne');
   const br = await przegladarka();
   const ctx = await br.newContext({ viewport: { width: 1280, height: 800 } });
   const pg = await ctx.newPage();
   await pg.goto(env.adres, { waitUntil: 'domcontentloaded' });
   await pg.waitForTimeout(1200);
 
-  // --- 1. Czyszczenie znaczników ------------------------------------------
+  /* --- 1. Czyszczenie znaczników -----------------------------------------
+     Czysta funkcja z `public/protokol.js`, wywoływana wprost w Node.
+     Wcześniej szła przez `page.evaluate` i sięgała po `window.stripSearchMarker`
+     — co przestało istnieć w chwili, gdy funkcja przeniosła się do modułu
+     i nie była już globalną deklaracją skryptu. Przeglądarka niczego tu nie
+     wnosiła: to jest napis na wejściu i napis na wyjściu. */
+  const { utworzProtokol } = require('../../public/protokol.js');
+  const { stripSearchMarker } = utworzProtokol();
   for (const [wejscie, oczek, opis] of PRZYPADKI) {
-    const got = await pg.evaluate((s) => window.stripSearchMarker(s), wejscie);
+    const got = stripSearchMarker(wejscie);
     const ok = got === oczek;
     console.log(`1. ${ok ? 'ok ' : 'ŹLE'} — ${opis}`);
     if (!ok) {
@@ -82,22 +89,41 @@ const PRZYPADKI = [
     }
   }
 
-  /* --- 2. Przerwana odpowiedź też przechodzi przez czyszczenie ------------
-     Jedyna droga, którą tekst z modelu trafiał na ekran surowy. Sprawdzamy
-     to na kodzie, bo odtworzenie przerwania w przeglądarce wymagałoby
-     modelu, który urywa w środku znacznika — a to akurat sytuacja, której
-     atrapa nie odda wiernie. */
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'app.js'), 'utf8');
-  /* Szukamy od obsługi PRZERWANIA, nie od pierwszego `err.partial` w pliku —
-     to drugie trafia w miejsce, gdzie treść jest do `err.partial`
-     PRZYPISYWANA, a nas interesuje miejsce, w którym trafia na ekran. */
-  const przerwanie = app.match(/AbortError'\)\s*\{[\s\S]{0,600}?conv\.messages\.push/);
-  const czysci = przerwanie && /stripSearchMarker/.test(przerwanie[0]);
-  console.log(`2. przerwana odpowiedź przechodzi przez czyszczenie: ${czysci ? 'tak' : 'NIE'}`);
-  if (!czysci) {
-    fail.push('przerwana odpowiedź (`err.partial`) idzie na ekran bez czyszczenia znaczników');
+  /* --- 2. PRZERWANA ODPOWIEDŹ TEŻ PRZECHODZI PRZEZ CZYSZCZENIE ------------
+     Jedyna droga, którą tekst z modelu trafiał na ekran surowy — i najczęstsza,
+     bo przerywa się wtedy, gdy coś trwa za długo, czyli dokładnie w trakcie
+     sięgania po narzędzie.
+
+     Kiedyś stał tu regexp po `public/app.js`: „czy w 600 znakach za
+     `AbortError` jest napis `stripSearchMarker`". Zdawał również wtedy, gdyby
+     czyszczenie przeniosło się do gałęzi, którą przerwanie omija. Teraz
+     naprawdę przerywamy odpowiedź w połowie znacznika i patrzymy na ekran.
+
+     Atrapa dostaje pytanie „przerwij mnie" i odpowiada strumieniem, w którym
+     `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu. */
+  await pg.fill('#input', 'przerwij mnie w połowie');
+  await pg.click('#send-btn');
+  // Czekamy, aż w odpowiedzi pojawi się POCZĄTEK znacznika — dopiero wtedy
+  // przerwanie ma co zostawić.
+  await pg.waitForFunction(
+    () => /\[ARCHIWUM/.test(document.querySelector('.msg-assistant')?.textContent || ''),
+    null, { timeout: 15000 },
+  );
+  await pg.click('#stop-btn');
+  await pg.waitForTimeout(1500);
+
+  const naEkranie = await pg.evaluate(() => Array.from(document.querySelectorAll('.msg-assistant'))
+    .map((e) => e.textContent).join('\n'));
+  const wyciekl = /\[ARCHIWUM/.test(naEkranie);
+  console.log(`2. po „stop" w połowie znacznika: ${wyciekl ? 'ZNACZNIK NA EKRANIE' : 'czysto'}`
+    + ` (${naEkranie.trim().slice(0, 60)}…)`);
+  if (wyciekl) {
+    fail.push('przerwana odpowiedź idzie na ekran bez czyszczenia znaczników — '
+      + `widać „${naEkranie.match(/\[ARCHIWUM[^\n]{0,40}/)[0]}"`);
+  }
+  // Sam początek wypowiedzi ma zostać — czyszczenie nie może zjeść odpowiedzi.
+  if (!/Zaraz sprawdzę archiwum/.test(naEkranie)) {
+    fail.push('po przerwaniu zniknęła cała odpowiedź, nie tylko znacznik');
   }
 
   await br.close();

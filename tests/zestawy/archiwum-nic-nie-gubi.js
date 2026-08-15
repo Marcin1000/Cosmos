@@ -193,14 +193,56 @@ function nowyKatalog(nazwa) {
      bieżąco. Same metadane nie mają z tym nic wspólnego. */
   console.log('7. odłączenie źródła nie kasuje materiału');
   {
-    const serwer = fs.readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8');
-    const i = serwer.indexOf("/api/onedrive/disconnect");
-    const blok = i >= 0 ? serwer.slice(i, i + 700) : '';
-    const kasuje = /usunZrodlo\(/.test(blok);
-    console.log(`   trasa odłączenia kasuje indeks: ${kasuje}`);
-    if (kasuje) {
-      fail.push('odłączenie OneDrive kasuje cały zaindeksowany materiał razem '
-        + 'z rozpoznanymi treściami — a indeks ma z założenia działać offline');
+    /* Sprawdzane ODŁĄCZENIEM, nie czytaniem `server.js`.
+
+       Pierwsza wersja szukała napisu `usunZrodlo(` w siedmiuset znakach za
+       adresem trasy. Zdałaby również wtedy, gdyby kasowanie przeniosło się
+       o akapit dalej albo schowało w funkcji pomocniczej — czyli w każdej
+       sytuacji, w której naprawdę warto o niej wiedzieć. Tu stawiamy serwer
+       na przygotowanym indeksie, odłączamy konto i liczymy, co zostało. */
+    const { uruchom, zabij, czekajNa, zwolnijPorty, KORZEN } = require('../pomoc');
+    const PORT = 8231;
+    const dane = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-odlacz-'));
+    katalogi.push(dane);
+    const przed = Array.from({ length: 40 }, (_, i) => ({
+      id: `onedrive:z${i}`, zrodlo: 'onedrive', typ: 'zdjecie', nazwa: `3B9A${4000 + i}.CR3`,
+      sciezka: `/Zdjęcia/Mazury 2026/3B9A${4000 + i}.CR3`, kiedy: '2026-06-14T19:12:00',
+      aparat: 'Canon EOS R6m2', ogniskowa: 70, opis: 'żagle o zachodzie', exifCzytany: true,
+    }));
+    fs.writeFileSync(path.join(dane, 'archiwum.json'), JSON.stringify(przed));
+
+    await zwolnijPorty([PORT]);
+    const proc = uruchom('node', ['server.js'], {
+      cwd: KORZEN,
+      env: { ...process.env, PORT: String(PORT), COSMOS_DATA_DIR: dane, NVIDIA_API_KEY: 'test' },
+    });
+    const adres = `http://127.0.0.1:${PORT}`;
+    try {
+      if (!await czekajNa(adres)) throw new Error('serwer testowy nie wstał');
+      const ile = async () => {
+        const r = await fetch(`${adres}/api/archive/search?zrodlo=onedrive&limit=1`);
+        return Number((await r.json()).znaleziono) || 0;
+      };
+      const przedOdlaczeniem = await ile();
+      const odp = await (await fetch(`${adres}/api/onedrive/disconnect`, { method: 'POST' })).json();
+      const poOdlaczeniu = await ile();
+      console.log(`   w indeksie przed: ${przedOdlaczeniem}, po odłączeniu: ${poOdlaczeniu} `
+        + `(trasa melduje: usunięto ${odp.usunieto}, zachowano ${odp.zachowano})`);
+      if (przedOdlaczeniem !== przed.length) {
+        fail.push(`serwer wczytał ${przedOdlaczeniem} z ${przed.length} wpisów — `
+          + 'punkt 7 nie mierzyłby niczego');
+      } else if (poOdlaczeniu !== przed.length) {
+        fail.push(`odłączenie OneDrive zabrało ${przed.length - poOdlaczeniu} z ${przed.length} `
+          + 'wpisów razem z rozpoznanymi treściami — a indeks ma z założenia działać offline');
+      }
+      // Rozpoznana treść też ma zostać, nie tylko liczba wpisów.
+      const r = await fetch(`${adres}/api/archive/search?zrodlo=onedrive&limit=1`);
+      const pierwszy = ((await r.json()).wyniki || [])[0] || {};
+      if (poOdlaczeniu === przed.length && pierwszy.opis !== 'żagle o zachodzie') {
+        fail.push('po odłączeniu wpisy zostały, ale bez rozpoznanego opisu');
+      }
+    } finally {
+      zabij(proc);
     }
   }
 

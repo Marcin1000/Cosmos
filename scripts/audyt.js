@@ -26,13 +26,56 @@ const start = rd('docs/START-TUTAJ.md');
 const roadmap = rd('docs/ROADMAP.md');
 const envEx = rd('.env.example');
 
+/* ------------------------------------------------------- 0 audyt o samym sobie
+
+   NAJWAŻNIEJSZA SEKCJA W TYM PLIKU, choć nic o Cosmosie nie mówi.
+
+   Audyt skłamał już dwa razy i za każdym razem tak samo: podzieliłem plik,
+   a on dalej czytał tylko `public/app.js`. Raz podał 45 „martwych" kluczy
+   tłumaczeń zamiast 19 (skasowanie ich wycięłoby komunikaty kaskady narzędzi),
+   raz przestał widzieć połowę tras po wyprowadzce do `lib/`. Za każdym razem
+   wynik wyglądał jak pomiar i za każdym razem był zmyśleniem.
+
+   Wspólna przyczyna: audyt miał WYLICZANKĘ plików, a projekt się zmieniał.
+   Poprawka polega na tym, żeby wyliczanki nie było — i żeby narzędzie samo
+   sprawdzało, czy niczego nie przegapiło. Trzy pytania:
+
+     1. czy czytam każdy skrypt, który wczytuje strona,
+     2. czy każdy z nich jest w pamięci podręcznej PWA (inaczej offline pada),
+     3. czy moje wzorce w ogóle jeszcze cokolwiek znajdują.
+
+   Trzecie jest najbardziej podstępne: regexp, który po zmianie zapisu
+   przestaje pasować, nie zgłasza błędu — po prostu zwraca pustą listę,
+   a pusta lista czyta się jak „wszystko w porządku". */
+sekcja('Audyt o samym sobie');
+const skryptyHtml = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+const plikiPublic = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
+const nieczytane = skryptyHtml.filter((s) => !plikiPublic.includes(s.replace(/^\.?\//, '')));
+nieczytane.length
+  ? zle(`strona wczytuje skrypty, których audyt nie widzi: ${nieczytane.join(', ')}`)
+  : ok(`audyt czyta wszystkie ${skryptyHtml.length} skryptów wczytywanych przez stronę`);
+
+const sw = rd('public/sw.js');
+const wCache = [...sw.matchAll(/'\/([^']+\.js)'/g)].map((m) => m[1]);
+const pozaCache = skryptyHtml.map((s) => s.replace(/^\.?\//, '')).filter((s) => !wCache.includes(s));
+pozaCache.length
+  ? zle(`skrypty spoza pamięci podręcznej PWA (aplikacja padnie offline): ${pozaCache.join(', ')}`)
+  : ok(`wszystkie skrypty strony są w pamięci podręcznej service workera`);
+
 // ---------------------------------------------------------------- 1 składnia
 sekcja('Składnia');
 try {
-  execSync('node --check server.js && node --check public/app.js && node --check public/i18n.js '
-    + '&& node --check public/models.js && node --check public/sw.js', { cwd: R });
-  ok('pliki JavaScript parsują się bez błędu');
-} catch { zle('błąd składni w JavaScripcie'); }
+  /* Sprawdzamy KAŻDY plik JavaScript w projekcie, nie wymienioną piątkę.
+     Poprzednia wersja miała listę i nowo wydzielone moduły (`narzedzia.js`,
+     `widoki.js`, `tekst.js`, `protokol.js`) nie były w niej sprawdzane wcale. */
+  const doSprawdzenia = [
+    'server.js',
+    ...plikiPublic.map((f) => `public/${f}`),
+    ...fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => `lib/${f}`),
+  ];
+  for (const f of doSprawdzenia) execSync(`node --check ${JSON.stringify(f)}`, { cwd: R });
+  ok(`pliki JavaScript parsują się bez błędu (${doSprawdzenia.length})`);
+} catch (e) { zle('błąd składni w JavaScripcie: ' + String(e.message).split('\n')[0]); }
 try {
   const py = fs.readdirSync(path.join(R, 'senses')).filter((f) => f.endsWith('.py'));
   for (const f of py) execSync(`python3 -c "import ast;ast.parse(open('senses/${f}',encoding='utf-8').read())"`, { cwd: R });
@@ -95,7 +138,7 @@ braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystk
    w którym ginie prawdziwa robota do zrobienia. */
 const prefiksyDynamiczne = [...skryptyKlienta.matchAll(/\bt\('([a-zA-Z0-9_.]+\.)'\s*\+/g)].map((m) => m[1]);
 const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtml.includes(k)
-  && !app.includes(`'${k}'`) && !app.includes(`\`${k}\``)
+  && !skryptyKlienta.includes(`'${k}'`) && !skryptyKlienta.includes(`\`${k}\``)
   && !prefiksyDynamiczne.some((p) => k.startsWith(p)));
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
@@ -124,12 +167,15 @@ gole.length
 // ---------------------------------------------------------------- 3 DOM
 sekcja('Zgodność kodu z HTML-em');
 const maId = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+/* Znowu WSZYSTKIE skrypty klienta, nie sam `app.js` — z tego samego powodu,
+   co przy kluczach i18n. Element tworzony w `widoki.js`, a szukany przez
+   `$()` w `app.js`, po podziale wyglądałby na sierotę. */
 const tworzone = new Set([
-  ...[...app.matchAll(/\.id\s*=\s*[`'"]([^`'"]+)/g)].map((m) => m[1]),
-  ...[...app.matchAll(/id="([a-z-]+-\$\{[^}]+\})"/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/\.id\s*=\s*[`'"]([^`'"]+)/g)].map((m) => m[1]),
+  ...[...skryptyKlienta.matchAll(/id="([a-z-]+-\$\{[^}]+\})"/g)].map((m) => m[1]),
 ]);
 const dynamicznePrefiksy = [...tworzone].map((x) => x.replace(/\$\{[^}]+\}/, ''));
-const uzyteId = [...new Set([...app.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]))];
+const uzyteId = [...new Set([...skryptyKlienta.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]))];
 const brakId = uzyteId.filter((id) => !maId.has(id) && !tworzone.has(id)
   && !dynamicznePrefiksy.some((p) => id.startsWith(p)));
 brakId.length ? zle('$(id) bez odpowiednika w HTML: ' + brakId.join(', '))
@@ -161,7 +207,11 @@ const modulyKod = fs.readdirSync(path.join(R, 'lib'))
 const kodTras = server + '\n' + modulyKod;
 const trasy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname) === '(\/[^']*)'/g)].map((m) => m[1]))];
 const prefiksy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname)\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
-const wolane = [...new Set([...(app + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
+/* Wywołania liczone ze WSZYSTKICH skryptów klienta. `narzedzia.js` sięga po
+   `/api/archive/search`, `/api/run`, `/api/images`, a `widoki.js` po
+   `/api/archive/thumb` — gdyby audyt czytał sam `app.js`, przestałby pilnować,
+   czy te trasy w ogóle istnieją. */
+const wolane = [...new Set([...(skryptyKlienta + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
 const sieroty = wolane.filter((c) => !trasy.includes(c) && !prefiksy.some((p) => c.startsWith(p))
   && !trasy.some((r) => c.startsWith(r + '/')));
 sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
@@ -748,8 +798,33 @@ for (const [f, t] of Object.entries({ 'server.js': server, 'public/app.js': app,
   for (const m of t.matchAll(/\b(TODO|FIXME|XXX|HACK)\b/g)) smieci.push(`${f}: ${m[1]}`);
 }
 smieci.length ? hmm('znaczniki do dokończenia: ' + smieci.join(', ')) : ok('brak TODO/FIXME w kodzie produkcyjnym');
-const debugi = (app.match(/console\.log\(/g) || []).length;
-debugi ? hmm(`console.log w app.js: ${debugi}`) : ok('brak wydruków diagnostycznych w kliencie');
+const debugi = (skryptyKlienta.match(/console\.log\(/g) || []).length;
+debugi ? hmm(`console.log w skryptach klienta: ${debugi}`) : ok('brak wydruków diagnostycznych w kliencie');
+
+/* ---------------------------------------------------------- czujniki wzorców
+   Regexp, który po zmianie zapisu przestaje pasować, nie zgłasza błędu —
+   oddaje pustą listę, a pusta lista czyta się jak „wszystko w porządku".
+   Tak właśnie audyt skłamał o trasach: po podziale `server.js` widział ich
+   45 zamiast 52 i cieszył się, że wszystkie są opisane w dokumentacji.
+
+   Progi są UMYŚLNIE niskie — to nie jest limit na rozwój projektu, tylko
+   sygnał „wzorzec przestał cokolwiek znajdować". Jeśli któraś liczba spadnie
+   poniżej, znaczy to, że zmienił się zapis w kodzie, a nie że ubyło funkcji. */
+const czujniki = [
+  ['klucze tłumaczeń (PL)', pl.length, 300],
+  ['klucze użyte w skryptach', uzyteApp.length, 150],
+  ['klucze użyte w HTML', uzyteHtml.length, 100],
+  ['identyfikatory z $()', uzyteId.length, 150],
+  ['trasy serwera', trasy.length, 40],
+  ['wywołania /api/ z klienta', wolane.length, 40],
+];
+const oslepla = czujniki.filter(([, ile, prog]) => ile < prog);
+oslepla.length
+  ? zle('wzorzec audytu przestał znajdować: '
+    + oslepla.map(([co, ile, prog]) => `${co} — ${ile} (spodziewane ≥${prog})`).join('; ')
+    + '. To nie jest usterka Cosmosa, tylko audytu — popraw wzorzec, zanim uwierzysz w resztę wyniku')
+  : ok('wszystkie wzorce audytu wciąż coś znajdują ('
+    + czujniki.map(([co, ile]) => `${co}: ${ile}`).join(', ') + ')');
 const nieczyste = execSync('git status --porcelain', { cwd: R }).toString().trim();
 nieczyste ? hmm('niezacommitowane zmiany:\n       ' + nieczyste.split('\n').join('\n       ')
 ) : ok('drzewo robocze czyste');
