@@ -432,8 +432,10 @@ const I18N = {
     'voice.listening': 'SŁUCHAM…',
     'voice.thinking': 'MYŚLĘ…',
     'voice.speaking': 'MÓWIĘ…',
+    'voice.push': 'NACIŚNIJ, ABY MÓWIĆ',
     'voice.camLabel': '👁 podgląd',
     'voice.hint': 'Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Kosmos” budzi asystenta',
+    'voice.hintPush': 'Ta przeglądarka nie utrzymuje ciągłego nasłuchu — dotknij kuli i mów. Dotknij ponownie, gdy skończysz.',
     'voice.close': 'Zakończ tryb głosowy',
     'voice.noSupport': 'Tryb głosowy wymaga przeglądarki Chrome lub Edge (Web Speech API).',
     'voice.searching': 'Sprawdzam w internecie.',
@@ -468,7 +470,6 @@ const I18N = {
     /* Wersja PO znalezieniu. Bez niej „Szukam zdjęć…" zostawało na ekranie na
        zawsze — Marcin patrzył na gotowe zdjęcia i na wiszący pod nimi
        komunikat, że Cosmos ich właśnie szuka. */
-    'chat.photosFound': '🖼️ *Zdjęcia: {q}*',
     'chat.photosNone': '⚠ Nie znalazłem zdjęć. {msg}',
     'chat.photosQuery': 'wyszukiwanie grafik',
     'photo.thumbFailed': 'miniatura niedostępna — kliknij, by otworzyć',
@@ -1123,8 +1124,10 @@ const I18N = {
     'voice.listening': 'LISTENING…',
     'voice.thinking': 'THINKING…',
     'voice.speaking': 'SPEAKING…',
+    'voice.push': 'TAP TO SPEAK',
     'voice.camLabel': '👁 preview',
     'voice.hint': 'Say “stop” to return to listening · “Hey Cosmos” wakes the assistant',
+    'voice.hintPush': 'This browser cannot keep listening continuously — tap the orb and speak. Tap again when you are done.',
     'voice.close': 'End voice mode',
     'voice.noSupport': 'Voice mode requires the Chrome or Edge browser (Web Speech API).',
     'voice.searching': 'Searching the internet.',
@@ -1155,7 +1158,6 @@ const I18N = {
     'chat.searched': '🔍 *Searched the internet: “{q}”*',
     'chat.genImage': '🎨 *Generating the image — this usually takes from a few seconds to a minute…*',
     'chat.findingPhotos': '🖼️ *Looking for photos: {q}…*',
-    'chat.photosFound': '🖼️ *Photos: {q}*',
     'chat.photosNone': '⚠ No photos found. {msg}',
     'chat.photosQuery': 'image search',
     'photo.thumbFailed': 'thumbnail unavailable — click to open',

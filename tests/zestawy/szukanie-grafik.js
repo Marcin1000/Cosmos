@@ -70,10 +70,28 @@ const { srodowisko } = require('../pomoc');
   /* Marcin poprosił „ze zdjęciami proszę" do siedmiodniowego planu Majorki
      i dostał zdjęcia JEDNEGO miejsca, poprzedzone zapowiedzią „oto propozycje
      zapytań o zdjęcia". Obie rzeczy wynikały z tego, czego prompt NIE mówił. */
-  const jednymZnacznikiem = /JEDNYM\s+znaczniku/.test(prompt);
-  console.log(`7b. prompt żąda kilku miejsc w jednym znaczniku: ${jednymZnacznikiem ? 'tak' : 'NIE'}`);
-  if (!jednymZnacznikiem) {
-    fail.push('prompt nie żąda kilku miejsc naraz — stąd jedno zdjęcie z siedmiu przystanków planu');
+  /* Pierwsza wersja tego sprawdzenia wymagała frazy „JEDNYM znaczniku" —
+     bo taka wtedy była reguła: zbierz wszystkie miejsca i poproś o nie razem.
+     Marcin zobaczył wynik i powiedział, o co naprawdę chodzi: „te zdjęcia
+     powinny być pod konkretnym dniem, a nie najpierw cały plan, a później
+     same zdjęcia". Reguła jest więc dziś odwrotna — znacznik pod punktem,
+     którego dotyczy — ale GWARANCJA została ta sama i to jej pilnujemy:
+     na plan z siedmioma przystankami nie wolno pokazać zdjęć jednego. */
+  const podPunktem = /BEZPOŚREDNIO POD PUNKTEM/.test(prompt);
+  const kilkaZnacznikow = /kilka w jednej odpowiedzi/i.test(prompt);
+  console.log(`7b. prompt każe stawiać znacznik pod punktem planu: ${podPunktem ? 'tak' : 'NIE'}, `
+    + `dopuszcza kilka w odpowiedzi: ${kilkaZnacznikow ? 'tak' : 'NIE'}`);
+  if (!podPunktem) {
+    fail.push('prompt nie mówi, gdzie postawić znacznik — zdjęcia znów wylądują '
+      + 'hurtem na końcu, oderwane od dni, których dotyczą');
+  }
+  if (!kilkaZnacznikow) {
+    fail.push('prompt nie dopuszcza kilku znaczników — stąd jedno zdjęcie z siedmiu '
+      + 'przystanków planu');
+  }
+  if (!/nie rób sekcji|NIE RÓB SEKCJI/i.test(prompt)) {
+    fail.push('prompt nie zabrania osobnej sekcji „propozycje zdjęć" — a nagłówek, '
+      + 'pod którym są same znaczniki, zostaje na ekranie pusty');
   }
   if (!/NIE ZAPOWIADAJ WYSZUKIWANIA/.test(prompt)) {
     fail.push('prompt nie zabrania zapowiadania — stąd „oto propozycje zapytań o zdjęcia"');

@@ -2166,6 +2166,17 @@ kbd {
   justify-content: center;
   gap: 26px;
   padding: 24px;
+  /* Miejsce na podpowiedź przyklejoną do dołu — bez tego treść wjeżdża pod nią. */
+  padding-bottom: 64px;
+  overflow: hidden;
+}
+
+
+/* Kula jest przyciskiem — w trybie „naciśnij, aby mówić" musi to być widać. */
+.voice-orb.push {
+  animation: orb-breathe 2.4s ease-in-out infinite;
+  outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 12px;
 }
 
 .voice-close { position: absolute; top: 18px; right: 18px; }
@@ -2392,6 +2403,11 @@ kbd {
 .voice-orb {
   width: 150px;
   height: 150px;
+  /* BEZ TEGO KULA JEST ELIPSĄ. Warstwa głosowa to kolumna `flex`, więc gdy
+     treści przybędzie (długie pytanie, długa odpowiedź), przeglądarka
+     ściska elementy o stałej wysokości. Na zrzucie z telefonu trzymanego
+     poziomo kula wyglądała jak spłaszczony spodek. */
+  flex: none;
   border-radius: 50%;
   background:
     radial-gradient(circle at 34% 30%, var(--accent-strong), var(--accent) 46%, transparent 74%),
@@ -2431,9 +2447,20 @@ kbd {
   color: var(--text-dim);
 }
 
+/* TEKSTY NIE MOGĄ NA SIEBIE NACHODZIĆ.
+   Na zrzutach Marcina rozpoznane pytanie, odpowiedź i podpowiedź na dole
+   leżały jedno na drugim. Powód: `.voice-transcript` nie miał żadnego
+   ograniczenia wysokości, więc rozpoznanie długie na dwanaście linii
+   wypychało resztę kolumny poza ekran — a `.voice-hint` jest pozycjonowana
+   bezwzględnie i zostawała na wierzchu.
+
+   Każdy z tych bloków dostaje więc własny sufit i własne przewijanie,
+   a warstwa rezerwuje miejsce na podpowiedź. */
 .voice-transcript {
   min-height: 26px;
   max-width: 640px;
+  max-height: 24vh;
+  overflow-y: auto;
   text-align: center;
   font-size: 19px;
   color: var(--text);
@@ -2451,6 +2478,9 @@ kbd {
 .voice-hint {
   position: absolute;
   bottom: 22px;
+  left: 24px;
+  right: 24px;
+  text-align: center;
   font-size: 11.5px;
   color: var(--text-faint);
 }
@@ -2469,6 +2499,18 @@ kbd {
   border: 1px solid var(--border-strong);
   background: #000;
 }
+/* TELEFON TRZYMANY POZIOMO. Na wysokość zostaje ~360 px, a sama kula ma 150.
+   Bez tego kadru mieści się kula i nic więcej — dokładnie tak, jak wyglądało
+   to na zrzucie: pytanie wchodzące na odpowiedź, odpowiedź na podpowiedź. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .voice-overlay { gap: 12px; padding: 12px 12px 46px; }
+  .voice-orb { width: 82px; height: 82px; }
+  .voice-status { font-size: 11px; letter-spacing: .16em; }
+  .voice-transcript { font-size: 16px; max-height: 26vh; }
+  .voice-answer { max-height: 30vh; }
+  .voice-hint { bottom: 10px; font-size: 10.5px; }
+}
+
 .voice-camera-label {
   position: absolute;
   top: 6px;
@@ -2482,24 +2524,45 @@ kbd {
 
 /* wyniki wyszukiwania w rozmowie */
 .msg-search { display: block; }
-/* Tok myślenia modelu rozumującego — widoczny, ale zwinięty, żeby nie
-   przykrywał właściwej odpowiedzi. */
+/* PRZEKŁADKI MAJĄ BYĆ CICHE.
+   Marcin: „te przekładki Wyniki wyszukiwania i Tok myślenia — zróbmy to
+   bardziej delikatnie, bo teraz wydłużają konwersacje i zaburzają flow".
+
+   Miał rację i nie chodzi o gust. Jedna odpowiedź z planem podróży ma ich
+   kilkanaście, a każda była pełnym kafelkiem: ramka, tło, wypełnienie,
+   własny prostokąt w strumieniu rozmowy. Trzy takie pod rząd wyglądały
+   ważniej niż odpowiedź, dla której powstały.
+
+   Zwinięta przekładka jest teraz jedną linijką bez ramki i bez tła —
+   przypisem, nie kafelkiem. Ramka wraca dopiero po ROZWINIĘCIU, bo wtedy
+   naprawdę jest to osobny blok treści, który trzeba oddzielić od reszty. */
 .think-block {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 10px;
-  background: var(--bg-elevated);
-  margin-bottom: 10px;
+  background: none;
+  margin: 2px 0 6px;
   font-size: 12.5px;
   color: var(--text-dim);
 }
 .think-block summary {
   cursor: pointer;
-  padding: 7px 12px;
+  padding: 2px 0;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-faint);
+  opacity: .75;
 }
-.think-block[open] summary { border-bottom: 1px solid var(--border); }
+.think-block summary:hover { opacity: 1; }
+.think-block[open] {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  margin: 8px 0 10px;
+}
+.think-block[open] summary {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  opacity: 1;
+}
 .think-block pre {
   padding: 10px 12px;
   margin: 0;
@@ -2512,21 +2575,32 @@ kbd {
   line-height: 1.55;
 }
 
+/* Ta sama zasada, co przy toku myślenia — patrz komentarz wyżej. */
 .search-results {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: none;
   font-size: 12.5px;
   color: var(--text-dim);
 }
 .search-results summary {
   cursor: pointer;
-  padding: 8px 14px;
+  padding: 2px 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-faint);
+  opacity: .75;
 }
-.search-results[open] summary { border-bottom: 1px solid var(--border); }
+.search-results summary:hover { opacity: 1; }
+.search-results[open] {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.search-results[open] summary {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  opacity: 1;
+}
 .search-results pre {
   padding: 10px 14px;
   white-space: pre-wrap;

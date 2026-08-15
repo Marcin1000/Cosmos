@@ -117,6 +117,7 @@ const el = {
   voiceOverlay: $('voice-overlay'),
   voiceClose: $('voice-close'),
   voiceOrb: $('voice-orb'),
+  voiceHint: document.querySelector('.voice-hint'),
   voiceStatus: $('voice-status'),
   voiceTranscript: $('voice-transcript'),
   voiceAnswer: $('voice-answer'),
@@ -3995,7 +3996,19 @@ el.kbDrop.addEventListener('drop', (e) => {
 // Wake word i rozmowa: Web Speech API (Chrome/Edge, także Android).
 // ----------------------------------------------------------------
 
-const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)\b/i;
+/* Bez `\b` po nazwie — i to jest poprawka po zrzucie Marcina.
+   Przy sklejonych rozpoznaniach („Hej kosmosHej kosmos co widzisz") granica
+   słowa po „kosmos" nie istniała, bo zaraz za nim stała litera. Wzorzec nie
+   pasował do PIERWSZEGO wystąpienia i słowo budzące wjeżdżało w treść
+   pytania. Rozluźnienie jest bezpieczne: żeby cokolwiek dopasować, trzeba
+   i tak mieć przed nazwą „hej"/„ok". */
+const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
+
+/* Czyste przekształcenia tekstu mowy — `public/mowa.js`. Tam mieszka też
+   `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
+const {
+  doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie,
+} = utworzMowe({ WAKE_RE });
 const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
 const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;
 
@@ -4011,7 +4024,63 @@ function setVoiceState(state) {
     listening: t('voice.listening'),
     thinking: t('voice.thinking'),
     speaking: t('voice.speaking'),
+    push: t('voice.push'),
   }[state] || '';
+  // W trybie „naciśnij" kula jest przyciskiem — musi to być widać i czuć.
+  el.voiceOrb.style.cursor = 'pointer';
+  el.voiceHint.textContent = t(state === 'push' ? 'voice.hintPush' : 'voice.hint');
+}
+
+/* ============ PISZCZĄCY MIKROFON ============
+   Marcin: „cały czas ten mikrofon się włącza i odłącza wraz z tym irytującym
+   dźwiękiem przyłączania i odłączania".
+
+   To nie jest usterka Cosmosa — to Android. Chrome na telefonie nie obsługuje
+   `continuous`: kończy sesję rozpoznawania po każdej wypowiedzi i po każdej
+   ciszy, a każde uruchomienie i zamknięcie mikrofonu system kwituje
+   dźwiękiem. Nasłuch słowa budzącego wymaga ciągłego słuchania, więc
+   wznawiamy — i tak w kółko, co kilka sekund, także wtedy, gdy w pokoju
+   nikogo nie ma.
+
+   Nie da się tego wyłączyć od strony strony internetowej. Da się natomiast
+   przestać się upierać: jeśli kilkanaście wznowień z rzędu nie przyniosło
+   ANI JEDNEGO rozpoznanego słowa, nasłuch ciągły w tym przeglądarce po prostu
+   nie działa. Wtedy zamiast piszczeć dalej, kula zamienia się w przycisk:
+   jedno dotknięcie, jedna sesja, jeden dźwięk.
+
+   Liczymy tylko wznowienia JAŁOWE. Rozmowa zeruje licznik, więc komuś, u kogo
+   nasłuch działa (desktop, Whisper przez własny strumień), nic się nie zmienia. */
+const WZNOWIEN_ZANIM_PRZYCISK = 12;
+let wznowienJalowych = 0;
+
+/** Rozpoznanie się udało — nasłuch ciągły w tej przeglądarce działa. */
+function nasluchDziala() {
+  wznowienJalowych = 0;
+}
+
+/** Przejdź na „naciśnij, aby mówić" i przestań wznawiać sesję. */
+function nasluchNaPrzycisk() {
+  wznowienJalowych = 0;
+  /* Zapamiętane na stałe dla TEJ przeglądarki. Bez tego Marcin przy każdym
+     wejściu w tryb głosowy słuchałby dwunastu piśnięć od nowa, zanim Cosmos
+     ponownie dojdzie do tego samego wniosku. Zapis kasuje się sam, gdy
+     pojawi się własny strumień z Whisperem — wtedy ciągły nasłuch działa
+     i nie ma czego omijać. */
+  try { localStorage.setItem('cosmos.nasluchPrzycisk', '1'); } catch { /* tryb prywatny */ }
+  if (voiceRec) { try { voiceRec.abort(); } catch { /* już zamknięty */ } }
+  voiceRec = null;
+  setVoiceState('push');
+  el.voiceTranscript.textContent = '';
+}
+
+/** Jedna sesja rozpoznawania pod palcem — bez wznawiania w kółko. */
+function nasluchRaz() {
+  if (!voiceMode) return;
+  wznowienJalowych = 0;
+  voiceHeard = '';
+  el.voiceTranscript.textContent = '';
+  setVoiceState('listening');
+  startVoiceRecognizer();
 }
 
 // Jeden kontekst audio na całą stronę. Tworzenie i zamykanie go przy każdym
@@ -4077,6 +4146,17 @@ async function enterVoiceMode() {
   // pytaniach w rodzaju „co trzymam w ręku”. Teraz to świadome kliknięcie.
   if (localStorage.getItem('cosmos.voiceCam') === '1') await startVoiceCamera();
   updateVoiceCamButton();
+
+  /* Ta przeglądarka już raz pokazała, że nie utrzymuje ciągłego nasłuchu —
+     nie każemy jej dowodzić tego drugi raz kosztem kolejnych kilkunastu
+     piśnięć mikrofonu. Whisper przez własny strumień piszczeć nie musi,
+     więc gdy jest dostępny, zapis przestaje obowiązywać i znika. */
+  if (silnikNasluchu() === 'whisper') {
+    try { localStorage.removeItem('cosmos.nasluchPrzycisk'); } catch { /* tryb prywatny */ }
+  } else if (localStorage.getItem('cosmos.nasluchPrzycisk') === '1') {
+    setVoiceState('push');
+    return;
+  }
 
   startWakeListening();
 }
@@ -4409,28 +4489,10 @@ function ustawGluchote(wlacz) {
   if (nasluch) nasluch.gluchy(voiceDeaf);
 }
 
-/** Uproszczona postać zdania — rozpoznawanie dopieszcza interpunkcję
- *  i wielkość liter jeszcze po tym, jak wynik uzna za ostateczny. */
-function odciskWyniku(wyniki, indeks) {
-  const r = wyniki && wyniki[indeks];
-  return r && r[0] ? String(r[0].transcript).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') : '';
-}
-
 /** Zapamiętaj, że wszystko do `doIndeksu` już przerobiliśmy. */
 function oznaczZuzyte(wyniki, doIndeksu) {
   voiceZuzyteDo = doIndeksu;
   voiceOdcisk = doIndeksu > 0 ? odciskWyniku(wyniki, doIndeksu - 1) : '';
-}
-
-/** Wytnij słowo budzące — wszystkie wystąpienia, nie tylko pierwsze. Przy
- *  ciągłym nasłuchu „Hej Kosmos" bywa rozpoznane kilka razy pod rząd. */
-function bezSlowaBudzacego(tekst) {
-  return String(tekst).replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
-    .replace(/\s{2,}/g, ' ').trim()
-    /* Rozpoznawanie lubi rozbić „Hej Kosmos" na dwa wyniki, więc po wycięciu
-       pełnej frazy zostaje sierotą samo „Hej". Ucinamy je tylko na POCZĄTKU
-       i tylko wtedy, gdy coś po nim jest — w środku zdania to już treść. */
-    .replace(/^(?:(?:hej|hey|ok(?:ej)?)[\s,.!]+)+(?=\S)/i, '');
 }
 
 /** Czy rozpoznawacz zaczął numerować wyniki od nowa? */
@@ -4468,11 +4530,13 @@ function startVoiceRecognizer() {
     }
 
     if (voiceState === 'wake') {
-      const swieze = [];
+      /* To samo scalanie, co niżej: przy wznawianych sesjach słowo budzące
+         wraca w kilku coraz dłuższych wersjach i gołe złączenie dawało
+         „Hej kosmosHej kosmos Co widzisz". */
+      let latest = '';
       for (let i = Math.max(0, voiceZuzyteDo); i < e.results.length; i++) {
-        swieze.push(e.results[i][0].transcript);
+        latest = doklejRozpoznane(latest, e.results[i][0].transcript);
       }
-      const latest = swieze.join(' ');
       const match = latest.match(WAKE_RE);
       if (!match) return;
       // Wszystkie wystąpienia, nie tylko pierwsze: przy ciągłym nasłuchu
@@ -4492,10 +4556,20 @@ function startVoiceRecognizer() {
     let interim = '';
     for (let i = Math.max(e.resultIndex, voiceZuzyteDo); i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) { voiceHeard += r[0].transcript; oznaczZuzyte(e.results, i + 1); }
-      else interim += r[0].transcript;
+      /* SCALAMY, NIE DOKLEJAMY.
+         Chrome na Androidzie nie obsługuje `continuous` — kończy sesję po
+         każdej wypowiedzi i po każdej ciszy. Wznowiona sesja rozpoznaje od
+         nowa audio, które częściowo już słyszeliśmy, więc gołe `+=` dawało
+         „Jakiejakiejakie sąjakie są największe…". `doklejRozpoznane` widzi
+         zakładkę i zostawia dłuższą wersję zamiast obu. */
+      if (r.isFinal) {
+        voiceHeard = doklejRozpoznane(voiceHeard, r[0].transcript);
+        oznaczZuzyte(e.results, i + 1);
+      } else {
+        interim = doklejRozpoznane(interim, r[0].transcript);
+      }
     }
-    el.voiceTranscript.textContent = (voiceHeard + ' ' + interim).trim();
+    el.voiceTranscript.textContent = doklejRozpoznane(voiceHeard, interim);
 
     // Rozpoznawacz jest ciągły, więc sam nie zasygnalizuje końca pytania.
     // Kończymy po chwili ciszy od ostatniego usłyszanego słowa.
@@ -4518,7 +4592,14 @@ function startVoiceRecognizer() {
     // Nowa sesja zaczyna liczyć wyniki od zera, więc znacznik też musi.
     oznaczZuzyte(null, 0);
     if (!voiceMode) return;
-    setTimeout(() => { if (voiceMode) startVoiceRecognizer(); }, 250);
+    /* Sesja, która skończyła się bez ani jednego wyniku, była jałowa —
+       czyli mikrofon piszczał po nic. Patrz komentarz przy
+       WZNOWIEN_ZANIM_PRZYCISK. */
+    if (!rec.__ostatniaDlugosc) wznowienJalowych++;
+    else wznowienJalowych = 0;
+    if (voiceState === 'push') return;
+    if (wznowienJalowych >= WZNOWIEN_ZANIM_PRZYCISK) { nasluchNaPrzycisk(); return; }
+    setTimeout(() => { if (voiceMode && voiceState !== 'push') startVoiceRecognizer(); }, 250);
   };
   rec.onerror = (ev) => {
     if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
@@ -4562,18 +4643,6 @@ function askVoice(text) {
   handleVoiceQuery(text);
 }
 
-/** Czy dwa zdania to praktycznie to samo? Porównujemy zbiory słów, bo
- *  rozpoznawanie mowy gubi końcówki i interpunkcję. */
-function toSamoZdanie(a, b) {
-  const slowa = (x) => new Set(String(x).toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 2));
-  const A = slowa(a);
-  const B = slowa(b);
-  if (A.size < 3) return false;                  // za krótkie, by wnioskować
-  let wspolne = 0;
-  for (const w of A) if (B.has(w)) wspolne++;
-  return wspolne / A.size > 0.7;
-}
 
 // Nazwy używane w pozostałej części pliku — zostawiamy je jako cienkie przejścia,
 // żeby nie rozsypać wywołań rozsianych po trybie głosowym.
@@ -4668,6 +4737,23 @@ async function handleVoiceQuery(text) {
 
 el.voiceBtn.addEventListener('click', enterVoiceMode);
 el.voiceClose.addEventListener('click', exitVoiceMode);
+
+/* Kula jest przyciskiem ZAWSZE, nie tylko po przejściu na „naciśnij".
+   Nawet gdy nasłuch działa, czekanie na słowo budzące bywa wolniejsze niż
+   dotknięcie ekranu — a w trybie „naciśnij" to jedyna droga do zadania
+   pytania. Kolejne dotknięcie w trakcie słuchania kończy wypowiedź. */
+el.voiceOrb.addEventListener('click', () => {
+  if (!voiceMode) return;
+  if (voiceState === 'listening') {
+    const tekst = bezSlowaBudzacego(el.voiceTranscript.textContent || '');
+    clearTimeout(voiceSilence);
+    voiceHeard = '';
+    if (tekst) askVoice(tekst); else backToWake();
+    return;
+  }
+  if (voiceState === 'thinking' || voiceState === 'speaking') return;
+  nasluchRaz();
+});
 
 // ----------------------------------------------------------------
 // Escape zamyka wierzchnią warstwę

@@ -78,6 +78,46 @@ const { srodowisko } = require('../pomoc');
   console.log(`6. „Canon R6 Mark II" z pola tekstowego → „nie mam w katalogu": ${nieznany}`);
   if (nieznany) fail.push('własny aparat Marcina nie trafił we własny wpis katalogowy');
 
+  /* --- 7. SPRZĘT MA DOCIERAĆ TAKŻE DO MODELU ----------------------------
+     Do tej pory znało go wyłącznie narzędzie planu. Model, pisząc nastawy
+     z własnej wiedzy — a robi tak przy każdym „jak to ustawić", które nie
+     uruchamia narzędzia — nie wiedział, co użytkownik ma w torbie.
+
+     Marcin dostał w planie na Majorkę „f/2.8" przy pięciu różnych ujęciach,
+     mając wyłącznie f/4 i jeden stały f/1.8. Rada, której nie da się
+     wykonać, jest gorsza od braku rady: wygląda wiarygodnie, a orientujesz
+     się dopiero na miejscu.
+
+     Atrapa tego środowiska oddaje w treści odpowiedzi to, co dostała
+     w wiadomościach systemowych — więc czytamy dokładnie to, co widzi model. */
+  await fetch(`${env.adres}/api/gear`, { method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      korpus: 'Canon R6 Mark II',
+      obiektywy: 'RF 24-105 f/4, RF 70-200 f/4, RF 50 f/1.8',
+      dodatki: 'DJI Mavic 3, Ronin-S',
+    }) });
+  const prompt = await (await fetch(`${env.adres}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: 'cloud', messages: [{ role: 'user', content: 'jak ustawić aparat' }] }),
+  })).text();
+
+  const maSzkla = /24-105 f\/4/.test(prompt) && /50 f\/1\.8/.test(prompt);
+  const maKorpus = /Canon R6 Mark II/.test(prompt);
+  const maDodatki = /Mavic 3/.test(prompt);
+  const maZasade = /nie proponuj[\s\S]{0,80}przysłony jaśniejszej/i.test(prompt);
+  console.log(`7. w prompcie modelu: korpus ${maKorpus ? 'jest' : 'BRAK'}, `
+    + `obiektywy ${maSzkla ? 'są' : 'BRAK'}, dodatki ${maDodatki ? 'są' : 'BRAK'}, `
+    + `zasada o przysłonie ${maZasade ? 'jest' : 'BRAK'}`);
+  if (!maKorpus) fail.push('model nie dostaje korpusu użytkownika');
+  if (!maSzkla) fail.push('model nie dostaje listy obiektywów — będzie zgadywał przysłonę');
+  if (!maDodatki) fail.push('model nie dostaje dodatków (dron, gimbal) — zaproponuje ujęcia bez sprzętu');
+  if (!maZasade) {
+    fail.push('prompt podaje sprzęt, ale nie mówi, że nastawy mają się w nim mieścić — '
+      + 'sama lista nie powstrzymała modelu przed „f/2.8" przy obiektywach f/4');
+  }
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nZESTAW SPRZĘTU OK');
   process.exit(fail.length ? 1 : 0);
