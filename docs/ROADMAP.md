@@ -3554,6 +3554,10 @@ przestać się upierać.
       Udane rozpoznanie zeruje licznik, więc tam, gdzie nasłuch ciągły działa
       (pulpit, własny strumień z Whisperem), nic się nie zmienia
 - [x] Kula jest klikalna zawsze — także po to, żeby zakończyć wypowiedź
+- [x] Wybór jest ZAPAMIĘTANY dla tej przeglądarki. Bez tego Marcin przy każdym
+      wejściu w tryb głosowy słuchałby dwunastu piśnięć od nowa, zanim Cosmos
+      dojdzie do tego samego wniosku. Zapis znika sam, gdy pojawi się własny
+      strumień z Whisperem — wtedy ciągły nasłuch działa i nie ma czego omijać
 
 ### 3. Warstwa głosowa nachodziła sama na siebie
 

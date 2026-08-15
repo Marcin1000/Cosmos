@@ -4061,6 +4061,12 @@ function nasluchDziala() {
 /** Przejdź na „naciśnij, aby mówić" i przestań wznawiać sesję. */
 function nasluchNaPrzycisk() {
   wznowienJalowych = 0;
+  /* Zapamiętane na stałe dla TEJ przeglądarki. Bez tego Marcin przy każdym
+     wejściu w tryb głosowy słuchałby dwunastu piśnięć od nowa, zanim Cosmos
+     ponownie dojdzie do tego samego wniosku. Zapis kasuje się sam, gdy
+     pojawi się własny strumień z Whisperem — wtedy ciągły nasłuch działa
+     i nie ma czego omijać. */
+  try { localStorage.setItem('cosmos.nasluchPrzycisk', '1'); } catch { /* tryb prywatny */ }
   if (voiceRec) { try { voiceRec.abort(); } catch { /* już zamknięty */ } }
   voiceRec = null;
   setVoiceState('push');
@@ -4140,6 +4146,17 @@ async function enterVoiceMode() {
   // pytaniach w rodzaju „co trzymam w ręku”. Teraz to świadome kliknięcie.
   if (localStorage.getItem('cosmos.voiceCam') === '1') await startVoiceCamera();
   updateVoiceCamButton();
+
+  /* Ta przeglądarka już raz pokazała, że nie utrzymuje ciągłego nasłuchu —
+     nie każemy jej dowodzić tego drugi raz kosztem kolejnych kilkunastu
+     piśnięć mikrofonu. Whisper przez własny strumień piszczeć nie musi,
+     więc gdy jest dostępny, zapis przestaje obowiązywać i znika. */
+  if (silnikNasluchu() === 'whisper') {
+    try { localStorage.removeItem('cosmos.nasluchPrzycisk'); } catch { /* tryb prywatny */ }
+  } else if (localStorage.getItem('cosmos.nasluchPrzycisk') === '1') {
+    setVoiceState('push');
+    return;
+  }
 
   startWakeListening();
 }
