@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (88 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (90 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia

@@ -3519,6 +3519,96 @@ Test pyta teraz o rzeczy właściwe.
       `javascript:`, 10 form składni Markdown. Renderer jest jedyną barierą
       między odpowiedzią modelu a `innerHTML`, a model cytuje treści z sieci
 
+## ✅ Partia 72 — nasłuch, rozmowa, zdjęcia pod dniem (GOTOWE)
+
+Marcin: „Nasłuch dramatycznie działa. Beznadziejnie." Do tego cztery uwagi
+o rozmowach z jego testów. Wszystkie z tej samej rodziny: Cosmos robił
+technicznie to, co miał, i było to nie do użycia.
+
+### 1. Pytanie zwielokrotnione w trybie głosowym
+
+Na ekranie stało: „Jakiejakiejakie sąjakie są największejakie są największe…"
+zamiast „Jakie są największe atrakcje na Majorce". Model dostał TO i sam
+zapisał w toku myślenia „seems garbled due to repetition" — odpowiedź wyszła
+dobra wyłącznie dlatego, że się domyślił.
+
+Chrome na Androidzie **nie obsługuje `continuous`**: kończy sesję po każdej
+wypowiedzi i po każdej ciszy. Wznowiona sesja rozpoznaje od nowa audio, które
+częściowo już słyszeliśmy, a kod robił `voiceHeard += transcript` — gołym
+plusem, stąd brak spacji między powtórzeniami.
+
+- [x] `public/mowa.js` — `doklej` scala po zachodzących **słowach** (nie
+      znakach: „na Majorce" i „nam" miałyby wspólne „na"), a porównuje bez
+      ogonków, bo rozpoznawanie oddaje najpierw „pokaz", potem „pokaż"
+- [x] „hej, kosmos! pokaż zdjęcia" szło do modelu jako „! pokaż zdjęcia"
+- [x] sklejone „Hej kosmosHej kosmos" zostawiało słowo budzące w treści
+
+### 2. Mikrofon włączający się i wyłączający bez końca
+
+Każde wznowienie sesji to systemowy dźwięk — na Androidzie co kilka sekund,
+także w pustym pokoju. Ze strony internetowej nie da się tego wyciszyć; da się
+przestać się upierać.
+
+- [x] Po dwunastu JAŁOWYCH wznowieniach z rzędu kula zamienia się w przycisk
+      „naciśnij, aby mówić": jedno dotknięcie, jedna sesja, jeden dźwięk.
+      Udane rozpoznanie zeruje licznik, więc tam, gdzie nasłuch ciągły działa
+      (pulpit, własny strumień z Whisperem), nic się nie zmienia
+- [x] Kula jest klikalna zawsze — także po to, żeby zakończyć wypowiedź
+
+### 3. Warstwa głosowa nachodziła sama na siebie
+
+Na czterech zrzutach pytanie, odpowiedź i podpowiedź leżały jedno na drugim,
+a w poziomie kula była spłaszczonym spodkiem. Kolumna `flex` bez sufitów:
+długie rozpoznanie rozpychało ją poza ekran i ściskało kulę o stałej wysokości.
+
+- [x] Sufity i własne przewijanie dla każdego bloku, `flex: none` na kuli,
+      osobny kadr dla telefonu trzymanego poziomo
+
+### 4. Zdjęcia hurtem na końcu zamiast pod dniem
+
+Marcin: „te zdjęcia powinny być pod konkretnym dniem, a nie najpierw cały
+plan, a później same zdjęcia, bo traci się nawiązanie do konkretnych punktów
+w planie". To nie był problem modelu, tylko narzędzia: braliśmy PIERWSZY
+znacznik, resztę zlepialiśmy w jedną wiadomość, a siatki dokładaliśmy na
+końcu. Stąd też pusta sekcja „Propozycje zdjęć" — nagłówek zostawał,
+a znaczniki pod nim znikały bez śladu.
+
+- [x] Narzędzie czyta WSZYSTKIE znaczniki razem z ich miejscem w tekście
+      i odtwarza kolejność: kawałek planu, siatka pod nim, kolejny kawałek.
+      Wszystko w jednej rundzie, bo limit to cztery rundy na turę — przy
+      rundzie na dzień siedmiodniowy plan urwałby się w środę
+- [x] Instrukcja zmieniona z „zbierz wszystko w JEDNYM znaczniku" na „wstaw
+      znacznik bezpośrednio pod punktem, którego dotyczy"
+
+### 5. f/2.8 przy obiektywach f/4
+
+Sprzęt znało wyłącznie narzędzie planu. Model, pisząc nastawy z własnej wiedzy
+— a robi tak przy każdym „jak to ustawić", które nie uruchamia narzędzia — nie
+wiedział, co użytkownik ma w torbie. Rada, której nie da się wykonać, jest
+gorsza od braku rady: wygląda wiarygodnie, a orientujesz się na miejscu.
+
+- [x] Korpus, obiektywy i dodatki idą do promptu razem z twardą zasadą:
+      nie proponuj przysłony jaśniejszej niż jego optyka ani ogniskowej,
+      której nie ma; jeśli ujęcie wymaga sprzętu, którego nie ma — powiedz to
+
+### 6. Przekładki krzyczały głośniej niż odpowiedź
+
+Marcin: „te przekładki Wyniki wyszukiwania i Tok myślenia — zróbmy to bardziej
+delikatnie, bo teraz wydłużają konwersacje i zaburzają flow".
+
+- [x] Zwinięta przekładka to jedna cicha linijka bez ramki i bez tła. Ramka
+      wraca dopiero po rozwinięciu, bo wtedy naprawdę jest osobnym blokiem
+
+### Nowe zestawy
+
+`mowa-nie-dubluje` (ciąg wznowień ze zrzutu → jedno zdanie, plus czego
+scalanie zjeść NIE MOŻE) i `warstwa-glosowa-miesci` (cztery ekrany, pomiar
+prostokątów). Oba sprawdzone: padają na starym kodzie.
+
+Dwa istniejące zestawy pilnowały reguł, które ta partia świadomie zmieniła
+(`szukanie-grafik` — „JEDNYM znacznikiem"; `zdjecia-w-planie` — zbiorczy
+komunikat „Zdjęcia: …"). Przestawione na nową gwarancję, nie na nowe brzmienie.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

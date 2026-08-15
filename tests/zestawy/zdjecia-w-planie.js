@@ -59,9 +59,17 @@ if (!maPrzegladarke()) {
   if (wiszace.length) {
     fail.push('„Szukam zdjęć…" wisi po znalezieniu zdjęć — komunikat o trwającej czynności się nie domyka');
   }
-  const domkniete = ekran.teksty.filter((x) => /^🖼️?\s*Zdjęcia:/i.test(x) || /Zdjęcia:/.test(x));
-  console.log(`   komunikat domknięty („Zdjęcia: …"): ${domkniete.length ? 'jest' : 'BRAK'}`);
-  if (!domkniete.length) fail.push('po znalezieniu zdjęć nie ma żadnej informacji, czego dotyczą');
+  /* Czego zdjęcia dotyczą — MUSI być widać. Kiedyś mówił o tym jeden zbiorczy
+     komunikat („🖼️ Zdjęcia: Katedra La Seu, Es Trenc") nad wszystkimi siatkami
+     naraz. Zniknął razem z galerią na końcu odpowiedzi: teraz każda siatka
+     stoi pod swoim punktem planu i ma WŁASNY podpis. Gwarancja jest ta sama,
+     nośnik inny — więc i sprawdzenie musi patrzeć na nośnik, który istnieje. */
+  const podpisy = await pg.evaluate(() => [...document.querySelectorAll('.msg-assistant')]
+    .filter((m) => m.querySelector('.photo-grid, .msg-photos'))
+    .map((m) => (m.textContent || '').trim().slice(0, 60))
+    .filter(Boolean));
+  console.log(`   podpisów nad siatkami: ${podpisy.length} — ${podpisy.join(' | ') || 'BRAK'}`);
+  if (!podpisy.length) fail.push('po znalezieniu zdjęć nie ma żadnej informacji, czego dotyczą');
 
   /* ---- 2. Zdjęcia są, i to obu miejsc ---- */
   console.log(`2. zdjęć na ekranie: ${ekran.zdjecia}, zestawów: ${ekran.siatki}`);

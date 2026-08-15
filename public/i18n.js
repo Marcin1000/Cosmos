@@ -470,7 +470,6 @@ const I18N = {
     /* Wersja PO znalezieniu. Bez niej „Szukam zdjęć…" zostawało na ekranie na
        zawsze — Marcin patrzył na gotowe zdjęcia i na wiszący pod nimi
        komunikat, że Cosmos ich właśnie szuka. */
-    'chat.photosFound': '🖼️ *Zdjęcia: {q}*',
     'chat.photosNone': '⚠ Nie znalazłem zdjęć. {msg}',
     'chat.photosQuery': 'wyszukiwanie grafik',
     'photo.thumbFailed': 'miniatura niedostępna — kliknij, by otworzyć',
@@ -1159,7 +1158,6 @@ const I18N = {
     'chat.searched': '🔍 *Searched the internet: “{q}”*',
     'chat.genImage': '🎨 *Generating the image — this usually takes from a few seconds to a minute…*',
     'chat.findingPhotos': '🖼️ *Looking for photos: {q}…*',
-    'chat.photosFound': '🖼️ *Photos: {q}*',
     'chat.photosNone': '⚠ No photos found. {msg}',
     'chat.photosQuery': 'image search',
     'photo.thumbFailed': 'thumbnail unavailable — click to open',

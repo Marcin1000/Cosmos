@@ -2524,24 +2524,45 @@ kbd {
 
 /* wyniki wyszukiwania w rozmowie */
 .msg-search { display: block; }
-/* Tok myślenia modelu rozumującego — widoczny, ale zwinięty, żeby nie
-   przykrywał właściwej odpowiedzi. */
+/* PRZEKŁADKI MAJĄ BYĆ CICHE.
+   Marcin: „te przekładki Wyniki wyszukiwania i Tok myślenia — zróbmy to
+   bardziej delikatnie, bo teraz wydłużają konwersacje i zaburzają flow".
+
+   Miał rację i nie chodzi o gust. Jedna odpowiedź z planem podróży ma ich
+   kilkanaście, a każda była pełnym kafelkiem: ramka, tło, wypełnienie,
+   własny prostokąt w strumieniu rozmowy. Trzy takie pod rząd wyglądały
+   ważniej niż odpowiedź, dla której powstały.
+
+   Zwinięta przekładka jest teraz jedną linijką bez ramki i bez tła —
+   przypisem, nie kafelkiem. Ramka wraca dopiero po ROZWINIĘCIU, bo wtedy
+   naprawdę jest to osobny blok treści, który trzeba oddzielić od reszty. */
 .think-block {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 10px;
-  background: var(--bg-elevated);
-  margin-bottom: 10px;
+  background: none;
+  margin: 2px 0 6px;
   font-size: 12.5px;
   color: var(--text-dim);
 }
 .think-block summary {
   cursor: pointer;
-  padding: 7px 12px;
+  padding: 2px 0;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-faint);
+  opacity: .75;
 }
-.think-block[open] summary { border-bottom: 1px solid var(--border); }
+.think-block summary:hover { opacity: 1; }
+.think-block[open] {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  margin: 8px 0 10px;
+}
+.think-block[open] summary {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  opacity: 1;
+}
 .think-block pre {
   padding: 10px 12px;
   margin: 0;
@@ -2554,21 +2575,32 @@ kbd {
   line-height: 1.55;
 }
 
+/* Ta sama zasada, co przy toku myślenia — patrz komentarz wyżej. */
 .search-results {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: none;
   font-size: 12.5px;
   color: var(--text-dim);
 }
 .search-results summary {
   cursor: pointer;
-  padding: 8px 14px;
+  padding: 2px 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-faint);
+  opacity: .75;
 }
-.search-results[open] summary { border-bottom: 1px solid var(--border); }
+.search-results summary:hover { opacity: 1; }
+.search-results[open] {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.search-results[open] summary {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  opacity: 1;
+}
 .search-results pre {
   padding: 10px 14px;
   white-space: pre-wrap;

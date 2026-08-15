@@ -40,7 +40,7 @@ const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
   rozpoznajObiektywy } = require('./lib/ekspozycja.js');
 const { pogodaDla } = require('./lib/pogoda.js');
 const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
-const { zbudujInstrukcje } = require('./lib/instrukcje-narzedzi.js');
+const { zbudujInstrukcje, blokSprzetu } = require('./lib/instrukcje-narzedzi.js');
 const { prognozaZorzy } = require('./lib/zorza.js');
 const { rozpoznajTemat } = require('./lib/tematy.js');
 const { planUjec, optykaDrona } = require('./lib/ujecia.js');
@@ -1727,6 +1727,11 @@ async function handleChat(req, res) {
   if (userProfile.trim()) {
     extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
   }
+
+  /* Sprzęt użytkownika — tekst dla modelu mieszka razem z resztą instrukcji,
+     w `lib/instrukcje-narzedzi.js`. */
+  const blokSprzet = blokSprzetu(userSprzet);
+  if (blokSprzet) extras.push(blokSprzet);
 
   const scene = payload.useSenses === false ? '' : sceneContext();
   if (scene) extras.push({ role: 'system', content: scene });

@@ -351,37 +351,75 @@ function utworzNarzedzia(z) {
       etykieta: t('chat.photosQuery'),
     }),
     async wykonaj(k) {
-      // „Katedra; plaża; wioska" — jedna prośba, kilka zestawów zdjęć.
-      const wszystkie = k.dop[1].split(';').map((s) => s.trim()).filter(Boolean).slice(0, 4);
+      /* ZDJĘCIA STOJĄ TAM, GDZIE MODEL JE POSTAWIŁ.
+
+         Marcin o planie na Majorkę: „te zdjęcia powinny być pod konkretnym
+         dniem, a nie najpierw cały plan, a później same zdjęcia, bo traci się
+         nawiązanie do konkretnych punktów w planie". Miał rację — i nie był to
+         problem modelu, tylko tego narzędzia. Braliśmy PIERWSZY znacznik,
+         resztę odpowiedzi zlepialiśmy w jedną wiadomość, a siatki dokładaliśmy
+         hurtem na końcu. Stąd brała się też pusta sekcja „Propozycje zdjęć":
+         nagłówek zostawał, a znaczniki pod nim znikały bez śladu.
+
+         Teraz czytamy WSZYSTKIE znaczniki razem z ich miejscem w tekście
+         i odtwarzamy kolejność: kawałek planu, siatka pod nim, kolejny
+         kawałek, kolejna siatka. Wszystko w jednej rundzie, bo limit wynosi
+         cztery rundy na całą turę — przy rundzie na dzień siedmiodniowy plan
+         urwałby się w środę. */
+      const WZ = new RegExp(WZORCE.GRAFIKA.source, 'gi');
+      const segmenty = [];
+      let odKad = 0;
+      let m = null;
+      while ((m = WZ.exec(k.acc)) !== null) {
+        segmenty.push({
+          tekst: k.acc.slice(odKad, m.index),
+          zapytania: m[1].split(';').map((x) => x.trim()).filter(Boolean).slice(0, 4),
+        });
+        odKad = m.index + m[0].length;
+        // Sześć siatek na turę. Więcej to już nie plan, tylko album.
+        if (segmenty.length >= 6) break;
+      }
+      const ogon = k.acc.slice(odKad);
+
       /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
          dostaniu wyniku lubi poprosić o to samo jeszcze raz — a drugi raz
          te same zdjęcia to dla użytkownika po prostu usterka. */
-      const zapytania = wszystkie.filter((q) => !k.stan.grafiki.has(bezOgonkowKlient(q)));
-      if (!zapytania.length) {
+      const wszystkie = [];
+      for (const seg of segmenty) {
+        seg.zapytania = seg.zapytania.filter((q) => {
+          const klucz = bezOgonkowKlient(q);
+          if (k.stan.grafiki.has(klucz) || wszystkie.some((x) => bezOgonkowKlient(x) === klucz)) {
+            return false;
+          }
+          wszystkie.push(q);
+          return true;
+        });
+      }
+      if (!wszystkie.length) {
         dodajWynikNarzedzia(k.conv,
-          `ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ: ${wszystkie.join(', ')}. Nie proś o nie `
-          + 'ponownie. Albo poproś o INNE miejsca z planu, albo dokończ odpowiedź tekstem.',
+          'ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ. Nie proś o nie ponownie. Albo poproś '
+          + 'o INNE miejsca z planu, albo dokończ odpowiedź tekstem.',
           t('chat.photosQuery'));
         return { akcja: 'dalej' };
       }
 
       const pasek = zapowiedz(k.conv, k.przed,
-        t('chat.findingPhotos', { q: zapytania.join(', ') }));
+        t('chat.findingPhotos', { q: wszystkie.join(', ') }));
       // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
-      const zestawy = await Promise.all(zapytania.map(async (q) => {
+      const zestawy = await Promise.all(wszystkie.map(async (q) => {
         const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}`);
         return { q, photos: d.results || [], error: d.error || '' };
       }));
-      const znalezione = zestawy.filter((s) => s.photos.length);
+      const znalezione = zestawy.filter((x) => x.photos.length);
 
       if (!znalezione.length) {
         /* Niepowodzenie wraca do modelu tak samo jak wynik. Kiedyś kończyliśmy
            tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
            się o niczym — i następne zdanie użytkownika trafiało w próżnię. */
-        const powod = zestawy.map((s) => s.error).filter(Boolean).join('; ');
+        const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
         pasek.domknij(t('chat.photosNone', { msg: powod }));
         dodajWynikNarzedzia(k.conv,
-          `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${zapytania.join(', ')}.\n`
+          `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
           + (powod ? `Powód techniczny: ${powod}\n` : '')
           + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe — spróbuj RAZ '
           + 'konkretniejszego. Jeśli było już konkretne, nie szukaj ponownie: powiedz '
@@ -390,27 +428,46 @@ function utworzNarzedzia(z) {
         return { akcja: 'dalej' };
       }
 
-      pasek.domknij(t('chat.photosFound', { q: znalezione.map((s) => s.q).join(', ') }));
-      for (const s of znalezione) {
-        k.conv.messages.push({
-          role: 'assistant',
-          content: { text: zapytania.length > 1 ? s.q : '', photos: s.photos },
-        });
+      /* Pasek postępu znika, a na jego miejsce wchodzi ODTWORZONA kolejność.
+         Usuwamy go z rozmowy zamiast przepisywać, bo teraz w to miejsce
+         wchodzi nie jedna wiadomość, tylko cały przeplot. */
+      const gdzie = k.conv.messages.indexOf(pasek.wiadomosc);
+      if (gdzie >= 0) k.conv.messages.splice(gdzie, 1);
+
+      const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
+      const dodajTekst = (tresc) => {
+        const czysty = stripSearchMarker(tresc);
+        if (czysty) k.conv.messages.push({ role: 'assistant', content: czysty });
+      };
+      for (const seg of segmenty) {
+        dodajTekst(seg.tekst);
+        for (const q of seg.zapytania) {
+          const znalezisko = poZapytaniu.get(bezOgonkowKlient(q));
+          if (!znalezisko) continue;
+          /* Podpis nad siatką zostaje ZAWSZE, także przy jednym zestawie.
+             To on wiąże zdjęcia z punktem planu, pod którym stoją. */
+          k.conv.messages.push({
+            role: 'assistant',
+            content: { text: znalezisko.q, photos: znalezisko.photos },
+          });
+        }
       }
-      for (const s of znalezione) k.stan.grafiki.add(bezOgonkowKlient(s.q));
+      dodajTekst(ogon);
+
+      for (const x of znalezione) k.stan.grafiki.add(bezOgonkowKlient(x.q));
       saveConversations();
       renderMessages();
 
-      const bezWynikow = zapytania.filter((q) => !znalezione.some((s) => s.q === q));
+      const bezWynikow = wszystkie.filter((q) => !poZapytaniu.has(bezOgonkowKlient(q)));
       dodajWynikNarzedzia(k.conv,
-        'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI (już je widzi — nie opisuj ich po kolei '
-        + 'i nie zapowiadaj):\n'
-        + znalezione.map((s) => `• ${s.q} — ${s.photos.length} szt.`).join('\n')
+        'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI, KAŻDE POD SWOIM PUNKTEM PLANU (już je '
+        + 'widzi — nie opisuj ich po kolei, nie przypisuj ich jeszcze raz do dni '
+        + 'i nie rób z tego osobnej listy na końcu):\n'
+        + znalezione.map((x) => `• ${x.q} — ${x.photos.length} szt.`).join('\n')
         + (bezWynikow.length ? `\nBEZ WYNIKÓW: ${bezWynikow.join(', ')}` : '')
-        + '\n\nDokończ teraz odpowiedź: przypisz te zdjęcia do miejsc z planu '
-        + 'jednym–dwoma zdaniami na miejsce. Jeśli plan ma jeszcze inne przystanki '
-        + 'bez zdjęć, poproś o nie JEDNYM znacznikiem [GRAFIKA: a; b; c] — nie po '
-        + 'jednym na raz. Nie proś ponownie o to, co już masz powyżej.',
+        + '\n\nJeśli odpowiedź jest kompletna — napisz krótkie domknięcie albo nic. '
+        + 'Jeśli w planie zostały przystanki bez zdjęć, poproś o nie JEDNYM '
+        + 'znacznikiem [GRAFIKA: a; b; c]. Nie proś ponownie o to, co już masz powyżej.',
         t('chat.photosQuery'));
       return { akcja: 'dalej' };
     },
