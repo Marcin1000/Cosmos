@@ -3659,6 +3659,35 @@ siatki, w kolejności znaczników, żaden znacznik na ekranie), ten sam plan
 proszony dwa razy, oraz trzykrotnie przepisany plan → jedna kopia, przy czym
 odpowiedź o czymś innym nadal staje obok.
 
+## ✅ Partia 74 — Dzień, plan, zdjęcia (GOTOWE)
+
+Marcin, po tym jak zdjęcia w końcu zaczęły się pojawiać: „Chciałbym żeby
+działało tak, żeby od razu było: Dzień 1, Plan, Zdjęcia, potem Dzień 2, Plan,
+Zdjęcia itd. — a nie jak jest teraz, czyli najpierw opis, potem jakieś
+myślenie, potem zdjęcia. Są też jakieś dodatkowe puste punkty."
+
+Przeplot działał — ale obok niego stał jeszcze cały plan wydrukowany hurtem,
+a przy ośmiu dniach połowa i tak lądowała na końcu.
+
+- [x] **Plan drukował się dwa razy.** Narzędzie grafik odtwarza układ samo
+      (kawałek planu → siatka pod nim), a mimo to jego pasek postępu niósł
+      ze sobą CAŁY tekst modelu. Efekt: plan w całości nad wszystkim i ten
+      sam plan pokrojony pod spodem. Pasek idzie teraz bez tekstu.
+- [x] **Limit sześciu siatek ucinał plan ośmiodniowy.** Dni 5-8 zostawały
+      w ogonie jednym blokiem, a ich zdjęcia hurtem na samym końcu — dokładnie
+      to, od czego uciekaliśmy. Limit podniesiony do dziesięciu.
+- [x] **Puste punkty.** Model pisze znacznik jako punkt listy („- [GRAFIKA: …]").
+      Po wycięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd — cała
+      wiadomość złożona z jednego „-". Sieroty są sprzątane, a kawałek bez ani
+      jednej litery nie trafia na ekran. Model dostał przy okazji prośbę,
+      żeby pisać znacznik w osobnej linii i nie tworzyć ich w ogóle.
+
+Nowy punkt 12 w `kaskada-narzedzi`: plan ośmiodniowy, każdy dzień ze swoim
+znacznikiem zapisanym jako punkt listy. Sprawdza wszystkie trzy rzeczy naraz
+— osiem siatek z ośmiu dni, żadnej wiadomości z więcej niż jednym dniem,
+układ „dzień → jego zdjęcia" i zero pustych punktów. Na starym kodzie daje
+6 siatek z 8, dwie kopie planu i osiem osieroconych myślników.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

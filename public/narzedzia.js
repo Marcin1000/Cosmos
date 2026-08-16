@@ -398,8 +398,11 @@ function utworzNarzedzia(z) {
           zapytania: m[1].split(';').map((x) => x.trim()).filter(Boolean).slice(0, 4),
         });
         odKad = m.index + m[0].length;
-        // Sześć siatek na turę. Więcej to już nie plan, tylko album.
-        if (segmenty.length >= 6) break;
+        /* Dziesięć siatek na turę. Sześć wystarczało na plan pięciodniowy,
+           ale przy ośmiu dniach reszta znaczników zostawała w ogonie: dni
+           5-8 lądowały jednym blokiem, a ich zdjęcia hurtem na samym końcu
+           — dokładnie to, od czego uciekaliśmy. */
+        if (segmenty.length >= 10) break;
       }
       const ogon = k.acc.slice(odKad);
 
@@ -425,8 +428,12 @@ function utworzNarzedzia(z) {
         return { akcja: 'dalej' };
       }
 
-      const pasek = zapowiedz(k.conv, k.przed,
-        t('chat.findingPhotos', { q: wszystkie.join(', ') }));
+      /* Pasek postępu bez `przed` — i to jest istotne.
+         Grafiki SAME odtwarzają układ (kawałek planu, siatka pod nim), więc
+         wydrukowanie tu całego tekstu z góry dawało plan dwa razy: raz
+         w całości nad wszystkim, raz pokrojony na kawałki. Marcin zobaczył
+         to jako „najpierw opis, potem jakieś myślenie, potem zdjęcia". */
+      const pasek = zapowiedz(k.conv, '', t('chat.findingPhotos', { q: wszystkie.join(', ') }));
       // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
       const zestawy = await Promise.all(wszystkie.map(async (q) => {
         const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}`);
@@ -457,9 +464,20 @@ function utworzNarzedzia(z) {
       if (gdzie >= 0) k.conv.messages.splice(gdzie, 1);
 
       const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
+      /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
+         Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
+         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd —
+         cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
+         dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
+         wstawiamy kawałków, w których nie została ani jedna litera. */
       const dodajTekst = (tresc) => {
-        const czysty = stripSearchMarker(tresc);
-        if (czysty) wstawTekstModelu(k.conv, czysty, k.conv.__turaOd || 0);
+        const czysty = stripSearchMarker(tresc)
+          // Punkt listy, po którym nic nie zostało — na końcu i w środku.
+          .replace(/^[ \t]*[-*•]\s*$/gm, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+        if (!/\p{L}|\p{N}/u.test(czysty)) return;
+        wstawTekstModelu(k.conv, czysty, k.conv.__turaOd || 0);
       };
       for (const seg of segmenty) {
         dodajTekst(seg.tekst);

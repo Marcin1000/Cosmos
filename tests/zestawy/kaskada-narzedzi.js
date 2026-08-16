@@ -497,6 +497,97 @@ async function uruchom(st, nazwa, acc, stan) {
     if (poObcej !== 2) fail.push('zapora zjadła odpowiedź, która była naprawdę inna');
   }
 
+    /* --- 12. UKŁAD, O KTÓRY POPROSIŁ MARCIN -------------------------------
+     „Chciałbym żeby działało tak, żeby od razu było: Dzień 1, Plan, Zdjęcia,
+     potem Dzień 2, Plan, Zdjęcia itd. — a nie jak jest teraz, czyli najpierw
+     opis, potem jakieś myślenie, potem zdjęcia."
+
+     Trzy rzeczy naraz, wszystkie widoczne w jego zapisie:
+       a) cały plan drukował się NAD przeplotem, więc stał na ekranie dwa razy,
+       b) limit sześciu siatek zostawiał dni 5-8 jednym blokiem na końcu,
+       c) po wyciętym znaczniku zostawał sam punkt listy — „puste punkty".
+
+     Ośmiodniowy plan, każdy dzień ze swoim znacznikiem zapisanym tak, jak
+     robi to model: jako punkt listy. */
+  {
+    const st = stanowisko({
+      odpowiedzi: { '/api/search/images': { results: [{ thumb: '/a', title: 'x', source: 'https://e.pl' }] } },
+    });
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
+    const dni = ['Santa Ponsa zachód', 'plaża Ponent', 'Valldemossa klasztor',
+      'Western Water Park', 'Katedra La Seu', 'Cap de Formentor',
+      'jaskinie Drach', 'taras hotelowy'];
+    const acc = dni.map((q, i) => `**Dzień ${i + 1}**\n`
+      + `- Zwiedzanie i zdjęcia.\n`
+      + `- **Ustawienia:** 24-105 mm f/4, ISO 200, 1/125 s.\n`
+      + `- [GRAFIKA: ${q}]\n`).join('\n')
+      + '\n### Nastawy aparatu — podsumowanie\nTabela na końcu.';
+
+    const dop = st.poNazwie.grafiki.dopasuj(acc);
+    await st.poNazwie.grafiki.wykonaj({
+      acc, dop, conv: st.conv, depth: 0, ostatnia: false,
+      przed: acc.replace(/\[GRAFIKA:[^\]]*\]/gi, '').trim(), stan,
+    });
+
+    const widok = st.conv.messages
+      .filter((m) => m.role === 'assistant')
+      .map((m) => (m.content && m.content.photos
+        ? { typ: 'siatka', tekst: m.content.text }
+        : { typ: 'tekst', tekst: String(m.content || '') }));
+
+    console.log(`12. plan ośmiodniowy → wiadomości: ${widok.length}`);
+    const siatki = widok.filter((x) => x.typ === 'siatka');
+    console.log(`   siatek: ${siatki.length} z ${dni.length} dni`);
+    if (siatki.length !== dni.length) {
+      fail.push(`z ${dni.length} dni powstało ${siatki.length} siatek — reszta `
+        + 'wylądowałaby jednym blokiem na końcu');
+    }
+
+    /* (a) Żaden kawałek tekstu nie może zawierać CAŁEGO planu. Jeśli
+       w jednej wiadomości jest więcej niż jeden nagłówek dnia, znaczy to,
+       że plan wydrukował się hurtem obok przeplotu. */
+    const hurtem = widok.filter((x) => x.typ === 'tekst'
+      && (x.tekst.match(/\*\*Dzień \d/g) || []).length > 1);
+    console.log(`   wiadomości z więcej niż jednym dniem: ${hurtem.length}`);
+    if (hurtem.length) {
+      fail.push('cały plan stoi w jednej wiadomości obok pokrojonego — '
+        + 'użytkownik widzi go dwa razy');
+    }
+
+    /* (b) Kolejność: tekst dnia, potem JEGO siatka, potem następny dzień. */
+    let porzadek = true;
+    for (let i = 0; i < widok.length - 1; i++) {
+      if (widok[i].typ !== 'tekst') continue;
+      const nrDnia = (widok[i].tekst.match(/\*\*Dzień (\d)/) || [])[1];
+      if (!nrDnia) continue;
+      if (widok[i + 1].typ !== 'siatka' || widok[i + 1].tekst !== dni[Number(nrDnia) - 1]) {
+        porzadek = false;
+        fail.push(`po tekście dnia ${nrDnia} nie stoi jego siatka, tylko `
+          + `${widok[i + 1].typ} „${widok[i + 1].tekst.slice(0, 30)}"`);
+        break;
+      }
+    }
+    console.log(`   układ „dzień → jego zdjęcia": ${porzadek ? 'zachowany' : 'ZŁAMANY'}`);
+
+    /* (c) Puste punkty. Wiadomość bez ani jednej litery i cyfry nie ma prawa
+       trafić na ekran — a właśnie takie zostawały po wyciętych znacznikach. */
+    const puste = widok.filter((x) => x.typ === 'tekst' && !/\p{L}|\p{N}/u.test(x.tekst));
+    console.log(`   pustych wiadomości: ${puste.length}`);
+    if (puste.length) fail.push(`${puste.length} pustych punktów po wyciętych znacznikach`);
+
+    // I osierocone myślniki wewnątrz kawałków też nie.
+    const zMyslnikiem = widok.filter((x) => x.typ === 'tekst' && /^[ \t]*[-*•][ \t]*$/m.test(x.tekst));
+    if (zMyslnikiem.length) {
+      fail.push(`${zMyslnikiem.length} kawałków ma pusty punkt listy w środku`);
+    }
+
+    // Ogon (tabela podsumowania) ma zostać, na końcu.
+    const ostatni = widok[widok.length - 1];
+    if (!(ostatni.typ === 'tekst' && /Nastawy aparatu/.test(ostatni.tekst))) {
+      fail.push('podsumowanie z końca planu zniknęło albo nie stoi na końcu');
+    }
+  }
+
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');
   process.exit(fail.length ? 1 : 0);
 })();
