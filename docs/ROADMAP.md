@@ -3613,6 +3613,52 @@ Dwa istniejące zestawy pilnowały reguł, które ta partia świadomie zmieniła
 (`szukanie-grafik` — „JEDNYM znacznikiem"; `zdjecia-w-planie` — zbiorczy
 komunikat „Zdjęcia: …"). Przestawione na nową gwarancję, nie na nowe brzmienie.
 
+## ✅ Partia 73 — trzy plany i zero zdjęć (GOTOWE)
+
+Marcin przysłał zapis rozmowy o Majorce: „Nie wyrzuca żadnych zdjęć nigdzie.
+Poza tym sam się wznawia i wyrzucił 3 plany. Nie może tak to działać."
+
+Trzy usterki, jedna przyczyna źródłowa — kaskada narzędzi umiała uruchomić
+w rundzie tylko JEDNO narzędzie.
+
+### 1. Prośba o zdjęcia ginęła bez śladu
+
+Model napisał plan, a pod nim `[PLAN: …]` **oraz** sześć `[GRAFIKA: …]`.
+Kaskada brała pierwsze pasujące narzędzie z listy — plan — a wszystkie
+pozostałe znaczniki czyściła z tekstu i wyrzucała. Na ekranie zostawały puste
+punkty „Dzień 2 – Palma:" bez niczego pod spodem.
+
+- [x] Po narzędziu, które wygrało, dokładane są grafiki z tej samej
+      odpowiedzi. Zwycięzcy odbierana jest wtedy emisja tekstu, bo układ
+      (kawałek planu → siatka pod nim) odtwarzają grafiki
+
+### 2. Ten sam plan liczony w kółko
+
+Model po dostaniu danych planu przepisywał całość i prosił o plan JESZCZE RAZ
+— o to samo miejsce. Archiwum i grafiki miały zaporę przed powtórką od dawna,
+plan nie miał żadnej.
+
+- [x] `stan.plan` odcina identyczne wywołanie i mówi modelowi wprost:
+      masz te dane wyżej, nie przepisuj całej odpowiedzi od nowa
+
+### 3. Trzy kopie planu na ekranie
+
+Każda runda kaskady to osobna wypowiedź modelu, a model uparcie przepisywał
+całość. Instrukcja pomaga, ale nie jest gwarancją — użytkownik ogląda skutek.
+
+- [x] `wstawTekstModelu` — przepisana odpowiedź **podmienia** poprzednią
+      zamiast stawać obok niej. Zapora działa tylko w obrębie bieżącej tury
+      i tylko dla dłuższych wypowiedzi o pokryciu słów ≥ 85% w obie strony;
+      odpowiedź naprawdę inna staje obok, tak jak powinna
+- [x] `zapowiedz` rozdzielone na dwie wiadomości: tekst modelu (przez zaporę)
+      i pasek postępu. Wcześniej były sklejone w jedną, więc każda runda
+      dokładała kolejną kopię tekstu
+
+Nowe punkty w `kaskada-narzedzi`: plan i grafiki w jednej odpowiedzi (dwie
+siatki, w kolejności znaczników, żaden znacznik na ekranie), ten sam plan
+proszony dwa razy, oraz trzykrotnie przepisany plan → jedna kopia, przy czym
+odpowiedź o czymś innym nadal staje obok.
+
 ## 🎉 Wszystkie partie z roadmapy zrealizowane
 Pozostałe pojedyncze punkty oznaczone `[ ]` (foldery/tagi, sterowanie gestami,
 streaming WebRTC, konta wielu użytkowników, automatyczne odtwarzanie web/desktop)

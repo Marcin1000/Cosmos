@@ -131,7 +131,40 @@ function utworzMowe(z) {
     return wspolne / A.size > 0.7;
   }
 
-  return { doklej, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, golo };
+  /**
+   * Czy druga wypowiedź to praktycznie przepisana pierwsza?
+   *
+   * Marcin dostał w jednej turze TRZY kopie tego samego planu Majorki.
+   * Model po każdym wyniku narzędzia pisał całość od nowa, a każda runda to
+   * osobna wiadomość — więc na ekranie rosła sterta prawie identycznych
+   * tabel. Instrukcja „nie przepisuj" pomaga, ale nie jest gwarancją;
+   * to jest zapora po stronie Cosmosa.
+   *
+   * Liczymy pokrycie WORKA SŁÓW w obie strony i wymagamy wysokiego progu
+   * oraz realnej długości. Krótkie wypowiedzi zostawiamy w spokoju: „tak"
+   * po „tak" bywa sensowne, a dwa akapity o tych samych filtrach ND to już
+   * przepisana odpowiedź.
+   *
+   * @param {string} a wcześniejsza wypowiedź
+   * @param {string} b nowa wypowiedź
+   * @param {number} [prog] wymagane pokrycie w obie strony
+   * @returns {boolean}
+   */
+  function tenSamTekst(a, b, prog = 0.85) {
+    const A = golo(a);
+    const B = golo(b);
+    // Poniżej dwustu znaków powtórzenie bywa treścią, nie usterką.
+    if (A.length < 200 || B.length < 200) return false;
+    const zbior = (x) => new Set(x.split(' ').filter((w) => w.length > 3));
+    const sa = zbior(A);
+    const sb = zbior(B);
+    if (sa.size < 20 || sb.size < 20) return false;
+    let wspolne = 0;
+    for (const w of sa) if (sb.has(w)) wspolne++;
+    return wspolne / sa.size >= prog && wspolne / sb.size >= prog;
+  }
+
+  return { doklej, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst, golo };
 }
 
 if (typeof window !== 'undefined') window.utworzMowe = utworzMowe;
