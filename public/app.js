@@ -1954,6 +1954,7 @@ const NARZEDZIA = utworzNarzedzia({
     setVoiceState('thinking');
   },
   PORCJA_ARCHIWUM,
+  wstawTekstModelu,
   WZORCE: {
     SZUKAJ: SEARCH_MARKER_RE,
     ARCHIWUM: ARCHIVE_RE,
@@ -1980,6 +1981,35 @@ const NARZEDZIA = utworzNarzedzia({
  *  @param {string} surowe treść od modelu (może być urwana)
  *  @returns {string} tekst do wypowiedzenia głosem albo pusty
  */
+/* JEDNO WEJŚCIE NA TEKST MODELU — i jedna zapora przed powtórką.
+
+   Marcin dostał w jednej turze TRZY kopie planu Majorki. Model po każdym
+   wyniku narzędzia przepisywał całość od nowa, a każda runda to osobna
+   wiadomość w rozmowie. Instrukcja „dopisz tylko to, czego jeszcze nie
+   napisałeś" pomaga, ale nie jest gwarancją — model bywa uparty, a użytkownik
+   ogląda skutek.
+
+   Dlatego przepisana odpowiedź nie ląduje obok poprzedniej, tylko JĄ
+   ZASTĘPUJE. Nowa wersja jest z definicji pełniejsza (model zna już wynik
+   narzędzia), więc podmiana niczego nie gubi — a rozmowa zostaje czytelna.
+   Szukamy tylko wśród wypowiedzi z BIEŻĄCEJ tury: powtórzenie planu sprzed
+   pół godziny jest odpowiedzią na nowe pytanie i ma prawo zostać. */
+function wstawTekstModelu(conv, tresc, odKtorej = 0) {
+  const czysty = String(tresc || '');
+  if (!czysty.trim()) return null;
+  for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
+    const m = conv.messages[i];
+    if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
+    if (tenSamTekst(m.content, czysty)) {
+      m.content = czysty;
+      return m;
+    }
+  }
+  const wiadomosc = { role: 'assistant', content: czysty };
+  conv.messages.push(wiadomosc);
+  return wiadomosc;
+}
+
 async function domknijOdpowiedz(conv, surowe) {
   // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
   const tresc = stripSearchMarker(await dokoncz(conv, surowe));
@@ -2001,8 +2031,8 @@ async function domknijOdpowiedz(conv, surowe) {
     saveConversations();
     return widoczne;
   }
-  conv.messages.push({ role: 'assistant', content: finalText,
-    think: lastThink, note: lastModelNote, samoMyslenie });
+  const wiadomosc = wstawTekstModelu(conv, finalText, conv.__turaOd || 0);
+  if (wiadomosc) Object.assign(wiadomosc, { think: lastThink, note: lastModelNote, samoMyslenie });
   saveConversations();
   return finalText;
 }
@@ -2019,7 +2049,9 @@ async function runGeneration(conv, podpiecie = null) {
      o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
      pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
      formalnie to różne kroki. To samo dotyczy zdjęć. */
-  const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+  const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
+  // Od której wiadomości zaczyna się ta tura — dalej nie szuka zapora powtórek.
+  conv.__turaOd = conv.messages.length;
 
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
@@ -2060,6 +2092,26 @@ async function runGeneration(conv, podpiecie = null) {
         break;
       }
 
+      /* DWA NARZĘDZIA W JEDNEJ ODPOWIEDZI — a wolno było tylko jedno.
+         Marcin poprosił o plan Majorki „ze zdjęciami i grafikami". Model
+         napisał plan, a pod nim [PLAN: …] ORAZ sześć [GRAFIKA: …]. Kaskada
+         brała pierwsze pasujące narzędzie z listy — czyli plan — a wszystkie
+         pozostałe znaczniki czyściła z tekstu i wyrzucała. Prośba o zdjęcia
+         znikała bez śladu. Model, dostawszy dane planu, pisał całość od nowa
+         (znowu ze znacznikami), plan znowu wygrywał, zdjęcia znowu przepadały
+         — i tak aż do wyczerpania rund. Efekt: trzy kopie planu na ekranie
+         i ani jednego zdjęcia.
+
+         Zdjęcia dokładamy więc po narzędziu, które wygrało. Wtedy to ONE
+         odtwarzają układ tekstu (kawałek planu, siatka pod nim), więc
+         zwycięzcy odbieramy emisję tekstu — inaczej plan stałby na ekranie
+         dwa razy. */
+      const grafikiTez = uzyte.nazwa !== 'grafiki'
+        ? NARZEDZIA.find((n) => n.nazwa === 'grafiki')
+        : null;
+      const dopGrafiki = grafikiTez && grafikiTez.dopasuj(acc);
+      const przedTekst = stripSearchMarker(acc.replace(dop[0], ''));
+
       const wynik = await uzyte.wykonaj({
         acc,
         dop,
@@ -2067,13 +2119,23 @@ async function runGeneration(conv, podpiecie = null) {
         depth,
         ostatnia,
         // Tekst modelu sprzed znacznika — WSZYSTKIE znaczniki wyczyszczone.
-        przed: stripSearchMarker(acc.replace(dop[0], '')),
+        przed: dopGrafiki ? '' : przedTekst,
         stan,
       });
 
       if (wynik && wynik.akcja === 'koniec') {
         finalText = wynik.finalGlos || wynik.finalText || '';
         break;
+      }
+
+      if (dopGrafiki) {
+        const wynikGrafik = await grafikiTez.wykonaj({
+          acc, dop: dopGrafiki, conv, depth, ostatnia, przed: przedTekst, stan,
+        });
+        if (wynikGrafik && wynikGrafik.akcja === 'koniec') {
+          finalText = wynikGrafik.finalGlos || wynikGrafik.finalText || '';
+          break;
+        }
       }
     }
   } catch (err) {
@@ -4007,7 +4069,7 @@ const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
 /* Czyste przekształcenia tekstu mowy — `public/mowa.js`. Tam mieszka też
    `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
 const {
-  doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie,
+  doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst,
 } = utworzMowe({ WAKE_RE });
 const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
 const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;

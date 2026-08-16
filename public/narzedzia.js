@@ -64,6 +64,7 @@
  * @param {Function} z.mowGlosem komunikat głosowy w trakcie czynności (może być pusty)
  * @param {number}   z.PORCJA_ARCHIWUM ile miniatur w porcji
  * @param {object}   z.WZORCE wyrażenia rozpoznające znaczniki
+ * @param {Function} z.wstawTekstModelu tekst modelu do rozmowy, z zaporą przed powtórką
  * @returns {Array<object>} narzędzia w kolejności sprawdzania
  */
 function utworzNarzedzia(z) {
@@ -72,24 +73,27 @@ function utworzNarzedzia(z) {
     stripSearchMarker, readJsonSafe, fetch: pobierz, webSearch,
     naKafelek, naKontekst, bezOgonkowKlient, zebranyMaterial,
     zastosujZmianePlotna, pokazPlotno, mowGlosem, PORCJA_ARCHIWUM, WZORCE,
+    wstawTekstModelu,
   } = z;
 
   /* Wiadomość „trwa czynność", którą trzeba będzie PRZEPISAĆ, gdy czynność
      się skończy. Wisiała kiedyś w rozmowie na zawsze jako „Szukam zdjęć…"
      — pod nią gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich szuka. */
   function zapowiedz(conv, przed, tekst) {
-    const wiadomosc = {
-      role: 'assistant',
-      content: (przed ? przed + '\n\n' : '') + tekst,
-    };
+    /* Tekst modelu i pasek postępu to DWIE różne wiadomości.
+       Wcześniej były jedną: `przed + status`. Przy kilku rundach w turze model
+       przepisywał całą odpowiedź od nowa, a każda runda dokładała kolejną
+       kopię — Marcin dostał w ten sposób trzy identyczne plany Majorki.
+       Rozdzielone, tekst przechodzi przez zaporę `wstawTekstModelu`, która
+       przepisaną wersję PODMIENIA zamiast dokładać. */
+    if (przed) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
+    const wiadomosc = { role: 'assistant', content: tekst };
     conv.messages.push(wiadomosc);
     saveConversations();
     renderMessages();
     return {
       wiadomosc,
-      domknij(nowyTekst) {
-        wiadomosc.content = (przed ? przed + '\n\n' : '') + nowyTekst;
-      },
+      domknij(nowyTekst) { wiadomosc.content = nowyTekst; },
     };
   }
 
@@ -263,6 +267,24 @@ function utworzNarzedzia(z) {
         const nazwa = ALIASY[klucz.toLowerCase()] || klucz.toLowerCase();
         parametry[nazwa] = /^[\d.]+$/.test(wartosc) ? Number(wartosc) : wartosc;
       }
+      /* TEN SAM PLAN LICZONY W KÓŁKO.
+         W rozmowie o Majorce model poprosił o plan dla Es Trenc, dostał dane,
+         przepisał CAŁY plan od nowa i poprosił jeszcze raz — o dokładnie to
+         samo miejsce. I jeszcze raz. Trzy identyczne obliczenia i trzy kopie
+         planu na ekranie, bo każda runda to nowa wypowiedź modelu.
+
+         Archiwum i grafiki miały tę zaporę od dawna, plan nie miał. */
+      const odcisk = bezOgonkowKlient(JSON.stringify(parametry));
+      if (k.stan.plan.has(odcisk)) {
+        dodajWynikNarzedzia(k.conv,
+          'TEN PLAN JUŻ POLICZYŁEŚ W TEJ TURZE i masz jego dane wyżej. Nie proś '
+          + 'o niego ponownie i NIE PRZEPISUJ całej odpowiedzi od nowa — dopisz '
+          + 'tylko to, czego jeszcze nie napisałeś, albo zakończ.',
+          t('chat.planQuery'));
+        return { akcja: 'dalej' };
+      }
+      k.stan.plan.add(odcisk);
+
       zapowiedz(k.conv, k.przed, t('chat.planning'));
       const wynik = await jsonem('/api/plan', {
         method: 'POST',
@@ -437,7 +459,7 @@ function utworzNarzedzia(z) {
       const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
       const dodajTekst = (tresc) => {
         const czysty = stripSearchMarker(tresc);
-        if (czysty) k.conv.messages.push({ role: 'assistant', content: czysty });
+        if (czysty) wstawTekstModelu(k.conv, czysty, k.conv.__turaOd || 0);
       };
       for (const seg of segmenty) {
         dodajTekst(seg.tekst);

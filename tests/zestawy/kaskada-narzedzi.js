@@ -20,6 +20,9 @@
 */
 const path = require('node:path');
 const { utworzNarzedzia } = require(path.join(__dirname, '..', '..', 'public', 'narzedzia.js'));
+const { utworzMowe } = require(path.join(__dirname, '..', '..', 'public', 'mowa.js'));
+
+const { tenSamTekst } = utworzMowe({ WAKE_RE: /\bhej kosmos/i });
 
 const fail = [];
 
@@ -72,6 +75,21 @@ function stanowisko({ odpowiedzi = {} } = {}) {
     pokazPlotno: () => {},
     mowGlosem: async (x) => { dziennik.glos.push(x); },
     PORCJA_ARCHIWUM: 24,
+    /* PRAWDZIWA zapora przed powtórzoną odpowiedzią, nie atrapa. To ona
+       zdecyduje, czy przepisany przez model plan podmieni poprzedni, czy
+       stanie obok niego jako druga kopia — a właśnie tego pilnujemy. */
+    wstawTekstModelu: (conv, tresc, odKtorej = 0) => {
+      const czysty = String(tresc || '');
+      if (!czysty.trim()) return null;
+      for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
+        const m = conv.messages[i];
+        if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
+        if (tenSamTekst(m.content, czysty)) { m.content = czysty; return m; }
+      }
+      const w = { role: 'assistant', content: czysty };
+      conv.messages.push(w);
+      return w;
+    },
     WZORCE,
   });
 
@@ -91,7 +109,7 @@ async function uruchom(st, nazwa, acc, stan) {
     depth: 0,
     ostatnia: false,
     przed: acc.replace(dop[0], '').replace(/\[[A-ZŻ]+:?[^\]]*\]/gi, '').trim(),
-    stan: stan || { archiwum: new Set(), grafiki: new Set() },
+    stan: stan || { archiwum: new Set(), grafiki: new Set(), plan: new Set() },
   });
 }
 
@@ -146,7 +164,7 @@ async function uruchom(st, nazwa, acc, stan) {
   /* --- 3. Powtórzone zapytanie do archiwum jest odcinane ----------------- */
   {
     const st = stanowisko({ odpowiedzi: { '/api/archive/search': { znaleziono: 0, wyniki: [] } } });
-    const stan = { archiwum: new Set(), grafiki: new Set() };
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026]', stan);
     const poPierwszym = st.dziennik.adresy.length;
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026]', stan);
@@ -230,7 +248,7 @@ async function uruchom(st, nazwa, acc, stan) {
         },
       },
     });
-    const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026]', stan);
     const poPierwszym = st.dziennik.adresy.length;
     // INNY filtr, ale pierwszy już coś znalazł — drugie pytanie jest zbędne.
@@ -253,7 +271,7 @@ async function uruchom(st, nazwa, acc, stan) {
      jedną usterkę na drugą. */
   {
     const st = stanowisko({ odpowiedzi: { '/api/archive/search': { znaleziono: 0, wyniki: [] } } });
-    const stan = { archiwum: new Set(), grafiki: new Set(), archiwumZWynikiem: false };
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
     await uruchom(st, 'archiwum', '[ARCHIWUM: miejsce=Mazury]', stan);
     const poPierwszym = st.dziennik.adresy.length;
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury]', stan);
@@ -304,6 +322,21 @@ async function uruchom(st, nazwa, acc, stan) {
       pokazPlotno: () => {},
       mowGlosem: async () => {},
       PORCJA_ARCHIWUM: 24,
+    /* PRAWDZIWA zapora przed powtórzoną odpowiedzią, nie atrapa. To ona
+       zdecyduje, czy przepisany przez model plan podmieni poprzedni, czy
+       stanie obok niego jako druga kopia — a właśnie tego pilnujemy. */
+    wstawTekstModelu: (conv, tresc, odKtorej = 0) => {
+      const czysty = String(tresc || '');
+      if (!czysty.trim()) return null;
+      for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
+        const m = conv.messages[i];
+        if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
+        if (tenSamTekst(m.content, czysty)) { m.content = czysty; return m; }
+      }
+      const w = { role: 'assistant', content: czysty };
+      conv.messages.push(w);
+      return w;
+    },
       WZORCE,
     });
     const planNarzedzie = narzedzia.find((n) => n.nazwa === 'plan');
@@ -312,7 +345,7 @@ async function uruchom(st, nazwa, acc, stan) {
       await planNarzedzie.wykonaj({
         acc: '[PLAN: obiektyw=50]', dop: planNarzedzie.dopasuj('[PLAN: obiektyw=50]'),
         conv: { messages: [] }, depth: 0, ostatnia: false, przed: '',
-        stan: { archiwum: new Set(), grafiki: new Set() },
+        stan: { archiwum: new Set(), grafiki: new Set(), plan: new Set() },
       });
     } catch { rzucil = true; }
     const ostatnie = st.dziennik.doModelu[st.dziennik.doModelu.length - 1];
@@ -333,6 +366,135 @@ async function uruchom(st, nazwa, acc, stan) {
     const doModelu = st.dziennik.doModelu.map((x) => x.tresc).join();
     console.log(`7. plan wywołany, wynik trafił do modelu: ${/DANE PLANU/.test(doModelu)}`);
     if (!/DANE PLANU/.test(doModelu)) fail.push('wynik planu nie trafił do modelu');
+  }
+
+    /* --- 9. DWA NARZĘDZIA W JEDNEJ ODPOWIEDZI -----------------------------
+     Rozmowa o Majorce, zapis przysłany przez Marcina. Model napisał plan,
+     a pod nim [PLAN: …] ORAZ sześć [GRAFIKA: …]. Kaskada brała pierwsze
+     pasujące narzędzie z listy — plan — a pozostałe znaczniki czyściła
+     i wyrzucała. Prośba o zdjęcia znikała bez śladu; Marcin: „nie wyrzuca
+     żadnych zdjęć nigdzie".
+
+     Tu sprawdzamy obie strony naraz: że plan się policzył ORAZ że zdjęcia
+     dotarły na ekran, każde pod swoim kawałkiem tekstu. */
+  {
+    const st = stanowisko({
+      odpowiedzi: {
+        '/api/plan': { slonce: { faza: 'złota godzina' }, ustawienia: { czas: '1/250' } },
+        '/api/search/images': { results: [{ thumb: '/a', title: 'x', source: 'https://e.pl' }] },
+      },
+    });
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
+    const acc = 'Plan wycieczki.\n\nDzień 2 — Palma.\n[GRAFIKA: Katedra La Seu]\n'
+      + 'Dzień 6 — Es Trenc.\n[GRAFIKA: plaża Es Trenc]\n[PLAN: miejsce=Es Trenc]';
+
+    /* Dokładnie tak, jak robi to kaskada w app.js: zwycięzca (plan) ma
+       ODEBRANĄ emisję tekstu, bo układ odtwarzają grafiki — inaczej plan
+       stałby na ekranie dwa razy. */
+    const dopPlan = st.poNazwie.plan.dopasuj(acc);
+    await st.poNazwie.plan.wykonaj({
+      acc, dop: dopPlan, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,
+    });
+    const dopGraf = st.poNazwie.grafiki.dopasuj(acc);
+    await st.poNazwie.grafiki.wykonaj({
+      acc, dop: dopGraf, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,
+    });
+
+    const siatki = st.conv.messages.filter((m) => m.content && m.content.photos);
+    const podpisy = siatki.map((m) => m.content.text);
+    console.log(`9. plan + grafiki w jednej odpowiedzi → siatek: ${siatki.length} `
+      + `(${podpisy.join(', ') || 'brak'})`);
+    if (siatki.length !== 2) {
+      fail.push(`z dwóch znaczników [GRAFIKA:] powstało ${siatki.length} siatek — `
+        + 'prośba o zdjęcia ginie, gdy w tej samej odpowiedzi jest inne narzędzie');
+    }
+
+    /* Kolejność: tekst dnia, potem JEGO zdjęcia. Zbiorcza galeria na końcu
+       odrywa zdjęcia od punktów, których dotyczą. */
+    const uklad = st.conv.messages
+      .filter((m) => m.role === 'assistant')
+      .map((m) => (m.content && m.content.photos ? `[siatka ${m.content.text}]` : 'tekst'));
+    console.log(`   układ rozmowy: ${uklad.join(' → ')}`);
+    const iPalma = uklad.findIndex((x) => /Katedra/.test(x));
+    const iTrenc = uklad.findIndex((x) => /Es Trenc/.test(x));
+    if (iPalma < 0 || iTrenc < 0 || iPalma > iTrenc) {
+      fail.push('siatki nie stoją w kolejności znaczników z tekstu');
+    }
+
+    // Znacznik nie ma prawa zostać w treści dla człowieka.
+    const naEkranie = st.conv.messages
+      .filter((m) => m.role === 'assistant' && typeof m.content === 'string')
+      .map((m) => m.content).join('\n');
+    if (/\[(GRAFIKA|PLAN):/i.test(naEkranie)) {
+      fail.push('znacznik został w treści pokazanej użytkownikowi');
+    }
+  }
+
+  /* --- 10. TEN SAM PLAN LICZONY DRUGI RAZ -------------------------------
+     Z tego samego zapisu: model po dostaniu danych planu przepisywał całą
+     odpowiedź i prosił o plan JESZCZE RAZ, dla tego samego miejsca. Trzy
+     rundy, trzy identyczne obliczenia, trzy kopie planu na ekranie. */
+  {
+    const st = stanowisko({ odpowiedzi: { '/api/plan': { ustawienia: { czas: '1/250' } } } });
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
+    await uruchom(st, 'plan', '[PLAN: miejsce=Es Trenc]', stan);
+    const poPierwszym = st.dziennik.adresy.filter((a) => a.includes('/api/plan')).length;
+    await uruchom(st, 'plan', '[PLAN: miejsce=Es Trenc]', stan);
+    const poDrugim = st.dziennik.adresy.filter((a) => a.includes('/api/plan')).length;
+    console.log(`10. obliczeń planu po dwóch identycznych prośbach: ${poDrugim}`);
+    if (poDrugim !== poPierwszym) {
+      fail.push('ten sam plan liczony drugi raz — model dostanie te same dane '
+        + 'i przepisze całą odpowiedź od nowa');
+    }
+    const doModelu = st.dziennik.doModelu.map((x) => x.tresc).join('\n');
+    if (!/JUŻ POLICZYŁEŚ/.test(doModelu)) {
+      fail.push('model nie dowiaduje się, że ten plan już ma');
+    }
+    if (!/NIE PRZEPISUJ/.test(doModelu)) {
+      fail.push('model nie dostaje zakazu przepisywania całej odpowiedzi od nowa');
+    }
+  }
+
+  /* --- 11. PRZEPISANA ODPOWIEDŹ PODMIENIA, NIE DOKŁADA ------------------
+     Ostatnia zapora: nawet gdy model mimo wszystko przepisze plan, na
+     ekranie ma zostać JEDNA kopia. */
+  {
+    const st = stanowisko();
+    const plan = 'Plan wycieczki na Majorkę. Dzień pierwszy przyjazd i spacer po plaży '
+      + 'Ponent o zachodzie słońca. Dzień drugi Palma, katedra La Seu i zamek Bellver '
+      + 'w porannym świetle. Dzień trzeci Sant Elm oraz rejs na wyspę Dragonera. '
+      + 'Dzień czwarty przylądek Formentor i latarnia morska. Zabierz filtr '
+      + 'polaryzacyjny oraz statyw do dłuższych ekspozycji.';
+    const planPoprawiony = plan + ' Statyw jest niezbędny przy wschodach.';
+    st.conv.__turaOd = 0;
+    const dep = st.narzedzia; // tylko po to, żeby nie było nieużywanej zmiennej
+    void dep;
+    // Ta sama droga, którą chodzi tekst modelu w kaskadzie.
+    const wstaw = (tresc) => {
+      const czysty = String(tresc || '');
+      for (let i = st.conv.messages.length - 1; i >= 0; i--) {
+        const m = st.conv.messages[i];
+        if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
+        if (tenSamTekst(m.content, czysty)) { m.content = czysty; return; }
+      }
+      st.conv.messages.push({ role: 'assistant', content: czysty });
+    };
+    wstaw(plan);
+    wstaw(planPoprawiony);
+    wstaw(planPoprawiony);
+    const kopie = st.conv.messages.filter((m) => m.role === 'assistant').length;
+    console.log(`11. po trzykrotnym przepisaniu planu kopii na ekranie: ${kopie}`);
+    if (kopie !== 1) fail.push(`przepisany plan zostawił ${kopie} kopie zamiast jednej`);
+    if (st.conv.messages[0].content !== planPoprawiony) {
+      fail.push('podmiana zostawiła starszą, uboższą wersję zamiast najnowszej');
+    }
+    // A zupełnie inna odpowiedź ma stanąć obok, nie podmienić poprzedniej.
+    wstaw('Zupełnie inna odpowiedź o czymś innym: ustawienia aparatu do zdjęć '
+      + 'nocnych, gwiazdy, droga mleczna, statyw, wężyk spustowy, długi czas '
+      + 'naświetlania, wysokie ISO oraz jasny obiektyw szerokokątny na pełną klatkę.');
+    const poObcej = st.conv.messages.filter((m) => m.role === 'assistant').length;
+    console.log(`   po dołożeniu innej odpowiedzi: ${poObcej}`);
+    if (poObcej !== 2) fail.push('zapora zjadła odpowiedź, która była naprawdę inna');
   }
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');
