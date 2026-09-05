@@ -53,7 +53,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 90 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 91 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji

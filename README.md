@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-0969da?style=flat-square">
-  <img alt="90 test suites" src="https://img.shields.io/badge/test%20suites-90-4ac26b?style=flat-square">
+  <img alt="91 test suites" src="https://img.shields.io/badge/test%20suites-91-4ac26b?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-6e7781?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-d4a72c?style=flat-square"></a>
 </p>
