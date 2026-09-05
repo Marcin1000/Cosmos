@@ -120,7 +120,13 @@ function utworzPlener(z) {
     if (pre === 'plan') { const b = $('plan-box'); if (b) b.classList.add('ma-wynik'); }
 
     const czesci = [];
-    if (d.kadr && d.kadr.uklad !== 'nieznany') czesci.push(`${d.kadr.uklad} ${d.kadr.proporcje}`);
+    /* Układ kadru przychodził z serwera po polsku i tak też lądował na
+       ekranie — także przy interfejsie po angielsku. Tłumaczymy go tutaj,
+       bo to jedyne miejsce, w którym ta wartość jest pokazywana. */
+    if (d.kadr && d.kadr.uklad !== 'nieznany') {
+      const uklad = t(`frame.${d.kadr.uklad}`);
+      czesci.push(`${uklad.startsWith('frame.') ? d.kadr.uklad : uklad} ${d.kadr.proporcje}`);
+    }
     czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
     // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
     // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.

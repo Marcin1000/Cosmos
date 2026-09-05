@@ -1,6 +1,7 @@
 // scrubSecrets jest zadeklarowana NIŻEJ niż miejsce wywołania — sprawdźmy,
 // że hoisting faktycznie działa, zamiast zakładać.
 const http = require('http');
+const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 const { spawn } = require('child_process');
 const KONTO = 'LeJnCuVKFSUWaEmU-j4546SFuR2EU-IJTkbLwD78VKs';
 
@@ -12,7 +13,7 @@ http.createServer((req, res) => {
     res.end(JSON.stringify({ error: { message: `Function 'x': Not found for account '${KONTO}'` } }));
   });
 }).listen(7107, async () => {
-  const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3062', NVIDIA_API_KEY: 'test', NEMOTRON_BASE_URL: 'http://127.0.0.1:7107/v1' } });
   await new Promise((r) => setTimeout(r, 4500));
   const r = await fetch('http://127.0.0.1:3062/api/chat', {

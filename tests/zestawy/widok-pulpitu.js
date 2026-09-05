@@ -8,7 +8,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (typeof B !== 'undefined') B = ADRES;
   const browser = await przegladarka();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   const r = await page.evaluate(() => ({

@@ -11,7 +11,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const p = await ctx.newPage();
   const fail = [];
   p.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await p.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADRES}`, { waitUntil: 'load' });
   await p.waitForTimeout(500);
 
   // podstaw rozpoznawanie mowy i policz, ile razy przejmowany jest mikrofon

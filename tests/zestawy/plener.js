@@ -50,10 +50,10 @@ if (!maPrzegladarke()) {
      wtedy, gdy jest zapisane miejsce inne niż to wpisane w planie. */
   await fetch(`${env.adres}/api/location`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location: 'Złotokłos, mazowieckie', lat: 52.0247, lon: 20.9019 }),
+    body: JSON.stringify({ location: 'Piaseczno, mazowieckie', lat: 52.2297, lon: 21.0122 }),
   });
 
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(500);
 
   /* ---- 0. Pozycja w menu istnieje i otwiera okno ---- */

@@ -152,7 +152,7 @@ const serwer = http.createServer((req, res) => {
 
     /* A miejsce ZNANE ma się policzyć, i to dla niego — nie dla zapisanej
        lokalizacji. To druga połowa skargi Marcina: plan na Majorkę wychodził
-       dla Złotokłosu. */
+       dla Piaseczna. */
     const znane = await planuj({ miejsce: "Cala d'Or, Hotel Barceló Ponent Beach" });
     const lat = Number(znane.wspolrzedne && znane.wspolrzedne.lat);
     console.log(`plan dla „Cala d'Or, Hotel…": kod ${znane.kod}, szerokość ${lat}, `

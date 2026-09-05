@@ -22,6 +22,7 @@ const css = rd('public/style.css');
 const i18nSrc = rd('public/i18n.js');
 const models = rd('public/models.js');
 const readme = rd('README.md');
+const readmePl = ist('README.pl.md') ? rd('README.pl.md') : '';
 const start = rd('docs/START-TUTAJ.md');
 const roadmap = rd('docs/ROADMAP.md');
 const envEx = rd('.env.example');
@@ -229,7 +230,10 @@ sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
    zapis dla człowieka i nie chcę go rozbijać na jedenaście wierszy tabeli
    tylko po to, żeby dopasować się do `includes()`. Rozwijamy więc skróty tutaj,
    zamiast psuć dokumentację pod narzędzie. */
-const dokTrasy = (readme + start)
+/* Oba README. Wizytówka po angielsku jest krótka i celowo nie zawiera
+   pełnego spisu tras — ten mieszka w wersji polskiej. Czytanie samego
+   `README.md` kazało audytowi uznać wszystkie 98 tras za nieudokumentowane. */
+const dokTrasy = (readme + readmePl + start)
   .replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g,
     (_, przed, srodek, po) => srodek.split(',').map((x) => `${przed}${x.trim()}${po}`).join(' '));
 const rodziny = [...dokTrasy.matchAll(/`(\/api\/[a-z0-9/_-]*)\*`/gi)].map((m) => m[1]);
@@ -323,11 +327,25 @@ ok('skrypty z dokumentacji istnieją i są wykonywalne');
 /* Liczby w dokumentacji starzeją się po cichu. „38 zestawów" stało w README
    i w tests/README.md jeszcze wtedy, gdy było ich sześćdziesiąt sześć —
    nikt tego nie zauważył, bo nieaktualna liczba wygląda dokładnie tak samo
-   jak aktualna. Audyt liczy zestawy sam i porównuje. */
+   jak aktualna. Audyt liczy zestawy sam i porównuje.
+
+   Nie każda liczba przy słowie „zestaw" jest jednak liczbą CAŁEJ baterii.
+   „34 zestawy przeglądarkowe padły naraz" mówi o podzbiorze i ma prawo się
+   nie zgadzać — to opis awarii, nie deklaracja rozmiaru. Dlatego pomijamy
+   liczby doprecyzowane przymiotnikiem: zawężają zbiór, więc nie da się ich
+   porównać z zawartością katalogu. Bez tego audyt zgłaszał usterkę
+   za każdym razem, gdy dokumentacja opisywała konkretną awarię. */
 const ileZestawow = fs.readdirSync(path.join(R, 'tests', 'zestawy')).filter((f) => f.endsWith('.js')).length;
+const PODZBIOR = /^\s+(przegl[aą]darkow|szybk|nowy|nowych|pythonow|padł|z nich)/i;
 const zleLiczby = [];
-for (const [f, tekst] of Object.entries({ 'README.md': readme, 'tests/README.md': rd('tests/README.md') })) {
+for (const [f, tekst] of Object.entries({
+  'README.md': readme,
+  'README.pl.md': rd('README.pl.md'),
+  'CLAUDE.md': rd('CLAUDE.md'),
+  'tests/README.md': rd('tests/README.md'),
+})) {
   for (const m of tekst.matchAll(/(\d+)\s+zestaw(?:ów|y|)/g)) {
+    if (PODZBIOR.test(tekst.slice(m.index + m[0].length))) continue;
     if (Number(m[1]) !== ileZestawow) zleLiczby.push(`${f}: „${m[0]}", a jest ${ileZestawow}`);
   }
 }
@@ -366,7 +384,13 @@ nieWCache.length
 sekcja('Bezpieczeństwo i prywatność');
 try { execSync('git check-ignore -q .env', { cwd: R }); ok('.env poza repozytorium'); }
 catch { zle('.env NIE jest ignorowany'); }
-try { execSync('git check-ignore -q data', { cwd: R }); ok('data/ poza repozytorium'); }
+/* Ukośnik na końcu jest tu KONIECZNY. Wzorzec `data/` w .gitignore dotyczy
+   katalogów, a `git check-ignore data` bez ukośnika nie wie, czy pyta o plik,
+   czy o katalog — i gdy katalogu akurat nie ma na dysku (świeży klon, po
+   sprzątaniu), odpowiada „nie ignorowane". Audyt zgłaszał wtedy wyciek danych
+   użytkownika, którego nie było, a jego wynik zależał od tego, czy ktoś
+   wcześniej uruchomił serwer. */
+try { execSync('git check-ignore -q data/', { cwd: R }); ok('data/ poza repozytorium'); }
 catch { zle('data/ NIE jest ignorowane'); }
 const sledzone = execSync('git ls-files', { cwd: R }).toString().split('\n');
 const wrazliwe = sledzone.filter((f) => /^\.env$|^data\//.test(f));

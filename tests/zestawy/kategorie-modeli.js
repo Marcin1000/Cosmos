@@ -1,4 +1,4 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Trzy błędy z prawdziwej listy Marcina:
 //  1. raport wynosił identyfikator konta NVIDII do schowka,
 //  2. modele wstające z zimnego startu były raportowane jako niedostępne,
@@ -58,7 +58,7 @@ up.listen(0, async () => {
   const portAtrapy = up.address().port;
   const fail = [];
   const { spawn } = require('child_process');
-  const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3060', NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: `http://127.0.0.1:${portAtrapy}/v1` } });
   await new Promise((r) => setTimeout(r, 4500));

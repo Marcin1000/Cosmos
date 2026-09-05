@@ -27,7 +27,7 @@ const WASKI = { width: 360, height: 740 };
   const pg = await ctx.newPage();
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(400);
 
   /** Czy strona przewija się w bok — najczęstsza wpadka na wąskim ekranie. */
@@ -66,7 +66,7 @@ const WASKI = { width: 360, height: 740 };
   console.log('2. płótno');
   await pg.evaluate(() => {
     const c = activeConv() || { messages: [] };
-    c.canvas = { title: 'Scenariusz filmu o Złotokłosie', text: 'UJĘCIE 1\nDron wznosi się nad lasem.' };
+    c.canvas = { title: 'Scenariusz filmu o Piasecznie', text: 'UJĘCIE 1\nDron wznosi się nad lasem.' };
     pokazPlotno(c);
   });
   await pg.waitForTimeout(200);
@@ -226,7 +226,7 @@ const WASKI = { width: 360, height: 740 };
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
-      miejsce: 'Złotokłos',
+      miejsce: 'Piaseczno',
       wspolrzedne: { lat: 52.03, lon: 20.85 },
       slonce: { wysokosc: 4.1, azymut: 303, faza: 'złota godzina', doZlotejMin: -5, doZachoduMin: 41 },
       kadr: { uklad: 'pionowo', proporcje: '9:16' },

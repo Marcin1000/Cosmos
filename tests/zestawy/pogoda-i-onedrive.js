@@ -76,7 +76,7 @@ const PORT = 7118;
           photo: { takenDateTime: '2026-06-14T20:40:00Z', cameraMake: 'Canon',
             cameraModel: 'EOS R6m2', focalLength: 50, fNumber: 1.8, iso: 400,
             exposureNumerator: 1, exposureDenominator: 200 },
-          location: { latitude: 52.0247, longitude: 20.9019 },
+          location: { latitude: 52.2297, longitude: 21.0122 },
           thumbnails: [{ small: { url: 'https://przyklad/mini1.jpg' } }] },
         { id: 'v1', name: 'DJI_0044.MP4', size: 990000000,
           parentReference: { path: '/drive/root:/Zdjecia' },
@@ -159,7 +159,7 @@ const PORT = 7118;
   // 12. plan zdjęciowy bierze pogodę, gdy użytkownik jej nie narzucił
   await fetch(`${env.adres}/api/location`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location: 'Złotokłos', lat: 52.0247, lon: 20.9019 }),
+    body: JSON.stringify({ location: 'Piaseczno', lat: 52.2297, lon: 21.0122 }),
   });
   const plan = await (await fetch(`${env.adres}/api/plan`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

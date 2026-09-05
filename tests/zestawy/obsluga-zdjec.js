@@ -1,4 +1,4 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Zdjęcie do modelu bez wzroku: przekierowanie na model wizyjny albo czytelny błąd.
 // Plus: zdjęcie z aparatu trafia do Galerii.
 const http = require('http');
@@ -36,7 +36,7 @@ const ask = async (port, model, vision) => {
 up.listen(7089, async () => {
   const fail = [];
   // A. z ustawionym modelem wizyjnym → przekierowanie
-  let srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  let srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3015', NVIDIA_API_KEY: 'test', NEMOTRON_BASE_URL: 'http://127.0.0.1:7089/v1',
       NEMOTRON_VISION_MODEL: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1' } });
   await new Promise((r) => setTimeout(r, 4000));
@@ -62,7 +62,7 @@ up.listen(7089, async () => {
   try { process.kill(-srv.pid); } catch {}
 
   // B. bez modelu wizyjnego → czytelny błąd, nie bezużyteczna odpowiedź
-  srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3016', NVIDIA_API_KEY: 'test', NEMOTRON_BASE_URL: 'http://127.0.0.1:7089/v1' } });
   await new Promise((r) => setTimeout(r, 4000));
   a = await ask(3016, 'nvidia/nemotron-nano-9b-v2');
@@ -78,7 +78,7 @@ up.listen(7089, async () => {
   const p = await ctx.newPage();
   const kbPosts = [];
   p.on('request', (r) => { if (r.url().includes('/api/kb/file') && r.method() === 'POST') kbPosts.push(r.postDataJSON()); });
-  await p.goto('http://localhost:3016', { waitUntil: 'networkidle' });
+  await p.goto('http://localhost:3016', { waitUntil: 'load' });
   await p.waitForTimeout(600);
   await p.evaluate(() => openCamera());
   await p.waitForTimeout(1200);

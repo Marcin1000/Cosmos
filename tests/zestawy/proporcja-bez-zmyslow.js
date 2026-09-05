@@ -38,7 +38,7 @@ if (!maPrzegladarke()) {
      zrobiła i sama się na tym złapała. */
   await fetch(`${env.adres}/api/location`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location: 'Złotokłos', lat: 52.0247, lon: 20.9019 }),
+    body: JSON.stringify({ location: 'Piaseczno', lat: 52.2297, lon: 21.0122 }),
   }).catch(() => {});
   const br = await przegladarka({ args: [
     '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',

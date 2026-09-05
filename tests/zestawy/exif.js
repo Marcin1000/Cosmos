@@ -2,7 +2,7 @@
 
    Bez tego indeks wiedziałby tylko „jest plik IMG_4821.jpg". Z tym wie:
    Canon R6 II, 50 mm, f/1.8, 1/200 s, ISO 400, 14 czerwca o 19:42,
-   52,02°N 20,90°E. Dopiero na takich danych da się zapytać „ile klipów
+   52,23°N 21,01°E. Dopiero na takich danych da się zapytać „ile klipów
    nakręciłem 50 mm w tym roku".
 
    Testowe zdjęcia składamy TUTAJ, bajt po bajcie, zamiast wrzucać do
@@ -115,9 +115,9 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   },
   {
     0x0001: [TYPY.ASCII, 'N'],
-    0x0002: [TYPY.RATIONAL, [[52, 1], [1, 1], [2892, 100]]],   // 52°1'28,92"
+    0x0002: [TYPY.RATIONAL, [[52, 1], [13, 1], [4692, 100]]],  // 52°13'46,92"
     0x0003: [TYPY.ASCII, 'E'],
-    0x0004: [TYPY.RATIONAL, [[20, 1], [54, 1], [660, 100]]],   // 20°54'6,6"
+    0x0004: [TYPY.RATIONAL, [[21, 1], [0, 1], [4392, 100]]],   // 21°0'43,92"
   },
   opcje,
 );
@@ -147,11 +147,11 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   if (/[Zz]|[+-]\d{2}:\d{2}$/.test(e.kiedy || '')) fail.push('data dostała strefę, której EXIF nie podaje');
 
   /* 3. GPS: stopnie-minuty-sekundy → stopnie dziesiętne. Tu najłatwiej
-     o cichy błąd — wynik „52,0" zamiast „52,0247" wygląda wiarygodnie,
+     o cichy błąd — wynik „52,2" zamiast „52,2297" wygląda wiarygodnie,
      a wskazuje miejsce oddalone o kilka kilometrów. */
   console.log(`3. GPS: ${e.lat}, ${e.lon}`);
-  if (Math.abs(e.lat - 52.0247) > 0.0005) fail.push(`szerokość: ${e.lat}`);
-  if (Math.abs(e.lon - 20.9018) > 0.0005) fail.push(`długość: ${e.lon}`);
+  if (Math.abs(e.lat - 52.2297) > 0.0005) fail.push(`szerokość: ${e.lat}`);
+  if (Math.abs(e.lon - 21.0122) > 0.0005) fail.push(`długość: ${e.lon}`);
 
   // 4. półkula południowa i zachodnia muszą dać wartości ujemne
   const pd = czytajExif(zbudujJpeg({ 0x010f: [TYPY.ASCII, 'X'] }, null, {

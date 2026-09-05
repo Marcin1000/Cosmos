@@ -11,7 +11,7 @@ async function ov(p,l){const r=await p.evaluate(()=>({s:document.documentElement
   let bad=0;
   // desktop
   let c=await b.newContext({viewport:{width:1440,height:900}}); let p=await c.newPage();
-  await p.goto(B,{waitUntil:'networkidle'}); await p.waitForTimeout(500);
+  await p.goto(B,{waitUntil:'load'}); await p.waitForTimeout(500);
   bad+=await ov(p,'czat');
   await p.click('#learn-btn'); await p.waitForTimeout(300);
   await p.click('[data-learn-tab="ideas"]'); await p.waitForTimeout(400);
@@ -28,7 +28,7 @@ async function ov(p,l){const r=await p.evaluate(()=>({s:document.documentElement
   await c.close();
   // mobile
   c=await b.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}); p=await c.newPage();
-  await p.goto(B,{waitUntil:'networkidle'}); await p.waitForTimeout(500);
+  await p.goto(B,{waitUntil:'load'}); await p.waitForTimeout(500);
   bad+=await ov(p,'mobile czat');
   await p.evaluate(()=>document.getElementById('learn-modal').style.display='');
   await p.evaluate(()=>{document.querySelectorAll('[data-learn-tab]').forEach(x=>x.classList.remove('active'));

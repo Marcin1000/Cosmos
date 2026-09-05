@@ -26,7 +26,7 @@ const ATRAPA = 'http://127.0.0.1:7120';
   const pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(400);
 
   await pg.click('#plener-btn');

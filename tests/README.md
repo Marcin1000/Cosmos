@@ -82,6 +82,23 @@ ustawił sytuację, której inaczej nie da się wywołać:
 Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.
 
+## Czekanie na stronę: `load`, nigdy `networkidle`
+
+Cosmos trzyma otwarty strumień zdarzeń (`/api/events/stream`). To połączenie
+z definicji nie kończy się nigdy, więc `waitUntil: 'networkidle'` nie ma na co
+czekać — Playwright widzi jedno żądanie w locie bez końca i wywala się po
+trzydziestu sekundach.
+
+Przez długi czas te zestawy przechodziły przypadkiem: strumień bywał chwilowo
+zerwany akurat w oknie pomiaru. Gdy przestał, **34 zestawy przeglądarkowe padły
+naraz** — wszystkie z tym samym „Timeout 30000ms exceeded, waiting until
+networkidle", i wszystkie na kodzie, którego nikt nie ruszał.
+
+Wszędzie jest więc `waitUntil: 'load'`, a na to, co ma się wydarzyć później,
+czeka się jawnie: `waitForSelector`, `waitForFunction` albo pomiar w pętli.
+Czekanie na „ciszę w sieci" w aplikacji, która celowo trzyma otwarte
+połączenie, jest z definicji czekaniem na coś, co nie nastąpi.
+
 ## Katalog danych
 
 Każdy serwer testowy dostaje świeży `COSMOS_DATA_DIR` w katalogu tymczasowym.

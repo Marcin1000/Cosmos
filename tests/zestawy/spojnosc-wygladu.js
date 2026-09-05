@@ -22,7 +22,7 @@ async function overflow(page, label) {
   // ---- Desktop dark ----
   let ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
   let page = await ctx.newPage();
-  await page.goto(B, { waitUntil: 'networkidle' });
+  await page.goto(B, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/d1-welcome-dark.png` });
   await overflow(page, 'desktop dark welcome');
@@ -74,7 +74,7 @@ async function overflow(page, label) {
   // ---- Desktop light ----
   ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
   page = await ctx.newPage();
-  await page.goto(B, { waitUntil: 'networkidle' });
+  await page.goto(B, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/d8-welcome-light.png` });
   await overflow(page, 'desktop light welcome');
@@ -83,7 +83,7 @@ async function overflow(page, label) {
   // ---- Mobile dark ----
   ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', isMobile: true, hasTouch: true });
   page = await ctx.newPage();
-  await page.goto(B, { waitUntil: 'networkidle' });
+  await page.goto(B, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/m1-welcome.png` });
   await overflow(page, 'mobile welcome');

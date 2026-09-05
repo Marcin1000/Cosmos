@@ -8,7 +8,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const fail = [];
   page.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   // wstaw rozmowę z obrazem (jak po wygenerowaniu grafiki)
@@ -81,7 +81,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
   // mobile
   const m = await browser.newPage({ viewport: { width: 360, height: 740 } });
-  await m.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await m.goto(`${ADRES}`, { waitUntil: 'load' });
   await m.waitForTimeout(700);
   await m.evaluate((png) => {
     activeId = 'test-img';

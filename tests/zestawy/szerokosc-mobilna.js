@@ -36,7 +36,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     if (!ok) problems.push(label);
   };
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   // 1. ekran powitalny (sidebar sam się chowa na mobile? sprawdź stan)

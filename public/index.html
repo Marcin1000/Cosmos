@@ -337,7 +337,8 @@
         <div class="field">
           <span class="field-label" data-i18n="set.location">Twoja lokalizacja</span>
           <div class="field-row">
-            <input type="text" id="set-location" placeholder="np. Złotokłos, mazowieckie">
+            <input type="text" id="set-location" data-i18n-ph="set.locationPh"
+              placeholder="np. Warszawa, mazowieckie">
             <button type="button" class="btn-secondary" id="set-location-detect"
               data-i18n="set.locationDetect">📍 Wykryj</button>
           </div>
@@ -748,19 +749,19 @@
               <option value="" data-i18n="pl.gearMine">Mój zestaw</option>
               <option value="canon-r6ii">Canon R6 II</option>
               <option value="mavic-3">Mavic 3</option>
-              <option value="telefon">Telefon</option>
+              <option value="telefon" data-i18n="opt.phone">Telefon</option>
             </select>
             <select id="fp-mode" class="mono" data-i18n-aria="pl.modeAria" aria-label="Tryb">
-              <option value="wideo">Wideo 25</option>
-              <option value="wideo50">Wideo 50</option>
-              <option value="zdjecie">Zdjęcie</option>
+              <option value="wideo" data-i18n="opt.video25">Wideo 25</option>
+              <option value="wideo50" data-i18n="opt.video50">Wideo 50</option>
+              <option value="zdjecie" data-i18n="opt.photo">Zdjęcie</option>
             </select>
             <select id="fp-sky" class="mono" data-i18n-aria="pl.skyAria" aria-label="Zachmurzenie">
-              <option value="">🌦 Z prognozy</option>
-              <option value="bezchmurnie">☀ Bezchmurnie</option>
-              <option value="lekkie">🌤 Lekkie</option>
-              <option value="pochmurno">☁ Pochmurno</option>
-              <option value="deszcz">🌧 Deszcz</option>
+              <option value="" data-i18n="opt.skyForecast">🌦 Z prognozy</option>
+              <option value="bezchmurnie" data-i18n="opt.skyClear">☀ Bezchmurnie</option>
+              <option value="lekkie" data-i18n="opt.skyLight">🌤 Lekkie</option>
+              <option value="pochmurno" data-i18n="opt.skyCloudy">☁ Pochmurno</option>
+              <option value="deszcz" data-i18n="opt.skyRain">🌧 Deszcz</option>
             </select>
           </div>
           <div class="plener-grid3">
@@ -916,19 +917,19 @@
         <select id="plan-gear" class="mono" aria-label="Sprzęt">
           <option value="canon-r6ii">Canon R6 II</option>
           <option value="mavic-3">Mavic 3</option>
-          <option value="telefon">Telefon</option>
+          <option value="telefon" data-i18n="opt.phone">Telefon</option>
         </select>
         <select id="plan-mode" class="mono" aria-label="Tryb">
-          <option value="wideo">Wideo 25</option>
-          <option value="wideo50">Wideo 50</option>
-          <option value="zdjecie">Zdjęcie</option>
+          <option value="wideo" data-i18n="opt.video25">Wideo 25</option>
+          <option value="wideo50" data-i18n="opt.video50">Wideo 50</option>
+          <option value="zdjecie" data-i18n="opt.photo">Zdjęcie</option>
         </select>
         <select id="plan-sky" class="mono" aria-label="Zachmurzenie">
-          <option value="">🌦 Z prognozy</option>
-          <option value="bezchmurnie">☀ Bezchmurnie</option>
-          <option value="lekkie">🌤 Lekkie</option>
-          <option value="pochmurno">☁ Pochmurno</option>
-          <option value="deszcz">🌧 Deszcz</option>
+          <option value="" data-i18n="opt.skyForecast">🌦 Z prognozy</option>
+          <option value="bezchmurnie" data-i18n="opt.skyClear">☀ Bezchmurnie</option>
+          <option value="lekkie" data-i18n="opt.skyLight">🌤 Lekkie</option>
+          <option value="pochmurno" data-i18n="opt.skyCloudy">☁ Pochmurno</option>
+          <option value="deszcz" data-i18n="opt.skyRain">🌧 Deszcz</option>
         </select>
       </div>
       <div class="plan-light mono" id="plan-light"></div>

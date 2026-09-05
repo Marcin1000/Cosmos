@@ -6,7 +6,7 @@ const OUT = require('../pomoc').KATALOG_ZRZUTOW;
   const b=await przegladarka();
   // desktop
   let c=await b.newContext({viewport:{width:1440,height:900}}); let p=await c.newPage();
-  await p.goto(`${ADRES}`,{waitUntil:'networkidle'}); await p.waitForTimeout(600);
+  await p.goto(`${ADRES}`,{waitUntil:'load'}); await p.waitForTimeout(600);
   await p.locator('#suggestions').screenshot({path:`${OUT}/sug-desktop.png`});
   const align=await p.evaluate(()=>getComputedStyle(document.querySelector('.suggestion')).textAlign);
   console.log('  computed text-align:',align);
@@ -18,7 +18,7 @@ const OUT = require('../pomoc').KATALOG_ZRZUTOW;
   // narrow viewport (buttons wrap to 2 lines) to check centering when wrapped
   await c.close();
   c=await b.newContext({viewport:{width:420,height:900}}); p=await c.newPage();
-  await p.goto(`${ADRES}`,{waitUntil:'networkidle'}); await p.waitForTimeout(600);
+  await p.goto(`${ADRES}`,{waitUntil:'load'}); await p.waitForTimeout(600);
   await p.locator('#suggestions').screenshot({path:`${OUT}/sug-narrow.png`});
   const over=await p.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
   console.log('  narrow horiz overflow:',over?'YES':'no');

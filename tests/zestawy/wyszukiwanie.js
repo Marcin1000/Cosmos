@@ -1,6 +1,7 @@
 // Cała ścieżka /api/search na podstawionej wyszukiwarce: reklamy odpadają,
 // zostają prawdziwe wyniki, treść stron się dokleja.
 const http = require('http');
+const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 
 const page = (t) => `<html><body><h1>${t}</h1><p>Temperatura teraz: 7&deg;C.</p></body></html>`;
 const ddg = `<html><body>
@@ -27,7 +28,7 @@ const srv = http.createServer((req, res) => {
 srv.listen(7094, async () => {
   const { spawn } = require('child_process');
   const srvProc = spawn('node', ['server.js'], {
-    cwd: '/home/user/Bear',
+    cwd: KORZEN,
     env: { ...process.env, PORT: '3010', SEARCH_URL: 'http://127.0.0.1:7094/html', NVIDIA_API_KEY: 'test' },
     stdio: 'ignore', detached: true,
   });

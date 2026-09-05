@@ -12,24 +12,24 @@
    złota godzina. */
 const { srodowisko } = require('../pomoc');
 
-const ZLOTOKLOS = { lat: 52.0247, lon: 20.9019 };
+const WARSZAWA = { lat: 52.2297, lon: 21.0122 };
 
 // Materiał próbny: te same współrzędne, różne pory i nastawy.
 const MATERIAL = [
   { id: 'a1', nazwa: 'IMG_001.jpg', typ: 'zdjecie', kiedy: '2026-06-14T20:40:00',
     aparat: 'Canon EOS R6m2', obiektyw: 'RF50mm F1.8 STM', ogniskowa: 50,
-    przyslona: 1.8, iso: 400, czasS: 0.005, ...ZLOTOKLOS, obiekty: ['person'] },
+    przyslona: 1.8, iso: 400, czasS: 0.005, ...WARSZAWA, obiekty: ['person'] },
   { id: 'a2', nazwa: 'IMG_002.jpg', typ: 'zdjecie', kiedy: '2026-06-14T13:00:00',
     aparat: 'Canon EOS R6m2', obiektyw: 'RF50mm F1.8 STM', ogniskowa: 50,
-    przyslona: 8, iso: 100, czasS: 0.002, ...ZLOTOKLOS },
+    przyslona: 8, iso: 100, czasS: 0.002, ...WARSZAWA },
   { id: 'a3', nazwa: 'DJI_003.mp4', typ: 'wideo', kiedy: '2026-06-15T20:45:00',
     aparat: 'DJI Mavic 3', ogniskowa: 24, przyslona: 2.8, iso: 800,
-    ...ZLOTOKLOS, zrodlo: 'onedrive' },
+    ...WARSZAWA, zrodlo: 'onedrive' },
   { id: 'a4', nazwa: 'IMG_004.jpg', typ: 'zdjecie', kiedy: '2025-11-02T10:00:00',
     aparat: 'Canon EOS R6m2', obiektyw: 'RF24-70mm F2.8', ogniskowa: 35,
-    przyslona: 4, iso: 1600, ...ZLOTOKLOS },
+    przyslona: 4, iso: 1600, ...WARSZAWA },
   { id: 'a5', nazwa: 'IMG_005.jpg', typ: 'zdjecie', kiedy: '2026-06-14T23:30:00',
-    aparat: 'Canon EOS R6m2', ogniskowa: 35, przyslona: 1.4, iso: 6400, ...ZLOTOKLOS },
+    aparat: 'Canon EOS R6m2', ogniskowa: 35, przyslona: 1.4, iso: 6400, ...WARSZAWA },
   // Zdjęcie z zupełnie innego miejsca — do sprawdzania promienia.
   { id: 'a6', nazwa: 'IMG_006.jpg', typ: 'zdjecie', kiedy: '2026-07-01T12:00:00',
     aparat: 'Canon EOS R6m2', ogniskowa: 50, lat: 54.352, lon: 18.6466 },
@@ -95,11 +95,11 @@ const MATERIAL = [
   if (szerokie.znaleziono !== 3) fail.push(`24–35 mm dało ${szerokie.znaleziono}, oczekiwano 3`);
 
   /* 7. Promień od punktu — „mam coś z tego miejsca". Gdańsk (a6) leży
-     260 km od Złotokłosu i nie może wpaść w promień 5 km. */
-  const tutaj = await szukaj({ ...ZLOTOKLOS, promienKm: 5 });
-  console.log(`7. w promieniu 5 km od Złotokłosu: ${tutaj.znaleziono}`);
+     260 km od Piaseczna i nie może wpaść w promień 5 km. */
+  const tutaj = await szukaj({ ...WARSZAWA, promienKm: 5 });
+  console.log(`7. w promieniu 5 km od Piaseczna: ${tutaj.znaleziono}`);
   if (tutaj.znaleziono !== 5) fail.push(`promień dał ${tutaj.znaleziono}, oczekiwano 5`);
-  if (tutaj.wyniki.some((w) => w.id === 'a6')) fail.push('Gdańsk wpadł w promień 5 km od Złotokłosu');
+  if (tutaj.wyniki.some((w) => w.id === 'a6')) fail.push('Gdańsk wpadł w promień 5 km od Piaseczna');
 
   // 8. zestawienia — na tym opierają się pytania „ile" i „najczęściej"
   const poOgn = await staty({ pole: 'ogniskowa' });

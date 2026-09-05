@@ -25,7 +25,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const b = await przegladarka();
   const p = await b.newPage();
   p.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await p.goto(env.adres, { waitUntil: 'networkidle' });
+  await p.goto(env.adres, { waitUntil: 'load' });
   await p.waitForTimeout(500);
 
   /* Klip testowy: 2 sekundy, kolor zmieniający się w czasie. Dzięki temu

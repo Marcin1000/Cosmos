@@ -2,6 +2,7 @@
 // zapytania (5 s), a gdy wpisy mają wektory z innego modelu — dolicza
 // przeliczenie WSZYSTKICH z limitem 60 s. Wszystko zanim model dostanie prompt.
 const http = require('http');
+const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
@@ -54,7 +55,7 @@ zmysly.listen(7112, () => model.listen(7113, async () => {
     }))));
 
   const srv = spawn('node', ['server.js'], {
-    cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+    cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3112', NVIDIA_API_KEY: 'test',
       COSMOS_DATA_DIR: DANE,
       SENSES_URL: 'http://127.0.0.1:7112',

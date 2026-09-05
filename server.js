@@ -314,13 +314,13 @@ function saveProfile(text) {
 }
 
 /* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
-   ale i wyszukiwanie („warsztat … w Złotokłosie"). Bez niej model pyta
+   ale i wyszukiwanie („warsztat … w Piasecznie"). Bez niej model pyta
    „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
 const LOCATION_FILE = path.join(DATA_DIR, 'location.txt');
 const WSPOLRZEDNE_FILE = path.join(DATA_DIR, 'location.json');
 let userLocation = '';
 /* Sama nazwa miejsca wystarczała do wyszukiwania, ale nie do liczenia pozycji
-   Słońca — złota godzina wymaga stopni, nie napisu „Złotokłos". Trzymamy
+   Słońca — złota godzina wymaga stopni, nie napisu „Piaseczno". Trzymamy
    jedno i drugie: nazwę dla modelu, współrzędne dla matematyki. */
 let userWspolrzedne = null;
 try { userLocation = fs.readFileSync(LOCATION_FILE, 'utf8'); } catch { /* brak */ }
@@ -368,7 +368,7 @@ function terazTekst() {
 }
 
 /* Współrzędne → nazwa miejscowości. Przeglądarka daje samo „52.05, 20.90",
-   a do wyszukiwarki trzeba wpisać „Złotokłos". Zamiana idzie przez serwer,
+   a do wyszukiwarki trzeba wpisać „Piaseczno". Zamiana idzie przez serwer,
    nie przez przeglądarkę: dzięki temu współrzędne nie trafiają do obcego
    hosta z Twojego telefonu razem z jego nagłówkami, a my możemy podać
    uczciwy User-Agent, którego Nominatim wymaga. */

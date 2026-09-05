@@ -3356,7 +3356,7 @@ oddzielającej „co wiesz" od „co mówisz".
 - [x] Z instrukcji usunięte gotowe zwroty do recytacji
 - [x] Zestaw `rejestr-odpowiedzi` — pierwszy pomiar tej części systemu
 
-### 2. Majorka liczona dla Złotokłosu
+### 2. Majorka liczona dla Piaseczna
 
 „Cala d'Or, Hotel Barceló Ponent Beach" szło do geokodera jako jedna fraza.
 Nominatim nie zna nazw hoteli, więc plan policzył się dla zapisanej

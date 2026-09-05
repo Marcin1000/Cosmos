@@ -20,7 +20,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   }));
   await page.route('**/api/kb/raw**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: '' }));
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   // Galeria → klik 🎬

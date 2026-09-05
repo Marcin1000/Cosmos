@@ -1,5 +1,6 @@
 // /api/polish przy dostawcy, który ignoruje stream:false albo zwraca śmieci
 const http = require('http');
+const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 const { spawn } = require('child_process');
 
 let mode = 'sse';
@@ -17,7 +18,7 @@ const upstream = http.createServer((req, res) => {
 });
 
 upstream.listen(7092, async () => {
-  const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3012', NVIDIA_API_KEY: 'test', NEMOTRON_BASE_URL: 'http://127.0.0.1:7092/v1' } });
   await new Promise((r) => setTimeout(r, 4000));
   const fail = [];

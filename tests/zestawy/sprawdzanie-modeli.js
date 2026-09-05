@@ -1,4 +1,4 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // „Sprawdź model": czy Cosmos umie sam ustalić, które modele naprawdę działają
 // na tym koncie — i które z nich czytają obrazy.
 const http = require('http');
@@ -43,7 +43,7 @@ const check = async (port, model) => {
 up.listen(7101, async () => {
   const fail = [];
   const srv = spawn('node', ['server.js'], {
-    cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+    cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3021', NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7101/v1', NEMOTRON_MODEL: 'nvidia/nemotron-nano-9b-v2',
       LOCAL_BASE_URL: 'http://127.0.0.1:7101/v1' },

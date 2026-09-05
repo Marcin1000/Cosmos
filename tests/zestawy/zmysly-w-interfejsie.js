@@ -12,7 +12,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600); // status refresh
 
   // 1. status zmysłów

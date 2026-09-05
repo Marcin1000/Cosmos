@@ -53,7 +53,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // --- 1. Zadaj pytanie i ZAMKNIJ kartę w połowie odpowiedzi ---------------
   let pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(600);
   await pg.fill('#input', 'pytanie w tle powoli');   // „powoli" = atrapa ciągnie kilka sekund
   await pg.press('#input', 'Enter');
@@ -109,7 +109,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(1500);
   await pg.evaluate((id) => window.localStorage.setItem('cosmos.lastConv', id), rozmowaId);
   // wejście w rozmowę z paska bocznego
@@ -144,7 +144,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
     return s ? JSON.parse(s) : null;
   });
   console.log(`3b. przeładowanie w trakcie; odebrane zdarzenia: ${przedPrzeladowaniem?.ostatnie ?? '—'}`);
-  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.reload({ waitUntil: 'load' });
   /* Czekamy na ODPOWIEDŹ W PLIKU, nie na zniknięcie kursora. Po przeładowaniu
      bez wznowienia kursor gaśnie od razu i zestaw zdążyłby zajrzeć do pliku
      przed zapisem awaryjnym serwera — czyli zobaczyłby „nic" i pokazał

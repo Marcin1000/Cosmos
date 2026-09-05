@@ -34,7 +34,7 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
   const pg = await (await br.newContext()).newPage();
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(400);
 
   /* Podstawiamy atrapę rozpoznawacza pod `getSR`, a potem uruchamiamy PRAWDZIWY

@@ -1,11 +1,11 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Ostrzeżenie o obrazie wysyłanym do modelu bez wzroku
 const { spawn } = require('child_process');
 // Ostrzeżenie pojawia się TYLKO bez ustawionego modelu wizyjnego — inaczej Cosmos podmienia model sam.
 const PORT = 3070;
 let srv;
 const start = async () => {
-  srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: String(PORT), NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:9099/v1', LOCAL_BASE_URL: 'http://127.0.0.1:9098/v1',
       LOCAL_API_KEY: 'test' } });
@@ -23,7 +23,7 @@ const stop = () => { try { process.kill(-srv.pid); } catch { /* już nie żyje *
   await start();
   const browser = await przegladarka();
   const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
-  await page.goto(`http://localhost:${PORT}`, { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${PORT}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   const fail = [];
 

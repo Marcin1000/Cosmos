@@ -17,7 +17,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     Object.defineProperty(navigator, 'mediaDevices', { get: () => undefined, configurable: true });
     localStorage.setItem('cosmos.liveSource', 'camera');
   });
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   await page.click('#live-btn');

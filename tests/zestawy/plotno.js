@@ -39,7 +39,7 @@ if (!maPrzegladarke()) {
   const pg = await (await br.newContext()).newPage();
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
 
   const zmiana = (tekst, blok) => pg.evaluate(([t0, b]) => {
     const conv = { canvas: { title: 'T', text: t0 } };

@@ -7,7 +7,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (typeof B !== 'undefined') B = ADRES;
   const b = await przegladarka();
   const p = await b.newPage({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
-  await p.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await p.goto(`${ADRES}`, { waitUntil: 'load' });
   await p.evaluate(() => document.getElementById('sidebar').classList.remove('collapsed'));
   await p.waitForTimeout(500);
   const r = await p.evaluate(() => {

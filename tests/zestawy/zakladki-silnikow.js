@@ -1,11 +1,11 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Cztery zakładki silników na wąskim ekranie: pasek ma się przewijać, nie rozpychać strony
 const { spawn } = require('child_process');
 // Cztery zakładki pojawiają się dopiero, gdy są klucze do czterech silników.
 const PORT = 3071;
 let srv;
 const start = async () => {
-  srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: String(PORT), NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:9099/v1', LOCAL_BASE_URL: 'http://127.0.0.1:9098/v1',
       OPENAI_API_KEY: 'test', ANTHROPIC_API_KEY: 'test', LOCAL_API_KEY: 'test' } });
@@ -28,7 +28,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   for (const w of [360, 412]) {
     const page = await browser.newPage({ viewport: { width: w, height: 800 }, isMobile: true, hasTouch: true });
-    await page.goto(`http://localhost:${PORT}`, { waitUntil: 'networkidle' });
+    await page.goto(`http://localhost:${PORT}`, { waitUntil: 'load' });
     await page.waitForTimeout(600);
 
     const r = await page.evaluate(() => {

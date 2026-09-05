@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" width="980" height="620" role="img" aria-label="Cosmos architecture: two inference backends feed one multimodal layer, then the tool cascade, then interfaces and sensors">
+  <style>
+    /* Diagram czyta się w obu motywach GitHuba. Jasny jest domyślny,
+       a `prefers-color-scheme` przestawia paletę — GitHub honoruje to
+       wewnątrz osadzonego SVG. */
+    .plyta   { fill: #ffffff; stroke: #d0d7de; }
+    .tytul   { fill: #1f2328; }
+    .opis    { fill: #59636e; }
+    .kreska  { stroke: #8c959f; }
+    .akcent  { fill: #0969da; }
+    .plytaA  { fill: #ddf4ff; stroke: #54aeff; }
+    .plytaB  { fill: #fff8c5; stroke: #d4a72c; }
+    .plytaC  { fill: #dafbe1; stroke: #4ac26b; }
+    .etykieta{ fill: #6e7781; }
+    @media (prefers-color-scheme: dark) {
+      .plyta   { fill: #0d1117; stroke: #30363d; }
+      .tytul   { fill: #e6edf3; }
+      .opis    { fill: #9198a1; }
+      .kreska  { stroke: #6e7681; }
+      .akcent  { fill: #4493f8; }
+      .plytaA  { fill: #0c2d6b; stroke: #1f6feb; }
+      .plytaB  { fill: #3d2c00; stroke: #9e6a03; }
+      .plytaC  { fill: #0f5323; stroke: #2ea043; }
+      .etykieta{ fill: #7d8590; }
+    }
+    text { font-family: 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, sans-serif; }
+    .mono { font-family: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace; }
+  </style>
+
+  <defs>
+    <marker id="grot" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="kreska" fill="context-stroke"/>
+    </marker>
+  </defs>
+
+  <!-- ── WARSTWA 1: dwa silniki ─────────────────────────────────────── -->
+  <text x="30" y="34" class="etykieta mono" font-size="12" letter-spacing="1.4">01 · INFERENCE</text>
+
+  <g>
+    <rect x="90" y="52" width="330" height="96" rx="10" class="plytaA" stroke-width="1.5"/>
+    <text x="112" y="82" class="tytul" font-size="17" font-weight="600">Local GPU</text>
+    <text x="112" y="105" class="opis" font-size="13.5">Nemotron · vision models · Whisper · YOLO</text>
+    <text x="112" y="128" class="opis mono" font-size="12">private · no per-token cost · needs the box on</text>
+  </g>
+
+  <g>
+    <rect x="560" y="52" width="330" height="96" rx="10" class="plytaB" stroke-width="1.5"/>
+    <text x="582" y="82" class="tytul" font-size="17" font-weight="600">Cloud APIs</text>
+    <text x="582" y="105" class="opis" font-size="13.5">NVIDIA · OpenAI · Anthropic</text>
+    <text x="582" y="128" class="opis mono" font-size="12">always up · larger models · metered</text>
+  </g>
+
+  <path d="M 255 148 L 255 186 L 490 186 L 490 214" class="kreska" fill="none"
+        stroke-width="1.6" marker-end="url(#grot)"/>
+  <path d="M 725 148 L 725 186 L 490 186" class="kreska" fill="none" stroke-width="1.6"/>
+
+  <text x="500" y="180" class="akcent mono" font-size="12.5">one switch, same conversation</text>
+
+  <!-- ── WARSTWA 2: warstwa multimodalna ────────────────────────────── -->
+  <text x="30" y="240" class="etykieta mono" font-size="12" letter-spacing="1.4">02 · ROUTING</text>
+  <g>
+    <rect x="230" y="214" width="520" height="70" rx="10" class="plyta" stroke-width="1.5"/>
+    <text x="252" y="244" class="tytul" font-size="16" font-weight="600">Multimodal layer</text>
+    <text x="252" y="267" class="opis" font-size="13">text · images · audio · documents — routed to whichever backend can see them</text>
+  </g>
+  <path d="M 490 284 L 490 322" class="kreska" fill="none" stroke-width="1.6" marker-end="url(#grot)"/>
+
+  <!-- ── WARSTWA 3: kaskada narzędzi ────────────────────────────────── -->
+  <text x="30" y="348" class="etykieta mono" font-size="12" letter-spacing="1.4">03 · TOOLS</text>
+  <g>
+    <rect x="150" y="322" width="680" height="88" rx="10" class="plytaC" stroke-width="1.5"/>
+    <text x="172" y="352" class="tytul" font-size="16" font-weight="600">Tool cascade &amp; MCP bridge</text>
+    <text x="172" y="375" class="opis" font-size="13">web search · own photo archive · shoot planner · code execution · image search</text>
+    <text x="172" y="396" class="opis mono" font-size="12">one contract per tool · four rounds per turn · every result goes back to the model</text>
+  </g>
+  <path d="M 490 410 L 490 448" class="kreska" fill="none" stroke-width="1.6" marker-end="url(#grot)"/>
+
+  <!-- ── WARSTWA 4: interfejsy i czujniki ───────────────────────────── -->
+  <text x="30" y="474" class="etykieta mono" font-size="12" letter-spacing="1.4">04 · EDGE</text>
+  <g>
+    <rect x="90" y="448" width="240" height="80" rx="10" class="plyta" stroke-width="1.5"/>
+    <text x="112" y="478" class="tytul" font-size="15" font-weight="600">Interfaces</text>
+    <text x="112" y="500" class="opis" font-size="12.5">PWA · desktop · voice</text>
+    <text x="112" y="518" class="opis mono" font-size="11.5">works offline, resumes mid-answer</text>
+  </g>
+  <g>
+    <rect x="370" y="448" width="240" height="80" rx="10" class="plyta" stroke-width="1.5"/>
+    <text x="392" y="478" class="tytul" font-size="15" font-weight="600">Sensors</text>
+    <text x="392" y="500" class="opis" font-size="12.5">camera · Kinect · microphone</text>
+    <text x="392" y="518" class="opis mono" font-size="11.5">separate process, separate machine</text>
+  </g>
+  <g>
+    <rect x="650" y="448" width="240" height="80" rx="10" class="plyta" stroke-width="1.5"/>
+    <text x="672" y="478" class="tytul" font-size="15" font-weight="600">Hardware</text>
+    <text x="672" y="500" class="opis" font-size="12.5">Canon CCAPI · DJI missions</text>
+    <text x="672" y="518" class="opis mono" font-size="11.5">read settings, write settings</text>
+  </g>
+
+  <path d="M 490 528 L 490 552" class="kreska" fill="none" stroke-width="1.4"
+        stroke-dasharray="4 4"/>
+  <text x="490" y="574" class="etykieta mono" font-size="12" text-anchor="middle">
+    every layer answers over Tailscale HTTPS — phone, laptop, or the machine itself
+  </text>
+  <text x="490" y="598" class="etykieta mono" font-size="11.5" text-anchor="middle" opacity="0.75">
+    Node core: zero runtime dependencies · Python sensors: whatever the model needs
+  </text>
+</svg>

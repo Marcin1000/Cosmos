@@ -1,4 +1,4 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Licznik czekania: pojawia się, gdy model milczy; znika, gdy zacznie pisać.
 const http = require('http');
 
@@ -18,7 +18,7 @@ const mock = http.createServer((req, res) => {
 mock.listen(7093, async () => {
   const { spawn } = require('child_process');
   const srv = spawn('node', ['server.js'], {
-    cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+    cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3011', NVIDIA_API_KEY: 'test', NEMOTRON_BASE_URL: 'http://127.0.0.1:7093/v1' },
   });
   await new Promise((r) => setTimeout(r, 4000));
@@ -27,7 +27,7 @@ mock.listen(7093, async () => {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const fail = [];
   page.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await page.goto('http://localhost:3011', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:3011', { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   await page.fill('#input', 'Czy możesz stworzyć grafikę z widokiem Dolomitów?');

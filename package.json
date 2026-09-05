@@ -1,7 +1,7 @@
 {
   "name": "cosmos",
   "version": "2.0.0",
-  "description": "Cosmos — osobiste środowisko AI (UI premium) dla modeli NVIDIA Nemotron: lokalnie (RTX) i w chmurze NVIDIA. PWA + aplikacja desktopowa.",
+  "description": "Hybrid local/cloud AI environment for multimodal models, agents, MCP and edge inference.",
   "main": "desktop/main.js",
   "scripts": {
     "start": "node server.js",

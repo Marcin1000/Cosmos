@@ -1,4 +1,4 @@
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Czy obraz w ogóle dociera do modelu? Nagrywamy, co dostaje dostawca.
 const http = require('http');
 const { spawn } = require('child_process');
@@ -16,7 +16,7 @@ const up = http.createServer((req, res) => {
 });
 
 up.listen(7090, async () => {
-  const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3014', NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7090/v1',
       // model wizyjny — inaczej serwer (słusznie) odrzuci zdjęcie do ślepego modelu
@@ -27,7 +27,7 @@ up.listen(7090, async () => {
   const p = await b.newPage();
   const fail = [];
   p.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await p.goto('http://localhost:3014', { waitUntil: 'networkidle' });
+  await p.goto('http://localhost:3014', { waitUntil: 'load' });
   await p.waitForTimeout(600);
 
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC';

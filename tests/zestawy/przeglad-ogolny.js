@@ -12,7 +12,7 @@ const fs = require('fs');
   page.on('response', (r) => { if (r.status() >= 500) console.log(`   500 z: ${r.url()}`); });
   page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-welcome.png') });
 
   // 1. czat w trybie chmury
@@ -64,7 +64,7 @@ const fs = require('fs');
   await page.click('#theme-btn');
 
   // 6. historia po odświeżeniu + service worker
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'load' });
   await page.click('.conv-title');
   await page.waitForTimeout(300);
   const msgCount = await page.locator('.msg').count();

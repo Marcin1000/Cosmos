@@ -36,7 +36,7 @@ const czekajNaStan = async (page, warunek, opis, ms = 8000) => {
   const fail = [];
 
   // 1. serwer działa — paska nie ma
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
   let s = await state(page);
   console.log('serwer działa    :', JSON.stringify(s));

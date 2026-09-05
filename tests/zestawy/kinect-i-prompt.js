@@ -13,12 +13,12 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   page.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
   page.on('dialog', (d) => { fail.push('alert: ' + d.message()); d.dismiss(); });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   // ---- 1. powiększenie podglądu ----
   await page.evaluate(() => { localStorage.setItem('cosmos.liveSource', 'kinect-color'); });
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
   await page.click('#live-btn');
   await page.waitForTimeout(1200);
@@ -57,7 +57,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (big.saved !== '1') fail.push('powiększenie nie zapamiętane');
 
   // przetrwa przeładowanie
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
   await page.click('#live-btn');
   await page.waitForTimeout(900);
@@ -158,7 +158,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   // ---- 4. mobile: przycisk nie rozbija kompozytora ----
   const m = await ctx.newPage();
   await m.setViewportSize({ width: 360, height: 740 });
-  await m.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await m.goto(`${ADRES}`, { waitUntil: 'load' });
   await m.waitForTimeout(500);
   const mob = await m.evaluate((txt) => {
     const i = document.getElementById('input');
@@ -183,7 +183,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       localStorage.setItem('cosmos.liveSource', 'kinect-color');
       localStorage.setItem('cosmos.liveExpanded', '1');
     });
-    await m.reload({ waitUntil: 'networkidle' });
+    await m.reload({ waitUntil: 'load' });
     await m.waitForTimeout(400);
     await m.click('#live-btn');
     await m.waitForTimeout(900);

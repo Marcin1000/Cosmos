@@ -88,7 +88,7 @@ const bloki = zbudujInstrukcje({
   krotko: false,
   bezNarzedzi: false,
   archiwum: { ile: () => 59421 },
-  userWspolrzedne: { lat: 52.0247, lon: 20.9019 },
+  userWspolrzedne: { lat: 52.2297, lon: 21.0122 },
   procedury: () => [{ name: 'wywoływanie filmu' }],
   urzadzenia: () => [{ name: 'lampa w salonie' }],
   imageProviders: () => ['nvidia'],

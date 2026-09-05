@@ -1,5 +1,6 @@
 // Funkcje pomocnicze mają używać modelu WYBRANEGO, nie tego z .env
 const http = require('http');
+const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 const { spawn } = require('child_process');
 
 const seen = [];
@@ -19,7 +20,7 @@ const up = http.createServer((req, res) => {
 });
 
 up.listen(7091, async () => {
-  const srv = spawn('node', ['server.js'], { cwd: '/home/user/Bear', stdio: 'ignore', detached: true,
+  const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3013', NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7091/v1', NEMOTRON_MODEL: 'nvidia/nieistniejacy-z-env' } });
   await new Promise((r) => setTimeout(r, 4000));

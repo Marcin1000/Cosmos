@@ -9,9 +9,9 @@ const { srodowisko } = require('../pomoc');
 const { swiatloDnia, pozycjaSlonca } = require('../../lib/slonce.js');
 const { evZeSlonca, dobierz, orientacja, evZPomiaru } = require('../../lib/ekspozycja.js');
 
-// Złotokłos, powiat piaseczyński
-const LAT = 52.0247;
-const LON = 20.9019;
+// Piaseczno, mazowieckie
+const LAT = 52.2297;
+const LON = 21.0122;
 const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }) : '—');
 
 (async () => {
@@ -124,7 +124,7 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
 
   await fetch(`${env.adres}/api/location`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location: 'Złotokłos, mazowieckie', lat: LAT, lon: LON }),
+    body: JSON.stringify({ location: 'Piaseczno, mazowieckie', lat: LAT, lon: LON }),
   });
   const zapisane = await (await fetch(`${env.adres}/api/location`)).json();
   console.log(`12. współrzędne zapisane: ${JSON.stringify(zapisane.wspolrzedne)}`);

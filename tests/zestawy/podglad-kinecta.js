@@ -26,12 +26,12 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     return c.toDataURL().slice(-120);
   });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'networkidle' });
+  await page.goto(`${ADRES}`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   // wybierz Kinecta jako źródło i otwórz panel
   await page.evaluate(() => { localStorage.setItem('cosmos.liveSource', 'kinect-color'); });
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(500);
   await page.click('#live-btn').catch(async () => {
     await page.evaluate(() => startLive());

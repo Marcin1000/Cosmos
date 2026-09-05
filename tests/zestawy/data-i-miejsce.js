@@ -42,19 +42,19 @@ const rozmowa = async (adres, tekst) => {
   const zapis = await fetch(`${env.adres}/api/location`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ location: 'Złotokłos, mazowieckie' }),
+    body: JSON.stringify({ location: 'Piaseczno, mazowieckie' }),
   });
   const wynikZapisu = await zapis.json();
   console.log(`3. zapis lokalizacji → ${zapis.status}, odczyt: „${wynikZapisu.location}"`);
-  if (wynikZapisu.location !== 'Złotokłos, mazowieckie') fail.push('lokalizacja nie zapisała się poprawnie');
+  if (wynikZapisu.location !== 'Piaseczno, mazowieckie') fail.push('lokalizacja nie zapisała się poprawnie');
 
   const odczyt = await (await fetch(`${env.adres}/api/location`)).json();
-  if (odczyt.location !== 'Złotokłos, mazowieckie') fail.push('lokalizacja nie przeżyła odczytu');
+  if (odczyt.location !== 'Piaseczno, mazowieckie') fail.push('lokalizacja nie przeżyła odczytu');
 
   // 4. i trafia do promptu przy następnej rozmowie
   widziane = await rozmowa(env.adres, 'znajdź warsztat w okolicy');
-  console.log(`4. lokalizacja w promptcie: ${/Złotokłos/.test(widziane) ? 'jest' : 'BRAK'}`);
-  if (!/Złotokłos/.test(widziane)) fail.push('zapisana lokalizacja nie dociera do modelu');
+  console.log(`4. lokalizacja w promptcie: ${/Piaseczno/.test(widziane) ? 'jest' : 'BRAK'}`);
+  if (!/Piaseczno/.test(widziane)) fail.push('zapisana lokalizacja nie dociera do modelu');
   if (!/nie dopytuj o lokalizację/i.test(widziane)) {
     fail.push('nic nie powstrzymuje modelu przed ponownym pytaniem o miasto');
   }
@@ -78,7 +78,7 @@ const rozmowa = async (adres, tekst) => {
   });
   widziane = await rozmowa(env.adres, 'cokolwiek');
   console.log(`7. po wyczyszczeniu: ${/Nie znasz lokalizacji/.test(widziane) ? 'znów nie zna' : 'PAMIĘTA STARĄ'}`);
-  if (/Złotokłos/.test(widziane)) fail.push('wyczyszczona lokalizacja nadal trafia do modelu');
+  if (/Piaseczno/.test(widziane)) fail.push('wyczyszczona lokalizacja nadal trafia do modelu');
 
   // 8. geokodowanie odrzuca śmieci zamiast dzwonić po nie na zewnątrz
   const zle = await fetch(`${env.adres}/api/location/resolve`, {

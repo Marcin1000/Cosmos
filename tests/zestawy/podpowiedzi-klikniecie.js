@@ -4,7 +4,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const ADRES = env.adres;
   const b=await przegladarka();
   const c=await b.newContext({viewport:{width:1440,height:900}}); const p=await c.newPage();
-  await p.goto(`${ADRES}`,{waitUntil:'networkidle'}); await p.waitForTimeout(500);
+  await p.goto(`${ADRES}`,{waitUntil:'load'}); await p.waitForTimeout(500);
   const label=await p.textContent('.suggestion:nth-child(1)');
   await p.click('.suggestion:nth-child(1)');
   await p.waitForTimeout(1200);

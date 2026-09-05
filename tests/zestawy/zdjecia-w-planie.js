@@ -32,7 +32,7 @@ if (!maPrzegladarke()) {
   const pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'networkidle' });
+  await pg.goto(env.adres, { waitUntil: 'load' });
   await pg.waitForTimeout(600);
 
   await pg.fill('#input', 'pokaż zdjęcia miejsc z planu');
