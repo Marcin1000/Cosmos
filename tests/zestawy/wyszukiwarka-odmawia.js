@@ -27,6 +27,10 @@ const http = require('node:http');
 
 const fail = [];
 
+/* Port poznajemy dopiero po `listen`, a atrapa SearXNG musi oddać adres
+   strony na tym samym serwerze — stąd zmienna wypełniana po starcie. */
+let PORT = 0;
+
 /* Serwer, który udaje DuckDuckGo. Każda ścieżka to inny scenariusz. */
 function atrapa() {
   return new Promise((gotowe) => {
@@ -36,6 +40,18 @@ function atrapa() {
         res.writeHead(202, { 'Content-Type': 'text/html' });
         return res.end('<html><body><div class="anomaly-modal">'
           + 'Unfortunately, bots use DuckDuckGo too.</div></body></html>');
+      }
+      if (req.url.startsWith('/searxng/search')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ results: [
+          { title: 'Pogoda Warszawa', url: `http://127.0.0.1:${PORT}/strona`,
+            content: 'Zajawka bez liczby, o którą pytał użytkownik.' },
+        ] }));
+      }
+      if (req.url.startsWith('/strona')) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        return res.end('<html><body><p>Dziś w Warszawie 18 stopni '
+          + 'i słabe zachmurzenie.</p></body></html>');
       }
       if (req.url.startsWith('/pusto')) {
         // Uczciwe „nic nie znalazłem": status 200, brak trafień.
@@ -56,8 +72,8 @@ function atrapa() {
 
 (async () => {
   const s = await atrapa();
-  const port = s.address().port;
-  const baza = `http://127.0.0.1:${port}`;
+  PORT = s.address().port;
+  const baza = `http://127.0.0.1:${PORT}`;
 
   /* `sendJson` woła metody odpowiedzi HTTP, więc dajemy mu atrapę, która
      zapamiętuje ciało zamiast je wysyłać. */
@@ -130,6 +146,42 @@ function atrapa() {
   } else if (!/przyczyna:/i.test(martwy.error)) {
     fail.push('komunikat o awarii nie niesie przyczyny z err.cause — '
       + `każda awaria wygląda tak samo: ${martwy.error}`);
+  }
+
+  /* --- 5. SEARXNG TEŻ MUSI DOWOZIĆ TREŚĆ STRON ---------------------------
+     Nagłówek tego pliku obiecuje, że Cosmos „nie tylko zbiera linki, ale
+     POBIERA TREŚĆ dwóch pierwszych stron" — bo bez tego model dostawał same
+     tytuły i w kółko prosił o kolejne wyszukiwanie, aż wyczerpał rundy.
+
+     Obietnica była spełniona tylko na drodze DuckDuckGo. Droga SearXNG
+     zwracała wyniki od razu, więc kto włączył SEARXNG_URL — czyli dokładnie
+     ten, kto uciekał przed odmowami DuckDuckGo — po cichu wracał do usterki,
+     dla której `fetchPageText` powstało.
+
+     Atrapa oddaje zajawkę BEZ liczby i osobną stronę, na której ta liczba
+     stoi. Jeśli „18 stopni" nie dotrze do wyniku, treść nie została pobrana. */
+  const stara = process.env.SEARXNG_URL;
+  process.env.SEARXNG_URL = `${baza}/searxng`;
+  const przezSearxng = await (async () => {
+    delete require.cache[require.resolve('../../lib/szukanie.js')];
+    delete require.cache[require.resolve('../../lib/rdzen.js')];
+    const { handleSearch } = require('../../lib/szukanie.js');
+    let ciało = '';
+    const res = { writeHead() { return res; }, setHeader() { return res; }, end(t) { ciało = t || ''; } };
+    await handleSearch({ method: 'GET', url: '/api/search?q=pogoda' }, res);
+    try { return JSON.parse(ciało); } catch { return {}; }
+  })();
+  if (stara === undefined) delete process.env.SEARXNG_URL; else process.env.SEARXNG_URL = stara;
+
+  const pierwszy = (przezSearxng.results || [])[0] || {};
+  const maTresc = /18 stopni/.test(pierwszy.text || '');
+  console.log(`5. SearXNG → silnik: ${przezSearxng.silnik}, `
+    + `treść strony: ${maTresc ? 'jest' : 'BRAK'} (${(pierwszy.text || '(puste)').slice(0, 40)})`);
+  if (przezSearxng.silnik !== 'searxng') {
+    fail.push(`zapytanie nie poszło przez SearXNG (silnik: ${przezSearxng.silnik})`);
+  } else if (!maTresc) {
+    fail.push('wyniki z SearXNG nie niosą treści stron — model dostaje same zajawki '
+      + 'i będzie prosił o kolejne wyszukiwania, tak jak przed powstaniem fetchPageText');
   }
 
   s.close();
