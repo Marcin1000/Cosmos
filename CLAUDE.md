@@ -8,24 +8,26 @@ Wszystko jest po polsku: komentarze, nazwy funkcji i zmiennych, komunikaty błę
 dokumentacja, teksty commitów. Nowy kod pisz tak samo. Interfejs ma dwa języki (PL/EN),
 ale kod mówi po polsku.
 
-Wyjątek: `contentai/` — tam nazwy są mieszane (starsza warstwa angielska + nowsza polska),
-patrz niżej.
-
 **Dwa pliki README, dwie role.** `README.md` jest po angielsku i jest wizytówką repozytorium
 na GitHubie — architektura, po co hybryda, czego się nauczyliśmy. `README.pl.md` jest po
 polsku i jest pełną instrukcją obsługi dla Marcina. Zmiana funkcji widocznej z zewnątrz
 wymaga wpisu w obu.
 
-## Dwa niezależne projekty w jednym repo
+## Jeden projekt, jedno repo
 
-**Cosmos** (katalog główny) — osobiste środowisko AI: czat, percepcja, baza wiedzy, studio
-mediów, nauka procedur. To jest właściwa treść tego repo.
+To repozytorium zawiera **wyłącznie Cosmosa** — osobiste środowisko AI: czat, percepcja,
+baza wiedzy, studio mediów, plan zdjęciowy, nauka procedur.
 
-**`contentai/`** — migawka odrębnego produktu (generator treści SEO). **Nie współdzieli
-kodu z Cosmosem** i nie jest przez niego uruchamiana. Bieżący rozwój Content AI toczy się
-w osobnym repozytorium `Marcin1000/ContentAI` (jest podpięte jako zdalne `contentai`);
-kopia tutaj jest starsza — nie ma np. katalogu `serwer/`. **Nie rozwijaj Content AI w tym
-repo** — zmiany trafiają do `Marcin1000/ContentAI`.
+Nie dokładaj tu innych projektów, nawet „tymczasowo". Repozytorium nosiło kiedyś nazwę
+`Bear` i mieszkały w nim obok siebie trzy rzeczy: Cosmos, migawka Content AI i prototyp
+serwisu dla klienta. Kosztowało to 137 MB, opis języka „HTML" zamiast JavaScriptu na
+GitHubie i publiczny wgląd w cudze materiały handlowe. Wyczyszczenie wymagało przepisania
+całej historii i **usunięcia repozytorium**, bo referencji pull requestów (`refs/pull/*`)
+nie da się skasować inaczej — GitHub trzyma je na zawsze i żadne wymuszone wypchnięcie
+ich nie rusza.
+
+Stąd zasada: **obcy kod idzie do własnego repozytorium od pierwszego commita.** Cofnięcie
+tego później jest nieproporcjonalnie drogie.
 
 ## Uruchamianie
 
