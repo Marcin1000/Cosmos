@@ -383,7 +383,18 @@ function wynik(tytul) {
   };
 }
 
+/** Prywatny katalog danych jednej osoby w katalogu serwera testowego.
+ *  Od kont (wrzesień 2026) nic nie leży wprost w data/ — każdy ma
+ *  data/uzytkownicy/<id>/, a tryb domowy to konto „wlasciciel". Test, który
+ *  sprawdza pliki na dysku, pyta TUTAJ, zamiast składać ścieżkę sam — przy
+ *  następnej zmianie układu poprawia się jedno miejsce. */
+function katalogOsoby(env, id = 'wlasciciel') {
+  const baza = env.katalogDanych || env;
+  return path.join(baza, 'uzytkownicy', id);
+}
+
 module.exports = {
+  katalogOsoby,
   KORZEN, ATRAPY, CHROMIUM, SRODOWISKA, KATALOG_ZRZUTOW,
   maPrzegladarke, przegladarka, srodowisko, posprzataj, czekajNa,
   uruchom, zabij, serwerCosmosa, zwolnijPorty, atrapaNode, atrapaPy, wynik, zasiejRozmowy,

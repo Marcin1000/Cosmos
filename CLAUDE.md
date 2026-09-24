@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 91 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 94 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -84,8 +84,8 @@ o porty i dają fałszywe awarie.
 
 ## Architektura
 
-Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,6 tys. linii, `lib/` 9,7 tys. w 24
-modułach, `public/` 11,2 tys. w 10 skryptach. Zero zależności npm w rdzeniu — nadal.
+Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,9 tys. linii, `lib/` 10,6 tys. w 34
+modułach, `public/` 11,7 tys. w 11 skryptach. Zero zależności npm w rdzeniu — nadal.
 
 ### `server.js` — dyrygent (2,6 tys. linii, zero zależności)
 
@@ -107,6 +107,7 @@ robi większość szybkich zestawów.
 | `archiwum.js`, `archiwum-trasy.js` | indeks plików zdjęciowych, wyszukiwanie, stronicowanie |
 | `ekspozycja.js`, `ujecia.js`, `tematy.js` | plan zdjęciowy: nastawy, kadry, katalog sprzętu |
 | `instrukcje-narzedzi.js` | **wszystkie opisy narzędzi dla modelu** (dawniej `extras` w `server.js`) |
+| `kontekst.js`, `konta.js`, `silniki.js` | kto pyta, konta i sesje, kto może użyć którego silnika |
 | `nauka.js` | procedury, bramka trybu auto |
 | `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, baza wiedzy, wyszukiwanie w sieci |
 | `exif.js`, `raw-podglad.js`, `srt.js`, `kmz.js` | formaty plików, bez zależności zewnętrznych |
@@ -193,11 +194,57 @@ miejsca**.
 Hasła z menedżera (`SECRETS_PROVIDER`) pobiera proces serwera i przekazuje runnerowi przez
 stdin. Nigdy nie trafiają do procedury, plików ani do klienta.
 
+### Wiele osób — kontekst użytkownika (przeczytaj, zanim dotkniesz danych)
+
+Od września 2026 Cosmos ma konta: **właściciel** i **członkowie** zapraszani linkiem.
+Każda osoba ma własne dane, a właściciel nie widzi cudzych treści (tylko konta i zużycie).
+Instrukcja dla ludzi: `docs/DOSTEP.md`.
+
+**Każde żądanie `/api/*` wykonuje się w imieniu osoby** — `server.js` ustala ją
+w `ktoPyta()` i woła `wKontekscie(u, () => trasyApi(…))`. Kontekst (`AsyncLocalStorage`,
+`lib/kontekst.js`) podąża za każdym `await`, timerem i pracą w tle.
+
+Zasady, których nie wolno łamać:
+
+1. **Nigdy `path.join(DATA_DIR, …)` dla danych osoby.** Używaj `stan(klucz, fabryka)`
+   albo `naUzytkownika(klucz, fabryka)` z `lib/kontekst.js` — fabryka dostaje katalog
+   bieżącej osoby. `DATA_DIR` wprost jest tylko dla rzeczy serwera (`konta/`).
+2. **Brak kontekstu = wyjątek, nigdy wartość domyślna.** Jeśli coś rzuca
+   `BrakKontekstu`, to znaczy, że kod biegnie poza żądaniem (timer, start serwera,
+   `res.on('close')`). Napraw to jawnym `wKontekscie(u, …)` — nie „weź właściciela
+   na wszelki wypadek". Cicha wartość domyślna pokazałaby dane jednej osoby drugiej
+   i nic nie wyglądałoby na zepsute.
+3. **Zdarzenia HTTP (`res.on('close')`, `req.on(…)`) NIE mają kontekstu żądania** —
+   biegną w kontekście serwera. Stąd `lib/biegi.js` przypina osobę do biegu przy jego
+   założeniu i zapisuje odpowiedź-sierotę jawnie w jej imieniu.
+4. **Nie eksportuj stanu jako wartości** (`kbItems`, `userProfile`) do innych modułów —
+   tylko jako funkcję. Wartość wstrzyknięta przy starcie to dane pierwszej osoby dla
+   wszystkich.
+5. **Nowa trasa działająca na serwerze albo w domu właściciela** (procesy, sprzęt
+   w sieci lokalnej, adresy odpytywane przez serwer) → dopisz ją do `TYLKO_WLASCICIEL`
+   w `server.js`. Ukrycie przycisku w interfejsie (`class="tylko-wlasciciel"`) to
+   wygoda, nie zabezpieczenie.
+6. **Wybór silnika idzie przez `pickEndpoint`**, który pyta strażnika z `lib/silniki.js`
+   (przyznane uprawnienia, własne klucze). Nie czytaj `ENDPOINTS[nazwa]` wprost w nowym
+   kodzie — ominąłbyś uprawnienia i płaciłby właściciel.
+7. **Dane od innych osób (imiona, loginy) do DOM-u tylko przez `textContent`.**
+   Panel Dostęp pokazuje właścicielowi imiona wpisane przez gości.
+
+Pilnują tego zestawy `izolacja-osob`, `konta-i-logowanie`, `konta-w-przegladarce`.
+
 ### Dane
 
-Wszystko w `data/` (gitignore) jako zwykłe pliki JSON: `memory.json`, `profile.txt`,
-`timeline.json`, `lessons.json`, `procedures.json`, `routines.json`, `conversations/`
-(jeden plik na rozmowę + lekki indeks metadanych), `kb/` (baza wiedzy), `train/`.
+Pliki serwera w `data/konta/` (konta, sesje jako skróty, zaproszenia — uprawnienia `0600`).
+Dane każdej osoby w `data/uzytkownicy/<id>/` jako zwykłe pliki JSON: `memory.json`,
+`profile.txt`, `timeline.json`, `lessons.json`, `procedures.json`, `routines.json`,
+`conversations/` (jeden plik na rozmowę + lekki indeks metadanych), `kb/` (baza wiedzy),
+`klucze.json` (własne klucze API). Właściciel ma stały identyfikator `wlasciciel`;
+trening (`train/`) jest tylko u niego. Konto usunięte → dane do `data/usuniete/`, nie kosz.
+
+Stary układ (wszystko wprost w `data/`) przenosi się sam przy starcie do katalogu
+właściciela, z kopią `data/kopia-przed-kontami-*/` — patrz `migrujDoKont()` w `server.js`.
+Testy czytające pliki z dysku pytają o ścieżkę `katalogOsoby(env)` z `tests/pomoc.js`.
+
 Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności.
 
 ### Front-end — bez budowania
@@ -218,6 +265,7 @@ z pozostałych.
 | `plener.js` | panel Pleneru: plan, kadry, wysyłka do aparatu |
 | `tekst.js` | Markdown → HTML, bloki kodu, przycisk kopiowania |
 | `protokol.js` | czyszczenie znaczników, nagłówki kontekstu — czyste funkcje |
+| `konta.js` | zaproszenie, Twoje konto, panel Dostęp; czyszczenie pamięci przeglądarki przy zmianie osoby |
 | `models.js` | katalog modeli, zakładki silników |
 | `i18n.js` | dwa słowniki (PL/EN) |
 
@@ -259,10 +307,15 @@ wymaga działającego `npm start` i, przy włączonym logowaniu, `COSMOS_TOKEN` 
 
 ### Uwierzytelnianie
 
-Wyłączone, gdy nie ustawiono ani `COSMOS_PASSWORD`, ani `COSMOS_API_TOKEN` (tryb domowy).
-Sesje są **w pamięci procesu** — restart serwera wylogowuje wszystkich. `COSMOS_API_TOKEN`
-to stały token dla klientów programowych (mostek MCP, skrypty). Przy wystawieniu publicznie
-ustaw też `COSMOS_COOKIE_SECURE=1`.
+Tryb domowy (żadne konto nie ma hasła, brak `COSMOS_API_TOKEN`): jedna osoba, właściciel,
+bez logowania. `COSMOS_PASSWORD` przy **pierwszym** starcie staje się hasłem konta
+właściciela (login z `COSMOS_LOGIN`); potem hasło żyje w koncie (`lib/konta.js`, scrypt).
+Sesje są na dysku jako skróty tokenów i przeżywają restart. Pusty login przy logowaniu =
+właściciel. `COSMOS_API_TOKEN` działa w imieniu właściciela (mostek MCP, watcher zmysłów).
+Limit: 5 pomyłek z adresu / 10 pod loginem → kwadrans przerwy; adres zza Cloudflare
+z `CF-Connecting-IP`, ale tylko gdy połączenie przyszło z pętli zwrotnej. Zapomniane hasło:
+`node scripts/konto.js haslo <login>` przy zatrzymanym serwerze. Przy wystawieniu
+publicznie ustaw `COSMOS_COOKIE_SECURE=1`.
 
 ## Klucze i sekrety
 

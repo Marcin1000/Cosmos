@@ -22,7 +22,7 @@
 */
 const fs = require('node:fs');
 const path = require('node:path');
-const { srodowisko } = require('../pomoc');
+const { srodowisko, katalogOsoby } = require('../pomoc');
 const { zapiszAtomowo } = require('../../lib/rdzen.js');
 
 (async () => {
@@ -88,7 +88,7 @@ const { zapiszAtomowo } = require('../../lib/rdzen.js');
      Zapisujemy przez API i sprawdzamy, że plik na dysku da się sparsować,
      a obok nie leży zapomniany `.tmp`. */
   const env = await srodowisko('grafiki');
-  const dane = env.katalogDanych || path.join(__dirname, '..', '..', 'data');
+  const dane = katalogOsoby(env);
 
   await fetch(`${env.adres}/api/conversations?id=proba1`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },

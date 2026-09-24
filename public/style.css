@@ -1250,7 +1250,8 @@ kbd {
 .field-row input, .field-row select { flex: 1; min-width: 0; max-width: 100%; }
 
 .field input[type="text"], .field input[type="number"],
-.field input[type="time"], .field input[type="date"],
+.field input[type="time"], .field input[type="date"], .field input[type="password"],
+.konto-blok input[type="text"], .konto-blok input[type="password"],
 .field textarea, .field select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -1263,8 +1264,8 @@ kbd {
   transition: border-color .15s, box-shadow .15s;
 }
 
-.field input.mono, .field select.mono { font-family: var(--font-mono); font-size: 12.5px; }
-.field input:focus, .field textarea:focus, .field select:focus {
+.field input.mono, .field select.mono, .konto-blok input.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.field input:focus, .field textarea:focus, .field select:focus, .konto-blok input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
@@ -3065,3 +3066,56 @@ select::-ms-expand { display: none; }
   box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
   pointer-events: none;
 }
+
+/* ================================================================
+   KONTA — Twoje konto i Dostęp (public/konta.js)
+   ================================================================ */
+
+/* Elementy, które mają sens tylko u właściciela. Ukrycie to wygoda, nie
+   zabezpieczenie — serwer i tak odmawia (TYLKO_WLASCICIEL w server.js). */
+.rola-czlonek .tylko-wlasciciel { display: none !important; }
+/* Pole modelu lokalnego ma sens tylko dla kogoś, kto ma do lokalnego GPU prawo. */
+.bez-lokalnego .tylko-z-lokalnym { display: none !important; }
+
+.konto-blok {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; margin-bottom: 18px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.konto-naglowek { display: flex; align-items: center; gap: 12px; }
+.konto-naglowek > div { flex: 1; min-width: 0; }
+.konto-avatar {
+  flex: none; width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent-glow); color: var(--accent-strong);
+  font-weight: 600; font-size: 16px;
+}
+.konto-avatar.maly { width: 30px; height: 30px; font-size: 13px; }
+.konto-nazwa { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.konto-meta, .osoba-meta { font-size: 11.5px; color: var(--text-faint); }
+.konto-szczegoly summary { cursor: pointer; color: var(--text-dim); font-size: 13px; padding: 4px 0; }
+.konto-szczegoly[open] summary { margin-bottom: 8px; }
+.konto-komunikat:empty { display: none; }
+.konto-komunikat.blad { color: var(--danger); }
+
+.dostep-link { display: flex; flex-direction: column; gap: 6px; }
+.dostep-lista { display: flex; flex-direction: column; gap: 8px; }
+.dostep-lista:empty { display: none; }
+.osoba {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: calc(var(--radius) - 4px);
+}
+.osoba.zaproszenie { flex-direction: row; align-items: center; justify-content: space-between; }
+.osoba-glowa { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.osoba-opis { min-width: 0; }
+.osoba-nazwa { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.osoba-meta { overflow-wrap: anywhere; }
+.osoba-silniki { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.osoba-silnik { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); cursor: pointer; }
+.osoba-silnik:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.osoba-akcje { gap: 8px; }
+.btn-ghost.niebezpieczny { color: var(--danger); }
+
+/* Ekran zaproszenia korzysta ze stylu logowania — tylko pola jedno pod drugim. */
+#invite-form input[hidden], #invite-form button[hidden] { display: none; }

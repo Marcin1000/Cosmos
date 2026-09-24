@@ -33,11 +33,32 @@
         <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
       </svg>
       <h1 class="login-title">COSMOS</h1>
-      <p class="login-sub" data-i18n="login.sub">Wpisz hasło, aby uzyskać dostęp</p>
-      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password" autofocus>
+      <p class="login-sub" data-i18n="login.sub">Zaloguj się do Cosmosa</p>
+      <input type="text" id="login-login" data-i18n-ph="login.login" placeholder="Login" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus>
+      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password">
       <button type="submit" class="btn-primary" id="login-submit" data-i18n="login.submit">Zaloguj</button>
       <p class="login-error" id="login-error"></p>
       <button type="button" class="login-lang" id="login-lang" data-i18n="lang">English</button>
+    </form>
+  </div>
+
+  <!-- Przyjęcie zaproszenia. Link ma postać /#zaproszenie=TOKEN — token siedzi
+       we fragmencie po #, więc nie trafia ani do logów serwera, ani do
+       Cloudflare: przeglądarka nie wysyła fragmentu w żądaniu. -->
+  <div class="login-overlay" id="invite-overlay" style="display:none">
+    <form class="login-box" id="invite-form">
+      <svg class="login-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/>
+        <ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 24 24)" opacity="0.55"/>
+      </svg>
+      <h1 class="login-title">COSMOS</h1>
+      <p class="login-sub" id="invite-sub" data-i18n="inv.sub">Masz zaproszenie. Ustaw login i hasło — i gotowe.</p>
+      <input type="text" id="invite-name" data-i18n-ph="inv.name" placeholder="Twoje imię" autocomplete="name">
+      <input type="text" id="invite-login" data-i18n-ph="inv.login" placeholder="Login (do logowania)" autocomplete="username" autocapitalize="none" spellcheck="false">
+      <input type="password" id="invite-pass" data-i18n-ph="inv.pass" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password">
+      <input type="password" id="invite-pass2" data-i18n-ph="inv.pass2" placeholder="Powtórz hasło" autocomplete="new-password">
+      <button type="submit" class="btn-primary" id="invite-submit" data-i18n="inv.submit">Dołącz</button>
+      <p class="login-error" id="invite-error"></p>
     </form>
   </div>
 
@@ -259,23 +280,91 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- TWOJE KONTO — każdy. Wypełnia public/konta.js. -->
+        <div class="konto-blok" id="konto-blok" hidden>
+          <div class="konto-naglowek">
+            <span class="konto-avatar" id="konto-avatar" aria-hidden="true"></span>
+            <div>
+              <div class="konto-nazwa" id="konto-nazwa-widok"></div>
+              <div class="konto-meta mono"><span id="konto-login"></span> · <span id="konto-rola"></span></div>
+            </div>
+            <button type="button" class="btn-ghost konto-wyloguj" id="konto-wyloguj" data-i18n="acc.logout">Wyloguj</button>
+          </div>
+          <details class="konto-szczegoly">
+            <summary data-i18n="acc.manage">Imię, hasło i własne klucze</summary>
+            <label class="field">
+              <span class="field-label" data-i18n="acc.name">Imię (tak zwraca się do Ciebie Cosmos)</span>
+              <div class="field-row">
+                <input type="text" id="konto-nazwa" autocomplete="name">
+                <button type="button" class="btn-secondary" id="konto-nazwa-zapisz" data-i18n="acc.save">Zapisz</button>
+              </div>
+            </label>
+            <div class="field">
+              <span class="field-label" data-i18n="acc.password">Zmiana hasła</span>
+              <div class="field-row">
+                <input type="password" id="konto-haslo-stare" data-i18n-ph="acc.passOld" placeholder="Obecne hasło" autocomplete="current-password">
+                <input type="password" id="konto-haslo-nowe" data-i18n-ph="acc.passNew" placeholder="Nowe hasło (min. 8)" autocomplete="new-password">
+                <button type="button" class="btn-secondary" id="konto-haslo-zapisz" data-i18n="acc.passSave">Zmień</button>
+              </div>
+              <span class="field-hint" data-i18n="acc.passHint">Po zmianie hasła pozostałe urządzenia zostaną wylogowane.</span>
+            </div>
+            <div class="field">
+              <span class="field-label" data-i18n="acc.keys">Własne klucze API (opcjonalnie)</span>
+              <div class="field-row">
+                <input type="password" id="konto-klucz-openai" data-i18n-ph="acc.keyOpenai" placeholder="Klucz OpenAI (sk-…)" autocomplete="off">
+                <button type="button" class="btn-secondary" id="konto-klucz-openai-zapisz" data-i18n="acc.save">Zapisz</button>
+              </div>
+              <div class="field-row">
+                <input type="password" id="konto-klucz-claude" data-i18n-ph="acc.keyClaude" placeholder="Klucz Anthropic / Claude" autocomplete="off">
+                <button type="button" class="btn-secondary" id="konto-klucz-claude-zapisz" data-i18n="acc.save">Zapisz</button>
+              </div>
+              <span class="field-hint" id="konto-klucze-hint" data-i18n="acc.keysHint">Z własnym kluczem płacisz sam, a zakładka tego silnika pojawi się od razu. Klucz widzi tylko serwer — w przeglądarce zostają cztery ostatnie znaki. Zostaw puste i zapisz, żeby usunąć.</span>
+            </div>
+            <div class="field-row">
+              <button type="button" class="btn-secondary" id="konto-wyloguj-wszedzie" data-i18n="acc.logoutAll">Wyloguj pozostałe urządzenia</button>
+            </div>
+          </details>
+          <p class="field-hint konto-komunikat" id="konto-komunikat" role="status"></p>
+        </div>
+
+        <!-- DOSTĘP — tylko właściciel. Zaproszenia i ludzie. -->
+        <div class="konto-blok tylko-wlasciciel" id="dostep-blok" hidden>
+          <span class="field-label" data-i18n="acc.accessTitle">Dostęp — kto korzysta z Twojego Cosmosa</span>
+          <div class="field-row">
+            <input type="text" id="dostep-nazwa" data-i18n-ph="acc.inviteName" placeholder="Imię osoby, którą zapraszasz">
+            <button type="button" class="btn-primary" id="dostep-zapros" data-i18n="acc.invite">Zaproś</button>
+          </div>
+          <div class="dostep-link" id="dostep-link" hidden>
+            <input type="text" id="dostep-link-pole" class="mono" readonly>
+            <div class="field-row">
+              <button type="button" class="btn-secondary" id="dostep-kopiuj" data-i18n="acc.copy">Kopiuj link</button>
+              <button type="button" class="btn-secondary" id="dostep-udostepnij" data-i18n="acc.share">Wyślij…</button>
+            </div>
+            <span class="field-hint" data-i18n="acc.linkHint">Link działa raz i wygasa po 7 dniach. Wyślij go tylko tej osobie — kto go otworzy pierwszy, ten zakłada konto.</span>
+          </div>
+          <span class="field-hint" id="dostep-bez-hasla" hidden data-i18n="acc.needPassword">Zanim zaprosisz kogokolwiek, ustaw sobie hasło (w .env: COSMOS_PASSWORD, albo powyżej). Bez hasła każdy, kto zna adres, wchodzi jako Ty.</span>
+          <div class="dostep-lista" id="dostep-lista"></div>
+          <div class="dostep-lista" id="dostep-zaproszenia"></div>
+          <span class="field-hint" data-i18n="acc.privacy">Widzisz konta, ostatnią wizytę i liczbę wiadomości. Rozmów, pamięci i bazy wiedzy innych osób nie widzisz — i nikt nie widzi Twoich.</span>
+        </div>
+
         <label class="field">
           <span class="field-label" data-i18n="set.modelCloud">Model — chmura NVIDIA</span>
           <div class="field-row">
             <input type="text" id="set-model-cloud" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
             <button class="btn-secondary" id="fetch-models-cloud" data-i18n="set.fetchList">Pobierz listę</button>
-            <button class="btn-secondary" id="check-model-cloud" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
+            <button class="btn-secondary tylko-wlasciciel" id="check-model-cloud" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
           </div>
           <select id="model-select-cloud" style="display:none" class="mono"></select>
           <div class="model-info" id="model-info-cloud" hidden></div>
         </label>
 
-        <label class="field">
+        <label class="field tylko-z-lokalnym">
           <span class="field-label" data-i18n="set.modelLocal">Model — lokalny (RTX / Ollama / vLLM)</span>
           <div class="field-row">
             <input type="text" id="set-model-local" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
             <button class="btn-secondary" id="fetch-models-local" data-i18n="set.fetchList">Pobierz listę</button>
-            <button class="btn-secondary" id="check-model-local" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
+            <button class="btn-secondary tylko-wlasciciel" id="check-model-local" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
           </div>
           <select id="model-select-local" style="display:none" class="mono"></select>
           <div class="model-info" id="model-info-local" hidden></div>
@@ -330,7 +419,7 @@
 
         <label class="field">
           <span class="field-label" data-i18n="set.profile">Profil (pamięć profilowa)</span>
-          <textarea id="set-profile" rows="3" placeholder="np. Marcin — twórca wideo. Sprzęt: Canon R6 II, Mavic 3, RTX 3080. Lubi ciepłą kolorystykę i 50 mm."></textarea>
+          <textarea id="set-profile" rows="3" data-i18n-ph="set.profilePh" placeholder="np. Ania — fotografuje góry, lubi krótkie odpowiedzi i konkretne liczby."></textarea>
           <span class="field-hint" data-i18n="set.profileHint">Stałe fakty o Tobie…</span>
         </label>
 
@@ -379,7 +468,7 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.devices">Urządzenia (smart home)</span>
           <span class="field-hint" data-i18n="dev.hint">Dowolne urządzenie sterowane przez HTTP (Home Assistant, Shelly, Hue, Tasmota). Cosmos może zaproponować użycie w rozmowie — wykonanie zawsze wymaga Twojego kliknięcia.</span>
           <div class="field-row">
@@ -397,7 +486,7 @@
           <div class="learn-list" id="dev-list"></div>
         </div>
 
-        <div class="field">
+        <div class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.briefing">Poranna odprawa</span>
           <span class="field-hint" data-i18n="brief.hint">Pogoda, kalendarz i zaplanowane czynności streszczone i czytane na głos. Wymaga BRIEFING_LAT/BRIEFING_LON w .env (pogoda) — kalendarz opcjonalnie przez CALENDAR_ICS.</span>
           <div class="field-row">
@@ -408,7 +497,7 @@
           <div class="briefing-box" id="brief-out" style="display:none"></div>
         </div>
 
-        <div class="field">
+        <div class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.train">Dane treningowe (fine-tuning)</span>
           <span class="field-hint" id="train-stats" data-i18n="train.hint">Wyeksportuj swoje rozmowy jako zbiór JSONL do dotrenowania własnego modelu (QLoRA). Przewodnik: training/README.md.</span>
           <div class="field-row">
@@ -632,7 +721,7 @@
         <!-- Procedury -->
         <div class="learn-pane" id="learn-pane-proc" style="display:none">
           <p class="field-hint" data-i18n-html="learn.procIntro">Naucz Cosmosa czynności krok po kroku (np. „sprawdź rachunek za prąd”). Kroki <strong>wrażliwe</strong> (płatność, wysłanie, potwierdzenie) zawsze wymagają Twojego kliknięcia — Cosmos nigdy nie zapłaci sam. Hasła i dane karty <strong>nie są</strong> zapisywane w procedurze.</p>
-          <div class="rec-box" id="rec-box" style="display:none">
+          <div class="rec-box tylko-wlasciciel" id="rec-box" style="display:none">
             <div class="field-row">
               <input type="text" id="rec-url" class="mono" data-i18n-ph="rec.urlPh" placeholder="adres startowy (opcjonalnie), np. https://ebok...">
               <button class="btn-secondary" id="rec-start" data-i18n="rec.start">🔴 Nagraj procedurę</button>
@@ -783,7 +872,7 @@
         </div>
 
         <!-- ---------- APARAT PO WI-FI ---------- -->
-        <div class="plener-section" id="pl-sec-camera">
+        <div class="plener-section tylko-wlasciciel" id="pl-sec-camera">
           <div class="plener-sec-title">📷 <span data-i18n="pl.camera">Aparat po Wi-Fi</span>
             <span class="mono studio-provider">Canon CCAPI</span></div>
           <div class="plan-camera mono" id="plan-camera">
@@ -874,8 +963,8 @@
     <div class="live-source">
       <select id="live-source" class="mono" data-i18n-aria="live.source" aria-label="Źródło obrazu">
         <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
-        <option value="kinect-color" data-i18n="live.srcKinectColor">Kinect — obraz</option>
-        <option value="kinect-depth" data-i18n="live.srcKinectDepth">Kinect — głębia</option>
+        <option value="kinect-color" class="tylko-wlasciciel" data-i18n="live.srcKinectColor">Kinect — obraz</option>
+        <option value="kinect-depth" class="tylko-wlasciciel" data-i18n="live.srcKinectDepth">Kinect — głębia</option>
       </select>
     </div>
     <div class="live-stage" id="live-stage">
@@ -1055,6 +1144,7 @@
   <script src="protokol.js"></script>
   <script src="plener.js"></script>
   <script src="mowa.js"></script>
+  <script src="konta.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

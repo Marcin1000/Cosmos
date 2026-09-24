@@ -343,8 +343,13 @@ for (const [f, tekst] of Object.entries({
   'README.pl.md': rd('README.pl.md'),
   'CLAUDE.md': rd('CLAUDE.md'),
   'tests/README.md': rd('tests/README.md'),
+  'docs/obrazy/banner.svg': rd('docs/obrazy/banner.svg'),
 })) {
-  for (const m of tekst.matchAll(/(\d+)\s+zestaw(?:ów|y|)/g)) {
+  /* Po polsku i po angielsku — angielskie „90 suites" i „99 behaviour test
+     suites" w bannerze przetrwały kilka zmian niezauważone, bo audyt czytał
+     tylko polskie „zestawów". Liczba w adresie odznaki też jest liczbą. */
+  for (const m of tekst.matchAll(/(\d+)\s+(?:zestaw(?:ów|y|)|(?:behaviour\s+)?(?:test\s+)?suites)|(?:test%20suites|zestawy%20test%C3%B3w)-(\d+)-/g)) {
+    m[1] = m[1] || m[2];
     if (PODZBIOR.test(tekst.slice(m.index + m[0].length))) continue;
     if (Number(m[1]) !== ileZestawow) zleLiczby.push(`${f}: „${m[0]}", a jest ${ileZestawow}`);
   }
@@ -399,8 +404,30 @@ const cfg = server.slice(server.indexOf('function handleConfig'), server.indexOf
 /apiKey\s*:\s*(ep\.apiKey|process\.env)/.test(cfg) ? zle('/api/config oddaje klucz API') : ok('/api/config oddaje tylko hasApiKey');
 const scrubUzyte = (server.match(/scrubSecrets\(/g) || []).length;
 scrubUzyte >= 4 ? ok(`redakcja danych konta w ${scrubUzyte - 1} miejscach`) : zle('redakcja danych konta niekompletna');
-/p\.startsWith\('\/api\/'\) && !isAuthed/.test(server) ? ok('każda trasa /api/ za logowaniem, gdy hasło ustawione')
-  : zle('brak globalnej bramki logowania na /api/');
+/* Bramka logowania — strukturalnie, nie po brzmieniu.
+   Od kont (wrzesień 2026) router wygląda tak: kilka tras PUBLICZNYCH,
+   potem `if (!u) return … 401`, potem `wKontekscie(u, () => trasyApi(…))`.
+   Sprawdzamy trzy rzeczy, bo każda z osobna może się rozjechać:
+     — przed bramką stoją WYŁĄCZNIE trasy z listy publicznych (nowa trasa
+       dopisana nad bramką byłaby dostępna bez logowania),
+     — bramka stoi przed wejściem do trasyApi,
+     — trasyApi jest wołane w jednym miejscu (drugie wywołanie mogłoby
+       ominąć bramkę). */
+{
+  const PUBLICZNE = ['/api/auth', '/api/login', '/api/logout', '/api/zaproszenie'];
+  const start = server.indexOf('const server = http.createServer(');
+  const blok = server.slice(start, server.indexOf('\n});', start));
+  const bramka = blok.search(/if \(!u\) return sendJson\(res, 401/);
+  const wejscie = blok.indexOf('trasyApi(req, res, p)');
+  const nadBramka = [...blok.slice(0, bramka).matchAll(/p === '(\/api\/[^']*)'/g)].map((m) => m[1]);
+  const obce = nadBramka.filter((t) => !PUBLICZNE.includes(t));
+  const wywolan = (server.match(/(?<!function )trasyApi\(req, res, p\)/g) || []).length;
+  if (start < 0 || bramka < 0 || wejscie < 0) zle('brak globalnej bramki logowania na /api/');
+  else if (bramka > wejscie) zle('bramka logowania stoi ZA wejściem do tras chronionych');
+  else if (obce.length) zle(`trasy nad bramką logowania (dostępne bez hasła): ${obce.join(', ')}`);
+  else if (wywolan !== 1) zle(`trasyApi wołane ${wywolan} razy — każde wywołanie poza routerem omija bramkę`);
+  else ok(`każda trasa /api/ za logowaniem poza ${PUBLICZNE.length} publicznymi`);
+}
 // Liczenie wystąpień kłamie — limit bywa w obiekcie opcji kilka linii wyżej.
 // Patrzymy w okno wokół każdego wywołania.
 const linie = server.split('\n');
@@ -600,6 +627,11 @@ for (const m of moduly) {
   for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  /* Definicje METOD — `constructor(co) {` w klasie, `has(_, prop) {` w pośredniku
+     (lib/kontekst.js). Wyglądają jak wywołanie, bo nazwa stoi przed nawiasem,
+     ale po nawiasie jest klamra ciała, a nie średnik czy operator. Bez tego
+     każda klasa i każdy Proxy w lib/ dawały „wołane bez definicji". */
+  for (const x of src.matchAll(/^\s*(?:async\s+|static\s+|get\s+|set\s+)*([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{/gm)) zdef.add(x[1]);
   /* Wszystko, co stoi wewnątrz nawiasów klamrowych albo okrągłych, traktujemy
      jak potencjalny parametr lub destrukturyzację. Hojnie — patrz wyżej. */
   /* Parametry funkcji czytamy z wersji BEZ zagnieżdżonych klamer, inaczej

@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-0969da?style=flat-square">
-  <img alt="91 test suites" src="https://img.shields.io/badge/test%20suites-91-4ac26b?style=flat-square">
+  <img alt="94 test suites" src="https://img.shields.io/badge/test%20suites-94-4ac26b?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-6e7781?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-d4a72c?style=flat-square"></a>
 </p>
@@ -88,7 +88,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception — nobody should write an object detector from scratch —
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 90 suites plus 9 Python
+**Tests measure behaviour, never source text.** 94 suites plus 9 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -124,6 +124,7 @@ answered a question. The interesting column is the last one.
 | **Canon over Wi-Fi** | Can it write settings back to the camera? | CCAPI integration. A camera that sleeps its Wi-Fi after a few minutes will happily report `online` for another thirty seconds. |
 | **Drone missions** | Waypoint missions as a file the aircraft accepts | WPML/KMZ writer using Node's own `zlib`. Never flown — stated plainly rather than implied. |
 | **QLoRA fine-tuning** | Is a personal fine-tune worth it over a good prompt? | Dataset export and a training loop. Verdict so far: no, and the prompt work generalises better. |
+| **Sharing it** | Can a single-person app host family and friends without rewriting every function? | A request-scoped user context (`AsyncLocalStorage`) that follows every `await` into background work. Data access without an established user **throws** instead of falling back to a default — a silent default would show one person's data to another, and nothing would look broken. Invitation links, per-person engine grants, owner-only server capabilities. |
 
 ---
 
@@ -178,7 +179,7 @@ node server.js            # http://localhost:3000
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 90 suites + 9 Python selftests (~16 min)
+npm test                  # 94 suites + 9 Python selftests (~16 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -196,7 +197,7 @@ lib/                 31 domain modules — one concern each, injected, no cycles
 public/              client: state, tools, view builders, protocol, text, speech
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge — exposes Cosmos tools to other agents
-tests/               90 behaviour suites, mock upstreams, fake DOM
+tests/               94 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 
@@ -213,6 +214,7 @@ an empty object.
 |---|---|
 | [`README.pl.md`](README.pl.md) | the same document in Polish |
 | [`docs/START-TUTAJ.md`](docs/START-TUTAJ.md) | full setup runbook, from nothing to running (Polish) |
+| [`docs/DOSTEP.md`](docs/DOSTEP.md) | own domain via Cloudflare Tunnel, inviting people, what they need on their side (Polish) |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | every batch of work, what broke and why (Polish) |
 | [`tests/README.md`](tests/README.md) | how the test environments work |
 

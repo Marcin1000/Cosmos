@@ -18,25 +18,39 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
 // Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
-const { modelInfo, modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./public/models.js');
+const { modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./public/models.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
    wie nic o rozmowach, zmysłach ani o Studiu. */
 const {
-  KORZEN, PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SEARCH_URL, SECRETS,
-  loadDotEnv, sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, studioTasks,
+  PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
+  sendJson, readBodyBuffer, readJson, pickEndpoint,
+  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
 } = require('./lib/rdzen.js');
+/* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
+   i trasy kont. Zasady — w nagłówkach tych modułów; bramka logowania zostaje
+   niżej, w routerze (audyt sprawdza ją strukturalnie). */
+const { stan, naUzytkownika, wKontekscie, kto, czyWlasciciel, katalogDla,
+  zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
+const konta = require('./lib/konta.js');
+const silniki = require('./lib/silniki.js');
+ustawStraznikaSilnikow(silniki.wybierz);
+const { stanOsoby } = require('./lib/stan-osoby.js');
+const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
+  obcePochodzenie, handleKonto, handleKonta, migrujDoKont, TYLKO_WLASCICIEL,
+} = require('./lib/konta-trasy.js').utworz({
+  konta, silniki, kto, katalogDla, zapomnij, WLASCICIEL_ID,
+  DATA_DIR, ENDPOINTS, STUDIO, imageProviders, sendJson, readJson, readBodyBuffer,
+});
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
-const { SPRZET, OBIEKTYWY, evZeSlonca, dobierz, evZPomiaru, orientacja,
+const { evZeSlonca, dobierz, evZPomiaru, orientacja,
   rozpoznajObiektywy } = require('./lib/ekspozycja.js');
 const { pogodaDla } = require('./lib/pogoda.js');
 const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
@@ -47,17 +61,27 @@ const { planUjec, optykaDrona } = require('./lib/ujecia.js');
 const canon = require('./lib/canon.js');
 const { misjaKmz, siatka } = require('./lib/kmz.js');
 const archiwum_ = require('./lib/archiwum.js');
-const archiwum = archiwum_.utworz(DATA_DIR);
+const pamiecModul_ = require('./lib/pamiec.js');
+/* Archiwum i OneDrive KAŻDEJ OSOBY OSOBNO. Pośrednik kieruje każde
+   `archiwum.coś(…)` do instancji bieżącej osoby, więc reszta pliku się nie
+   zmienia — a mimo to nikt nie przeszuka cudzych zdjęć. Dom (do pory światła
+   dla zdjęć bez GPS-u) ustawiamy przy tworzeniu instancji, z lokalizacji tej
+   samej osoby. */
+const archiwum = naUzytkownika('archiwum', (katalog) => {
+  const a = archiwum_.utworz(katalog);
+  const w = U().wspolrzedne;
+  if (w) a.ustawDom(w);
+  return a;
+});
 const onedrive_ = require('./lib/onedrive.js');
-const onedrive = onedrive_.utworz({
-  katalogDanych: DATA_DIR,
+const onedrive = naUzytkownika('onedrive', (katalog) => onedrive_.utworz({
+  katalogDanych: katalog,
   clientId: process.env.ONEDRIVE_CLIENT_ID || '',
   clientSecret: process.env.ONEDRIVE_CLIENT_SECRET || '',
   redirectUri: process.env.ONEDRIVE_REDIRECT_URI || '',
-});
+}));
 const trening_ = require('./lib/trening.js');
-const { addEvent, recentEvents, sceneContext, podlaczStrumien, iluSluchaczy,
-  ileZdarzen } = require('./lib/zdarzenia.js');
+const { addEvent, recentEvents, sceneContext, podlaczStrumien, ileZdarzen } = require('./lib/zdarzenia.js');
 const { TRAIN_DIR, TRAIN_SCRIPT, buildTrainingDataset, commandExists, startTraining, trainJob, trainLog, trainStatusView } = trening_;
 const urzadzenia_ = require('./lib/urzadzenia.js');
 const { BRIEFING, handleBriefing, handleDevices, urzadzenia } = urzadzenia_;
@@ -67,83 +91,10 @@ const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
-const { llmComplete, parseModelResponse, blindToImages } = require('./lib/model.js');
+const { llmComplete, blindToImages } = require('./lib/model.js');
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
-
-// Uwierzytelnianie (konieczne przy wystawieniu na VPS/publicznie).
-//   COSMOS_PASSWORD    — hasło do logowania w przeglądarce.
-//   COSMOS_API_TOKEN   — stały token dla klientów programowych (MCP, skrypty).
-// Gdy żadne nie jest ustawione, auth jest wyłączone (tryb domowy/localhost)
-// i zachowuje się jak dotychczas.
-// ---------------------------------------------------------------------------
-
-const AUTH = {
-  password: process.env.COSMOS_PASSWORD || '',
-  apiToken: process.env.COSMOS_API_TOKEN || '',
-  cookieSecure: process.env.COSMOS_COOKIE_SECURE === '1', // ustaw przy publicznym HTTPS
-};
-
-const sessions = new Set(); // aktywne tokeny sesji (w pamięci)
-
-function authEnabled() {
-  return Boolean(AUTH.password || AUTH.apiToken);
-}
-
-function safeEqual(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ba.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ba, bb);
-}
-
-function parseCookies(req) {
-  const out = {};
-  for (const part of (req.headers.cookie || '').split(';')) {
-    const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
-  }
-  return out;
-}
-
-function isAuthed(req) {
-  if (!authEnabled()) return true;
-  const header = req.headers.authorization || '';
-  const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (bearer) {
-    if (AUTH.apiToken && safeEqual(bearer, AUTH.apiToken)) return true;
-    if (sessions.has(bearer)) return true;
-  }
-  const cookie = parseCookies(req).cosmos_auth;
-  if (cookie && sessions.has(cookie)) return true;
-  return false;
-}
-
-async function handleLogin(req, res) {
-  let data;
-  try { data = JSON.parse((await readBodyBuffer(req)).toString('utf8')); }
-  catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-  if (!AUTH.password || !safeEqual(String(data.password || ''), AUTH.password)) {
-    return sendJson(res, 401, { error: 'Nieprawidłowe hasło.' });
-  }
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.add(token);
-  const cookie = `cosmos_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}` +
-    (AUTH.cookieSecure ? '; Secure' : '');
-  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': cookie });
-  res.end(JSON.stringify({ ok: true, token }));
-}
-
-function handleLogout(req, res) {
-  const token = parseCookies(req).cosmos_auth;
-  if (token) sessions.delete(token);
-  res.writeHead(200, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Set-Cookie': 'cosmos_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
-  });
-  res.end('{"ok":true}');
-}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -163,19 +114,20 @@ const MIME = {
 // Pamięć długotrwała (RAG) — całość w lib/pamiec.js.
 // Tutaj tylko spięcie zależności i cienkie przejścia dla reszty pliku.
 // ---------------------------------------------------------------------------
-const pamiec_ = require('./lib/pamiec.js').utworz({
-  katalogDanych: DATA_DIR,
+const pamiec_ = naUzytkownika('pamiec', (katalog) => pamiecModul_.utworz({
+  katalogDanych: katalog,
   sensesUrl: SENSES_URL,
   chmura: () => ENDPOINTS.cloud,
   sendJson,
   readJson,
-});
+}));
 const handleMemory = (req, res) => pamiec_.handleMemory(req, res);
 const searchMemory = (q, limit) => pamiec_.searchMemory(q, limit);
 const memoryContextLines = (items) => pamiec_.memoryContextLines(items);
 const embedTexts = (texts, timeoutMs, inputType) => pamiec_.embedTexts(texts, timeoutMs, inputType);
 const embedStatus = (sensesHasEmbed) => pamiec_.embedStatus(sensesHasEmbed);
-const { cosine, sameModel, keywordScore } = pamiec_;
+// Czyste funkcje podobieństwa — z modułu, nie z instancji: potrzebne też poza żądaniem.
+const { cosine, sameModel, keywordScore } = pamiecModul_;
 
 // ---------------------------------------------------------------------------
 // Baza wiedzy — pliki, linki i notatki użytkownika.
@@ -189,15 +141,15 @@ const { cosine, sameModel, keywordScore } = pamiec_;
 // localStorage. Bez bazy danych — rozmowy to dokumenty, nie dane relacyjne.
 // ---------------------------------------------------------------------------
 
-const CONV_DIR = path.join(DATA_DIR, 'conversations');
-const CONV_INDEX = path.join(CONV_DIR, 'index.json');
-
-let convIndex = [];
-try { convIndex = JSON.parse(fs.readFileSync(CONV_INDEX, 'utf8')); } catch { /* brak pliku */ }
+/* Stan bieżącej osoby: indeks rozmów, profil, lokalizacja, sprzęt, baza
+   wiedzy, oś czasu — lib/stan-osoby.js. */
+const U = () => stanOsoby(BRIEFING);
+const CONV_DIR = () => path.join(U().katalog, 'conversations');
+const CONV_INDEX = () => path.join(CONV_DIR(), 'index.json');
 
 function saveConvIndex() {
   try {
-    zapiszAtomowo(CONV_INDEX, JSON.stringify(convIndex));
+    zapiszAtomowo(CONV_INDEX(), JSON.stringify(U().convIndex));
   } catch (err) {
     console.error('Nie udało się zapisać indeksu rozmów:', err.message);
   }
@@ -205,12 +157,12 @@ function saveConvIndex() {
 
 // Sanityzacja ID → tylko nasz alfabet uid; blokuje path traversal.
 function convPath(id) {
-  return path.join(CONV_DIR, `${String(id).replace(/[^a-z0-9]/gi, '')}.json`);
+  return path.join(CONV_DIR(), `${String(id).replace(/[^a-z0-9]/gi, '')}.json`);
 }
 
 function sortConvIndex() {
   // przypięte na górze, potem wg czasu modyfikacji
-  convIndex.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
+  U().convIndex.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
 }
 
 /** Dopisz wiadomość do rozmowy PO STRONIE SERWERA.
@@ -241,7 +193,7 @@ function dopiszWiadomoscDoRozmowy(id, wiadomosc) {
   conv.messages.push(wiadomosc);
   conv.updatedAt = Date.now();
   zapiszAtomowo(plik, JSON.stringify(conv));
-  const meta = convIndex.find((c) => c.id === id);
+  const meta = U().convIndex.find((c) => c.id === id);
   if (meta) { meta.updatedAt = conv.updatedAt; sortConvIndex(); saveConvIndex(); }
   return true;
 }
@@ -257,7 +209,7 @@ function searchConversationsContent(query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const out = [];
-  for (const meta of convIndex) {
+  for (const meta of U().convIndex) {
     try {
       const conv = JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8'));
       let snippet = '';
@@ -285,12 +237,9 @@ function searchConversationsContent(query) {
  * pożyczony, a jedno zdanie w czacie jest świeższe niż ustawienie sprzed
  * miesiąca.
  */
-const SPRZET_FILE = path.join(DATA_DIR, 'sprzet.json');
-let userSprzet = { korpus: '', obiektywy: '', dodatki: '' };
-try { userSprzet = { ...userSprzet, ...JSON.parse(fs.readFileSync(SPRZET_FILE, 'utf8')) }; }
-catch { /* brak — panel Ustawień pozwoli uzupełnić */ }
+const SPRZET_FILE = () => path.join(U().katalog, 'sprzet.json');
 function saveSprzet(dane) {
-  userSprzet = {
+  U().sprzet = {
     korpus: String((dane && dane.korpus) || '').slice(0, 120),
     obiektywy: String((dane && dane.obiektywy) || '').slice(0, 400),
     /* Dron, gimbal, statyw, slider. Osobne pole, bo to NIE jest optyka —
@@ -299,55 +248,40 @@ function saveSprzet(dane) {
     dodatki: String((dane && dane.dodatki) || '').slice(0, 300),
   };
   try {
-    zapiszAtomowo(SPRZET_FILE, JSON.stringify(userSprzet));
+    zapiszAtomowo(SPRZET_FILE(), JSON.stringify(U().sprzet));
   } catch (err) { console.error('Nie udało się zapisać sprzętu:', err.message); }
 }
 
 // Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
-const PROFILE_FILE = path.join(DATA_DIR, 'profile.txt');
-let userProfile = '';
-try { userProfile = fs.readFileSync(PROFILE_FILE, 'utf8'); } catch { /* brak */ }
+const PROFILE_FILE = () => path.join(U().katalog, 'profile.txt');
 function saveProfile(text) {
-  userProfile = String(text || '').slice(0, 4000);
-  try { zapiszAtomowo(PROFILE_FILE, userProfile); }
+  U().profile = String(text || '').slice(0, 4000);
+  try { zapiszAtomowo(PROFILE_FILE(), U().profile); }
   catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
 }
 
 /* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
    ale i wyszukiwanie („warsztat … w Piasecznie"). Bez niej model pyta
    „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
-const LOCATION_FILE = path.join(DATA_DIR, 'location.txt');
-const WSPOLRZEDNE_FILE = path.join(DATA_DIR, 'location.json');
-let userLocation = '';
+const LOCATION_FILE = () => path.join(U().katalog, 'location.txt');
 /* Sama nazwa miejsca wystarczała do wyszukiwania, ale nie do liczenia pozycji
    Słońca — złota godzina wymaga stopni, nie napisu „Piaseczno". Trzymamy
    jedno i drugie: nazwę dla modelu, współrzędne dla matematyki. */
-let userWspolrzedne = null;
-try { userLocation = fs.readFileSync(LOCATION_FILE, 'utf8'); } catch { /* brak */ }
-try { userWspolrzedne = JSON.parse(fs.readFileSync(WSPOLRZEDNE_FILE, 'utf8')); } catch { /* brak */ }
-// Zapas z odprawy porannej — kto ustawił BRIEFING_LAT, nie musi robić tego drugi raz.
-if (!userWspolrzedne && BRIEFING.lat && BRIEFING.lon) {
-  userWspolrzedne = { lat: Number(BRIEFING.lat), lon: Number(BRIEFING.lon) };
-}
-/* Archiwum potrzebuje domu do liczenia pory światła dla zdjęć bez GPS-u.
-   Ustawiamy TU, a nie przy tworzeniu indeksu: `userWspolrzedne` deklarowane
-   jest niżej niż `archiwum`, więc wcześniejsze odwołanie trafiało w martwą
-   strefę czasową i serwer w ogóle nie wstawał. */
-if (userWspolrzedne) archiwum.ustawDom(userWspolrzedne);
+const WSPOLRZEDNE_FILE = () => path.join(U().katalog, 'location.json');
 
 function saveLocation(text, wspolrzedne) {
-  userLocation = String(text || '').trim().slice(0, 200);
-  try { zapiszAtomowo(LOCATION_FILE, userLocation); }
+  U().location = String(text || '').trim().slice(0, 200);
+  try { zapiszAtomowo(LOCATION_FILE(), U().location); }
   catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
-    userWspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
-    try { zapiszAtomowo(WSPOLRZEDNE_FILE, JSON.stringify(userWspolrzedne)); }
+    U().wspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
+    try { zapiszAtomowo(WSPOLRZEDNE_FILE(), JSON.stringify(U().wspolrzedne)); }
     catch (err) { console.error('Nie udalo sie zapisac wspolrzednych:', err.message); }
     /* Archiwum liczy pore swiatla dla zdjec bez GPS-u wzgledem domu, wiec
        zmiana lokalizacji musi je przeliczyc - inaczej wpisy dodane wczesniej
        zostaja z `null` mimo ze jest juz z czego je policzyc. */
     if (typeof archiwum !== 'undefined') {
-      archiwum.ustawDom(userWspolrzedne);
+      archiwum.ustawDom(U().wspolrzedne);
       const ile = archiwum.przeliczSwiatlo();
       if (ile) addEvent('archiwum', `przeliczono pore swiatla dla ${ile} plikow`);
     }
@@ -419,7 +353,7 @@ async function handleConversations(req, res, pathname) {
   if (pathname === '/api/conversations/meta' && req.method === 'POST' && id) {
     let data;
     try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const entry = convIndex.find((c) => c.id === id);
+    const entry = U().convIndex.find((c) => c.id === id);
     if (!entry) return sendJson(res, 404, { error: 'Nie znaleziono rozmowy.' });
     if (typeof data.title === 'string' && data.title.trim()) entry.title = data.title.trim().slice(0, 120);
     if (typeof data.pinned === 'boolean') entry.pinned = data.pinned;
@@ -441,7 +375,7 @@ async function handleConversations(req, res, pathname) {
   }
 
   if (req.method === 'GET' && !id) {
-    return sendJson(res, 200, { conversations: convIndex });
+    return sendJson(res, 200, { conversations: U().convIndex });
   }
   if (req.method === 'GET' && id) {
     try {
@@ -461,7 +395,7 @@ async function handleConversations(req, res, pathname) {
     } catch (err) {
       return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
     }
-    const prev = convIndex.find((c) => c.id === id);
+    const prev = U().convIndex.find((c) => c.id === id);
     const meta = {
       id,
       title: conv.title || 'Rozmowa',
@@ -469,14 +403,14 @@ async function handleConversations(req, res, pathname) {
       updatedAt: conv.updatedAt,
       pinned: (typeof conv.pinned === 'boolean' ? conv.pinned : prev?.pinned) || false,
     };
-    const i = convIndex.findIndex((c) => c.id === id);
-    if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
+    const i = U().convIndex.findIndex((c) => c.id === id);
+    if (i >= 0) U().convIndex[i] = meta; else U().convIndex.push(meta);
     sortConvIndex();
     saveConvIndex();
     return sendJson(res, 200, { ok: true, meta });
   }
   if (req.method === 'DELETE' && id) {
-    convIndex = convIndex.filter((c) => c.id !== id);
+    U().convIndex = U().convIndex.filter((c) => c.id !== id);
     saveConvIndex();
     try { fs.unlinkSync(convPath(id)); } catch { /* już nie ma */ }
     return sendJson(res, 200, { ok: true });
@@ -485,17 +419,14 @@ async function handleConversations(req, res, pathname) {
   res.end();
 }
 
-const KB_DIR = path.join(DATA_DIR, 'kb');
-const KB_FILES = path.join(KB_DIR, 'files');
-const KB_INDEX = path.join(KB_DIR, 'index.json');
-
-let kbItems = [];
-try { kbItems = JSON.parse(fs.readFileSync(KB_INDEX, 'utf8')); } catch { /* brak pliku */ }
+const KB_DIR = () => path.join(U().katalog, 'kb');
+const KB_FILES = () => path.join(KB_DIR(), 'files');
+const KB_INDEX = () => path.join(KB_DIR(), 'index.json');
 
 function saveKb() {
   try {
-    fs.mkdirSync(KB_FILES, { recursive: true });
-    zapiszAtomowo(KB_INDEX, JSON.stringify(kbItems));
+    fs.mkdirSync(KB_FILES(), { recursive: true });
+    zapiszAtomowo(KB_INDEX(), JSON.stringify(U().kbItems));
   } catch (err) {
     console.error('Nie udało się zapisać bazy wiedzy:', err.message);
   }
@@ -600,9 +531,8 @@ async function handleUruchom(req, res) {
   sendJson(res, 200, wynik);
 }
 
-/* OneDrive: logowanie i indeksowanie. Cały przepływ OAuth siedzi tutaj,
+/* OneDrive: logowanie i U().indeksowanie. Cały przepływ OAuth siedzi tutaj,
    bo wymaga tras HTTP; sama rozmowa z Microsoftem jest w lib/onedrive.js. */
-let indeksowanie = null;      // { przejrzanych, dodanych, trwa, blad, sygnal }
 
 async function handleOneDrive(req, res, p) {
   if (p === '/api/onedrive/status' && req.method === 'GET') {
@@ -611,9 +541,9 @@ async function handleOneDrive(req, res, p) {
       polaczony: onedrive.polaczony(),
       polaczenie: onedrive.stanPolaczenia(),
       redirectUri: process.env.ONEDRIVE_REDIRECT_URI || null,
-      indeksowanie: indeksowanie
-        ? { trwa: indeksowanie.trwa, przejrzanych: indeksowanie.przejrzanych,
-            dodanych: indeksowanie.dodanych, blad: indeksowanie.blad }
+      indeksowanie: U().indeksowanie
+        ? { trwa: U().indeksowanie.trwa, przejrzanych: U().indeksowanie.przejrzanych,
+            dodanych: U().indeksowanie.dodanych, blad: U().indeksowanie.blad }
         : null,
       wArchiwum: archiwum.ile(),
       // Ile z tego ma już dane z plików — patrz `postep()` w lib/archiwum.js.
@@ -663,27 +593,27 @@ async function handleOneDrive(req, res, p) {
 
   if (p === '/api/onedrive/index' && req.method === 'POST') {
     if (!onedrive.polaczony()) return sendJson(res, 400, { error: 'OneDrive niepołączony.' });
-    if (indeksowanie && indeksowanie.trwa) {
-      return sendJson(res, 409, { error: 'Indeksowanie już trwa.', stan: indeksowanie });
+    if (U().indeksowanie && U().indeksowanie.trwa) {
+      return sendJson(res, 409, { error: 'Indeksowanie już trwa.', stan: U().indeksowanie });
     }
     let d = {};
     try { d = await readJson(req); } catch { /* bez parametrów też można */ }
-    indeksowanie = { trwa: true, przejrzanych: 0, dodanych: 0, blad: null, sygnal: { przerwane: false } };
+    U().indeksowanie = { trwa: true, przejrzanych: 0, dodanych: 0, blad: null, sygnal: { przerwane: false } };
     /* Indeksowanie idzie W TLE i nie blokuje odpowiedzi: przy 2 TB trwa
        kilkanaście minut, a przeglądarka zerwałaby połączenie po minucie. */
     (async () => {
       try {
         await onedrive.indeksuj(async (paczka) => {
           archiwum.dodaj(paczka);
-          indeksowanie.dodanych += paczka.length;
-        }, { folder: d.folder || '', limit: Number(d.limit) || 100000, sygnal: indeksowanie.sygnal });
-        addEvent('archiwum', `OneDrive: zindeksowano ${indeksowanie.dodanych} plików`);
+          U().indeksowanie.dodanych += paczka.length;
+        }, { folder: d.folder || '', limit: Number(d.limit) || 100000, sygnal: U().indeksowanie.sygnal });
+        addEvent('archiwum', `OneDrive: zindeksowano ${U().indeksowanie.dodanych} plików`);
       } catch (err) {
-        indeksowanie.blad = err.message;
+        U().indeksowanie.blad = err.message;
         console.error('Indeksowanie OneDrive:', err.message);
       } finally {
-        indeksowanie.trwa = false;
-        // `zapisz()` jest asynchroniczny — czekamy, żeby „indeksowanie
+        U().indeksowanie.trwa = false;
+        // `zapisz()` jest asynchroniczny — czekamy, żeby „U().indeksowanie
         // skończone" znaczyło też „zapisane na dysk".
         await archiwum.zapisz();
       }
@@ -692,7 +622,7 @@ async function handleOneDrive(req, res, p) {
   }
 
   if (p === '/api/onedrive/index' && req.method === 'DELETE') {
-    if (indeksowanie) indeksowanie.sygnal.przerwane = true;
+    if (U().indeksowanie) U().indeksowanie.sygnal.przerwane = true;
     return sendJson(res, 200, { przerwano: true });
   }
 
@@ -751,7 +681,7 @@ async function handlePlanZdjeciowy(req, res) {
     if (!zNazwy) miejsceNieznane = String(d.miejsce).slice(0, 80);
   }
 
-  const zapis = userWspolrzedne || {};
+  const zapis = U().wspolrzedne || {};
   const surowyLat = d.lat ?? (zNazwy && zNazwy.lat) ?? zapis.lat;
   const surowyLon = d.lon ?? (zNazwy && zNazwy.lon) ?? zapis.lon;
   const lat = surowyLat === null || surowyLat === undefined ? NaN : Number(surowyLat);
@@ -819,12 +749,12 @@ async function handlePlanZdjeciowy(req, res) {
   const zPytania = Array.isArray(d.obiektyw)
     ? d.obiektyw.flatMap((x) => rozpoznajObiektywy(String(x)))
     : rozpoznajObiektywy(d.obiektyw || '');
-  const zUstawien = zPytania.length ? [] : rozpoznajObiektywy(userSprzet.obiektywy || '');
+  const zUstawien = zPytania.length ? [] : rozpoznajObiektywy(U().sprzet.obiektywy || '');
   const szkla = zPytania.length ? zPytania : zUstawien;
   const nieRozpoznane = (d.obiektyw && !zPytania.length) ? String(d.obiektyw).slice(0, 120) : '';
 
   const ustawienia = dobierz(ev, {
-    sprzet: d.sprzet || userSprzet.korpus || undefined, tryb: d.tryb, klatki: d.klatki,
+    sprzet: d.sprzet || U().sprzet.korpus || undefined, tryb: d.tryb, klatki: d.klatki,
     ogniskowa: d.ogniskowa, ruch: d.ruch, glebia: d.glebia,
     obiektyw: szkla, temat: d.temat,
   });
@@ -863,7 +793,7 @@ async function handlePlanZdjeciowy(req, res) {
   sendJson(res, 200, {
     // Gdy liczymy dla PODANEGO miejsca, to jego nazwa jest tu istotna —
     // inaczej odpowiedź mówiłaby o domu, a liczby dotyczyły Krakowa.
-    miejsce: (zNazwy && zNazwy.nazwa) || userLocation || null,
+    miejsce: (zNazwy && zNazwy.nazwa) || U().location || null,
     miejsceZNazwy: Boolean(zNazwy),
     wspolrzedne: { lat, lon },
     slonce: {
@@ -894,7 +824,7 @@ async function handlePlanZdjeciowy(req, res) {
  * (dron, gimbal, statyw) wpisuje się raz w Plenerze albo rzuca w zdaniu
  * „lecę z Mavikiem", a nie wypełnia formularza z polami wyboru. */
 function sprzetTekst(d) {
-  return [d.sprzet, d.dodatki, userSprzet.korpus, userSprzet.dodatki]
+  return [d.sprzet, d.dodatki, U().sprzet.korpus, U().sprzet.dodatki]
     .filter(Boolean).join(' ');
 }
 
@@ -959,11 +889,10 @@ function kbItemMeta(it) {
 
 // Przeliczenie fragmentów bazy wiedzy na aktualny model embeddingów.
 // Działa w tle i pilnuje, by nie uruchomić się dwa razy naraz.
-let reembedBusy = false;
 async function reembedKbChunks(model, budget = 40) {
-  if (reembedBusy) return;
+  if (U().reembedBusy) return;
   const stale = [];
-  for (const it of kbItems) {
+  for (const it of U().kbItems) {
     for (const ch of it.chunks || []) {
       if (!sameModel(ch, model)) stale.push(ch);
       if (stale.length >= budget) break;
@@ -971,7 +900,7 @@ async function reembedKbChunks(model, budget = 40) {
     if (stale.length >= budget) break;
   }
   if (!stale.length) return;
-  reembedBusy = true;
+  U().reembedBusy = true;
   try {
     const embs = await embedTexts(stale.map((c) => c.text), 60000, 'passage');
     if (embs) {
@@ -980,14 +909,14 @@ async function reembedKbChunks(model, budget = 40) {
       console.log(`  → Przeliczono ${stale.length} fragmentów bazy wiedzy na model ${model}`);
     }
   } catch { /* spróbujemy przy następnym pytaniu */ } finally {
-    reembedBusy = false;
+    U().reembedBusy = false;
   }
 }
 
 async function kbSearch(query, excludeIds = [], limit = 4) {
   if (!query || !query.trim()) return [];
   const pool = [];
-  for (const it of kbItems) {
+  for (const it of U().kbItems) {
     if (excludeIds.includes(it.id)) continue;
     for (const ch of it.chunks || []) pool.push({ name: it.name, ...ch });
   }
@@ -1015,14 +944,14 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
 
 async function kbAddFile(name, mime, buf, presetText = null) {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  fs.mkdirSync(KB_FILES, { recursive: true });
-  fs.writeFileSync(path.join(KB_FILES, id), buf);
+  fs.mkdirSync(KB_FILES(), { recursive: true });
+  fs.writeFileSync(path.join(KB_FILES(), id), buf);
   const text = presetText !== null ? presetText : await extractKbText(name, mime, buf);
   const item = {
     id, type: 'file', name, mime, size: buf.length, time: Date.now(),
     text, chunks: await buildChunks(text),
   };
-  kbItems.push(item);
+  U().kbItems.push(item);
   saveKb();
   return item;
 }
@@ -1031,19 +960,17 @@ async function kbAddFile(name, mime, buf, presetText = null) {
 // Digital Time Machine — oś czasu migawek otoczenia (obraz + wykryte obiekty).
 // ---------------------------------------------------------------------------
 
-const TIMELINE_FILE = path.join(DATA_DIR, 'timeline.json');
-let timeline = [];
-try { timeline = JSON.parse(fs.readFileSync(TIMELINE_FILE, 'utf8')); } catch { /* brak */ }
+const TIMELINE_FILE = () => path.join(U().katalog, 'timeline.json');
 function saveTimeline() {
-  try { zapiszAtomowo(TIMELINE_FILE, JSON.stringify(timeline)); }
+  try { zapiszAtomowo(TIMELINE_FILE(), JSON.stringify(U().timeline)); }
   catch (err) { console.error('Nie udało się zapisać osi czasu:', err.message); }
 }
 
 async function handleTimeline(req, res) {
   if (req.method === 'GET') {
     // dołącz różnice względem poprzedniej migawki
-    const withDiff = timeline.map((s, i) => {
-      const prev = timeline[i - 1];
+    const withDiff = U().timeline.map((s, i) => {
+      const prev = U().timeline[i - 1];
       const cur = new Set(s.objects || []);
       const old = new Set(prev ? prev.objects || [] : []);
       return {
@@ -1072,18 +999,18 @@ async function handleTimeline(req, res) {
       objects: Array.isArray(data.objects) ? data.objects.slice(0, 40) : [],
       imageId,
     };
-    timeline.push(snap);
-    if (timeline.length > 500) timeline = timeline.slice(-500);
+    U().timeline.push(snap);
+    if (U().timeline.length > 500) U().timeline = U().timeline.slice(-500);
     saveTimeline();
     addEvent('oś-czasu', `zapisano migawkę otoczenia${snap.objects.length ? `: ${snap.objects.join(', ')}` : ''}`);
     return sendJson(res, 200, { ok: true, id: snap.id });
   }
   if (req.method === 'DELETE') {
     const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    const snap = timeline.find((s) => s.id === id);
-    if (snap?.imageId) { try { fs.unlinkSync(path.join(KB_FILES, snap.imageId)); } catch { /* skip */ }
-      kbItems = kbItems.filter((it) => it.id !== snap.imageId); saveKb(); }
-    timeline = timeline.filter((s) => s.id !== id);
+    const snap = U().timeline.find((s) => s.id === id);
+    if (snap?.imageId) { try { fs.unlinkSync(path.join(KB_FILES(), snap.imageId)); } catch { /* skip */ }
+      U().kbItems = U().kbItems.filter((it) => it.id !== snap.imageId); saveKb(); }
+    U().timeline = U().timeline.filter((s) => s.id !== id);
     saveTimeline();
     return sendJson(res, 200, { ok: true });
   }
@@ -1169,8 +1096,8 @@ async function capabilityManifest() {
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
       eksport: STUDIO.exportDir || null },
-    wiedza: { rozmowy: convIndex.length, pamiec: pamiec_.ile(), bazaWiedzy: kbItems.length,
-      profil: userProfile.trim().length > 0, migawki: timeline.length },
+    wiedza: { rozmowy: U().convIndex.length, pamiec: pamiec_.ile(), bazaWiedzy: U().kbItems.length,
+      profil: U().profile.trim().length > 0, migawki: U().timeline.length },
     nauka: { wzorce: wzorce().length, procedury: procedury().length, rutyny: rutyny().length,
       nagrywanieEkranu: playwright, automatyzacjaOdczytu: playwright,
       menedzerHasel: secretsEnabled() ? SECRETS.provider : null },
@@ -1182,7 +1109,7 @@ async function capabilityManifest() {
        ani misji waypointowej, ani kart ujęć — a od kiedy mają interfejs,
        jest dokąd odesłać człowieka zamiast tłumaczyć trasę HTTP. */
     plener: {
-      sprzet: [userSprzet.korpus, userSprzet.obiektywy, userSprzet.dodatki].filter(Boolean).join(' · ') || null,
+      sprzet: [U().sprzet.korpus, U().sprzet.obiektywy, U().sprzet.dodatki].filter(Boolean).join(' · ') || null,
       aparatPoWifi: canon.skonfigurowany(),
       misjaKmz: true,
       kartyUjec: true,
@@ -1247,8 +1174,8 @@ function capabilityText(m) {
 
 // --- Backlog usprawnień: pomysły Cosmosa na samego siebie ---
 //     Całość w lib/pomysly.js; tutaj zostaje tylko spięcie zależności.
-const pomysly_ = require('./lib/pomysly.js').utworz({
-  katalogDanych: DATA_DIR,
+const pomysly_ = naUzytkownika('pomysly', (katalog) => require('./lib/pomysly.js').utworz({
+  katalogDanych: katalog,
   saveJsonFile,
   sendJson,
   readJson,
@@ -1256,10 +1183,10 @@ const pomysly_ = require('./lib/pomysly.js').utworz({
   llmComplete,
   manifest: () => capabilityManifest(),
   opisZdolnosci: (m) => capabilityText(m),
-  profil: () => userProfile,
-  tematyRozmow: () => convIndex.slice(0, 25).map((c) => c.title).filter(Boolean),
-  pozycjeWiedzy: () => kbItems.slice(-25).map((it) => it.name).filter(Boolean),
-});
+  profil: () => U().profile,
+  tematyRozmow: () => U().convIndex.slice(0, 25).map((c) => c.title).filter(Boolean),
+  pozycjeWiedzy: () => U().kbItems.slice(-25).map((it) => it.name).filter(Boolean),
+}));
 const handleImprovements = (req, res, pathname) => pomysly_.handleImprovements(req, res, pathname);
 const handleSuggest = (req, res) => pomysly_.handleSuggest(req, res);
 
@@ -1342,26 +1269,26 @@ async function handleTrainRun(req, res, pathname) {
 
 async function handleKb(req, res, pathname) {
   if (pathname === '/api/kb' && req.method === 'GET') {
-    return sendJson(res, 200, { items: kbItems.map(kbItemMeta) });
+    return sendJson(res, 200, { items: U().kbItems.map(kbItemMeta) });
   }
 
   if (pathname === '/api/kb' && req.method === 'DELETE') {
     const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    const item = kbItems.find((it) => it.id === id);
-    kbItems = kbItems.filter((it) => it.id !== id);
+    const item = U().kbItems.find((it) => it.id === id);
+    U().kbItems = U().kbItems.filter((it) => it.id !== id);
     if (item?.type === 'file') {
-      try { fs.unlinkSync(path.join(KB_FILES, item.id)); } catch { /* już nie ma */ }
+      try { fs.unlinkSync(path.join(KB_FILES(), item.id)); } catch { /* już nie ma */ }
     }
     saveKb();
-    return sendJson(res, 200, { ok: true, total: kbItems.length });
+    return sendJson(res, 200, { ok: true, total: U().kbItems.length });
   }
 
   if (pathname === '/api/kb/raw' && req.method === 'GET') {
     const id = new URL(req.url, 'http://localhost').searchParams.get('id');
-    const item = kbItems.find((it) => it.id === id && it.type === 'file');
+    const item = U().kbItems.find((it) => it.id === id && it.type === 'file');
     if (!item) { res.writeHead(404); return res.end(); }
     try {
-      const buf = fs.readFileSync(path.join(KB_FILES, item.id));
+      const buf = fs.readFileSync(path.join(KB_FILES(), item.id));
       res.writeHead(200, {
         'Content-Type': item.mime || 'application/octet-stream',
         'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(item.name)}`,
@@ -1412,7 +1339,7 @@ async function handleKb(req, res, pathname) {
         type: 'link', name: title.slice(0, 200), url, time: Date.now(),
         text, chunks: await buildChunks(text),
       };
-      kbItems.push(item);
+      U().kbItems.push(item);
       saveKb();
       addEvent('baza-wiedzy', `dodano link: ${title.slice(0, 80)}`);
       return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
@@ -1433,7 +1360,7 @@ async function handleKb(req, res, pathname) {
       type: 'note', name: name.slice(0, 200), time: Date.now(),
       text, chunks: await buildChunks(text),
     };
-    kbItems.push(item);
+    U().kbItems.push(item);
     saveKb();
     addEvent('baza-wiedzy', `zapisano notatkę: ${name.slice(0, 80)}`);
     return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
@@ -1447,21 +1374,27 @@ async function handleKb(req, res, pathname) {
 // ---------------------------------------------------------------------------
 
 function handleConfig(res) {
+  /* Zakładki silników to to, czego TA osoba może użyć — nie to, co ma serwer.
+     Członek bez przyznanego Claude'a nie widzi zakładki Claude, chyba że wpisał
+     własny klucz; wtedy `zrodlo: 'wlasny'` mówi, że płaci sam. */
   const endpoints = {};
-  for (const [name, ep] of Object.entries(ENDPOINTS)) {
-    endpoints[name] = {
+  for (const { nazwa, zrodlo, ep } of silniki.dostepne()) {
+    endpoints[nazwa] = {
       label: ep.label,
       baseUrl: ep.baseUrl,
       model: ep.model,
       visionModel: ep.visionModel || '',
-      hasApiKey: name === 'local' ? true : Boolean(ep.apiKey),
+      hasApiKey: nazwa === 'local' ? true : Boolean(ep.apiKey),
+      zrodlo,
     };
   }
   sendJson(res, 200, {
     app: 'Cosmos',
     endpoints,
     senses: { baseUrl: SENSES_URL },
+    uzytkownik: kto(),
     studio: {
+      dozwolone: silniki.studioDozwolone(),
       image: imageProviders().length > 0,
       speech: Boolean(STUDIO.eleven.key),
       video: Boolean(STUDIO.seedance.key),
@@ -1631,7 +1564,17 @@ async function handleChat(req, res) {
     return sendJson(res, 400, { error: 'Pole "messages" jest wymagane.' });
   }
 
+  /* Uprawnienie sprawdzamy WPROST, zanim cokolwiek poleci do modelu. Strażnik
+     w `pickEndpoint` i tak podmieniłby silnik na chmurę NVIDIA, ale wtedy
+     osoba prosząca o Claude'a dostałaby odpowiedź Nemotrona bez słowa
+     wyjaśnienia — a to wygląda jak usterka, nie jak decyzja właściciela. */
+  const dostepSilnika = silniki.dostep(payload.endpoint);
+  if (payload.endpoint && payload.endpoint !== 'cloud' && !dostepSilnika.ok) {
+    return sendJson(res, 403, { error: dostepSilnika.powod, kod: 'silnik-niedostepny' });
+  }
   const ep = pickEndpoint(payload.endpoint);
+  // Jedyne, co właściciel widzi o cudzej aktywności: liczba wiadomości.
+  konta.zanotujWiadomosc(kto().id);
 
   if (!ep.apiKey && ep.baseUrl.includes('integrate.api.nvidia.com')) {
     return sendJson(res, 401, {
@@ -1673,7 +1616,7 @@ async function handleChat(req, res) {
   extras.push({
     role: 'system',
     content: `TERAZ JEST: ${terazTekst()}.`
-      + (userLocation ? `\nUŻYTKOWNIK ZNAJDUJE SIĘ W: ${userLocation}.`
+      + (U().location ? `\nUŻYTKOWNIK ZNAJDUJE SIĘ W: ${U().location}.`
         + ' Używaj tego miejsca, gdy pyta o coś „w okolicy", „niedaleko" albo „u mnie" —'
         + ' nie dopytuj o lokalizację, którą już znasz.'
         : '\nNie znasz lokalizacji użytkownika. Jeśli jest potrzebna, zapytaj o nią raz, krótko.'),
@@ -1724,13 +1667,13 @@ async function handleChat(req, res) {
   });
 
   // Profil użytkownika — pamięć profilowa wstrzykiwana zawsze
-  if (userProfile.trim()) {
-    extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + userProfile.trim() });
+  if (U().profile.trim()) {
+    extras.push({ role: 'system', content: 'PROFIL UŻYTKOWNIKA (stałe fakty o osobie, z którą rozmawiasz):\n' + U().profile.trim() });
   }
 
   /* Sprzęt użytkownika — tekst dla modelu mieszka razem z resztą instrukcji,
      w `lib/instrukcje-narzedzi.js`. */
-  const blokSprzet = blokSprzetu(userSprzet);
+  const blokSprzet = blokSprzetu(U().sprzet);
   if (blokSprzet) extras.push(blokSprzet);
 
   const scene = payload.useSenses === false ? '' : sceneContext();
@@ -1740,8 +1683,13 @@ async function handleChat(req, res) {
      tekst dla modelu, bez logiki, więc da się go złożyć i sprawdzić
      w teście bez stawiania serwera. Patrz nagłówek tamtego pliku. */
   extras.push(...zbudujInstrukcje({
-    payload, krotko, bezNarzedzi, archiwum, userWspolrzedne,
-    procedury, urzadzenia, imageProviders, KOD_WLACZONY, capabilityText,
+    payload, krotko, bezNarzedzi, archiwum, userWspolrzedne: U().wspolrzedne,
+    procedury, urzadzenia,
+    /* Członek bez przyznanego Studia nie dostaje w instrukcji narzędzia
+       do generowania obrazów, a narzędzia „uruchom kod" nie dostaje nigdy —
+       kod wykonuje się na serwerze, obok kluczy i danych wszystkich. */
+    imageProviders: () => (silniki.studioDozwolone() ? imageProviders() : []),
+    KOD_WLACZONY: KOD_WLACZONY && czyWlasciciel(), capabilityText,
   }));
 
   if (payload.useMemory !== false) {
@@ -1753,7 +1701,7 @@ async function handleChat(req, res) {
   // Baza wiedzy — pozycje zaznaczone przez użytkownika (zawsze dołączane)
   const kbSelected = Array.isArray(payload.kbSelected) ? payload.kbSelected : [];
   if (kbSelected.length) {
-    const chosen = kbItems.filter((it) => kbSelected.includes(it.id));
+    const chosen = U().kbItems.filter((it) => kbSelected.includes(it.id));
 
     const textItems = chosen.filter((it) => !/^image\//.test(it.mime || ''));
     if (textItems.length) {
@@ -1779,7 +1727,7 @@ async function handleChat(req, res) {
           : [{ type: 'text', text: String(m.content) }];
         for (const it of imageItems) {
           try {
-            const buf = fs.readFileSync(path.join(KB_FILES, it.id));
+            const buf = fs.readFileSync(path.join(KB_FILES(), it.id));
             parts.unshift({
               type: 'image_url',
               image_url: { url: `data:${it.mime};base64,${buf.toString('base64')}` },
@@ -2182,9 +2130,25 @@ function serveStatic(req, res) {
       return res.end('Not found');
     }
     const ext = path.extname(filePath).toLowerCase();
-    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    const headers = {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      /* Publiczna domena: przeglądarka nie zgaduje typu pliku, strona nie daje
+         się osadzić w cudzej ramce (klikanie w Cosmosa „przez szybę" obcej
+         strony), a adres Cosmosa nie wycieka w nagłówku Referer do stron,
+         do których prowadzą linki z odpowiedzi. */
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'same-origin',
+    };
     if (ext === '.woff2' || urlPath.startsWith('/icons/')) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    } else {
+      /* Kod aplikacji: wolno trzymać, ale trzeba zapytać, czy jest nowszy.
+         Bez tego nagłówka Cloudflare trzyma .js i .css u siebie około dwóch
+         godzin — po aktualizacji telefony dostawałyby stary app.js, i żadne
+         podniesienie wersji service workera by tego nie naprawiło, bo sam
+         sw.js też przychodziłby z pamięci Cloudflare. */
+      headers['Cache-Control'] = 'no-cache';
     }
     res.writeHead(200, headers);
     res.end(data);
@@ -2198,11 +2162,13 @@ function serveStatic(req, res) {
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
-studio_.polacz({ KB_FILES, addEvent, kbAddFile, kbItemMeta, kbItems });
+studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems });
 urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
-trening_.polacz({ addEvent, convIndex, convPath, userProfile });
-nauka_.polacz({ KB_FILES, addEvent, cosine, embedTexts, kbAddFile, kbItems,
-  keywordScore, sameModel, saveKb, tsName });
+trening_.polacz({ addEvent, rozmowy: () => U().convIndex, convPath, profil: () => U().profile });
+nauka_.polacz({
+  kbPliki: () => KB_FILES(), addEvent, cosine, embedTexts, kbAddFile, keywordScore, sameModel, tsName,
+  kbUsun: (id) => { U().kbItems = U().kbItems.filter((it) => it.id !== id); saveKb(); },
+});
 
 /* Trasy archiwum materiału. Sam indeks jest PASYWNY — źródła (OneDrive, dysk
    przez zmysły) wpychają wpisy, a zapytania działają, gdy te źródła są
@@ -2214,309 +2180,337 @@ const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
 });
 const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
 
+async function trasyApi(req, res, p) {
+  if (!czyWlasciciel() && TYLKO_WLASCICIEL.some((w) => w.test(p))) {
+    return sendJson(res, 403, { error: 'Ta funkcja jest dostępna tylko dla właściciela Cosmosa.' });
+  }
+  if (p.startsWith('/api/studio') && !silniki.studioDozwolone()) {
+    return sendJson(res, 403, { error: 'Studio nie jest dla Ciebie włączone — poproś właściciela o dostęp.' });
+  }
+  /* Rozpoznawanie treści całego archiwum idzie na karcie graficznej
+     właściciela i potrafi ją zająć na godziny. To ten sam zasób co „lokalny
+     GPU", więc to samo uprawnienie. */
+  if (p === '/api/archive/vision' && !silniki.dostep('local').ok) {
+    return sendJson(res, 403, { error: 'Rozpoznawanie treści używa komputera właściciela — poproś o dostęp do lokalnego GPU.' });
+  }
+  if (p === '/api/konto' || p.startsWith('/api/konto/')) return await handleKonto(req, res, p);
+  if (p === '/api/konta' || p.startsWith('/api/konta/')) return await handleKonta(req, res, p);
+
+
+  if (p === '/api/config' && req.method === 'GET') return handleConfig(res);
+  if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
+  if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
+  if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
+  if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+  /* Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia,
+     którego przeglądarka jeszcze nie ma — dzięki temu wznowienie po
+     zerwanym Wi-Fi nie powtarza połowy zdania ani jej nie gubi. */
+  if (p === '/api/chat/bieg' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://localhost').searchParams;
+    if (biegi_.podepnij(q.get('id') || '', q.get('od'), res)) return;
+    return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy — serwer jej nie pamięta.' });
+  }
+  // Co się teraz liczy. Przeglądarka pyta o to po odświeżeniu strony.
+  if (p === '/api/chat/biegi' && req.method === 'GET') {
+    return sendJson(res, 200, { biegi: biegi_.lista() });
+  }
+  /* „Mam tę odpowiedź i zapisałem ją u siebie." Dopiero to odwołuje zapis
+     awaryjny — patrz komentarz przy `potwierdz` w lib/biegi.js. */
+  if (p === '/api/chat/odebrane' && req.method === 'POST') {
+    let dane = {};
+    try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
+    return sendJson(res, 200, { ok: biegi_.potwierdz(String(dane.bieg || '')) });
+  }
+  /* Przerwanie musi być ŚWIADOME. Odkąd zamknięcie karty nie przerywa
+     generowania, przycisk Stop jest jedyną drogą — i musi docierać do
+     serwera, bo to on trzyma połączenie z modelem. */
+  if (p === '/api/chat/stop' && req.method === 'POST') {
+    let dane = {};
+    try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
+    const b = biegi_.daj(String(dane.bieg || ''));
+    if (b && b.przerwij) b.przerwij();
+    return sendJson(res, 200, { ok: Boolean(b) });
+  }
+  if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
+  if (p === '/api/events') return await handleEvents(req, res);
+  // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast
+  // tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte na komputerze
+  // dociera do telefonu, a nie umiera w logu serwera.
+  if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
+  if (p === '/api/memory') return await handleMemory(req, res);
+  if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
+  if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
+  if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
+  if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
+  if (p.startsWith('/api/archive')) return await handleArchiwum(req, res, p);
+  if (p.startsWith('/api/onedrive')) return await handleOneDrive(req, res, p);
+  if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
+  if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
+  if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
+  /* CANON CCAPI — aparat jako urządzenie, nie tylko temat rozmowy.
+     Trzy trasy, bo tyle wystarczy: co tam stoi, co ma ustawione, i zmień to.
+     Wyzwalanie migawki jest osobno i celowo nie ma go w podpowiedziach dla
+     modelu — zdjęcie ma robić człowiek, a nie model, któremu wydawało się,
+     że to dobry moment. */
+  /* MISJA WAYPOINTOWA → plik KMZ. `senses/flightplan.py` liczy już wysokość,
+     pokrycie i liczbę zdjęć; tu domykamy pętlę i oddajemy to dronowi.
+     Odpowiedź jest PLIKIEM, nie JSON-em — trafia prosto do pobrania. */
+  if (p === '/api/plan/mission' && req.method === 'POST') {
+    let d;
+    try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    try {
+      const punkty = Array.isArray(d.punkty) && d.punkty.length
+        ? d.punkty
+        : siatka({
+          lat: Number(d.lat), lon: Number(d.lon),
+          szerokoscM: Number(d.szerokoscM) || 200,
+          dlugoscM: Number(d.dlugoscM) || 200,
+          odstepM: Number(d.odstepM) || 50,
+          kierunek: Number(d.kierunek) || 0,
+        });
+      const buf = misjaKmz(punkty, d);
+      const nazwa = String(d.nazwa || 'misja').replace(/[^\w-]+/g, '-').slice(0, 40);
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.google-earth.kmz',
+        'Content-Length': buf.length,
+        'Content-Disposition': `attachment; filename="${nazwa}.kmz"`,
+      });
+      addEvent('plan', `misja waypointowa: ${punkty.length} punktów`);
+      return res.end(buf);
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  if (p === '/api/canon/status' && req.method === 'GET') {
+    return sendJson(res, 200, await canon.stan());
+  }
+  if (p === '/api/canon/settings') {
+    if (!canon.skonfigurowany()) {
+      return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+    }
+    try {
+      if (req.method === 'GET') {
+        const w = await canon.nastawy();
+        return sendJson(res, 200, { ...w, liczby: canon.naLiczby(w.nastawy) });
+      }
+      if (req.method === 'PUT') {
+        const d = await readJson(req);
+        const zmiany = [];
+        /* Kolejność ma znaczenie: najpierw ISO, potem przysłona, na końcu
+           czas. Aparat sam koryguje pozostałe nastawy pod tę, którą właśnie
+           zmieniono, więc ustawienie czasu jako ostatniego zostawia go
+           takim, jakiego chcieliśmy. */
+        for (const nazwa of ['iso', 'przyslona', 'czas']) {
+          if (d[nazwa] === undefined || d[nazwa] === null || d[nazwa] === '') continue;
+          zmiany.push(await canon.ustaw(nazwa, d[nazwa]));
+        }
+        if (!zmiany.length) return sendJson(res, 400, { error: 'Nie podano żadnej nastawy.' });
+        addEvent('aparat', `nastawy zmienione: ${zmiany.map((z) => `${z.nazwa}=${z.wartosc}`).join(', ')}`);
+        return sendJson(res, 200, { ok: true, zmiany });
+      }
+    } catch (err) {
+      return sendJson(res, 502, { error: err.message });
+    }
+  }
+  if (p === '/api/canon/shutter' && req.method === 'POST') {
+    if (!canon.skonfigurowany()) {
+      return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
+    }
+    let d = {};
+    try { d = await readJson(req); } catch { /* domyślne */ }
+    try {
+      const w = await canon.migawka({ af: d.af === true });
+      addEvent('aparat', 'migawka wyzwolona zdalnie');
+      return sendJson(res, 200, w);
+    } catch (err) {
+      return sendJson(res, 502, { error: err.message });
+    }
+  }
+
+  if (p === '/api/gear') {
+    if (req.method === 'GET') return sendJson(res, 200, U().sprzet);
+    if (req.method === 'PUT') {
+      try { saveSprzet(await readJson(req)); return sendJson(res, 200, { ok: true, ...U().sprzet }); }
+      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    }
+  }
+  if (p === '/api/profile') {
+    if (req.method === 'GET') return sendJson(res, 200, { profile: U().profile });
+    if (req.method === 'POST') {
+      try { saveProfile((await readJson(req)).profile); return sendJson(res, 200, { ok: true }); }
+      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    }
+  }
+  if (p === '/api/location') {
+    if (req.method === 'GET') return sendJson(res, 200, { location: U().location, wspolrzedne: U().wspolrzedne, teraz: terazTekst() });
+    if (req.method === 'POST') {
+      try {
+        const d = await readJson(req);
+        saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
+        return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne });
+      }
+      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    }
+  }
+  if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
+  if (p === '/api/admin/stats' && req.method === 'GET') {
+    let kbBytes = 0;
+    try {
+      for (const f of fs.readdirSync(KB_FILES())) {
+        try { kbBytes += fs.statSync(path.join(KB_FILES(), f)).size; } catch { /* skip */ }
+      }
+    } catch { /* brak katalogu */ }
+    return sendJson(res, 200, {
+      conversations: U().convIndex.length,
+      memories: pamiec_.ile(),
+      kbItems: U().kbItems.length,
+      kbBytes,
+      profileChars: U().profile.length,
+      events: ileZdarzen(),
+      engines: Object.keys(ENDPOINTS),
+      studio: { image: imageProviders().length > 0, speech: Boolean(STUDIO.eleven.key), video: Boolean(STUDIO.seedance.key) },
+      auth: authEnabled(),
+    });
+  }
+  if (p === '/api/backup' && req.method === 'GET') {
+    const convs = U().convIndex.map((meta) => {
+      try { return JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { return null; }
+    }).filter(Boolean);
+    const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories: pamiec_.lista(), profile: U().profile };
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+    });
+    return res.end(JSON.stringify(bundle));
+  }
+  if (p === '/api/train/dataset' && req.method === 'GET') {
+    const fmt = new URL(req.url, 'http://localhost').searchParams.get('format') || 'chat';
+    const { lines, count } = buildTrainingDataset(fmt);
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'X-Example-Count': String(count),
+      'Content-Disposition': `attachment; filename="cosmos-dataset-${fmt}-${new Date().toISOString().slice(0, 10)}.jsonl"`,
+    });
+    return res.end(lines);
+  }
+  if (p === '/api/train/stats' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      chat: buildTrainingDataset('chat').count,
+      instruction: buildTrainingDataset('instruction').count,
+    });
+  }
+  if (p === '/api/train/env' || p === '/api/train/status' || p === '/api/train/start' || p === '/api/train/stop') {
+    return await handleTrainRun(req, res, p);
+  }
+  if (p === '/api/backup' && req.method === 'POST') {
+    let bundle;
+    try { bundle = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    let restored = 0;
+    if (Array.isArray(bundle.conversations)) {
+      for (const conv of bundle.conversations) {
+        if (!conv || !conv.id) continue;
+        const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
+        try {
+          zapiszAtomowo(convPath(id), JSON.stringify(conv));
+          const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt || Date.now(), updatedAt: conv.updatedAt || Date.now(), pinned: conv.pinned || false };
+          const i = U().convIndex.findIndex((c) => c.id === id);
+          if (i >= 0) U().convIndex[i] = meta; else U().convIndex.push(meta);
+          restored++;
+        } catch { /* skip */ }
+      }
+      sortConvIndex(); saveConvIndex();
+    }
+    if (Array.isArray(bundle.memories)) pamiec_.ustawListe(bundle.memories);
+    if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
+    return sendJson(res, 200, { ok: true, restored });
+  }
+  if (p === '/api/summarize' && req.method === 'POST') {
+    let data;
+    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    const text = String(data.text || '').slice(0, 40000);
+    if (!text.trim()) return sendJson(res, 400, { error: 'Brak treści do streszczenia.' });
+    try {
+      const summary = await llmComplete([
+        { role: 'system', content: 'Streść poniższą rozmowę zwięźle w punktach, w języku rozmowy. Zwróć samo streszczenie.' },
+        { role: 'user', content: text },
+      ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 600 });
+      return sendJson(res, 200, { ok: true, summary });
+    } catch (err) {
+      return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
+    }
+  }
+  if (p === '/api/timeline') return await handleTimeline(req, res);
+  if (p === '/api/lessons' || p === '/api/lessons/match') return await handleLessons(req, res, p);
+  if (p === '/api/procedures') return await handleProcedures(req, res, p);
+  if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
+  if (p.startsWith('/api/procedures/record/')) return await handleRecord(req, res, p);
+  if (p === '/api/devices' || p === '/api/devices/run') return await handleDevices(req, res, p);
+  if (p === '/api/briefing' && req.method === 'GET') return await handleBriefing(req, res);
+  if (p === '/api/capabilities' && req.method === 'GET') {
+    const m = await capabilityManifest();
+    return sendJson(res, 200, { manifest: m, opis: capabilityText(m) });
+  }
+  if (p === '/api/suggest' && req.method === 'POST') return await handleSuggest(req, res);
+  if (p === '/api/improvements') return await handleImprovements(req, res, p);
+  if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
+  if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
+  if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
+  if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
+  /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
+     bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
+     Współrzędne dokłada SERWER z ustawień — przeglądarka nie musi ich znać,
+     a BirdNET bez nich zawęża listę gatunków do całego świata zamiast do
+     tego, co w tym tygodniu naprawdę lata nad Twoją łąką. */
+  if (p === '/api/ptak' && req.method === 'POST') {
+    const w = U().wspolrzedne;
+    const qs = w && Number.isFinite(w.lat)
+      ? `?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}`
+      : '';
+    return await proxySenses(req, res, '/ptak', { search: qs });
+  }
+  if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
+  if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
+  if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
+  if (p === '/api/kinect/stream' && req.method === 'GET') {
+    return await proxySensesStream(req, res, '/kinect/stream',
+      new URL(req.url, 'http://localhost').search);
+  }
+  if (p === '/api/kinect/frame' && req.method === 'GET') {
+    return await proxySensesGet(req, res, '/kinect/frame',
+      new URL(req.url, 'http://localhost').search);
+  }
+  if (p === '/api/kinect/status' && req.method === 'GET') {
+    return await proxySensesGet(req, res, '/kinect/status');
+  }
+  return sendJson(res, 404, { error: 'Nie ma takiej trasy.' });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const p = new URL(req.url, 'http://localhost').pathname;
+    if (!p.startsWith('/api/')) {
+      if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
+      res.writeHead(405);
+      return res.end();
+    }
 
-    // --- uwierzytelnianie ---
+    // --- publiczne: logowanie i zaproszenia ---
     if (p === '/api/auth' && req.method === 'GET') {
-      return sendJson(res, 200, { required: authEnabled(), authed: isAuthed(req) });
+      const u = ktoPyta(req);
+      return sendJson(res, 200, { required: authEnabled(), authed: Boolean(u), uzytkownik: u });
     }
     if (p === '/api/login' && req.method === 'POST') return await handleLogin(req, res);
     if (p === '/api/logout' && req.method === 'POST') return handleLogout(req, res);
-    if (p.startsWith('/api/') && !isAuthed(req)) {
-      return sendJson(res, 401, { error: 'Wymagane logowanie.' });
-    }
+    if (p === '/api/zaproszenie') return await handleZaproszenie(req, res);
 
-    if (p === '/api/config' && req.method === 'GET') return handleConfig(res);
-    if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
-    if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
-    if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
-    if (p === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
-    /* Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia,
-       którego przeglądarka jeszcze nie ma — dzięki temu wznowienie po
-       zerwanym Wi-Fi nie powtarza połowy zdania ani jej nie gubi. */
-    if (p === '/api/chat/bieg' && req.method === 'GET') {
-      const q = new URL(req.url, 'http://localhost').searchParams;
-      if (biegi_.podepnij(q.get('id') || '', q.get('od'), res)) return;
-      return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy — serwer jej nie pamięta.' });
-    }
-    // Co się teraz liczy. Przeglądarka pyta o to po odświeżeniu strony.
-    if (p === '/api/chat/biegi' && req.method === 'GET') {
-      return sendJson(res, 200, { biegi: biegi_.lista() });
-    }
-    /* „Mam tę odpowiedź i zapisałem ją u siebie." Dopiero to odwołuje zapis
-       awaryjny — patrz komentarz przy `potwierdz` w lib/biegi.js. */
-    if (p === '/api/chat/odebrane' && req.method === 'POST') {
-      let dane = {};
-      try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
-      return sendJson(res, 200, { ok: biegi_.potwierdz(String(dane.bieg || '')) });
-    }
-    /* Przerwanie musi być ŚWIADOME. Odkąd zamknięcie karty nie przerywa
-       generowania, przycisk Stop jest jedyną drogą — i musi docierać do
-       serwera, bo to on trzyma połączenie z modelem. */
-    if (p === '/api/chat/stop' && req.method === 'POST') {
-      let dane = {};
-      try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
-      const b = biegi_.daj(String(dane.bieg || ''));
-      if (b && b.przerwij) b.przerwij();
-      return sendJson(res, 200, { ok: Boolean(b) });
-    }
-    if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
-    if (p === '/api/events') return await handleEvents(req, res);
-    // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast
-    // tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte na komputerze
-    // dociera do telefonu, a nie umiera w logu serwera.
-    if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
-    if (p === '/api/memory') return await handleMemory(req, res);
-    if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
-    if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);
-    if (p === '/api/run' && req.method === 'POST') return await handleUruchom(req, res);
-    if (p === '/api/plan' && req.method === 'POST') return await handlePlanZdjeciowy(req, res);
-    if (p.startsWith('/api/archive')) return await handleArchiwum(req, res, p);
-    if (p.startsWith('/api/onedrive')) return await handleOneDrive(req, res, p);
-    if (p === '/api/search/images' && req.method === 'GET') return await handleSearchImages(req, res);
-    if (p === '/api/search/thumb' && req.method === 'GET') return await handleImageProxy(req, res);
-    if (p === '/api/conversations' || p === '/api/conversations/meta' || p === '/api/conversations/search') return await handleConversations(req, res, p);
-    /* CANON CCAPI — aparat jako urządzenie, nie tylko temat rozmowy.
-       Trzy trasy, bo tyle wystarczy: co tam stoi, co ma ustawione, i zmień to.
-       Wyzwalanie migawki jest osobno i celowo nie ma go w podpowiedziach dla
-       modelu — zdjęcie ma robić człowiek, a nie model, któremu wydawało się,
-       że to dobry moment. */
-    /* MISJA WAYPOINTOWA → plik KMZ. `senses/flightplan.py` liczy już wysokość,
-       pokrycie i liczbę zdjęć; tu domykamy pętlę i oddajemy to dronowi.
-       Odpowiedź jest PLIKIEM, nie JSON-em — trafia prosto do pobrania. */
-    if (p === '/api/plan/mission' && req.method === 'POST') {
-      let d;
-      try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      try {
-        const punkty = Array.isArray(d.punkty) && d.punkty.length
-          ? d.punkty
-          : siatka({
-            lat: Number(d.lat), lon: Number(d.lon),
-            szerokoscM: Number(d.szerokoscM) || 200,
-            dlugoscM: Number(d.dlugoscM) || 200,
-            odstepM: Number(d.odstepM) || 50,
-            kierunek: Number(d.kierunek) || 0,
-          });
-        const buf = misjaKmz(punkty, d);
-        const nazwa = String(d.nazwa || 'misja').replace(/[^\w-]+/g, '-').slice(0, 40);
-        res.writeHead(200, {
-          'Content-Type': 'application/vnd.google-earth.kmz',
-          'Content-Length': buf.length,
-          'Content-Disposition': `attachment; filename="${nazwa}.kmz"`,
-        });
-        addEvent('plan', `misja waypointowa: ${punkty.length} punktów`);
-        return res.end(buf);
-      } catch (err) {
-        return sendJson(res, 400, { error: err.message });
-      }
-    }
+    const u = ktoPyta(req);
+    if (!u) return sendJson(res, 401, { error: 'Wymagane logowanie.' });
+    if (obcePochodzenie(req)) return sendJson(res, 403, { error: 'Żądanie z innej strony — odrzucone.' });
 
-    if (p === '/api/canon/status' && req.method === 'GET') {
-      return sendJson(res, 200, await canon.stan());
-    }
-    if (p === '/api/canon/settings') {
-      if (!canon.skonfigurowany()) {
-        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
-      }
-      try {
-        if (req.method === 'GET') {
-          const w = await canon.nastawy();
-          return sendJson(res, 200, { ...w, liczby: canon.naLiczby(w.nastawy) });
-        }
-        if (req.method === 'PUT') {
-          const d = await readJson(req);
-          const zmiany = [];
-          /* Kolejność ma znaczenie: najpierw ISO, potem przysłona, na końcu
-             czas. Aparat sam koryguje pozostałe nastawy pod tę, którą właśnie
-             zmieniono, więc ustawienie czasu jako ostatniego zostawia go
-             takim, jakiego chcieliśmy. */
-          for (const nazwa of ['iso', 'przyslona', 'czas']) {
-            if (d[nazwa] === undefined || d[nazwa] === null || d[nazwa] === '') continue;
-            zmiany.push(await canon.ustaw(nazwa, d[nazwa]));
-          }
-          if (!zmiany.length) return sendJson(res, 400, { error: 'Nie podano żadnej nastawy.' });
-          addEvent('aparat', `nastawy zmienione: ${zmiany.map((z) => `${z.nazwa}=${z.wartosc}`).join(', ')}`);
-          return sendJson(res, 200, { ok: true, zmiany });
-        }
-      } catch (err) {
-        return sendJson(res, 502, { error: err.message });
-      }
-    }
-    if (p === '/api/canon/shutter' && req.method === 'POST') {
-      if (!canon.skonfigurowany()) {
-        return sendJson(res, 503, { error: 'Nie ustawiono CANON_CCAPI_URL — patrz .env.example.' });
-      }
-      let d = {};
-      try { d = await readJson(req); } catch { /* domyślne */ }
-      try {
-        const w = await canon.migawka({ af: d.af === true });
-        addEvent('aparat', 'migawka wyzwolona zdalnie');
-        return sendJson(res, 200, w);
-      } catch (err) {
-        return sendJson(res, 502, { error: err.message });
-      }
-    }
-
-    if (p === '/api/gear') {
-      if (req.method === 'GET') return sendJson(res, 200, userSprzet);
-      if (req.method === 'PUT') {
-        try { saveSprzet(await readJson(req)); return sendJson(res, 200, { ok: true, ...userSprzet }); }
-        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      }
-    }
-    if (p === '/api/profile') {
-      if (req.method === 'GET') return sendJson(res, 200, { profile: userProfile });
-      if (req.method === 'POST') {
-        try { saveProfile((await readJson(req)).profile); return sendJson(res, 200, { ok: true }); }
-        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      }
-    }
-    if (p === '/api/location') {
-      if (req.method === 'GET') return sendJson(res, 200, { location: userLocation, wspolrzedne: userWspolrzedne, teraz: terazTekst() });
-      if (req.method === 'POST') {
-        try {
-          const d = await readJson(req);
-          saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
-          return sendJson(res, 200, { ok: true, location: userLocation, wspolrzedne: userWspolrzedne });
-        }
-        catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      }
-    }
-    if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
-    if (p === '/api/admin/stats' && req.method === 'GET') {
-      let kbBytes = 0;
-      try {
-        for (const f of fs.readdirSync(KB_FILES)) {
-          try { kbBytes += fs.statSync(path.join(KB_FILES, f)).size; } catch { /* skip */ }
-        }
-      } catch { /* brak katalogu */ }
-      return sendJson(res, 200, {
-        conversations: convIndex.length,
-        memories: pamiec_.ile(),
-        kbItems: kbItems.length,
-        kbBytes,
-        profileChars: userProfile.length,
-        events: ileZdarzen(),
-        engines: Object.keys(ENDPOINTS),
-        studio: { image: imageProviders().length > 0, speech: Boolean(STUDIO.eleven.key), video: Boolean(STUDIO.seedance.key) },
-        auth: authEnabled(),
-      });
-    }
-    if (p === '/api/backup' && req.method === 'GET') {
-      const convs = convIndex.map((meta) => {
-        try { return JSON.parse(fs.readFileSync(convPath(meta.id), 'utf8')); } catch { return null; }
-      }).filter(Boolean);
-      const bundle = { version: 1, exportedAt: Date.now(), conversations: convs, memories: pamiec_.lista(), profile: userProfile };
-      res.writeHead(200, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="cosmos-backup-${new Date().toISOString().slice(0, 10)}.json"`,
-      });
-      return res.end(JSON.stringify(bundle));
-    }
-    if (p === '/api/train/dataset' && req.method === 'GET') {
-      const fmt = new URL(req.url, 'http://localhost').searchParams.get('format') || 'chat';
-      const { lines, count } = buildTrainingDataset(fmt);
-      res.writeHead(200, {
-        'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'X-Example-Count': String(count),
-        'Content-Disposition': `attachment; filename="cosmos-dataset-${fmt}-${new Date().toISOString().slice(0, 10)}.jsonl"`,
-      });
-      return res.end(lines);
-    }
-    if (p === '/api/train/stats' && req.method === 'GET') {
-      return sendJson(res, 200, {
-        chat: buildTrainingDataset('chat').count,
-        instruction: buildTrainingDataset('instruction').count,
-      });
-    }
-    if (p === '/api/train/env' || p === '/api/train/status' || p === '/api/train/start' || p === '/api/train/stop') {
-      return await handleTrainRun(req, res, p);
-    }
-    if (p === '/api/backup' && req.method === 'POST') {
-      let bundle;
-      try { bundle = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      let restored = 0;
-      if (Array.isArray(bundle.conversations)) {
-        for (const conv of bundle.conversations) {
-          if (!conv || !conv.id) continue;
-          const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
-          try {
-            zapiszAtomowo(convPath(id), JSON.stringify(conv));
-            const meta = { id, title: conv.title || 'Rozmowa', createdAt: conv.createdAt || Date.now(), updatedAt: conv.updatedAt || Date.now(), pinned: conv.pinned || false };
-            const i = convIndex.findIndex((c) => c.id === id);
-            if (i >= 0) convIndex[i] = meta; else convIndex.push(meta);
-            restored++;
-          } catch { /* skip */ }
-        }
-        sortConvIndex(); saveConvIndex();
-      }
-      if (Array.isArray(bundle.memories)) pamiec_.ustawListe(bundle.memories);
-      if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
-      return sendJson(res, 200, { ok: true, restored });
-    }
-    if (p === '/api/summarize' && req.method === 'POST') {
-      let data;
-      try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      const text = String(data.text || '').slice(0, 40000);
-      if (!text.trim()) return sendJson(res, 400, { error: 'Brak treści do streszczenia.' });
-      try {
-        const summary = await llmComplete([
-          { role: 'system', content: 'Streść poniższą rozmowę zwięźle w punktach, w języku rozmowy. Zwróć samo streszczenie.' },
-          { role: 'user', content: text },
-        ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 600 });
-        return sendJson(res, 200, { ok: true, summary });
-      } catch (err) {
-        return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
-      }
-    }
-    if (p === '/api/timeline') return await handleTimeline(req, res);
-    if (p === '/api/lessons' || p === '/api/lessons/match') return await handleLessons(req, res, p);
-    if (p === '/api/procedures') return await handleProcedures(req, res, p);
-    if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
-    if (p.startsWith('/api/procedures/record/')) return await handleRecord(req, res, p);
-    if (p === '/api/devices' || p === '/api/devices/run') return await handleDevices(req, res, p);
-    if (p === '/api/briefing' && req.method === 'GET') return await handleBriefing(req, res);
-    if (p === '/api/capabilities' && req.method === 'GET') {
-      const m = await capabilityManifest();
-      return sendJson(res, 200, { manifest: m, opis: capabilityText(m) });
-    }
-    if (p === '/api/suggest' && req.method === 'POST') return await handleSuggest(req, res);
-    if (p === '/api/improvements') return await handleImprovements(req, res, p);
-    if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
-    if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
-    if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
-    if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
-    /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
-       bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
-       Współrzędne dokłada SERWER z ustawień — przeglądarka nie musi ich znać,
-       a BirdNET bez nich zawęża listę gatunków do całego świata zamiast do
-       tego, co w tym tygodniu naprawdę lata nad Twoją łąką. */
-    if (p === '/api/ptak' && req.method === 'POST') {
-      const w = userWspolrzedne;
-      const qs = w && Number.isFinite(w.lat)
-        ? `?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}`
-        : '';
-      return await proxySenses(req, res, '/ptak', { search: qs });
-    }
-    if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
-    if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
-    if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
-    if (p === '/api/kinect/stream' && req.method === 'GET') {
-      return await proxySensesStream(req, res, '/kinect/stream',
-        new URL(req.url, 'http://localhost').search);
-    }
-    if (p === '/api/kinect/frame' && req.method === 'GET') {
-      return await proxySensesGet(req, res, '/kinect/frame',
-        new URL(req.url, 'http://localhost').search);
-    }
-    if (p === '/api/kinect/status' && req.method === 'GET') {
-      return await proxySensesGet(req, res, '/kinect/status');
-    }
-    if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
-    res.writeHead(405);
-    res.end();
+    /* Od tego miejsca wszystko dzieje się W IMIENIU tej osoby: dane, zdarzenia,
+       praca w tle. Kontekst podąża za każdym `await` (lib/kontekst.js). */
+    return await wKontekscie(u, () => trasyApi(req, res, p));
   } catch (err) {
     if (!res.headersSent) sendJson(res, 500, { error: `Błąd serwera: ${err.message}` });
     else res.end();
@@ -2525,7 +2519,13 @@ const server = http.createServer(async (req, res) => {
 
 function start(port = PORT) {
   return new Promise((resolve) => {
-    server.listen(port, () => {
+    const migracja = migrujDoKont();
+    konta.przeladuj();
+    konta.zapewnijWlasciciela({
+      haslo: process.env.COSMOS_PASSWORD || '',
+      login: process.env.COSMOS_LOGIN || '',
+      nazwa: process.env.COSMOS_NAZWA || process.env.COSMOS_LOGIN || '',
+    }).then((wlasciciel) => server.listen(port, () => {
       console.log('');
       console.log('  ✦ Cosmos');
       console.log(`  → UI:      http://localhost:${port}`);
@@ -2533,10 +2533,23 @@ function start(port = PORT) {
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
-      console.log(`  → Pamięć:  ${pamiec_.ile()} wpisów (data/memory.json)`);
-      console.log(`  → Baza wiedzy: ${kbItems.length} pozycji (data/kb/)`);
-      console.log(`  → Rozmowy: ${convIndex.length} (data/conversations/)`);
-      console.log(`  → Logowanie: ${authEnabled() ? 'WŁĄCZONE' : 'wyłączone (tryb domowy/localhost)'}`);
+      /* Liczby właściciela liczymy w JEGO imieniu — poza kontekstem nie ma
+         czyich danych liczyć, i dobrze. */
+      wKontekscie(wlasciciel, () => {
+        console.log(`  → Pamięć:  ${pamiec_.ile()} wpisów`);
+        console.log(`  → Baza wiedzy: ${U().kbItems.length} pozycji`);
+        console.log(`  → Rozmowy: ${U().convIndex.length}`);
+        if (procedury().length || rutyny().length) {
+          console.log(`  → Nauka:   ${wzorce().length} wzorców, ${procedury().length} procedur, ${rutyny().length} rutyn`);
+        }
+      });
+      if (migracja) {
+        console.log(`  → Migracja do kont: przeniesiono ${migracja.przeniesione.length} pozycji do data/uzytkownicy/${WLASCICIEL_ID}/`);
+        console.log(`               kopia zapasowa: ${migracja.kopia}`);
+        if (migracja.pominiete.length) console.log(`               pominięto (już były u celu): ${migracja.pominiete.join(', ')}`);
+      }
+      const ileKont = konta.wszyscy().length;
+      console.log(`  → Logowanie: ${authEnabled() ? `WŁĄCZONE — kont: ${ileKont}, login właściciela: ${wlasciciel.login}` : 'wyłączone (tryb domowy/localhost)'}`);
       if (!authEnabled()) {
         console.log('               ⚠  Nie wystawiaj tego serwera do internetu bez COSMOS_PASSWORD!');
       }
@@ -2546,16 +2559,13 @@ function start(port = PORT) {
         STUDIO.eleven.key && 'dźwięk(ElevenLabs)', STUDIO.seedance.key && 'wideo(Seedance)'].filter(Boolean);
       console.log(`  → Studio:  ${studioOn.length ? studioOn.join(', ') : 'brak kluczy (opcjonalne)'}` +
         (STUDIO.exportDir ? `  eksport → ${STUDIO.exportDir}` : ''));
-      if (procedury().length || rutyny().length) {
-        console.log(`  → Nauka:   ${wzorce().length} wzorców, ${procedury().length} procedur, ${rutyny().length} rutyn`);
-      }
       if (secretsEnabled()) {
         console.log(`  → Sekrety: menedżer haseł „${SECRETS.provider}" (automatyzacja z logowaniem)`);
       }
       console.log('');
       startScheduler();
       resolve(server);
-    });
+    }));
   });
 }
 
@@ -2566,9 +2576,15 @@ function start(port = PORT) {
    jest `unref`-owany, więc sam z siebie przy wyjściu nie zdąży. */
 function zamknijPorzadnie(sygnal) {
   process.on(sygnal, () => {
-    archiwum.zapisz()
-      .catch((err) => console.error('Nie udało się dopisać archiwum:', err.message))
-      .finally(() => process.exit(0));
+    /* Każda osoba ma własne archiwum, więc zapisujemy wszystkie, które są
+       w pamięci — w imieniu ich właścicieli. */
+    const zapisy = zaladowani().map((id) => {
+      const u = konta.znajdz(id);
+      if (!u) return Promise.resolve();
+      return wKontekscie(u, () => archiwum.zapisz())
+        .catch((err) => console.error(`Nie udało się dopisać archiwum (${u.login}):`, err.message));
+    });
+    Promise.all(zapisy).finally(() => process.exit(0));
   });
 }
 

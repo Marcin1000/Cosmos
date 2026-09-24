@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="91 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-91-4ac26b?style=flat-square">
+  <img alt="94 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-94-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 91 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 94 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -112,6 +112,7 @@ na jakieś pytanie. Ciekawa jest ostatnia kolumna.
 | **Canon po Wi-Fi** | Czy da się zapisać nastawy z powrotem do aparatu? | Integracja CCAPI. Aparat, który usypia Wi-Fi po kilku minutach, przez następne trzydzieści sekund chętnie melduje `online`. |
 | **Misje drona** | Misja waypointowa jako plik, który maszyna przyjmie | Zapis WPML/KMZ na własnym `zlib` z Node. Nigdy nie oblatane — powiedziane wprost, nie zasugerowane. |
 | **QLoRA** | Czy własny fine-tune wygrywa z dobrym promptem? | Eksport zbioru i pętla treningowa. Werdykt na razie: nie, a praca nad promptem lepiej się uogólnia. |
+| **Udostępnienie** | Czy aplikację dla jednej osoby da się otworzyć dla rodziny i znajomych bez przepisywania każdej funkcji? | Kontekst użytkownika na żądanie (`AsyncLocalStorage`), który podąża za każdym `await` aż do pracy w tle. Dostęp do danych bez ustalonej osoby **rzuca wyjątek** zamiast brać domyślną — cicha domyślna pokazałaby dane jednej osoby drugiej i nic nie wyglądałoby na zepsute. Zaproszenia linkiem, silniki przyznawane osobno, zdolności serwera tylko dla właściciela. Instrukcja: [`docs/DOSTEP.md`](docs/DOSTEP.md). |
 
 ## Jak to uruchomić
 
@@ -125,7 +126,7 @@ node server.js            # http://localhost:3000
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 91 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 94 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -869,7 +870,10 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/capabilities` | GET | Manifest zdolności — czym Cosmos jest i co realnie potrafi teraz |
 | `/api/suggest` | POST | Propozycje zastosowań szyte pod użytkownika (z manifestu + profilu) |
 | `/api/improvements` | GET/POST/PUT/DELETE | Backlog usprawnień z akceptacją |
-| `/api/auth` `/api/login` `/api/logout` | GET/POST | Stan logowania, logowanie hasłem, wylogowanie |
+| `/api/auth` `/api/login` `/api/logout` | GET/POST | Stan logowania (z kontem: kto i jaka rola), logowanie loginem i hasłem (pusty login = właściciel), wylogowanie |
+| `/api/zaproszenie` | GET/POST | Publiczne: podgląd zaproszenia po tokenie i przyjęcie go (nowe konto członka + sesja) |
+| `/api/konto` `/api/konto/*` | GET/PUT/POST | Własne konto: imię, zmiana hasła (wylogowuje pozostałe urządzenia), własne klucze OpenAI/Claude, wylogowanie wszędzie |
+| `/api/konta` `/api/konta/*` | GET/POST/PUT/DELETE | **Tylko właściciel:** lista kont (bez treści — konto, ostatnia wizyta, zużycie), zaproszenia, przyznawanie silników, wylogowanie i usuwanie osoby |
 | `/api/conversations` `/api/conversations/meta` `/api/conversations/search` | GET/PUT/POST/DELETE | Rozmowy: treść, metadane (tytuł, przypięcie), szukanie po treści |
 | `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
@@ -1165,7 +1169,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 91 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 94 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

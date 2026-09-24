@@ -23,7 +23,7 @@
 */
 const fs = require('fs');
 const path = require('path');
-const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
+const { srodowisko, przegladarka, maPrzegladarke, katalogOsoby } = require('../pomoc');
 
 if (!maPrzegladarke()) {
   console.log('POMINIĘTE: brak Chromium');
@@ -41,7 +41,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
      widoczna właśnie tam — to jedyne miejsce, które przeżywa zamkniętą kartę. */
   const zPliku = (id) => {
     try {
-      return JSON.parse(fs.readFileSync(path.join(env.katalogDanych, 'conversations', `${id}.json`), 'utf8'));
+      return JSON.parse(fs.readFileSync(path.join(katalogOsoby(env), 'conversations', `${id}.json`), 'utf8'));
     } catch { return null; }
   };
   const ostatniaOdpowiedz = (id) => {

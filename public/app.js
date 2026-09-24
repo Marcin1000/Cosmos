@@ -1058,6 +1058,11 @@ async function loadConversations() {
 // Jednorazowa migracja rozmów ze starego localStorage na serwer.
 async function migrateLegacyConversations() {
   if (localStorage.getItem('cosmos.migrated')) return;
+  /* Rozmowy z czasów sprzed serwera należą do właściciela tego urządzenia.
+     Gdyby migrację odpalił gość zalogowany na telefonie Marcina, wysłałaby
+     cudze rozmowy na JEGO konto. */
+  const ja = konta_.ja();
+  if (ja && ja.rola !== 'wlasciciel') return;
   const legacy = loadJson(STORAGE_KEYS.conversations, []);
   for (const conv of legacy) {
     if (!conv || !conv.id) continue;
@@ -3507,6 +3512,9 @@ async function liveDetect() {
 /* Plan zdjęciowy, karty ujęć i misja drona mieszkają w `public/plener.js`
    — patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
    więc musi stać dokładnie tu, gdzie stał przeniesiony kod. */
+/* Konta: zaproszenie, Twoje konto, Dostęp (public/konta.js). */
+const konta_ = utworzKonta({ $, t });
+
 const { odswiezPlan, zamknijPlener } = utworzPlener({
   $, el, t, readJsonSafe, closeSettings, dopasujPanelKamery,
   odswiezArchiwum, wczytajSprzet, zapiszSprzet,
@@ -5049,6 +5057,7 @@ function setEndpoint(name) {
 // ----------------------------------------------------------------
 
 function openSettings() {
+  konta_.odswiez().catch(() => { /* panel konta nie może zablokować Ustawień */ });
   el.setModelCloud.value = settings.modelCloud;
   el.setModelLocal.value = settings.modelLocal;
   el.setSystem.value = settings.systemPrompt;
@@ -5853,6 +5862,9 @@ async function checkAuth() {
   try {
     const res = await fetch('/api/auth');
     const d = await res.json();
+    // Rola od razu: przyciski tylko dla właściciela nie mogą mignąć gościowi.
+    konta_.zastosujRole(d.uzytkownik);
+    konta_.pilnujWlascicielaPamieci(d.uzytkownik);
     return d.required && !d.authed ? false : true;
   } catch {
     return true; // serwer nieosiągalny — nie blokuj UI (offline)
@@ -5876,7 +5888,8 @@ function showLogin() {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: $('login-password').value }),
+        // Pusty login = właściciel (tak działało logowanie przed kontami).
+        body: JSON.stringify({ login: $('login-login').value, password: $('login-password').value }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -5893,6 +5906,14 @@ function showLogin() {
 
 async function boot() {
   applyI18n();
+  /* Link z zaproszeniem ma pierwszeństwo przed wszystkim innym — także przed
+     sesją. Ktoś, kto dostał zaproszenie na urządzeniu, na którym jest już
+     zalogowany właściciel, ma założyć SWOJE konto, a nie trafić na cudze. */
+  const zaproszenie = konta_.tokenZaproszenia();
+  if (zaproszenie) {
+    konta_.pokazZaproszenie(zaproszenie);
+    return;
+  }
   if (!(await checkAuth())) {
     showLogin();
     return; // nie inicjalizuj reszty, dopóki użytkownik się nie zaloguje

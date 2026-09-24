@@ -70,6 +70,7 @@ class Element {
     return el;
   }
   append(...els) { els.forEach((e) => this.appendChild(e)); }
+  replaceChildren(...els) { this.children.forEach((c) => { c.parentNode = null; }); this.children = []; this._text = ''; this._html = ''; els.forEach((e) => this.appendChild(e)); }
   prepend(el) { el.parentNode = this; this.children.unshift(el); }
   removeChild(el) {
     const i = this.children.indexOf(el);
