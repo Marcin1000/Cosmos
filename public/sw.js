@@ -2,10 +2,10 @@
    Statyczne pliki: cache-first (działa offline).
    API: zawsze sieć — czat wymaga połączenia z modelem. */
 
-const CACHE = 'cosmos-v115';
+const CACHE = 'cosmos-v116';
 
 const STATIC_ASSETS = [
-  '/',
+  '/app',
   '/index.html',
   '/style.css',
   '/app.js',
@@ -20,13 +20,13 @@ const STATIC_ASSETS = [
   '/mowa.js',
   '/konta.js',
   '/manifest.webmanifest',
-  '/icons/icon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
-  '/icons/mask-icon.svg',
-  '/icons/icon-maskable-192.png',
-  '/icons/icon-maskable-512.png',
+  '/icons/cosmos.svg',
+  '/icons/cosmos-192.png',
+  '/icons/cosmos-512.png',
+  '/icons/cosmos-apple-touch.png',
+  '/icons/cosmos-maska.svg',
+  '/icons/cosmos-maskable-192.png',
+  '/icons/cosmos-maskable-512.png',
   '/fonts/fonts.css',
   '/fonts/IBMPlexSans-400-latin.woff2',
   '/fonts/IBMPlexSans-400-latin-ext.woff2',
@@ -59,6 +59,9 @@ self.addEventListener('fetch', (event) => {
 
   // API i streaming — zawsze przez sieć
   if (url.pathname.startsWith('/api/') || event.request.method !== 'GET') return;
+  /* Strona produktowa (/ i /strona/) nie jest częścią aplikacji offline:
+     ma przychodzić świeża, a nie z pamięci telefonu sprzed tygodnia. */
+  if (url.origin === location.origin && (url.pathname === '/' || url.pathname.startsWith('/strona/'))) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

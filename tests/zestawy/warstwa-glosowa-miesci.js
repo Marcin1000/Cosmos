@@ -49,7 +49,7 @@ const EKRANY = [
   for (const [nazwa, viewport] of EKRANY) {
     const ctx = await br.newContext({ viewport, deviceScaleFactor: 2 });
     const pg = await ctx.newPage();
-    await pg.goto(env.adres, { waitUntil: 'domcontentloaded' });
+    await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
     await pg.waitForTimeout(900);
 
     /* Wchodzimy w tryb głosowy i wypełniamy go treścią wprost. Nie udajemy

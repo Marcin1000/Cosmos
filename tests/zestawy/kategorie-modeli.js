@@ -108,7 +108,7 @@ up.listen(0, async () => {
   const pg = await ctx.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
-  await pg.goto('http://127.0.0.1:3060/');
+  await pg.goto('http://127.0.0.1:3060/app');
   await pg.evaluate(() => document.getElementById('settings-btn').click());
   await pg.waitForTimeout(400);
   await pg.evaluate(() => document.getElementById('fetch-models-cloud').click());

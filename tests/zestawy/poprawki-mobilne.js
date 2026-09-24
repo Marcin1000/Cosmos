@@ -18,7 +18,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   });
   const m = await mctx.newPage();
   m.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await m.goto(`${ADRES}`, { waitUntil: 'load' });
+  await m.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await m.evaluate(() => {
     localStorage.setItem('cosmos.conversations', JSON.stringify(
       Array.from({ length: 10 }, (_, i) => ({
@@ -191,7 +191,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   // ---------- PULPIT: brak regresji ----------
   const d = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await d.goto(`${ADRES}`, { waitUntil: 'load' });
+  await d.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await d.waitForTimeout(600);
   const desk = await d.evaluate(() => {
     const list = document.querySelector('.conversations');

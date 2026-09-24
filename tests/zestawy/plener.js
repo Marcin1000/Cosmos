@@ -53,7 +53,7 @@ if (!maPrzegladarke()) {
     body: JSON.stringify({ location: 'Piaseczno, mazowieckie', lat: 52.2297, lon: 21.0122 }),
   });
 
-  await pg.goto(env.adres, { waitUntil: 'load' });
+  await pg.goto(env.adres + '/app', { waitUntil: 'load' });
   await pg.waitForTimeout(500);
 
   /* ---- 0. Pozycja w menu istnieje i otwiera okno ---- */

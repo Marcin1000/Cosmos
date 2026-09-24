@@ -104,6 +104,7 @@ const MIME = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
 };
@@ -321,7 +322,7 @@ async function handleGeokod(req, res) {
     + `&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`;
   const stoper = AbortSignal.timeout(GEOKOD_MS);
   try {
-    const r = await fetch(url, { signal: stoper, headers: { 'User-Agent': 'Cosmos/1.0 (prywatny asystent)' } });
+    const r = await fetch(url, { signal: stoper, headers: { 'User-Agent': 'Cosmos/2.0 (prywatny asystent)' } });
     if (!r.ok) return sendJson(res, 502, { error: `Usługa nazw miejsc odpowiedziała ${r.status}.` });
     const d = await r.json();
     const a = d.address || {};
@@ -2116,7 +2117,11 @@ async function handleModels(req, res) {
 
 function serveStatic(req, res) {
   let urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-  if (urlPath === '/') urlPath = '/index.html';
+  /* Pod „/" stoi strona produktowa, a sam Cosmos pod „/app". Aplikacja ładuje
+     swoje pliki ścieżkami bezwzględnymi (/app.js, /style.css), więc działa
+     tak samo spod „/app" i „/app/". */
+  if (urlPath === '/') urlPath = '/strona/index.html';
+  else if (urlPath === '/app' || urlPath === '/app/') urlPath = '/index.html';
 
   const filePath = path.join(PUBLIC_DIR, urlPath);
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -2140,6 +2145,8 @@ function serveStatic(req, res) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'same-origin',
     };
+    /* Czcionki i ikony są niezmienne pod swoją nazwą — przeglądarka i Cloudflare
+       trzymają je rok. Nowa ikona = nowa nazwa pliku, inaczej nikt jej nie zobaczy. */
     if (ext === '.woff2' || urlPath.startsWith('/icons/')) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
     } else {

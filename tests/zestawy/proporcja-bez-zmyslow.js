@@ -50,7 +50,7 @@ if (!maPrzegladarke()) {
   ]) {
     const ctx = await br.newContext({ viewport, permissions: ['camera'] });
     const pg = await ctx.newPage();
-    await pg.goto(env.adres, { waitUntil: 'domcontentloaded' });
+    await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
     await pg.waitForTimeout(1200);
     await pg.click('#live-btn');
     await pg.waitForTimeout(2500);

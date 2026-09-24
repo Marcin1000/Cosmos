@@ -46,7 +46,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (/favicon|net::ERR|Failed to load resource/i.test(m.text())) return;
     bledy.push('KONSOLA: ' + m.text());
   });
-  await pg.goto(env.adres, { waitUntil: 'domcontentloaded' });
+  await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
   await pg.waitForTimeout(1200);
 
   /** Wołanie trasy z poziomu strony — to jest ta sama droga, którą chodzi panel. */

@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="94 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-94-4ac26b?style=flat-square">
+  <img alt="95 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-95-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 94 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 95 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -120,13 +120,13 @@ na jakieś pytanie. Ciekawa jest ostatnia kolumna.
 git clone https://github.com/Marcin1000/Cosmos.git
 cd Cosmos
 cp .env.example .env      # co najmniej jeden klucz API albo wskazanie modelu lokalnego
-node server.js            # http://localhost:3000
+node server.js            # http://localhost:3000 (strona produktowa), /app (Cosmos)
 ```
 
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 94 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 95 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -148,6 +148,25 @@ node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 > **[docs/ROADMAP.md](docs/ROADMAP.md)** — każda partia pracy: co się zepsuło i dlaczego.
 
 ---
+
+## Strona produktowa i adres aplikacji
+
+Pod `/` stoi strona produktowa (na serwerze: `https://cosmosai.live`), a sam Cosmos
+mieszka pod **`/app`**. Stąd kilka praktycznych rzeczy:
+
+- **Aplikację na telefonie dodawaj z `/app`.** Ikona dodana wcześniej z gołego
+  adresu otworzy teraz stronę produktową — usuń ją i dodaj jeszcze raz.
+- **Zaproszenia** z panelu Dostęp mają postać `…/app#zaproszenie=…`. Starsze linki
+  `…/#zaproszenie=…` strona przekierowuje od razu, więc żaden wysłany link nie
+  przestał działać.
+- **Zalogowany** widzi na stronie „Otwórz Cosmos” zamiast „Zaloguj się”.
+- **Język** (PL/EN) jest wspólny dla strony i aplikacji — wybór w jednym miejscu
+  obowiązuje w drugim.
+- Pliki strony: `public/strona/` (HTML, CSS, jeden skrypt, własne czcionki Onest
+  i Martian Mono, obrazek podglądu linku `og.jpg`). Teksty polskie stoją w HTML-u,
+  angielskie w `strona.js` — pisane osobno, nie tłumaczone zdanie w zdanie.
+- Znak (planeta z pierścieniem z czterech łuków — po jednym na silnik) i wszystkie
+  ikony powstają z jednego źródła: `node scripts/ikony.js`.
 
 # Dokumentacja techniczna
 
@@ -218,7 +237,7 @@ Poniżej pełny opis każdego elementu — funkcje, konfiguracja, API, koszty.
 
 ### Windows — wariant 1: PWA (najprostszy)
 
-1. Uruchom serwer (`npm start`) i otwórz `http://localhost:3000` w **Chrome lub Edge**.
+1. Uruchom serwer (`npm start`) i otwórz `http://localhost:3000/app` w **Chrome lub Edge**.
 2. Kliknij ikonę **„Zainstaluj aplikację"** w pasku adresu (albo menu ⋯ → *Zainstaluj Cosmos*).
 3. Cosmos pojawi się w menu Start jako osobna aplikacja z własnym oknem i ikoną.
 
@@ -244,7 +263,7 @@ z serwerem na Twoim PC — tam jest klucz API i tam wykonuje się cała logika.
 
 ### iPhone / iPad — PWA (Safari)
 
-Otwórz adres serwera w **Safari** → **Udostępnij** → **„Dodaj do ekranu początkowego"**.
+Otwórz adres serwera z dopiskiem `/app` w **Safari** → **Udostępnij** → **„Dodaj do ekranu początkowego"**.
 Ikona i pasek stanu są przygotowane pod iOS.
 
 ### Mac — PWA (Safari / Chrome)
@@ -1169,7 +1188,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 94 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 95 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

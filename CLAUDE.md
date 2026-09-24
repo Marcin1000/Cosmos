@@ -33,7 +33,7 @@ tego później jest nieproporcjonalnie drogie.
 
 ```bash
 cp .env.example .env
-npm start                 # serwer + UI na http://localhost:3000
+npm start                 # strona produktowa na http://localhost:3000, Cosmos pod /app
 ```
 
 Rdzeń nie ma zależności npm — wystarczy Node ≥ 18. `npm install` pobiera tylko Electron
@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 94 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 95 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -268,6 +268,7 @@ z pozostałych.
 | `konta.js` | zaproszenie, Twoje konto, panel Dostęp; czyszczenie pamięci przeglądarki przy zmianie osoby |
 | `models.js` | katalog modeli, zakładki silników |
 | `i18n.js` | dwa słowniki (PL/EN) |
+| `strona/` | strona produktowa pod `/` — osobna od aplikacji, własny CSS i skrypt |
 
 Moduły trzymają się wzorca dwustronnego, żeby ten sam plik działał w przeglądarce
 i w `require()` z testu:
@@ -297,6 +298,23 @@ kasuje cache o innej nazwie niż `CACHE`. Po zmianie czegokolwiek w `STATIC_ASSE
 dostaną starą wersję. **Nowy skrypt w `public/` to trzy miejsca naraz:** `index.html`
 (tag `<script>`), `sw.js` (`STATIC_ASSETS`) i podniesiona wersja cache'a. Pominięcie
 `sw.js` daje najgorszy możliwy objaw: działa u ciebie, nie działa na telefonie Marcina.
+
+### Strona produktowa (`public/strona/`) i adres `/app`
+
+`serveStatic()` oddaje pod `/` stronę produktową (`public/strona/index.html`), a pod
+`/app` i `/app/` — aplikację (`public/index.html`). Dlatego **aplikacja ładuje swoje
+pliki ścieżkami bezwzględnymi** (`/app.js`, `/style.css`, `/sw.js`) — względna ścieżka
+spod `/app/` trafiłaby w `/app/app.js` i aplikacja wstałaby bez skryptów.
+
+- Teksty strony: polskie w HTML-u (`data-t`), angielskie w słowniku `EN`
+  w `strona.js`. Nowy tekst = wpis w obu; zestaw `strona-produktowa` sprawdza,
+  że przełączenie na EN zmienia **każdy** tekst.
+- Stary link `/#zaproszenie=…` przekierowuje skrypt w `<head>` strony — przed
+  czymkolwiek innym. Nowe linki z panelu Dostęp mają już `/app#zaproszenie=…`.
+- Service worker omija `/` i `/strona/` — strona ma przychodzić świeża.
+- Liczby na stronie (zestawy testów) pilnuje audyt razem z README.
+- Znak i ikony generuje `scripts/ikony.js` z jednego źródła. Pliki w `public/icons/`
+  serwer oddaje jako niezmienne (rok w pamięci) — **nowy wygląd = nowa nazwa pliku**.
 
 ### Mostek MCP (`mcp/cosmos-mcp.js`)
 

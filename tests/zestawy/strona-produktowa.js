@@ -1,0 +1,137 @@
+/* Strona produktowa pod „/" i aplikacja pod „/app".
+ *
+ * Co musi być prawdą, żeby strona była wizytówką, a nie przeszkodą:
+ *   1. „/" to strona, „/app" to Cosmos — i nic z aplikacji nie zgubiło się
+ *      przy przeprowadzce (pliki ładowane ścieżkami bezwzględnymi).
+ *   2. Stary link z zaproszeniem (/#zaproszenie=…) dalej otwiera formularz
+ *      dołączenia — żaden wysłany link nie może przestać działać.
+ *   3. Przełącznik PL/EN podmienia KAŻDY tekst. Brak angielskiego wpisu
+ *      oznaczałby polskie zdanie w angielskiej wersji, a to wygląda gorzej niż
+ *      literówka.
+ *   4. Wybór języka przeżywa przeładowanie i jest wspólny z aplikacją.
+ *   5. Telefon: bez poziomego przewijania w obu językach, na całej długości.
+ *   6. Ograniczony ruch: wszystko widać od razu, rozmowa pokazowa jest pełna.
+ *   7. Przełącznik silników w rozmowie pokazowej naprawdę przełącza.
+ *   8. Zero błędów w konsoli. */
+const { srodowisko, przegladarka } = require('../pomoc');
+
+(async () => {
+  const env = await srodowisko('pelne');
+  const b = await przegladarka();
+  const problemy = [];
+  const ok = (warunek, opis) => {
+    console.log(`${warunek ? 'OK ' : 'ZLE'} ${opis}`);
+    if (!warunek) problemy.push(opis);
+  };
+  const bledy = [];
+  const nowaStrona = async (opcje = {}, sledzKonsole = true) => {
+    const ctx = await b.newContext({ locale: 'pl-PL', ...opcje });
+    const p = await ctx.newPage();
+    if (sledzKonsole) p.on('pageerror', (e) => bledy.push(`pageerror: ${e.message}`));
+    if (sledzKonsole) p.on('console', (m) => { if (m.type() === 'error') bledy.push(`console: ${m.text()}`); });
+    return { ctx, p };
+  };
+
+  // --- 1. adresy ------------------------------------------------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1440, height: 900 } });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    ok(await p.locator('.hero-h').count() === 1, '„/" pokazuje stronę produktową');
+    ok(await p.locator('#welcome, #login-overlay').count() === 0, '„/" nie ładuje aplikacji');
+
+    for (const adres of ['/app', '/app/']) {
+      await p.goto(env.adres + adres, { waitUntil: 'load' });
+      await p.waitForSelector('#welcome', { state: 'attached' });
+      const zaladowane = await p.evaluate(() => typeof window.utworzKonta === 'function' && typeof window.t === 'function');
+      ok(zaladowane, `„${adres}" ładuje aplikację razem z jej skryptami`);
+    }
+    await ctx.close();
+  }
+
+  // --- 2. stary link z zaproszeniem -----------------------------------------
+  {
+    /* Zmyślony token: serwer słusznie odpowie 410, a aplikacja zapisze to
+       w konsoli — tu liczy się tylko, dokąd prowadzi link. */
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } }, false);
+    const token = 'x'.repeat(32);
+    await p.goto(`${env.adres}/#zaproszenie=${token}`, { waitUntil: 'load' });
+    await p.waitForURL(/\/app#zaproszenie=/, { timeout: 5000 }).catch(() => {});
+    ok(p.url() === `${env.adres}/app#zaproszenie=${token}`, `stary link przekierowuje z tokenem → ${p.url()}`);
+    await p.waitForSelector('#invite-overlay', { state: 'visible', timeout: 5000 }).catch(() => {});
+    ok(await p.locator('#invite-overlay').isVisible(), 'po przekierowaniu widać formularz dołączenia');
+    await ctx.close();
+  }
+
+  // --- 3–4. języki ----------------------------------------------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1440, height: 900 } });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    ok(await p.evaluate(() => document.documentElement.lang) === 'pl', 'polska przeglądarka → strona po polsku');
+
+    const polskie = await p.evaluate(() => [...document.querySelectorAll('[data-t]')].map((el) => [el.dataset.t, el.textContent.trim()]));
+    await p.click('[data-jezyk="en"]');
+    await p.waitForFunction(() => document.documentElement.lang === 'en');
+    const angielskie = await p.evaluate(() => [...document.querySelectorAll('[data-t]')].map((el) => [el.dataset.t, el.textContent.trim()]));
+    /* Słowa, które w obu językach brzmią tak samo — i tylko one. */
+    const TAKIE_SAME = new Set(['pm.w2']);   // „Routing"
+    const bezTlumaczenia = polskie.filter(([k, tekst], i) => tekst && !TAKIE_SAME.has(k) && angielskie[i][1] === tekst).map(([k]) => k);
+    ok(bezTlumaczenia.length === 0, `każdy tekst ma angielską wersję${bezTlumaczenia.length ? ' — brak: ' + [...new Set(bezTlumaczenia)].join(', ') : ''}`);
+    ok(/One thread/.test(await p.textContent('.hero-h')), 'nagłówek po angielsku');
+    ok(/one thread/i.test(await p.title()), 'tytuł karty po angielsku');
+
+    await p.reload({ waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    ok(await p.evaluate(() => document.documentElement.lang) === 'en', 'angielski przeżywa przeładowanie');
+    ok(await p.evaluate(() => localStorage.getItem('cosmos.lang')) === 'en', 'wybór zapisany pod tym samym kluczem co w aplikacji (cosmos.lang)');
+
+    await p.click('[data-jezyk="pl"]');
+    await p.waitForFunction(() => document.documentElement.lang === 'pl');
+    ok(/Jedna rozmowa/.test(await p.textContent('.hero-h')), 'powrót na polski przywraca polski nagłówek');
+
+    // --- 7. przełącznik silników
+    await p.click('[data-silnik="claude"]');
+    await p.waitForFunction(() => /claude/.test(document.querySelector('#pill-tekst').textContent), null, { timeout: 3000 }).catch(() => {});
+    ok(/claude/.test(await p.textContent('#pill-tekst')), 'klik „Claude" przełącza model w rozmowie pokazowej');
+    const ostatni = await p.evaluate(() => { const e = [...document.querySelectorAll('#czat-zywy .odp-silnik')].pop(); return e ? e.textContent : ''; });
+    ok(ostatni === 'Claude', `następna odpowiedź przychodzi z wybranego silnika (${ostatni || 'brak'})`);
+    ok(await p.getAttribute('[data-silnik="claude"]', 'aria-pressed') === 'true', 'przycisk silnika ma aria-pressed');
+    await ctx.close();
+  }
+
+  // --- 5. telefon: bez poziomego przewijania --------------------------------
+  for (const jezyk of ['pl', 'en']) {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true, locale: jezyk === 'en' ? 'en-US' : 'pl-PL' });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForTimeout(400);
+    const wysokosc = await p.evaluate(() => document.documentElement.scrollHeight);
+    let najgorzej = 0;
+    for (let y = 0; y <= wysokosc; y += 600) {
+      await p.evaluate((y) => scrollTo({ top: y, behavior: 'instant' }), y);
+      await p.waitForTimeout(40);
+      najgorzej = Math.max(najgorzej, await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth));
+    }
+    ok(najgorzej <= 0, `telefon 360 px (${jezyk}): brak poziomego przewijania (nadmiar ${najgorzej} px)`);
+    await ctx.close();
+  }
+
+  // --- 6. ograniczony ruch --------------------------------------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForTimeout(300);
+    const ukryte = await p.evaluate(() => [...document.querySelectorAll('[data-pokaz]')].filter((el) => Number(getComputedStyle(el).opacity) < 0.99).length);
+    ok(ukryte === 0, `ograniczony ruch: treść widoczna bez przewijania (ukrytych: ${ukryte})`);
+    const odpowiedzi = await p.locator('#czat-zywy .odp').count();
+    ok(odpowiedzi === 4, `ograniczony ruch: rozmowa pokazowa pełna od razu (${odpowiedzi}/4)`);
+    await ctx.close();
+  }
+
+  // --- 8. konsola -----------------------------------------------------------
+  ok(bledy.length === 0, `brak błędów w konsoli${bledy.length ? ':\n     ' + bledy.slice(0, 5).join('\n     ') : ''}`);
+
+  await b.close();
+  env.koniec();
+  console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nWszystko w porządku');
+  process.exit(problemy.length ? 1 : 0);
+})();

@@ -344,6 +344,9 @@ for (const [f, tekst] of Object.entries({
   'CLAUDE.md': rd('CLAUDE.md'),
   'tests/README.md': rd('tests/README.md'),
   'docs/obrazy/banner.svg': rd('docs/obrazy/banner.svg'),
+  /* Strona produktowa: liczba i słowo stoją w osobnych elementach
+     („<span>94</span><dd>zestawy testów…"), więc czytamy ją bez znaczników. */
+  'public/strona/index.html': rd('public/strona/index.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
 })) {
   /* Po polsku i po angielsku — angielskie „90 suites" i „99 behaviour test
      suites" w bannerze przetrwały kilka zmian niezauważone, bo audyt czytał
@@ -360,7 +363,7 @@ zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
 const wersja = (sw.match(/cosmos-v(\d+)/) || [])[1];
-const zasoby = [...sw.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]).filter((a) => a !== '/' && !a.startsWith('/api'));
+const zasoby = [...sw.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]).filter((a) => a !== '/' && a !== '/app' && !a.startsWith('/api'));   // „/app” to index.html
 const brakZas = zasoby.filter((a) => !ist('public' + a));
 console.log(`    cache: cosmos-v${wersja}, zasobów: ${zasoby.length}`);
 brakZas.length ? zle('zasoby w cache bez pliku: ' + brakZas.join(', ')) : ok('wszystkie zasoby z cache istnieją');

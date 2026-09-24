@@ -91,7 +91,7 @@ async function postaw(dataDir) {
 
   // --- 3. Zaproszenie działa raz ---------------------------------------------
   const zap = await marcin.zadaj('/api/konta/zaproszenia', { metoda: 'POST', dane: { nazwa: 'Ania Łęcka' } });
-  ok(zap.kod === 200 && zap.json.token && zap.json.sciezka.startsWith('/#zaproszenie='),
+  ok(zap.kod === 200 && zap.json.token && zap.json.sciezka.startsWith('/app#zaproszenie='),
     'właściciel tworzy zaproszenie i dostaje link z tokenem w #fragmencie (nie trafia do logów serwera)');
   const token = zap.json.token;
   const podglad = await anonim.zadaj(`/api/zaproszenie?token=${encodeURIComponent(token)}`);

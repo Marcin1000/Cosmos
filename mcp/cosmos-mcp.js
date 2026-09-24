@@ -12,7 +12,7 @@
  *     "mcpServers": {
  *       "cosmos": {
  *         "command": "node",
- *         "args": ["C:/sciezka/do/Bear/mcp/cosmos-mcp.js"],
+ *         "args": ["C:/sciezka/do/Cosmos/mcp/cosmos-mcp.js"],
  *         "env": { "COSMOS_URL": "http://localhost:3000" }
  *       }
  *     }

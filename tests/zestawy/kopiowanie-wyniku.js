@@ -12,7 +12,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const pg = await ctx.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
-  await pg.goto(`${ADRES}/`);
+  await pg.goto(`${ADRES}/app`);
   await pg.click('#settings-btn');
   await pg.waitForTimeout(400);
 
@@ -50,7 +50,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await pg2.addInitScript(() => {
     Object.defineProperty(navigator, 'clipboard', { get: () => undefined, configurable: true });
   });
-  await pg2.goto(`${ADRES}/`);
+  await pg2.goto(`${ADRES}/app`);
   await pg2.click('#settings-btn');
   await pg2.waitForTimeout(300);
   await pg2.click('#fetch-models-cloud');

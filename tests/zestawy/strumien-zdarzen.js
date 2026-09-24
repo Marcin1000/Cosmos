@@ -34,7 +34,7 @@ const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
   const pg = await b.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
-  await pg.goto(env.adres);
+  await pg.goto(env.adres + '/app');
   await pg.waitForTimeout(1500);
 
   // 2. zwykłe zdarzenie miga i znika
@@ -55,7 +55,7 @@ const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
     window.webkitSpeechRecognition = window.SpeechRecognition;
     navigator.mediaDevices.getUserMedia = async () => ({ getTracks: () => [{ stop() {} }] });
   });
-  await pg2.goto(env.adres);
+  await pg2.goto(env.adres + '/app');
   await pg2.waitForTimeout(1500);
   await wyslijZdarzenie(env.adres, 'wake', 'wykryto słowo aktywujące');
   await pg2.waitForFunction(() => document.getElementById('voice-overlay')
@@ -71,7 +71,7 @@ const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
   const ctx3 = await b.newContext();
   const pg3 = await ctx3.newPage();
   await pg3.addInitScript(() => localStorage.setItem('cosmos.wakeZdalny', '0'));
-  await pg3.goto(env.adres);
+  await pg3.goto(env.adres + '/app');
   await pg3.waitForTimeout(1500);
   await wyslijZdarzenie(env.adres, 'wake', 'wykryto słowo aktywujące');
   await pg3.waitForTimeout(2500);

@@ -140,7 +140,7 @@ const el = {
   studioClose: $('studio-close'),
 };
 
-const AVATAR_SVG = '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="currentColor" opacity="0.92"/><ellipse cx="24" cy="24" rx="20" ry="7.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-24 24 24)" opacity="0.55"/></svg>';
+const AVATAR_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><use href="#znak-cosmos"/></svg>';
 const COPY_SVG = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 
 // ----------------------------------------------------------------
@@ -5850,7 +5850,7 @@ async function loadServerConfig() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* offline dev */ });
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* offline dev */ });
   });
 }
 

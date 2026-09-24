@@ -44,9 +44,17 @@
   --radius: 12px;
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* kolory silników w znaku — te same co na stronie produktowej, rozjaśnione na ciemne tło */
+  --znak-nvidia: #76B84F;
+  --znak-local: #5B8FF5;
+  --znak-claude: #DE7A51;
+  --znak-openai: var(--text);
 }
 
 [data-theme="light"] {
+  --znak-nvidia: #5E9E3A;
+  --znak-local: #2F6FEB;
+  --znak-claude: #C8643B;
   --bg: #fbfbfd;
   --bg-sidebar: #f4f5f8;
   --bg-elevated: #ffffff;
@@ -161,7 +169,13 @@ kbd {
   font-size: 15px;
   letter-spacing: .28em;
 }
-.brand-icon { width: 24px; height: 24px; color: var(--accent); }
+.brand-icon { width: 26px; height: 26px; overflow: visible; }
+.znak-l1 { stroke: var(--znak-nvidia); }
+.znak-l2 { stroke: var(--znak-local); }
+.znak-l3 { stroke: var(--znak-claude); }
+.znak-l4 { stroke: var(--znak-openai); }
+.znak-planeta { fill: var(--text); stroke: var(--znak-tlo, var(--bg)); stroke-width: 2.4; }
+.sidebar .znak-planeta { --znak-tlo: var(--bg-sidebar); }
 
 .icon-btn {
   display: inline-flex;
@@ -454,9 +468,9 @@ kbd {
   text-align: center;
 }
 .welcome-icon {
-  width: 56px;
-  height: 56px;
-  color: var(--accent);
+  width: 72px;
+  height: 72px;
+  overflow: visible;
   margin-bottom: 20px;
   filter: drop-shadow(0 0 24px var(--accent-glow));
 }
@@ -907,7 +921,8 @@ kbd {
   margin-top: 2px;
   color: var(--accent);
 }
-.msg-avatar svg { width: 17px; height: 17px; }
+.msg-avatar svg { width: 22px; height: 22px; overflow: visible; }
+.msg-avatar .znak-planeta { --znak-tlo: var(--bg-elevated); }
 
 .msg-assistant .msg-content { flex: 1; min-width: 0; padding-top: 3px; }
 
@@ -2117,7 +2132,10 @@ kbd {
   max-width: 340px;
   text-align: center;
 }
-.login-icon { width: 56px; height: 56px; color: var(--accent); filter: drop-shadow(0 0 24px var(--accent-glow)); }
+.login-icon { width: 64px; height: 64px; overflow: visible; filter: drop-shadow(0 0 24px var(--accent-glow)); }
+.login-o { font-size: 13.5px; line-height: 1.5; color: var(--text-faint); margin: -4px 0 2px; }
+.login-link { font-size: 13.5px; color: var(--text-dim); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+.login-link:hover { color: var(--text); }
 .login-title {
   font-family: var(--font-mono);
   font-size: 24px;

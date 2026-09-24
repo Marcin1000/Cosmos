@@ -6,7 +6,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (typeof B !== 'undefined') B = ADRES;
   const b = await przegladarka();
   const p = await b.newPage();
-  await p.goto(`${ADRES}`, { waitUntil: 'load' });
+  await p.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await p.waitForTimeout(400);
   const fail = [];
 

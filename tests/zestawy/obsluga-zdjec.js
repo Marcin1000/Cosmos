@@ -78,7 +78,7 @@ up.listen(7089, async () => {
   const p = await ctx.newPage();
   const kbPosts = [];
   p.on('request', (r) => { if (r.url().includes('/api/kb/file') && r.method() === 'POST') kbPosts.push(r.postDataJSON()); });
-  await p.goto('http://localhost:3016', { waitUntil: 'load' });
+  await p.goto('http://localhost:3016/app', { waitUntil: 'load' });
   await p.waitForTimeout(600);
   await p.evaluate(() => openCamera());
   await p.waitForTimeout(1200);

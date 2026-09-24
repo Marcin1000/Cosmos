@@ -28,7 +28,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     return n ? n.innerText.trim() : '';
   });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'load' });
+  await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   // ---- 1. model, który myśli i pisze: myślenie widoczne, odpowiedź na miejscu ----
@@ -181,7 +181,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     permissions: ['microphone', 'camera'],
   });
   const m = await mctx.newPage();
-  await m.goto(`${ADRES}`, { waitUntil: 'load' });
+  await m.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await m.waitForTimeout(600);
   // kilka rozmów, żeby lista miała co pokazywać
   await m.evaluate(() => {

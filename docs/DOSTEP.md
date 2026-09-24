@@ -89,7 +89,8 @@ Ma pokazać `active (running)`, a w panelu Cloudflare tunel zmieni status na
 | Service → Type | `HTTP` |
 | Service → URL | `localhost:3000` |
 
-**Save**. Po minucie `https://cosmosai.live` pokaże ekran logowania.
+**Save**. Po minucie `https://cosmosai.live` pokaże stronę produktową,
+a `https://cosmosai.live/app` — ekran logowania.
 
 ### 2d. Uruchom ponownie Cosmosa
 
@@ -129,7 +130,8 @@ nie ma ich, chyba że wpisze własny klucz.
 1. Otworzyć link.
 2. Wpisać login i hasło → **Dołącz**.
 3. Na telefonie: menu przeglądarki → **Dodaj do ekranu głównego**. Cosmos
-   działa wtedy jak aplikacja.
+   działa wtedy jak aplikacja. Dodawaj z adresu `cosmosai.live/app` — pod
+   samym `cosmosai.live` stoi strona produktowa.
 
 To wszystko. Czat, wyszukiwanie w sieci, plan zdjęciowy, baza wiedzy, galeria,
 **mikrofon, głos i kamera z przeglądarki** działają od razu, bez instalowania

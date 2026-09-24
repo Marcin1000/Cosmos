@@ -222,8 +222,10 @@ Praktyczny wniosek:
 3. Zobaczysz kilka linijek zaczynających się od `✦ Cosmos`. To znaczy, że działa.
 4. Otwórz przeglądarkę (Chrome lub Edge) i wejdź na:
    ```
-   http://localhost:3000
+   http://localhost:3000/app
    ```
+   (Sam `http://localhost:3000` pokazuje stronę produktową — stamtąd też
+   wejdziesz przyciskiem „Zaloguj się”.)
 5. Powinieneś zobaczyć Cosmos. Napisz coś w polu na dole i naciśnij Enter. 🎉
 
 > Aby zatrzymać serwer: w oknie `cmd` naciśnij `Ctrl + C`. Aby uruchomić ponownie: `npm start`.
@@ -808,14 +810,15 @@ adres jest publiczny.
 
 # CZĘŚĆ 4 — Zainstaluj jako aplikację (obie ścieżki)
 
-Wszędzie poniżej **ADRES-SERWERA** to:
+Wszędzie poniżej **ADRES-SERWERA** to (aplikację instaluje się spod `/app` — pod samym
+adresem stoi strona produktowa):
 - Ścieżka A: `localhost:3000` (na tym komputerze) albo `192.168.x.x:3000` (w sieci Wi-Fi),
   albo adres Tailscale `100.x.x.x:3000` (poza domem),
 - Ścieżka B: adres VPS z Tailscale, np. `100.101.102.103:3000` (albo Twoja domena).
 
 ## Windows — wariant 1: PWA (najprostszy)
 
-1. Otwórz `http://ADRES-SERWERA` w **Chrome lub Edge**.
+1. Otwórz `http://ADRES-SERWERA/app` w **Chrome lub Edge**.
 2. Po prawej stronie paska adresu zobaczysz ikonę **„Zainstaluj"**
    (albo: menu ⋮ → *„Zainstaluj Cosmos…"*).
 3. Kliknij ją. Cosmos pojawi się w menu Start jako osobna aplikacja z własną ikoną.
@@ -844,7 +847,7 @@ Gotowy instalator znajdziesz w folderze `dist`.
    Tailscale / VPS — Ścieżka B).
    - Adres komputera w sieci sprawdzisz tak: w `cmd` wpisz `ipconfig`, znajdź
      **„Adres IPv4"** — coś jak `192.168.1.20`.
-2. Na telefonie otwórz w Chrome: `http://ADRES-SERWERA`
+2. Na telefonie otwórz w Chrome: `http://ADRES-SERWERA/app`
 3. Menu ⋮ → **„Dodaj do ekranu głównego"** / **„Zainstaluj aplikację"**.
 
 Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona).
@@ -852,7 +855,7 @@ Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona).
 ## iPhone / iPad (iOS, iPadOS)
 
 1. Otwórz Cosmosa w przeglądarce **Safari** (na iOS tylko Safari potrafi instalować
-   aplikacje): `http://ADRES-SERWERA`
+   aplikacje): `http://ADRES-SERWERA/app`
 2. Dotknij ikony **Udostępnij** (kwadrat ze strzałką w górę).
 3. Wybierz **„Dodaj do ekranu początkowego"**.
 
@@ -860,7 +863,7 @@ Cosmos działa wtedy jak natywna aplikacja (pełny ekran, własna ikona).
 
 ## Mac (macOS)
 
-Safari (macOS Sonoma lub nowszy): otwórz `http://ADRES-SERWERA`, potem w menu górnym
+Safari (macOS Sonoma lub nowszy): otwórz `http://ADRES-SERWERA/app`, potem w menu górnym
 **Plik → Dodaj do Docka**. W Chrome/Edge działa zwykła instalacja PWA (ikona
 „Zainstaluj" w pasku adresu).
 

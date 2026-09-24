@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (94 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (95 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -36,7 +36,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   const env = await srodowisko('pelne');   // stawia serwer i atrapy
   const b = await przegladarka();
   const p = await b.newPage();
-  await p.goto(env.adres);
+  await p.goto(env.adres + '/app');   // aplikacja; pod „/" stoi strona produktowa
 
   // …mierz…
 

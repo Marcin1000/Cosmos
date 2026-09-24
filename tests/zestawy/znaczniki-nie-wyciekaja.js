@@ -68,7 +68,7 @@ const PRZYPADKI = [
   const br = await przegladarka();
   const ctx = await br.newContext({ viewport: { width: 1280, height: 800 } });
   const pg = await ctx.newPage();
-  await pg.goto(env.adres, { waitUntil: 'domcontentloaded' });
+  await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
   await pg.waitForTimeout(1200);
 
   /* --- 1. Czyszczenie znaczników -----------------------------------------

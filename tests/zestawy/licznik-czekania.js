@@ -27,7 +27,7 @@ mock.listen(7093, async () => {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const fail = [];
   page.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await page.goto('http://localhost:3011', { waitUntil: 'load' });
+  await page.goto('http://localhost:3011/app', { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   await page.fill('#input', 'Czy możesz stworzyć grafikę z widokiem Dolomitów?');

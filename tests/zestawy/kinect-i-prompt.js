@@ -13,7 +13,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   page.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
   page.on('dialog', (d) => { fail.push('alert: ' + d.message()); d.dismiss(); });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'load' });
+  await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   // ---- 1. powiększenie podglądu ----
@@ -158,7 +158,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   // ---- 4. mobile: przycisk nie rozbija kompozytora ----
   const m = await ctx.newPage();
   await m.setViewportSize({ width: 360, height: 740 });
-  await m.goto(`${ADRES}`, { waitUntil: 'load' });
+  await m.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await m.waitForTimeout(500);
   const mob = await m.evaluate((txt) => {
     const i = document.getElementById('input');

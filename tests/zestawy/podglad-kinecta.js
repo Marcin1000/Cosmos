@@ -26,7 +26,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     return c.toDataURL().slice(-120);
   });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'load' });
+  await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
 
   // wybierz Kinecta jako źródło i otwórz panel

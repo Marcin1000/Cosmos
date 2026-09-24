@@ -28,7 +28,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   for (const w of [360, 412]) {
     const page = await browser.newPage({ viewport: { width: w, height: 800 }, isMobile: true, hasTouch: true });
-    await page.goto(`http://localhost:${PORT}`, { waitUntil: 'load' });
+    await page.goto(`http://localhost:${PORT}/app`, { waitUntil: 'load' });
     await page.waitForTimeout(600);
 
     const r = await page.evaluate(() => {

@@ -27,7 +27,7 @@ up.listen(7090, async () => {
   const p = await b.newPage();
   const fail = [];
   p.on('pageerror', (e) => fail.push('błąd JS: ' + e.message));
-  await p.goto('http://localhost:3014', { waitUntil: 'load' });
+  await p.goto('http://localhost:3014/app', { waitUntil: 'load' });
   await p.waitForTimeout(600);
 
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC';

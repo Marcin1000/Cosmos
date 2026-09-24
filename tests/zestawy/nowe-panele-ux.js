@@ -27,7 +27,7 @@ const WASKI = { width: 360, height: 740 };
   const pg = await ctx.newPage();
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
-  await pg.goto(env.adres, { waitUntil: 'load' });
+  await pg.goto(env.adres + '/app', { waitUntil: 'load' });
   await pg.waitForTimeout(400);
 
   /** Czy strona przewija się w bok — najczęstsza wpadka na wąskim ekranie. */

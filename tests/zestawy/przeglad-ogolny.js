@@ -12,7 +12,7 @@ const fs = require('fs');
   page.on('response', (r) => { if (r.status() >= 500) console.log(`   500 z: ${r.url()}`); });
   page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
-  await page.goto(`${ADRES}`, { waitUntil: 'load' });
+  await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await page.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'shot-welcome.png') });
 
   // 1. czat w trybie chmury

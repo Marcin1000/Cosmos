@@ -101,7 +101,7 @@ QLoRA 70B to zwykle kilka godzin → **~10–30 $ za przebieg** na community A10
    A100 80 GB (7B–13B QLoRA) lub H100 (30B–70B QLoRA).
 3. **Na maszynie:**
    ```bash
-   git clone <adres-repo-Cosmos> && cd Bear/training
+   git clone <adres-repo-Cosmos> && cd Cosmos/training
    pip install "unsloth[cu121] @ git+https://github.com/unslothai/unsloth.git"
    python qlora_example.py --data <twoj-plik>.jsonl \
      --model unsloth/Meta-Llama-3.1-70B-Instruct-bnb-4bit --epochs 2 --gguf

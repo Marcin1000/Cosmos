@@ -23,7 +23,7 @@ const stop = () => { try { process.kill(-srv.pid); } catch { /* już nie żyje *
   await start();
   const browser = await przegladarka();
   const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
-  await page.goto(`http://localhost:${PORT}`, { waitUntil: 'load' });
+  await page.goto(`http://localhost:${PORT}/app`, { waitUntil: 'load' });
   await page.waitForTimeout(600);
   const fail = [];
 

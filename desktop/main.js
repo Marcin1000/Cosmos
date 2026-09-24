@@ -38,7 +38,7 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
-  win.loadURL(`http://localhost:${PORT}`);
+  win.loadURL(`http://localhost:${PORT}/app`);
   win.on('closed', () => { win = null; });
 }
 

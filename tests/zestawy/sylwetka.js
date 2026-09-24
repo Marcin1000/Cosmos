@@ -16,7 +16,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   const zadania = [];
   pg.on('request', (r) => { if (r.url().includes('/api/')) zadania.push(r.url().split('/api/')[1]); });
 
-  await pg.goto(env.adres);
+  await pg.goto(env.adres + '/app');
   await pg.waitForTimeout(1200);
   await pg.evaluate(() => document.getElementById('live-btn').click());
   await pg.waitForTimeout(5000);

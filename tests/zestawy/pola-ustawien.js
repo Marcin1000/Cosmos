@@ -13,7 +13,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
     for (const [w, h] of [[1280, 900], [360, 740]]) {
       const pg = await br.newPage({ viewport: { width: w, height: h }, isMobile: w < 500, hasTouch: w < 500 });
       await pg.addInitScript((m) => localStorage.setItem('cosmos.theme', m), motyw);
-      await pg.goto(`${ADRES}/`);
+      await pg.goto(`${ADRES}/app`);
       await pg.evaluate((m) => document.documentElement.setAttribute('data-theme', m), motyw);
       await pg.evaluate(() => document.getElementById('settings-btn').click());
       await pg.waitForTimeout(400);

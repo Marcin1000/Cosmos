@@ -1,7 +1,7 @@
 {
   "name": "cosmos",
   "version": "2.0.0",
-  "description": "Hybrid local/cloud AI environment for multimodal models, agents, MCP and edge inference.",
+  "description": "A personal, hybrid AI system: one conversation across NVIDIA cloud, a local GPU, Claude and OpenAI.",
   "main": "desktop/main.js",
   "scripts": {
     "start": "node server.js",
@@ -32,7 +32,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/icons/icon-512.png"
+      "icon": "public/icons/cosmos-512.png"
     },
     "nsis": {
       "oneClick": false,

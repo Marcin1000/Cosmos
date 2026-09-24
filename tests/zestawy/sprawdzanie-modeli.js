@@ -94,7 +94,7 @@ up.listen(7101, async () => {
   const pg = await br.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
-  await pg.goto('http://127.0.0.1:3021/');
+  await pg.goto('http://127.0.0.1:3021/app');
   await pg.click('#settings-btn');
   await pg.waitForTimeout(400);
 
