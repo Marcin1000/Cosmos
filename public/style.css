@@ -37,14 +37,23 @@
   --border-strong: #34363C;
   --text: #ECEBE6;
   --text-dim: #A3A5AD;
-  --text-faint: #6F727B;
-  --accent: #5B8FF5;
-  --accent-strong: #7DA6F8;
-  --accent-contrast: #FFFFFF;
-  --accent-glow: #5B8FF52e;
+  /* #8A8D96, nie #6F727B: stary odcień miał 3,9:1 na tle i 3,6:1 na karcie —
+     poniżej WCAG AA dla drobnego tekstu (podpisy, stopka, nieaktywne zakładki).
+     Ta sama wartość co --blady na stronie produktowej. */
+  --text-faint: #8A8D96;
+  /* KOLOR MAJĄ TYLKO SILNIKI. Akcent był niebieskim lokalnego GPU (#5B8FF5
+     == --k-local), więc linki, cytaty, karty akcji i suwaki w odpowiedzi
+     NVIDII wyglądały, jakby pisał je lokalny model. Akcent jest teraz
+     neutralny — jak przyciski na stronie — a kolor niesie wyłącznie nić. */
+  --accent: var(--text);
+  --accent-strong: var(--text);
+  --accent-contrast: var(--bg);
+  --accent-glow: color-mix(in srgb, var(--text) 14%, transparent);
   --danger: #E5534B;
   --warning: #E8A33D;
+  --warning-tekst: var(--warning);
   --success: #76B84F;
+  --success-tekst: var(--success);
   --code-bg: #0D0E10;
   --scrollbar: #ffffff1c;
   --shadow: 0 30px 80px -30px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .03);
@@ -61,12 +70,20 @@
   --znak-local: var(--k-local);
   --znak-claude: var(--k-claude);
   --znak-openai: var(--text);
+  /* Kolor silnika jako TEKST. Kreski, kropki i nici mogą być jasne, ale
+     podpis „NVIDIA” 10,5 px w kolorze kreski miał w jasnym motywie 3,3:1.
+     Na ciemnym tle kolory kresek przechodzą AA, więc tu są tym samym. */
+  --k-nvidia-tekst: var(--k-nvidia);
+  --k-local-tekst: var(--k-local);
+  --k-claude-tekst: var(--k-claude);
+  --k-openai-tekst: var(--k-openai);
   /* silnik wybrany teraz — ustawia go setEndpoint() przez data-silnik na <html> */
   --k-akt: var(--k-nvidia);
+  --k-akt-tekst: var(--k-nvidia-tekst);
 }
-[data-silnik="local"] { --k-akt: var(--k-local); }
-[data-silnik="claude"] { --k-akt: var(--k-claude); }
-[data-silnik="openai"] { --k-akt: var(--k-openai); }
+[data-silnik="local"] { --k-akt: var(--k-local); --k-akt-tekst: var(--k-local-tekst); }
+[data-silnik="claude"] { --k-akt: var(--k-claude); --k-akt-tekst: var(--k-claude-tekst); }
+[data-silnik="openai"] { --k-akt: var(--k-openai); --k-akt-tekst: var(--k-openai-tekst); }
 
 [data-theme="light"] {
   --bg: #F6F5F1;
@@ -80,14 +97,14 @@
   --border-strong: #D5D2C9;
   --text: #16171B;
   --text-dim: #5E616B;
-  --text-faint: #8D909A;
-  --accent: #2F6FEB;
-  --accent-strong: #2459C7;
-  --accent-contrast: #FFFFFF;
-  --accent-glow: #2F6FEB24;
+  /* #686B75: 4,9:1 na tle, 4,5:1 na panelu bocznym (stary #8D909A — 2,9:1). */
+  --text-faint: #686B75;
   --danger: #D43B3B;
   --warning: #B8741F;
+  /* Bursztyn i zieleń jako tekst muszą być ciemniejsze niż jako kropka. */
+  --warning-tekst: #95590F;
   --success: #5E9E3A;
+  --success-tekst: #3F7B22;
   --code-bg: #EFEDE7;
   --scrollbar: #16171B22;
   --shadow: 0 1px 0 rgba(22, 23, 27, .03), 0 40px 90px -36px rgba(22, 23, 27, .32), 0 12px 28px -14px rgba(22, 23, 27, .12);
@@ -96,6 +113,10 @@
   --k-local: #2F6FEB;
   --k-claude: #C8643B;
   --k-openai: #16171B;
+  --k-nvidia-tekst: #3F7B22;
+  --k-local-tekst: #2659CC;
+  --k-claude-tekst: #A94F2A;
+  --k-openai-tekst: #16171B;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -267,6 +288,10 @@ body::after {
   flex-shrink: 0;
 }
 .conv-item:hover .conv-action { display: inline-flex; }
+/* Z klawiatury też. `display: none` wyjmowało przypnij/zmień nazwę/usuń
+   z kolejności Tab — pod Tabem były same tytuły rozmów. */
+.conv-item:focus-within .conv-action,
+.conv-item:focus-within .conv-delete { display: inline-flex; }
 .conv-action:hover { color: var(--text); background: var(--bg); }
 .conv-action.danger:hover { color: var(--danger); }
 .conv-action.pinned { display: inline-flex; color: var(--accent); }
@@ -391,7 +416,18 @@ body::after {
   padding: 12px 20px;
   min-height: 58px;
   z-index: 1;
+  /* Pasek NIE MOŻE wyjść poza swoją kolumnę. Przy otwartym płótnie wystawał
+     na nie — plakietka modelu i „Eksportuj” leżały na tytule płótna. */
+  min-width: 0;
+  row-gap: 8px;
 }
+/* Płótno otwarte: kolumna rozmowy ma ~560 px. Plakietka modelu znika (niżej),
+   a zakładki i ikony ścieśniają się tak, żeby komplet — cztery silniki
+   i pięć ikon — zmieścił się w jednym wierszu. Zawijanie zostaje jako
+   ostatnia deska: lepszy drugi wiersz niż ikona za krawędzią. */
+.app:has(.canvas:not([hidden])) .topbar { gap: 6px; padding: 12px; flex-wrap: wrap; }
+.app:has(.canvas:not([hidden])) .endpoint-tab { padding: 7px 10px; }
+.app:has(.canvas:not([hidden])) .topbar .icon-btn { width: 32px; }
 
 /* Bez tego paska aplikacja odcięta od serwera wygląda na sprawną: rysuje
    interfejs z pamięci podręcznej, a awarię widać dopiero po wysłaniu wiadomości. */
@@ -441,16 +477,26 @@ body::after {
 .endpoint-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   padding: 7px 14px;
   border-radius: 10px;
   border: 1px solid transparent;
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
   color: var(--text-faint);
   transition: background .25s, color .25s, box-shadow .25s, border-color .25s;
 }
-.endpoint-tab svg { width: 15px; height: 15px; color: var(--k); }
+/* Kropka w kolorze silnika zamiast ikonki — jak przełącznik na stronie
+   produktowej. Ikony (chmura, monitor, gwiazdka) znikały na telefonie
+   i razem z nimi znikał jedyny kolor zakładki; kropka zostaje wszędzie. */
+.endpoint-tab svg { display: none; }
+.endpoint-tab::before {
+  content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--k); opacity: .75; transition: opacity .25s, box-shadow .25s;
+}
+.endpoint-tab.active::before { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 20%, transparent); }
 .endpoint-tab:hover { color: var(--text); }
 .endpoint-tab.active {
   background: var(--bg-elevated);
@@ -479,10 +525,20 @@ body::after {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--k-akt) 20%, transparent);
   transition: background .4s;
 }
+/* Przy otwartym płótnie kolumna rozmowy ma ~560 px, a nazwa modelu jest
+   i tak w podpisie każdej odpowiedzi — plakietka ustępuje miejsca. */
+.app:has(.canvas:not([hidden])) .topbar-model { display: none; }
 
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
+  /* Zorza powitania ma 120% szerokości kolumny — bez tego ekran powitalny
+     dawał się przewinąć w bok o 39 px na telefonie. Samo `clip` nic by tu
+     nie dało: obok `overflow-y: auto` przeglądarka i tak liczy je jako
+     `hidden` (CSS Overflow 3), więc piszemy wprost. Zorzy nie przycinamy
+     na `.welcome` — na komputerze jej rozmyte brzegi wychodzą poza kolumnę
+     720 px i ucięcie dałoby dwie pionowe krawędzie światła. */
+  overflow-x: hidden;
   scroll-behavior: smooth;
   z-index: 1;
 }
@@ -502,6 +558,16 @@ body::after {
   position: absolute; left: 50%; top: 0; width: min(900px, 120%); height: 420px;
   transform: translateX(-50%); pointer-events: none; z-index: -1;
   filter: blur(70px); opacity: .45;
+  /* Dryfujące koła (scale 1.1) wystawały poza zorzę i dokładały szerokości
+     do przewijania. Przycięcie nic nie zmienia w wyglądzie: rozmycie
+     (filter na TYM elemencie) i tak rozlewa się poza pudełko. */
+  overflow: hidden;
+}
+/* 120% szerokości mieści się tylko przy kolumnie rozmowy ≥ 864 px. Węższa
+   (telefon, 1024 z panelem bocznym) — zorza na szerokość kolumny, bez
+   wystawania poza nią. */
+@media (max-width: 1140px) {
+  .welcome-zorza { width: 100%; }
 }
 .welcome-zorza i { position: absolute; border-radius: 50%; animation: welcome-dryf 24s ease-in-out infinite alternate; }
 .welcome-zorza i:nth-child(1) { width: 42%; aspect-ratio: 1; left: 8%; top: 10%; background: color-mix(in srgb, var(--k-nvidia) 30%, transparent); }
@@ -509,14 +575,18 @@ body::after {
 .welcome-zorza i:nth-child(3) { width: 34%; aspect-ratio: 1; right: 6%; top: 18%; background: color-mix(in srgb, var(--k-claude) 26%, transparent); animation-delay: -15s; }
 @keyframes welcome-dryf { 50% { transform: translate(-4%, 6%) scale(1.1); } 100% { transform: translate(5%, -4%) scale(.94); } }
 [data-theme="dark"] .welcome-zorza { opacity: .28; }
+/* Znak i etykieta każde w swoim wierszu, na osi. Jako inline SVG i inline-flex
+   dzieliły jedną linię — znak ~130 px w lewo od środka, etykieta w prawo. */
 .welcome-icon {
+  display: block;
   width: 52px;
   height: 52px;
   overflow: visible;
-  margin-bottom: 22px;
+  margin: 0 auto 22px;
 }
 .welcome-et {
-  display: inline-flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  display: flex; width: fit-content; margin: 0 auto 18px;
+  align-items: center; gap: 10px;
   font: 500 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim);
 }
 .welcome-kropka {
@@ -540,6 +610,12 @@ body::after {
   animation: welcome-plyn 9s linear infinite;
 }
 @keyframes welcome-plyn { to { background-position: -220% 0; } }
+/* Kto prosi system o mniej ruchu, dostaje zorzę i gradient w bezruchu —
+   kolory zostają, dryf i przepływ znikają. To samo z wejściem karty
+   i rysowaniem nici (niżej). */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-zorza i, .welcome h1 em { animation: none !important; }
+}
 .welcome-sub {
   color: var(--text-faint);
   font-size: 13px;
@@ -584,7 +660,9 @@ body::after {
   padding: 16px 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  /* Rytm jak w rozmowie pokazowej na stronie. 26 px plus ~30 px
+     niewidocznych akcji pod każdym dymkiem rozrywało wątek na osobne karty. */
+  gap: 14px;
 }
 
 .msg { display: flex; gap: 14px; }
@@ -605,22 +683,23 @@ body::after {
    w kolorze silnika, który ją napisał, i podpis nad treścią. Przełączenie
    silnika w połowie rozmowy widać jako zmianę koloru nici. Starsze
    odpowiedzi bez zapisanego silnika dostają neutralną kreskę. */
-.msg-assistant { --k: var(--border-strong); gap: 18px; }
-.msg-assistant[data-silnik="cloud"] { --k: var(--k-nvidia); }
-.msg-assistant[data-silnik="local"] { --k: var(--k-local); }
-.msg-assistant[data-silnik="claude"] { --k: var(--k-claude); }
-.msg-assistant[data-silnik="openai"] { --k: var(--k-openai); }
-/* Odpowiedź to karta, jak w rozmowie pokazowej na stronie: jasna powierzchnia,
-   nić w środku przy lewej krawędzi, podpis silnika nad treścią. Awatar zostaje
-   w DOM-ie (testy i czytniki ekranu go znają), ale nić przejęła jego rolę. */
+.msg-assistant { --k: var(--border-strong); --k-tekst: var(--text-dim); gap: 18px; }
+.msg-assistant[data-silnik="cloud"] { --k: var(--k-nvidia); --k-tekst: var(--k-nvidia-tekst); }
+.msg-assistant[data-silnik="local"] { --k: var(--k-local); --k-tekst: var(--k-local-tekst); }
+.msg-assistant[data-silnik="claude"] { --k: var(--k-claude); --k-tekst: var(--k-claude-tekst); }
+.msg-assistant[data-silnik="openai"] { --k: var(--k-openai); --k-tekst: var(--k-openai-tekst); }
+/* Odpowiedź to karta, jak w rozmowie pokazowej na stronie: powierzchnia
+   ledwie jaśniejsza od tła, bez cienia — wątek czyta się jako jeden ciąg,
+   a nie stos pływających kart. Nić w środku przy lewej krawędzi, podpis
+   silnika nad treścią. Awatar zostaje w DOM-ie (testy i czytniki ekranu
+   go znają), ale nić przejęła jego rolę. */
 .msg-assistant .msg-avatar { display: none; }
 .msg-assistant .msg-kolumna {
   position: relative;
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, var(--bg));
   border: 1px solid var(--border);
-  border-radius: 6px 20px 20px 20px;
+  border-radius: 6px 16px 16px 16px;
   padding: 14px 20px 10px 26px;
-  box-shadow: var(--shadow-soft);
 }
 .msg-assistant .msg-kolumna::before {
   content: ""; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 3px;
@@ -630,14 +709,23 @@ body::after {
 .msg-assistant.nowa .msg-kolumna::before { animation: nic-rysuje .8s cubic-bezier(.2, .7, .1, 1) .1s both; }
 @keyframes odp-wchodzi { from { opacity: 0; transform: translateY(8px) scale(.985); } }
 @keyframes nic-rysuje { from { transform: scaleY(0); } }
-/* Łącznik z poprzednią odpowiedzią — nić biegnie dalej przez cały wątek. */
-.msg-assistant + .msg-assistant .msg-kolumna::after {
-  content: ""; position: absolute; left: 11px; top: -27px; height: 27px; width: 1px; background: var(--border-strong);
+@media (prefers-reduced-motion: reduce) {
+  .msg-assistant.nowa .msg-kolumna, .msg-assistant.nowa .msg-kolumna::before { animation: none !important; }
+}
+/* Łącznik — nić biegnie dalej przez cały wątek: od poprzedniej odpowiedzi
+   ALBO od pytania. Dawniej był tylko między dwiema odpowiedziami pod rząd,
+   a w prawdziwej rozmowie między nimi zawsze stoi pytanie — więc nie było
+   go nigdy. Wysokość = odstęp między wiadomościami (.messages gap). */
+.msg-assistant + .msg-assistant .msg-kolumna::after,
+.msg-user + .msg-assistant .msg-kolumna::after,
+.msg-action-card + .msg-assistant .msg-kolumna::after {
+  content: ""; position: absolute; left: 11px; top: -15px; height: 14px; width: 1px; background: var(--border-strong);
 }
 .msg-assistant .msg-actions { margin-top: 4px; }
 .msg-silnik {
   display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-  font: 500 10.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--k);
+  font: 500 10.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--k-tekst, var(--k));
 }
 .msg-silnik small { font-size: inherit; color: var(--text-faint); text-transform: none; letter-spacing: 0; }
 
@@ -664,7 +752,7 @@ body::after {
   padding: 6px 8px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
   font-size: 12px;
   max-width: 260px;
 }
@@ -678,7 +766,7 @@ body::after {
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 10px;
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
 }
 .arch-state { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 .arch-box .field-row { margin-top: 8px; }
@@ -691,7 +779,7 @@ body::after {
   padding: 10px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
 }
 /* Zwinięty pasek: tytuł z lewej, nastawy z prawej, strzałka na końcu.
    Tytuł ustępuje miejsca, gdy się nie mieści (`min-width: 0` + wielokropek);
@@ -787,6 +875,9 @@ body::after {
   letter-spacing: 0.2px;
 }
 .plan-light { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+/* W Plenerze to zdanie dla człowieka (faza światła, minuty do zachodu, komunikat),
+   więc zwykłą czcionką — mono zostaje dla liczb w małym panelu kamery. */
+.plener-light { font-size: 12.5px; line-height: 1.55; font-variant-numeric: tabular-nums; }
 .plan-why { font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
 .plan-why p { margin: 0 0 3px; }
 .plan-urgent { color: var(--accent); font-weight: 600; }
@@ -796,10 +887,24 @@ body::after {
 .canvas {
   display: flex;
   flex-direction: column;
-  width: min(46vw, 720px);
+  /* Dolna granica 340 px — węższe płótno nie nadaje się do pisania; górna
+     720 px — dłuższy wiersz czyta się gorzej. Poniżej 1200 px płótno
+     przestaje dzielić ekran z rozmową (reguła niżej): przy 1024 czat
+     zostawał z 281 px. */
+  width: clamp(340px, 42vw, 720px);
+  flex: none;
   border-left: 1px solid var(--border-strong);
   background: var(--bg);
   min-width: 0;
+}
+@media (max-width: 1200px) and (min-width: 901px) {
+  .canvas {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(560px, 100vw);
+    z-index: 30;
+    box-shadow: var(--shadow);
+  }
 }
 .canvas-bar {
   display: flex;
@@ -853,7 +958,7 @@ body::after {
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   overflow: hidden;
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
 }
 .run-bar {
   padding: 6px 10px;
@@ -893,7 +998,7 @@ body::after {
   padding: 5px 9px;
   border-radius: 8px;
   border: 1px solid var(--border-strong);
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
   color: var(--text);
   cursor: pointer;
   max-width: 100%;
@@ -956,7 +1061,7 @@ body::after {
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  background: var(--bg-elev);
+  background: var(--bg-elevated);
 }
 .photo-tile img {
   display: block;
@@ -1007,7 +1112,7 @@ body::after {
   font-size: 11px;
   line-height: 1.3;
   color: var(--text-dim);
-  background: var(--bg-sunken, var(--bg-elev));
+  background: var(--bg-sidebar);
 }
 .photo-tile-pusty { border-style: dashed; }
 
@@ -1031,22 +1136,55 @@ body::after {
 
 .msg-assistant .msg-content { flex: 1; min-width: 0; padding-top: 3px; }
 
+/* BŁĄD TO KARTA W WĄTKU, nie czerwony wydruk z terminala. Ten sam kształt
+   co odpowiedź, nić w kolorze --danger zamiast koloru silnika, zwykła
+   czcionka — komunikat ma się dać przeczytać, a nie tylko zauważyć.
+   Pod treścią „↻ Ponów” (dokłada go app.js przy ostatnim błędzie rozmowy). */
 .msg-error .msg-content {
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13.5px;
-  font-family: var(--font-mono);
+  position: relative;
+  color: var(--text);
+  background: color-mix(in srgb, var(--danger) 5%, color-mix(in srgb, var(--bg-elevated) 55%, var(--bg)));
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border));
+  border-radius: 6px 16px 16px 16px;
+  padding: 14px 20px 14px 26px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
+.msg-error .msg-content::before {
+  content: ""; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 3px;
+  border-radius: 3px; background: var(--danger);
+}
+.msg-user + .msg-error .msg-content::after,
+.msg-assistant + .msg-error .msg-content::after {
+  content: ""; position: absolute; left: 11px; top: -15px; height: 14px; width: 1px; background: var(--border-strong);
+}
+.msg-error .msg-ponow {
+  display: flex;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+.msg-error .msg-ponow:hover { border-color: var(--text); background: var(--bg-elevated); }
 
+/* Kursor pisania w kolorze silnika, który właśnie pisze — ten sam kolor co nić. */
 .cursor-blink {
   display: inline-block;
-  width: 8px;
-  height: 16px;
-  vertical-align: -3px;
-  background: var(--accent);
-  border-radius: 1px;
+  width: 7px;
+  height: 1.05em;
+  vertical-align: -.16em;
+  margin-left: 2px;
+  background: var(--k, var(--k-akt));
+  border-radius: 2px;
   /* 1 s to było tempo zegara, nie oczekiwania. Kursor migający raz na
      sekundę wygląda, jakby coś się zacięło — a to jedyny sygnał, że model
      pracuje. 0,6 s czyta się jako „liczy", nie jako „stoi". */
@@ -1061,7 +1199,39 @@ body::after {
   opacity: 0;
   transition: opacity .15s;
 }
-.msg:hover .msg-actions { opacity: 1; }
+/* Mysz odsłania akcje najazdem, klawiatura — fokusem. Dawniej był tylko
+   `:hover`, więc Tab lądował na niewidzialnym przycisku. */
+.msg:hover .msg-actions,
+.msg:focus-within .msg-actions { opacity: 1; }
+/* Akcje pod PYTANIEM nie rezerwują miejsca: pływający pasek pod dymkiem,
+   widoczny tylko przy najeździe. W przepływie dokładały ~30 px pustki pod
+   każdym pytaniem i wątek miał dwa rytmy (pytanie→odpowiedź ≈60 px,
+   odpowiedź→pytanie ≈27 px). `padding-top` zamiast `margin` — pasek styka
+   się z dymkiem, więc przejazd myszą z dymka na przycisk nie gubi najazdu. */
+@media (hover: hover) {
+  .msg-user .user-col { position: relative; }
+  .msg-user .msg-actions {
+    position: absolute; top: 100%; right: 0; z-index: 3;
+    margin: 0; padding-top: 4px;
+    pointer-events: none;
+  }
+  .msg-user:hover .msg-actions,
+  .msg-user:focus-within .msg-actions { pointer-events: auto; }
+  .msg-user .msg-actions .msg-action-btn {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-soft);
+  }
+  .msg-user .msg-actions .msg-action-btn:hover { background: var(--bg-hover); }
+}
+/* Dotyk nie ma najazdu — akcje widać zawsze. Pod pytaniami tylko przy
+   ostatnim (edycja ma sens przy bieżącym wątku; przy starszych byłby to
+   rząd przycisków pod każdym dymkiem). Starsze pytanie: przytrzymanie
+   i zaznaczenie tekstu działa jak dotąd. */
+@media (hover: none) {
+  .msg-actions { opacity: 1; }
+  .msg-user:has(~ .msg-user) .msg-actions { display: none; }
+}
 .msg-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1084,9 +1254,20 @@ body::after {
 .md h3 { font-size: 16px; } .md h4 { font-size: 15px; }
 .md ul, .md ol { margin: 0 0 12px; padding-left: 24px; }
 .md li { margin: 4px 0; }
-.md a { color: var(--accent); text-decoration-color: var(--accent-glow); }
+/* Link w odpowiedzi: kolor tekstu, podkreślenie w kolorze silnika — jak na
+   stronie. Niebieski link w zielonej karcie NVIDII mówił „lokalny GPU”. */
+.md a { color: inherit; }
+/* Tylko zwykłe odnośniki z Markdownu (bez klasy) — kafelki zdjęć i inne
+   linki-komponenty w treści odpowiedzi mają własny wygląd. */
+.md a:not([class]) {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--k, var(--k-akt)) 70%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+.md a:not([class]):hover { text-decoration-color: var(--k, var(--k-akt)); }
 .md blockquote {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--k, var(--border-strong));
   padding: 2px 16px;
   margin: 0 0 12px;
   color: var(--text-dim);
@@ -1332,7 +1513,7 @@ body::after {
    nadaje — ta ramka dokłada to, co trzeba wiedzieć przed wyborem. */
 .model-info {
   border: 1px solid var(--border);
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--border-strong);
   border-radius: 8px;
   background: var(--bg-input);
   padding: 10px 12px;
@@ -1351,7 +1532,7 @@ body::after {
   white-space: nowrap;
 }
 .model-info-good { margin-top: 6px; font-size: 12px; }
-.model-info-warn { margin-top: 7px; color: var(--warning); font-size: 12px; }
+.model-info-warn { margin-top: 7px; color: var(--warning-tekst); font-size: 12px; }
 .model-info-guess { margin-top: 6px; color: var(--text-faint); font-size: 11.5px; }
 .model-info-err {
   margin: 6px 0 0;
@@ -1551,7 +1732,7 @@ body::after {
   border-radius: 999px;
   letter-spacing: .06em;
 }
-.studio-off { font-size: 11px; color: var(--warning); }
+.studio-off { font-size: 11px; color: var(--warning-tekst); }
 
 .studio-section textarea,
 .studio-section input[type="text"],
@@ -1638,18 +1819,19 @@ body::after {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  border: 1px solid var(--accent);
-  background: var(--accent-glow);
-  border-radius: 12px;
+  /* Neutralna: to prośba Cosmosa o zgodę, nie wypowiedź żadnego silnika. */
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  border-radius: 16px;
   padding: 12px 16px;
   max-width: 100%;
 }
 .action-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.action-card-type { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: .04em; }
+.action-card-type { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: .04em; }
 .action-card-text { font-size: 13.5px; color: var(--text); }
 .action-card-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .action-card-btns .btn-primary, .action-card-btns .btn-secondary { padding: 6px 14px; font-size: 13px; }
-.action-card-done { color: var(--success); font-size: 20px; }
+.action-card-done { color: var(--success-tekst); font-size: 20px; }
 
 /* ============================ OŚ CZASU ============================ */
 
@@ -1667,7 +1849,7 @@ body::after {
 .tl-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
 .tl-objects { font-size: 13px; color: var(--text-dim); }
 .tl-change { font-size: 12px; }
-.tl-change .app { color: var(--success); }
+.tl-change .app { color: var(--success-tekst); }
 .tl-change .dis { color: var(--danger); }
 .tl-del { color: var(--text-faint); align-self: flex-start; padding: 2px 8px; border-radius: 5px; }
 .tl-del:hover { color: var(--danger); background: var(--bg); }
@@ -2314,8 +2496,11 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: 60;
-  --text: #ECEBE6; --text-dim: #A3A5AD; --text-faint: #7A7D86;
+  --text: #ECEBE6; --text-dim: #A3A5AD; --text-faint: #8E919B;
   --bg-hover: rgba(255, 255, 255, .08); --border-strong: rgba(255, 255, 255, .14);
+  /* Akcent to kolor tekstu, a tekst jest tu zawsze jasny — bez tego w jasnym
+     motywie aktywny przycisk kamery dziedziczyłby ciemny akcent z <html>. */
+  --accent: var(--text);
   color: var(--text);
   background:
     radial-gradient(circle at 50% 36%, rgba(200, 100, 59, .22), transparent 45%),
@@ -2347,10 +2532,11 @@ body::after {
 .voice-close { position: absolute; top: 18px; right: 18px; }
 .voice-cam-btn { position: absolute; top: 18px; right: 66px; color: var(--text-faint); }
 .voice-cam-btn.active { color: var(--accent); }
-/* Trzeci przycisk w rzędzie — emoji zamiast SVG, bo „🐦" czytelniej mówi,
-   o co chodzi, niż jakikolwiek zarys ptaka, który dałoby się narysować
-   w 24 pikselach. */
-.voice-bird-btn { position: absolute; top: 18px; right: 114px; font-size: 18px; line-height: 1; }
+/* Trzeci przycisk w rzędzie. Był emoji „🐦” — na scenie głosu wyglądał jak
+   logo Twittera, a nie jak funkcja. Teraz liniowy ptak jak reszta ikon
+   (ik-ptak), kolor i rozmiar jak kamera obok. */
+.voice-bird-btn { position: absolute; top: 18px; right: 114px; color: var(--text-faint); }
+.voice-bird-btn:hover, .voice-cam-btn:hover { color: var(--text); }
 
 /* Wiersz aparatu w panelu planu. Nastawy z aparatu i przycisk obok siebie,
    bo pytanie brzmi „czy to, co mam ustawione, zgadza się z tym, co policzone" —
@@ -2499,10 +2685,10 @@ body::after {
 .niebo-czas { font-size: 32px; font-weight: 500; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
 .niebo-faza {
   font: 500 10.5px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase;
-  padding: 7px 10px; border-radius: 999px; color: var(--k-local); background: color-mix(in srgb, var(--k-local) 12%, transparent);
+  padding: 7px 10px; border-radius: 999px; color: var(--k-local-tekst); background: color-mix(in srgb, var(--k-local) 12%, transparent);
 }
-.niebo-faza[data-faza="zlota"] { color: var(--warning); background: color-mix(in srgb, var(--warning) 16%, transparent); }
-.niebo-faza[data-faza="dzien"] { color: var(--k-nvidia); background: color-mix(in srgb, var(--k-nvidia) 14%, transparent); }
+.niebo-faza[data-faza="zlota"] { color: var(--warning-tekst); background: color-mix(in srgb, var(--warning) 16%, transparent); }
+.niebo-faza[data-faza="dzien"] { color: var(--k-nvidia-tekst); background: color-mix(in srgb, var(--k-nvidia) 14%, transparent); }
 .niebo-faza[data-faza="noc"] { color: var(--text-dim); background: var(--bg-hover); }
 .niebo-dane { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
 .niebo-dane dt { font-size: 11.5px; color: var(--text-faint); }
@@ -2562,7 +2748,7 @@ body::after {
 .plener-shot.zrobione { border-left-color: var(--border-strong); opacity: .5; }
 .plener-shot.zrobione .plener-shot-name { text-decoration: line-through; }
 .plener-shot {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--text-faint);
   padding: 6px 0 6px 10px;
 }
 .plener-shot-head {
@@ -2593,7 +2779,7 @@ body::after {
   min-width: 7em;
   overflow-wrap: anywhere;
 }
-.plener-shot-nums { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+.plener-shot-nums { font-size: 11.5px; font-weight: 500; color: var(--text); white-space: nowrap; }
 /* Rola ujęcia: otwarcie / rozwinięcie / domknięcie. Kolorem odróżniamy tylko
    początek i koniec — środek jest tłem, na które te dwa mają się odcinać. */
 .plener-shot-role {
@@ -2606,8 +2792,8 @@ body::after {
   padding: 1px 7px;
   white-space: nowrap;
 }
-.plener-shot-role.rola-otwarcie { color: var(--accent); border-color: var(--accent-glow); }
-.plener-shot-role.rola-domkniecie { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }
+.plener-shot-role.rola-otwarcie { color: var(--text); border-color: var(--border-strong); }
+.plener-shot-role.rola-domkniecie { color: var(--warning-tekst); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }
 .plener-shot-move { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
 .plener-shot-how { font-size: 12px; line-height: 1.45; margin-top: 4px; }
 .plener-shot-why { font-size: 11px; color: var(--text-faint); line-height: 1.45; margin-top: 3px; }
@@ -2951,21 +3137,25 @@ body::after {
   .field textarea, .field select,
   .field input.mono, .field select.mono { font-size: 16px; }
 
-  /* Pasek górny. Cztery silniki + trzy ikony nie mieszczą się na telefonie
-     w pełnych rozmiarach, więc chowamy ikonki wewnątrz zakładek i ścieśniamy
-     resztę — dzięki temu komplet mieści się bez ucinania nazw w pół słowa. */
-  .topbar { padding: 8px 10px; gap: 6px; }
+  /* Pasek górny w DWÓCH WIERSZACH. Cztery silniki i pięć ikon (głos,
+     czytanie, kamera, streszczenie, eksport) nie mieszczą się w 390 px
+     w żadnym ścieśnieniu — czwarta zakładka uciekała za krawędź jako
+     „Clau…”. U góry: menu i ikony; pod spodem przełącznik silników na całą
+     szerokość, cztery równe pola z kropkami — jak na stronie produktowej. */
+  .topbar { padding: 8px 10px; gap: 6px; row-gap: 8px; flex-wrap: wrap; }
+  #expand-btn { margin-right: auto; }
   .endpoint-switch {
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding: 2px;
+    order: 10;
+    flex: 1 0 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    padding: 3px;
+    border-radius: 13px;
   }
-  .endpoint-switch::-webkit-scrollbar { display: none; }
-  .endpoint-tab { flex-shrink: 0; padding: 5px 9px; font-size: 12px; gap: 0; }
-  .endpoint-tab svg { display: none; }
-  .topbar .icon-btn { width: 30px; height: 30px; }
-  .topbar .icon-btn svg { width: 16px; height: 16px; }
+  .endpoint-tab { min-width: 0; padding: 6px 4px; font-size: 12.5px; gap: 6px; }
+  .topbar .icon-btn { width: 32px; height: 32px; }
+  .topbar .icon-btn svg { width: 17px; height: 17px; }
 
   /* Modale: prawie pełny ekran, przewijanie w środku */
   .modal-overlay { padding: 8px; }
@@ -3000,8 +3190,12 @@ body::after {
   /* Ekran powitalny ciaśniej — inaczej ostatnia podpowiedź chowa się
      za polem wiadomości i wygląda na uciętą. */
   .welcome { padding: 4vh 16px 16px; }
-  .welcome-icon { width: 44px; height: 44px; margin-bottom: 12px; }
-  .welcome h1 { font-size: 21px; letter-spacing: .3em; padding-left: .3em; }
+  .welcome-icon { width: 44px; height: 44px; margin-bottom: 14px; }
+  .welcome-et { margin-bottom: 14px; }
+  /* Rozstrzelenie .3em było reliktem dawnego logotypu „C O S M O S” —
+     nagłówek czytał się jako „O d  c z e g o”. Teraz tak jak h1 strony
+     na telefonie: ciasno i duże. */
+  .welcome h1 { font-size: clamp(30px, 9vw, 38px); letter-spacing: -.04em; padding-left: 0; margin-bottom: 14px; }
   .welcome-sub { margin-bottom: 20px; font-size: 12px; }
   /* Identyfikatory modeli bywają dłuższe niż ekran — łamiemy je w dowolnym
      miejscu, zamiast rozpychać stronę albo zawijać na dwa nierówne wiersze. */
@@ -3014,13 +3208,13 @@ body::after {
   .voice-hint { left: 20px; right: 20px; text-align: center; }
 }
 
-/* Wąskie telefony (Galaxy S, iPhone mini): cztery silniki mieszczą się
-   dopiero po jeszcze mocniejszym ścieśnieniu zakładek. */
+/* Wąskie telefony (Galaxy S, iPhone mini): przełącznik ma własny wiersz,
+   więc wystarczy lekko ścieśnić zakładki i ikony. */
 @media (max-width: 380px) {
   .topbar { padding: 8px 8px; gap: 5px; }
-  .endpoint-tab { padding: 4px 6px; font-size: 11px; }
-  .topbar .icon-btn { width: 28px; height: 28px; }
-  .topbar .icon-btn svg { width: 15px; height: 15px; }
+  .endpoint-tab { padding: 6px 2px; font-size: 12px; gap: 5px; }
+  .topbar .icon-btn { width: 30px; height: 30px; }
+  .topbar .icon-btn svg { width: 16px; height: 16px; }
 }
 
 /* Skróty klawiszowe pod stopką mają sens tylko przy fizycznej klawiaturze.
@@ -3049,7 +3243,7 @@ body::after {
   margin-bottom: -1px;
 }
 .studio-tab:hover { color: var(--text); }
-.studio-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.studio-tab.active { color: var(--text); border-bottom-color: var(--text); }
 
 .learn-pane { display: flex; flex-direction: column; gap: 10px; }
 .learn-pane input[type="text"],
@@ -3147,7 +3341,7 @@ body::after {
   border-radius: 6px;
   padding: 3px 8px;
 }
-.runner-confirm { font-size: 12.5px; color: var(--warning); display: flex; align-items: center; gap: 7px; }
+.runner-confirm { font-size: 12.5px; color: var(--warning-tekst); display: flex; align-items: center; gap: 7px; }
 .runner-btns { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
 .runner-done { text-align: center; font-size: 15px; color: var(--accent); padding: 24px 0; }
 
@@ -3165,7 +3359,7 @@ body::after {
 /* Poranna odprawa */
 .briefing-box {
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--border-strong);
   border-radius: 8px;
   padding: 12px 14px;
   margin-top: 8px;
@@ -3260,9 +3454,9 @@ body::after {
   color: var(--text-dim);
 }
 .gallery-actions button.frame-on {
-  background: var(--accent);
-  color: #0b0d14;
-  border-color: var(--accent);
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
 }
 
 /* Przyciski nagłówka trzymamy razem po prawej. Bez tego `space-between`
@@ -3273,7 +3467,7 @@ body::after {
 .model-note {
   margin-bottom: 8px;
   padding: 6px 10px;
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--border-strong);
   background: var(--bg-elevated);
   border-radius: 0 6px 6px 0;
   font-size: 11.5px;
@@ -3281,8 +3475,8 @@ body::after {
 }
 
 /* Wynik sprawdzenia modelu — mierzony, nie zgadywany. */
-.check-ok   { margin-top: 6px; color: var(--success); font-size: 12px; }
-.check-warn { margin-top: 6px; color: var(--warning); font-size: 12px; }
+.check-ok   { margin-top: 6px; color: var(--success-tekst); font-size: 12px; }
+.check-warn { margin-top: 6px; color: var(--warning-tekst); font-size: 12px; }
 .check-bad  { margin-top: 6px; color: var(--danger); font-size: 12px; }
 .check-all  { margin-top: 8px; width: 100%; font-size: 12.5px; }
 
@@ -3310,15 +3504,19 @@ body::after {
 select::-ms-expand { display: none; }
 
 /* Mignięcie o zdarzeniu z czujnika albo z innego urządzenia.
-   Nad treścią, ale nie blokuje jej — to informacja, nie okno dialogowe. */
+   Nad treścią, ale nie blokuje jej — to informacja, nie okno dialogowe.
+   Siedzi NAD POLEM WIADOMOŚCI (jest w .composer-wrap), a nie pod paskiem
+   górnym: tam na telefonie przykrywało pasek „Brak połączenia”, czyli
+   akurat tę jedną informację, której nie wolno przegapić. */
+.composer-wrap { position: relative; }
 .event-flash {
   position: absolute;
-  top: 52px;
+  bottom: calc(100% + 4px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
   max-width: min(560px, calc(100% - 32px));
-  padding: 7px 14px;
+  padding: 7px 14px 7px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-elevated);
@@ -3327,8 +3525,14 @@ select::-ms-expand { display: none; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  box-shadow: var(--shadow-soft);
   pointer-events: none;
+}
+/* Kropka „na żywo” w kolorze aktywnego silnika — zamiast 👁 z tekstu. */
+.event-flash::before {
+  content: ""; display: inline-block; vertical-align: 1px; margin-right: 8px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--k-akt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k-akt) 22%, transparent);
 }
 
 /* ================================================================
@@ -3383,3 +3587,117 @@ select::-ms-expand { display: none; }
 
 /* Ekran zaproszenia korzysta ze stylu logowania — tylko pola jedno pod drugim. */
 #invite-form input[hidden], #invite-form button[hidden] { display: none; }
+
+/* ================================================================
+   FOKUS Z KLAWIATURY
+   ================================================================ */
+
+/* Arkusz nie miał żadnego `:focus-visible` — fokus był domyślnym obrysem
+   przeglądarki, na ciemnym tle ledwie widocznym. Obrys w kolorze silnika,
+   jak na stronie produktowej. Tylko z klawiatury: kliknięcie myszą
+   niczego nie obrysowuje. Pola tekstowe mają własną obwódkę przy fokusie. */
+:focus-visible { outline: 2px solid var(--k-akt); outline-offset: 2px; }
+/* Pola, które mają już własną obwódkę przy fokusie — drugi obrys byłby
+   podwójną ramką. Pola bez niej (Nauka, podgląd kamery) zostają z obrysem. */
+.composer textarea:focus-visible, .canvas-text:focus-visible, .conv-search:focus-visible,
+.field :is(input, textarea, select):focus-visible, .field-row input:focus-visible,
+.konto-blok input:focus-visible, .login-box input:focus-visible,
+.studio-section :is(input, textarea, select):focus-visible,
+.plener-section :is(input, select):focus-visible { outline: none; }
+/* Zakładka silnika dostaje obrys w SWOIM kolorze — to o nią pytasz Tabem. */
+.endpoint-tab:focus-visible { outline-color: var(--k); }
+/* Na scenie głosu tło jest zawsze ciemne — obrys jasny, nie w kolorze
+   ciemnego motywu OpenAI. */
+.voice-overlay :focus-visible { outline-color: #F2A57E; outline-offset: 4px; }
+.voice-orb:focus-visible { outline-offset: 10px; border-radius: 50%; }
+
+/* ================================================================
+   IKONY LINIOWE — zamiast emoji w przyciskach i tytułach sekcji
+   ================================================================ */
+
+/* Emoji (🎒🌅📷🚁🗂, 🖼🔊🎬, 📁🎙…) rysował każdy system inaczej i żadne nie
+   pasowało do liniowych ikon panelu bocznego. Te są tym samym rysunkiem
+   (kreska 1,7, zaokrąglone końce) i biorą kolor tekstu.
+   Maska w `::before`, a nie <svg> w środku: część przycisków dostaje tekst
+   przez `textContent` (i18n, stan nagrywania) — pseudo-element to przeżyje,
+   wstawiony SVG nie. Użycie: klasa `ik ik-<nazwa>` na elemencie. */
+.ik::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: .5em;
+  vertical-align: -.22em;
+  background: currentColor;
+  -webkit-mask: var(--ik) center / contain no-repeat;
+  mask: var(--ik) center / contain no-repeat;
+}
+/* Tytuły sekcji Studia i Pleneru: ikona przygaszona, tekst pełny. */
+.studio-sec-title.ik::before,
+.plener-sec-title.ik::before {
+  width: 18px; height: 18px; margin-right: 0; background: var(--text-dim);
+}
+/* Przycisk-ikona (bez tekstu) — ikona na środku, bez odstępu. */
+.icon-btn.ik::before { width: 18px; height: 18px; margin: 0; vertical-align: 0; }
+/* Ostrzeżenia w Plenerze: trójkąt zamiast ⚠ w tekście. */
+.plener-warn.ik::before { background: var(--warning-tekst); }
+/* Przekładki „Tok myślenia” i „Wyniki wyszukiwania” — ikona zamiast 🧠/🔍. */
+.think-block summary::before,
+.search-results summary::before {
+  content: ""; display: inline-block; width: 1.2em; height: 1.2em; margin-right: .45em; vertical-align: -.25em;
+  background: currentColor;
+  -webkit-mask: var(--ik) center / contain no-repeat; mask: var(--ik) center / contain no-repeat;
+}
+.think-block summary { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1v.1h5v-.1c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z'/%3E%3C/svg%3E"); }
+.search-results summary { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E"); }
+
+.ik-obraz { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.8'/%3E%3Cpath d='M21 15l-5-5L5 21'/%3E%3C/svg%3E"); }
+.ik-dzwiek { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5 6 9H3v6h3l5 4z'/%3E%3Cpath d='M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13'/%3E%3C/svg%3E"); }
+.ik-wideo { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 7l-7 5 7 5V7z'/%3E%3Crect x='1' y='5' width='15' height='14' rx='2'/%3E%3C/svg%3E"); }
+.ik-klatki { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Cpath d='M9 5v14M15 5v14'/%3E%3C/svg%3E"); }
+.ik-pedzel { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3Cpath d='M13.5 6.5l4 4'/%3E%3C/svg%3E"); }
+.ik-plecak { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 10a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v9a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z'/%3E%3Cpath d='M9.5 6V4.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V6M6 13.5h12M10.5 13.5v2.5'/%3E%3C/svg%3E"); }
+.ik-swit { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18h18M7 18a5 5 0 0 1 10 0M12 5v3M5.6 9.6l1.8 1.8M18.4 9.6l-1.8 1.8M8.5 21.5h7'/%3E%3C/svg%3E"); }
+.ik-aparat { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l1.6-2.4A1 1 0 0 1 9.4 5h5.2a1 1 0 0 1 .8.6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z'/%3E%3Ccircle cx='12' cy='13' r='3.4'/%3E%3C/svg%3E"); }
+.ik-dron { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9.5' y='9.5' width='5' height='5' rx='1.2'/%3E%3Cpath d='M9.5 9.5 7 7M14.5 9.5 17 7M9.5 14.5 7 17M14.5 14.5 17 17'/%3E%3Ccircle cx='5.5' cy='5.5' r='2.5'/%3E%3Ccircle cx='18.5' cy='5.5' r='2.5'/%3E%3Ccircle cx='5.5' cy='18.5' r='2.5'/%3E%3Ccircle cx='18.5' cy='18.5' r='2.5'/%3E%3C/svg%3E"); }
+.ik-archiwum { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='4.5' rx='1'/%3E%3Cpath d='M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5M10 12.5h4'/%3E%3C/svg%3E"); }
+.ik-ptak { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.5 7.5h.01'/%3E%3Cpath d='M20 7.6l2 .6-2 .6'/%3E%3Cpath d='M20 8a4 4 0 0 0-7.6-1.7L3.5 18.5H12A8 8 0 0 0 20 10.5z'/%3E%3Cpath d='M7.5 18.5a6 6 0 0 0 4.4-9.6'/%3E%3Cpath d='M11 18.5V21M14.5 18v3'/%3E%3C/svg%3E"); }
+.ik-folder { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E"); }
+.ik-mikrofon { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='12' rx='3'/%3E%3Cpath d='M5 10v2a7 7 0 0 0 14 0v-2M12 19v3'/%3E%3C/svg%3E"); }
+.ik-pinezka { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z'/%3E%3Ccircle cx='12' cy='9' r='2.5'/%3E%3C/svg%3E"); }
+.ik-slonce { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/%3E%3C/svg%3E"); }
+.ik-czapka { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7l9-4 9 4-9 4-9-4z'/%3E%3Cpath d='M7 9.5V15c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5V9.5M21 7v5'/%3E%3C/svg%3E"); }
+.ik-nagraj { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.5'/%3E%3Ccircle cx='12' cy='12' r='3.5' fill='%23000'/%3E%3C/svg%3E"); }
+.ik-stop { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='5' width='14' height='14' rx='2.5'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1' fill='%23000'/%3E%3C/svg%3E"); }
+.ik-blyskawica { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 3 5 14h6l-1 7 8-11h-6z'/%3E%3C/svg%3E"); }
+.ik-iskra { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 5.6L20 10l-6.1 1.4L12 17l-1.9-5.6L4 10l6.1-1.4z'/%3E%3Cpath d='M19 17v.01M6 19v.01'/%3E%3C/svg%3E"); }
+.ik-uwaga { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 4.2 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z'/%3E%3Cpath d='M12 9.5v4.5M12 17.5v.01'/%3E%3C/svg%3E"); }
+.ik-mysl { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1v.1h5v-.1c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z'/%3E%3C/svg%3E"); }
+.ik-lupa { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E"); }
+.ik-oko { --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
+
+/* ================================================================
+   DROBNE: puste stany, pola na telefonie
+   ================================================================ */
+
+/* Puste listy (oś czasu, galeria, baza wiedzy, rozmowy) — spokojny,
+   wyśrodkowany akapit zamiast szarej linijki przyklejonej do ramki.
+   Tekst wstawia app.js; tu tylko wygląd. */
+.tl-empty, .gallery-empty, .kb-empty {
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  text-wrap: balance;
+}
+.kb-empty { padding: 22px 16px; }
+
+@media (max-width: 720px) {
+  /* Nazwy urządzeń audio bywają dłuższe niż ekran — lista dostaje cały
+     wiersz, a „Odśwież” schodzi pod nią, zamiast ucinać nazwę w pół. */
+  #set-mic { flex: 1 1 100%; }
+  /* Tryb nasłuchu: to samo — długie opcje na całą szerokość. */
+  #set-stt { width: 100%; }
+}

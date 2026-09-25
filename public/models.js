@@ -18,6 +18,10 @@
      kontekst   rozmiar okna kontekstu, opisowo
      cechy      wizja | rozumowanie | narzędzia | szybki | polski
      uwaga      ostrzeżenie, jeśli jakieś jest (np. nie zmieści się na 10 GB)
+     en         te same pola tekstowe po angielsku (opis, mocne, kontekst,
+                uwaga, czasem nazwa). modelInfo() podmienia je, gdy interfejs
+                jest po angielsku — bez tego angielskie Ustawienia pokazywały
+                „Mocny, ale nierówny…”. Brak pola w `en` = zostaje polskie.
    ============================================================ */
 
 const MODEL_CATALOG = [
@@ -30,6 +34,12 @@ const MODEL_CATALOG = [
     kontekst: '1 mln tokenów',
     cechy: ['rozumowanie', 'narzędzia', 'polski'],
     uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada — do szybkich pytań weź Super 49B.',
+    en: {
+      opis: 'NVIDIA\'s flagship — best for work where quality matters more than time.',
+      mocne: ['hard reasoning', 'long analyses', 'best Polish', 'multi-step code'],
+      kontekst: '1M tokens',
+      uwaga: 'Slowest of the family and doesn\'t always answer — for quick questions take Super 49B.',
+    },
   },
   {
     dopasuj: ['nemotron-3-super', 'super-120b'],
@@ -38,6 +48,11 @@ const MODEL_CATALOG = [
     mocne: ['codzienna praca', 'rozumowanie', 'wywoływanie narzędzi', 'dobra polszczyzna'],
     kontekst: '1 mln tokenów',
     cechy: ['rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      opis: 'Strong but uneven — measured 0.5 s on one run and 5.8 s on another.',
+      mocne: ['everyday work', 'reasoning', 'tool calling', 'good Polish'],
+      kontekst: '1M tokens',
+    },
   },
   {
     dopasuj: ['nano-omni'],
@@ -46,6 +61,11 @@ const MODEL_CATALOG = [
     mocne: ['opis zdjęć i wideo', 'pytania o kadr', 'analiza materiału z drona'],
     kontekst: 'średni',
     cechy: ['wizja', 'rozumowanie'],
+    en: {
+      opis: 'Omni-modal: images, video, speech and text at once, with reasoning.',
+      mocne: ['describing photos and video', 'questions about the frame', 'reviewing drone footage'],
+      kontekst: 'medium',
+    },
   },
   {
     dopasuj: ['nemotron-nano-vl-8b', 'nemotron-nano-vl'],
@@ -54,6 +74,11 @@ const MODEL_CATALOG = [
     mocne: ['opis zdjęć', 'tekst z obrazu', 'praca lokalna na RTX'],
     kontekst: 'średni',
     cechy: ['wizja', 'szybki'],
+    en: {
+      opis: 'NVIDIA\'s small vision model — also fits locally next to a text model.',
+      mocne: ['describing photos', 'text from images', 'local work on an RTX'],
+      kontekst: 'medium',
+    },
   },
   {
     dopasuj: ['nemotron-nano-12b-v2-vl', '12b-v2-vl'],
@@ -62,6 +87,11 @@ const MODEL_CATALOG = [
     mocne: ['porównywanie zdjęć', 'czytanie tekstu z obrazu', 'kontrola jakości ujęć'],
     kontekst: 'średni',
     cechy: ['wizja'],
+    en: {
+      opis: 'The most reliable vision model: 0.2–0.3 s, answered in every measurement.',
+      mocne: ['comparing photos', 'reading text from images', 'checking shot quality'],
+      kontekst: 'medium',
+    },
   },
   {
     dopasuj: ['nemotron-3-nano-30b', 'nano-30b-a3b'],
@@ -71,6 +101,12 @@ const MODEL_CATALOG = [
     kontekst: 'duży',
     cechy: ['szybki', 'narzędzia'],
     uwaga: 'MoE zmniejsza obliczenia, nie pamięć — lokalnie potrzebuje ~16–18 GB VRAM.',
+    en: {
+      opis: 'Light MoE model — fast, a sensible quality trade-off.',
+      mocne: ['quick answers', 'simple tasks', 'summaries'],
+      kontekst: 'large',
+      uwaga: 'MoE cuts compute, not memory — locally it needs ~16–18 GB of VRAM.',
+    },
   },
   {
     dopasuj: ['nemotron-nano-9b', 'nano-9b-v2'],
@@ -81,6 +117,12 @@ const MODEL_CATALOG = [
     cechy: ['szybki', 'rozumowanie'],
     uwaga: 'Model rozumujący: przy limicie poniżej ~700 tokenów zużywa cały budżet '
       + 'na myślenie i oddaje pustą treść. Podnieś „Maks. tokenów odpowiedzi".',
+    en: {
+      opis: 'Transformer-Mamba hybrid — fits on an RTX 3080 and has a thinking budget.',
+      mocne: ['local work', 'long context on the cheap'],
+      kontekst: 'large (Mamba saves memory)',
+      uwaga: 'Reasoning model: with a limit below ~700 tokens it spends the whole budget on thinking and returns empty content. Raise “Max response tokens”.',
+    },
   },
   {
     dopasuj: ['nemotron-mini', 'mini-4b'],
@@ -90,6 +132,12 @@ const MODEL_CATALOG = [
     kontekst: 'mały',
     cechy: ['szybki'],
     uwaga: 'Po polsku wyraźnie słabszy niż większe modele.',
+    en: {
+      opis: 'Smallest of the family — for weaker cards and very fast answers.',
+      mocne: ['weak hardware', 'simple commands'],
+      kontekst: 'small',
+      uwaga: 'Noticeably weaker in Polish than the bigger models.',
+    },
   },
   {
     dopasuj: ['nemotron-embed', 'embed-1b', 'embedqa'],
@@ -99,6 +147,12 @@ const MODEL_CATALOG = [
     kontekst: 'krótkie fragmenty',
     cechy: [],
     uwaga: 'Nie wybieraj go do czatu — ustawia się go w EMBED, nie jako model rozmowy.',
+    en: {
+      opis: 'Embedding model — not for chat, only for semantic search.',
+      mocne: ['knowledge base', 'long-term memory'],
+      kontekst: 'short passages',
+      uwaga: 'Don\'t pick it for chat — it goes in EMBED, not as the conversation model.',
+    },
   },
 
   {
@@ -108,6 +162,11 @@ const MODEL_CATALOG = [
     mocne: ['codzienna rozmowa', 'dłuższe teksty', 'rozumowanie', 'kod'],
     kontekst: 'duży',
     cechy: ['szybki', 'rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      opis: 'The best pick for conversation: 0.3–0.4 s to the first character, consistently.',
+      mocne: ['everyday conversation', 'longer texts', 'reasoning', 'code'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['nemoguard', 'nemotron-safety-guard', 'content-safety', 'topic-control'],
@@ -117,6 +176,13 @@ const MODEL_CATALOG = [
     kontekst: 'krótkie fragmenty',
     cechy: [],
     uwaga: 'Odpowie, ale nie jako rozmówca — to narzędzie do oceny tekstu.',
+    en: {
+      nazwa: 'Nemotron Guard (moderation)',
+      opis: 'Content-safety classifier — it rates text, it doesn\'t hold a conversation.',
+      mocne: ['content filtering', 'topic control'],
+      kontekst: 'short passages',
+      uwaga: 'It will answer, but not as a conversation partner — it is a tool for rating text.',
+    },
   },
   {
     dopasuj: ['riva-translate'],
@@ -126,6 +192,12 @@ const MODEL_CATALOG = [
     kontekst: 'mały',
     cechy: ['szybki'],
     uwaga: 'Do zwykłej rozmowy weź Nemotron — ten model tłumaczy.',
+    en: {
+      opis: 'NVIDIA\'s translation model — for translating, not for conversation.',
+      mocne: ['translating subtitles', 'translating descriptions'],
+      kontekst: 'small',
+      uwaga: 'For regular conversation take Nemotron — this model translates.',
+    },
   },
   {
     dopasuj: ['ising-calibration'],
@@ -135,6 +207,12 @@ const MODEL_CATALOG = [
     kontekst: 'średni',
     cechy: ['wizja'],
     uwaga: 'Do codziennej pracy weź Nano Omni albo Nano 12B VL.',
+    en: {
+      opis: 'NVIDIA research model — reads images, but isn\'t a general-purpose model.',
+      mocne: ['experiments', 'calibration tasks'],
+      kontekst: 'medium',
+      uwaga: 'For everyday work take Nano Omni or Nano 12B VL.',
+    },
   },
 
   // ---- Meta Llama ----
@@ -145,6 +223,11 @@ const MODEL_CATALOG = [
     mocne: ['opis zdjęć', 'tekst z obrazu', 'pytania o kadr'],
     kontekst: 'duży',
     cechy: ['wizja'],
+    en: {
+      opis: 'Vision Llama — solid for describing photos and reading text from images.',
+      mocne: ['describing photos', 'text from images', 'questions about the frame'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['llama-3.1-8b-instruct', 'llama-3.2-1b-instruct', 'llama-3.2-3b-instruct'],
@@ -154,6 +237,13 @@ const MODEL_CATALOG = [
     kontekst: 'średni',
     cechy: ['szybki', 'narzędzia'],
     uwaga: 'Po polsku wyraźnie słabsza niż Nemotron — do pisania weź większy model.',
+    en: {
+      nazwa: 'Small Llama (1B–8B)',
+      opis: 'Light Llama — fast, for simple tasks and many requests.',
+      mocne: ['quick answers', 'classification', 'simple processing'],
+      kontekst: 'medium',
+      uwaga: 'Noticeably weaker in Polish than Nemotron — for writing take a bigger model.',
+    },
   },
 
   // ---- inne, potwierdzone na koncie ----
@@ -165,6 +255,12 @@ const MODEL_CATALOG = [
     kontekst: 'duży',
     cechy: ['wizja', 'rozumowanie', 'narzędzia'],
     uwaga: 'Zdjęcia przyjmuje, ale do ich opisu lepszy jest model wizyjny (Nano Omni, 12B VL).',
+    en: {
+      opis: 'Open OpenAI model with visible reasoning; this variant accepts photos.',
+      mocne: ['reasoning', 'code', 'step-by-step explanations', 'questions about a photo'],
+      kontekst: 'large',
+      uwaga: 'It accepts photos, but a vision model (Nano Omni, 12B VL) describes them better.',
+    },
   },
   {
     dopasuj: ['gpt-oss-120b', 'gpt-oss'],
@@ -173,6 +269,11 @@ const MODEL_CATALOG = [
     mocne: ['rozumowanie', 'kod', 'dłuższe analizy'],
     kontekst: 'duży',
     cechy: ['rozumowanie', 'narzędzia'],
+    en: {
+      opis: 'The larger open OpenAI model with visible reasoning — text only.',
+      mocne: ['reasoning', 'code', 'longer analyses'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['deepseek-v4-pro', 'deepseek-v4'],
@@ -181,6 +282,11 @@ const MODEL_CATALOG = [
     mocne: ['kod', 'analiza zdjęć', 'trudne rozumowanie'],
     kontekst: 'duży',
     cechy: ['wizja', 'rozumowanie', 'narzędzia'],
+    en: {
+      opis: 'Strong multimodal model — good at code and at analysing images.',
+      mocne: ['code', 'photo analysis', 'hard reasoning'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['minimax-m3', 'minimax'],
@@ -189,6 +295,11 @@ const MODEL_CATALOG = [
     mocne: ['długie dokumenty', 'analiza', 'pisanie'],
     kontekst: 'bardzo duży',
     cechy: ['rozumowanie', 'narzędzia'],
+    en: {
+      opis: 'Large text model — long context and capable reasoning.',
+      mocne: ['long documents', 'analysis', 'writing'],
+      kontekst: 'very large',
+    },
   },
   {
     dopasuj: ['inkling'],
@@ -197,6 +308,11 @@ const MODEL_CATALOG = [
     mocne: ['analiza zdjęć', 'rozmowa o materiale wizualnym'],
     kontekst: 'średni',
     cechy: ['wizja'],
+    en: {
+      opis: 'Multimodal model — reads images together with text.',
+      mocne: ['photo analysis', 'talking about visual material'],
+      kontekst: 'medium',
+    },
   },
 
   // ---- OpenAI ----
@@ -207,6 +323,11 @@ const MODEL_CATALOG = [
     mocne: ['szybkie odpowiedzi', 'niski koszt', 'proste przetwarzanie tekstu'],
     kontekst: 'duży',
     cechy: ['szybki', 'wizja', 'narzędzia'],
+    en: {
+      opis: 'Cheap, fast version — for simple tasks and many requests.',
+      mocne: ['quick answers', 'low cost', 'simple text processing'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['gpt-4o', 'gpt-5', 'gpt-4.1'],
@@ -215,6 +336,12 @@ const MODEL_CATALOG = [
     mocne: ['kod', 'analiza obrazów', 'pisanie', 'wywoływanie narzędzi'],
     kontekst: 'duży',
     cechy: ['wizja', 'narzędzia', 'polski'],
+    en: {
+      nazwa: 'GPT (full)',
+      opis: 'General-purpose OpenAI model — strong at code, images and conversation.',
+      mocne: ['code', 'image analysis', 'writing', 'tool calling'],
+      kontekst: 'large',
+    },
   },
   {
     dopasuj: ['gpt-image', 'dall-e'],
@@ -224,6 +351,13 @@ const MODEL_CATALOG = [
     kontekst: '—',
     cechy: [],
     uwaga: 'Nie ustawiaj go jako modelu rozmowy — służy Studiu.',
+    en: {
+      nazwa: 'OpenAI image model',
+      opis: 'Image generation — used by Studio, not by the chat.',
+      mocne: ['images', 'storyboard', 'mask editing'],
+      kontekst: '—',
+      uwaga: 'Don\'t set it as the conversation model — it serves Studio.',
+    },
   },
   {
     dopasuj: ['o3', 'o1'],
@@ -233,6 +367,13 @@ const MODEL_CATALOG = [
     kontekst: 'duży',
     cechy: ['rozumowanie'],
     uwaga: 'Wolniejszy i droższy — nie do zwykłej rozmowy.',
+    en: {
+      nazwa: 'OpenAI o-series (reasoning)',
+      opis: 'Reasoning model — thinks longer before it answers.',
+      mocne: ['maths', 'logic', 'hard debugging'],
+      kontekst: 'large',
+      uwaga: 'Slower and more expensive — not for everyday conversation.',
+    },
   },
 
   // ---- Anthropic ----
@@ -243,6 +384,11 @@ const MODEL_CATALOG = [
     mocne: ['analiza długich dokumentów', 'refaktoryzacja kodu', 'pisanie'],
     kontekst: 'bardzo duży',
     cechy: ['wizja', 'rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      opis: 'The most capable Claude — for long, complex tasks.',
+      mocne: ['long-document analysis', 'code refactoring', 'writing'],
+      kontekst: 'very large',
+    },
   },
   {
     dopasuj: ['claude-sonnet'],
@@ -251,6 +397,11 @@ const MODEL_CATALOG = [
     mocne: ['codzienna praca', 'kod', 'długi kontekst'],
     kontekst: 'bardzo duży',
     cechy: ['wizja', 'rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      opis: 'Balanced Claude — fast and still very capable.',
+      mocne: ['everyday work', 'code', 'long context'],
+      kontekst: 'very large',
+    },
   },
   {
     dopasuj: ['claude-haiku'],
@@ -259,6 +410,11 @@ const MODEL_CATALOG = [
     mocne: ['szybkie odpowiedzi', 'klasyfikacja', 'krótkie streszczenia'],
     kontekst: 'duży',
     cechy: ['szybki', 'wizja', 'narzędzia'],
+    en: {
+      opis: 'The fastest Claude — for tasks where response time matters.',
+      mocne: ['quick answers', 'classification', 'short summaries'],
+      kontekst: 'large',
+    },
   },
 
   // ---- lokalne ----
@@ -269,6 +425,12 @@ const MODEL_CATALOG = [
     mocne: ['prywatna analiza zdjęć', 'praca offline'],
     kontekst: 'zależny od modelu',
     cechy: ['wizja'],
+    en: {
+      nazwa: 'Local vision model',
+      opis: 'Recognises images on your GPU — no photos sent to the cloud.',
+      mocne: ['private photo analysis', 'offline work'],
+      kontekst: 'depends on the model',
+    },
   },
 ];
 
@@ -289,12 +451,22 @@ const CECHA_OPIS = {
   polski: { ikona: '🇵🇱', pl: 'dobra polszczyzna', en: 'strong Polish' },
 };
 
-/** Znajdź opis modelu po jego identyfikatorze. Zwraca null, gdy nic nie pasuje. */
+/* Język interfejsu. `getLang` daje i18n.js (ładowany wcześniej); w Node
+   (testy wołają modelInfo przez require) go nie ma — wtedy polski. */
+function jezykInterfejsu() {
+  return typeof getLang === 'function' ? getLang() : 'pl';
+}
+
+/** Znajdź opis modelu po jego identyfikatorze. Zwraca null, gdy nic nie pasuje.
+    Pola tekstowe w języku interfejsu (patrz `en` w nagłówku pliku). */
 function modelInfo(id) {
   if (!id) return null;
   const key = String(id).toLowerCase();
   for (const entry of MODEL_CATALOG) {
-    if (entry.dopasuj.some((frag) => key.includes(frag))) return { ...entry, zgadywane: false };
+    if (entry.dopasuj.some((frag) => key.includes(frag))) {
+      const { en, ...wpis } = entry;
+      return { ...wpis, ...(jezykInterfejsu() === 'en' && en ? en : {}), zgadywane: false };
+    }
   }
   // Nieznany model — wyczytaj, co się da, z samej nazwy i powiedz, że to domysł.
   const cechy = HINTS.filter((h) => h.frag.some((f) => key.includes(f))).map((h) => h.cecha);

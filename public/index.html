@@ -199,10 +199,6 @@
         <button class="offline-retry" id="offline-retry" data-i18n="offline.retry">Spróbuj ponownie</button>
       </div>
 
-      <!-- Zdarzenie z czujnika albo z innego urządzenia. Miga i znika —
-           to kontekst, nie polecenie wymagające reakcji. -->
-      <div class="event-flash" id="event-flash" role="status" hidden></div>
-
       <header class="topbar">
         <button class="icon-btn" id="expand-btn" data-i18n-title="expand" title="Pokaż panel" aria-label="Pokaż panel">
           <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -243,11 +239,15 @@
             <button class="suggestion" data-prompt-key="sug4p" data-i18n="sug4">Lokalnie czy w chmurze?</button>
           </div>
         </div>
-        <div class="messages" id="messages"></div>
+        <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions" data-i18n-aria="chat.log" aria-label="Rozmowa"></div>
       </div>
 
       <!-- ================= COMPOSER ================= -->
       <div class="composer-wrap">
+        <!-- Zdarzenie z czujnika albo z innego urządzenia. Miga i znika —
+             to kontekst, nie polecenie wymagające reakcji. Stoi tu, nad polem
+             wiadomości, bo pod paskiem górnym zasłaniało pasek „Brak połączenia”. -->
+        <div class="event-flash" id="event-flash" role="status" hidden></div>
         <!-- Wiadomości napisane w trakcie odpowiedzi. Czekają tu widoczne
              i dają się wyjąć — „wyślę to za chwilę" musi być odwracalne. -->
         <div class="queue-box" id="queue-box" role="status" hidden></div>
@@ -283,7 +283,7 @@
          Dokument obok rozmowy. Model poprawia w nim fragmenty zamiast
          przepisywać całość — przy scenariuszu na trzy tysiące słów to
          różnica między sekundą a minutą. -->
-    <section class="canvas" id="canvas" hidden aria-label="Płótno">
+    <section class="canvas" id="canvas" hidden data-i18n-aria="canvas.aria" aria-label="Płótno">
       <div class="canvas-bar">
         <span class="canvas-title" id="canvas-title"></span>
         <span class="canvas-meta mono" id="canvas-meta"></span>
@@ -298,7 +298,7 @@
 
   <!-- ================= MODAL: USTAWIENIA ================= -->
   <div class="modal-overlay" id="settings-modal" style="display:none">
-    <div class="modal" role="dialog" aria-labelledby="settings-title">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modal-header">
         <h2 id="settings-title" data-i18n="settings">Ustawienia</h2>
         <button class="icon-btn" id="settings-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -357,7 +357,7 @@
         <div class="konto-blok tylko-wlasciciel" id="dostep-blok" hidden>
           <span class="field-label" data-i18n="acc.accessTitle">Dostęp — kto korzysta z Twojego Cosmosa</span>
           <div class="field-row">
-            <input type="text" id="dostep-nazwa" data-i18n-ph="acc.inviteName" placeholder="Imię osoby, którą zapraszasz">
+            <input type="text" id="dostep-nazwa" data-i18n-ph="acc.inviteName" placeholder="Imię zapraszanej osoby">
             <button type="button" class="btn-primary" id="dostep-zapros" data-i18n="acc.invite">Zaproś</button>
           </div>
           <div class="dostep-link" id="dostep-link" hidden>
@@ -411,7 +411,7 @@
         <div class="field">
           <span class="field-label" data-i18n="set.gearMoved">Sprzęt i archiwum materiału</span>
           <div class="field-row">
-            <button type="button" class="btn-secondary" id="set-open-plener" data-i18n="set.gearMovedGo">📷 Otwórz Plener</button>
+            <button type="button" class="btn-secondary ik ik-aparat" id="set-open-plener" data-i18n="set.gearMovedGo">Otwórz Plener</button>
           </div>
           <span class="field-hint" data-i18n="set.gearMovedHint">Korpus, obiektywy, plan zdjęciowy, aparat po Wi-Fi, misja drona i archiwum materiału są teraz w jednym miejscu — w Plenerze.</span>
         </div>
@@ -419,8 +419,8 @@
         <label class="field">
           <span class="field-label" data-i18n="set.stt">Nasłuch w trybie głosowym</span>
           <select id="set-stt">
-            <option value="auto" data-i18n="set.sttAuto">Automatycznie — bez przeglądarki, gdy serwer rozpoznaje mowę</option>
-            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień (bez piszczenia i sprzężenia)</option>
+            <option value="auto" data-i18n="set.sttAuto">Automatycznie</option>
+            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień audio</option>
             <option value="przegladarka" data-i18n="set.sttBrowser">Przeglądarka (Web Speech API)</option>
           </select>
           <span class="field-hint" data-i18n="set.sttHint">Własny strumień otwiera mikrofon raz na całą rozmowę: nie ma dźwięków włączania i wyłączania, słyszenia samego siebie ani pętli. Mowę rozpoznaje Whisper w zmysłach, a gdy komputer domowy jest wyłączony — rozpoznawanie w chmurze (jeśli masz do niego dostęp). Bez lokalnego Whispera Cosmos nie nasłuchuje otoczenia: słucha od razu po otwarciu trybu głosowego i po każdej odpowiedzi, a potem czeka na dotknięcie kuli.</span>
@@ -453,9 +453,9 @@
           <span class="field-label" data-i18n="set.location">Twoja lokalizacja</span>
           <div class="field-row">
             <input type="text" id="set-location" data-i18n-ph="set.locationPh"
-              placeholder="np. Warszawa, mazowieckie">
-            <button type="button" class="btn-secondary" id="set-location-detect"
-              data-i18n="set.locationDetect">📍 Wykryj</button>
+              placeholder="np. Warszawa">
+            <button type="button" class="btn-secondary ik ik-pinezka" id="set-location-detect"
+              data-i18n="set.locationDetect">Wykryj</button>
           </div>
           <span class="field-hint" data-i18n="set.locationHint">Cosmos użyje tego przy pytaniach „w okolicy"…</span>
         </div>
@@ -504,10 +504,10 @@
             </select>
           </div>
           <div class="field-row">
-            <input type="text" id="dev-url" class="mono" data-i18n-ph="dev.urlPh" placeholder="http://adres-urzadzenia/...">
+            <input type="text" id="dev-url" class="mono" data-i18n-ph="dev.urlPh" placeholder="http://urządzenie/…">
             <button class="btn-secondary" id="dev-add" data-i18n="dev.add">Dodaj</button>
           </div>
-          <input type="text" id="dev-body" class="mono" data-i18n-ph="dev.bodyPh" placeholder='treść żądania (opcjonalnie), np. {"state":"ON"}'>
+          <input type="text" id="dev-body" class="mono" data-i18n-ph="dev.bodyPh" placeholder='opcjonalnie: {"state":"ON"}'>
           <div class="field-hint" id="dev-status"></div>
           <div class="learn-list" id="dev-list"></div>
         </div>
@@ -516,7 +516,7 @@
           <span class="field-label" data-i18n="set.briefing">Poranna odprawa</span>
           <span class="field-hint" data-i18n="brief.hint">Pogoda, kalendarz i zaplanowane czynności streszczone i czytane na głos. Wymaga BRIEFING_LAT/BRIEFING_LON w .env (pogoda) — kalendarz opcjonalnie przez CALENDAR_ICS.</span>
           <div class="field-row">
-            <button class="btn-secondary" id="brief-now" data-i18n="brief.now">☀ Odpraw mnie teraz</button>
+            <button class="btn-secondary ik ik-slonce" id="brief-now" data-i18n="brief.now">Odpraw mnie teraz</button>
             <label class="ps-sens"><input type="checkbox" id="brief-auto"> <span data-i18n="brief.auto">Automatycznie o</span></label>
             <input type="time" id="brief-time" value="08:00" style="max-width:120px">
           </div>
@@ -536,7 +536,7 @@
               <input type="text" id="train-ollama" class="mono" value="cosmos-ft" data-i18n-ph="train.ollamaPh" placeholder="nazwa w Ollamie" style="max-width:150px">
             </div>
             <div class="field-row">
-              <button class="btn-primary" id="train-start" data-i18n="train.start">🎓 Dotrenuj teraz</button>
+              <button class="btn-primary ik ik-czapka" id="train-start" data-i18n="train.start">Dotrenuj teraz</button>
               <button class="btn-ghost" id="train-stop" data-i18n="train.stop" style="display:none">Zatrzymaj</button>
             </div>
             <div class="field-hint" id="train-env"></div>
@@ -555,7 +555,7 @@
 
   <!-- ================= MODAL: STUDIO ================= -->
   <div class="modal-overlay" id="studio-modal" style="display:none">
-    <div class="modal studio-modal" role="dialog" aria-labelledby="studio-title">
+    <div class="modal studio-modal" role="dialog" aria-modal="true" aria-labelledby="studio-title">
       <div class="modal-header">
         <h2 id="studio-title" data-i18n="studio">Studio</h2>
         <button class="icon-btn" id="studio-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -565,7 +565,7 @@
       <div class="modal-body">
 
         <div class="studio-section" id="studio-sec-image">
-          <div class="studio-sec-title">🖼️ <span data-i18n="st.image">Obraz</span> <span class="mono studio-provider">OpenAI</span>
+          <div class="studio-sec-title ik ik-obraz"><span data-i18n="st.image">Obraz</span> <span class="mono studio-provider">OpenAI</span>
             <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (OPENAI_API_KEY)</span></div>
           <textarea id="studio-image-prompt" rows="2" data-i18n-ph="st.imagePh" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
           <div class="field-row">
@@ -579,7 +579,7 @@
               <option value="1536x1024" data-i18n="st.sizeLandscape">1536 × 1024 (poziomy)</option>
               <option value="1024x1536" data-i18n="st.sizePortrait">1024 × 1536 (pionowy)</option>
             </select>
-            <select id="studio-image-count" class="mono" title="Warianty">
+            <select id="studio-image-count" class="mono" data-i18n-title="st.variants" title="Liczba wariantów" aria-label="Liczba wariantów">
               <option value="1">×1</option>
               <option value="2">×2</option>
               <option value="4">×4</option>
@@ -590,18 +590,18 @@
         </div>
 
         <div class="studio-section" id="studio-sec-speech">
-          <div class="studio-sec-title">🔊 <span data-i18n="st.sound">Dźwięk</span> <span class="mono studio-provider">ElevenLabs</span>
+          <div class="studio-sec-title ik ik-dzwiek"><span data-i18n="st.sound">Dźwięk</span> <span class="mono studio-provider">ElevenLabs</span>
             <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (ELEVENLABS_API_KEY)</span></div>
           <textarea id="studio-speech-text" rows="2" data-i18n-ph="st.speechPh" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
           <div class="field-row">
-            <input type="text" id="studio-speech-voice" class="mono" data-i18n-ph="st.voicePh" placeholder="voice ID (puste = domyślny)">
+            <input type="text" id="studio-speech-voice" class="mono" data-i18n-ph="st.voicePh" placeholder="voice ID (opcjonalnie)">
             <button class="btn-primary" id="studio-speech-go" data-i18n="st.speechGo">Generuj dźwięk</button>
           </div>
           <div class="studio-out" id="studio-speech-out"></div>
         </div>
 
         <div class="studio-section" id="studio-sec-video">
-          <div class="studio-sec-title">🎬 <span data-i18n="st.video">Wideo</span> <span class="mono studio-provider">Seedance</span>
+          <div class="studio-sec-title ik ik-wideo"><span data-i18n="st.video">Wideo</span> <span class="mono studio-provider">Seedance</span>
             <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (SEEDANCE_API_KEY)</span></div>
           <textarea id="studio-video-prompt" rows="2" data-i18n-ph="st.videoPh" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
           <div class="field-row">
@@ -634,7 +634,7 @@
             </select>
           </div>
           <div class="field-row">
-            <input type="text" id="studio-video-seed" class="mono" data-i18n-ph="st.seedPh" placeholder="seed (opcjonalnie — powtarzalność)">
+            <input type="text" id="studio-video-seed" class="mono" data-i18n-ph="st.seedPh" placeholder="seed (opcjonalnie)">
             <label class="studio-check"><input type="checkbox" id="studio-video-camfix"> <span data-i18n="st.camfix">stała kamera</span></label>
             <button class="btn-primary" id="studio-video-go" data-i18n="st.videoGo">Generuj wideo</button>
           </div>
@@ -642,10 +642,10 @@
         </div>
 
         <div class="studio-section" id="studio-sec-storyboard">
-          <div class="studio-sec-title">🎞️ <span data-i18n="st.storyboard">Storyboard</span> <span class="mono studio-provider">AI</span></div>
+          <div class="studio-sec-title ik ik-klatki"><span data-i18n="st.storyboard">Storyboard</span> <span class="mono studio-provider">AI</span></div>
           <textarea id="studio-sb-scene" rows="2" data-i18n-ph="st.storyboardPh" placeholder="Opisz scenę…"></textarea>
           <div class="field-row">
-            <select id="studio-sb-shots" class="mono" title="Ujęcia">
+            <select id="studio-sb-shots" class="mono" data-i18n-title="st.sbShots" title="Liczba ujęć" aria-label="Liczba ujęć">
               <option value="3">3</option><option value="4" selected>4</option>
               <option value="5">5</option><option value="6">6</option>
             </select>
@@ -655,7 +655,7 @@
         </div>
 
         <div class="studio-section" id="studio-sec-edit">
-          <div class="studio-sec-title">🩹 <span data-i18n="st.edit">Edycja obrazu (inpainting)</span> <span class="mono studio-provider">OpenAI</span></div>
+          <div class="studio-sec-title ik ik-pedzel"><span data-i18n="st.edit">Edycja obrazu (inpainting)</span> <span class="mono studio-provider">OpenAI</span></div>
           <select id="studio-edit-img" class="mono"><option value="" data-i18n="st.editPick">Wybierz obraz z bazy…</option></select>
           <div class="edit-canvas-wrap" id="studio-edit-canvas-wrap" style="display:none">
             <canvas id="studio-edit-canvas"></canvas>
@@ -676,7 +676,7 @@
 
   <!-- ================= MODAL: BAZA WIEDZY ================= -->
   <div class="modal-overlay" id="kb-modal" style="display:none">
-    <div class="modal kb-modal" role="dialog" aria-labelledby="kb-title">
+    <div class="modal kb-modal" role="dialog" aria-modal="true" aria-labelledby="kb-title">
       <div class="modal-header">
         <h2 id="kb-title" data-i18n="kb">Baza wiedzy</h2>
         <button class="icon-btn" id="kb-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -685,12 +685,12 @@
       </div>
       <div class="modal-body">
         <div class="kb-add-row">
-          <button class="btn-secondary" id="kb-upload-btn" data-i18n="kb.upload">📁 Dodaj pliki</button>
+          <button class="btn-secondary ik ik-folder" id="kb-upload-btn" data-i18n="kb.upload">Dodaj pliki</button>
           <input type="file" id="kb-file-input" multiple style="display:none">
-          <button class="btn-secondary" id="kb-record-btn" data-i18n="kb.record">🎙 Nagraj notatkę</button>
+          <button class="btn-secondary ik ik-mikrofon" id="kb-record-btn" data-i18n="kb.record">Nagraj notatkę</button>
         </div>
         <div class="field-row">
-          <input type="text" id="kb-url" data-i18n-ph="kb.urlPh" placeholder="https://adres-strony.pl — dodaj link do bazy" class="mono">
+          <input type="text" id="kb-url" data-i18n-ph="kb.urlPh" placeholder="https://adres-strony.pl" class="mono">
           <button class="btn-secondary" id="kb-add-link" data-i18n="kb.addLink">Dodaj link</button>
         </div>
         <div class="kb-drop" id="kb-drop" data-i18n="kb.drop">…albo przeciągnij i upuść pliki tutaj (dokumenty, Excel, grafiki, audio, wideo)</div>
@@ -703,7 +703,7 @@
 
   <!-- ================= MODAL: NAUKA ================= -->
   <div class="modal-overlay" id="learn-modal" style="display:none">
-    <div class="modal studio-modal" role="dialog" aria-labelledby="learn-title">
+    <div class="modal studio-modal" role="dialog" aria-modal="true" aria-labelledby="learn-title">
       <div class="modal-header">
         <h2 id="learn-title" data-i18n="learn">Nauka</h2>
         <button class="icon-btn" id="learn-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -722,7 +722,7 @@
         <div class="learn-pane" id="learn-pane-recog">
           <p class="field-hint" data-i18n="learn.recogIntro">Pokaż Cosmosowi coś w kamerze i nazwij to — nauczy się to rozpoznawać (obiekt, gest, poza). Uczy się przez przykład, lokalnie; nie zmienia wag modelu.</p>
           <div class="field-row">
-            <input type="text" id="learn-label" data-i18n-ph="learn.labelPh" placeholder="Nazwa, np. „Mój klucz do domu”, „gest STOP”">
+            <input type="text" id="learn-label" data-i18n-ph="learn.labelPh" placeholder="Nazwa, np. „klucz”">
             <select id="learn-kind">
               <option value="object" data-i18n="learn.kindObject">Obiekt</option>
               <option value="gesture" data-i18n="learn.kindGesture">Gest</option>
@@ -736,7 +736,7 @@
             <img id="learn-thumb" alt="" style="display:none">
           </div>
           <div class="field-row">
-            <button class="btn-secondary" id="learn-cam-btn" data-i18n="learn.openCam">📷 Włącz kamerę</button>
+            <button class="btn-secondary ik ik-aparat" id="learn-cam-btn" data-i18n="learn.openCam">Włącz kamerę</button>
             <button class="btn-secondary" id="learn-shot-btn" data-i18n="learn.capture" disabled>Zrób zdjęcie wzorca</button>
             <button class="btn-primary" id="learn-save" data-i18n="learn.teach">Naucz</button>
           </div>
@@ -750,8 +750,8 @@
           <div class="rec-box tylko-wlasciciel" id="rec-box" style="display:none">
             <div class="field-row">
               <input type="text" id="rec-url" class="mono" data-i18n-ph="rec.urlPh" placeholder="adres startowy (opcjonalnie), np. https://ebok...">
-              <button class="btn-secondary" id="rec-start" data-i18n="rec.start">🔴 Nagraj procedurę</button>
-              <button class="btn-ghost" id="rec-stop" data-i18n="rec.stop" style="display:none">⏹ Zakończ nagrywanie</button>
+              <button class="btn-secondary ik ik-nagraj" id="rec-start" data-i18n="rec.start">Nagraj procedurę</button>
+              <button class="btn-ghost ik ik-stop" id="rec-stop" data-i18n="rec.stop" style="display:none">Zakończ nagrywanie</button>
             </div>
             <div class="field-hint" id="rec-status" data-i18n="rec.hint">Otworzy się przeglądarka na tym komputerze — zrób zadanie (klikaj, wpisuj), potem „Zakończ". Nagrywane są kliknięcia, wpisany tekst i nawigacja; hasła nie są zapisywane. Nie nagrywa ruchów myszki ani innych aplikacji.</div>
           </div>
@@ -765,7 +765,7 @@
           <div class="field-row" style="margin-top:10px">
             <button class="btn-primary" id="proc-save" data-i18n="learn.saveProc">Zapisz procedurę</button>
             <button class="btn-secondary" id="proc-run" data-i18n="learn.runProc">Uruchom (z potwierdzeniem)</button>
-            <button class="btn-secondary" id="proc-run-auto" data-i18n="learn.runAuto" style="display:none">⚡ Uruchom auto (tylko odczyt)</button>
+            <button class="btn-secondary ik ik-blyskawica" id="proc-run-auto" data-i18n="learn.runAuto" style="display:none">Uruchom auto (tylko odczyt)</button>
             <button class="btn-ghost" id="proc-delete" data-i18n="learn.deleteProc" style="display:none">Usuń</button>
           </div>
           <div class="field-hint" id="learn-proc-status"></div>
@@ -798,7 +798,7 @@
         <div class="learn-pane" id="learn-pane-ideas" style="display:none">
           <p class="field-hint" data-i18n="imp.intro">Cosmos wie, czym jest i co realnie potrafi — na podstawie swojego stanu, Twojego profilu i tematów rozmów potrafi zaproponować, jak jeszcze mógłby Ci pomóc. Nic nie dzieje się bez Twojej zgody: pomysły trafiają tutaj do akceptacji.</p>
           <div class="field-row">
-            <button class="btn-primary" id="imp-suggest" data-i18n="imp.suggest">✨ Co jeszcze możesz dla mnie zrobić?</button>
+            <button class="btn-primary ik ik-iskra" id="imp-suggest" data-i18n="imp.suggest">Co jeszcze możesz dla mnie zrobić?</button>
             <button class="btn-secondary" id="imp-caps" data-i18n="imp.caps">Pokaż, co potrafisz</button>
           </div>
           <div class="briefing-box" id="imp-out" style="display:none"></div>
@@ -822,7 +822,7 @@
        model. To nie jest funkcja, której nie ma; to funkcja, o której nikt
        nie wie. -->
   <div class="modal-overlay" id="plener-modal" style="display:none">
-    <div class="modal plener-modal" role="dialog" aria-labelledby="plener-title">
+    <div class="modal plener-modal" role="dialog" aria-modal="true" aria-labelledby="plener-title">
       <div class="modal-header">
         <h2 id="plener-title" data-i18n="plener">Plener</h2>
         <button class="icon-btn" id="plener-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -834,7 +834,7 @@
 
         <!-- ---------- SPRZĘT ---------- -->
         <div class="plener-section">
-          <div class="plener-sec-title">🎒 <span data-i18n="pl.gear">Mój sprzęt</span></div>
+          <div class="plener-sec-title ik ik-plecak"><span data-i18n="pl.gear">Mój sprzęt</span></div>
           <div class="field-grid">
             <label class="field">
               <span class="field-label" data-i18n="set.body">Korpus</span>
@@ -858,7 +858,7 @@
 
         <!-- ---------- PLAN ZDJĘCIOWY ---------- -->
         <div class="plener-section">
-          <div class="plener-sec-title">🌅 <span data-i18n="plan.title">Plan zdjęciowy</span></div>
+          <div class="plener-sec-title ik ik-swit"><span data-i18n="plan.title">Plan zdjęciowy</span></div>
           <div class="plan-row">
             <select id="fp-gear" class="mono" data-i18n-aria="pl.gearAria" aria-label="Sprzęt">
               <option value="" data-i18n="pl.gearMine">Mój zestaw</option>
@@ -880,10 +880,13 @@
             </select>
           </div>
           <div class="plener-grid3">
-            <input type="text" id="fp-place" data-i18n-ph="pl.placePh" placeholder="Miejsce — puste = Twoja lokalizacja">
-            <input type="text" id="fp-topic" data-i18n-ph="pl.topicPh" placeholder="Temat — np. wesele, las, koncert">
+            <input type="text" id="fp-place" data-i18n-ph="pl.placePh" placeholder="Miejsce, np. Zakopane">
+            <input type="text" id="fp-topic" data-i18n-ph="pl.topicPh" placeholder="Temat, np. wesele">
             <input type="datetime-local" id="fp-when" class="mono" data-i18n-title="pl.whenTitle" title="Kiedy — puste = teraz">
           </div>
+          <!-- Zasada pustych pól tutaj, a nie w podpowiedzi pola: „Miejsce — puste
+               = Twoja lokalizacja” nie mieściło się nawet na 1440 px. -->
+          <span class="field-hint" data-i18n="pl.pustePola">Puste miejsce = Twoja lokalizacja, pusty czas = teraz.</span>
           <div class="field-row">
             <button type="button" class="btn-primary" id="fp-go" data-i18n="pl.compute">Policz plan</button>
             <button type="button" class="btn-secondary" id="fp-now" data-i18n="pl.now">Teraz</button>
@@ -920,7 +923,7 @@
             </div>
           </div>
           <div class="plan-shot mono" id="fp-shot">—</div>
-          <div class="plan-light mono" id="fp-light"></div>
+          <div class="plan-light plener-light" id="fp-light"></div>
           <div class="plan-why" id="fp-why"></div>
           <!-- Karty ujęć. Do tej pory istniały wyłącznie w `lib/ujecia.js`
                i docierały do człowieka tylko wtedy, gdy model sam zdecydował
@@ -930,7 +933,7 @@
 
         <!-- ---------- APARAT PO WI-FI ---------- -->
         <div class="plener-section tylko-wlasciciel" id="pl-sec-camera">
-          <div class="plener-sec-title">📷 <span data-i18n="pl.camera">Aparat po Wi-Fi</span>
+          <div class="plener-sec-title ik ik-aparat"><span data-i18n="pl.camera">Aparat po Wi-Fi</span>
             <span class="mono studio-provider">Canon CCAPI</span></div>
           <div class="plan-camera mono" id="plan-camera">
             <span id="plan-camera-now">—</span>
@@ -942,7 +945,7 @@
 
         <!-- ---------- MISJA DRONA ---------- -->
         <div class="plener-section">
-          <div class="plener-sec-title">🚁 <span data-i18n="pl.mission">Misja drona</span>
+          <div class="plener-sec-title ik ik-dron"><span data-i18n="pl.mission">Misja drona</span>
             <span class="mono studio-provider">WPML · KMZ</span></div>
           <div class="plener-grid3">
             <input type="number" id="mis-lat" step="0.00001" data-i18n-ph="pl.lat" placeholder="szerokość (lat)">
@@ -967,16 +970,16 @@
           <span class="field-hint" id="mis-skad" role="status"></span>
           <div class="field-row">
             <button type="button" class="btn-primary" id="mis-go" data-i18n="pl.misGo">Pobierz .kmz</button>
-            <button type="button" class="btn-secondary" id="mis-here" data-i18n="pl.misHere">📍 Z planu</button>
+            <button type="button" class="btn-secondary ik ik-pinezka" id="mis-here" data-i18n="pl.misHere">Z planu</button>
           </div>
           <div class="plener-out mono" id="mis-out" role="status"></div>
-          <span class="field-hint plener-warn" data-i18n="pl.misAgl">⚠ Wysokość jest liczona względem PUNKTU STARTU, nie względem terenu (WPML: relativeToStartPoint). W górach i na pofałdowanym terenie zbocze może wejść w trasę lotu — dobierz wysokość do najwyższego punktu obszaru, a nie do miejsca, z którego startujesz.</span>
-          <span class="field-hint plener-warn" data-i18n="pl.misWarn">⚠ Plik jest zbudowany według dokumentacji WPML, ale nie przeszedł jeszcze przez prawdziwego drona — pierwszy import sprawdź na pustym polu i z ręką na drążkach. Za zgodność lotu z przepisami (strefy, zasięg wzrokowy, wysokość) odpowiadasz Ty, nie Cosmos.</span>
+          <span class="field-hint plener-warn ik ik-uwaga" data-i18n="pl.misAgl">Wysokość jest liczona względem PUNKTU STARTU, nie względem terenu (WPML: relativeToStartPoint). W górach i na pofałdowanym terenie zbocze może wejść w trasę lotu — dobierz wysokość do najwyższego punktu obszaru, a nie do miejsca, z którego startujesz.</span>
+          <span class="field-hint plener-warn ik ik-uwaga" data-i18n="pl.misWarn">Plik jest zbudowany według dokumentacji WPML, ale nie przeszedł jeszcze przez prawdziwego drona — pierwszy import sprawdź na pustym polu i z ręką na drążkach. Za zgodność lotu z przepisami (strefy, zasięg wzrokowy, wysokość) odpowiadasz Ty, nie Cosmos.</span>
         </div>
 
         <!-- ---------- ARCHIWUM MATERIAŁU ---------- -->
         <div class="plener-section">
-          <div class="plener-sec-title">🗂 <span data-i18n="arch.title">Archiwum materiału</span></div>
+          <div class="plener-sec-title ik ik-archiwum"><span data-i18n="arch.title">Archiwum materiału</span></div>
           <div class="arch-box" id="arch-box">
             <div class="arch-state mono" id="arch-state">…</div>
             <div class="field-row" id="arch-actions"></div>
@@ -988,7 +991,7 @@
   </div>
 
   <!-- ================= PANEL: KAMERA NA ŻYWO ================= -->
-  <div class="live-panel" id="live-panel" style="display:none">
+  <div class="live-panel" id="live-panel" style="display:none" role="region" data-i18n-aria="liveTitle" aria-label="Kamera na żywo">
     <div class="live-head">
       <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
       <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
@@ -1090,7 +1093,7 @@
 
   <!-- ================= MODAL: OŚ CZASU ================= -->
   <div class="modal-overlay" id="timeline-modal" style="display:none">
-    <div class="modal gallery-modal" role="dialog" aria-labelledby="timeline-title">
+    <div class="modal gallery-modal" role="dialog" aria-modal="true" aria-labelledby="timeline-title">
       <div class="modal-header">
         <h2 id="timeline-title" data-i18n="timeMachine">Oś czasu</h2>
         <button class="icon-btn" id="timeline-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -1105,7 +1108,7 @@
 
   <!-- ================= MODAL: GALERIA ================= -->
   <div class="modal-overlay" id="gallery-modal" style="display:none">
-    <div class="modal gallery-modal" role="dialog" aria-labelledby="gallery-title">
+    <div class="modal gallery-modal" role="dialog" aria-modal="true" aria-labelledby="gallery-title">
       <div class="modal-header">
         <h2 id="gallery-title" data-i18n="gallery">Galeria</h2>
         <button class="icon-btn" id="gallery-close" data-i18n-aria="close" aria-label="Zamknij">
@@ -1126,29 +1129,32 @@
   </div>
 
   <!-- ================= TRYB GŁOSOWY ================= -->
-  <div class="voice-overlay" id="voice-overlay" style="display:none">
+  <div class="voice-overlay" id="voice-overlay" style="display:none" role="dialog" aria-modal="true" data-i18n-aria="voiceMode" aria-label="Tryb głosowy">
     <button class="icon-btn voice-cam-btn" id="voice-cam-btn" data-i18n-title="voice.camOn" title="Włącz podgląd kamery" aria-label="Podgląd kamery">
       <svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
     </button>
-    <button class="icon-btn voice-bird-btn" id="voice-bird-btn" data-i18n-title="voice.bird" title="Nagraj 8 s i rozpoznaj ptaka" aria-label="Rozpoznaj ptaka">🐦</button>
+    <button class="icon-btn voice-bird-btn ik ik-ptak" id="voice-bird-btn" data-i18n-title="voice.bird" title="Nagraj 8 s i rozpoznaj ptaka" aria-label="Rozpoznaj ptaka"></button>
     <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
       <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
     <!-- Kula jak na stronie produktowej: aura z kolorów silników, trzy fale
          i rdzeń. Stan (wake / listening / thinking / speaking / push) ustawia
          app.js klasą na #voice-orb — warstwy w środku tylko go wyrażają. -->
-    <div class="voice-orb" id="voice-orb">
+    <!-- Przycisk, nie DIV: w trybie „naciśnij, aby mówić” kula jest JEDYNĄ
+         drogą do zadania pytania, więc musi dać się jej użyć z klawiatury
+         (Enter/Spacja) i czytnik ekranu musi wiedzieć, że to przycisk. -->
+    <button type="button" class="voice-orb" id="voice-orb" data-i18n-aria="voice.orb" aria-label="Mów do Cosmosa">
       <i class="orb-aura" aria-hidden="true"></i>
       <i class="orb-fala" aria-hidden="true"></i><i class="orb-fala" aria-hidden="true"></i><i class="orb-fala" aria-hidden="true"></i>
       <i class="orb-rdzen" aria-hidden="true"></i>
-    </div>
+    </button>
     <div class="voice-fala" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>
-    <div class="voice-status mono" id="voice-status" data-i18n="voice.wake">POWIEDZ „HEJ, COSMOS”</div>
-    <div class="voice-transcript" id="voice-transcript"></div>
-    <div class="voice-answer" id="voice-answer"></div>
+    <div class="voice-status mono" id="voice-status" aria-live="polite" data-i18n="voice.wake">POWIEDZ „HEJ, COSMOS”</div>
+    <div class="voice-transcript" id="voice-transcript" aria-live="polite"></div>
+    <div class="voice-answer" id="voice-answer" aria-live="polite"></div>
     <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
       <video id="voice-camera" autoplay playsinline muted></video>
-      <span class="voice-camera-label mono" data-i18n="voice.camLabel">👁 podgląd</span>
+      <span class="voice-camera-label mono ik ik-oko" data-i18n="voice.camLabel">podgląd</span>
     </div>
     <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>
   </div>
@@ -1177,7 +1183,7 @@
 
   <!-- ================= MODAL: KAMERA ================= -->
   <div class="modal-overlay" id="camera-modal" style="display:none">
-    <div class="modal camera-modal" role="dialog" data-i18n-aria="cam.title" aria-label="Kamera">
+    <div class="modal camera-modal" role="dialog" aria-modal="true" data-i18n-aria="cam.title" aria-label="Kamera">
       <div class="modal-header">
         <h2 data-i18n="cam.title">Kamera</h2>
         <div class="modal-header-actions">
