@@ -97,7 +97,7 @@ const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
-const { llmComplete, blindToImages } = require('./lib/model.js');
+const { llmComplete, blindToImages, zapytajModel } = require('./lib/model.js');
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
@@ -1838,35 +1838,9 @@ async function handleChat(req, res) {
 
   let upstream;
   try {
-    upstream = await fetch(`${ep.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: authHeaders(ep),
-      body: JSON.stringify(body),
-      signal: abort.signal,
-    });
-    // Modele rozumujące OpenAI (o1, o3, gpt-5) odrzucają `max_tokens` i własną
-    // temperaturę — trzeba `max_completion_tokens` i temperatury domyślnej.
-    // Bez tego cała zakładka silnika po prostu nie działa, a użytkownik widzi
-    // tylko surowy błąd 400. Jedna ponowna próba z poprawionym żądaniem.
-    if (upstream.status === 400) {
-      const raw = await upstream.clone().text().catch(() => '');
-      const fixed = { ...body };
-      let changed = false;
-      if (/max_completion_tokens/.test(raw)) {
-        fixed.max_completion_tokens = fixed.max_tokens;
-        delete fixed.max_tokens;
-        changed = true;
-      }
-      if (/temperature/.test(raw)) { delete fixed.temperature; delete fixed.top_p; changed = true; }
-      if (changed) {
-        upstream = await fetch(`${ep.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: authHeaders(ep),
-          body: JSON.stringify(fixed),
-          signal: abort.signal,
-        });
-      }
-    }
+    // Parametry pod dostawcę, poprawki po odmowie 400, ponowienia przy
+    // 429/503 — wszystko w lib/model.js, wspólne z funkcjami pomocniczymi.
+    upstream = await zapytajModel(ep, body, { signal: abort.signal });
   } catch (err) {
     if (abort.signal.aborted) return;
     return sendJson(res, 502, {

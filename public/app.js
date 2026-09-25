@@ -687,7 +687,12 @@ function podpisSilnika(klucz, model) {
   }
   return el;
 }
-const znakSilnika = () => ({ silnik: endpoint, model: currentModel() || '' });
+/* Silnik przypięty do TURY. Przełączenie zakładki w trakcie odpowiedzi
+   podpisywało odpowiedź chmury jako „lokalny GPU", a kolejne rundy narzędzi
+   szły już do innego silnika niż pierwsza. `runGeneration` ustawia go na
+   starcie i zdejmuje na końcu. */
+let znakTury = null;
+const znakSilnika = () => znakTury || ({ silnik: endpoint, model: currentModel() || '' });
 
 function messageElement(m, idx = -1) {
   const role = m.role;
@@ -744,6 +749,15 @@ function messageElement(m, idx = -1) {
   if (isError) {
     body.textContent = text;
     msg.appendChild(body);
+    // Błąd na końcu rozmowy — jedno kliknięcie zamiast przepisywania pytania.
+    const conv = activeConv();
+    if (idx >= 0 && conv && idx === conv.messages.length - 1) {
+      const ponow = document.createElement('button');
+      ponow.className = 'msg-action-btn msg-ponow';
+      ponow.textContent = '↻ ' + t('chat.ponow');
+      ponow.addEventListener('click', () => regenerateFrom(idx));
+      body.appendChild(ponow);
+    }
     return msg;
   }
 
@@ -806,7 +820,14 @@ function messageElement(m, idx = -1) {
   col.style.minWidth = '0';
   const podpis = !isError && podpisSilnika(m.silnik, m.model);
   if (podpis) col.appendChild(podpis);
-  col.append(body, messageActions(text, { copy: true, role: 'assistant', idx }));
+  /* Przyciski tylko pod OSTATNIĄ wypowiedzią tury. Pasek postępu („Szukam…")
+     i kroki pośrednie to nie odpowiedź — pięć „Regeneruj" pod jedną
+     odpowiedzią i „Zapamiętaj" przy „Przeszukuję archiwum…" to szum. */
+  const nastepna = idx >= 0 ? activeConv()?.messages[idx + 1] : null;
+  const srodekTury = m.status || (nastepna && (nastepna.role === 'assistant'
+    || (nastepna.role === 'user' && nastepna.search)));
+  col.append(body);
+  if (!srodekTury) col.append(messageActions(text, { copy: true, role: 'assistant', idx }));
   msg.appendChild(col);
   return msg;
 }
@@ -1425,10 +1446,27 @@ function toApiMessages(conv) {
         + '--- POCZĄTEK PŁÓTNA ---\n' + conv.canvas.text + '\n--- KONIEC PŁÓTNA ---',
     });
   }
-  for (const m of conv.messages) {
-    if (m.error || m.role === 'action') continue;
+  /* Granica bieżącej tury: ostatnia wiadomość człowieka (nie wynik narzędzia).
+     Przed nią wyniki narzędzi skracamy do jednej linii, a obrazy zostają
+     tylko w samej ostatniej wiadomości. Bez tego po czterech turach model
+     dostawał 26 wiadomości, w tym siedem pełnych wyników wyszukiwania
+     po ~6 tys. znaków, a zdjęcie z pierwszej tury kierowało każdą następną
+     do modelu wizyjnego. */
+  let granica = -1;
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    const m = conv.messages[i];
+    if (m.role === 'user' && !m.search) { granica = i; break; }
+  }
+  conv.messages.forEach((m, i) => {
+    if (m.error || m.role === 'action' || m.status) return;
     let text = msgText(m);
-    const images = msgImages(m);
+    const images = i === granica ? msgImages(m) : [];
+    if (i !== granica && msgImages(m).length && m.role === 'user') {
+      text = `(tu użytkownik pokazał zdjęcie${msgImages(m).length > 1 ? 'a' : ''})` + (text ? `\n${text}` : '');
+    }
+    if (m.search && i < granica) {
+      text = `(wcześniejszy wynik narzędzia: ${m.searchQuery || 'dane'} — już wykorzystany w odpowiedzi)`;
+    }
     // Dokumenty doklejamy dopiero tutaj: w rozmowie widać kafelek z nazwą,
     // a model dostaje pełną treść z wyraźną ramką, żeby wiedział, co jest
     // załącznikiem, a co pytaniem użytkownika.
@@ -1444,10 +1482,12 @@ function toApiMessages(conv) {
       api.push({ role: m.role, content: parts });
     } else {
       // obrazy w wiadomościach asystenta (np. wygenerowane w Studiu)
-      // nie wracają do API — wysyłamy sam tekst
+      // nie wracają do API — wysyłamy sam tekst. Pustej wypowiedzi nie
+      // wysyłamy wcale: część dostawców (Claude) ją odrzuca.
+      if (!String(text || '').trim()) return;
       api.push({ role: m.role, content: text });
     }
-  }
+  });
   return api;
 }
 
@@ -1605,7 +1645,8 @@ function potwierdzOdbior(id) {
 async function streamOnce(conv, opcje = {}) {
   const msg = document.createElement('div');
   msg.className = 'msg msg-assistant nowa';
-  msg.dataset.silnik = endpoint;
+  const ep = znakSilnika().silnik;
+  msg.dataset.silnik = ep;
   msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
   const body = document.createElement('div');
   body.className = 'msg-content md';
@@ -1614,7 +1655,7 @@ async function streamOnce(conv, opcje = {}) {
   kolumna.className = 'msg-kolumna';
   kolumna.style.flex = '1';
   kolumna.style.minWidth = '0';
-  const podpis = podpisSilnika(endpoint, currentModel());
+  const podpis = podpisSilnika(ep, znakSilnika().model);
   if (podpis) kolumna.appendChild(podpis);
   kolumna.appendChild(body);
   msg.appendChild(kolumna);
@@ -1644,12 +1685,19 @@ async function streamOnce(conv, opcje = {}) {
 
   const paint = () => {
     renderQueued = false;
-    const head = think
-      ? `<details class="think-block"${acc ? '' : ' open'}>`
-        + `<summary>${escapeHtml(t(acc ? 'think.done' : 'think.live'))}</summary>`
-        + `<pre>${escapeHtml(think)}</pre></details>`
+    /* Myślenie z `<think>` w treści idzie do panelu myślenia, a znaczniki
+       i ich urwane początki nie migają na ekranie w trakcie pisania. Panel
+       myślenia jest zwinięty — rozumowanie bywa po angielsku i pełne
+       deliberacji; kto chce, rozwinie. */
+    const { think: thinkWTresci } = rozdzielMyslenie(acc);
+    const widok = widokWToku(acc);
+    const calyThink = [think, thinkWTresci].filter(Boolean).join('\n');
+    const head = calyThink
+      ? '<details class="think-block">'
+        + `<summary>${escapeHtml(t(widok ? 'think.done' : 'think.live'))}</summary>`
+        + `<pre>${escapeHtml(calyThink)}</pre></details>`
       : '';
-    body.innerHTML = head + renderMarkdown(acc) + '<span class="cursor-blink"></span>' + waitNote;
+    body.innerHTML = head + renderMarkdown(widok) + '<span class="cursor-blink"></span>' + waitNote;
     scrollToBottom();
   };
   const schedulePaint = () => {
@@ -1668,8 +1716,8 @@ async function streamOnce(conv, opcje = {}) {
   zapamietajBieg({ id: biegId, convId: conv.id, ostatnie: (Number(opcje.od) || 0) - 1 });
 
   try {
-    const modelOverride = endpoint === 'local' ? settings.modelLocal
-      : endpoint === 'cloud' ? settings.modelCloud : '';
+    const modelOverride = znakTury ? znakTury.nadpisanie
+      : ep === 'local' ? settings.modelLocal : ep === 'cloud' ? settings.modelCloud : '';
     let res = podpiecie
       ? await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${Number(opcje.od) || 0}`,
         { signal: abortController.signal })
@@ -1677,7 +1725,7 @@ async function streamOnce(conv, opcje = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          endpoint,
+          endpoint: ep,
           // `dodatkowe` to dopisek na jedną turę, poza historią rozmowy —
           // służy dokańczaniu odpowiedzi uciętej limitem długości.
           messages: [...toApiMessages(conv), ...(opcje.dodatkowe || [])],
@@ -1820,6 +1868,12 @@ async function streamOnce(conv, opcje = {}) {
        już próbowaliśmy — myliło się w obie strony. */
     potwierdzOdbior(biegId);
     if (bladBiegu) throw new Error(bladBiegu);
+    // `<think>` w treści to myślenie, nie odpowiedź — i nie wolno z niego
+    // wyławiać znaczników narzędzi.
+    {
+      const r = rozdzielMyslenie(acc);
+      if (r.think) { think = [think, r.think].filter(Boolean).join('\n'); acc = r.tresc; }
+    }
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
     if (!acc.trim() && think.trim()) {
@@ -1898,6 +1952,9 @@ let lastFinish = '';
  */
 const DOPISKI_MAX = 3;
 async function dokoncz(conv, tekst) {
+  /* Pusta treść przy „length" = cały budżet poszedł na myślenie. Drugie
+     żądanie znaczyłoby drugi pełny przebieg myślenia i zwykle ten sam wynik. */
+  if (!String(tekst || '').trim()) return tekst;
   let pelny = tekst;
   for (let i = 0; i < DOPISKI_MAX && lastFinish === 'length'; i++) {
     const ciag = await streamOnce(conv, {
@@ -1911,8 +1968,9 @@ async function dokoncz(conv, tekst) {
       ],
     });
     if (!ciag.trim()) break;
-    // Bez spacji: ciąg dalszy potrafi zacząć się w środku wyrazu.
-    pelny += ciag;
+    // Bez spacji: ciąg dalszy potrafi zacząć się w środku wyrazu. A często
+    // zaczyna od powtórzenia ostatnich słów — tę zakładkę zdejmujemy.
+    pelny = doklejBezZakladki(pelny, ciag);
   }
   return pelny;
 }
@@ -1951,7 +2009,7 @@ async function webSearch(query) {
 const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
-  ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, naKontekst, bezOgonkowKlient,
+  ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, naKontekst, bezOgonkowKlient,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
@@ -2039,30 +2097,47 @@ function wstawTekstModelu(conv, tresc, odKtorej = 0) {
   for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
     const m = conv.messages[i];
     if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
-    if (tenSamTekst(m.content, czysty)) {
+    if (przepisanie(m.content, czysty)) {
       m.content = czysty;
       return m;
     }
   }
-  const wiadomosc = { role: 'assistant', content: czysty };
+  const wiadomosc = { role: 'assistant', content: czysty, ...znakSilnika() };
   conv.messages.push(wiadomosc);
   return wiadomosc;
 }
 
 async function domknijOdpowiedz(conv, surowe) {
   // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
-  const tresc = stripSearchMarker(await dokoncz(conv, surowe));
+  const pelne = await dokoncz(conv, surowe);
+  /* Akcję szukamy w SUROWYM tekście: `stripSearchMarker` czyści też [AKCJA:],
+     więc po nim karta do zatwierdzenia nie pojawiała się nigdy — model pisał
+     „zapamiętam", a nic się nie działo. */
+  const akcja = pelne.match(ACTION_RE);
+  const tresc = stripSearchMarker(pelne);
   /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
      w całości na myślenie". Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
      jako odpowiedź — gorsze niż nic: rozumowanie jest po angielsku, urwane
      i pokazuje deliberację, której użytkownik widzieć nie powinien. */
+  /* Pusto, ale tura już coś pokazała (zdjęcia, wstęp przed narzędziem) —
+     sami każemy modelowi „napisz domknięcie albo nic", więc „nic" jest
+     poprawne i nie zasługuje na dopisek „(pusta odpowiedź modelu)". */
+  if (!tresc && !akcja) {
+    const tura = conv.messages.slice(conv.__turaOd || 0);
+    const widac = (m) => m.role === 'assistant' && !m.status && !m.error
+      && (msgText(m).trim() || (m.content && typeof m.content === 'object'
+        && ((m.content.photos || []).length || (m.content.images || []).length)));
+    if (tura.some(widac)) {
+      saveConversations();
+      return '';
+    }
+  }
   const samoMyslenie = !tresc && Boolean(lastReasoning);
   if (samoMyslenie) lastThink = lastReasoning;
   const finalText = samoMyslenie ? t('budgetSpentOnThinking') : (tresc || t('emptyReply'));
 
-  const akcja = finalText.match(ACTION_RE);
   if (akcja) {
-    const widoczne = finalText.replace(akcja[0], '').trim();
+    const widoczne = tresc;
     conv.messages.push({ role: 'assistant', content: widoczne || '…',
       think: lastThink, note: lastModelNote, ...znakSilnika() });
     conv.messages.push({ role: 'action',
@@ -2091,6 +2166,10 @@ async function runGeneration(conv, podpiecie = null) {
   const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
   // Od której wiadomości zaczyna się ta tura — dalej nie szuka zapora powtórek.
   conv.__turaOd = conv.messages.length;
+  znakTury = {
+    silnik: endpoint, model: currentModel() || '',
+    nadpisanie: endpoint === 'local' ? settings.modelLocal : endpoint === 'cloud' ? settings.modelCloud : '',
+  };
 
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
@@ -2196,6 +2275,7 @@ async function runGeneration(conv, podpiecie = null) {
   } finally {
     isGenerating = false;
     abortController = null;
+    znakTury = null;
     setGeneratingUI(false);
     /* Zapis bez zwłoki. Przeglądarka właśnie potwierdziła serwerowi, że ma
        odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie —
@@ -4172,7 +4252,8 @@ const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
 /* Czyste przekształcenia tekstu mowy — `public/mowa.js`. Tam mieszka też
    `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
 const {
-  doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst,
+  doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie,
+  przepisanie, doklejBezZakladki,
 } = utworzMowe({ WAKE_RE });
 const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
 const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;

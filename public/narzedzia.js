@@ -87,7 +87,9 @@ function utworzNarzedzia(z) {
        Rozdzielone, tekst przechodzi przez zaporę `wstawTekstModelu`, która
        przepisaną wersję PODMIENIA zamiast dokładać. */
     if (przed) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
-    const wiadomosc = { role: 'assistant', content: tekst };
+    // `status` — pasek postępu, nie wypowiedź: nie wraca do modelu jako jego
+    // własne słowa i nie dostaje przycisków „Zapamiętaj" / „Regeneruj".
+    const wiadomosc = { role: 'assistant', content: tekst, status: true };
     conv.messages.push(wiadomosc);
     saveConversations();
     renderMessages();

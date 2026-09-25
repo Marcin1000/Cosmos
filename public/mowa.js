@@ -164,7 +164,38 @@ function utworzMowe(z) {
     return wspolne / sa.size >= prog && wspolne / sb.size >= prog;
   }
 
-  return { doklej, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst, golo };
+  /** Czy `nowy` to przepisana albo rozszerzona wersja `stary`? Model po
+   *  wyniku narzędzia zaczyna często od tego samego wstępu („Sprawdzę jeszcze
+   *  jedno." ×3, akapit o obiektywie dwa razy w dwóch kartach). `tenSamTekst`
+   *  patrzy tylko na długie teksty — ten sam wstęp łapiemy osobno. */
+  function przepisanie(stary, nowy) {
+    const A = golo(stary);
+    const B = golo(nowy);
+    if (!A || !B) return false;
+    if (A === B) return true;
+    const n = Math.min(A.length, 160);
+    if (A.length >= 40 && B.startsWith(A.slice(0, Math.max(40, Math.floor(n * 0.8))))) return true;
+    return tenSamTekst(stary, nowy);
+  }
+
+  /** Doklej dalszy ciąg odpowiedzi uciętej limitem długości. Model zaczyna
+   *  dokończenie od powtórzenia ostatnich słów — bez zdjęcia zakładki na
+   *  ekranie stało „…SzerokDzień 2 — … Szerokiej". */
+  function doklejBezZakladki(pelny, ciag) {
+    const max = Math.min(300, pelny.length, ciag.length);
+    for (let k = max; k >= 12; k--) {
+      const ogon = pelny.slice(-k);
+      const spacja = ogon.search(/\s/);
+      if (spacja < 0) continue;
+      const wsp = ogon.slice(spacja + 1);
+      if (wsp.length < 8) continue;
+      const i = ciag.indexOf(wsp);
+      if (i >= 0 && i < 200) return pelny.slice(0, pelny.length - wsp.length) + ciag.slice(i);
+    }
+    return pelny + ciag;
+  }
+
+  return { doklej, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst, przepisanie, doklejBezZakladki, golo };
 }
 
 if (typeof window !== 'undefined') window.utworzMowe = utworzMowe;

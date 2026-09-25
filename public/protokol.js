@@ -53,16 +53,50 @@ function utworzProtokol() {
   function stripSearchMarker(s) {
     let out = String(s || '');
     for (const z of ZNACZNIKI) {
-      out = out.replace(new RegExp(`\\[${z}:?[^\\]]*\\]`, 'gi'), '');
-      /* Urwany na końcu tekstu — i TYLKO na końcu. W środku wypowiedzi otwarty
-         nawias kwadratowy to zwykły nawias (albo odnośnik w Markdownie)
-         i nie wolno go zjadać razem z resztą zdania. */
-      out = out.replace(new RegExp(`\\[${z}:?[^\\]]*$`, 'i'), '');
+      /* Znacznik = nazwa, a zaraz po niej „:" albo „]" — i NIGDY odnośnik
+         Markdown. Z dwukropkiem opcjonalnym „[Planty](…)", „[Archiwum
+         Narodowe](…)" czy „[Obrazy Moneta](…)" znikały z odpowiedzi,
+         a „[Archiwum…](…)" odpalało do tego narzędzie archiwum. */
+      out = out.replace(new RegExp(`\\[${z}(?:\\s*:[^\\]\\n]*)?\\](?!\\()`, 'gi'), '');
+      /* Urwany na końcu tekstu — i TYLKO na końcu, i tylko z dwukropkiem.
+         W środku wypowiedzi otwarty nawias kwadratowy to zwykły nawias,
+         a „[Plan B" na końcu zdania nie jest poleceniem. */
+      out = out.replace(new RegExp(`\\[${z}\\s*:[^\\]\\n]*$`, 'i'), '');
     }
     // Płot, w którym po usunięciu znacznika nie zostało nic prócz białych znaków.
-    out = out.replace(/```[a-zA-Z-]*\s*```/g, '');
+    out = out.replace(/```[a-zA-Z-]*\s*```/g, '')
+      // **[SZUKAJ: …]** zostawiało „****", a `[SZUKAJ: …]` — „``"
+      .replace(/\*\*\s*\*\*|(?<![`\w])``(?!`)/g, '');
+    // Płot urwany razem ze znacznikiem: nieparzysta liczba płotów, ostatni pusty.
+    if (((out.match(/```/g) || []).length % 2) === 1) out = out.replace(/```[a-zA-Z-]*\s*$/, '');
     return out.trim();
   }
+
+  /** Rozdziel treść modelu na myślenie i odpowiedź.
+   *  vLLM bez parsera rozumowania, Nemotron z „detailed thinking on" i starsze
+   *  Ollamy piszą `<think>…</think>` wprost w treści. Zostawione tam stało na
+   *  ekranie — a znaczniki z rozważań („czy użyć [SZUKAJ: …]?") odpalały
+   *  narzędzia w pętli. Działa też na urwanym `<think>` w trakcie strumienia. */
+  function rozdzielMyslenie(acc) {
+    let think = '';
+    let wejscie = String(acc || '');
+    // samo zamknięcie bez otwarcia (otwarcie siedziało w szablonie czatu, np. R1/QwQ)
+    const z = wejscie.search(/<\/think>/i);
+    if (z >= 0 && !/<think>/i.test(wejscie.slice(0, z))) { think = wejscie.slice(0, z); wejscie = wejscie.slice(z + 8); }
+    const tresc = wejscie.replace(/<think>([\s\S]*?)(<\/think>|$)/gi, (_, w) => { think += w; return ''; });
+    return { think: think.trim(), tresc: tresc.replace(/^\s+/, '') };
+  }
+
+  /** Tekst do pokazania W TRAKCIE strumienia: bez znaczników, bez urwanego
+   *  „[SZU" i bez `<think>`. Surowy tekst na żywo pokazywał „[GRAFIKA: Wawe…"
+   *  przez ułamek sekundy przy każdym narzędziu. */
+  function widokWToku(acc) {
+    let t = stripSearchMarker(rozdzielMyslenie(acc).tresc);
+    const m = t.match(/\[([A-ZĄĆĘŁŃÓŚŹŻ]{0,8})$/i);
+    if (m && ZNACZNIKI.some((zn) => zn.startsWith(m[1].toUpperCase()))) t = t.slice(0, m.index);
+    return t.replace(/<\/?t?h?i?n?k?$/i, '');
+  }
+
   /* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
      To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
 
@@ -150,8 +184,9 @@ function utworzProtokol() {
      każdej poprawce trwa minutę i za każdym razem coś się po drodze gubi. */
   const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
   const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
-  const ARCHIVE_RE = /\[ARCHIWUM:?\s*([^\]\n]*)\]/i;
-  const PLAN_RE = /\[PLAN:?\s*([^\]\n]*)\]/i;
+  // Dwukropek obowiązkowy i nigdy odnośnik — „[Archiwum Narodowe](…)" to link.
+  const ARCHIVE_RE = /\[ARCHIWUM:\s*([^\]\n]*)\](?!\()/i;
+  const PLAN_RE = /\[PLAN:\s*([^\]\n]*)\](?!\()/i;
   const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
 
   /* „Katedra La Seu" i „katedra la seu" to to samo pytanie o zdjęcia. Bez
@@ -175,6 +210,8 @@ function utworzProtokol() {
     ZNACZNIKI,
     ARCH_LIMIT_ZNAKOW,
     stripSearchMarker,
+    rozdzielMyslenie,
+    widokWToku,
     naKontekst,
     bezOgonkowKlient,
   };
