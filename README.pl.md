@@ -204,7 +204,8 @@ Poniżej pełny opis każdego elementu — funkcje, konfiguracja, API, koszty.
 - 🧾 **Podsumowania rozmów**, licznik tokenów w kompozytorze, profil użytkownika
   doklejany do kontekstu każdej rozmowy
 - ⚙️ Osobny wybór modelu dla chmury i dla GPU, system prompt, temperatura, limit tokenów
-- 🌗 Motyw ciemny (kosmos) i jasny (sterylny), czcionki IBM Plex dołączone offline
+- 🌗 Motyw jasny i ciemny (domyślnie jak w systemie), ten sam wygląd co strona produktowa; czcionki Onest i Martian Mono dołączone offline
+- 🧵 Nić rozmowy: każda odpowiedź ma pasek i podpis w kolorze silnika, który ją napisał (NVIDIA, lokalny GPU, Claude, OpenAI) — zmianę silnika w połowie wątku widać od razu
 - 🌍 **Dwa języki interfejsu — polski i angielski** (przełącznik w panelu bocznym
   i na ekranie logowania); język steruje też instrukcją systemową modelu
   i rozpoznawaniem/syntezą mowy
@@ -1223,7 +1224,7 @@ decyzji, nie usterki — skrypt celowo ich nie liczy jako błędów.
 - **Chmura NVIDIA (build.nvidia.com):** rejestracja darmowa, konto deweloperskie dostaje
   pulę darmowych zapytań; przy większym użyciu obowiązuje cennik NVIDIA. Do prototypowania
   zwykle wystarcza pula darmowa.
-- **Aplikacja Cosmos:** open source, bez opłat; czcionki IBM Plex na licencji OFL.
+- **Aplikacja Cosmos:** open source, bez opłat; czcionki Onest i Martian Mono na licencji OFL.
 
 ## 🛠️ Rozwiązywanie problemów
 

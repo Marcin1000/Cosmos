@@ -113,6 +113,9 @@ const I18N = {
 
     // — ekran powitalny —
     'welcomeModelLabel': 'Aktywny model:',
+    'welcome.et': 'Jedna rozmowa · każdy model',
+    'welcome.h': 'Od czego <em>zaczynamy?</em>',
+    'silnik.local': 'Lokalny GPU',
     'sug1': 'Wyjaśnij, jak działa LLM',
     'sug1p': 'Wyjaśnij prostymi słowami, jak działa duży model językowy (LLM).',
     'sug2': 'Napisz funkcję w Pythonie',
@@ -897,6 +900,9 @@ const I18N = {
     'tabLocal': 'Local',
 
     'welcomeModelLabel': 'Active model:',
+    'welcome.et': 'One thread · every engine',
+    'welcome.h': 'Where do we <em>start?</em>',
+    'silnik.local': 'Local GPU',
     'sug1': 'Explain how an LLM works',
     'sug1p': 'Explain in simple terms how a large language model (LLM) works.',
     'sug2': 'Write a Python function',

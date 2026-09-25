@@ -3,8 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#05060a" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
+  <script>
+    /* Motyw przed pierwszym malowaniem: zapisany wybór albo ustawienie systemu.
+       Bez tego jasny ekran mignąłby najpierw ciemnym tłem, zanim dojdzie app.js. */
+    try {
+      var m = localStorage.getItem('cosmos.theme');
+      if (m !== 'dark' && m !== 'light') m = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = m;
+      var s = localStorage.getItem('cosmos.endpoint');
+      if (s) document.documentElement.dataset.silnik = s;
+    } catch (e) {}
+  </script>
   <title>Cosmos</title>
   <meta name="description" content="Cosmos — osobisty, hybrydowy system AI. Jedna rozmowa przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI.">
   <!-- Aplikacja za logowaniem nie ma czego szukać w wyszukiwarkach; wizytówką jest strona pod „/". -->
@@ -220,14 +231,16 @@
       <div class="chat-scroll" id="chat-scroll">
         <!-- Ekran powitalny -->
         <div class="welcome" id="welcome">
+          <div class="welcome-zorza" aria-hidden="true"><i></i><i></i><i></i></div>
           <svg class="welcome-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
-          <h1>Cosmos</h1>
+          <p class="welcome-et"><span class="welcome-kropka"></span><span data-i18n="welcome.et">Jedna rozmowa · każdy model</span></p>
+          <h1 data-i18n-html="welcome.h">Od czego <em>zaczynamy?</em></h1>
           <p class="welcome-sub"><span data-i18n="welcomeModelLabel">Aktywny model:</span> <span class="mono" id="welcome-model">—</span></p>
           <div class="suggestions" id="suggestions">
             <button class="suggestion" data-prompt-key="sug1p" data-i18n="sug1">Wyjaśnij, jak działa LLM</button>
             <button class="suggestion" data-prompt-key="sug2p" data-i18n="sug2">Napisz funkcję w Pythonie</button>
-            <button class="suggestion" data-prompt-key="sug3p" data-i18n="sug3">Architektura systemu percepcji</button>
-            <button class="suggestion" data-prompt-key="sug4p" data-i18n="sug4">Fotogrametria vs kamera głębi</button>
+            <button class="suggestion" data-prompt-key="sug3p" data-i18n="sug3">Zaplanuj zdjęcia o świcie</button>
+            <button class="suggestion" data-prompt-key="sug4p" data-i18n="sug4">Lokalnie czy w chmurze?</button>
           </div>
         </div>
         <div class="messages" id="messages"></div>

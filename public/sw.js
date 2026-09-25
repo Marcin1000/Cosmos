@@ -2,7 +2,7 @@
    Statyczne pliki: cache-first (działa offline).
    API: zawsze sieć — czat wymaga połączenia z modelem. */
 
-const CACHE = 'cosmos-v116';
+const CACHE = 'cosmos-v117';
 
 const STATIC_ASSETS = [
   '/app',
@@ -28,16 +28,10 @@ const STATIC_ASSETS = [
   '/icons/cosmos-maskable-192.png',
   '/icons/cosmos-maskable-512.png',
   '/fonts/fonts.css',
-  '/fonts/IBMPlexSans-400-latin.woff2',
-  '/fonts/IBMPlexSans-400-latin-ext.woff2',
-  '/fonts/IBMPlexSans-500-latin.woff2',
-  '/fonts/IBMPlexSans-500-latin-ext.woff2',
-  '/fonts/IBMPlexSans-600-latin.woff2',
-  '/fonts/IBMPlexSans-600-latin-ext.woff2',
-  '/fonts/IBMPlexMono-400-latin.woff2',
-  '/fonts/IBMPlexMono-400-latin-ext.woff2',
-  '/fonts/IBMPlexMono-500-latin.woff2',
-  '/fonts/IBMPlexMono-500-latin-ext.woff2',
+  '/fonts/Onest-latin.woff2',
+  '/fonts/Onest-latin-ext.woff2',
+  '/fonts/MartianMono-latin.woff2',
+  '/fonts/MartianMono-latin-ext.woff2',
 ];
 
 self.addEventListener('install', (event) => {

@@ -667,6 +667,28 @@ const {
   msgPhotos, msgDalej, PORCJA_ARCHIWUM,
 });
 
+/* Nić rozmowy: każda odpowiedź pamięta, który silnik ją napisał, i nosi jego
+   kolor — dokładnie tak, jak pokazuje to strona produktowa. */
+function nazwaSilnika(klucz) {
+  return klucz === 'cloud' ? 'NVIDIA' : klucz === 'local' ? t('silnik.local')
+    : klucz === 'claude' ? 'Claude' : klucz === 'openai' ? 'OpenAI' : '';
+}
+function podpisSilnika(klucz, model) {
+  const nazwa = nazwaSilnika(klucz);
+  if (!nazwa) return null;
+  const el = document.createElement('div');
+  el.className = 'msg-silnik';
+  el.textContent = nazwa;
+  const krotki = String(model || '').split('/').pop();
+  if (krotki) {
+    const m = document.createElement('small');
+    m.textContent = krotki;
+    el.appendChild(m);
+  }
+  return el;
+}
+const znakSilnika = () => ({ silnik: endpoint, model: currentModel() || '' });
+
 function messageElement(m, idx = -1) {
   const role = m.role;
   const text = msgText(m);
@@ -681,6 +703,7 @@ function messageElement(m, idx = -1) {
     avatar.className = 'msg-avatar';
     avatar.innerHTML = AVATAR_SVG;
     msg.appendChild(avatar);
+    if (m.silnik) msg.dataset.silnik = m.silnik;
   }
 
   const body = document.createElement('div');
@@ -780,6 +803,8 @@ function messageElement(m, idx = -1) {
   const col = document.createElement('div');
   col.style.flex = '1';
   col.style.minWidth = '0';
+  const podpis = !isError && podpisSilnika(m.silnik, m.model);
+  if (podpis) col.appendChild(podpis);
   col.append(body, messageActions(text, { copy: true, role: 'assistant', idx }));
   msg.appendChild(col);
   return msg;
@@ -1578,12 +1603,19 @@ function potwierdzOdbior(id) {
 
 async function streamOnce(conv, opcje = {}) {
   const msg = document.createElement('div');
-  msg.className = 'msg msg-assistant';
+  msg.className = 'msg msg-assistant nowa';
+  msg.dataset.silnik = endpoint;
   msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
   const body = document.createElement('div');
   body.className = 'msg-content md';
   body.innerHTML = '<span class="cursor-blink"></span>';
-  msg.appendChild(body);
+  const kolumna = document.createElement('div');
+  kolumna.style.flex = '1';
+  kolumna.style.minWidth = '0';
+  const podpis = podpisSilnika(endpoint, currentModel());
+  if (podpis) kolumna.appendChild(podpis);
+  kolumna.appendChild(body);
+  msg.appendChild(kolumna);
   el.messages.appendChild(msg);
   scrollToBottom(true);
 
@@ -2030,14 +2062,14 @@ async function domknijOdpowiedz(conv, surowe) {
   if (akcja) {
     const widoczne = finalText.replace(akcja[0], '').trim();
     conv.messages.push({ role: 'assistant', content: widoczne || '…',
-      think: lastThink, note: lastModelNote });
+      think: lastThink, note: lastModelNote, ...znakSilnika() });
     conv.messages.push({ role: 'action',
       actionType: akcja[1].trim().toLowerCase(), actionText: akcja[2].trim() });
     saveConversations();
     return widoczne;
   }
   const wiadomosc = wstawTekstModelu(conv, finalText, conv.__turaOd || 0);
-  if (wiadomosc) Object.assign(wiadomosc, { think: lastThink, note: lastModelNote, samoMyslenie });
+  if (wiadomosc) Object.assign(wiadomosc, { think: lastThink, note: lastModelNote, samoMyslenie, ...znakSilnika() });
   saveConversations();
   return finalText;
 }
@@ -2151,7 +2183,7 @@ async function runGeneration(conv, podpiecie = null) {
          dokładnie w trakcie sięgania po narzędzie. */
       const czesc = stripSearchMarker(err.partial);
       if (czesc) {
-        conv.messages.push({ role: 'assistant', content: czesc });
+        conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
         saveConversations();
       }
     } else {
@@ -4992,8 +5024,18 @@ function applyTheme(theme) {
   el.themeIconDark.style.display = dark ? 'none' : '';
   el.themeIconLight.style.display = dark ? '' : 'none';
   el.themeLabel.textContent = dark ? t('themeLight') : t('themeDark');
-  document.querySelector('meta[name="theme-color"]')
-    .setAttribute('content', dark ? '#05060a' : '#fbfbfd');
+  document.querySelectorAll('meta[name="theme-color"]')
+    .forEach((m) => m.setAttribute('content', dark ? '#111214' : '#F6F5F1'));
+}
+
+/* Bez zapisanego wyboru motyw idzie za systemem — tak jak strona produktowa.
+   Ten sam wybór robi już skrypt w <head>, żeby nie mignęło złe tło. */
+function motywDomyslny() {
+  try {
+    const zapisany = localStorage.getItem(STORAGE_KEYS.theme);
+    if (zapisany === 'dark' || zapisany === 'light') return zapisany;
+  } catch { /* tryb prywatny */ }
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 el.themeBtn.addEventListener('click', () => {
@@ -5001,14 +5043,14 @@ el.themeBtn.addEventListener('click', () => {
   applyTheme(next);
 });
 
-applyTheme(localStorage.getItem(STORAGE_KEYS.theme) || 'dark');
+applyTheme(motywDomyslny());
 
 // przełącznik języka (PL ↔ EN)
 el.langBtn = $('lang-btn');
 el.langBtn.addEventListener('click', () => {
   setLang(getLang() === 'pl' ? 'en' : 'pl');
   // odśwież teksty budowane dynamicznie w JS
-  applyTheme(document.documentElement.dataset.theme || 'dark');
+  applyTheme(document.documentElement.dataset.theme || motywDomyslny());
   buildEndpointTabs();
   updateModelBadge();
   renderSidebar();
@@ -5046,6 +5088,7 @@ function buildEndpointTabs() {
 function setEndpoint(name) {
   endpoint = name;
   localStorage.setItem(STORAGE_KEYS.endpoint, name);
+  document.documentElement.dataset.silnik = name;   // kolor nici, obwódki pola i kropki modelu
   document.querySelectorAll('.endpoint-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.endpoint === name);
   });

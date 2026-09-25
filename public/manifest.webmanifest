@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#05060a",
-  "theme_color": "#05060a",
+  "background_color": "#111214",
+  "theme_color": "#111214",
   "categories": ["productivity", "utilities"],
   "icons": [
     { "src": "/icons/cosmos.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },

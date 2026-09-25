@@ -292,6 +292,15 @@ gdy klucza brak w wybranym języku, a na końcu zwraca sam klucz. Nowy tekst wym
 w obu — inaczej angielski interfejs po cichu wyświetli polskie zdanie. Tłumaczenie
 elementów idzie po atrybutach `data-i18n`, `data-i18n-html`, `data-i18n-ph`.
 
+**Wygląd: kierunek „Jeden wątek”.** Aplikacja i strona produktowa to jeden świat:
+te same tokeny kolorów (jasny `#F6F5F1` / ciemny `#111214`), te same czcionki
+(`public/fonts/fonts.css` — jeden plik dla obu), motyw domyślnie jak w systemie. Kolor
+mają tylko silniki: `--k-nvidia`, `--k-local`, `--k-claude`, `--k-openai`, a `--k-akt`
+to silnik wybrany teraz (`data-silnik` na `<html>`, ustawia `setEndpoint()`). Każda
+odpowiedź zapisuje `silnik` i `model` i rysuje się z paskiem („nicią”) i podpisem w jego
+kolorze — nowe miejsce, które dopisuje odpowiedź do rozmowy, musi dołożyć
+`...znakSilnika()`, inaczej wiadomość dostanie neutralną szarą kreskę.
+
 **Service worker:** `public/sw.js` cache'uje statykę strategią cache-first i przy aktywacji
 kasuje cache o innej nazwie niż `CACHE`. Po zmianie czegokolwiek w `STATIC_ASSETS`
 **podnieś wersję** w `const CACHE = 'cosmos-vNN'` — inaczej użytkownicy z zainstalowaną PWA
