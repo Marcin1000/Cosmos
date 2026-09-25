@@ -103,12 +103,17 @@ const PRZYPADKI = [
      `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu. */
   await pg.fill('#input', 'przerwij mnie w połowie');
   await pg.click('#send-btn');
-  // Czekamy, aż w odpowiedzi pojawi się POCZĄTEK znacznika — dopiero wtedy
-  // przerwanie ma co zostawić.
+  /* Czekamy na zdanie PRZED znacznikiem, a potem chwilę, żeby strumień
+     wszedł w sam znacznik. Na ekranie znacznika nie widać już nawet w trakcie
+     pisania (widokWToku) — i to też jest gwarancja: sprawdzamy ją tu. */
   await pg.waitForFunction(
-    () => /\[ARCHIWUM/.test(document.querySelector('.msg-assistant')?.textContent || ''),
+    () => /Zaraz sprawdzę archiwum/.test(document.querySelector('.msg-assistant')?.textContent || ''),
     null, { timeout: 15000 },
   );
+  await pg.waitForTimeout(1500);
+  const wTrakcie = await pg.evaluate(() => document.querySelector('.msg-assistant')?.textContent || '');
+  console.log(`2. w trakcie pisania znacznik na ekranie: ${/\[ARCH/.test(wTrakcie) ? 'TAK' : 'nie'}`);
+  if (/\[ARCH/.test(wTrakcie)) fail.push('urwany znacznik widać na ekranie w trakcie pisania');
   await pg.click('#stop-btn');
   await pg.waitForTimeout(1500);
 

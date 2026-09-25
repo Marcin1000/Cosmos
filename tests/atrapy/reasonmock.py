@@ -29,7 +29,8 @@ class H(http.server.BaseHTTPRequestHandler):
 
         if not req.get("stream"):
             # ścieżka niestrumieniowa (streszczenie, dopracowanie promptu)
-            if "pusto" in user:
+            # Mały budżet = samo myślenie; większy (ponowienie po „length") = odpowiedź.
+            if "pusto" in user and int(req.get("max_tokens") or req.get("max_completion_tokens") or 0) < 4000:
                 body = {"choices": [{"message": {
                     "content": "",
                     "reasoning_content": "Rozważam punkty rozmowy: temat A, temat B."},

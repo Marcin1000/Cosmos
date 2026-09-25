@@ -1903,7 +1903,11 @@ async function handleChat(req, res) {
   try {
     // Parametry pod dostawcę, poprawki po odmowie 400, ponowienia przy
     // 429/503 — wszystko w lib/model.js, wspólne z funkcjami pomocniczymi.
-    upstream = await zapytajModel(ep, body, { signal: abort.signal });
+    upstream = await zapytajModel(ep, body, {
+      signal: abort.signal,
+      // Pomiar płynności ma zobaczyć kapryśny model takim, jaki jest.
+      ponowienia: payload.pomiar === true ? 0 : 2,
+    });
   } catch (err) {
     if (biegId) OCZEKUJACE.delete(biegId);
     clearTimeout(straznik);

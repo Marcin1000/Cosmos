@@ -111,6 +111,9 @@ async function jedenPomiar(endpoint, model) {
         // a nie modele między sobą.
         useCapabilities: false, useMemory: false, useSenses: false, useStudio: false,
         max_tokens: MAX_TOKENOW,
+        // Bez ponowień po 429/503 — kapryśny model ma wyjść w pomiarze
+        // takim, jaki jest, a nie wygładzony przez serwer.
+        pomiar: true,
       }),
       signal: AbortSignal.timeout(120000),
     });

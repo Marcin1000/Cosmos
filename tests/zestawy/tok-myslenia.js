@@ -113,6 +113,10 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   });
   console.log(`4. streszczenie: ok=${sum.ok}, „${String(sum.d.summary || sum.d.error).slice(0, 50)}"`);
   if (!sum.ok || !String(sum.d.summary || '').trim()) fail.push('streszczenie puste');
+  /* Budżet zjedzony przez myślenie → ponowienie z większym, a nie tok
+     myślenia udający streszczenie (dopracowanie promptu wstawiało kiedyś
+     do pola angielskie rozważania modelu). */
+  if (/Rozważam punkty/.test(String(sum.d.summary || ''))) fail.push('streszczenie to tok myślenia, nie odpowiedź');
 
   // ---- 5. przełącznik kamery przód/tył ----
   // Chromium z atrapą ma tylko jedną kamerę, a przełącznik ma się pokazywać
