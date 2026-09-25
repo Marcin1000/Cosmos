@@ -163,6 +163,8 @@ function utworzPlener(z) {
       why.appendChild(el);
     }
 
+    if (pre === 'fp') rysujNiebo(d);
+
     // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
     planOstatnieUstawienia = u;
     odswiezAparat(u);
@@ -180,6 +182,59 @@ function utworzPlener(z) {
      *  wszystko. Zestaw `panel-kamery-miesci` widział to jako „małe okienko
      *  przesuwalne pod dużym podglądem" i miał rację. */
     if (pre === 'plan') dopasujPanelKamery();
+  }
+
+  /* ---- KARTA NIEBA ------------------------------------------------------
+     To samo, co pokazuje strona produktowa w scenie „Nie zgaduje. Liczy.",
+     tylko z prawdziwych danych planu. Słońce stoi na łuku w miejscu, które
+     wynika z godziny między wschodem a zachodem; przed wschodem i po zachodzie
+     chowa się za górami. Kolor nieba idzie za wysokością Słońca, nie za zegarem:
+     złota godzina w grudniu i w czerwcu wypada o innej porze, a wygląda tak samo. */
+  function rysujNiebo(d) {
+    const karta = $('fp-niebo');
+    if (!karta || !d || !d.slonce) return;
+    const s = d.slonce;
+    const u = d.ustawienia || {};
+    const pole = $('fp-when') && $('fp-when').value;
+    const kiedy = pole && !Number.isNaN(new Date(pole).getTime()) ? new Date(pole) : new Date();
+    const en = typeof getLang === 'function' && getLang() === 'en';
+    const godz = (x) => (x ? new Date(x).toLocaleTimeString(en ? 'en-GB' : 'pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—');
+    const liczba = (x, m = 1) => (typeof x === 'number' ? (en ? x.toFixed(m) : x.toFixed(m).replace('.', ',')).replace('-', '−') : '—');
+
+    const wschod = s.wschod ? new Date(s.wschod).getTime() : null;
+    const zachod = s.zachod ? new Date(s.zachod).getTime() : null;
+    let postep = 0.5;   // 0 — wschód, 1 — zachód
+    if (wschod && zachod && zachod > wschod) postep = (kiedy.getTime() - wschod) / (zachod - wschod);
+    const droga = $('fp-luk');
+    const dl = droga.getTotalLength();
+    const naLuku = Math.min(1, Math.max(0, postep));
+    const pt = droga.getPointAtLength(dl * naLuku);
+    const slonce = $('fp-slonce');
+    slonce.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+    slonce.style.opacity = postep < 0 || postep > 1 ? '0' : '1';   // przed wschodem i po zachodzie go nie ma
+    droga.style.strokeDasharray = String(dl);
+    droga.style.strokeDashoffset = String(dl * (1 - naLuku));
+
+    const wys = typeof s.wysokosc === 'number' ? s.wysokosc : 0;
+    const ogr = (x) => Math.min(1, Math.max(0, x));
+    karta.querySelector('.n-noc').style.opacity = String(ogr(1 - (wys + 4) / 5));
+    karta.querySelector('.n-zloto').style.opacity = String(ogr(1 - Math.abs(wys - 2) / 6));
+    karta.querySelector('.n-dzien').style.opacity = String(ogr((wys - 5) / 6));
+    const faza = wys < -6 ? 'noc' : wys < -0.5 ? 'niebieska' : wys < 6 ? 'zlota' : 'dzien';
+    const odznaka = $('fp-n-faza');
+    odznaka.textContent = t(`niebo.${faza}`);
+    odznaka.dataset.faza = faza;
+
+    $('fp-n-czas').textContent = godz(kiedy);
+    $('fp-n-wys').textContent = `${liczba(s.wysokosc)}°`;
+    $('fp-n-az').textContent = typeof s.azymut === 'number' ? `${Math.round(s.azymut)}°` : '—';
+    $('fp-n-wschod').textContent = godz(s.wschod);
+    $('fp-n-zachod').textContent = godz(s.zachod);
+    $('fp-n-t').textContent = u.czas || '—';
+    $('fp-n-f').textContent = u.przyslona || '—';
+    $('fp-n-iso').textContent = u.iso ? `ISO ${u.iso}` : '—';
+    karta.hidden = false;
+    karta.closest('.plener-section').classList.add('z-niebem');
   }
 
   let planOstatnieUstawienia = null;

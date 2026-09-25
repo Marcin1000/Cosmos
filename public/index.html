@@ -888,6 +888,37 @@
             <button type="button" class="btn-primary" id="fp-go" data-i18n="pl.compute">Policz plan</button>
             <button type="button" class="btn-secondary" id="fp-now" data-i18n="pl.now">Teraz</button>
           </div>
+          <!-- Karta nieba — ta sama co w scenie „Nie zgaduje. Liczy." na stronie
+               produktowej, tylko z prawdziwych liczb planu: wschód, zachód,
+               wysokość i azymut Słońca w wybranej chwili. Rysuje ją plener.js. -->
+          <div class="niebo-karta" id="fp-niebo" hidden>
+            <div class="niebo-scena">
+            <div class="niebo-tlo" aria-hidden="true"><i class="n-noc"></i><i class="n-zloto"></i><i class="n-dzien"></i></div>
+            <svg class="niebo-luk" viewBox="0 0 400 230" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+              <path class="luk-cien" d="M24 190 Q200 -10 376 190"/>
+              <path class="luk-droga" id="fp-luk" d="M24 190 Q200 -10 376 190"/>
+              <g class="gory">
+                <path d="M0 230 L0 176 L46 150 L78 168 L126 118 L160 150 L196 128 L238 170 L276 136 L318 162 L352 144 L400 172 L400 230 Z"/>
+                <path class="gory2" d="M0 230 L0 196 L60 178 L110 192 L170 170 L230 194 L300 176 L360 190 L400 184 L400 230 Z"/>
+              </g>
+              <!-- Słońce przed górami: tuż po wschodzie ma być widać, że wstaje. -->
+              <g id="fp-slonce" class="slonce"><circle r="18" class="slonce-aura"/><circle r="8" class="slonce-tarcza"/></g>
+            </svg>
+            </div>
+            <div class="niebo-odczyt">
+              <div class="niebo-glowa">
+                <span class="mono niebo-czas" id="fp-n-czas">—</span>
+                <span class="niebo-faza" id="fp-n-faza"></span>
+              </div>
+              <dl class="niebo-dane">
+                <div><dt data-i18n="niebo.wys">Wysokość Słońca</dt><dd class="mono" id="fp-n-wys">—</dd></div>
+                <div><dt data-i18n="niebo.azymut">Azymut</dt><dd class="mono" id="fp-n-az">—</dd></div>
+                <div><dt data-i18n="niebo.wschod">Wschód</dt><dd class="mono" id="fp-n-wschod">—</dd></div>
+                <div><dt data-i18n="niebo.zachod">Zachód</dt><dd class="mono" id="fp-n-zachod">—</dd></div>
+              </dl>
+              <div class="niebo-nastawy mono"><b id="fp-n-t">—</b><b id="fp-n-f">—</b><b id="fp-n-iso">—</b></div>
+            </div>
+          </div>
           <div class="plan-shot mono" id="fp-shot">—</div>
           <div class="plan-light mono" id="fp-light"></div>
           <div class="plan-why" id="fp-why"></div>
@@ -1103,7 +1134,15 @@
     <button class="icon-btn voice-close" id="voice-close" data-i18n-aria="voice.close" aria-label="Zakończ tryb głosowy">
       <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
-    <div class="voice-orb" id="voice-orb"></div>
+    <!-- Kula jak na stronie produktowej: aura z kolorów silników, trzy fale
+         i rdzeń. Stan (wake / listening / thinking / speaking / push) ustawia
+         app.js klasą na #voice-orb — warstwy w środku tylko go wyrażają. -->
+    <div class="voice-orb" id="voice-orb">
+      <i class="orb-aura" aria-hidden="true"></i>
+      <i class="orb-fala" aria-hidden="true"></i><i class="orb-fala" aria-hidden="true"></i><i class="orb-fala" aria-hidden="true"></i>
+      <i class="orb-rdzen" aria-hidden="true"></i>
+    </div>
+    <div class="voice-fala" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>
     <div class="voice-status mono" id="voice-status" data-i18n="voice.wake">POWIEDZ „HEJ, COSMOS”</div>
     <div class="voice-transcript" id="voice-transcript"></div>
     <div class="voice-answer" id="voice-answer"></div>

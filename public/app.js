@@ -801,6 +801,7 @@ function messageElement(m, idx = -1) {
   }
 
   const col = document.createElement('div');
+  col.className = 'msg-kolumna';
   col.style.flex = '1';
   col.style.minWidth = '0';
   const podpis = !isError && podpisSilnika(m.silnik, m.model);
@@ -1610,6 +1611,7 @@ async function streamOnce(conv, opcje = {}) {
   body.className = 'msg-content md';
   body.innerHTML = '<span class="cursor-blink"></span>';
   const kolumna = document.createElement('div');
+  kolumna.className = 'msg-kolumna';
   kolumna.style.flex = '1';
   kolumna.style.minWidth = '0';
   const podpis = podpisSilnika(endpoint, currentModel());
