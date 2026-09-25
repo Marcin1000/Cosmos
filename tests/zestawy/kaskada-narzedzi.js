@@ -589,6 +589,24 @@ async function uruchom(st, nazwa, acc, stan) {
     }
   }
 
+  /* --- ZDJĘCIA ODŁOŻONE, A MODEL ZAPOMNIAŁ ZNACZNIKÓW -------------------
+     Zdjęcia czekają na gotową odpowiedź (app.js). Gdy model napisze ją bez
+     [GRAFIKA:], Cosmos stawia znaczniki sam — pod akapitem o danym miejscu,
+     nie pod nagłówkiem, w którym przypadkiem pada nazwa miasta. */
+  {
+    const { wstawZnacznikiZdjec } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js')).utworzProtokol();
+    const plan = 'Plan na sobotę w Krakowie (z policzonym światłem):\n\n'
+      + '**Rano — Wawel.** Złota godzina 6:52, katedra od strony Wisły.\n\n'
+      + '**Wieczór — Kazimierz.** Niebieska godzina, statyw przy ulicy Szerokiej.\n\nMiłego dnia.';
+    const wynik = wstawZnacznikiZdjec(plan, ['Wawel Kraków', 'Kazimierz Kraków ulica Szeroka']);
+    const bloki = wynik.split('\n\n');
+    const gdzie = (q) => bloki.findIndex((b) => b.includes(`[GRAFIKA: ${q}]`));
+    console.log(`12. znaczniki postawione sami: Wawel → akapit ${gdzie('Wawel Kraków')}, Kazimierz → ${gdzie('Kazimierz Kraków ulica Szeroka')}`);
+    if (!/Wawel\./.test(bloki[gdzie('Wawel Kraków')] || '')) fail.push('zdjęcia Wawelu nie stoją pod akapitem o Wawelu');
+    if (!/Kazimierz\./.test(bloki[gdzie('Kazimierz Kraków ulica Szeroka')] || '')) fail.push('zdjęcia Kazimierza nie stoją pod akapitem o Kazimierzu');
+    if (wynik.replace(/\n\[GRAFIKA: [^\]]*\]/g, '') !== plan) fail.push('wstawianie znaczników zmieniło treść odpowiedzi');
+  }
+
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');
   process.exit(fail.length ? 1 : 0);
 })();

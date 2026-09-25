@@ -97,6 +97,36 @@ function utworzProtokol() {
     return t.replace(/<\/?t?h?i?n?k?$/i, '');
   }
 
+  /** Wstaw znaczniki zdjęć pod akapitami, których dotyczą.
+   *  Model poproszony o zdjęcia do gotowego planu potrafi napisać plan bez
+   *  znaczników. Wtedy sami decydujemy, gdzie je postawić: pod akapitem, który
+   *  najwięcej mówi o danym miejscu (słowa zapytania w akapicie), a gdy żaden
+   *  nic nie mówi — na końcu. Zdjęcia katedry pod punktem o katedrze, nie
+   *  zbiorczo pod całą odpowiedzią. */
+  function wstawZnacznikiZdjec(tekst, zapytania) {
+    const bloki = String(tekst || '').split(/\n{2,}/);
+    const slowa = (x) => bezOgonkowKlient(x).replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter((w) => w.length >= 4);
+    const doBloku = new Map();
+    const wBlokach = bloki.map((b) => new Set(slowa(b)));
+    const pasuje = (w, x) => w.has(x) || [...w].some((y) => y.startsWith(x.slice(0, 5)));
+    for (const q of zapytania) {
+      const szukane = slowa(q);
+      /* Wagi: pierwsze słowo zapytania to zwykle samo miejsce („Wawel"
+         w „Wawel Kraków") — liczy się podwójnie; słowo obecne w wielu
+         akapitach (nazwa miasta w nagłówku planu) — mniej. */
+      const waga = szukane.map((x, j) => (j === 0 ? 2 : 1) / Math.max(1, wBlokach.filter((w) => pasuje(w, x)).length));
+      let najlepszy = bloki.length - 1;
+      let wynik = 0;
+      wBlokach.forEach((w, i) => {
+        const trafien = szukane.reduce((suma, x, j) => suma + (pasuje(w, x) ? waga[j] : 0), 0);
+        if (trafien > wynik) { wynik = trafien; najlepszy = i; }
+      });
+      if (!doBloku.has(najlepszy)) doBloku.set(najlepszy, []);
+      doBloku.get(najlepszy).push(q);
+    }
+    return bloki.map((b, i) => (doBloku.has(i) ? `${b}\n[GRAFIKA: ${doBloku.get(i).join('; ')}]` : b)).join('\n\n');
+  }
+
   /* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
      To jest miejsce, w którym Cosmos przez długi czas okłamywał sam siebie.
 
@@ -210,6 +240,7 @@ function utworzProtokol() {
     ZNACZNIKI,
     ARCH_LIMIT_ZNAKOW,
     stripSearchMarker,
+    wstawZnacznikiZdjec,
     rozdzielMyslenie,
     widokWToku,
     naKontekst,

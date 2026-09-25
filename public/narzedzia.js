@@ -74,6 +74,8 @@ function utworzNarzedzia(z) {
     naKafelek, naKontekst, bezOgonkowKlient, zebranyMaterial,
     zastosujZmianePlotna, pokazPlotno, mowGlosem, PORCJA_ARCHIWUM, WZORCE,
     wstawTekstModelu,
+    // silnik tury — pasek postępu dostaje kropkę w jego kolorze (opcjonalne w testach)
+    znakSilnika = null,
   } = z;
 
   /* Wiadomość „trwa czynność", którą trzeba będzie PRZEPISAĆ, gdy czynność
@@ -89,7 +91,7 @@ function utworzNarzedzia(z) {
     if (przed) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
     // `status` — pasek postępu, nie wypowiedź: nie wraca do modelu jako jego
     // własne słowa i nie dostaje przycisków „Zapamiętaj" / „Regeneruj".
-    const wiadomosc = { role: 'assistant', content: tekst, status: true };
+    const wiadomosc = { role: 'assistant', content: tekst, status: true, ...(znakSilnika ? znakSilnika() : {}) };
     conv.messages.push(wiadomosc);
     saveConversations();
     renderMessages();

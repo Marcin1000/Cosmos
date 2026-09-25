@@ -110,6 +110,13 @@ function utworzPlener(z) {
      z jasności bieżącej klatki) i w Plenerze (`fp-*`, liczony dla miejsca
      i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden —
      dwie kopie tej samej funkcji rozjechałyby się przy pierwszej poprawce. */
+  const jezyk = () => (typeof getLang === 'function' && getLang() === 'en' ? 'en-GB' : 'pl-PL');
+  /** „711 min" to nie jest liczba, którą czyta się w terenie — „11 h 51 min" jest. */
+  function ileCzasu(min) {
+    const m = Math.max(0, Math.round(Number(min) || 0));
+    return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+  }
+
   function pokazPlan(d, pre = 'plan') {
     const u = d.ustawienia;
     $(pre + '-shot').textContent = `${u.czas} · ${u.przyslona} · ISO ${u.iso}`;
@@ -127,7 +134,11 @@ function utworzPlener(z) {
       const uklad = t(`frame.${d.kadr.uklad}`);
       czesci.push(`${uklad.startsWith('frame.') ? d.kadr.uklad : uklad} ${d.kadr.proporcje}`);
     }
-    czesci.push(`${d.slonce.faza} (${d.slonce.wysokosc}°)`);
+    /* Karta nieba (Plener) sama pokazuje fazę — w linijce pod nią byłaby
+       powtórką. Wysokość z przecinkiem po polsku i z jednym miejscem po nim. */
+    const wys = Number(d.slonce.wysokosc).toLocaleString(jezyk(), { maximumFractionDigits: 1 });
+    if (pre !== 'fp') czesci.push(`${d.slonce.faza} (${wys}°)`);
+    else czesci.push(`${t('plan.slonce')} ${wys}°`);
     // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
     // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.
     if (d.pogoda) {
@@ -147,11 +158,11 @@ function utworzPlener(z) {
     czas.className = 'plan-urgent';
     if (d.slonce.faza === 'złota godzina') {
       czas.textContent = ` · ${t('plan.goldenNow')}`
-        + (zachod > 0 ? `, ${t('plan.toSunset', { n: zachod })}` : '');
+        + (zachod > 0 ? `, ${t('plan.toSunset', { n: ileCzasu(zachod) })}` : '');
     } else if (zloty > 0) {
-      czas.textContent = ` · ${t('plan.toGolden', { n: zloty })}`;
+      czas.textContent = ` · ${t('plan.toGolden', { n: ileCzasu(zloty) })}`;
     } else if (zachod > 0) {
-      czas.textContent = ` · ${t('plan.toSunset', { n: zachod })}`;
+      czas.textContent = ` · ${t('plan.toSunset', { n: ileCzasu(zachod) })}`;
     }
     if (czas.textContent) light.appendChild(czas);
 

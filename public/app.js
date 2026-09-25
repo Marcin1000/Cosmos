@@ -701,7 +701,7 @@ function messageElement(m, idx = -1) {
   const isError = Boolean(m.error);
 
   const msg = document.createElement('div');
-  msg.className = `msg msg-${role}` + (isError ? ' msg-error' : '');
+  msg.className = `msg msg-${role}` + (isError ? ' msg-error' : '') + (m.status ? ' msg-status' : '');
 
   if (role === 'assistant') {
     const avatar = document.createElement('div');
@@ -724,7 +724,7 @@ function messageElement(m, idx = -1) {
       : t('kb.record');
     msg.innerHTML =
       `<div class="action-card">` +
-      `<div class="action-card-body"><span class="action-card-type">⚡ ${escapeHtml(label)}</span>` +
+      `<div class="action-card-body"><span class="action-card-type ik ik-blyskawica">${escapeHtml(label.replace(/^✦\s*/, ''))}</span>` +
       `<span class="action-card-text">${escapeHtml(m.actionText)}</span></div>` +
       (done
         ? `<span class="action-card-done">✓</span>`
@@ -806,7 +806,8 @@ function messageElement(m, idx = -1) {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'doc-chip';
-      chip.textContent = `📄 ${d.name} · ${t('doc.chars', { n: (d.chars || 0).toLocaleString() })}`;
+      chip.classList.add('ik', 'ik-dokument');
+  chip.textContent = `${d.name} · ${t('doc.chars', { n: (d.chars || 0).toLocaleString() })}`;
       chip.title = t('doc.peek');
       // Podgląd na żądanie: wysłaną treść trzeba móc sprawdzić, ale nie
       // kosztem zalania rozmowy ośmioma tysiącami znaków umowy.
@@ -1010,6 +1011,7 @@ function collapseSidebarOnMobile() {
 function newConversation() {
   if (isGenerating) stopGeneration();
   activeId = null;
+  zapamietajOstatnia(null);
   activeConversation = null;
   renderSidebar();
   renderMessages();
@@ -1040,9 +1042,31 @@ function naprawStareRuchyNarzedzi(conv) {
   return conv;
 }
 
+/* Ostatnio otwarta rozmowa — żeby zwykłe odświeżenie strony nie wyrzucało
+   na ekran powitalny. Tylko na chwilę (pół godziny): kto wraca następnego
+   dnia, zaczyna od czystej karty. Klucz `cosmos.conv.…` czyści konta.js przy
+   zmianie osoby, więc nikt nie zobaczy cudzej rozmowy. */
+const OSTATNIA_KLUCZ = 'cosmos.conv.ostatnia';
+const OSTATNIA_WAZNA_MS = 30 * 60 * 1000;
+function zapamietajOstatnia(id) {
+  try {
+    if (id) localStorage.setItem(OSTATNIA_KLUCZ, JSON.stringify({ id, kiedy: Date.now() }));
+    else localStorage.removeItem(OSTATNIA_KLUCZ);
+  } catch { /* prywatne okno */ }
+}
+async function przywrocOstatnia() {
+  if (activeId) return;
+  let z = null;
+  try { z = JSON.parse(localStorage.getItem(OSTATNIA_KLUCZ) || 'null'); } catch { /* śmieci */ }
+  if (!z || !z.id || Date.now() - (z.kiedy || 0) > OSTATNIA_WAZNA_MS) return;
+  if (!conversations.some((c) => c.id === z.id)) return;
+  await selectConversation(z.id);
+}
+
 async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
+  zapamietajOstatnia(id);
   renderSidebar();
   collapseSidebarOnMobile();
   el.messages.innerHTML = '';
@@ -1068,6 +1092,7 @@ function deleteConversation(id) {
   if (activeId === id) {
     activeId = null;
     activeConversation = null;
+    zapamietajOstatnia(null);
     renderMessages();
   }
   renderSidebar();
@@ -1085,6 +1110,7 @@ function ensureConversation(firstUserText) {
       updatedAt: now,
     };
     activeId = activeConversation.id;
+    zapamietajOstatnia(activeId);
     conversations.unshift({
       id: activeConversation.id,
       title: activeConversation.title,
@@ -1229,7 +1255,7 @@ function renderBlindModelWarning() {
   note.id = 'blind-model-warn';
   note.className = 'model-info-warn';
   note.style.padding = '0 4px 6px';
-  note.textContent = '⚠ ' + t('model.blindWarn');
+  note.textContent = '⚠︎ ' + t('model.blindWarn');
   el.attachments.appendChild(note);
 }
 
@@ -1705,7 +1731,18 @@ async function streamOnce(conv, opcje = {}) {
         + `<summary>${escapeHtml(t(widok ? 'think.done' : 'think.live'))}</summary>`
         + `<pre>${escapeHtml(calyThink)}</pre></details>`
       : '';
-    body.innerHTML = head + renderMarkdown(widok) + '<span class="cursor-blink"></span>' + waitNote;
+    body.innerHTML = head + `<div class="strumien-tresc">${renderMarkdown(widok)}</div>` + waitNote;
+    /* Kursor na końcu OSTATNIEGO zdania, nie w osobnej linii pod tekstem —
+       jak na stronie produktowej. Szukamy ostatniego bloku tekstu (akapit,
+       punkt listy, nagłówek); bloki kodu zostawiamy w spokoju. */
+    const tresc = body.querySelector('.strumien-tresc');
+    const kursor = document.createElement('span');
+    kursor.className = 'cursor-blink';
+    const koniec = tresc.lastElementChild;
+    const bloki = koniec && !/^(PRE|TABLE|DIV)$/.test(koniec.tagName)
+      ? koniec.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6') : [];
+    const cel = bloki.length ? bloki[bloki.length - 1] : (koniec && /^(P|H[1-6])$/.test(koniec.tagName) ? koniec : tresc);
+    cel.appendChild(kursor);
     scrollToBottom();
   };
   const schedulePaint = () => {
@@ -2019,7 +2056,7 @@ async function webSearch(query) {
 const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
-  ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, naKontekst, bezOgonkowKlient,
+  ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
@@ -2064,6 +2101,7 @@ const NARZEDZIA = utworzNarzedzia({
   },
   PORCJA_ARCHIWUM,
   wstawTekstModelu,
+  znakSilnika,
   WZORCE: {
     SZUKAJ: SEARCH_MARKER_RE,
     ARCHIWUM: ARCHIVE_RE,
@@ -2205,12 +2243,18 @@ async function runGeneration(conv, podpiecie = null) {
            sami pod nią, zamiast je zgubić. */
         const zapomniane = [...stan.grafikiOdlozone].filter((q) => !stan.grafiki.has(bezOgonkowKlient(q)));
         if (zapomniane.length && !ostatnia) {
-          finalText = await domknijOdpowiedz(conv, acc);
+          /* Znaczniki stawiamy sami — pod akapitami, które mówią o danym
+             miejscu — i puszczamy przez narzędzie zdjęć. Ono odtwarza układ:
+             kawałek odpowiedzi, siatka pod nim, kolejny kawałek. */
           narzedzieTeraz = 'grafiki';
-          const zGrafikami = `${acc}\n[GRAFIKA: ${zapomniane.slice(0, 4).join('; ')}]`;
+          const zZnacznikami = wstawZnacznikiZdjec(stripSearchMarker(acc), zapomniane.slice(0, 10));
           const g = NARZEDZIA.find((n) => n.nazwa === 'grafiki');
-          await g.wykonaj({ acc: '[GRAFIKA: ' + zapomniane.slice(0, 4).join('; ') + ']', dop: g.dopasuj(zGrafikami), conv, depth, ostatnia, przed: '', stan });
+          const przed = conv.messages.length;
+          await g.wykonaj({ acc: zZnacznikami, dop: g.dopasuj(zZnacznikami), conv, depth, ostatnia, przed: '', stan });
           stan.grafikiOdlozone.clear();
+          // Zdjęć nie znaleziono — narzędzie nie wstawiło tekstu. Odpowiedź musi się pokazać i tak.
+          const tekstJest = conv.messages.slice(przed).some((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status);
+          finalText = tekstJest ? stripSearchMarker(acc) : await domknijOdpowiedz(conv, acc);
           break;
         }
         finalText = await domknijOdpowiedz(conv, acc);
@@ -2307,7 +2351,7 @@ async function runGeneration(conv, podpiecie = null) {
         saveConversations();
       }
     } else {
-      conv.messages.push({ role: 'assistant', content: `⚠ ${err.message}`, error: true });
+      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true });
       saveConversations();
       if (voiceMode) finalText = t('voice.errReply');
     }
@@ -3029,9 +3073,18 @@ function studioOut(section, html) {
   out.classList.add('show');
 }
 
+/** Pusty stan: ikona, zdanie i — gdy jest dokąd iść — przycisk.
+ *  Sam szary tekst wyglądał jak błąd ładowania, a nie jak „jeszcze nic tu nie ma". */
+function pustyStan(ikona, tekst, przycisk = '') {
+  return `<div class="pusty-stan"><span class="ik ${ikona}" aria-hidden="true"></span>`
+    + `<p>${escapeHtml(tekst)}</p>`
+    + (przycisk ? `<button type="button" class="btn-secondary">${escapeHtml(przycisk)}</button>` : '')
+    + '</div>';
+}
+
 function studioNote(item, exported) {
-  return `<span class="studio-note">✓ zapisano w Bazie wiedzy: ${escapeHtml(item.name)}` +
-         (exported ? `<br>✓ wyeksportowano: ${escapeHtml(exported)}` : '') + '</span>';
+  return `<span class="studio-note">✓ ${escapeHtml(t('st.zapisano', { n: item.name }))}` +
+         (exported ? `<br>✓ ${escapeHtml(t('st.wyeksportowano', { n: exported }))}` : '') + '</span>';
 }
 
 async function openStudio() {
@@ -3043,6 +3096,9 @@ async function openStudio() {
       const box = $(`studio-sec-${sec}`);
       box.classList.toggle('disabled', !on);
       box.querySelector('.studio-off').style.display = on ? 'none' : '';
+      /* Wyszarzenie samym CSS-em zostawiało przyciski klikalne z klawiatury —
+         Enter nie robił nic i nic nie mówił. Wyłączamy je naprawdę. */
+      box.querySelectorAll('button, input, select, textarea').forEach((x) => { x.disabled = !on; });
     }
     if (prov.voice) $('studio-speech-voice').placeholder = t('st.voicePhDefault', { v: prov.voice });
     // wybór silnika obrazów (OpenAI / Adobe Firefly), gdy jest więcej niż jeden
@@ -3666,7 +3722,7 @@ async function liveDetect() {
   // Postawę doklejamy przy KAŻDYM cyklu, nie tylko w chwili pomiaru —
   // inaczej następna detekcja nadpisuje status i sylwetka miga na ułamek
   // sekundy. Zmienia się wolno, więc ostatnia znana jest nadal prawdziwa.
-  const ogon = livePrevPose ? ` · 🧍 ${livePrevPose}` : '';
+  const ogon = livePrevPose ? ` · ${t('live.sylwetka')} ${livePrevPose}` : '';
   ustawStatusKamery((objs.length
     ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
     : t('liveNothing')) + ogon);
@@ -3720,9 +3776,10 @@ async function liveDetect() {
            postawy linijkę z dwiema: starą (wpisaną wyżej jako `ogon`) i nową.
            Widać to było przez ułamek sekundy i wyglądało jak usterka
            rozpoznawania, a było usterką składania napisu. */
-        const bezOgona = statusKamery.replace(/ · 🧍 .*$/, '');
+        const znacznik = ` · ${t('live.sylwetka')} `;
+        const bezOgona = statusKamery.includes(znacznik) ? statusKamery.slice(0, statusKamery.indexOf(znacznik)) : statusKamery;
         livePrevPose = poz.summary;
-        ustawStatusKamery(`${bezOgona} · 🧍 ${poz.summary}`);
+        ustawStatusKamery(`${bezOgona}${znacznik}${poz.summary}`);
         // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.
         // Do kontekstu rozmowy: model ma wiedzieć, czy stoisz, czy siedzisz.
         fetch('/api/events', {
@@ -3809,7 +3866,7 @@ async function openTimeline() {
   list.innerHTML = `<div class="tl-empty">${t('loading')}</div>`;
   let snaps = [];
   try { snaps = (await (await fetch('/api/timeline')).json()).snapshots || []; } catch { /* offline */ }
-  if (!snaps.length) { list.innerHTML = `<div class="tl-empty">${t('tm.empty')}</div>`; return; }
+  if (!snaps.length) { list.innerHTML = pustyStan('ik-archiwum', t('tm.empty')); return; }
   list.innerHTML = '';
   for (const s of snaps.slice().reverse()) {
     const row = document.createElement('div');
@@ -3861,7 +3918,8 @@ async function renderGallery() {
   filtered.sort((a, b) => b.time - a.time);
 
   if (!filtered.length) {
-    grid.innerHTML = `<div class="gallery-empty">${t('gallery.empty')}</div>`;
+    grid.innerHTML = pustyStan('ik-obraz', t('gallery.empty'), t('gallery.doStudia'));
+    grid.querySelector('.pusty-stan button')?.addEventListener('click', () => { closeGallery(); openStudio(); });
     return;
   }
   grid.innerHTML = '';
@@ -3873,14 +3931,14 @@ async function renderGallery() {
     let media;
     if (k === 'image') media = `<img src="${url}" loading="lazy" alt="${escapeHtml(it.name)}">`;
     else if (k === 'video') media = `<video src="${url}" controls preload="metadata"></video>`;
-    else media = `<div class="gallery-audio">🎵</div><audio src="${url}" controls></audio>`;
+    else media = `<div class="gallery-audio ik ik-dzwiek" aria-hidden="true"></div><audio src="${url}" controls></audio>`;
 
     // Widać, który obraz jest w tej chwili pierwszą klatką — bez tego jedynym
     // potwierdzeniem był ✓ znikający po sekundzie.
     const isFrame = localStorage.getItem('cosmos.videoFrame') === it.id;
     const frameBtn = k === 'image'
-      ? `<button data-frame="${escapeHtml(it.id)}" class="${isFrame ? 'frame-on' : ''}" `
-        + `title="${isFrame ? t('gallery.frameIs') : t('gallery.useFrame')}">🎬</button>` : '';
+      ? `<button data-frame="${escapeHtml(it.id)}" class="ik ik-klatki ${isFrame ? 'frame-on' : ''}" `
+        + `title="${isFrame ? t('gallery.frameIs') : t('gallery.useFrame')}" aria-label="${isFrame ? t('gallery.frameIs') : t('gallery.useFrame')}"></button>` : '';
     const upBtn = k === 'image'
       ? `<button data-up="${escapeHtml(it.id)}" title="${t('gallery.upscale')}">⤢</button>` : '';
     cell.innerHTML =
@@ -4007,19 +4065,18 @@ $('studio-video-go').addEventListener('click', async () => {
 
 const KB_MAX_FILE = 50 * 1024 * 1024; // 50 MB na plik
 
+/** Klasa ikony liniowej dla pozycji bazy wiedzy (style.css, `.ik-…`). */
 function kbIcon(item) {
-  if (item.type === 'link') return '🔗';
-  if (item.type === 'note') return '📝';
+  if (item.type === 'link') return 'ik-link';
+  if (item.type === 'note') return 'ik-notatka';
   const mime = item.mime || '';
-  if (mime.startsWith('image/')) return '🖼️';
-  if (mime.startsWith('audio/')) return '🎵';
-  if (mime.startsWith('video/')) return '🎬';
+  if (mime.startsWith('image/')) return 'ik-obraz';
+  if (mime.startsWith('audio/')) return 'ik-dzwiek';
+  if (mime.startsWith('video/')) return 'ik-wideo';
   const ext = item.name.split('.').pop().toLowerCase();
-  if (['xlsx', 'xls', 'csv', 'ods'].includes(ext)) return '📊';
-  if (['pdf'].includes(ext)) return '📕';
-  if (['docx', 'doc', 'odt'].includes(ext)) return '📄';
-  if (['pptx', 'ppt'].includes(ext)) return '📽️';
-  return '📁';
+  if (['xlsx', 'xls', 'csv', 'ods'].includes(ext)) return 'ik-tabela';
+  if (['pdf', 'docx', 'doc', 'odt', 'pptx', 'ppt', 'txt', 'md'].includes(ext)) return 'ik-dokument';
+  return 'ik-folder';
 }
 
 function fmtSize(bytes) {
@@ -4056,7 +4113,7 @@ async function loadKbList() {
 
     el.kbList.innerHTML = '';
     if (!items.length) {
-      el.kbList.innerHTML = `<div class="kb-empty">${t('kb.empty')}</div>`;
+      el.kbList.innerHTML = pustyStan('ik-folder', t('kb.empty'));
       return;
     }
     for (const item of [...items].reverse()) {
@@ -4074,8 +4131,8 @@ async function loadKbList() {
       });
 
       const icon = document.createElement('span');
-      icon.className = 'kb-item-icon';
-      icon.textContent = kbIcon(item);
+      icon.className = `kb-item-icon ik ${kbIcon(item)}`;
+      icon.setAttribute('aria-hidden', 'true');
 
       const main = document.createElement('div');
       main.className = 'kb-item-main';
@@ -4248,7 +4305,7 @@ async function kbToggleRecording() {
   kbSpeechRec.onresult = (e) => {
     acc = [...e.results].filter((r) => r.isFinal).map((r) => r[0].transcript).join(' ');
     const interim = [...e.results].filter((r) => !r.isFinal).map((r) => r[0].transcript).join(' ');
-    kbSetStatus('🎙 ' + (acc + ' ' + interim).trim().slice(-160));
+    kbSetStatus((acc + ' ' + interim).trim().slice(-160));
   };
   kbSpeechRec.onend = async () => {
     kbSpeechRec = null;
@@ -5171,6 +5228,47 @@ document.addEventListener('keydown', (e) => {
   if (!$('canvas').hidden && !el.input.matches(':focus')) { e.preventDefault(); $('canvas').hidden = true; }
 });
 
+/* ---- KARTY USTAWIEŃ -------------------------------------------------------
+   Ustawienia to ~20 bloków w jednej kolumnie. Karty u góry PRZEWIJAJĄ do grupy
+   i podświetlają tę, w której jesteś — nic nie jest chowane, więc każde pole
+   zostaje tam, gdzie było (i tak samo dostępne z klawiatury czy z testu).
+   Karta bez widocznego bloku (np. „Dom" u zaproszonej osoby) znika. */
+{
+  const cialo = document.querySelector('#settings-modal .modal-body');
+  const karty = cialo ? [...cialo.querySelectorAll('.set-karty [data-cel]')] : [];
+  const widoczne = (g) => [...cialo.querySelectorAll(`[data-karta="${g}"]`)].filter((b) => b.offsetParent !== null);
+  const zaznacz = (g) => karty.forEach((k) => {
+    k.classList.toggle('aktywna', k.dataset.cel === g);
+    k.setAttribute('aria-current', k.dataset.cel === g ? 'true' : 'false');
+  });
+  const odswiez = () => {
+    for (const k of karty) k.hidden = !widoczne(k.dataset.cel).length;
+    const pasek = cialo.querySelector('.set-karty');
+    const odGory = cialo.getBoundingClientRect().top + (pasek ? pasek.offsetHeight : 0) + 24;
+    let biezaca = karty.find((k) => !k.hidden)?.dataset.cel;
+    for (const k of karty) {
+      if (k.hidden) continue;
+      const pierwszy = widoczne(k.dataset.cel)[0];
+      if (pierwszy && pierwszy.getBoundingClientRect().top <= odGory) biezaca = k.dataset.cel;
+    }
+    if (biezaca) zaznacz(biezaca);
+  };
+  for (const k of karty) {
+    k.addEventListener('click', () => {
+      const pierwszy = widoczne(k.dataset.cel)[0];
+      if (!pierwszy) return;
+      const pasek = cialo.querySelector('.set-karty');
+      cialo.scrollTo({ top: pierwszy.offsetTop - (pasek ? pasek.offsetHeight + 8 : 0), behavior: 'smooth' });
+      zaznacz(k.dataset.cel);
+    });
+  }
+  if (cialo) {
+    cialo.addEventListener('scroll', () => requestAnimationFrame(odswiez), { passive: true });
+    new MutationObserver(() => { if ($('settings-modal').style.display !== 'none') requestAnimationFrame(odswiez); })
+      .observe($('settings-modal'), { attributes: true, attributeFilter: ['style'] });
+  }
+}
+
 /* ---- FOKUS W NAKŁADKACH -------------------------------------------------
    Z klawiatury nakładki były nieużywalne: fokus nie wchodził do środka,
    Tab uciekał do rozmowy pod spodem (15–29 razy na 30), a po Escape nie
@@ -5773,9 +5871,9 @@ function renderModelInfo(boxEl, id) {
   const tags = (info.cechy || [])
     .map((c) => CECHA_OPIS[c])
     .filter(Boolean)
-    .map((c) => `<span class="model-info-tag">${c.ikona} ${escapeHtml(c[lang] || c.pl)}</span>`);
+    .map((c) => `<span class="model-info-tag ik ${c.ik}">${escapeHtml(c[lang] || c.pl)}</span>`);
   if (info.kontekst) {
-    tags.push(`<span class="model-info-tag">📏 ${escapeHtml(info.kontekst)}</span>`);
+    tags.push(`<span class="model-info-tag ik ik-linijka">${escapeHtml(info.kontekst)}</span>`);
   }
 
   const parts = [];
@@ -5794,7 +5892,7 @@ function renderModelInfo(boxEl, id) {
     parts.push(`<div class="model-info-good">${t('model.bestFor')} `
       + escapeHtml(info.mocne.join(' · ')) + '</div>');
   }
-  if (info.uwaga) parts.push(`<div class="model-info-warn">⚠ ${escapeHtml(info.uwaga)}</div>`);
+  if (info.uwaga) parts.push(`<div class="model-info-warn">⚠︎ ${escapeHtml(info.uwaga)}</div>`);
 
   boxEl.innerHTML = parts.join('');
   boxEl.hidden = false;
@@ -6046,7 +6144,7 @@ async function fetchModelsInto(epName, selectEl, btn) {
     // a systemowe okienko na telefonie ucina je i nie da się z nich skopiować.
     const box = $(epName === 'local' ? 'model-info-local' : 'model-info-cloud');
     box.hidden = false;
-    box.innerHTML = `<div class="model-info-warn">⚠ ${escapeHtml(t('set.fetchErr'))}</div>`
+    box.innerHTML = `<div class="model-info-warn">⚠︎ ${escapeHtml(t('set.fetchErr'))}</div>`
       + `<pre class="model-info-err">${escapeHtml(err.message)}</pre>`;
   } finally {
     btn.disabled = false;
@@ -6141,10 +6239,18 @@ el.setModelLocal.addEventListener('input', refreshModelInfoBoxes);
 // Status i konfiguracja serwera
 // ----------------------------------------------------------------
 
+/* Stan silników z ostatniego /api/status. Kropka przy nazwie modelu miała
+   kolor silnika nawet przy „Chmura NVIDIA — brak klucza" w panelu stanu —
+   dwa sprzeczne sygnały. Teraz gaśnie, gdy silnik jest niedostępny. */
+var stanSilnikow = {};   // var: updateModelBadge bywa wołane przed tą linią (start aplikacji)
+
 function updateModelBadge() {
   const model = currentModel() || t('chat.modelNotSet');
   const labels = { cloud: t('tabCloud'), local: t('tabLocal'), openai: 'OpenAI', claude: 'Claude' };
   el.topbarModel.textContent = `${model} · ${labels[endpoint] || endpoint}`;
+  const stan = stanSilnikow[endpoint];
+  el.topbarModel.classList.toggle('niedostepny', stan === 'bez-klucza' || stan === 'offline');
+  el.topbarModel.title = stan === 'bez-klucza' ? t('stat.noKey') : stan === 'offline' ? t('stat.offline') : '';
   el.welcomeModel.textContent = model;
 }
 
@@ -6195,6 +6301,11 @@ async function refreshStatusWlasciwe() {
       setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? t('stat.online') : t('stat.offline'));
     }
     setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? t('stat.online') : t('stat.offline'));
+    stanSilnikow = {
+      cloud: cloudCfg.hasApiKey ? (st.cloud?.online === true ? 'ok' : 'offline') : 'bez-klucza',
+      local: st.local?.online === true ? 'ok' : 'offline',
+    };
+    updateModelBadge();
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
     if (senses.online) {
       /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
@@ -6320,7 +6431,7 @@ function startApp() {
   updateKbBadge();
   /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
      powstawała w tle — wznowienie musi mieć do czego wrócić. */
-  loadConversations().then(wznowBieg).catch(() => { /* wznowienie nie może blokować startu */ });
+  loadConversations().then(przywrocOstatnia).then(wznowBieg).catch(() => { /* wznowienie nie może blokować startu */ });
   renderMessages();
   updateSendButton();
   loadServerConfig();
@@ -6773,7 +6884,7 @@ async function loadRoutines() {
     const freq = { daily: t('learn.freqDaily'), weekly: t('learn.freqWeekly'), monthly: t('learn.freqMonthly'), interval: t('learn.freqInterval') };
     box.innerHTML = routines.map((r) => {
       const sched = r.schedule.type === 'interval' ? `${freq.interval} (${r.schedule.everyMinutes})` : `${freq[r.schedule.type]} ${r.schedule.time}`;
-      const autoTag = r.mode === 'auto-read' ? ' · ⚡auto' : '';
+      const autoTag = r.mode === 'auto-read' ? ' · auto' : '';
       return `<div class="learn-item" data-id="${r.id}">` +
         `<div class="learn-item-main"><strong>${escapeHtml(r.procedureName)}</strong>` +
         `<span class="learn-item-meta mono">${sched}${autoTag} · ${t('learn.nextRun', { when: new Date(r.nextRun).toLocaleString() })}</span></div>` +

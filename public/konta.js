@@ -60,7 +60,12 @@ function utworzKonta({ $, t }) {
     return zmiana;
   }
 
-  const inicjal = (u) => (String((u && (u.nazwa || u.login)) || '?').trim()[0] || '?').toUpperCase();
+  /* Pierwsza LITERA albo cyfra, nie pierwszy znak: imię „<b>Tomek" dawało
+     w kółku „<". Litery spoza łaciny też się liczą (\p{L}). */
+  const inicjal = (u) => {
+    const m = String((u && (u.nazwa || u.login)) || '').match(/[\p{L}\p{N}]/u);
+    return m ? m[0].toUpperCase() : '?';
+  };
 
   // ------------------------------------------------------------------
   // Zaproszenie: /#zaproszenie=TOKEN

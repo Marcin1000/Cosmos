@@ -77,8 +77,8 @@ function utworzWidoki(z) {
       } else {
         const chip = document.createElement('button');
         chip.type = 'button';
-        chip.className = 'doc-chip';
-        chip.textContent = `📄 ${plik.name}`;
+        chip.className = 'doc-chip ik ik-dokument';
+        chip.textContent = plik.name;
         chip.addEventListener('click', () => openTextViewer(plik.name, plik.text));
         box.appendChild(chip);
       }

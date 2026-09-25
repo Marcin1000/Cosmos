@@ -444,11 +444,12 @@ const HINTS = [
 ];
 
 const CECHA_OPIS = {
-  wizja: { ikona: '👁', pl: 'widzi obrazy', en: 'sees images' },
-  rozumowanie: { ikona: '🧠', pl: 'rozumowanie', en: 'reasoning' },
-  narzędzia: { ikona: '🔧', pl: 'narzędzia', en: 'tools' },
-  szybki: { ikona: '⚡', pl: 'szybki', en: 'fast' },
-  polski: { ikona: '🇵🇱', pl: 'dobra polszczyzna', en: 'strong Polish' },
+  // `ik` = klasa ikony liniowej (style.css, `.ik-…`) — zamiast emoji, jak w całej aplikacji.
+  wizja: { ik: 'ik-oko', pl: 'widzi obrazy', en: 'sees images' },
+  rozumowanie: { ik: 'ik-mysl', pl: 'rozumowanie', en: 'reasoning' },
+  narzędzia: { ik: 'ik-klucz', pl: 'narzędzia', en: 'tools' },
+  szybki: { ik: 'ik-blyskawica', pl: 'szybki', en: 'fast' },
+  polski: { ik: 'ik-dymek', pl: 'dobra polszczyzna', en: 'strong Polish' },
 };
 
 /* Język interfejsu. `getLang` daje i18n.js (ładowany wcześniej); w Node

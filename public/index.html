@@ -306,8 +306,17 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- Nawigacja po grupach — przewija do grupy, niczego nie chowa (app.js: karty ustawień). -->
+        <nav class="set-karty" aria-label="Ustawienia" data-i18n-aria="set.karty">
+          <button type="button" data-cel="konto" data-i18n="set.k.konto">Konto</button>
+          <button type="button" data-cel="silniki" data-i18n="set.k.silniki">Silniki</button>
+          <button type="button" data-cel="glos" data-i18n="set.k.glos">Głos</button>
+          <button type="button" data-cel="pamiec" data-i18n="set.k.pamiec">Pamięć</button>
+          <button type="button" data-cel="dom" data-i18n="set.k.dom">Dom</button>
+          <button type="button" data-cel="dane" data-i18n="set.k.dane">Dane</button>
+        </nav>
         <!-- TWOJE KONTO — każdy. Wypełnia public/konta.js. -->
-        <div class="konto-blok" id="konto-blok" hidden>
+        <div data-karta="konto" class="konto-blok" id="konto-blok" hidden>
           <div class="konto-naglowek">
             <span class="konto-avatar" id="konto-avatar" aria-hidden="true"></span>
             <div>
@@ -354,7 +363,7 @@
         </div>
 
         <!-- DOSTĘP — tylko właściciel. Zaproszenia i ludzie. -->
-        <div class="konto-blok tylko-wlasciciel" id="dostep-blok" hidden>
+        <div data-karta="konto" class="konto-blok tylko-wlasciciel" id="dostep-blok" hidden>
           <span class="field-label" data-i18n="acc.accessTitle">Dostęp — kto korzysta z Twojego Cosmosa</span>
           <div class="field-row">
             <input type="text" id="dostep-nazwa" data-i18n-ph="acc.inviteName" placeholder="Imię zapraszanej osoby">
@@ -374,7 +383,7 @@
           <span class="field-hint" data-i18n="acc.privacy">Widzisz konta, ostatnią wizytę i liczbę wiadomości. Rozmów, pamięci i bazy wiedzy innych osób nie widzisz — i nikt nie widzi Twoich.</span>
         </div>
 
-        <label class="field">
+        <label data-karta="silniki" class="field">
           <span class="field-label" data-i18n="set.modelCloud">Model — chmura NVIDIA</span>
           <div class="field-row">
             <input type="text" id="set-model-cloud" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
@@ -385,7 +394,7 @@
           <div class="model-info" id="model-info-cloud" hidden></div>
         </label>
 
-        <label class="field tylko-z-lokalnym">
+        <label data-karta="silniki" class="field tylko-z-lokalnym">
           <span class="field-label" data-i18n="set.modelLocal">Model — lokalny (RTX / Ollama / vLLM)</span>
           <div class="field-row">
             <input type="text" id="set-model-local" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
@@ -397,7 +406,7 @@
           <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
         </label>
 
-        <label class="field">
+        <label data-karta="glos" class="field">
           <span class="field-label" data-i18n="set.mic">Mikrofon do dyktowania</span>
           <div class="field-row">
             <select id="set-mic" class="mono"></select>
@@ -408,7 +417,7 @@
 
         <!-- Sprzęt i archiwum materiału przeniosły się do Pleneru. Zostaje
              odsyłacz, bo szukanie ich tutaj jest odruchem po miesiącach. -->
-        <div class="field">
+        <div data-karta="silniki" class="field">
           <span class="field-label" data-i18n="set.gearMoved">Sprzęt i archiwum materiału</span>
           <div class="field-row">
             <button type="button" class="btn-secondary ik ik-aparat" id="set-open-plener" data-i18n="set.gearMovedGo">Otwórz Plener</button>
@@ -416,7 +425,7 @@
           <span class="field-hint" data-i18n="set.gearMovedHint">Korpus, obiektywy, plan zdjęciowy, aparat po Wi-Fi, misja drona i archiwum materiału są teraz w jednym miejscu — w Plenerze.</span>
         </div>
 
-        <label class="field">
+        <label data-karta="glos" class="field">
           <span class="field-label" data-i18n="set.stt">Nasłuch w trybie głosowym</span>
           <select id="set-stt">
             <option value="auto" data-i18n="set.sttAuto">Automatycznie</option>
@@ -427,12 +436,12 @@
           <span class="field-hint mono" id="set-stt-now"></span>
         </label>
 
-        <label class="field">
+        <label data-karta="silniki" class="field">
           <span class="field-label" data-i18n="set.system">Instrukcja systemowa</span>
           <textarea id="set-system" rows="3" data-i18n-ph="set.systemPh" placeholder="np. Jesteś pomocnym asystentem. Odpowiadasz po polsku."></textarea>
         </label>
 
-        <div class="field-grid">
+        <div data-karta="silniki" class="field-grid">
           <label class="field">
             <span class="field-label"><span data-i18n="set.temp">Temperatura</span> <span class="mono" id="temp-value">0.6</span></span>
             <input type="range" id="set-temp" min="0" max="1" step="0.05" value="0.6">
@@ -443,13 +452,13 @@
           </label>
         </div>
 
-        <label class="field">
+        <label data-karta="pamiec" class="field">
           <span class="field-label" data-i18n="set.profile">Profil (pamięć profilowa)</span>
           <textarea id="set-profile" rows="3" data-i18n-ph="set.profilePh" placeholder="np. Ania — fotografuje góry, lubi krótkie odpowiedzi i konkretne liczby."></textarea>
           <span class="field-hint" data-i18n="set.profileHint">Stałe fakty o Tobie…</span>
         </label>
 
-        <div class="field">
+        <div data-karta="pamiec" class="field">
           <span class="field-label" data-i18n="set.location">Twoja lokalizacja</span>
           <div class="field-row">
             <input type="text" id="set-location" data-i18n-ph="set.locationPh"
@@ -460,32 +469,32 @@
           <span class="field-hint" data-i18n="set.locationHint">Cosmos użyje tego przy pytaniach „w okolicy"…</span>
         </div>
 
-        <div class="field">
+        <div data-karta="pamiec" class="field">
           <span class="field-label"><span data-i18n="set.memory">Pamięć długotrwała</span> <span class="mono" id="memory-count"></span></span>
           <div class="memory-list" id="memory-list"><span class="field-hint" data-i18n="loading">Ładowanie…</span></div>
           <span class="field-hint" data-i18n="set.memoryHint">Zapisuj fakty przyciskiem „Zapamiętaj" pod wiadomością. Cosmos sam przywołuje pasujące wpisy w trakcie rozmowy.</span>
         </div>
 
-        <label class="field">
+        <label data-karta="silniki" class="field">
           <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline — bez wyszukiwania w internecie</span></span>
         </label>
 
-        <label class="field">
+        <label data-karta="glos" class="field">
           <span class="field-label"><input type="checkbox" id="set-wake-remote" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.wakeRemote">Reaguj na „Hej, Cosmos” z innych urządzeń</span></span>
           <span class="field-hint" data-i18n="set.wakeRemoteHint">Gdy na domowym komputerze działa nasłuch słowa aktywującego (senses/wake_listener.py), to okno samo wejdzie w tryb głosowy. Wyłącz, jeśli nie chcesz, żeby mikrofon włączał się bez Twojego kliknięcia.</span>
         </label>
 
-        <label class="field">
+        <label data-karta="dane" class="field">
           <span class="field-label"><input type="checkbox" id="set-timemachine" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="tm.enable">Digital Time Machine — automatyczny zapis otoczenia</span></span>
           <span class="field-hint" data-i18n="tm.enableHint">Gdy włączone, panel kamery na żywo sam zapisuje migawki przy zmianie sceny.</span>
         </label>
 
-        <div class="field">
+        <div data-karta="dane" class="field">
           <span class="field-label" data-i18n="set.stats">Statystyki</span>
           <div class="config-info mono" id="stats-info">—</div>
         </div>
 
-        <div class="field">
+        <div data-karta="dane" class="field">
           <span class="field-label" data-i18n="set.backup">Kopia zapasowa</span>
           <div class="field-row">
             <button class="btn-secondary" id="backup-download" data-i18n="backupDownload">Pobierz kopię</button>
@@ -494,7 +503,7 @@
           </div>
         </div>
 
-        <div class="field tylko-wlasciciel">
+        <div data-karta="dom" class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.devices">Urządzenia (smart home)</span>
           <span class="field-hint" data-i18n="dev.hint">Dowolne urządzenie sterowane przez HTTP (Home Assistant, Shelly, Hue, Tasmota). Cosmos może zaproponować użycie w rozmowie — wykonanie zawsze wymaga Twojego kliknięcia.</span>
           <div class="field-row">
@@ -512,7 +521,7 @@
           <div class="learn-list" id="dev-list"></div>
         </div>
 
-        <div class="field tylko-wlasciciel">
+        <div data-karta="dom" class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.briefing">Poranna odprawa</span>
           <span class="field-hint" data-i18n="brief.hint">Pogoda, kalendarz i zaplanowane czynności streszczone i czytane na głos. Wymaga BRIEFING_LAT/BRIEFING_LON w .env (pogoda) — kalendarz opcjonalnie przez CALENDAR_ICS.</span>
           <div class="field-row">
@@ -523,7 +532,7 @@
           <div class="briefing-box" id="brief-out" style="display:none"></div>
         </div>
 
-        <div class="field tylko-wlasciciel">
+        <div data-karta="dane" class="field tylko-wlasciciel">
           <span class="field-label" data-i18n="set.train">Dane treningowe (fine-tuning)</span>
           <span class="field-hint" id="train-stats" data-i18n="train.hint">Wyeksportuj swoje rozmowy jako zbiór JSONL do dotrenowania własnego modelu (QLoRA). Przewodnik: training/README.md.</span>
           <div class="field-row">
@@ -544,7 +553,7 @@
           </div>
         </div>
 
-        <div class="config-info mono" id="config-info"></div>
+        <div data-karta="silniki" class="config-info mono" id="config-info"></div>
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" id="settings-reset" data-i18n="set.reset">Przywróć domyślne</button>
@@ -566,7 +575,7 @@
 
         <div class="studio-section" id="studio-sec-image">
           <div class="studio-sec-title ik ik-obraz"><span data-i18n="st.image">Obraz</span> <span class="mono studio-provider">OpenAI</span>
-            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (OPENAI_API_KEY)</span></div>
+            <span class="studio-off" style="display:none"><span data-i18n="st.noKey">Wymaga klucza</span><span class="tylko-wlasciciel mono studio-off-klucz"> · OPENAI_API_KEY</span></span></div>
           <textarea id="studio-image-prompt" rows="2" data-i18n-ph="st.imagePh" placeholder="Opisz grafikę, którą chcesz wygenerować…"></textarea>
           <div class="field-row">
             <select id="studio-image-tpl" class="mono"><option value="" data-i18n="st.tplSelect">Szablony promptów…</option></select>
@@ -591,7 +600,7 @@
 
         <div class="studio-section" id="studio-sec-speech">
           <div class="studio-sec-title ik ik-dzwiek"><span data-i18n="st.sound">Dźwięk</span> <span class="mono studio-provider">ElevenLabs</span>
-            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (ELEVENLABS_API_KEY)</span></div>
+            <span class="studio-off" style="display:none"><span data-i18n="st.noKey">Wymaga klucza</span><span class="tylko-wlasciciel mono studio-off-klucz"> · ELEVENLABS_API_KEY</span></span></div>
           <textarea id="studio-speech-text" rows="2" data-i18n-ph="st.speechPh" placeholder="Tekst do przeczytania naturalnym głosem…"></textarea>
           <div class="field-row">
             <input type="text" id="studio-speech-voice" class="mono" data-i18n-ph="st.voicePh" placeholder="voice ID (opcjonalnie)">
@@ -602,7 +611,7 @@
 
         <div class="studio-section" id="studio-sec-video">
           <div class="studio-sec-title ik ik-wideo"><span data-i18n="st.video">Wideo</span> <span class="mono studio-provider">Seedance</span>
-            <span class="studio-off mono" style="display:none"><span data-i18n="st.noKey">— brak klucza</span> (SEEDANCE_API_KEY)</span></div>
+            <span class="studio-off" style="display:none"><span data-i18n="st.noKey">Wymaga klucza</span><span class="tylko-wlasciciel mono studio-off-klucz"> · SEEDANCE_API_KEY</span></span></div>
           <textarea id="studio-video-prompt" rows="2" data-i18n-ph="st.videoPh" placeholder="Opisz ujęcie — ruch kamery, scenę, nastrój…"></textarea>
           <div class="field-row">
             <select id="studio-video-image" class="mono"><option value="" data-i18n="st.frameNone">pierwsza klatka: brak (sam prompt)</option></select>
