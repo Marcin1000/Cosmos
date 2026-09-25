@@ -944,6 +944,9 @@ function regenerateFrom(idx) {
   runGeneration(conv);
 }
 
+// Edycja w toku: od której wiadomości zostanie ucięta historia przy wysłaniu.
+let edycjaOd = null;
+
 function editFrom(idx) {
   const conv = activeConv();
   if (!conv || isGenerating) return;
@@ -951,11 +954,12 @@ function editFrom(idx) {
   if (!m) return;
   const text = msgText(m);
   const images = msgImages(m);
-  conv.messages = conv.messages.slice(0, idx); // usuń tę wiadomość i wszystko po niej
+  /* Historię tniemy dopiero przy WYSŁANIU poprawionej wiadomości. Cięcie
+     przy samym kliknięciu „Edytuj" kasowało dalszą rozmowę od razu i na
+     serwerze — kto się rozmyślił, tracił wszystko bez ostrzeżenia. */
+  edycjaOd = { convId: conv.id, idx };
   pendingImages = images.length ? [...images] : pendingImages;
-  saveConversations();
   renderAttachments();
-  renderMessages();
   el.input.value = text;
   autosizeInput();
   updateSendButton();
@@ -1572,6 +1576,8 @@ async function sendMessage() {
   }
 
   const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
+  if (edycjaOd && edycjaOd.convId === conv.id) conv.messages = conv.messages.slice(0, edycjaOd.idx);
+  edycjaOd = null;
   const content = (pendingImages.length || gotowe.length)
     ? {
         text,
@@ -4381,6 +4387,15 @@ async function enterVoiceMode() {
   el.voiceOverlay.style.display = '';
   el.voiceTranscript.textContent = '';
   el.voiceAnswer.textContent = '';
+  /* Wybór silnika zależy od /api/config i /api/status. Otwarcie trybu,
+     zanim przyszły, tworzyło SpeechRecognition (piszczenie), a po ich
+     nadejściu startował drugi nasłuch obok pierwszego. Czekamy na nie,
+     ale nie dłużej niż 4 s. */
+  setVoiceState('thinking');
+  await Promise.race([gotowoscGlosu, pauza(4000)]);
+  if (!voiceMode) return;
+  silnikSesji = null;
+  silnikSesji = silnikNasluchu();
 
   // UWAGA — nie wolno tu trzymać własnego strumienia z mikrofonu.
   // Próbowałem tak wyciszyć sygnały podłączania sprzętu na Androidzie, ale
@@ -4537,6 +4552,7 @@ $('voice-bird-btn').addEventListener('click', rozpoznajPtaka);
 
 function exitVoiceMode() {
   voiceMode = false;
+  silnikSesji = null;
   voiceNoteMode = false;
   voiceNoteBuffer = [];
   stopVoiceRecognizers();
@@ -4563,6 +4579,26 @@ function exitVoiceMode() {
 let voiceRec = null;          // jedyny rozpoznawacz sesji
 let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
 let voiceHeard = '';          // złożone zdanie w trybie pytania
+/* Komunikat (błąd rozpoznawania, mikrofon wyciszony) stoi w tym samym polu co
+   usłyszane słowa. Dotknięcie kuli w trakcie słuchania brało treść pola jako
+   pytanie — i model odpowiadał na „Nie udało się rozpoznać mowy: …".
+   Zapamiętujemy więc, co było komunikatem. */
+function komunikatGlosu(tekst) {
+  el.voiceTranscript.textContent = tekst;
+  el.voiceTranscript.dataset.komunikat = tekst;
+}
+function usłyszaneWPolu() {
+  const pole = el.voiceTranscript.textContent || '';
+  return pole === el.voiceTranscript.dataset.komunikat ? '' : pole;
+}
+/* Silnik rozpoznawania ustalony RAZ na sesję głosową. Liczony przy każdym
+   przejściu stanu potrafił zmienić zdanie w połowie (chwilowy brak zmysłów
+   w /api/status) — i działały dwa nasłuchy naraz. */
+let silnikSesji = null;
+/* Serwer trzy razy z rzędu nie rozpoznał mowy. To stan TEJ sesji, nie wybór
+   użytkownika — dawniej trafiał na stałe do Ustawień i po naprawie serwera
+   Cosmos dalej piszczał Web Speech API. */
+let sttSerweraPadl = false;
 let voiceSilence = null;      // odliczanie ciszy po pytaniu
 /* Znacznik „to już przerobiliśmy”. Samo `voiceDeaf` nie wystarczało i to była
    przyczyna sprzężenia: rozpoznawacz jest CIĄGŁY, więc kiedy Cosmos mówi,
@@ -4630,8 +4666,9 @@ function nasluchMozliwy() {
 /** 'whisper' albo 'przegladarka'. Wybór z Ustawień; `auto` bierze Whispera,
  *  gdy zmysły są pod ręką, bo to on rozwiązuje problem sprzężenia. */
 function silnikNasluchu() {
+  if (voiceMode && silnikSesji) return silnikSesji;
   const wybor = localStorage.getItem('cosmos.sttEngine') || 'auto';
-  if (wybor === 'przegladarka') return 'przegladarka';
+  if (wybor === 'przegladarka' || sttSerweraPadl) return 'przegladarka';
   return nasluchMozliwy() ? 'whisper' : 'przegladarka';
 }
 
@@ -4661,17 +4698,23 @@ function startNasluchWlasny() {
     onBlad: (err) => {
       // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
       // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
-      el.voiceTranscript.textContent = t('voice.sttErr', { msg: err.message });
+      komunikatGlosu(t('voice.sttErr', { msg: err.message }));
       if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
       /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
          DZIAŁA — a Cosmos, który w kółko powtarza ten sam błąd, jest po
          prostu zepsuty. Zmiana jest jawna: człowiek musi wiedzieć, czemu
          nagle zmieniło się zachowanie. */
       nasluchAwarie = 0;
-      localStorage.setItem('cosmos.sttEngine', 'przegladarka');
+      sttSerweraPadl = true;
+      silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
-      el.voiceTranscript.textContent = t('voice.sttFallback');
-      if (voiceMode) startVoiceRecognizer();
+      komunikatGlosu(t('voice.sttFallback'));
+      /* Na Androidzie ciągłe Web Speech to piszczenie co kilka sekund —
+         lepiej kula pod palcem: jedno dotknięcie, jedna sesja. */
+      if (voiceMode) {
+        if (/Android/i.test(navigator.userAgent)) setVoiceState('push');
+        else startVoiceRecognizer();
+      }
     },
     onCisza: (powod) => zaradzGluchocie(powod),
   });
@@ -4685,8 +4728,9 @@ function startNasluchWlasny() {
       startNasluchWlasny();
       return;
     }
-    el.voiceTranscript.textContent = t('voice.micDenied', { msg: err.message });
-    voiceMode = false;
+    komunikatGlosu(t('voice.micDenied', { msg: err.message }));
+    // Nakładka zostaje żywa (Escape i ✕ działają), kula czeka na dotknięcie.
+    if (voiceMode) setVoiceState('push');
   });
 }
 
@@ -4705,7 +4749,7 @@ let odzyskiwanieMikrofonu = null;
 
 function zaradzGluchocie(powod) {
   if (!voiceMode || odzyskiwanieMikrofonu) return;
-  el.voiceTranscript.textContent = t('voice.micLost', { powod });
+  komunikatGlosu(t('voice.micLost', { powod }));
   odzyskiwanieMikrofonu = setTimeout(async () => {
     odzyskiwanieMikrofonu = null;
     if (!voiceMode || !nasluch) return;
@@ -4717,7 +4761,7 @@ function zaradzGluchocie(powod) {
     setTimeout(() => {
       if (!voiceMode || !nasluch) return;
       if (nasluch.zywy()) el.voiceTranscript.textContent = '';
-      else el.voiceTranscript.textContent = t('voice.micDead', { powod });
+      else komunikatGlosu(t('voice.micDead', { powod }));
     }, 2500);
   }, 1500);
 }
@@ -4880,8 +4924,8 @@ function startVoiceRecognizer() {
   rec.onerror = (ev) => {
     if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
       voiceRec = null;
-      el.voiceTranscript.textContent = t('voice.micDenied', { msg: ev.error });
-      voiceMode = false;
+      komunikatGlosu(t('voice.micDenied', { msg: ev.error }));
+      if (voiceMode) setVoiceState('push');
       return;
     }
     /* „no-speech" i „aborted" to normalny bieg rzeczy — onend wznowi */
@@ -4965,6 +5009,12 @@ const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagryw
 
 async function handleVoiceQuery(text) {
   el.voiceTranscript.textContent = text;
+  /* Pytanie głosowe w trakcie pisanej odpowiedzi uruchamiało drugą generację
+     obok pierwszej — obie lądowały w rozmowie na krzyż i obie były czytane. */
+  if (isGenerating) {
+    stopGeneration();
+    for (let i = 0; i < 50 && isGenerating; i++) await pauza(100);
+  }
 
   // --- tryb dyktowania notatki do bazy wiedzy ---
   if (voiceNoteMode) {
@@ -5031,7 +5081,7 @@ el.voiceClose.addEventListener('click', exitVoiceMode);
 el.voiceOrb.addEventListener('click', () => {
   if (!voiceMode) return;
   if (voiceState === 'listening') {
-    const tekst = bezSlowaBudzacego(el.voiceTranscript.textContent || '');
+    const tekst = bezSlowaBudzacego(usłyszaneWPolu());
     clearTimeout(voiceSilence);
     voiceHeard = '';
     if (tekst) askVoice(tekst); else backToWake();
@@ -6025,7 +6075,20 @@ async function retryConnection() {
   if (btn) { btn.disabled = false; btn.textContent = t('offline.retry'); }
 }
 
+/* Pierwsze /api/config i /api/status — od nich zależy, którym silnikiem
+   rozpoznawać mowę. Tryb głosowy otwarty wcześniej czeka na tę obietnicę. */
+let gotowyStatus = null;
+let gotowyConfig = null;
+const gotowoscGlosu = Promise.all([
+  new Promise((r) => { gotowyStatus = r; }),
+  new Promise((r) => { gotowyConfig = r; }),
+]);
+
 async function refreshStatus() {
+  try { await refreshStatusWlasciwe(); } finally { gotowyStatus(); }
+}
+
+async function refreshStatusWlasciwe() {
   try {
     const res = await fetch('/api/status');
     const st = await res.json();
@@ -6060,6 +6123,10 @@ async function refreshStatus() {
 }
 
 async function loadServerConfig() {
+  try { await loadServerConfigWlasciwe(); } finally { gotowyConfig(); }
+}
+
+async function loadServerConfigWlasciwe() {
   try {
     const res = await fetch('/api/config');
     serverConfig = await res.json();

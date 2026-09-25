@@ -170,18 +170,29 @@
       przedbiegProbek = 0;
     }
 
+    /* Pokolenie startu. `getUserMedia` trwa — a w tym czasie ktoś może
+       zamknąć tryb głosowy albo kliknąć kulę drugi raz. Bez tego licznika
+       `start()` po powrocie i tak otwierał strumień, którego nikt już nie
+       zatrzymywał: mikrofon zostawał włączony po zamknięciu trybu (dwa szybkie
+       kliknięcia kuli = jedna żywa ścieżka, sześć = trzy). */
+    let pokolenie = 0;
+
     async function start(ograniczenia) {
       if (dziala) return true;
+      const moje = ++pokolenie;
       const Ctx = global.AudioContext || global.webkitAudioContext;
-      strumien = await navigator.mediaDevices.getUserMedia(ograniczenia || {
+      const s = await navigator.mediaDevices.getUserMedia(ograniczenia || {
         audio: {
           echoCancellation: true,     // ważne: bez tego głośnik telefonu
           noiseSuppression: true,     // wraca do mikrofonu mimo `gluchy`
           autoGainControl: true,
         },
       });
+      if (moje !== pokolenie || dziala) { s.getTracks().forEach((tr) => tr.stop()); return false; }
+      strumien = s;
       ctx = new Ctx();
       if (ctx.state === 'suspended') await ctx.resume();
+      if (moje !== pokolenie) { stop(); return false; }
       zrodlo = ctx.createMediaStreamSource(strumien);
 
       /* ScriptProcessorNode, nie AudioWorklet — świadomie.
@@ -255,6 +266,7 @@
     }
 
     function stop() {
+      pokolenie++;                     // start w toku już nie otworzy mikrofonu
       dziala = false;
       wyzeruj();
       clearInterval(pilnowanie);
