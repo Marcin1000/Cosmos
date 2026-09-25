@@ -31,8 +31,8 @@ const fail = [];
    od którego uciekamy. */
 const WZORCE = {
   SZUKAJ: /\[SZUKAJ:\s*([^\]\n]+)\]/i,
-  ARCHIWUM: /\[ARCHIWUM:?\s*([^\]\n]*)\]/i,
-  PLAN: /\[PLAN:?\s*([^\]\n]*)\]/i,
+  ARCHIWUM: /\[ARCHIWUM:\s*([^\]\n]*)\](?!\()/i,
+  PLAN: /\[PLAN:\s*([^\]\n]*)\](?!\()/i,
   PLOTNO_NOWE: /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i,
   PLOTNO_ZMIANA: /```płótno-zmiana\s*\n([\s\S]*?)```/i,
   KOD: /```uruchom\s*\n([\s\S]*?)```/i,
@@ -388,9 +388,10 @@ async function uruchom(st, nazwa, acc, stan) {
     const acc = 'Plan wycieczki.\n\nDzień 2 — Palma.\n[GRAFIKA: Katedra La Seu]\n'
       + 'Dzień 6 — Es Trenc.\n[GRAFIKA: plaża Es Trenc]\n[PLAN: miejsce=Es Trenc]';
 
-    /* Dokładnie tak, jak robi to kaskada w app.js: zwycięzca (plan) ma
-       ODEBRANĄ emisję tekstu, bo układ odtwarzają grafiki — inaczej plan
-       stałby na ekranie dwa razy. */
+    /* Samo narzędzie zdjęć: z tekstu ze znacznikami odtwarza układ
+       (kawałek planu, siatka pod nim). W app.js zdjęcia przy innym
+       narzędziu są ODKŁADANE do gotowej odpowiedzi — szkic sprzed danych
+       nie trafia na ekran — ale rozkład pod punktami robi dokładnie to. */
     const dopPlan = st.poNazwie.plan.dopasuj(acc);
     await st.poNazwie.plan.wykonaj({
       acc, dop: dopPlan, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,

@@ -287,12 +287,14 @@ function utworzNarzedzia(z) {
       }
       k.stan.plan.add(odcisk);
 
-      zapowiedz(k.conv, k.przed, t('chat.planning'));
+      const pasek = zapowiedz(k.conv, k.przed, t('chat.planning'));
       const wynik = await jsonem('/api/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parametry),
       });
+      // „Liczę…" pod gotowym planem to nieprawda — domykamy pasek.
+      pasek.domknij(t('chat.planned'));
       dodajWynikNarzedzia(k.conv,
         'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, użyj ich '
         + 'zamiast własnych szacunków):\n' + JSON.stringify(wynik, null, 1),

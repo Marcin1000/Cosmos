@@ -2175,7 +2175,7 @@ async function runGeneration(conv, podpiecie = null) {
      o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
      pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
      formalnie to różne kroki. To samo dotyczy zdjęć. */
-  const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
+  const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false, grafikiOdlozone: new Set() };
   // Od której wiadomości zaczyna się ta tura — dalej nie szuka zapora powtórek.
   conv.__turaOd = conv.messages.length;
   znakTury = {
@@ -2201,6 +2201,18 @@ async function runGeneration(conv, podpiecie = null) {
       }
 
       if (!uzyte) {
+        /* Model napisał gotową odpowiedź bez odłożonych zdjęć — dokładamy je
+           sami pod nią, zamiast je zgubić. */
+        const zapomniane = [...stan.grafikiOdlozone].filter((q) => !stan.grafiki.has(bezOgonkowKlient(q)));
+        if (zapomniane.length && !ostatnia) {
+          finalText = await domknijOdpowiedz(conv, acc);
+          narzedzieTeraz = 'grafiki';
+          const zGrafikami = `${acc}\n[GRAFIKA: ${zapomniane.slice(0, 4).join('; ')}]`;
+          const g = NARZEDZIA.find((n) => n.nazwa === 'grafiki');
+          await g.wykonaj({ acc: '[GRAFIKA: ' + zapomniane.slice(0, 4).join('; ') + ']', dop: g.dopasuj(zGrafikami), conv, depth, ostatnia, przed: '', stan });
+          stan.grafikiOdlozone.clear();
+          break;
+        }
         finalText = await domknijOdpowiedz(conv, acc);
         break;
       }
@@ -2245,6 +2257,8 @@ async function runGeneration(conv, podpiecie = null) {
         : null;
       const dopGrafiki = grafikiTez && grafikiTez.dopasuj(acc);
       const przedTekst = stripSearchMarker(acc.replace(dop[0], ''));
+      // Szkic przy odłożonych zdjęciach nie idzie na ekran — patrz niżej.
+      const przedDoPokazania = dopGrafiki ? '' : przedTekst;
 
       narzedzieTeraz = uzyte.nazwa;
       const wynik = await uzyte.wykonaj({
@@ -2254,7 +2268,7 @@ async function runGeneration(conv, podpiecie = null) {
         depth,
         ostatnia,
         // Tekst modelu sprzed znacznika — WSZYSTKIE znaczniki wyczyszczone.
-        przed: dopGrafiki ? '' : przedTekst,
+        przed: przedDoPokazania,
         stan,
       });
 
@@ -2263,15 +2277,22 @@ async function runGeneration(conv, podpiecie = null) {
         break;
       }
 
+      /* Zdjęcia ODKŁADAMY do gotowej odpowiedzi. Rozłożone pod szkicem
+         sprzed danych dawały dwa sprzeczne plany na ekranie: szkic z „6:40"
+         pocięty zdjęciami i właściwy plan z „6:52" pod spodem. Model dostaje
+         prośbę, żeby postawił znaczniki zdjęć pod punktami gotowej wersji —
+         a gdy zapomni, dokładamy je sami na końcu tury. */
       if (dopGrafiki) {
-        narzedzieTeraz = 'grafiki';
-        const wynikGrafik = await grafikiTez.wykonaj({
-          acc, dop: dopGrafiki, conv, depth, ostatnia, przed: przedTekst, stan,
-        });
-        if (wynikGrafik && wynikGrafik.akcja === 'koniec') {
-          finalText = wynikGrafik.finalGlos || wynikGrafik.finalText || '';
-          break;
+        const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
+        for (const g of acc.matchAll(WZ)) {
+          for (const q of g[1].split(';').map((x) => x.trim()).filter(Boolean)) stan.grafikiOdlozone.add(q);
         }
+        narzedzieTeraz = 'grafiki';
+        dodajWynikNarzedzia(conv,
+          'ZDJĘCIA JESZCZE NIE POKAZANE. Napisz teraz gotową odpowiedź na podstawie danych powyżej '
+          + 'i postaw [GRAFIKA: …] pod właściwymi punktami — tak jak w szkicu, ale w ostatecznej wersji. '
+          + 'Nie powtarzaj szkicu.',
+          t('chat.photosQuery'));
       }
     }
   } catch (err) {
