@@ -50,6 +50,7 @@ const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
 const glos = require('./lib/glos.js').utworz({
   SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, STUDIO,
 });
+const { pobierzStrone } = require('./lib/pobieranie.js');
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
@@ -1329,11 +1330,13 @@ async function handleKb(req, res, pathname) {
     let url = String(data.url || '').trim();
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     try {
-      const r = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0' },
-        signal: AbortSignal.timeout(20000),
-      });
-      const html = await r.text();
+      /* Bezpieczne pobieranie: gość nie może kazać serwerowi zajrzeć do sieci
+         prywatnej (127.0.0.1, zmysły, metadane chmury, Tailscale). Właściciel
+         może — i tak ma pełny dostęp do serwera. Patrz lib/pobieranie.js. */
+      const r = await pobierzStrone(url, { pozwolPrywatne: czyWlasciciel(), czasMs: 20000, maxBajtow: 3_000_000 });
+      if (r.status >= 400) throw new Error(`strona odpowiedziała HTTP ${r.status}`);
+      url = r.adres;
+      const html = r.tekst;
       const title = stripTags((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || url;
       const text = stripTags(
         html.replace(/<script[\s\S]*?<\/script>/gi, ' ')

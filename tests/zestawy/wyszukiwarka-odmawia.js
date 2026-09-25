@@ -23,6 +23,9 @@
      3. Przy awarii połączenia komunikat ma nieść przyczynę z `err.cause`,
         a nie samo „fetch failed”.
 */
+// Atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
+process.env.POBIERANIE_ZAUFANE = '127.0.0.1,localhost';
+
 const http = require('node:http');
 
 const fail = [];

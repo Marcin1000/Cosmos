@@ -1,3 +1,5 @@
+// Atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
+process.env.POBIERANIE_ZAUFANE = '127.0.0.1,localhost';
 // Cała ścieżka /api/search na podstawionej wyszukiwarce: reklamy odpadają,
 // zostają prawdziwe wyniki, treść stron się dokleja.
 const http = require('http');

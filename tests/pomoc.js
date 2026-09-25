@@ -111,7 +111,9 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   if (rozmowy) zasiejRozmowy(dataDir, rozmowy);
   const proc = uruchom('node', ['server.js'], {
     cwd: KORZEN,
-    env: { ...process.env, PORT: String(port), COSMOS_DATA_DIR: dataDir, NVIDIA_API_KEY: 'test', ...env },
+    env: { ...process.env, PORT: String(port), COSMOS_DATA_DIR: dataDir, NVIDIA_API_KEY: 'test',
+      // atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js)
+      POBIERANIE_ZAUFANE: '127.0.0.1,localhost', ...env },
   });
   // Zestaw sprawdzający TRWAŁOŚĆ zapisu musi wiedzieć, gdzie ten zapis ląduje.
   proc.katalogDanych = dataDir;

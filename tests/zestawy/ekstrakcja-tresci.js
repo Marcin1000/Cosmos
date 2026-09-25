@@ -1,3 +1,5 @@
+// Atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
+process.env.POBIERANIE_ZAUFANE = '127.0.0.1,localhost';
 // Sprawdź samą ekstrakcję tekstu ze strony — na lokalnym serwerze HTML,
 // bo wyszukiwarka jest z tego środowiska nieosiągalna.
 const http = require('http');
