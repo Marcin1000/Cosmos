@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Strona produktowa w dwóch językach: ten sam plik, angielski pod ?lang=en. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://cosmosai.live/</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cosmosai.live/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cosmosai.live/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cosmosai.live/"/>
+  </url>
+  <url>
+    <loc>https://cosmosai.live/?lang=en</loc>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://cosmosai.live/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cosmosai.live/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cosmosai.live/"/>
+  </url>
+</urlset>

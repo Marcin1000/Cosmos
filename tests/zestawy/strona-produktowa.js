@@ -12,7 +12,14 @@
  *   5. Telefon: bez poziomego przewijania w obu językach, na całej długości.
  *   6. Ograniczony ruch: wszystko widać od razu, rozmowa pokazowa jest pełna.
  *   7. Przełącznik silników w rozmowie pokazowej naprawdę przełącza.
- *   8. Zero błędów w konsoli. */
+ *   8. Zero błędów w konsoli.
+ *   9. Układ nie skacze (CLS < 0,1), nawet gdy strona.js dochodzi 400 ms po
+ *      stylach — tak jest w prawdziwej sieci, a lokalnie wyścig tego nie łapie.
+ *  10. Bez JavaScriptu treść jest widoczna (czytniki, podgląd linku, NoScript).
+ *  11. Angielski ma własny adres (/?lang=en), a „/” bez zapisanego wyboru
+ *      zostaje po polsku także w angielskiej przeglądarce — inaczej robot
+ *      en-US indeksuje angielski tekst pod polskim adresem.
+ *  12. Opisy dla czytnika i meta description też są tłumaczone. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -70,6 +77,11 @@ const { srodowisko, przegladarka } = require('../pomoc');
     ok(await p.evaluate(() => document.documentElement.lang) === 'pl', 'polska przeglądarka → strona po polsku');
 
     const polskie = await p.evaluate(() => [...document.querySelectorAll('[data-t]')].map((el) => [el.dataset.t, el.textContent.trim()]));
+    const zbierzOpisy = () => p.evaluate(() => ({
+      aria: [...document.querySelectorAll('[data-t-aria]')].map((el) => [el.dataset.tAria, el.getAttribute('aria-label')]),
+      opis: document.querySelector('meta[name="description"]').content,
+    }));
+    const opisyPl = await zbierzOpisy();
     await p.click('[data-jezyk="en"]');
     await p.waitForFunction(() => document.documentElement.lang === 'en');
     const angielskie = await p.evaluate(() => [...document.querySelectorAll('[data-t]')].map((el) => [el.dataset.t, el.textContent.trim()]));
@@ -79,8 +91,13 @@ const { srodowisko, przegladarka } = require('../pomoc');
     ok(bezTlumaczenia.length === 0, `każdy tekst ma angielską wersję${bezTlumaczenia.length ? ' — brak: ' + [...new Set(bezTlumaczenia)].join(', ') : ''}`);
     ok(/One thread/.test(await p.textContent('.hero-h')), 'nagłówek po angielsku');
     ok(/one thread/i.test(await p.title()), 'tytuł karty po angielsku');
+    const opisyEn = await zbierzOpisy();
+    const ariaBez = opisyPl.aria.filter(([, pl], i) => !pl || pl === opisyEn.aria[i][1]).map(([k]) => k);
+    ok(opisyPl.aria.length > 0 && ariaBez.length === 0, `opisy dla czytnika (aria-label) tłumaczone${ariaBez.length ? ' — brak: ' + ariaBez.join(', ') : ''}`);
+    ok(opisyEn.opis && opisyEn.opis !== opisyPl.opis, 'meta description zmienia się na angielski');
 
-    await p.reload({ waitUntil: 'load' });
+    /* Adres „/” bez ?lang — język musi przyjść z zapisanego wyboru. */
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
     await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
     ok(await p.evaluate(() => document.documentElement.lang) === 'en', 'angielski przeżywa przeładowanie');
     ok(await p.evaluate(() => localStorage.getItem('cosmos.lang')) === 'en', 'wybór zapisany pod tym samym kluczem co w aplikacji (cosmos.lang)');
@@ -102,7 +119,8 @@ const { srodowisko, przegladarka } = require('../pomoc');
   // --- 5. telefon: bez poziomego przewijania --------------------------------
   for (const jezyk of ['pl', 'en']) {
     const { ctx, p } = await nowaStrona({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true, locale: jezyk === 'en' ? 'en-US' : 'pl-PL' });
-    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.goto(env.adres + (jezyk === 'en' ? '/?lang=en' : '/'), { waitUntil: 'load' });
+    await p.waitForFunction((j) => document.documentElement.lang === j, jezyk, { timeout: 3000 }).catch(() => {});
     await p.waitForTimeout(400);
     const wysokosc = await p.evaluate(() => document.documentElement.scrollHeight);
     let najgorzej = 0;
@@ -124,6 +142,59 @@ const { srodowisko, przegladarka } = require('../pomoc');
     ok(ukryte === 0, `ograniczony ruch: treść widoczna bez przewijania (ukrytych: ${ukryte})`);
     const odpowiedzi = await p.locator('#czat-zywy .odp').count();
     ok(odpowiedzi === 4, `ograniczony ruch: rozmowa pokazowa pełna od razu (${odpowiedzi}/4)`);
+    await ctx.close();
+  }
+
+  // --- 9. układ nie skacze, gdy skrypt przychodzi później ------------------
+  for (const [opis, viewport, adres] of [['1440 PL', { width: 1440, height: 900 }, '/'], ['1366×768 PL', { width: 1366, height: 768 }, '/'], ['390 EN', { width: 390, height: 844 }, '/?lang=en']]) {
+    const { ctx, p } = await nowaStrona({ viewport, isMobile: viewport.width < 500, hasTouch: viewport.width < 500 });
+    await p.addInitScript(() => {
+      window.__cls = 0;
+      new PerformanceObserver((l) => l.getEntries().forEach((e) => { if (!e.hadRecentInput) window.__cls += e.value; }))
+        .observe({ type: 'layout-shift', buffered: true });
+    });
+    /* Style i HTML od razu, skrypt 400 ms później — pierwsze malowanie
+       następuje bez niego, więc wszystko, co skrypt dobudowuje, widać jako skok. */
+    await p.route('**/strona/strona.js', async (r) => { await new Promise((z) => setTimeout(z, 400)); await r.continue(); });
+    await p.goto(env.adres + adres, { waitUntil: 'load' });
+    await p.waitForTimeout(2500);
+    const cls = await p.evaluate(() => window.__cls);
+    ok(cls < 0.1, `CLS ${opis} przy skrypcie spóźnionym o 400 ms: ${cls.toFixed(4)} (< 0,1)`);
+    await ctx.close();
+  }
+
+  // --- 10. bez JavaScriptu ----------------------------------------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1440, height: 900 }, javaScriptEnabled: false }, false);
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForTimeout(300);
+    const { ukryte, wszystkie } = await p.evaluate(() => {
+      const bloki = [...document.querySelectorAll('[data-pokaz]')];
+      return { wszystkie: bloki.length, ukryte: bloki.filter((el) => Number(getComputedStyle(el).opacity) < 1).length };
+    });
+    ok(wszystkie > 0 && ukryte === 0, `bez JavaScriptu treść widoczna (ukrytych ${ukryte}/${wszystkie})`);
+    await ctx.close();
+  }
+
+  // --- 11. adres angielski i brak zgadywania po przeglądarce -----------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 }, locale: 'en-US' });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    await p.waitForTimeout(200);
+    ok(await p.evaluate(() => document.documentElement.lang) === 'pl', 'angielska przeglądarka bez wyboru: „/” zostaje po polsku');
+    ok(/Jedna rozmowa/.test(await p.textContent('.hero-h')), 'angielska przeglądarka bez wyboru: nagłówek po polsku');
+    ok(await p.evaluate(() => localStorage.getItem('cosmos.lang')) === null, 'samo wejście niczego nie zapisuje za użytkownika');
+    await ctx.close();
+  }
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } });
+    await p.goto(env.adres + '/?lang=en', { waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    ok(await p.evaluate(() => document.documentElement.lang) === 'en', '/?lang=en: angielski od razu, także w polskiej przeglądarce');
+    ok(/One thread/.test(await p.textContent('.hero-h')), '/?lang=en: nagłówek po angielsku');
+    const kanon = await p.getAttribute('link[rel="canonical"]', 'href');
+    ok(/[?&]lang=en/.test(kanon || ''), `/?lang=en: adres kanoniczny wskazuje wersję angielską (${kanon})`);
     await ctx.close();
   }
 

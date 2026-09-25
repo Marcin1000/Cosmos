@@ -112,7 +112,7 @@ na jakieś pytanie. Ciekawa jest ostatnia kolumna.
 | **Canon po Wi-Fi** | Czy da się zapisać nastawy z powrotem do aparatu? | Integracja CCAPI. Aparat, który usypia Wi-Fi po kilku minutach, przez następne trzydzieści sekund chętnie melduje `online`. |
 | **Misje drona** | Misja waypointowa jako plik, który maszyna przyjmie | Zapis WPML/KMZ na własnym `zlib` z Node. Nigdy nie oblatane — powiedziane wprost, nie zasugerowane. |
 | **QLoRA** | Czy własny fine-tune wygrywa z dobrym promptem? | Eksport zbioru i pętla treningowa. Werdykt na razie: nie, a praca nad promptem lepiej się uogólnia. |
-| **Udostępnienie** | Czy aplikację dla jednej osoby da się otworzyć dla rodziny i znajomych bez przepisywania każdej funkcji? | Kontekst użytkownika na żądanie (`AsyncLocalStorage`), który podąża za każdym `await` aż do pracy w tle. Dostęp do danych bez ustalonej osoby **rzuca wyjątek** zamiast brać domyślną — cicha domyślna pokazałaby dane jednej osoby drugiej i nic nie wyglądałoby na zepsute. Zaproszenia linkiem, silniki przyznawane osobno, zdolności serwera tylko dla właściciela. Instrukcja: [`docs/DOSTEP.md`](docs/DOSTEP.md). |
+| **Udostępnienie** | Czy aplikację dla jednej osoby da się otworzyć dla zaproszonych osób bez przepisywania każdej funkcji? | Kontekst użytkownika na żądanie (`AsyncLocalStorage`), który podąża za każdym `await` aż do pracy w tle. Dostęp do danych bez ustalonej osoby **rzuca wyjątek** zamiast brać domyślną — cicha domyślna pokazałaby dane jednej osoby drugiej i nic nie wyglądałoby na zepsute. Zaproszenia linkiem, silniki przyznawane osobno, zdolności serwera tylko dla właściciela. Instrukcja: [`docs/DOSTEP.md`](docs/DOSTEP.md). |
 
 ## Jak to uruchomić
 

@@ -113,7 +113,13 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
 };
+
+/* Typy, które opłaca się kompresować — tekst. Cloudflare robi to sam, ale
+   instancja wystawiona bez niego wysyłała 225 kB zamiast ~60. */
+const KOMPRESUJ = /^(text\/|application\/(json|xml|javascript|manifest\+json)|image\/svg)/;
 
 
 // ---------------------------------------------------------------------------
@@ -2186,7 +2192,12 @@ async function handleModels(req, res) {
 // ---------------------------------------------------------------------------
 
 function serveStatic(req, res) {
-  let urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  let urlPath;
+  // „/%E0" to zepsuty adres, nie awaria serwera — 400 zamiast 500.
+  try { urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Bad request');
+  }
   /* Pod „/" stoi strona produktowa, a sam Cosmos pod „/app". Aplikacja ładuje
      swoje pliki ścieżkami bezwzględnymi (/app.js, /style.css), więc działa
      tak samo spod „/app" i „/app/". */
@@ -2194,7 +2205,8 @@ function serveStatic(req, res) {
   else if (urlPath === '/app' || urlPath === '/app/') urlPath = '/index.html';
 
   const filePath = path.join(PUBLIC_DIR, urlPath);
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  // Z separatorem: sam prefiks przepuściłby sąsiedni katalog „public-cokolwiek".
+  if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403);
     return res.end('Forbidden');
   }
@@ -2226,6 +2238,21 @@ function serveStatic(req, res) {
          podniesienie wersji service workera by tego nie naprawiło, bo sam
          sw.js też przychodziłby z pamięci Cloudflare. */
       headers['Cache-Control'] = 'no-cache';
+      /* „no-cache" = zapytaj, czy się zmieniło. Bez ETag odpowiedź brzmiała
+         zawsze „tak" i każda wizyta pobierała całe 120 kB od nowa. */
+      const etag = `W/"${require('node:crypto').createHash('sha1').update(data).digest('base64url').slice(0, 22)}"`;
+      headers.ETag = etag;
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(etag)) {
+        res.writeHead(304, headers);
+        return res.end();
+      }
+    }
+    const ae = String(req.headers['accept-encoding'] || '');
+    if (KOMPRESUJ.test(headers['Content-Type']) && data.length > 1024) {
+      headers.Vary = 'Accept-Encoding';
+      const zlib = require('node:zlib');
+      if (/\bbr\b/.test(ae)) { data = zlib.brotliCompressSync(data, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }); headers['Content-Encoding'] = 'br'; }
+      else if (/\bgzip\b/.test(ae)) { data = zlib.gzipSync(data); headers['Content-Encoding'] = 'gzip'; }
     }
     res.writeHead(200, headers);
     res.end(data);

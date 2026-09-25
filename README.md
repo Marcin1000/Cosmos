@@ -124,7 +124,7 @@ answered a question. The interesting column is the last one.
 | **Canon over Wi-Fi** | Can it write settings back to the camera? | CCAPI integration. A camera that sleeps its Wi-Fi after a few minutes will happily report `online` for another thirty seconds. |
 | **Drone missions** | Waypoint missions as a file the aircraft accepts | WPML/KMZ writer using Node's own `zlib`. Never flown — stated plainly rather than implied. |
 | **QLoRA fine-tuning** | Is a personal fine-tune worth it over a good prompt? | Dataset export and a training loop. Verdict so far: no, and the prompt work generalises better. |
-| **Sharing it** | Can a single-person app host family and friends without rewriting every function? | A request-scoped user context (`AsyncLocalStorage`) that follows every `await` into background work. Data access without an established user **throws** instead of falling back to a default — a silent default would show one person's data to another, and nothing would look broken. Invitation links, per-person engine grants, owner-only server capabilities. |
+| **Sharing it** | Can a single-person app host invited people without rewriting every function? | A request-scoped user context (`AsyncLocalStorage`) that follows every `await` into background work. Data access without an established user **throws** instead of falling back to a default — a silent default would show one person's data to another, and nothing would look broken. Invitation links, per-person engine grants, owner-only server capabilities. |
 
 ---
 
@@ -247,5 +247,5 @@ structure, the tests and this page should be enough to judge the engineering.
 ---
 
 <p align="center">
-  <sub>MIT licensed · built by <a href="https://github.com/Marcin1000">Marcin Przybylski</a></sub>
+  <sub>MIT licensed · <a href="https://github.com/Marcin1000/Cosmos">source on GitHub</a></sub>
 </p>
