@@ -17,6 +17,15 @@ const page = `<!doctype html><html><head><title>Pogoda</title>
 const srv = http.createServer((req, res) => {
   if (req.url === '/binary') {
     res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(Buffer.alloc(64));
+  } else if (req.url === '/portal') {
+    // Typowy portal: nagłówek, menu i baner cookies PRZED treścią. Przy
+    // limicie 2500 znaków sama nawigacja wypierała właściwą liczbę.
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('<html><body><header>' + 'Portal Kategoria numer 0 '.repeat(60) + '</header>'
+      + '<nav>' + 'Sport Pogoda Kultura '.repeat(60) + '</nav>'
+      + '<div class="cookies"><form><button>Akceptuję wszystkie cookies</button></form></div>'
+      + '<main><h1>Prognoza Kraków</h1><p>Jutro w Krakowie 7°C i zachmurzenie.</p>'
+      + '<p>Szczegóły prognozy na kolejne godziny. </p>'.repeat(12) + '</main><footer>© 2026</footer></body></html>');
   } else if (req.url === '/big') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end('<p>' + 'x'.repeat(900000) + '</p>');
@@ -33,6 +42,11 @@ srv.listen(7096, async () => {
   if (/var a=1|color:red/.test(txt)) fail.push('skrypt lub styl trafił do tekstu');
   if (/komentarz/.test(txt)) fail.push('komentarz HTML nie usunięty');
   if (/<[a-z]/i.test(txt)) fail.push('zostały znaczniki');
+
+  const portal = await fetchPageText('http://127.0.0.1:7096/portal', 2500);
+  console.log(`1b. portal: ${portal.slice(0, 60)}…`);
+  if (!/7°C/.test(portal)) fail.push('portal: treść z <main> wyparta przez menu i nagłówek');
+  if (/Portal Kategoria|Akceptuję|Sport Pogoda/.test(portal)) fail.push('portal: menu, nagłówek albo baner cookies w tekście dla modelu');
 
   const bin = await fetchPageText('http://127.0.0.1:7096/binary');
   console.log(`2. plik binarny: „${bin}" (ma być pusty)`);

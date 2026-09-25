@@ -52,7 +52,7 @@ const glos = require('./lib/glos.js').utworz({
 });
 const { pobierzStrone } = require('./lib/pobieranie.js');
 const szukanie_ = require('./lib/szukanie.js');
-const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
+const { handleSearch, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { swiatloDnia, zaIleMinut } = require('./lib/slonce.js');
@@ -547,6 +547,7 @@ async function handleOneDrive(req, res, p) {
       skonfigurowany: onedrive.skonfigurowany(),
       polaczony: onedrive.polaczony(),
       polaczenie: onedrive.stanPolaczenia(),
+      wymagaLogowania: onedrive.wymagaLogowania(),
       redirectUri: process.env.ONEDRIVE_REDIRECT_URI || null,
       indeksowanie: U().indeksowanie
         ? { trwa: U().indeksowanie.trwa, przejrzanych: U().indeksowanie.przejrzanych,
@@ -1296,9 +1297,16 @@ async function handleKb(req, res, pathname) {
     if (!item) { res.writeHead(404); return res.end(); }
     try {
       const buf = fs.readFileSync(path.join(KB_FILES(), item.id));
+      /* Wgrany HTML albo SVG otwarty „inline" na adresie aplikacji to skrypt
+         z pełnym dostępem do /api/* w imieniu tego, kto kliknął. Takie pliki
+         tylko do pobrania i w piaskownicy; zdjęcia i PDF-y dalej w podglądzie. */
+      const mime = String(item.mime || 'application/octet-stream').toLowerCase();
+      const aktywny = /html|svg|xml|javascript|ecmascript/.test(mime) || !/^(image\/(png|jpe?g|gif|webp|avif|heic)|application\/pdf|text\/plain|audio\/|video\/)/.test(mime);
       res.writeHead(200, {
-        'Content-Type': item.mime || 'application/octet-stream',
-        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(item.name)}`,
+        'Content-Type': mime,
+        'Content-Disposition': `${aktywny ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(item.name)}`,
+        'X-Content-Type-Options': 'nosniff',
+        ...(mime === 'application/pdf' ? {} : { 'Content-Security-Policy': 'sandbox; default-src \'none\'; img-src \'self\' data:; media-src \'self\'' }),
       });
       return res.end(buf);
     } catch { res.writeHead(404); return res.end(); }
@@ -1312,7 +1320,7 @@ async function handleKb(req, res, pathname) {
 
   if (pathname === '/api/kb/file' && req.method === 'POST') {
     let data;
-    try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    try { data = await readJson(req, 128 * 1024 * 1024); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
     const name = String(data.name || 'plik').slice(0, 200);
     const mime = String(data.mime || '');
     let buf;
@@ -1338,11 +1346,7 @@ async function handleKb(req, res, pathname) {
       url = r.adres;
       const html = r.tekst;
       const title = stripTags((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || url;
-      const text = stripTags(
-        html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
-            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-            .replace(/<(nav|footer|header)[\s\S]*?<\/\1>/gi, ' ')
-      ).slice(0, 200000);
+      const text = czytelnyTekst(html).slice(0, 200000);
       const item = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         type: 'link', name: title.slice(0, 200), url, time: Date.now(),
@@ -2453,7 +2457,7 @@ async function trasyApi(req, res, p) {
   }
   if (p === '/api/backup' && req.method === 'POST') {
     let bundle;
-    try { bundle = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    try { bundle = await readJson(req, 128 * 1024 * 1024); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
     let restored = 0;
     if (Array.isArray(bundle.conversations)) {
       for (const conv of bundle.conversations) {

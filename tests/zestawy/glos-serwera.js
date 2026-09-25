@@ -12,7 +12,10 @@
  *      OpenAI — a przy braku wszystkiego 502, żeby przeglądarka wzięła głos
  *      systemowy,
  *   4. gość bez prawa do OpenAI i Studia nie dostaje płatnego głosu właściciela,
- *   5. zmysły z Whisperem mają pierwszeństwo przed chmurą (lokalnie, za darmo). */
+ *   5. zmysły z Whisperem mają pierwszeństwo przed chmurą (lokalnie, za darmo),
+ *   6. własny serwer rozpoznawania (STT_BASE_URL): w internecie nie dostaje
+ *      nasłuchu otoczenia, a gość bez przyznań nie korzysta z niego na klucz
+ *      właściciela. */
 const http = require('node:http');
 const { utworz } = require('../../lib/glos.js');
 const { sendJson, readBodyBuffer, readJson } = require('../../lib/rdzen.js');
@@ -140,6 +143,31 @@ const atrapa = http.createServer((req, res) => {
   d = await r.json();
   ok(r.status === 200 && d.zrodlo === 'zmysly' && d.text === 'z Whispera', `zmysły żyją → lokalny Whisper, także dla nasłuchu (${d.zrodlo})`);
   ok(!wywolania.some((w) => w.url.startsWith('/oa/')), 'przy żywych zmysłach nic nie poszło do chmury');
+
+  // --- 6. własny serwer rozpoznawania (STT_BASE_URL)
+  const glos3 = (env) => utworz({ SENSES_URL: 'http://127.0.0.1:1', silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO, env });
+  const stawiaj = async (g) => {
+    const s3 = http.createServer((req, res) => g.handleStt(req, res));
+    await new Promise((rr) => s3.listen(0, '127.0.0.1', rr));
+    return s3;
+  };
+  const zChmury = glos3({ STT_BASE_URL: 'https://stt.example.com/v1', STT_API_KEY: 'sk-WLASCICIELA' });
+  ok(zChmury.mozliwosci(wlasciciel).sttLokalnyWlasny === false, 'STT_BASE_URL w internecie nie uchodzi za lokalny');
+  const s4 = await stawiaj(glos3({ STT_BASE_URL: `${A}/oa/v1`, STT_LOKALNY: '0', STT_API_KEY: 'sk-WLASCICIELA' }));
+  const u4 = `http://127.0.0.1:${s4.address().port}/api/stt`;
+  wywolania.length = 0;
+  r = await fetch(`${u4}?tryb=nasluch`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  ok(r.status === 502 && !wywolania.some((w) => w.auth === 'Bearer sk-WLASCICIELA'), `nasłuch otoczenia nie idzie do serwera rozpoznawania w chmurze (${r.status})`);
+  ktoTeraz = gosc;
+  wywolania.length = 0;
+  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  ok(r.status === 502 && !wywolania.some((w) => w.auth === 'Bearer sk-WLASCICIELA'), `gość bez przyznań nie używa serwera rozpoznawania właściciela (${r.status})`);
+  ok(glos3({ STT_BASE_URL: 'http://127.0.0.1:9/v1' }).mozliwosci(gosc).sttLokalnyWlasny === false, 'gość nie dostaje w /api/config cudzego serwera rozpoznawania');
+  ktoTeraz = wlasciciel;
+  // za duże nagranie odcięte przy czytaniu
+  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.alloc(26 * 1024 * 1024) }).catch(() => ({ status: 0 }));
+  ok(r.status === 413 || r.status === 0, `nagranie ponad 25 MB odrzucone (${r.status})`);
+  s4.close();
 
   atrapa.close(); serwer.close(); serwer2.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nGŁOS SERWERA OK');

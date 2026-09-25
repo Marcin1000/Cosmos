@@ -30,6 +30,12 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
   const srv = http.createServer((req, res) => {
     if (req.url === '/przekieruj') { res.writeHead(302, { Location: 'http://127.0.0.1:1/tajne' }); return res.end(); }
     if (req.url === '/przekieruj-localhost') { res.writeHead(302, { Location: `http://localhost:${srv.address().port}/` }); return res.end(); }
+    if (req.url === '/saczy') {
+      // bajt co 300 ms — limit bezczynności tego nie złapie, całkowity musi
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      const t = setInterval(() => { if (res.destroyed) return clearInterval(t); res.write('x'); }, 300);
+      return;
+    }
     if (req.url === '/duza') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('x'.repeat(50000)); }
     if (req.url === '/cp1250') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=windows-1250' });
@@ -76,7 +82,14 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
   const c = await pobierzStrone(`${A}/cp1250`, { pozwolPrywatne: true });
   ok(c.tekst === 'Żółć', `windows-1250 → „${c.tekst}"`);
 
+  const t0 = Date.now();
+  blad = null;
+  try { await pobierzStrone(`${A}/saczy`, { pozwolPrywatne: true, czasMs: 1000 }); } catch (e) { blad = e; }
+  const trwalo = Date.now() - t0;
+  ok(blad && trwalo < 2000, `limit czasu jest całkowity, nie tylko bezczynności (${trwalo} ms)`);
+
   srv.close();
+  if (srv.closeAllConnections) srv.closeAllConnections();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nPOBIERANIE BEZPIECZNE OK');
   process.exit(problemy.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
