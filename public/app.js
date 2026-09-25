@@ -2374,7 +2374,9 @@ function setGeneratingUI(generating) {
 function updatePolishButton() {
   const btn = $('polish-btn');
   if (!btn) return;
-  btn.hidden = el.input.value.trim().length < 25 || isGenerating;
+  // Po dopracowaniu przycisk to „przywróć moją wersję" — nie może zniknąć
+  // tylko dlatego, że model oddał krótszy tekst.
+  btn.hidden = isGenerating || (!polishPrevious && el.input.value.trim().length < 25);
 }
 
 /** Przepisz treść pola na precyzyjny prompt, z możliwością cofnięcia. */
@@ -5160,10 +5162,59 @@ const overlays = [
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   const top = overlays.find((o) => (o.open ? o.open() : $(o.id).style.display !== 'none'));
-  if (!top) return;
-  e.preventDefault();
-  top.close();
+  if (top) {
+    e.preventDefault();
+    top.close();
+    return;
+  }
+  // Płótno nie jest nakładką (stoi obok rozmowy), ale Escape też je zamyka.
+  if (!$('canvas').hidden && !el.input.matches(':focus')) { e.preventDefault(); $('canvas').hidden = true; }
 });
+
+/* ---- FOKUS W NAKŁADKACH -------------------------------------------------
+   Z klawiatury nakładki były nieużywalne: fokus nie wchodził do środka,
+   Tab uciekał do rozmowy pod spodem (15–29 razy na 30), a po Escape nie
+   wracał na przycisk, którym nakładkę otwarto. Zamiast łatać każdą z osobna:
+   obserwujemy, która jest na wierzchu — reszta strony dostaje `inert`,
+   fokus wchodzi do środka, a po zamknięciu wraca tam, skąd przyszedł. */
+{
+  const elementy = ['img-viewer', 'voice-overlay', 'camera-modal', 'live-panel', 'gallery-modal',
+    'timeline-modal', 'learn-modal', 'kb-modal', 'studio-modal', 'plener-modal', 'settings-modal']
+    .map((id) => $(id)).filter(Boolean);
+  const widoczna = (w) => w.style.display !== 'none' && !w.hidden;
+  const skad = new Map();
+  let poprzednio = new Set();
+  const FOKUSOWALNE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), '
+    + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const przelicz = () => {
+    const otwarte = elementy.filter(widoczna);
+    const wierzch = otwarte[0] || null;          // kolejność tablicy = kolejność od wierzchu
+    for (const dziecko of document.body.children) {
+      if (dziecko.tagName === 'SCRIPT') continue;
+      dziecko.inert = Boolean(wierzch) && dziecko !== wierzch;
+    }
+    for (const w of otwarte) {
+      if (poprzednio.has(w)) continue;
+      skad.set(w, document.activeElement);
+      if (!w.getAttribute('role')) w.setAttribute('role', 'dialog');
+      w.setAttribute('aria-modal', 'true');
+      requestAnimationFrame(() => {
+        if (w.contains(document.activeElement)) return;
+        const cel = w.querySelector('[autofocus]') || w.querySelector(FOKUSOWALNE);
+        if (cel) cel.focus({ preventScroll: true });
+      });
+    }
+    for (const w of poprzednio) {
+      if (otwarte.includes(w)) continue;
+      const wroc = skad.get(w);
+      skad.delete(w);
+      if (!otwarte.length && wroc && document.contains(wroc) && typeof wroc.focus === 'function') wroc.focus({ preventScroll: true });
+    }
+    poprzednio = new Set(otwarte);
+  };
+  const obserwator = new MutationObserver(przelicz);
+  for (const w of elementy) obserwator.observe(w, { attributes: true, attributeFilter: ['style', 'hidden'] });
+}
 
 // ----------------------------------------------------------------
 // Sidebar / motyw / endpoint

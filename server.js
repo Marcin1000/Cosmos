@@ -696,6 +696,8 @@ async function handlePlanZdjeciowy(req, res) {
   const lon = surowyLon === null || surowyLon === undefined ? NaN : Number(surowyLon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return sendJson(res, 400, {
+      // dla interfejsu: człowiek dostaje własny, przetłumaczony komunikat
+      ...(miejsceNieznane ? { miejsceNieznane } : { brakLokalizacji: true }),
       error: miejsceNieznane
         /* Komunikat mówi MODELOWI, co ma zrobić dalej — bo to on go czyta
            jako pierwszy. Bez tego przy „Cala d'Or, Hotel Barceló Ponent Beach"
@@ -1360,7 +1362,14 @@ async function handleKb(req, res, pathname) {
       addEvent('baza-wiedzy', `dodano link: ${title.slice(0, 80)}`);
       return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
     } catch (err) {
-      return sendJson(res, 502, { error: `Nie udało się pobrać strony: ${err.message}` });
+      /* Człowiek ma zobaczyć, co jest nie tak, a nie „getaddrinfo ENOTFOUND". */
+      const kod = err.code || (err.cause && err.cause.code) || '';
+      const powod = err.name === 'ZablokowanyAdres' ? err.message
+        : /ENOTFOUND|EAI_AGAIN/.test(kod) ? 'taki adres nie istnieje — sprawdź, czy nie ma literówki'
+          : /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ETIMEDOUT/.test(kod) ? 'strona nie odpowiada'
+            : /CERT|SSL|TLS/i.test(kod + err.message) ? 'strona ma nieważny certyfikat bezpieczeństwa'
+              : err.message;
+      return sendJson(res, 502, { error: `Nie udało się pobrać strony: ${powod}` });
     }
   }
 

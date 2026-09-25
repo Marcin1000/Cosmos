@@ -427,8 +427,15 @@ function utworzPlener(z) {
     /* Plan liczymy przy KAŻDYM otwarciu, nie tylko pierwszym. Puste okno
        z przyciskiem „Policz" kazałoby klikać po to, co i tak zawsze chcemy
        zobaczyć, a plan sprzed godziny jest już nieprawdą — Słońce się
-       przesunęło, a to jest cała treść tego panelu. */
-    liczPlanPlener();
+       przesunęło, a to jest cała treść tego panelu.
+       Ale tylko gdy wiadomo GDZIE — bez zapisanej lokalizacji i bez wpisanego
+       miejsca serwer i tak odpowie 400, a w konsoli przy każdym otwarciu
+       lądował błąd. Wtedy od razu prosimy o miejsce. */
+    if ($('fp-place').value.trim()) { liczPlanPlener(); return; }
+    fetch('/api/location').then((r) => r.json()).then((d) => {
+      if (d.wspolrzedne && d.wspolrzedne.lat) liczPlanPlener();
+      else { $('fp-light').textContent = t('plan.needLocation'); $('fp-shot').textContent = '—'; }
+    }).catch(() => liczPlanPlener());
   }
 
   function zamknijPlener() { $('plener-modal').style.display = 'none'; }
@@ -498,7 +505,10 @@ function utworzPlener(z) {
       const d = await readJsonSafe(r);
       if (!r.ok) {
         $('fp-shot').textContent = '—';
-        $('fp-light').textContent = d.error || t('plan.needLocation');
+        /* Komunikat serwera jest pisany DLA MODELU („SPRÓBUJ JESZCZE RAZ…")
+           i tylko po polsku — człowiekowi pokazujemy własny, przetłumaczony. */
+        $('fp-light').textContent = d.miejsceNieznane ? t('plan.placeUnknown', { m: d.miejsceNieznane })
+          : d.brakLokalizacji ? t('plan.needLocation') : (d.error || t('plan.needLocation'));
         $('fp-why').textContent = '';
         $('fp-shots').innerHTML = '';
         return;
