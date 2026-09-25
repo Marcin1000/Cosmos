@@ -7,7 +7,10 @@
  *   2. po przełączeniu silnika następna odpowiedź ma JEGO znak, a poprzednia
  *      zostaje przy swoim (nić zmienia kolor, nie przemalowuje historii),
  *   3. znak jest zapisany w rozmowie na dysku, więc przeżywa przeładowanie,
- *   4. <html data-silnik> idzie za wybraną zakładką (kolor pola i kropki modelu). */
+ *   4. <html data-silnik> idzie za wybraną zakładką (kolor pola i kropki modelu),
+ *   5. przełączenie zakładki W TRAKCIE odpowiedzi nie przepisuje jej podpisu —
+ *      odpowiedź pisana przez lokalny GPU zostaje przy nim (dawniej po
+ *      zmianie zakładki podpisywała się silnikiem, który jej nie napisał). */
 const fs = require('fs');
 const path = require('path');
 const { srodowisko, przegladarka, katalogOsoby } = require('../pomoc');
@@ -55,6 +58,24 @@ const { srodowisko, przegladarka, katalogOsoby } = require('../pomoc');
   const kolory = await p.evaluate(() => [...document.querySelectorAll('#messages .msg-assistant .msg-kolumna')].map((k) => getComputedStyle(k, '::before').backgroundColor));
   ok(kolory.length >= 2 && kolory[0] !== kolory[kolory.length - 1], `nić zmienia kolor przy zmianie silnika (${kolory.join(' → ')})`);
 
+  // --- 1 i 5. w trakcie pisania: znak już jest; zmiana zakładki go nie rusza
+  const ilePrzed = (await znakiOdpowiedzi()).length;
+  await p.fill('#input', 'odpowiadaj powoli');
+  await p.click('#send-btn');
+  await p.waitForFunction((n) => document.querySelectorAll('#messages .msg-assistant').length > n, ilePrzed, { timeout: 15000 });
+  await p.waitForTimeout(500);
+  const wTrakcie = await p.evaluate(() => {
+    const m = [...document.querySelectorAll('#messages .msg-assistant')].pop();
+    return { silnik: m.dataset.silnik, pisze: Boolean(m.querySelector('.cursor-blink')) };
+  });
+  ok(wTrakcie.pisze && wTrakcie.silnik === 'local', `w trakcie pisania odpowiedź ma już znak silnika (${JSON.stringify(wTrakcie)})`);
+  await p.click('.endpoint-tab[data-endpoint="cloud"]');
+  await p.waitForFunction(() => getComputedStyle(document.querySelector('#stop-btn')).display === 'none', null, { timeout: 30000 });
+  await p.waitForTimeout(400);
+  const poZmianie = (await znakiOdpowiedzi()).pop() || {};
+  ok(poZmianie.silnik === 'local', `zmiana zakładki w trakcie nie przepisuje podpisu odpowiedzi (${poZmianie.silnik} / ${poZmianie.podpis})`);
+  await p.click('.endpoint-tab[data-endpoint="local"]');
+
   // --- 3. zapis na dysku i przeładowanie
   const katalog = path.join(katalogOsoby(env), 'conversations');
   const pliki = fs.existsSync(katalog) ? fs.readdirSync(katalog).filter((f) => f.endsWith('.json') && !f.startsWith('_')) : [];
@@ -68,7 +89,7 @@ const { srodowisko, przegladarka, katalogOsoby } = require('../pomoc');
   await p.click('.conv-item .conv-title');
   await p.waitForSelector('#messages .msg-assistant', { timeout: 8000 });
   znaki = await znakiOdpowiedzi();
-  ok(znaki.map((z) => z.silnik).join(',') === 'cloud,local', `po przeładowaniu nić ta sama (${znaki.map((z) => z.silnik).join(',')})`);
+  ok(znaki.map((z) => z.silnik).join(',') === 'cloud,local,local', `po przeładowaniu nić ta sama (${znaki.map((z) => z.silnik).join(',')})`);
 
   await b.close();
   env.koniec();
