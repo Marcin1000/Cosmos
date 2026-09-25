@@ -1562,6 +1562,14 @@ async function proxySensesGet(req, res, targetPath, search = '') {
 // API: czat (streaming SSE) z kontekstem percepcji
 // ---------------------------------------------------------------------------
 
+/* Żądania czatu wysłane do dostawcy, który jeszcze nie odpowiedział — po nich
+   „Stop" przerywa, zanim bieg powstanie. Klucz: id biegu. */
+const OCZEKUJACE = new Map();
+/* Ile najdłużej model może milczeć: przed nagłówkami i między kawałkami
+   strumienia. Modele rozumujące potrafią myśleć długo, ale przysyłają wtedy
+   `reasoning_content` — cisza 90 s to już zawieszenie. */
+const CISZA_MODELU_MS = Number(process.env.COSMOS_CISZA_MODELU_MS) || 90_000;
+
 async function handleChat(req, res) {
   let payload;
   try {
@@ -1836,13 +1844,35 @@ async function handleChat(req, res) {
      martwy, a usunięcie go tylko zaciemniłoby diff. */
   if (!biegId) req.on('close', () => abort.abort());
 
+  /* „Stop" zanim dostawca odpowie nagłówkami: biegu jeszcze nie ma, więc
+     /api/chat/stop nie miał czego przerwać — odpowiedź rodziła się mimo to
+     i po 20 s lądowała w rozmowie. Rejestr trwa od wysłania do nagłówków. */
+  if (biegId) OCZEKUJACE.set(biegId, abort);
+  /* Własny limit na ciszę dostawcy. Bez niego czekaliśmy do domyślnych
+     300 s fetcha z migającym kursorem. Po nagłówkach ten sam zegar pilnuje
+     przerw między kawałkami strumienia (pompa niżej go odnawia). */
+  let cisza = false;
+  let straznik = null;
+  const pilnujCiszy = () => {
+    clearTimeout(straznik);
+    straznik = setTimeout(() => { cisza = true; abort.abort(); }, CISZA_MODELU_MS);
+    if (straznik.unref) straznik.unref();
+  };
+  pilnujCiszy();
+
   let upstream;
   try {
     // Parametry pod dostawcę, poprawki po odmowie 400, ponowienia przy
     // 429/503 — wszystko w lib/model.js, wspólne z funkcjami pomocniczymi.
     upstream = await zapytajModel(ep, body, { signal: abort.signal });
   } catch (err) {
-    if (abort.signal.aborted) return;
+    if (biegId) OCZEKUJACE.delete(biegId);
+    clearTimeout(straznik);
+    if (cisza) {
+      return sendJson(res, 504, { error: `Model nie odpowiedział w ${Math.round(CISZA_MODELU_MS / 1000)} s [${ep.label} · ${model}]. Spróbuj ponownie albo wybierz inny model.` });
+    }
+    // Przerwane „Stopem" przed nagłówkami — domykamy odpowiedź, żeby nie wisiała.
+    if (abort.signal.aborted) { if (!res.headersSent) res.writeHead(204); return res.end(); }
     return sendJson(res, 502, {
       error: payload.endpoint === 'local'
         ? `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err.message})`
@@ -1850,7 +1880,9 @@ async function handleChat(req, res) {
     });
   }
 
+  if (biegId) OCZEKUJACE.delete(biegId);
   if (!upstream.ok) {
+    clearTimeout(straznik);
     let detail = '';
     try { detail = await upstream.text(); } catch { /* ignore */ }
     let message = `Błąd modelu (HTTP ${upstream.status}).`;
@@ -1896,10 +1928,11 @@ async function handleChat(req, res) {
       ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
     });
     try {
-      for await (const chunk of upstream.body) res.write(chunk);
+      for await (const chunk of upstream.body) { pilnujCiszy(); res.write(chunk); }
     } catch {
       /* klient przerwał lub upstream padł — kończymy strumień */
     }
+    clearTimeout(straznik);
     return res.end();
   }
 
@@ -1911,6 +1944,7 @@ async function handleChat(req, res) {
     id: biegId,
     rozmowaId: typeof payload.rozmowa === 'string' ? payload.rozmowa : '',
     model,
+    silnik: payload.endpoint,
     podmienionyZ: swappedFrom,
   });
   bieg.przerwij = () => abort.abort();
@@ -1922,19 +1956,39 @@ async function handleChat(req, res) {
   (async () => {
     const dekoder = new TextDecoder();
     let ogon = '';
+    /* Czy dostawca powiedział „koniec" ([DONE] albo finish_reason). Strumień,
+       który po prostu się urwał, wyglądał dotąd jak pełna odpowiedź — urwane
+       zdanie lądowało w rozmowie jako gotowe. */
+    let koniecWidziany = false;
+    const zjedz = (blok) => {
+      if (!blok.trim()) return;
+      if (/^data:\s*\[DONE\]/m.test(blok) || /"finish_reason"\s*:\s*"[a-z_]+"/.test(blok)) koniecWidziany = true;
+      biegi_.dopisz(bieg, blok);
+    };
     try {
       for await (const chunk of upstream.body) {
-        ogon += dekoder.decode(chunk, { stream: true });
+        pilnujCiszy();
+        // llama-cpp-python i część serwerów rozdziela ramki „\r\n\r\n" —
+        // bez ujednolicenia cała odpowiedź przychodziła jednym kawałkiem na końcu.
+        ogon = (ogon + dekoder.decode(chunk, { stream: true })).replace(/\r\n|\r(?!$)/g, '\n');
         // Bloki SSE, nie bajty: numerowanie zdarzeń wymaga całych bloków,
         // bo po nich klient wraca („mam do 137, dawaj resztę").
         const bloki = ogon.split('\n\n');
         ogon = bloki.pop();
-        for (const blok of bloki) if (blok.trim()) biegi_.dopisz(bieg, blok);
+        for (const blok of bloki) zjedz(blok);
       }
-      if (ogon.trim()) biegi_.dopisz(bieg, ogon);
-      biegi_.zakoncz(bieg);
+      clearTimeout(straznik);
+      zjedz(ogon.replace(/\r$/, ''));
+      biegi_.zakoncz(bieg, koniecWidziany ? '' : 'Model urwał odpowiedź w połowie — połączenie z dostawcą się zerwało. Spróbuj ponownie.');
     } catch (err) {
-      biegi_.zakoncz(bieg, abort.signal.aborted ? '' : (err.message || 'Strumień modelu przerwany.'));
+      clearTimeout(straznik);
+      const powod = cisza
+        ? `Model zamilkł na ${Math.round(CISZA_MODELU_MS / 1000)} s w trakcie odpowiedzi. Spróbuj ponownie.`
+        : abort.signal.aborted ? ''
+          : /terminated|socket|ECONNRESET|other side closed/i.test(err.message || '')
+            ? 'Połączenie z dostawcą modelu zerwało się w trakcie odpowiedzi. Spróbuj ponownie.'
+            : (err.message || 'Strumień modelu przerwany.');
+      biegi_.zakoncz(bieg, powod);
     }
   })();
 }
@@ -2217,9 +2271,13 @@ async function trasyApi(req, res, p) {
   if (p === '/api/chat/stop' && req.method === 'POST') {
     let dane = {};
     try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
-    const b = biegi_.daj(String(dane.bieg || ''));
+    const id = String(dane.bieg || '');
+    const b = biegi_.daj(id);
     if (b && b.przerwij) b.przerwij();
-    return sendJson(res, 200, { ok: Boolean(b) });
+    // Bieg jeszcze się nie urodził — dostawca nie odpowiedział nagłówkami.
+    const czeka = !b && OCZEKUJACE.get(id);
+    if (czeka) { czeka.abort(); OCZEKUJACE.delete(id); }
+    return sendJson(res, 200, { ok: Boolean(b || czeka) });
   }
   if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
   if (p === '/api/events') return await handleEvents(req, res);
