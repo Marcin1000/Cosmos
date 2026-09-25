@@ -8,7 +8,11 @@
  *   1. prywatne adresy (IPv4, IPv6, zmapowane, CGNAT/Tailscale) — odrzucone,
  *   2. przekierowanie z „publicznego" adresu na prywatny — odrzucone,
  *   3. właściciel (pozwolPrywatne) — przepuszczony,
- *   4. limit bajtów działa, a strona w windows-1250 wychodzi z ogonkami. */
+ *   4. limit bajtów działa, a strona w windows-1250 wychodzi z ogonkami,
+ *   5. adres podany NAZWĄ HOSTA (przez DNS) w ogóle się pobiera — przez dobę
+ *      nie pobierała się żadna strona, bo `lookup` oddawał Node 22 zły kształt
+ *      odpowiedzi, a wszystkie przypadki tu szły na dosłowne 127.0.0.1,
+ *   6. gniazdo otwarte dla właściciela nie obsłuży potem gościa (keep-alive). */
 const http = require('node:http');
 const { pobierzStrone, prywatnyAdres, ZablokowanyAdres } = require('../../lib/pobieranie.js');
 
@@ -16,13 +20,16 @@ const problemy = [];
 const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) problemy.push(opis); };
 
 (async () => {
-  for (const ip of ['127.0.0.1', '10.1.2.3', '100.101.102.103', '169.254.169.254', '192.168.1.1', '172.20.0.1', '::1', 'fd00::1', '::ffff:127.0.0.1', '0.0.0.0']) {
+  for (const ip of ['127.0.0.1', '10.1.2.3', '100.101.102.103', '169.254.169.254', '192.168.1.1', '172.20.0.1', '::1', 'fd00::1', '::ffff:127.0.0.1', '0.0.0.0',
+    // tak parser URL zapisuje [::ffff:127.0.0.1] i [::ffff:169.254.169.254]
+    '::ffff:7f00:1', '::ffff:a9fe:a9fe', '64:ff9b::7f00:1', '2002:7f00:1::']) {
     ok(prywatnyAdres(ip), `prywatny: ${ip}`);
   }
   for (const ip of ['8.8.8.8', '151.101.1.69', '2a00:1450:4001::1']) ok(!prywatnyAdres(ip), `publiczny: ${ip}`);
 
   const srv = http.createServer((req, res) => {
     if (req.url === '/przekieruj') { res.writeHead(302, { Location: 'http://127.0.0.1:1/tajne' }); return res.end(); }
+    if (req.url === '/przekieruj-localhost') { res.writeHead(302, { Location: `http://localhost:${srv.address().port}/` }); return res.end(); }
     if (req.url === '/duza') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('x'.repeat(50000)); }
     if (req.url === '/cp1250') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=windows-1250' });
@@ -45,6 +52,22 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
 
   const w = await pobierzStrone(`${A}/`, { pozwolPrywatne: true });
   ok(w.status === 200 && /tajne/.test(w.tekst), 'właściciel: adres prywatny przepuszczony');
+  let h = null;
+  try { h = await pobierzStrone(`http://localhost:${srv.address().port}/`, { pozwolPrywatne: true }); } catch (e) { h = e; }
+  ok(h && h.status === 200 && /tajne/.test(h.tekst), `nazwa hosta przez DNS pobiera się (${h && (h.status || h.message)})`);
+  blad = null;
+  try { await pobierzStrone(`http://localhost:${srv.address().port}/`); } catch (e) { blad = e; }
+  ok(blad instanceof ZablokowanyAdres, 'gość zaraz po właścicielu, ten sam host — dalej zablokowany');
+  blad = null;
+  try { await pobierzStrone(`http://[::ffff:127.0.0.1]:${srv.address().port}/`); } catch (e) { blad = e; }
+  ok(blad instanceof ZablokowanyAdres, 'gość: [::ffff:127.0.0.1] — zablokowane');
+  // przekierowanie z zaufanego hosta na prywatny adres, którego nikt nie wpuścił
+  const zaufaneBylo = process.env.POBIERANIE_ZAUFANE;
+  process.env.POBIERANIE_ZAUFANE = '127.0.0.1';
+  blad = null;
+  try { await pobierzStrone(`${A}/przekieruj-localhost`); } catch (e) { blad = e; }
+  ok(blad instanceof ZablokowanyAdres, 'gość: przekierowanie na prywatny adres — zablokowane');
+  if (zaufaneBylo === undefined) delete process.env.POBIERANIE_ZAUFANE; else process.env.POBIERANIE_ZAUFANE = zaufaneBylo;
   blad = null;
   try { await pobierzStrone(`${A}/przekieruj`, { pozwolPrywatne: true, maksPrzekierowan: 0 }); } catch (e) { blad = e; }
   ok(blad instanceof ZablokowanyAdres, 'przekierowania liczone i ograniczane');
