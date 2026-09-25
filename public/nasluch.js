@@ -383,7 +383,10 @@
 
     async function wyslij(blob) {
       try {
-        const res = await fetch('/api/stt', {
+        /* Adres podaje aplikacja: język rozmowy i to, czy to nasłuch słowa
+           budzącego (tylko lokalny Whisper — otoczenia nie wysyłamy do chmury),
+           czy pytanie, które ktoś świadomie zadaje. */
+        const res = await fetch(typeof o.adres === 'function' ? o.adres() : '/api/stt', {
           method: 'POST',
           headers: { 'Content-Type': 'audio/wav' },
           body: blob,

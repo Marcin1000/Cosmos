@@ -45,6 +45,11 @@ const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
   konta, silniki, kto, katalogDla, zapomnij, WLASCICIEL_ID,
   DATA_DIR, ENDPOINTS, STUDIO, imageProviders, sendJson, readJson, readBodyBuffer,
 });
+/* Głos: rozpoznawanie i czytanie na głos z łańcuchem źródeł (zmysły → chmura).
+   Tryb głosowy bez Web Speech API = bez piszczenia mikrofonu na Androidzie. */
+const glos = require('./lib/glos.js').utworz({
+  SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, STUDIO,
+});
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags } = szukanie_;
 const { czytajLokalnie, OBSLUGIWANE: DOK_OBSLUGIWANE } = require('./lib/dokumenty.js');
@@ -1394,6 +1399,7 @@ function handleConfig(res) {
     endpoints,
     senses: { baseUrl: SENSES_URL },
     uzytkownik: kto(),
+    glos: glos.mozliwosci(),
     studio: {
       dozwolone: silniki.studioDozwolone(),
       image: imageProviders().length > 0,
@@ -2463,7 +2469,7 @@ async function trasyApi(req, res, p) {
   if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
   if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
   if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
-  if (p === '/api/stt' && req.method === 'POST') return await proxySenses(req, res, '/stt');
+  if (p === '/api/stt' && req.method === 'POST') return await glos.handleStt(req, res);
   /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
      bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
      Współrzędne dokłada SERWER z ustawień — przeglądarka nie musi ich znać,
@@ -2476,7 +2482,7 @@ async function trasyApi(req, res, p) {
       : '';
     return await proxySenses(req, res, '/ptak', { search: qs });
   }
-  if (p === '/api/tts' && req.method === 'POST') return await proxySenses(req, res, '/tts', { json: true });
+  if (p === '/api/tts' && req.method === 'POST') return await glos.handleTts(req, res);
   if (p === '/api/detect' && req.method === 'POST') return await proxySenses(req, res, '/detect', { json: true });
   if (p === '/api/pose' && req.method === 'POST') return await proxySenses(req, res, '/pose', { json: true });
   if (p === '/api/kinect/stream' && req.method === 'GET') {

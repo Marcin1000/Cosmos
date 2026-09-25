@@ -418,12 +418,12 @@
 
         <label class="field">
           <span class="field-label" data-i18n="set.stt">Nasłuch w trybie głosowym</span>
-          <select id="set-stt" class="mono">
-            <option value="auto" data-i18n="set.sttAuto">Automatycznie — Whisper, gdy zmysły działają</option>
-            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień + Whisper (bez sprzężenia)</option>
+          <select id="set-stt">
+            <option value="auto" data-i18n="set.sttAuto">Automatycznie — bez przeglądarki, gdy serwer rozpoznaje mowę</option>
+            <option value="whisper" data-i18n="set.sttWhisper">Własny strumień (bez piszczenia i sprzężenia)</option>
             <option value="przegladarka" data-i18n="set.sttBrowser">Przeglądarka (Web Speech API)</option>
           </select>
-          <span class="field-hint" data-i18n="set.sttHint">Własny strumień otwiera mikrofon RAZ na całą rozmowę: znika sygnał podłączania sprzętu, słyszenie samego siebie i pętle. Wymaga włączonych zmysłów z Whisperem — bez nich Cosmos sam wraca do przeglądarki. Cena: pytanie leci na komputer domowy i wraca, więc odpowiedź zaczyna się o sekundę-dwie później niż przy rozpoznawaniu w przeglądarce.</span>
+          <span class="field-hint" data-i18n="set.sttHint">Własny strumień otwiera mikrofon raz na całą rozmowę: nie ma dźwięków włączania i wyłączania, słyszenia samego siebie ani pętli. Mowę rozpoznaje Whisper w zmysłach, a gdy komputer domowy jest wyłączony — rozpoznawanie w chmurze (jeśli masz do niego dostęp). Bez lokalnego Whispera Cosmos nie nasłuchuje otoczenia: słucha od razu po otwarciu trybu głosowego i po każdej odpowiedzi, a potem czeka na dotknięcie kuli.</span>
           <span class="field-hint mono" id="set-stt-now"></span>
         </label>
 

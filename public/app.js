@@ -2360,17 +2360,38 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
 // Zmysły: mowa (TTS) — Piper przez senses, fallback: głos systemowy
 // ----------------------------------------------------------------
 
+/** Tekst do czytania na głos — to, co brzmi jak mowa, a nie jak Markdown.
+ *  Lektor czytał dotąd adresy stron znak po znaku, nazwy emoji, rozsypane
+ *  tabele („Przysłona Czas ISO — — —") i urywał w pół zdania na 1200 znaku. */
 function stripForSpeech(text) {
-  return text
-    .replace(/\[SZUKAJ:[^\]]*\]/gi, '')
+  let t = String(text || '');
+  if (typeof stripSearchMarker === 'function') t = stripSearchMarker(t);   // wszystkie znaczniki narzędzi
+  t = t
     .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*_#>|]/g, '')
+    .replace(/https?:\/\/\S+/g, '')                           // adresów się nie czyta
+    .replace(/^[ \t]*\|?[ \t]*:?-{3,}.*$/gm, '')               // linia oddzielająca w tabeli
+    .replace(/^[ \t]*\|(.+)\|[ \t]*$/gm, (_, w) => w.split('|').map((k) => k.trim()).filter(Boolean).join(', ') + '.')
+    .replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]+/gm, '')           // punktory list
+    .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
+    .replace(/[*_#>|~]/g, '');
+  /* Nagłówek, punkt listy i wiersz tabeli to osobne myśli — bez kropki lektor
+     czytał „Plan Świt o 6:41" jednym tchem. Każda linia bez znaku końca
+     dostaje kropkę, dopiero potem sklejamy białe znaki. */
+  t = t.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+    .map((l) => (/[.!?:;,…]$/.test(l) ? l : `${l}.`))
+    .join(' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 1200);
+    .trim();
+  if (t.length > 1200) {
+    // Ucinamy na końcu zdania, nie w połowie słowa.
+    const kawalek = t.slice(0, 1200);
+    const koniec = Math.max(kawalek.lastIndexOf('. '), kawalek.lastIndexOf('! '), kawalek.lastIndexOf('? '));
+    t = koniec > 400 ? kawalek.slice(0, koniec + 1) : kawalek;
+  }
+  return t;
 }
 
 let currentAudio = null;
@@ -2394,38 +2415,78 @@ async function readJsonSafe(res) {
   }
 }
 
+/** Czy serwer ma głos: Piper w zmysłach albo głos w chmurze (ElevenLabs, OpenAI). */
+function ttsSerwera() {
+  return Boolean((senses.online && senses.caps.piper) || serverConfig.glos?.ttsChmura);
+}
+
+/** Porcje do czytania głosem z serwera. Pierwsza krótka — żeby Cosmos zaczął
+ *  mówić po ułamku sekundy, a nie po wygenerowaniu całej odpowiedzi — kolejne
+ *  dłuższe, bo tam czas generowania chowa się pod czytaniem poprzedniej. */
+function porcjeGlosu(tekst) {
+  const zdania = splitForSpeech(tekst, 220);
+  const porcje = [];
+  let biezaca = '';
+  for (const z of zdania) {
+    const limit = porcje.length === 0 ? 160 : 600;
+    if (biezaca && (biezaca + ' ' + z).length > limit) { porcje.push(biezaca); biezaca = z; }
+    else biezaca = biezaca ? `${biezaca} ${z}` : z;
+  }
+  if (biezaca) porcje.push(biezaca);
+  return porcje;
+}
+
+/** Zagraj nagranie i poczekaj na koniec — także gdy ktoś je przerwie.
+ *  Bez `onpause` przerwane czytanie zostawiało wiszącą obietnicę, a tryb
+ *  głosowy czekał na koniec wypowiedzi, która już nigdy się nie skończy. */
+function grajNagranie(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    const koniec = () => { URL.revokeObjectURL(url); if (currentAudio === audio) currentAudio = null; resolve(); };
+    audio.onended = koniec;
+    audio.onerror = koniec;
+    audio.onpause = koniec;
+    audio.play().catch(koniec);
+  });
+}
+
 async function speakText(text) {
   const clean = stripForSpeech(text);
   if (!clean) return;
   stopSpeaking();
+  speakSerial = {};                   // znacznik tej wypowiedzi
+  const mine = speakSerial;
 
-  // 1. Piper (lokalny, naturalny głos) przez usługę zmysłów
-  if (senses.online && senses.caps.piper) {
-    try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean }),
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        await new Promise((resolve) => {
-          currentAudio = new Audio(URL.createObjectURL(blob));
-          currentAudio.onended = resolve;
-          currentAudio.onerror = resolve;
-          currentAudio.play().catch(resolve);
-        });
-        return;
-      }
-    } catch { /* fallback niżej */ }
+  // 1. Głos z serwera: ElevenLabs / OpenAI / Piper (kolejność ustawia serwer).
+  if (ttsSerwera()) {
+    const porcje = porcjeGlosu(clean);
+    const pobierz = (fragment) => fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: fragment, jezyk: getLang() === 'en' ? 'en' : 'pl' }),
+    }).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))));
+    let nastepna = pobierz(porcje[0]);
+    let zagrane = 0;
+    for (let i = 0; i < porcje.length; i++) {
+      let blob;
+      try { blob = await nastepna; } catch { break; }
+      if (speakSerial !== mine) return;
+      // Następną porcję pobieramy, zanim ta się skończy — bez przerw między zdaniami.
+      if (i + 1 < porcje.length) { nastepna = pobierz(porcje[i + 1]); nastepna.catch(() => {}); }
+      await grajNagranie(blob);
+      zagrane++;
+      if (speakSerial !== mine) return;
+    }
+    if (zagrane === porcje.length) return;
+    if (zagrane > 0) return;          // urwało się w połowie — nie czytamy od nowa innym głosem
   }
 
   // 2. Głos systemowy przeglądarki
   if ('speechSynthesis' in window) {
     const langPrefix = t('speechLang').slice(0, 2);
     const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
-    speakSerial = {};                 // znacznik tej wypowiedzi
-    const mine = speakSerial;
     for (const part of splitForSpeech(clean)) {
       if (speakSerial !== mine) return;   // ktoś przerwał albo zaczął nową
       await new Promise((resolve) => {
@@ -2549,7 +2610,7 @@ async function startWhisperRecording() {
     const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
     el.input.placeholder = t('chat.dictating');
     try {
-      const res = await fetch('/api/stt', {
+      const res = await fetch(adresStt(), {
         method: 'POST',
         headers: { 'Content-Type': blob.type },
         body: blob,
@@ -2647,7 +2708,7 @@ el.micBtn.addEventListener('click', async () => {
     return;
   }
   stopSpeaking();
-  if (senses.online && senses.caps.whisper) {
+  if (sttSerwera() && window.MediaRecorder) {
     try {
       await startWhisperRecording();
     } catch (err) {
@@ -4007,8 +4068,8 @@ async function kbToggleRecording() {
     if (kbSpeechRec) { kbSpeechRec.stop(); }
     return;
   }
-  // wariant 1: Whisper przez zmysły (nagranie audio)
-  if (senses.online && senses.caps.whisper) {
+  // wariant 1: rozpoznawanie na serwerze (Whisper w zmysłach albo chmura)
+  if (sttSerwera() && window.MediaRecorder) {
     try {
       const stream = await getMedia(audioConstraints());
       const chunks = [];
@@ -4020,7 +4081,7 @@ async function kbToggleRecording() {
         kbSetStatus(t('kb.transcribingNote'));
         try {
           const blob = new Blob(chunks, { type: kbRecorder.mimeType || 'audio/webm' });
-          const res = await fetch('/api/stt', {
+          const res = await fetch(adresStt(), {
             method: 'POST', headers: { 'Content-Type': blob.type }, body: blob,
           });
           const data = await readJsonSafe(res);
@@ -4183,6 +4244,7 @@ function nasluchRaz() {
   wznowienJalowych = 0;
   voiceHeard = '';
   el.voiceTranscript.textContent = '';
+  if (silnikNasluchu() === 'whisper') { startQueryListening(); return; }
   setVoiceState('listening');
   startVoiceRecognizer();
 }
@@ -4257,7 +4319,13 @@ async function enterVoiceMode() {
      więc gdy jest dostępny, zapis przestaje obowiązywać i znika. */
   if (silnikNasluchu() === 'whisper') {
     try { localStorage.removeItem('cosmos.nasluchPrzycisk'); } catch { /* tryb prywatny */ }
-  } else if (localStorage.getItem('cosmos.nasluchPrzycisk') === '1') {
+    // Ktoś właśnie otworzył tryb głosowy — chce mówić, więc od razu słuchamy.
+    if (trybRozmowy()) { startQueryListening(); return; }
+  } else if (localStorage.getItem('cosmos.nasluchPrzycisk') === '1' || /Android/i.test(navigator.userAgent)) {
+    /* Web Speech API na Androidzie piszczy przy każdym starcie i końcu sesji,
+       a ciągłego nasłuchu i tak nie utrzyma. Zamiast kilkunastu piśnięć, zanim
+       Cosmos sam to odkryje, od razu kula pod palcem: jedno dotknięcie, jedna
+       sesja. */
     setVoiceState('push');
     return;
   }
@@ -4451,9 +4519,31 @@ let nasluch = null;            // instancja NasluchWlasny albo null
 let nasluchCisza = null;       // powrót do nasłuchu słowa budzącego po ciszy
 const NASLUCH_CISZA_MS = 9000;
 
+/* ---- GDZIE ROZPOZNAĆ MOWĘ -------------------------------------------
+   Serwer ma łańcuch źródeł (lib/glos.js): Whisper w zmysłach, własny serwer
+   rozpoznawania, OpenAI. Aplikacja pyta więc nie „czy działają zmysły", tylko
+   „czy serwer w ogóle rozpozna mowę" — a lokalność sprawdza osobno, bo od niej
+   zależy, czy wolno słuchać otoczenia w oczekiwaniu na „Hej, Cosmos". */
+function sttLokalne() {
+  return Boolean((senses.online && senses.caps.whisper) || serverConfig.glos?.sttLokalnyWlasny);
+}
+function sttSerwera() {
+  return sttLokalne() || Boolean(serverConfig.glos?.sttChmura);
+}
+/** Adres rozpoznawania z językiem rozmowy i trybem (nasłuch otoczenia albo pytanie). */
+function adresStt(tryb = 'pytanie') {
+  return `/api/stt?jezyk=${getLang() === 'en' ? 'en' : 'pl'}&tryb=${tryb}`;
+}
+/** Tryb rozmowy: mowę rozpoznaje tylko chmura, więc bez nasłuchu otoczenia.
+ *  Cosmos słucha od razu po otwarciu trybu głosowego i po każdej odpowiedzi,
+ *  a po chwili ciszy czeka na dotknięcie kuli — tak jak asystenci w telefonach.
+ *  Web Speech API (i jego piszczenie na Androidzie) nie jest wtedy potrzebne. */
+function trybRozmowy() {
+  return silnikNasluchu() === 'whisper' && !sttLokalne();
+}
+
 function nasluchMozliwy() {
-  return Boolean(window.NasluchWlasny && window.NasluchWlasny.dostepny()
-    && senses.online && senses.caps.whisper);
+  return Boolean(window.NasluchWlasny && window.NasluchWlasny.dostepny() && sttSerwera());
 }
 
 /** 'whisper' albo 'przegladarka'. Wybór z Ustawień; `auto` bierze Whispera,
@@ -4485,6 +4575,7 @@ let nasluchAwarie = 0;
 function startNasluchWlasny() {
   if (nasluch) { nasluch.gluchy(voiceDeaf); return; }
   nasluch = window.NasluchWlasny.utworz({
+    adres: () => adresStt(voiceState === 'wake' ? 'nasluch' : 'pytanie'),
     onWypowiedz: (tekst) => { nasluchAwarie = 0; wypowiedzZNasluchu(tekst); },
     onBlad: (err) => {
       // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
@@ -4723,6 +4814,16 @@ function backToWake() {
   clearTimeout(voiceSilence);
   clearTimeout(nasluchCisza);
   voiceHeard = '';
+  if (trybRozmowy()) {
+    /* Bez lokalnego Whispera nie słuchamy otoczenia — mikrofon się zamyka
+       (bez żadnego dźwięku: to zwykły strumień audio, nie rozpoznawanie
+       przeglądarki), a kula czeka na dotknięcie. */
+    if (nasluch) { nasluch.stop(); nasluch = null; }
+    ustawGluchote(false);
+    setVoiceState('push');
+    el.voiceTranscript.textContent = '';
+    return;
+  }
   if (voiceRec && voiceRec.__ostatniaDlugosc) {
     oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
   }
@@ -5799,7 +5900,9 @@ async function zapiszSprzet() {
 function odswiezWyborNasluchu() {
   const sel = $('set-stt');
   sel.value = localStorage.getItem('cosmos.sttEngine') || 'auto';
-  const silnik = silnikNasluchu() === 'whisper' ? t('set.sttWhisper') : t('set.sttBrowser');
+  const silnik = silnikNasluchu() === 'whisper'
+    ? t(sttLokalne() ? 'set.sttZrodloLokalne' : 'set.sttZrodloChmura')
+    : t('set.sttBrowser');
   $('set-stt-now').textContent = t('set.sttNow', { silnik });
 }
 $('check-model-cloud').addEventListener('click', () => checkModelField('cloud'));
