@@ -862,7 +862,10 @@ async function extractKbText(name, mime, buf) {
   return '';
 }
 
-function chunkText(text, size = 1500, max = 30) {
+/* 140 fragmentów po 1500 znaków = cały tekst, który trzymamy (200 tys. znaków).
+   Przy dawnych 30 baza wiedzy przeszukiwała tylko pierwsze 45 tys. —
+   reszta dłuższego PDF-a była niewidoczna dla pytań. */
+function chunkText(text, size = 1500, max = 140) {
   const chunks = [];
   for (let i = 0; i < text.length && chunks.length < max; i += size) {
     chunks.push(text.slice(i, i + size));
@@ -938,13 +941,13 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
   // blokujemy tym odpowiedzi, przy kolejnym pytaniu będą już gotowe.
   if (qmodel) reembedKbChunks(qmodel);
 
-  const threshold = qvec ? 0.35 : 0.18;
+  // Próg dla każdego fragmentu osobno — patrz searchMemory w lib/pamiec.js.
   return pool
-    .map((c) => ({
-      c,
-      score: (qvec && sameModel(c, qmodel)) ? cosine(qvec, c.embedding) : keywordScore(query, c.text),
-    }))
-    .filter((s) => s.score > threshold)
+    .map((c) => {
+      const wektor = Boolean(qvec && sameModel(c, qmodel));
+      return { c, wektor, score: wektor ? cosine(qvec, c.embedding) : keywordScore(query, c.text) };
+    })
+    .filter((s) => s.score > (s.wektor ? 0.35 : 0.18))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((s) => ({ name: s.c.name, text: s.c.text }));
@@ -1774,14 +1777,31 @@ async function handleChat(req, res) {
     }
   }
 
+  /* Tryb głosowy: odpowiedź zostanie PRZECZYTANA. Model o tym nie wiedział
+     i pisał listy, tabele i sekcję źródeł — lektor czytał je adres po adresie
+     albo ucinał w połowie. Stoi na końcu dodatkowych instrukcji. */
+  if (payload.trybGlosowy === true) {
+    extras.push({
+      role: 'system',
+      content: 'TRYB GŁOSOWY: Twoja odpowiedź zostanie przeczytana na głos. Mów jak w rozmowie: '
+        + 'zwykle 2–4 krótkie zdania, bez list, tabel, nagłówków, linków i sekcji „Źródła". '
+        + 'Liczby i godziny podawaj tak, jak się je mówi. Narzędzi używasz normalnie, '
+        + 'ale sam wynik streść krótko — szczegóły użytkownik zobaczy na ekranie.',
+    });
+  }
+
   if (extras.length) {
     const insertAt = messages[0]?.role === 'system' ? 1 : 0;
     messages.splice(insertAt, 0, ...extras);
   }
 
   // Wybór modelu — po zbudowaniu kontekstu, bo baza wiedzy mogła dodać obrazy.
-  const hasImages = messages.some((m) => Array.isArray(m.content) &&
-    m.content.some((p) => p.type === 'image_url'));
+  /* Liczy się OSTATNIA wiadomość człowieka. Zdjęcie z pierwszej tury
+     kierowało każdą następną do modelu wizyjnego, choć rozmowa dawno o nim
+     zapomniała (klient i tak wysyła obrazy tylko z ostatniej wiadomości). */
+  const ostatniaOdCzlowieka = [...messages].reverse().find((m) => m.role === 'user');
+  const hasImages = Boolean(ostatniaOdCzlowieka && Array.isArray(ostatniaOdCzlowieka.content)
+    && ostatniaOdCzlowieka.content.some((p) => p.type === 'image_url'));
 
   let model = payload.model || ep.model;
 

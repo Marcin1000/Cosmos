@@ -741,7 +741,9 @@ function messageElement(m, idx = -1) {
   if (m.search) {
     msg.className = 'msg msg-search';
     msg.innerHTML =
-      `<details class="search-results"><summary>${t('chat.searchResults', { q: escapeHtml(m.searchQuery || '') })}</summary>` +
+      `<details class="search-results"><summary>${(!m.narzedzie || m.narzedzie === 'szukaj')
+        ? t('chat.searchResults', { q: escapeHtml(m.searchQuery || '') })
+        : t('chat.toolResult', { n: t(`narzedzie.${m.narzedzie}`), q: escapeHtml(m.searchQuery || '') })}</summary>` +
       `<pre>${escapeHtml(text)}</pre></details>`;
     return msg;
   }
@@ -1740,6 +1742,8 @@ async function streamOnce(conv, opcje = {}) {
           max_tokens: settings.maxTokens,
           kbSelected: [...kbSelected],
           useSearch: settings.offline ? false : undefined,
+          // odpowiedź będzie czytana na głos — model ma mówić, nie pisać
+          trybGlosowy: voiceMode || undefined,
           bieg: biegId,
           rozmowa: conv.id,
         }),
@@ -2024,8 +2028,10 @@ const {
    „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
    Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
    Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
+// Które narzędzie właśnie pracuje — żeby wynik archiwum nie był podpisany „Wyniki wyszukiwania".
+let narzedzieTeraz = '';
 function dodajWynikNarzedzia(conv, tresc, etykieta) {
-  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta });
+  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta, narzedzie: narzedzieTeraz || undefined });
   saveConversations();
   renderMessages();
 }
@@ -2204,15 +2210,19 @@ async function runGeneration(conv, podpiecie = null) {
          mówimy modelowi, że ma dokończyć tekstem, i domykamy turę tą samą
          drogą co zawsze. */
       if (ostatnia && !uzyte.zawszeDozwolone) {
-        const limit = uzyte.gdyLimit ? uzyte.gdyLimit(dop) : null;
-        if (limit) {
-          dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta);
-          const ostatniaTresc = await streamOnce(conv);
-          finalText = await domknijOdpowiedz(conv, ostatniaTresc);
-        } else {
-          // Narzędzie bez własnego komunikatu: po prostu domknij tym, co jest.
-          finalText = await domknijOdpowiedz(conv, acc);
-        }
+        /* Każde narzędzie dostaje komunikat o limicie — także archiwum, plan
+           i kod. Bez niego tura kończyła się samą zapowiedzią („Teraz jeszcze
+           Twoje archiwum.") i ciszą. */
+        const limit = uzyte.gdyLimit ? uzyte.gdyLimit(dop) : {
+          tresc: 'LIMIT NARZĘDZI W TEJ TURZE WYCZERPANY — nie używaj już żadnych znaczników. '
+            + 'Dokończ teraz odpowiedź tekstem na podstawie tego, co już masz, a jeśli '
+            + 'czegoś nie zdążyłeś sprawdzić, powiedz to jednym zdaniem.',
+          etykieta: uzyte.nazwa,
+        };
+        narzedzieTeraz = uzyte.nazwa;
+        dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta);
+        const ostatniaTresc = await streamOnce(conv);
+        finalText = await domknijOdpowiedz(conv, ostatniaTresc);
         break;
       }
 
@@ -2236,6 +2246,7 @@ async function runGeneration(conv, podpiecie = null) {
       const dopGrafiki = grafikiTez && grafikiTez.dopasuj(acc);
       const przedTekst = stripSearchMarker(acc.replace(dop[0], ''));
 
+      narzedzieTeraz = uzyte.nazwa;
       const wynik = await uzyte.wykonaj({
         acc,
         dop,
@@ -2253,6 +2264,7 @@ async function runGeneration(conv, podpiecie = null) {
       }
 
       if (dopGrafiki) {
+        narzedzieTeraz = 'grafiki';
         const wynikGrafik = await grafikiTez.wykonaj({
           acc, dop: dopGrafiki, conv, depth, ostatnia, przed: przedTekst, stan,
         });
@@ -2451,13 +2463,19 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
  *  tabele („Przysłona Czas ISO — — —") i urywał w pół zdania na 1200 znaku. */
 function stripForSpeech(text) {
   let t = String(text || '');
+  if (typeof rozdzielMyslenie === 'function') t = rozdzielMyslenie(t).tresc;   // <think> się nie czyta
   if (typeof stripSearchMarker === 'function') t = stripSearchMarker(t);   // wszystkie znaczniki narzędzi
   t = t
+    // Sekcja źródeł to linki dla oka — lektor czytał je po kolei, adres po adresie.
+    .replace(/\n[ \t]*(?:\*\*)?(?:Źródła|Zrodla|Sources)(?:\*\*)?:?[ \t]*\n[\s\S]*$/i, '')
+    .replace(/【[^】]*】/g, '')                                  // przypisy w stylu 【1†L1-L4】
+    .replace(/\[\d+(?:[,–-]\s*\d+)*\](?!\()/g, '')              // przypisy [1], [2–3]
     .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/https?:\/\/\S+/g, '')                           // adresów się nie czyta
+    .replace(/https?:\/\/[^\s)\]]+/g, '')                     // adresów się nie czyta
+    .replace(/\(\s*[,;:]?\s*\)/g, '')                             // „( )" po wyciętym adresie
     .replace(/^[ \t]*\|?[ \t]*:?-{3,}.*$/gm, '')               // linia oddzielająca w tabeli
     .replace(/^[ \t]*\|(.+)\|[ \t]*$/gm, (_, w) => w.split('|').map((k) => k.trim()).filter(Boolean).join(', ') + '.')
     .replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]+/gm, '')           // punktory list
@@ -2470,12 +2488,17 @@ function stripForSpeech(text) {
     .map((l) => (/[.!?:;,…]$/.test(l) ? l : `${l}.`))
     .join(' ')
     .replace(/\s+/g, ' ')
+    .replace(/\s+([.,!?;:])/g, '$1')          // „100 ." po wyciętym przypisie
     .trim();
-  if (t.length > 1200) {
-    // Ucinamy na końcu zdania, nie w połowie słowa.
-    const kawalek = t.slice(0, 1200);
+  /* Czytamy porcjami (porcjeGlosu), więc długość nie jest problemem techniczną
+     — ale pięciominutowego monologu nikt nie słucha. Ucinamy na końcu zdania
+     i MÓWIMY, że reszta jest na ekranie; dawniej cięcie było bez słowa. */
+  const LIMIT_CZYTANIA = 2400;
+  if (t.length > LIMIT_CZYTANIA) {
+    const kawalek = t.slice(0, LIMIT_CZYTANIA);
     const koniec = Math.max(kawalek.lastIndexOf('. '), kawalek.lastIndexOf('! '), kawalek.lastIndexOf('? '));
-    t = koniec > 400 ? kawalek.slice(0, koniec + 1) : kawalek;
+    t = (koniec > 400 ? kawalek.slice(0, koniec + 1) : kawalek) + ' ' + (getLang() === 'en'
+      ? 'The rest is on the screen.' : 'Resztę masz na ekranie.');
   }
   return t;
 }

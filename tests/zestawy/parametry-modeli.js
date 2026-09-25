@@ -50,8 +50,12 @@ const atrapa = http.createServer((req, res) => {
   zadania.length = 0;
   let r = await zapytajModel(ep, cialo('gpt-5'));
   ok(r.status === 200 && zadania.length === 1, `gpt-5: jedno żądanie (${zadania.length})`);
-  ok(zadania[0].max_completion_tokens === 100 && zadania[0].max_tokens === undefined && zadania[0].temperature === undefined,
+  ok(zadania[0].max_completion_tokens >= 100 && zadania[0].max_tokens === undefined && zadania[0].temperature === undefined,
     'gpt-5: max_completion_tokens, bez max_tokens i temperatury');
+  ok(zadania[0].max_completion_tokens >= 16000, `gpt-5: sufit odpowiedzi mieści myślenie (${zadania[0].max_completion_tokens})`);
+  zadania.length = 0;
+  await zapytajModel(ep, cialo('nemotron-zwykly'));
+  ok(zadania[0].max_tokens === 100, `zwykły model: limit bez zmian (${zadania[0].max_tokens})`);
 
   zadania.length = 0;
   r = await zapytajModel(ep, cialo('wybredny'));
