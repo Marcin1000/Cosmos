@@ -11,7 +11,11 @@
  *   3. po ciszy kula czeka na dotknięcie („push"), mikrofon zamknięty,
  *   4. dotknięcie kuli → znowu „słucham", dalej zero SpeechRecognition,
  *   5. telefon z Androidem BEZ rozpoznawania na serwerze → od razu kula pod
- *      palcem, bez kilkunastu piśnięć, zanim Cosmos sam to odkryje.
+ *      palcem, bez kilkunastu piśnięć, zanim Cosmos sam to odkryje,
+ *   6. otwarcie trybu, ZANIM przyjdzie /api/config — dalej zero
+ *      SpeechRecognition (dawniej: 4, a po konfiguracji dwa nasłuchy naraz),
+ *   7. szybkie klikanie kuli i zamknięcie trybu → mikrofon naprawdę
+ *      zamknięty (dawniej zostawała żywa ścieżka audio).
  */
 const http = require('node:http');
 const { przegladarka, serwerCosmosa, czekajNa, zabij } = require('../pomoc');
@@ -39,6 +43,19 @@ const atrapa = http.createServer((req, res) => {
 
 const LICZ_SR = () => {
   window.__srNowe = 0;
+  // Żywe ścieżki mikrofonu — „zamknięty" ma znaczyć zamknięty, nie ukryty.
+  window.__sciezki = [];
+  const gum = navigator.mediaDevices && navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  if (gum) {
+    navigator.mediaDevices.getUserMedia = async (o) => {
+      // Prawdziwy telefon oddaje mikrofon po chwili (pytanie o zgodę, sprzęt).
+      if (window.__gumDelay) await new Promise((r) => setTimeout(r, window.__gumDelay));
+      const s = await gum(o);
+      window.__sciezki.push(...s.getAudioTracks());
+      return s;
+    };
+  }
+  window.__zywe = () => window.__sciezki.filter((t) => t.readyState === 'live').length;
   const Oryginal = window.webkitSpeechRecognition || window.SpeechRecognition;
   function Liczony() {
     window.__srNowe++;
@@ -67,8 +84,8 @@ const LICZ_SR = () => {
     const p = await ctx.newPage();
     await p.addInitScript(LICZ_SR);
     await p.goto(`http://127.0.0.1:${PORT_Z}/app`, { waitUntil: 'load' });
-    await p.waitForFunction(() => window.serverConfig !== undefined || true);
-    await p.waitForTimeout(1500);      // /api/config i /api/status
+    // `serverConfig` to `let` w skrypcie, nie własność `window` — pytamy wprost.
+    await p.waitForFunction(() => Boolean(typeof serverConfig !== 'undefined' && serverConfig.glos), null, { timeout: 8000 }).catch(() => {});
     ok(await p.evaluate(() => Boolean(serverConfig.glos && serverConfig.glos.sttChmura)), '/api/config zgłasza rozpoznawanie w chmurze');
     await p.click('#voice-btn');
     await p.waitForTimeout(800);
@@ -83,6 +100,32 @@ const LICZ_SR = () => {
     s = await stan(p);
     ok(/listening/.test(s.klasa), `dotknięcie kuli → „słucham" (${s.klasa})`);
     ok(s.sr === 0, `dalej zero SpeechRecognition (${s.sr})`);
+    // 7. zamknięcie trybu, zanim mikrofon zdążył się otworzyć
+    await p.click('#voice-close');
+    await p.waitForTimeout(500);
+    await p.evaluate(() => { window.__gumDelay = 1200; });
+    await p.click('#voice-btn');
+    await p.waitForTimeout(150);
+    await p.click('#voice-close');
+    await p.waitForTimeout(2500);
+    const zywe = await p.evaluate(() => window.__zywe());
+    ok(zywe === 0, `zamknięcie w trakcie otwierania mikrofonu → mikrofon zamknięty (żywych ścieżek: ${zywe})`);
+    await ctx.close();
+  }
+
+  // --- 6: tryb otwarty, zanim przyszła konfiguracja
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'] });
+    const p = await ctx.newPage();
+    await p.addInitScript(LICZ_SR);
+    await p.route('**/api/config', async (r) => { await new Promise((w) => setTimeout(w, 2500)); r.continue(); });
+    await p.route('**/api/status', async (r) => { await new Promise((w) => setTimeout(w, 2500)); r.continue(); });
+    await p.goto(`http://127.0.0.1:${PORT_Z}/app`, { waitUntil: 'load' });
+    await p.click('#voice-btn');
+    await p.waitForTimeout(4500);
+    const s = await stan(p);
+    ok(s.sr === 0, `otwarcie przed /api/config: zero SpeechRecognition (${s.sr})`);
+    ok(/listening|push/.test(s.klasa), `otwarcie przed /api/config: tryb rozmowy po nadejściu konfiguracji (${s.klasa})`);
     await ctx.close();
   }
 
