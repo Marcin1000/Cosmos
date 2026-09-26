@@ -183,6 +183,10 @@ async function zapytajModel(kbSelected) {
   const maly = (await lista()).find((x) => x.name === 'maly.jpg');
   const z4 = await zapytajModel([maly && maly.id]);
   ok(maly && !maly.podglad && z4.obrazy.length === 1, 'mały obraz idzie w oryginale, bez podglądu');
+  // Galeria na telefonie pobierała przy każdym otwarciu wszystko od nowa (89 MB) — plik o danym id się nie zmienia.
+  const surowy = await fetch(`${ADRES}/api/kb/raw?id=${encodeURIComponent(maly ? maly.id : '')}`);
+  ok(/immutable/.test(surowy.headers.get('cache-control') || '') && /private/.test(surowy.headers.get('cache-control') || '')
+    && Number(surowy.headers.get('content-length')) > 0, `plik z bazy ma pamięć podręczną i długość (${surowy.headers.get('cache-control')})`);
 
   // --- 6. mały BMP ---------------------------------------------------------------------
   await p.evaluate((b64) => {

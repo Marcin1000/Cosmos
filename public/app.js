@@ -2113,10 +2113,15 @@ async function wznowBieg() {
   } catch { return; }                 // serwer offline — wznowienie poczeka
 
   const b = (dane.biegi || []).find((x) => x.id === zapis.id);
-  /* Bieg skończył się, gdy nas nie było. Serwer zapisał odpowiedź do rozmowy
-     sam (lib/biegi.js), więc nie ma czego dociągać — wystarczy posprzątać
-     znacznik, żeby nie próbować w nieskończoność. */
-  if (!b || !b.trwa) { zapamietajBieg(null); return; }
+  /* Bieg skończył się, gdy nas nie było, a serwer zapisał już odpowiedź do
+     rozmowy sam (lib/biegi.js) — nie ma czego dociągać. Skończony, ale jeszcze
+     NIE zapisany (powrót do 20 s po końcu): podpinamy się i odbieramy całość.
+     Dawniej na ekranie zostawało wtedy samo pytanie (zespół IT, runda 4). */
+  if (!b || (!b.trwa && b.zapisany)) {
+    zapamietajBieg(null);
+    if (b && zapis.convId && activeId === zapis.convId) await selectConversation(zapis.convId);
+    return;
+  }
 
   const conv = zapis.convId && activeId === zapis.convId ? activeConversation : null;
   if (!conv) {
