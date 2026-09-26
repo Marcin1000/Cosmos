@@ -150,6 +150,13 @@ dowolny z cennika. Inne modele dopuszczasz w `.env`:
 odpowiedzi ma sufit `COSMOS_MAX_TOKENS_CZLONKA` (domyślnie 8192). Z własnym
 kluczem osoba wybiera, co chce — płaci sama.
 
+Każda osoba ma też **limit miejsca na dysku** — baza wiedzy, wyniki Studia
+i rozmowy: `COSMOS_LIMIT_MB_OSOBY` (domyślnie 500 MB). Po przekroczeniu zapis
+odpowiada czytelnym błędem, a nie „zapisano". W panelu Dostęp przy każdej
+osobie widać, ile zajmuje, a nad listą — ile zostało miejsca na dysku serwera
+(poniżej 5% napis robi się czerwony). Twoje konto limitu nie ma, chyba że
+ustawisz `COSMOS_LIMIT_MB_WLASCICIELA`.
+
 **Lokalny GPU** to też **zmysły** na Twoim komputerze: Whisper, czytanie
 głosem Piper, wykrywanie obiektów, wyciąganie tekstu z PDF-ów, powiększanie
 obrazów. Bez tego przełącznika osoba ma mikrofon, głos i kamerę

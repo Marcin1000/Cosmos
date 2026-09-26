@@ -127,6 +127,15 @@ function utworzKonta({ $, t }) {
     k.classList.toggle('blad', Boolean(blad));
   }
 
+  /** Rozmiar w MB albo GB, w języku interfejsu. */
+  function rozmiar(bajty) {
+    const jezyk = (typeof document !== 'undefined' && document.documentElement && document.documentElement.lang === 'en') ? 'en-GB' : 'pl-PL';
+    const mb = (bajty || 0) / 1048576;
+    return mb >= 1024
+      ? `${(mb / 1024).toLocaleString(jezyk, { maximumFractionDigits: 1 })} GB`
+      : `${mb.toLocaleString(jezyk, { maximumFractionDigits: 1 })} MB`;
+  }
+
   async function odswiezKonto() {
     const r = await zadaj('/api/konto');
     if (!r.ok) return;
@@ -137,6 +146,11 @@ function utworzKonta({ $, t }) {
     $('konto-nazwa-widok').textContent = u.nazwa || u.login;
     $('konto-login').textContent = u.login;
     $('konto-rola').textContent = u.rola === 'wlasciciel' ? t('acc.roleOwner') : t('acc.roleMember');
+    // Zajęte miejsce — przy limicie z limitem, żeby pełny dysk nie był niespodzianką.
+    const m = r.json.miejsce;
+    $('konto-miejsce').textContent = m ? ` · ${m.limit
+      ? t('acc.diskOf', { zajete: rozmiar(m.zajete), limit: rozmiar(m.limit) })
+      : t('acc.disk', { zajete: rozmiar(m.zajete) })}` : '';
     $('konto-nazwa').value = u.nazwa || '';
     /* Tryb domowy: nie ma logowania, więc nie ma czego wylogować ani zmieniać.
        Zmiana hasła zostaje — to właśnie nią właściciel włącza logowanie. */
@@ -201,7 +215,8 @@ function utworzKonta({ $, t }) {
     const z = u.zuzycie || {};
     opis.append(element('div', 'osoba-meta mono',
       `${u.login} · ${u.rola === 'wlasciciel' ? t('acc.roleOwner') : t('acc.roleMember')} · `
-      + `${t('acc.lastSeen')}: ${kiedy(u.ostatnio)} · ${t('acc.messages', { n: z.wiadomosci || 0, dzis: z.dzien === new Date().toISOString().slice(0, 10) ? (z.dzisiaj || 0) : 0 })}`));
+      + `${t('acc.lastSeen')}: ${kiedy(u.ostatnio)} · ${t('acc.messages', { n: z.wiadomosci || 0, dzis: z.dzien === new Date().toISOString().slice(0, 10) ? (z.dzisiaj || 0) : 0 })}`
+      + (u.miejsce ? ` · ${t('acc.disk', { zajete: rozmiar(u.miejsce.zajete) })}` : '')));
     glowa.append(opis);
     w.append(glowa);
     if (u.rola === 'wlasciciel') return w;
@@ -270,6 +285,16 @@ function utworzKonta({ $, t }) {
     blok.hidden = false;
     $('dostep-bez-hasla').hidden = r.json.logowanie;
     $('dostep-zapros').disabled = !r.json.logowanie;
+    /* Wolne miejsce na dysku VPS-a. Pełny dysk to „nic się nie zapisze"
+       dla wszystkich naraz — lepiej zobaczyć to tu niż po fakcie. */
+    const d = r.json.dysk;
+    const dysk = $('dostep-dysk');
+    if (d && d.calosc) {
+      const malo = d.wolne / d.calosc < 0.05;
+      dysk.textContent = t(malo ? 'acc.serverDiskLow' : 'acc.serverDisk', { wolne: rozmiar(d.wolne), calosc: rozmiar(d.calosc) });
+      dysk.classList.toggle('blad', malo);
+      dysk.hidden = false;
+    } else dysk.hidden = true;
     const lista = $('dostep-lista');
     lista.replaceChildren(...r.json.uzytkownicy.map(wierszOsoby));
     const zap = $('dostep-zaproszenia');

@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 105 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 106 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -288,6 +288,12 @@ Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności. Ceną jes
 - **Zapis przez `zapiszAtomowo`.** `kopia: true` (poprzednia wersja jako `.bak`, twarde
   dowiązanie) dla danych nie do odtworzenia; `trwale: true` (fsync) tylko dla małych
   krytycznych plików — fsync stoi w pętli zdarzeń. Duże i częste zapisy — odroczone.
+- **Nieudany zapis nie odpowiada „ok".** Funkcje `save*` (i `saveJsonFile`) nie rzucają,
+  ale ZWRACAJĄ błąd (`null` = zapisane); trasa sprawdza wynik i odpowiada
+  `bladZapisu(res, err)` — 507 przy pełnym dysku i przekroczonym limicie, 500 przy
+  innym błędzie (`lib/miejsce.js`). Stan w pamięci zmieniaj dopiero po udanym zapisie.
+  Nowy zapis pliku w imieniu osoby woła przedtem `miejsce_.sprawdz(bajty)` (limit
+  `COSMOS_LIMIT_MB_OSOBY`); `kbAddFile` robi to za wszystkich, którzy idą przez bazę wiedzy.
 
 ### Front-end — bez budowania
 

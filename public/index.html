@@ -321,7 +321,7 @@
             <span class="konto-avatar" id="konto-avatar" aria-hidden="true"></span>
             <div>
               <div class="konto-nazwa" id="konto-nazwa-widok"></div>
-              <div class="konto-meta mono"><span id="konto-login"></span> · <span id="konto-rola"></span></div>
+              <div class="konto-meta mono"><span id="konto-login"></span> · <span id="konto-rola"></span><span id="konto-miejsce"></span></div>
             </div>
             <button type="button" class="btn-ghost konto-wyloguj" id="konto-wyloguj" data-i18n="acc.logout">Wyloguj</button>
           </div>
@@ -378,9 +378,10 @@
             <span class="field-hint" data-i18n="acc.linkHint">Link działa raz i wygasa po 7 dniach. Wyślij go tylko tej osobie — kto go otworzy pierwszy, ten zakłada konto.</span>
           </div>
           <span class="field-hint" id="dostep-bez-hasla" hidden data-i18n="acc.needPassword">Zanim zaprosisz kogokolwiek, ustaw sobie hasło (w .env: COSMOS_PASSWORD, albo powyżej). Bez hasła każdy, kto zna adres, wchodzi jako Ty.</span>
+          <span class="field-hint konto-komunikat" id="dostep-dysk" hidden></span>
           <div class="dostep-lista" id="dostep-lista"></div>
           <div class="dostep-lista" id="dostep-zaproszenia"></div>
-          <span class="field-hint" data-i18n="acc.privacy">Widzisz konta, ostatnią wizytę i liczbę wiadomości. Rozmów, pamięci i bazy wiedzy innych osób nie widzisz — i nikt nie widzi Twoich.</span>
+          <span class="field-hint" data-i18n="acc.privacy">Widzisz konta, ostatnią wizytę, liczbę wiadomości i zajęte miejsce. Rozmów, pamięci i bazy wiedzy innych osób nie widzisz — i nikt nie widzi Twoich.</span>
         </div>
 
         <label data-karta="silniki" class="field">

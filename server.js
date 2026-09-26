@@ -100,6 +100,9 @@ const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
 // Praca dłuższa niż 100 s Cloudflare'a (Studio) — zadanie w tle z numerem do dopytywania.
 const zadania_ = require('./lib/zadania.js').utworzZadania();
+// Limit miejsca na osobę i 507 zamiast „ok", gdy zapis się nie udał.
+const miejsce_ = require('./lib/miejsce.js');
+const bladZapisu = (res, err) => miejsce_.odpowiedzBledemZapisu(res, sendJson, err);
 const { llmComplete, blindToImages, zapytajModel } = require('./lib/model.js');
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
@@ -163,12 +166,19 @@ const U = () => stanOsoby(BRIEFING);
 const CONV_DIR = () => path.join(U().katalog, 'conversations');
 const CONV_INDEX = () => path.join(CONV_DIR(), 'index.json');
 
-function saveConvIndex() {
-  try {
-    zapiszAtomowo(CONV_INDEX(), JSON.stringify(U().convIndex));
-  } catch (err) {
-    console.error('Nie udało się zapisać indeksu rozmów:', err.message);
+/* Funkcje save* NIE rzucają (wołają je też timery, gdzie wyjątek wywróciłby
+   proces), ale ZWRACAJĄ błąd — null znaczy „zapisane". Trasa, która po zapisie
+   odpowiada „ok", sprawdza wynik: pełny dysk ma dać 507, a nie `{ ok: true }`
+   dla czegoś, czego po restarcie nie będzie (lib/miejsce.js). */
+function zapiszLubBlad(opis, fn) {
+  try { fn(); return null; } catch (err) {
+    console.error(`Nie udało się zapisać ${opis}:`, err.message);
+    return err;
   }
+}
+
+function saveConvIndex() {
+  return zapiszLubBlad('indeksu rozmów', () => zapiszAtomowo(CONV_INDEX(), JSON.stringify(U().convIndex)));
 }
 
 // Sanityzacja ID → tylko nasz alfabet uid; blokuje path traversal.
@@ -255,7 +265,7 @@ function searchConversationsContent(query) {
  */
 const SPRZET_FILE = () => path.join(U().katalog, 'sprzet.json');
 function saveSprzet(dane) {
-  U().sprzet = {
+  const sprzet = {
     korpus: String((dane && dane.korpus) || '').slice(0, 120),
     obiektywy: String((dane && dane.obiektywy) || '').slice(0, 400),
     /* Dron, gimbal, statyw, slider. Osobne pole, bo to NIE jest optyka —
@@ -263,17 +273,19 @@ function saveSprzet(dane) {
        nakręcić. Wpisywane jak człowiek mówi: „Mavic 3, Ronin-S, statyw". */
     dodatki: String((dane && dane.dodatki) || '').slice(0, 300),
   };
-  try {
-    zapiszAtomowo(SPRZET_FILE(), JSON.stringify(U().sprzet));
-  } catch (err) { console.error('Nie udało się zapisać sprzętu:', err.message); }
+  // Pamięć zmienia się dopiero po udanym zapisie — inaczej po błędzie pokazywałaby coś, czego nie ma na dysku.
+  const blad = zapiszLubBlad('sprzętu', () => zapiszAtomowo(SPRZET_FILE(), JSON.stringify(sprzet)));
+  if (!blad) U().sprzet = sprzet;
+  return blad;
 }
 
 // Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
 const PROFILE_FILE = () => path.join(U().katalog, 'profile.txt');
 function saveProfile(text) {
-  U().profile = String(text || '').slice(0, 4000);
-  try { zapiszAtomowo(PROFILE_FILE(), U().profile); }
-  catch (err) { console.error('Nie udało się zapisać profilu:', err.message); }
+  const profil = String(text || '').slice(0, 4000);
+  const blad = zapiszLubBlad('profilu', () => zapiszAtomowo(PROFILE_FILE(), profil));
+  if (!blad) U().profile = profil;
+  return blad;
 }
 
 /* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
@@ -286,13 +298,15 @@ const LOCATION_FILE = () => path.join(U().katalog, 'location.txt');
 const WSPOLRZEDNE_FILE = () => path.join(U().katalog, 'location.json');
 
 function saveLocation(text, wspolrzedne) {
-  U().location = String(text || '').trim().slice(0, 200);
-  try { zapiszAtomowo(LOCATION_FILE(), U().location); }
-  catch (err) { console.error('Nie udało się zapisać lokalizacji:', err.message); }
+  const nazwa = String(text || '').trim().slice(0, 200);
+  const blad = zapiszLubBlad('lokalizacji', () => zapiszAtomowo(LOCATION_FILE(), nazwa));
+  if (blad) return blad;
+  U().location = nazwa;
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
-    U().wspolrzedne = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
-    try { zapiszAtomowo(WSPOLRZEDNE_FILE(), JSON.stringify(U().wspolrzedne)); }
-    catch (err) { console.error('Nie udalo sie zapisac wspolrzednych:', err.message); }
+    const wsp = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
+    const bladWsp = zapiszLubBlad('współrzędnych', () => zapiszAtomowo(WSPOLRZEDNE_FILE(), JSON.stringify(wsp)));
+    if (bladWsp) return bladWsp;
+    U().wspolrzedne = wsp;
     /* Archiwum liczy pore swiatla dla zdjec bez GPS-u wzgledem domu, wiec
        zmiana lokalizacji musi je przeliczyc - inaczej wpisy dodane wczesniej
        zostaja z `null` mimo ze jest juz z czego je policzyc. */
@@ -302,6 +316,7 @@ function saveLocation(text, wspolrzedne) {
       if (ile) addEvent('archiwum', `przeliczono pore swiatla dla ${ile} plikow`);
     }
   }
+  return null;
 }
 
 /* Data i godzina. Model zna świat wyłącznie do końca swojego treningu —
@@ -348,7 +363,8 @@ async function handleGeokod(req, res) {
     if (!nazwa) return sendJson(res, 502, { error: 'Nie udało się ustalić nazwy miejsca.' });
     // Zapisujemy od razu: to jedyny moment, w którym mamy i nazwę,
     // i współrzędne. Bez nich złota godzina nie ma z czego się policzyć.
-    saveLocation(nazwa, { lat, lon });
+    const blad = saveLocation(nazwa, { lat, lon });
+    if (blad) return bladZapisu(res, blad);
     addEvent('lokalizacja', `Ustalono lokalizację: ${nazwa}`);
     return sendJson(res, 200, { location: nazwa, lat, lon });
   } catch (err) {
@@ -381,7 +397,8 @@ async function handleConversations(req, res, pathname) {
       zapiszAtomowo(convPath(id), JSON.stringify(conv));
     } catch { /* plik mógł zniknąć — indeks i tak zaktualizowany */ }
     sortConvIndex();
-    saveConvIndex();
+    const blad = saveConvIndex();
+    if (blad) return bladZapisu(res, blad);
     return sendJson(res, 200, { ok: true, meta: entry });
   }
 
@@ -418,11 +435,21 @@ async function handleConversations(req, res, pathname) {
     conv.id = id;
     conv.updatedAt = Date.now();
     if (!conv.createdAt) conv.createdAt = conv.updatedAt;
+    /* Rozmowa ze zdjęciami potrafi urosnąć — liczy się do limitu osoby tak
+       samo jak baza wiedzy. Liczymy przyrost, nie całość: poprawka literówki
+       w rozmowie przy pełnym limicie ma przejść. */
+    const tresc = JSON.stringify(conv);
+    let bylo = 0;
+    try { bylo = fs.statSync(convPath(id)).size; } catch { /* nowa rozmowa */ }
+    const przyrost = Buffer.byteLength(tresc) - bylo;
+    if (przyrost > 0) await miejsce_.sprawdz(przyrost);
     try {
-      zapiszAtomowo(convPath(id), JSON.stringify(conv));
+      zapiszAtomowo(convPath(id), tresc);
     } catch (err) {
+      if (miejsce_.toBrakMiejsca(err)) return bladZapisu(res, err);
       return sendJson(res, 500, { error: `Zapis rozmowy nie powiódł się: ${err.message}` });
     }
+    miejsce_.dolicz(przyrost);
     const prev = U().convIndex.find((c) => c.id === id);
     const meta = {
       id,
@@ -434,12 +461,19 @@ async function handleConversations(req, res, pathname) {
     const i = U().convIndex.findIndex((c) => c.id === id);
     if (i >= 0) U().convIndex[i] = meta; else U().convIndex.push(meta);
     sortConvIndex();
-    saveConvIndex();
+    const bladIndeksu = saveConvIndex();
+    if (bladIndeksu) return bladZapisu(res, bladIndeksu);
     return sendJson(res, 200, { ok: true, meta });
   }
   if (req.method === 'DELETE' && id) {
+    const usunieta = U().convIndex.find((c) => c.id === id);
     U().convIndex = U().convIndex.filter((c) => c.id !== id);
-    saveConvIndex();
+    const blad = saveConvIndex();
+    if (blad) {
+      // Indeks na dysku dalej ją ma — niech i w pamięci wróci, zamiast zniknąć do restartu.
+      if (usunieta) { U().convIndex.push(usunieta); sortConvIndex(); }
+      return bladZapisu(res, blad);
+    }
     try { fs.unlinkSync(convPath(id)); } catch { /* już nie ma */ }
     return sendJson(res, 200, { ok: true });
   }
@@ -452,13 +486,11 @@ const KB_FILES = () => path.join(KB_DIR(), 'files');
 const KB_INDEX = () => path.join(KB_DIR(), 'index.json');
 
 function saveKb() {
-  try {
+  return zapiszLubBlad('bazy wiedzy', () => {
     fs.mkdirSync(KB_FILES(), { recursive: true });
     // `.bak`: indeksu bazy wiedzy nie da się odbudować z plików — opisy i wektory są tylko tu.
     zapiszAtomowo(KB_INDEX(), JSON.stringify(U().kbItems), { kopia: true });
-  } catch (err) {
-    console.error('Nie udało się zapisać bazy wiedzy:', err.message);
-  }
+  });
 }
 
 const TEXT_EXTS = new Set(['txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'js', 'ts', 'py',
@@ -1023,17 +1055,37 @@ async function kbSearch(query, excludeIds = [], limit = 4) {
 }
 
 async function kbAddFile(name, mime, buf, presetText = null) {
+  // Limit miejsca osoby — przed zapisem, nie po (lib/miejsce.js). Obejmuje też
+  // wyniki Studia i notatki głosowe, bo wszystkie idą tędy.
+  await miejsce_.sprawdz(buf.length);
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  fs.mkdirSync(KB_FILES(), { recursive: true });
-  fs.writeFileSync(path.join(KB_FILES(), id), buf);
+  const plik = path.join(KB_FILES(), id);
+  try {
+    fs.mkdirSync(KB_FILES(), { recursive: true });
+    fs.writeFileSync(plik, buf);
+  } catch (err) {
+    try { fs.unlinkSync(plik); } catch { /* nie powstał */ }
+    throw miejsce_.zBleduDysku(err);
+  }
+  /* Pozycja trafia do indeksu albo wcale: indeks, który się nie zapisał,
+     zostawiłby po restarcie plik-sierotę, a człowiek dostałby „ok". */
+  const wpisz = (item) => {
+    U().kbItems.push(item);
+    const blad = saveKb();
+    if (blad) {
+      U().kbItems = U().kbItems.filter((it) => it !== item);
+      try { fs.unlinkSync(plik); } catch { /* już nie ma */ }
+      throw miejsce_.zBleduDysku(blad);
+    }
+    miejsce_.dolicz(buf.length);
+  };
   /* Nagranie przepisuje się W TLE. Transkrypcja godzinnego nagrania trwa
      minuty, a żądanie, które na nią czekało, za Cloudflare kończyło się po
      100 s stroną 524 — choć plik i tak się potem dodawał. Pozycja jest od
      razu, tekst dochodzi, gdy zmysły skończą (kontekst osoby idzie za nami). */
   if (presetText === null && wymagaTranskrypcji(name, mime)) {
     const item = { id, type: 'file', name, mime, size: buf.length, time: Date.now(), text: '', chunks: [], przetwarzanie: 'transkrypcja' };
-    U().kbItems.push(item);
-    saveKb();
+    wpisz(item);
     (async () => {
       const text = await extractKbText(name, mime, buf);
       item.text = text;
@@ -1053,8 +1105,7 @@ async function kbAddFile(name, mime, buf, presetText = null) {
     id, type: 'file', name, mime, size: buf.length, time: Date.now(),
     text, chunks: await buildChunks(text),
   };
-  U().kbItems.push(item);
-  saveKb();
+  wpisz(item);
   return item;
 }
 
@@ -1064,8 +1115,7 @@ async function kbAddFile(name, mime, buf, presetText = null) {
 
 const TIMELINE_FILE = () => path.join(U().katalog, 'timeline.json');
 function saveTimeline() {
-  try { zapiszAtomowo(TIMELINE_FILE(), JSON.stringify(U().timeline)); }
-  catch (err) { console.error('Nie udało się zapisać osi czasu:', err.message); }
+  return zapiszLubBlad('osi czasu', () => zapiszAtomowo(TIMELINE_FILE(), JSON.stringify(U().timeline)));
 }
 
 async function handleTimeline(req, res) {
@@ -1092,7 +1142,10 @@ async function handleTimeline(req, res) {
         const buf = Buffer.from(String(data.image).split(',').pop(), 'base64');
         const item = await kbAddFile(tsName('migawka', 'jpg'), 'image/jpeg', buf, 'Migawka osi czasu.');
         imageId = item.id;
-      } catch { /* bez obrazu */ }
+      } catch (err) {
+        // Pełny dysk albo limit osoby — powiedz to, zamiast zapisać migawkę bez obrazu.
+        if (miejsce_.toBrakMiejsca(err)) return bladZapisu(res, err);
+      }
     }
     const snap = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -1103,7 +1156,11 @@ async function handleTimeline(req, res) {
     };
     U().timeline.push(snap);
     if (U().timeline.length > 500) U().timeline = U().timeline.slice(-500);
-    saveTimeline();
+    const blad = saveTimeline();
+    if (blad) {
+      U().timeline = U().timeline.filter((x) => x !== snap);
+      return bladZapisu(res, blad);
+    }
     addEvent('oś-czasu', `zapisano migawkę otoczenia${snap.objects.length ? `: ${snap.objects.join(', ')}` : ''}`);
     return sendJson(res, 200, { ok: true, id: snap.id });
   }
@@ -1113,7 +1170,8 @@ async function handleTimeline(req, res) {
     if (snap?.imageId) { try { fs.unlinkSync(path.join(KB_FILES(), snap.imageId)); } catch { /* skip */ }
       U().kbItems = U().kbItems.filter((it) => it.id !== snap.imageId); saveKb(); }
     U().timeline = U().timeline.filter((s) => s.id !== id);
-    saveTimeline();
+    const blad = saveTimeline();
+    if (blad) return bladZapisu(res, blad);
     return sendJson(res, 200, { ok: true });
   }
   res.writeHead(405); res.end();
@@ -1386,9 +1444,10 @@ async function handleKb(req, res, pathname) {
     const item = U().kbItems.find((it) => it.id === id);
     U().kbItems = U().kbItems.filter((it) => it.id !== id);
     if (item?.type === 'file') {
-      try { fs.unlinkSync(path.join(KB_FILES(), item.id)); } catch { /* już nie ma */ }
+      try { fs.unlinkSync(path.join(KB_FILES(), item.id)); miejsce_.dolicz(-(item.size || 0)); } catch { /* już nie ma */ }
     }
-    saveKb();
+    const blad = saveKb();
+    if (blad) return bladZapisu(res, blad);
     return sendJson(res, 200, { ok: true, total: U().kbItems.length });
   }
 
@@ -1448,16 +1507,22 @@ async function handleKb(req, res, pathname) {
       const html = r.tekst;
       const title = stripTags((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || url;
       const text = czytelnyTekst(html).slice(0, 200000);
+      await miejsce_.sprawdz(Buffer.byteLength(text));
       const item = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         type: 'link', name: title.slice(0, 200), url, time: Date.now(),
         text, chunks: await buildChunks(text),
       };
       U().kbItems.push(item);
-      saveKb();
+      const blad = saveKb();
+      if (blad) {
+        U().kbItems = U().kbItems.filter((it) => it !== item);
+        return bladZapisu(res, blad);
+      }
       addEvent('baza-wiedzy', `dodano link: ${title.slice(0, 80)}`);
       return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
     } catch (err) {
+      if (miejsce_.toBrakMiejsca(err)) return bladZapisu(res, err);
       /* Człowiek ma zobaczyć, co jest nie tak, a nie „getaddrinfo ENOTFOUND". */
       const kod = err.code || (err.cause && err.cause.code) || '';
       const powod = err.name === 'ZablokowanyAdres' ? err.message
@@ -1476,13 +1541,18 @@ async function handleKb(req, res, pathname) {
     if (!text) return sendJson(res, 400, { error: 'Pusta notatka.' });
     const name = String(data.title || '').trim() ||
       `Notatka głosowa ${new Date().toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}`;
+    await miejsce_.sprawdz(Buffer.byteLength(text));
     const item = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       type: 'note', name: name.slice(0, 200), time: Date.now(),
       text, chunks: await buildChunks(text),
     };
     U().kbItems.push(item);
-    saveKb();
+    const blad = saveKb();
+    if (blad) {
+      U().kbItems = U().kbItems.filter((it) => it !== item);
+      return bladZapisu(res, blad);
+    }
     addEvent('baza-wiedzy', `zapisano notatkę: ${name.slice(0, 80)}`);
     return sendJson(res, 200, { ok: true, item: kbItemMeta(item) });
   }
@@ -2741,26 +2811,31 @@ async function trasyApi(req, res, p) {
   if (p === '/api/gear') {
     if (req.method === 'GET') return sendJson(res, 200, U().sprzet);
     if (req.method === 'PUT') {
-      try { saveSprzet(await readJson(req)); return sendJson(res, 200, { ok: true, ...U().sprzet }); }
-      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      let dane;
+      try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      const blad = saveSprzet(dane);
+      if (blad) return bladZapisu(res, blad);
+      return sendJson(res, 200, { ok: true, ...U().sprzet });
     }
   }
   if (p === '/api/profile') {
     if (req.method === 'GET') return sendJson(res, 200, { profile: U().profile });
     if (req.method === 'POST') {
-      try { saveProfile((await readJson(req)).profile); return sendJson(res, 200, { ok: true }); }
-      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      let dane;
+      try { dane = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      const blad = saveProfile(dane.profile);
+      if (blad) return bladZapisu(res, blad);
+      return sendJson(res, 200, { ok: true });
     }
   }
   if (p === '/api/location') {
     if (req.method === 'GET') return sendJson(res, 200, { location: U().location, wspolrzedne: U().wspolrzedne, teraz: terazTekst() });
     if (req.method === 'POST') {
-      try {
-        const d = await readJson(req);
-        saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
-        return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne });
-      }
-      catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      let d;
+      try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      const blad = saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
+      if (blad) return bladZapisu(res, blad);
+      return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne });
     }
   }
   if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
@@ -2817,7 +2892,11 @@ async function trasyApi(req, res, p) {
     let bundle;
     try { bundle = await readJson(req, 128 * 1024 * 1024); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
     let restored = 0;
+    let blad = null;
     if (Array.isArray(bundle.conversations)) {
+      // Kopia to też miejsce na dysku osoby — cała naraz, zanim cokolwiek zapiszemy.
+      const tresci = bundle.conversations.filter((c) => c && c.id).map((c) => JSON.stringify(c));
+      await miejsce_.sprawdz(tresci.reduce((suma, t) => suma + Buffer.byteLength(t), 0));
       for (const conv of bundle.conversations) {
         if (!conv || !conv.id) continue;
         const id = String(conv.id).replace(/[^a-z0-9]/gi, '');
@@ -2827,12 +2906,20 @@ async function trasyApi(req, res, p) {
           const i = U().convIndex.findIndex((c) => c.id === id);
           if (i >= 0) U().convIndex[i] = meta; else U().convIndex.push(meta);
           restored++;
-        } catch { /* skip */ }
+        } catch (err) { blad = blad || err; }
       }
-      sortConvIndex(); saveConvIndex();
+      sortConvIndex();
+      blad = saveConvIndex() || blad;
     }
-    if (Array.isArray(bundle.memories)) pamiec_.ustawListe(bundle.memories);
-    if (typeof bundle.profile === 'string') saveProfile(bundle.profile);
+    if (Array.isArray(bundle.memories)) blad = pamiec_.ustawListe(bundle.memories) || blad;
+    if (typeof bundle.profile === 'string') blad = saveProfile(bundle.profile) || blad;
+    if (blad) {
+      // Część weszła, część nie — człowiek ma wiedzieć, że kopia NIE jest cała.
+      const { kod } = miejsce_.bladDlaCzlowieka(blad);
+      return sendJson(res, kod === 507 ? 507 : 500, {
+        error: `Przywrócono ${restored} rozmów, ale nie wszystko się zapisało: ${miejsce_.zBleduDysku(blad).message}`, restored,
+      });
+    }
     return sendJson(res, 200, { ok: true, restored });
   }
   if (p === '/api/summarize' && req.method === 'POST') {
@@ -2935,7 +3022,8 @@ const server = http.createServer(async (req, res) => {
        praca w tle. Kontekst podąża za każdym `await` (lib/kontekst.js). */
     return await wKontekscie(u, () => trasyApi(req, res, p));
   } catch (err) {
-    if (!res.headersSent) sendJson(res, 500, { error: `Błąd serwera: ${err.message}` });
+    // Pełny dysk i limit osoby → 507 z wyjaśnieniem; reszta → 500 (lib/miejsce.js).
+    if (!res.headersSent) { const { kod, error } = miejsce_.bladDlaCzlowieka(err); sendJson(res, kod, { error }); }
     else res.end();
   }
 });
