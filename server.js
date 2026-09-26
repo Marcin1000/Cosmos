@@ -482,6 +482,9 @@ async function handleConversations(req, res, pathname) {
 }
 
 const KB_DIR = () => path.join(U().katalog, 'kb');
+/* Największy plik do bazy wiedzy. 95 MB, bo Cloudflare odrzuca ciało powyżej
+   100 MB własną stroną 413, zanim cokolwiek dojdzie do serwera. */
+const KB_PLIK_MAX = (Number(process.env.COSMOS_KB_MAX_MB) || 95) * 1024 * 1024;
 const KB_FILES = () => path.join(KB_DIR(), 'files');
 const KB_INDEX = () => path.join(KB_DIR(), 'index.json');
 
@@ -1479,12 +1482,43 @@ async function handleKb(req, res, pathname) {
   }
 
   if (pathname === '/api/kb/file' && req.method === 'POST') {
-    let data;
-    try { data = await readJson(req, 128 * 1024 * 1024); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-    const name = String(data.name || 'plik').slice(0, 200);
-    const mime = String(data.mime || '');
-    let buf;
-    try { buf = Buffer.from(String(data.data || ''), 'base64'); } catch { buf = null; }
+    /* Plik przychodzi jako SUROWE ciało: typ w Content-Type, nazwa w nagłówku
+       X-Cosmos-Nazwa (zakodowana jak w adresie — nie w adresie, bo ten trafia
+       do dzienników Cloudflare'a). Dawniej przeglądarka kodowała plik do base64
+       i pakowała w JSON w wątku głównym: 45 MB zamrażało telefon na 4,7 s,
+       przez tunel szło o 33% więcej danych, a serwer parsował 60 MB JSON-a,
+       stojąc w miejscu. Droga JSON + base64 zostaje dla zgodności (skrypty). */
+    const typ = String(req.headers['content-type'] || '').toLowerCase();
+    let name; let mime; let buf;
+    if (typ.startsWith('application/json')) {
+      let data;
+      try { data = await readJson(req, KB_PLIK_MAX + KB_PLIK_MAX / 3); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+      name = String(data.name || 'plik').slice(0, 200);
+      mime = String(data.mime || '');
+      try { buf = Buffer.from(String(data.data || ''), 'base64'); } catch { buf = null; }
+    } else {
+      try { name = decodeURIComponent(String(req.headers['x-cosmos-nazwa'] || '')); } catch { name = ''; }
+      name = (name || 'plik').replace(/[\/\u0000-\u001f]/g, '_').slice(0, 200);
+      mime = typ.split(';')[0].trim();
+      if (mime === 'application/octet-stream') mime = '';
+      const dlugosc = Number(req.headers['content-length']) || 0;
+      if (dlugosc > KB_PLIK_MAX) {
+        req.resume();
+        return sendJson(res, 413, { error: `Plik jest za duży — limit to ${Math.round(KB_PLIK_MAX / 1048576)} MB (Cloudflare i tak nie przepuszcza więcej niż 100 MB).` });
+      }
+      /* Limit miejsca znamy przed wysyłką (Content-Length). Odmowę wysyłamy
+         dopiero po odczytaniu ciała: odpowiedź w trakcie wysyłki przeglądarka
+         potrafi zgubić i pokazać „błąd sieci" zamiast wyjaśnienia. */
+      if (dlugosc) {
+        try { await miejsce_.sprawdz(dlugosc); } catch (err) {
+          req.resume();
+          return req.on('end', () => bladZapisu(res, err));
+        }
+      }
+      try { buf = await readBodyBuffer(req, KB_PLIK_MAX); } catch {
+        return sendJson(res, 413, { error: `Plik jest za duży — limit to ${Math.round(KB_PLIK_MAX / 1048576)} MB.` });
+      }
+    }
     if (!buf || !buf.length) return sendJson(res, 400, { error: 'Brak danych pliku.' });
 
     const item = await kbAddFile(name, mime, buf);

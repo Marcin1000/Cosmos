@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-0969da?style=flat-square">
-  <img alt="106 test suites" src="https://img.shields.io/badge/test%20suites-106-4ac26b?style=flat-square">
+  <img alt="107 test suites" src="https://img.shields.io/badge/test%20suites-107-4ac26b?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-6e7781?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-d4a72c?style=flat-square"></a>
 </p>
@@ -97,7 +97,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception — nobody should write an object detector from scratch —
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 106 suites plus 9 Python
+**Tests measure behaviour, never source text.** 107 suites plus 9 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -128,6 +128,9 @@ request with no response for 100 s turns into an error page, while the server
 keeps working and the API bill keeps running. Streaming answers send a heartbeat
 every 25 s; image generation that runs past ~75 s answers `202` with a job id,
 and the page polls `/api/zadania` until the result lands in the knowledge base.
+Files travel to the knowledge base as a raw request body with upload progress,
+not as base64 inside JSON — the old way froze a phone for almost five seconds on
+a 45 MB recording, because the encoding ran on the main thread.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
@@ -206,7 +209,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 106 suites + 9 Python selftests (~16 min)
+npm test                  # 107 suites + 9 Python selftests (~16 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -246,7 +249,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge — exposes Cosmos tools to other agents
-tests/               106 behaviour suites, mock upstreams, fake DOM
+tests/               107 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 

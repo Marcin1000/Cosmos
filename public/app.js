@@ -4356,12 +4356,27 @@ async function loadKbList() {
   }
 }
 
-function fileToBase64(file) {
+/* Plik idzie do bazy wiedzy jako SUROWE ciało, nie base64 w JSON-ie.
+   Kodowanie base64 i JSON.stringify działały w wątku głównym: plik 45 MB
+   zamrażał telefon na 4,7 s (bez przewijania, bez dotyku), a przez tunel szło
+   o jedną trzecią więcej danych. XMLHttpRequest zamiast fetch, bo tylko on
+   mówi, ile już wysłał — człowiek widzi „Wysyłam 37%", a nie jeden napis
+   przez minutę. Nazwa w nagłówku, nie w adresie (adresy lądują w dziennikach). */
+function wyslijPlikDoBazy(file, naPostep) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
-    reader.onerror = () => reject(new Error(t('fileReadErr')));
-    reader.readAsDataURL(file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/kb/file');
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('X-Cosmos-Nazwa', encodeURIComponent(file.name));
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && naPostep) naPostep(e.loaded / e.total); };
+    xhr.onload = () => {
+      let d;
+      try { d = JSON.parse(xhr.responseText); } catch { d = { error: `HTTP ${xhr.status} — ${String(xhr.responseText || '').trim().slice(0, 200)}` }; }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(d);
+      else reject(new Error(d.error || `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error(t('offline.title')));
+    xhr.send(file);
   });
 }
 
@@ -4373,16 +4388,15 @@ async function kbUploadFiles(files) {
       alert(t('kb.tooBig', { name: file.name }));
       continue;
     }
-    kbSetStatus(t('kb.processing', { i: i + 1, n: list.length, name: file.name }) +
-      (/^(audio|video)/.test(file.type) ? t('kb.transcribing') : '…'));
+    const przetwarzam = t('kb.processing', { i: i + 1, n: list.length, name: file.name }) +
+      (/^(audio|video)/.test(file.type) ? t('kb.transcribing') : '…');
+    kbSetStatus(t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: 0 }));
     try {
-      const res = await fetch('/api/kb/file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name, mime: file.type, data: await fileToBase64(file) }),
+      await wyslijPlikDoBazy(file, (czesc) => {
+        // Wysłane w całości — dalej serwer czyta tekst (albo przepisuje nagranie w tle).
+        kbSetStatus(czesc >= 1 ? przetwarzam
+          : t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: Math.floor(czesc * 100) }));
       });
-      const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     } catch (err) {
       alert(t('kb.addErr', { name: file.name }) + '\n' + err.message);
     }

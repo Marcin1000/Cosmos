@@ -59,6 +59,6 @@
   <line x1="300" y1="243" x2="640" y2="243" stroke="#2a3358" stroke-width="1"/>
   <text x="300" y="268" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,monospace"
         font-size="13" fill="#5f6b93">
-    zero runtime dependencies · 106 behaviour test suites
+    zero runtime dependencies · 107 behaviour test suites
   </text>
 </svg>
