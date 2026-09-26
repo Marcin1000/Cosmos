@@ -144,7 +144,7 @@
     'cta.p': 'Open the link from your invitation and set a login and password in a minute. Already have an account? Sign in. No invitation? Run your own Cosmos — the code is open.',
     'cta.kod': 'Run your own Cosmos',
     'stopka.opis': 'A personal, hybrid AI system.',
-    'stopka.kod': 'Source code (MIT)',
+    'stopka.kod': 'Source code (non-commercial use)',
   };
 
   const META = {

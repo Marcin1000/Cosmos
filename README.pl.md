@@ -10,7 +10,7 @@
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
   <img alt="116 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-116-5E9E3A?style=flat-square">
-  <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-5E616B?style=flat-square">
+  <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
 
@@ -1307,7 +1307,8 @@ decyzji, nie usterki — skrypt celowo ich nie liczy jako błędów.
 - **Chmura NVIDIA (build.nvidia.com):** rejestracja darmowa, konto deweloperskie dostaje
   pulę darmowych zapytań; przy większym użyciu obowiązuje cennik NVIDIA. Do prototypowania
   zwykle wystarcza pula darmowa.
-- **Aplikacja Cosmos:** open source, bez opłat; czcionki Onest i Martian Mono na licencji OFL.
+- **Aplikacja Cosmos:** bez opłat do użytku niekomercyjnego (licencja PolyForm Noncommercial 1.0.0,
+  patrz niżej); czcionki Onest i Martian Mono na licencji OFL.
 
 ## 🛠️ Rozwiązywanie problemów
 
@@ -1326,3 +1327,13 @@ decyzji, nie usterki — skrypt celowo ich nie liczy jako błędów.
 | Dyktowanie urywa się w pół zdania | Chrome kończy sesję rozpoznawania po pauzie. Naprawione — nasłuch wznawia się do kliknięcia „stop" |
 | Obraz bez odpowiedzi „wizyjnej" | Ustaw `NEMOTRON_VISION_MODEL` / `LOCAL_VISION_MODEL` na model VL |
 | Telefon nie łączy się z serwerem | Ta sama sieć Wi-Fi + zapora Windows: zezwól Node.js na sieć prywatną |
+
+## 📜 Licencja
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Kod można czytać, uruchamiać u siebie, zmieniać
+i przekazywać dalej — do użytku osobistego, nauki, badań, projektów hobbystycznych, a także
+w szkołach, organizacjach pożytku publicznego i instytucjach publicznych. Sprzedaż, płatna
+usługa albo użycie w firmie wymagają osobnej zgody — zapytaj przez zgłoszenie na GitHubie.
+
+Wersje opublikowane przed 26 września 2026 były na licencji MIT i zostają na niej dla
+każdego, kto już je ma. Tekst licencji jest po angielsku i tylko on jest wiążący.

@@ -10,7 +10,7 @@
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
   <img alt="116 test suites" src="https://img.shields.io/badge/test%20suites-116-5E9E3A?style=flat-square">
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-5E616B?style=flat-square">
+  <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
 
@@ -303,8 +303,18 @@ The deep documentation is in Polish. It is a working log rather than a product
 manual, and translating it would cost more than it would return — but the code
 structure, the tests and this page should be enough to judge the engineering.
 
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Read the code, run it at home, change it,
+share it — for personal use, study, research, hobby projects, schools, charities and
+public institutions. Selling it, running it as a paid service or using it inside a
+company needs a separate agreement; open an issue on GitHub to ask.
+
+Versions published before 26 September 2026 were MIT-licensed and stay that way for
+anyone who already has them.
+
 ---
 
 <p align="center">
-  <sub>MIT licensed · <a href="https://github.com/Marcin1000/Cosmos">source on GitHub</a></sub>
+  <sub>PolyForm Noncommercial · <a href="https://github.com/Marcin1000/Cosmos">source on GitHub</a></sub>
 </p>
