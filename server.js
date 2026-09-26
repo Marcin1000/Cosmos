@@ -45,6 +45,10 @@ const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
   konta, silniki, kto, katalogDla, zapomnij, WLASCICIEL_ID,
   DATA_DIR, ENDPOINTS, STUDIO, imageProviders, sendJson, readJson, readBodyBuffer,
 });
+/* Czy sesja, z którą przyszło żądanie, dalej istnieje — dla połączeń, które
+   trwają długo (strumień zdarzeń, widz odpowiedzi): „Wyloguj wszędzie" i zmiana
+   hasła mają je zerwać, a nie tylko odrzucać nowe żądania. */
+const sesjaWazna = (req) => () => Boolean(ktoPyta(req));
 /* Głos: rozpoznawanie i czytanie na głos z łańcuchem źródeł (zmysły → chmura).
    Tryb głosowy bez Web Speech API = bez piszczenia mikrofonu na Androidzie. */
 const glos = require('./lib/glos.js').utworz({
@@ -325,9 +329,12 @@ async function handleOneDrive(req, res, p) {
       });
     }
     /* `state` chroni przed podrzuceniem cudzego kodu autoryzacyjnego:
-       wracający callback musi podać dokładnie tę wartość. */
-    const stanCsrf = genId();
-    oczekiwaneStany.add(stanCsrf);
+       wracający callback musi podać dokładnie tę wartość — i wrócić do TEJ
+       SAMEJ osoby. Wspólny zbiór pozwalał członkowi podsunąć właścicielowi
+       link z kodem ze swojego konta Microsoft: archiwum właściciela
+       indeksowało wtedy cudzy OneDrive. Losowanie kryptograficzne, nie genId(). */
+    const stanCsrf = crypto.randomBytes(16).toString('base64url');
+    oczekiwaneStany.set(stanCsrf, kto().id);
     setTimeout(() => oczekiwaneStany.delete(stanCsrf), 600000).unref?.();
     return sendJson(res, 200, { url: onedrive.adresLogowania(stanCsrf) });
   }
@@ -344,7 +351,7 @@ async function handleOneDrive(req, res, p) {
     if (q.get('error')) {
       return strona('Nie udało się połączyć', escapeHtmlSerwer(q.get('error_description') || q.get('error')));
     }
-    if (!oczekiwaneStany.has(q.get('state') || '')) {
+    if (oczekiwaneStany.get(q.get('state') || '') !== kto().id) {
       return strona('Nie udało się połączyć', 'Nieprawidłowy albo przeterminowany identyfikator sesji.');
     }
     oczekiwaneStany.delete(q.get('state'));
@@ -473,7 +480,7 @@ function wznowIndeksowaniaOneDrive() {
   }, zwloka).unref();
 }
 
-const oczekiwaneStany = new Set();
+const oczekiwaneStany = new Map();   // state OAuth OneDrive → id osoby, która zaczęła logowanie
 const escapeHtmlSerwer = (s) => String(s || '').replace(/[&<>"]/g,
   (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[z]));
 
@@ -524,7 +531,11 @@ function moduleExists(...parts) {
 async function capabilityManifest() {
   // Członek bez zgody na zmysły ich nie ma — model nie może mu ich obiecywać.
   const senses = silniki.zmyslyDozwolone() ? await sensesState() : { online: false, caps: {} };
-  const imgs = imageProviders().map((p) => p.label);
+  /* Manifest idzie do kontekstu czatu tej osoby — ma mówić o JEJ możliwościach.
+     Członkowi obiecywał Studio i silniki, których mu nie przyznano, i oddawał
+     ścieżkę eksportu z dysku serwera (zasada 8). */
+  const studio = silniki.studioDozwolone();
+  const imgs = studio ? imageProviders().map((p) => p.label) : [];
   let playwright = false;
   try { require.resolve('playwright'); playwright = true; } catch { /* brak */ }
 
@@ -550,13 +561,13 @@ async function capabilityManifest() {
       + 'językowy (domyślnie NVIDIA Nemotron), ale Cosmos to całość: pamięć, zmysły, '
       + 'narzędzia i zdolność uczenia się. Wszystko działa na sprzęcie użytkownika '
       + 'albo na jego serwerze; dane i klucze nie należą do nikogo innego.',
-    mozgi: Object.entries(ENDPOINTS).map(([id, ep]) => ({
+    mozgi: silniki.dostepne().map(({ nazwa: id, ep }) => ({
       id, model: ep.model || '(nie ustawiono)', gotowy: Boolean(ep.apiKey || ep.model),
     })),
     zmysly: { online: senses.online, ...senses.caps },
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
-    studio: { obraz: imgs, dzwiek: Boolean(STUDIO.eleven.key), wideo: Boolean(STUDIO.seedance.key),
-      eksport: STUDIO.exportDir || null },
+    studio: { obraz: imgs, dzwiek: studio && Boolean(STUDIO.eleven.key), wideo: studio && Boolean(STUDIO.seedance.key),
+      eksport: czyWlasciciel() ? (STUDIO.exportDir || null) : null },
     wiedza: { rozmowy: U().convIndex.length, pamiec: pamiec_.ile(), bazaWiedzy: U().kbItems.length,
       profil: U().profile.trim().length > 0, migawki: U().timeline.length },
     nauka: { wzorce: wzorce().length, procedury: procedury().length, rutyny: rutyny().length,
@@ -584,7 +595,8 @@ async function capabilityManifest() {
     trening: czyWlasciciel()
       ? { przykladyChat: U().convIndex.length, skrypt: moduleExists('training', 'qlora_example.py') }
       : null,
-    brakujace: missing,
+    // Braki w konfiguracji serwera naprawia właściciel — członkowi to tylko szum.
+    brakujace: czyWlasciciel() ? missing : [],
   };
 }
 
@@ -774,8 +786,12 @@ function handleConfig(res) {
 
 async function handleStatus(req, res) {
   const results = {};
+  /* Tylko silniki tej osoby (własny klucz albo przyznane). Członek odpytywał
+     OpenAI i Claude'a kluczami właściciela co 30 s z każdej karty i widział,
+     czy domowy komputer właściciela jest włączony. */
+  const zmysly = silniki.zmyslyDozwolone();
   await Promise.all([
-    ...Object.entries(ENDPOINTS).map(async ([name, ep]) => {
+    ...silniki.dostepne().map(async ({ nazwa: name, ep }) => {
       try {
         const r = await fetch(`${ep.baseUrl}/models`, {
           headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
@@ -787,6 +803,7 @@ async function handleStatus(req, res) {
       }
     }),
     (async () => {
+      if (!zmysly) return;
       try {
         const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(3000) });
         const caps = r.ok ? await r.json() : {};
@@ -799,7 +816,7 @@ async function handleStatus(req, res) {
   results.embeddings = embedStatus(results.senses?.caps?.embed);
   /* Bez zgody na zmysły przeglądarka nie może ich zobaczyć jako „online" —
      inaczej kierowałaby do nich mowę i wykrywanie, a dostawała 403. */
-  if (!silniki.zmyslyDozwolone()) results.senses = { online: false, caps: {}, tylkoWlasciciel: true };
+  if (!zmysly) results.senses = { online: false, caps: {}, tylkoWlasciciel: true };
   sendJson(res, 200, results);
 }
 
@@ -1054,13 +1071,13 @@ async function trasyApi(req, res, p) {
   if (p === '/api/status' && req.method === 'GET') return await handleStatus(req, res);
   if (p === '/api/models' && req.method === 'GET') return await handleModels(req, res);
   if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
-  if (p === '/api/chat' && req.method === 'POST') return await czat_.handleChat(req, res);
+  if (p === '/api/chat' && req.method === 'POST') return await czat_.handleChat(req, res, { wazny: sesjaWazna(req) });
   /* Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia,
      którego przeglądarka jeszcze nie ma — dzięki temu wznowienie po
      zerwanym Wi-Fi nie powtarza połowy zdania ani jej nie gubi. */
   if (p === '/api/chat/bieg' && req.method === 'GET') {
     const q = new URL(req.url, 'http://localhost').searchParams;
-    if (biegi_.podepnij(q.get('id') || '', q.get('od'), res)) return;
+    if (biegi_.podepnij(q.get('id') || '', q.get('od'), res, { wazny: sesjaWazna(req) })) return;
     return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy — serwer jej nie pamięta.' });
   }
   // Co się teraz liczy. Przeglądarka pyta o to po odświeżeniu strony.
@@ -1093,7 +1110,7 @@ async function trasyApi(req, res, p) {
   // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast
   // tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte na komputerze
   // dociera do telefonu, a nie umiera w logu serwera.
-  if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res);
+  if (p === '/api/events/stream' && req.method === 'GET') return podlaczStrumien(req, res, { wazny: sesjaWazna(req) });
   if (p === '/api/memory') return await handleMemory(req, res);
   if (p === '/api/search' && req.method === 'GET') return await handleSearch(req, res);
   if (p === '/api/document' && req.method === 'POST') return await handleDokument(req, res);

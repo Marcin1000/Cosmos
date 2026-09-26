@@ -19,11 +19,17 @@
      9. „Wyloguj wszędzie" działa — przycisk wysyła POST BEZ treści, a serwer
         brał to za zły JSON i przez miesiące odpowiadał 400,
     10. członek na silniku przyznanym przez właściciela dostaje model z jego
-        listy i sufit max_tokens — nie „o1-pro na 100 tys. tokenów" na cudzy koszt,
-    11. zmysły (domowe GPU właściciela) i adres domu tylko ze zgodą,
+        listy i sufit max_tokens — nie „o1-pro na 100 tys. tokenów" na cudzy koszt;
+        sufit wygrywa też z podbiciem limitu dla modeli myślących,
+    11. zmysły (domowe GPU właściciela) i adres domu tylko ze zgodą; manifest
+        zdolności i stan silników członka mówią tylko o JEGO silnikach, bez
+        ścieżek serwera; identyfikator logowania OneDrive działa tylko u osoby,
+        która je zaczęła; cudzy numer zadania wideo Studia daje 404,
     12. logowanie z cudzej strony odrzucone („login CSRF"),
     13. blokada IPv6 liczona po sieci /64, nie po pojedynczym adresie,
-    14. miniatura SVG (może nieść skrypt) nie przechodzi przez proxy.
+    14. miniatura SVG (może nieść skrypt) nie przechodzi przez proxy, a proxy nie
+        idzie za przekierowaniem poza listę hostów,
+     9b. „Wyloguj wszędzie" zrywa też OTWARTY strumień zdarzeń na innym urządzeniu.
 */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -78,9 +84,27 @@ const atrapa = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       return res.end('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.cookie)</script></svg>');
     }
+    // Przekierowanie z hosta z listy miniatur poza listę (tu: ten sam port pod „localhost").
+    if (req.url.startsWith('/przekieruj')) {
+      res.writeHead(302, { Location: `http://localhost:${atrapa.address().port}/obraz.png` });
+      return res.end();
+    }
     if (req.url.startsWith('/obraz.png')) {
       res.writeHead(200, { 'Content-Type': 'image/png' });
       return res.end(Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'));
+    }
+    // Seedance (wideo Studia): zlecenie → numer zadania, status → gotowe, plik wideo.
+    if (req.url === '/seedance/contents/generations/tasks' && req.method === 'POST') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ id: `cgt-${Date.now()}` }));
+    }
+    if (req.url.startsWith('/seedance/contents/generations/tasks/')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ status: 'succeeded', content: { video_url: `http://127.0.0.1:${atrapa.address().port}/wideo.mp4` } }));
+    }
+    if (req.url === '/wideo.mp4') {
+      res.writeHead(200, { 'Content-Type': 'video/mp4' });
+      return res.end(Buffer.from('00000018667479706d703432', 'hex'));
     }
     if (req.url.endsWith('/models')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -121,6 +145,11 @@ async function postaw(dataDir) {
   ZMYSLY = `${A}/zmysly`;
   envAtrapy = {
     OPENAI_API_KEY: 'klucz-wlasciciela', OPENAI_BASE_URL: `${A}/v1`, OPENAI_MODEL: 'gpt-4o-mini',
+    COSMOS_MODELE_PRZYZNANE: 'gpt-5-mini',
+    // OneDrive skonfigurowany na niby; wymiana kodu na token trafia w atrapę (404), bez sieci.
+    ONEDRIVE_CLIENT_ID: 'x', ONEDRIVE_CLIENT_SECRET: 'y', ONEDRIVE_REDIRECT_URI: 'https://przyklad/cb',
+    ONEDRIVE_TOKEN_URL: `${A}/token`,
+    SEEDANCE_API_KEY: 'klucz-seedance-wlasciciela', SEEDANCE_BASE_URL: `${A}/seedance`,
     NEMOTRON_BASE_URL: `${A}/v1`, LOCAL_BASE_URL: 'http://127.0.0.1:9/v1',
     SENSES_URL: ZMYSLY, STUDIO_EXPORT_DIR: EKSPORT, IMAGE_SEARCH_URL: `${A}/`,
   };
@@ -202,10 +231,30 @@ async function postaw(dataDir) {
   // --- 9. „Wyloguj wszędzie" — dokładnie tak, jak wysyła go przycisk ------------
   const aniaTablet = klient('10.0.0.8');
   await aniaTablet.zadaj('/api/login', { metoda: 'POST', dane: { login: 'ania', password: 'nowe-haslo-ani-1' } });
+  /* Otwarty strumień zdarzeń na „zgubionym" tablecie. Wylogowanie odrzucało
+     tylko NOWE żądania — otwarte połączenie żyło dalej i tablet widział nazwy
+     plików, notatki i prompty aż do zerwania sieci. */
+  const strumienTabletu = { tekst: '', zamkniety: false };
+  const przerwijStrumien = new AbortController();
+  fetch(`${ADRES}/api/events/stream`, { headers: { Cookie: aniaTablet.ciastko }, signal: przerwijStrumien.signal })
+    .then(async (r) => {
+      const czytnik = r.body.getReader();
+      const dekoder = new TextDecoder();
+      for (;;) { const { done, value } = await czytnik.read(); if (done) break; strumienTabletu.tekst += dekoder.decode(value); }
+    }).catch(() => {}).finally(() => { strumienTabletu.zamkniety = true; });
+  await new Promise((r) => setTimeout(r, 300));
+  await ania.zadaj('/api/events', { metoda: 'POST', dane: { type: 'test', summary: 'PRZED-WYLOGOWANIEM' } });
+  await new Promise((r) => setTimeout(r, 300));
+  ok(strumienTabletu.tekst.includes('PRZED-WYLOGOWANIEM'), 'otwarty strumień tabletu dostaje zdarzenia (kontrola)');
   const wszedzie = await ania.zadaj('/api/konto/wyloguj-wszedzie', { metoda: 'POST' });   // bez treści
   ok(wszedzie.kod === 200 && wszedzie.json.wylogowano >= 1,
     `„Wyloguj wszędzie" z pustym żądaniem → ${wszedzie.kod}, wylogowano ${wszedzie.json.wylogowano}`);
   ok((await aniaTablet.zadaj('/api/konto')).kod === 401, 'tablet Ani wylogowany przyciskiem „Wyloguj wszędzie"');
+  await ania.zadaj('/api/events', { metoda: 'POST', dane: { type: 'test', summary: 'PO-WYLOGOWANIU-WSZEDZIE' } });
+  await new Promise((r) => setTimeout(r, 300));
+  ok(!strumienTabletu.tekst.includes('PO-WYLOGOWANIU-WSZEDZIE') && strumienTabletu.zamkniety,
+    'otwarty strumień tabletu zerwany — zdarzenie po wylogowaniu do niego nie dociera');
+  przerwijStrumien.abort();
   ok((await ania.zadaj('/api/konto')).kod === 200, 'urządzenie, z którego kliknięto, zostaje zalogowane');
   const zepsuty = await fetch(`${ADRES}/api/konto`, { method: 'PUT', body: '{nazwa:',
     headers: { 'Content-Type': 'application/json', Cookie: ania.ciastko } });
@@ -234,6 +283,13 @@ async function postaw(dataDir) {
   const cw = await czat(marcin, { endpoint: 'openai', model: 'o1-pro', max_tokens: 100000 });
   ok(cw.zadanie.model === 'o1-pro' && !cw.spozaListy && tokeny(cw.zadanie) === 100000,
     `właściciel wybiera dowolny model i długość (${cw.zadanie.model}, ${tokeny(cw.zadanie)})`);
+  /* Model myślący z listy właściciela: Cosmos podbija im limit do 16 000 (myślenie
+     liczy się do limitu) — i to podbicie przebijało sufit członka. */
+  const myslacy = await czat(ania, { endpoint: 'openai', model: 'gpt-5-mini', max_tokens: 2048 });
+  ok(myslacy.zadanie.model === 'gpt-5-mini' && tokeny(myslacy.zadanie) <= 8192,
+    `model myślący członka: sufit wygrywa z podbiciem limitu (${tokeny(myslacy.zadanie)})`);
+  const myslacyW = await czat(marcin, { endpoint: 'openai', model: 'gpt-5-mini', max_tokens: 2048 });
+  ok(tokeny(myslacyW.zadanie) === 16000, `u właściciela podbicie dla modelu myślącego zostaje (${tokeny(myslacyW.zadanie)})`);
 
   // --- 11. Zmysły i adres domu tylko ze zgodą ----------------------------------
   const obraz = { image: 'data:image/png;base64,iVBORw0KGgo=' };
@@ -252,6 +308,43 @@ async function postaw(dataDir) {
   ok(!cfgAni.json.senses.baseUrl && cfgAni.json.studio.exportDir === null,
     'członek nie dostaje adresu zmysłów ani ścieżki eksportu właściciela');
   ok(cfgW.json.senses.baseUrl === ZMYSLY && cfgW.json.studio.exportDir === EKSPORT, 'właściciel widzi swoje adresy');
+  /* Manifest zdolności idzie do kontekstu czatu: członkowi oddawał ścieżkę
+     eksportu z dysku serwera i obiecywał silniki, których mu nie przyznano. */
+  const capAni = (await ania.zadaj('/api/capabilities')).json.manifest || {};
+  const capW = (await marcin.zadaj('/api/capabilities')).json.manifest || {};
+  ok(capAni.studio && capAni.studio.eksport === null && capW.studio && capW.studio.eksport === EKSPORT,
+    'manifest zdolności: ścieżka eksportu tylko u właściciela');
+  const mozgiAni = (capAni.mozgi || []).map((m) => m.id).sort().join(',');
+  ok(mozgiAni === 'cloud,openai', `manifest członka wymienia tylko jego silniki (${mozgiAni})`);
+  ok(!('local' in stAni.json) && 'local' in stW.json,
+    'stan silników członka bez „lokalnego GPU" nie zdradza, czy komputer właściciela jest włączony');
+  /* OneDrive: `state` z logowania Ani nie może zadziałać u właściciela. Inaczej
+     link od członka z kodem jego konta Microsoft podpinał cudzy OneDrive
+     do archiwum właściciela. */
+  const loginAni = await ania.zadaj('/api/onedrive/login');
+  const stanAni = new URL(loginAni.json.url || 'https://x/').searchParams.get('state') || '';
+  const callback = async (k) => (await fetch(`${ADRES}/api/onedrive/callback?code=kod-ani&state=${encodeURIComponent(stanAni)}`,
+    { headers: { Cookie: k.ciastko } })).text();
+  ok(stanAni.length >= 20 && /Nieprawidłowy albo przeterminowany/.test(await callback(marcin)),
+    'OneDrive: identyfikator logowania Ani nie działa w callbacku właściciela');
+  ok(!/Nieprawidłowy albo przeterminowany/.test(await callback(ania)),
+    'OneDrive: ten sam identyfikator przechodzi u osoby, która zaczęła logowanie (kontrola)');
+  /* Wideo Studia: rejestr zadań jest wspólny, klucz Seedance — właściciela.
+     Członek ze Studiem, znając numer zadania (np. ze zrzutu ekranu), dostawał
+     cudze wideo z promptem do swojej bazy wiedzy. */
+  await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { openai: true, studio: true } } });
+  const zlecenie = await marcin.zadaj('/api/studio/video', { metoda: 'POST', dane: { prompt: 'SEKRET-WIDEO prywatny film' } });
+  const numer = zlecenie.json.taskId;
+  const cudzy = await ania.zadaj(`/api/studio/video/status?id=${encodeURIComponent(numer || '')}`);
+  const nieznany = await ania.zadaj('/api/studio/video/status?id=cgt-spoza-cosmosa');
+  ok(Boolean(numer) && cudzy.kod === 404 && nieznany.kod === 404,
+    `wideo Studia: cudzy i nieznany numer zadania dla członka → ${cudzy.kod}, ${nieznany.kod}`);
+  let swoj = await marcin.zadaj(`/api/studio/video/status?id=${encodeURIComponent(numer || '')}`);
+  for (let i = 0; i < 20 && swoj.json.status === 'running'; i++) {
+    await new Promise((r) => setTimeout(r, 150));
+    swoj = await marcin.zadaj(`/api/studio/video/status?id=${encodeURIComponent(numer || '')}`);
+  }
+  ok(swoj.json.status === 'done', `właściciel dostaje swoje wideo (${swoj.json.status})`);
   await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { openai: true, local: true } } });
   const cfgAniLokalny = await ania.zadaj('/api/config');
   ok(cfgAniLokalny.json.endpoints.local && cfgAniLokalny.json.endpoints.local.baseUrl === '',
@@ -327,6 +420,9 @@ async function postaw(dataDir) {
   ok(png.status === 200 && png.headers.get('x-content-type-options') === 'nosniff'
     && /sandbox/.test(png.headers.get('content-security-policy') || ''),
   `miniatura PNG przechodzi — z nosniff i sandbox (${png.status})`);
+  const przekierowana = await miniatura('przekieruj');
+  ok(przekierowana.status !== 200 && przekierowana.status >= 400,
+    `przekierowanie poza listę hostów nie przechodzi (SSRF do sieci serwera) → ${przekierowana.status}`);
 
   atrapa.close();
   zabij(srv);
