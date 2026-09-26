@@ -42,6 +42,7 @@ function wektor(tekst, wymiar) {
 }
 
 const liczone = { zmysly: 0, chmura: 0 };   // ile FAKTÓW (nie pytań) policzono
+let pytaniaDoZmyslow = 0;
 let zmyslyDzialaja = true;
 
 function atrapa(nazwa, obsluz) {
@@ -54,6 +55,7 @@ const zmysly = atrapa('zmysly', (d, res) => {
   if (!zmyslyDzialaja) { res.writeHead(503); return res.end(); }
   const teksty = d.texts || [];
   liczone.zmysly += teksty.filter((x) => FAKTY.includes(x)).length;
+  pytaniaDoZmyslow += teksty.filter((x) => !FAKTY.includes(x)).length;
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ vectors: teksty.map((x) => wektor(x, 64)) }));
 });
@@ -76,12 +78,13 @@ async function az(warunek, ms = 3000) {
   await new Promise((r) => chmura.listen(0, '127.0.0.1', r));
   const katalog = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-wektory-'));
   delete process.env.EMBED_PROVIDER;   // auto: najpierw zmysły, potem chmura
-  const p = pamiecModul.utworz({
+  const nowa = () => pamiecModul.utworz({
     katalogDanych: katalog,
     sensesUrl: `http://127.0.0.1:${zmysly.address().port}`,
     chmura: () => ({ apiKey: 'test', baseUrl: `http://127.0.0.1:${chmura.address().port}/v1` }),
     sendJson: () => {}, readJson: async () => ({}),
   });
+  let p = nowa();
   p.ustawListe(FAKTY.map((text, i) => ({ id: `f${i}`, text, time: Date.now() })));
   const lista = () => p.lista();
   const wszystkieMaja = (model) => lista().every((m) => pamiecModul.sameModel(m, model));
@@ -91,24 +94,35 @@ async function az(warunek, ms = 3000) {
   ok(await az(() => wszystkieMaja('senses:64')), 'zmysły policzyły wektory całej pamięci');
 
   // --- zmysły zasypiają: chmura dolicza SWOJE, nie kasując zmysłowych ------------
+  /* Każdy krok pyta innym zdaniem: to samo zdanie w ciągu kilkunastu sekund
+     bierze wektor zapamiętany przy poprzednim pytaniu (lib/pamiec.js — pamięć
+     i baza wiedzy pytają o nie jedna po drugiej), więc nie sprawdzałoby zmiany źródła. */
   zmyslyDzialaja = false;
-  await p.searchMemory('czym fotografuję?');
+  await p.searchMemory('czym fotografuję w górach?');
   ok(await az(() => wszystkieMaja('nvidia:nvidia/llama-nemotron-embed-1b-v2')), 'chmura policzyła wektory, gdy zmysły spały');
   ok(wszystkieMaja('senses:64'), 'wektory zmysłów zostały obok wektorów chmury');
 
   // --- zmysły wracają: nic do przeliczenia, trafienie od razu wektorem --------------
+  /* Po awarii zmysły mają minutę karencji — rozmowa idzie wtedy od razu do
+     chmury (lib/pamiec.js). Powrót po karencji udaje świeża instancja na tym
+     samym katalogu: czyta z pliku wektory obu modeli, karencji nie zna. */
+  await az(() => {
+    try { return JSON.parse(fs.readFileSync(path.join(katalog, 'memory.json'), 'utf8')).every((m) => m.wektory && Object.keys(m.wektory).length === 2); } catch { return false; }
+  });
+  p = nowa();
   zmyslyDzialaja = true;
   const przed = liczone.zmysly;
-  // Karencji po awarii nie ma: zmysły padły, ale chmura odpowiedziała.
-  const wynik = await p.searchMemory('czym fotografuję?');
+  const pytaniaPrzed = pytaniaDoZmyslow;
+  const wynik = await p.searchMemory('czym fotografuję nad morzem?');
   await czekaj(300);   // gdyby coś ruszyło w tle — niech zdąży się policzyć
+  ok(pytaniaDoZmyslow > pytaniaPrzed, 'pytanie po powrocie liczą zmysły');
   ok(liczone.zmysly === przed, `powrót zmysłów nie przelicza pamięci (policzono ${liczone.zmysly - przed} faktów)`);
   ok(wynik.length >= 1 && /Canon/.test(wynik[0].text), `pierwsze pytanie po powrocie trafia wektorem („${(wynik[0] || {}).text || 'nic'}")`);
 
   // --- i chmura też nie liczy drugi raz ----------------------------------------------
   zmyslyDzialaja = false;
   const przedChmura = liczone.chmura;
-  const wynik2 = await p.searchMemory('czym fotografuję?');
+  const wynik2 = await p.searchMemory('czym fotografuję zimą?');
   await czekaj(300);
   ok(liczone.chmura === przedChmura && wynik2.length >= 1 && /Canon/.test(wynik2[0].text),
     `ponowne przejście na chmurę: zero przeliczeń, trafienie wektorem (policzono ${liczone.chmura - przedChmura})`);
