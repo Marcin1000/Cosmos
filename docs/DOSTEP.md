@@ -172,7 +172,9 @@ z przeglądarki, a Twój komputer nie pracuje dla niej.
 
 **Minimum — dwie minuty:**
 
-1. Otworzyć link.
+1. Otworzyć link. Formularz mówi językiem przeglądarki gościa (polski albo
+   angielski; inny język → angielski), a pod przyciskiem jest przełącznik
+   **English / Polski**. Wybór zostaje w aplikacji po dołączeniu.
 2. Wpisać login i hasło → **Dołącz**.
 3. Na telefonie: menu przeglądarki → **Dodaj do ekranu głównego**. Cosmos
    działa wtedy jak aplikacja. Dodawaj z adresu `cosmosai.live/app` — pod

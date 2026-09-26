@@ -3266,7 +3266,7 @@ const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywa
    — patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
    więc musi stać dokładnie tu, gdzie stał przeniesiony kod. */
 /* Konta: zaproszenie, Twoje konto, Dostęp (public/konta.js). */
-const konta_ = utworzKonta({ $, t });
+const konta_ = utworzKonta({ $, t, zmienJezyk: () => setLang(getLang() === 'pl' ? 'en' : 'pl') });
 
 const { odswiezPlan, zamknijPlener } = utworzPlener({
   $, el, t, readJsonSafe, closeSettings, dopasujPanelKamery,

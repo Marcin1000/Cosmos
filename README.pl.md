@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="111 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-111-4ac26b?style=flat-square">
+  <img alt="112 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-112-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 111 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 112 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -141,7 +141,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 111 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 112 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -173,7 +173,8 @@ mieszka pod **`/app`**. Stąd kilka praktycznych rzeczy:
   adresu otworzy teraz stronę produktową — usuń ją i dodaj jeszcze raz.
 - **Zaproszenia** z panelu Dostęp mają postać `…/app#zaproszenie=…`. Starsze linki
   `…/#zaproszenie=…` strona przekierowuje od razu, więc żaden wysłany link nie
-  przestał działać.
+  przestał działać. Formularz dołączania mówi językiem przeglądarki gościa
+  (z przełącznikiem PL/EN) — sama aplikacja bez zaproszenia startuje po polsku.
 - **Zalogowany** widzi na stronie „Otwórz Cosmos” zamiast „Zaloguj się”.
 - **Język** (PL/EN) jest wspólny dla strony i aplikacji — wybór w jednym miejscu
   obowiązuje w drugim.
@@ -1242,7 +1243,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 111 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 112 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

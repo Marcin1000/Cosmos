@@ -24,6 +24,7 @@ const I18N = {
     'inv.pass': 'Hasło (min. 8 znaków)',
     'inv.pass2': 'Powtórz hasło',
     'inv.submit': 'Dołącz',
+    'inv.innyJezyk': 'English',
     'inv.mismatch': 'Hasła się różnią.',
     'acc.save': 'Zapisz',
     'acc.logout': 'Wyloguj',
@@ -879,6 +880,7 @@ const I18N = {
     'inv.pass': 'Password (at least 8 characters)',
     'inv.pass2': 'Repeat password',
     'inv.submit': 'Join',
+    'inv.innyJezyk': 'Polski',
     'inv.mismatch': 'The passwords do not match.',
     'acc.save': 'Save',
     'acc.logout': 'Sign out',
@@ -1689,8 +1691,35 @@ const I18N = {
   },
 };
 
-let _lang = localStorage.getItem('cosmos.lang') || 'pl';
-if (!I18N[_lang]) _lang = 'pl';
+/** Język na starcie aplikacji.
+ *
+ *  Zapisany wybór wygrywa zawsze. Bez niego — po polsku, z jednym wyjątkiem:
+ *  link z zaproszeniem. Zaproszona osoba widzi Cosmosa pierwszy raz, często
+ *  z telefonu po angielsku, i formularz dołączania po polsku był dla niej
+ *  ścianą. Wtedy decyduje język przeglądarki (pierwszy z listy, który
+ *  znamy), a wybór zapisujemy — po dołączeniu strona się przeładowuje
+ *  i ma zostać w tym samym języku. */
+function jezykStartowy(zapisany, hash, jezykiPrzegladarki) {
+  if (zapisany && I18N[zapisany]) return { jezyk: zapisany, zapisz: false };
+  if (/^#zaproszenie=/.test(String(hash || ''))) {
+    for (const j of jezykiPrzegladarki || []) {
+      const kod = String(j || '').toLowerCase().slice(0, 2);
+      if (I18N[kod]) return { jezyk: kod, zapisz: true };
+    }
+    return { jezyk: 'en', zapisz: true };   // przeglądarka w języku, którego nie mamy
+  }
+  return { jezyk: 'pl', zapisz: false };
+}
+
+let _lang = 'pl';
+if (typeof localStorage !== 'undefined') {
+  let zapisany = null;
+  try { zapisany = localStorage.getItem('cosmos.lang'); } catch { /* prywatne okno */ }
+  const start = jezykStartowy(zapisany, location.hash,
+    navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]);
+  _lang = start.jezyk;
+  if (start.zapisz) { try { localStorage.setItem('cosmos.lang', _lang); } catch { /* bez pamięci */ } }
+}
 
 function getLang() { return _lang; }
 
@@ -1734,3 +1763,5 @@ function applyI18n(root = document) {
     el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
   });
 }
+
+if (typeof module !== 'undefined') module.exports = { jezykStartowy, I18N };

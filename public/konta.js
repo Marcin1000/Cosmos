@@ -11,7 +11,8 @@
    z testu (patrz CLAUDE.md, „Front-end — bez budowania").
    ============================================================ */
 
-function utworzKonta({ $, t }) {
+/** zmienJezyk — przełącza PL↔EN i odświeża teksty (formularz zaproszenia). */
+function utworzKonta({ $, t, zmienJezyk }) {
   let ja = null;
   let kontaSerwera = null;
 
@@ -81,6 +82,11 @@ function utworzKonta({ $, t }) {
     const nakladka = $('invite-overlay');
     const blad = $('invite-error');
     nakladka.style.display = '';
+    let opis = () => {};
+    /* Język odgadnięty z przeglądarki może być zły (telefon służbowy po
+       angielsku) — jeden klik na przełączenie, bez szukania ustawień. */
+    const przelacz = $('invite-lang');
+    if (przelacz && zmienJezyk) przelacz.addEventListener('click', () => { zmienJezyk(); opis(); });
     // Token w nagłówku, nie w adresie — adresy lądują w logach po drodze.
     const r = await zadaj('/api/zaproszenie', { naglowki: { 'X-Cosmos-Zaproszenie': token } });
     if (!r.ok) {
@@ -88,9 +94,13 @@ function utworzKonta({ $, t }) {
       for (const id of ['invite-name', 'invite-login', 'invite-pass', 'invite-pass2', 'invite-submit']) $(id).hidden = true;
       return;
     }
-    $('invite-sub').textContent = r.json.zapraszajacy
-      ? t('inv.subFrom', { kto: r.json.zapraszajacy })
-      : t('inv.sub');
+    // Zdanie z imieniem składa skrypt, więc po zmianie języka trzeba je złożyć od nowa.
+    opis = () => {
+      $('invite-sub').textContent = r.json.zapraszajacy
+        ? t('inv.subFrom', { kto: r.json.zapraszajacy })
+        : t('inv.sub');
+    };
+    opis();
     $('invite-name').value = r.json.nazwa || '';
     $('invite-login').value = r.json.proponowanyLogin || '';
     $('invite-form').addEventListener('submit', async (e) => {

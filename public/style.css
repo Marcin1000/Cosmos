@@ -2455,6 +2455,7 @@ body::after {
 .login-o { font-size: 13.5px; line-height: 1.5; color: var(--text-faint); margin: -4px 0 2px; }
 .login-link { font-size: 13.5px; color: var(--text-dim); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
 .login-link:hover { color: var(--text); }
+.login-jezyk { align-self: center; background: none; border: 0; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px; }
 .login-title {
   font-family: var(--font-sans);
   font-size: 22px;
