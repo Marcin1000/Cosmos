@@ -18,7 +18,11 @@
  *  13. zdjęcie odrzucone kodem 500 (Ollama) → ponowienie z modelem wizyjnym,
  *  14. model myślący po cichu → dłuższy limit do pierwszej treści, z pulsem,
  *  15. restart serwera w trakcie odpowiedzi → odpowiedź dokończona i zapisana,
- *  16. uśpiony komputer domowy → nazwana przyczyna i bezpiecznik 30 s. */
+ *  16. uśpiony komputer domowy → nazwana przyczyna i bezpiecznik 30 s,
+ *  17. „Stop" w trakcie składania kontekstu (embeddingi czekają na śpiące zmysły)
+ *      → nic nie idzie do dostawcy; dawniej rejestr stał PO składaniu,
+ *  18. drugi POST z tym samym biegiem (Chrome ponawia go sam, gdy połączenie
+ *      padnie przed pierwszym bajtem) → jedno żądanie do dostawcy, ta sama odpowiedź. */
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -43,7 +47,7 @@ const atrapa = http.createServer((req, res) => {
     let d = {}; try { d = JSON.parse(b); } catch { /* puste */ }
     const ost = [...(d.messages || [])].reverse().find((m) => m.role === 'user') || { content: '' };
     const t = typeof ost.content === 'string' ? ost.content : JSON.stringify(ost.content);
-    const slowo = (t.match(/przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu/) || [''])[0];
+    const slowo = (t.match(/przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu/) || [''])[0];
     if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; }
     if (slowo === 'przeciazony' && proby[slowo] < 3) {
       return blad(res, 529, { error: { message: 'Overloaded', type: 'overloaded_error' } }, { 'retry-after': '0.2' });
@@ -70,6 +74,14 @@ const atrapa = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { role: 'assistant' } }] })}\n\n`);
       return setTimeout(() => res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Przemyślana odpowiedź.' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`), 2500);
+    }
+    if (slowo === 'dubelbiegu') {
+      // Nagłówki dopiero po 800 ms (model myśli), potem odpowiedź z numerem żądania.
+      const nr = proby[slowo];
+      return setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: `Odpowiedź numer ${nr}.` }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
+      }, 800);
     }
     if (/przedcisza/.test(t)) return;
     if (/opoznij/.test(t)) {
@@ -231,6 +243,39 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   ok(/: puls/.test(w.txt), '14. w czasie ciszy przeglądarka dostaje puls (Cloudflare nie zerwie)');
   w = await czat('myslipocichu', { dodatki: { model: 'zwykly-model' } });
   ok(w.koniec && /zamilkł/.test(w.koniec.blad || ''), '14. zwykły model milczący tak samo długo — dalej „zamilkł" po 1,5 s');
+
+  // --- 18: drugi POST z tym samym biegiem — jedno żądanie do dostawcy
+  const biegDubel = los();
+  const pierwszyPost = czat('dubelbiegu', { bieg: biegDubel });
+  await spij(200);
+  const drugiPost = czat('dubelbiegu', { bieg: biegDubel });
+  const [p1, p2] = await Promise.all([pierwszyPost, drugiPost]);
+  ok(proby.dubelbiegu === 1 && /Odpowiedź numer 1/.test(p1.txt || '') && /Odpowiedź numer 1/.test(p2.txt || ''),
+    `18. drugi POST z tym samym biegiem → ${proby.dubelbiegu} żądanie do dostawcy, obie odpowiedzi te same`);
+
+  // --- 17: „Stop" w trakcie składania kontekstu (osobny serwer: zmysły-czarna dziura i wpis pamięci)
+  const czarnaDziura = require('node:net').createServer(() => { /* przyjmuje i milczy */ });
+  await new Promise((r) => czarnaDziura.listen(0, '127.0.0.1', r));
+  const PORT3 = 3493;
+  const srv3 = serwerCosmosa(PORT3, {
+    NEMOTRON_BASE_URL: `http://127.0.0.1:${atrapa.address().port}/v1`,
+    SENSES_URL: `http://127.0.0.1:${czarnaDziura.address().port}`, EMBED_PROVIDER: 'senses',
+  });
+  const katOsoby3 = path.join(srv3.katalogDanych, 'uzytkownicy', 'wlasciciel');
+  fs.mkdirSync(katOsoby3, { recursive: true });
+  fs.writeFileSync(path.join(katOsoby3, 'memory.json'), JSON.stringify([{ id: 'm1', text: 'Fotografuję Canonem.', time: Date.now() }]));
+  const S3 = `http://127.0.0.1:${PORT3}`;
+  if (!(await czekajNa(`${S3}/api/auth`))) throw new Error('trzeci serwer nie wstał');
+  const biegWczesny = los();
+  const wWczesny = czat('wczesnystop', { adres: S3, bieg: biegWczesny, dodatki: { useMemory: true } });
+  await spij(300);
+  const stopWczesny = await (await fetch(`${S3}/api/chat/stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bieg: biegWczesny }) })).json();
+  const wynikWczesny = await wWczesny;
+  await spij(1500);
+  ok(stopWczesny.ok === true && !proby.wczesnystop && wynikWczesny.status === 204,
+    `17. „Stop" w trakcie składania kontekstu → przyjęty (${stopWczesny.ok}), do dostawcy ${proby.wczesnystop || 0} żądań, odpowiedź ${wynikWczesny.status}`);
+  zabij(srv3);
+  czarnaDziura.close();
 
   // --- 15: restart w trakcie odpowiedzi (musi być ostatni — zamyka serwer)
   nowa('rozmowarestart');

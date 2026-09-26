@@ -1113,9 +1113,8 @@ async function trasyApi(req, res, p) {
     const id = String(dane.bieg || '');
     const b = biegi_.daj(id);
     if (b && b.przerwij) b.przerwij();
-    // Bieg jeszcze się nie urodził — dostawca nie odpowiedział nagłówkami.
-    const czeka = !b && OCZEKUJACE.get(`${kto().id}:${id}`);
-    if (czeka) { czeka.abort(); OCZEKUJACE.delete(`${kto().id}:${id}`); }
+    // Bieg jeszcze się nie urodził — kontekst się składa albo dostawca nie odpowiedział nagłówkami.
+    const czeka = !b && czat_.zatrzymajOczekujacy(`${kto().id}:${id}`);
     return sendJson(res, 200, { ok: Boolean(b || czeka) });
   }
   if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
