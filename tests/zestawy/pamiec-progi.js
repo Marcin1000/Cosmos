@@ -34,6 +34,28 @@ const zmysly = http.createServer((req, res) => {
   const wynik = await p.searchMemory('jaki mam aparat');
   ok(wynik.some((m) => m.id === 'a'), `wpis z innym modelem wektorów przywołany słowami kluczowymi (${wynik.map((m) => m.id).join(',') || 'nic'})`);
   ok(!wynik.some((m) => m.id === 'b'), 'niepasujący wpis dalej pominięty');
+  /* Embeddingi z chmury NVIDIA (zmysły śpią). Przez brakujący import
+     `authHeaders` żądanie nie wychodziło NIGDY, a błąd połykał `catch` —
+     status mówił „chmura NVIDIA", a pamięć działała tylko na słowach. */
+  const zadaniaNv = [];
+  const nvidia = require('node:http').createServer((req, res) => {
+    let b = '';
+    req.on('data', (c) => { b += c; }).on('end', () => {
+      zadaniaNv.push({ url: req.url, auth: req.headers.authorization || '' });
+      const n = (JSON.parse(b || '{}').input || ['x']).length;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ data: Array.from({ length: n }, (_, i) => ({ index: i, embedding: [0.1, 0.2, 0.3] })), model: 'nv-embed' }));
+    });
+  });
+  await new Promise((r) => nvidia.listen(0, '127.0.0.1', r));
+  process.env.EMBED_PROVIDER = 'nvidia';
+  const p2 = utworz({ katalogDanych: kat, sensesUrl: 'http://127.0.0.1:1', sendJson: () => {}, readJson: async () => ({}),
+    chmura: () => ({ baseUrl: `http://127.0.0.1:${nvidia.address().port}/v1`, apiKey: 'nvapi-test', label: 'NVIDIA' }) });
+  const wynikNv = await p2.embedTexts(['jaki mam aparat'], 3000, 'query');
+  ok(Boolean(wynikNv && wynikNv.vectors && wynikNv.vectors.length === 1), `embeddingi z chmury NVIDIA działają (${wynikNv ? 'wektor' : 'null'})`);
+  ok(zadaniaNv.some((z) => /embeddings/.test(z.url) && /nvapi-test/.test(z.auth)), `żądanie do NVIDII wyszło z kluczem (${zadaniaNv.length})`);
+  nvidia.close();
+
   zmysly.close();
   fs.rmSync(kat, { recursive: true, force: true });
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nPROGI PAMIĘCI OK');
