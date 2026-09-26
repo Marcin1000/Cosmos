@@ -157,8 +157,8 @@ const {
   // Tekst, z którego nic nie wynika – ma być uczciwe przyznanie, nie cisza.
   const bezSensu = await plan({ tryb: 'zdjecie', obiektyw: 'jakiś szerokokątny' });
   const powody3 = (bezSensu.ustawienia && bezSensu.ustawienia.powody) || [];
-  console.log(`8. nierozpoznany obiektyw → ${powody3.some((p) => /Nie odczytałem obiektywu/.test(p)) ? 'przyznaje się' : 'MILCZY'}`);
-  if (!powody3.some((p) => /Nie odczytałem obiektywu/.test(p))) {
+  console.log(`8. nierozpoznany obiektyw → ${powody3.some((p) => /Nie udało się odczytać obiektywu/.test(p)) ? 'przyznaje się' : 'MILCZY'}`);
+  if (!powody3.some((p) => /Nie udało się odczytać obiektywu/.test(p))) {
     fail.push('nierozpoznany obiektyw przemilczany – użytkownik nie wie, że dane przepadły');
   }
 

@@ -1596,7 +1596,7 @@ function toApiMessages(conv) {
     // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura – serwer przy małym
     // oknie modelu lokalnego wyrzuca tylko wiadomości sprzed niej.
     if (i === granica) api.turaOd = api.length;
-    if (m.error || m.role === 'action' || m.status) return;
+    if (m.error || m.role === 'action' || m.status || m.komunikatCosmosa) return;
     let text = msgText(m);
     const images = i === granica ? msgImages(m) : [];
     if (i !== granica && msgImages(m).length && m.role === 'user') {
@@ -2071,7 +2071,10 @@ async function streamOnce(conv, opcje = {}) {
     // wyławiać znaczników narzędzi.
     {
       const r = rozdzielMyslenie(acc);
-      if (r.think) { think = [think, r.think].filter(Boolean).join('\n'); acc = r.tresc; }
+      // Treść bez tagów ZAWSZE: pusty blok `<think>\n\n</think>` (Qwen3 bez
+      // myślenia) nie przechodził warunku i tagi stały na ekranie (agencja, runda 5).
+      if (r.think) think = [think, r.think].filter(Boolean).join('\n');
+      acc = r.tresc;
     }
     // Model, któremu budżet tokenów skończył się w trakcie myślenia, nie zdąży
     // nic napisać. Lepiej pokazać sam tok myślenia niż „pusta odpowiedź”.
@@ -2364,16 +2367,26 @@ async function domknijOdpowiedz(conv, surowe) {
     conv.messages.push({ role: 'action',
       actionType: akcja[1].trim().toLowerCase(), actionText: akcja[2].trim() });
     saveConversations();
-    return widoczne;
+    /* Akcja czeka na kliknięcie „Wykonaj”. W trybie głosowym słychać było samo
+       „Zapiszę to.”, a bez kliknięcia nic się nie zapisywało (agencja, runda 5). */
+    return voiceMode ? `${widoczne || ''} ${t('voice.confirmOnScreen')}`.trim() : widoczne;
   }
   const wiadomosc = wstawTekstModelu(conv, finalText, conv.__turaOd || 0);
-  if (wiadomosc) Object.assign(wiadomosc, { think: lastThink, note: lastModelNote, samoMyslenie, ...znakSilnika() });
+  if (wiadomosc) {
+    /* Komunikat Cosmosa („⚠︎ Model zużył cały budżet…”, „pusta odpowiedź”)
+       nie jest wypowiedzią modelu. Dawniej wracał w historii jako jego
+       własna odpowiedź, także do innego silnika (agencja, runda 5). */
+    const komunikatCosmosa = !tresc;
+    Object.assign(wiadomosc, { think: lastThink, note: lastModelNote, samoMyslenie, ...znakSilnika(),
+      ...(komunikatCosmosa ? { komunikatCosmosa: true } : {}) });
+  }
   saveConversations();
   return finalText;
 }
 
 async function runGeneration(conv, podpiecie = null) {
   isGenerating = true;
+  turaPrzerwana = false;
   setGeneratingUI(true);
   if (voiceMode) setVoiceState('thinking');
   let finalText = '';
@@ -2394,6 +2407,8 @@ async function runGeneration(conv, podpiecie = null) {
 
   try {
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
+      // „Zatrzymaj” w trakcie narzędzia: kolejnej płatnej rundy u modelu nie ma.
+      if (turaPrzerwana) break;
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
          zapytania do modelu i mają dostać własne biegi. */
@@ -2486,6 +2501,7 @@ async function runGeneration(conv, podpiecie = null) {
         przed: przedDoPokazania,
         stan,
       });
+      if (turaPrzerwana) break;
 
       if (wynik && wynik.akcja === 'koniec') {
         finalText = wynik.finalGlos || wynik.finalText || '';
@@ -2518,7 +2534,8 @@ async function runGeneration(conv, podpiecie = null) {
          dokładnie w trakcie sięgania po narzędzie. */
       const czesc = stripSearchMarker(err.partial);
       if (czesc) {
-        conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
+        // Widać, że to przerwane, a nie cała odpowiedź (agencja, runda 5).
+        conv.messages.push({ role: 'assistant', content: czesc, note: t('chat.stopped'), ...znakSilnika() });
         saveConversations();
       }
     } else {
@@ -2529,7 +2546,17 @@ async function runGeneration(conv, podpiecie = null) {
       if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true });
       saveConversations();
-      if (voiceMode) finalText = t('voice.errReply');
+      /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
+         powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
+         brzmiały identycznie: „błąd połączenia z modelem” (agencja, runda 5). */
+      if (voiceMode) {
+        const m = String(err.message || '');
+        finalText = t(/środk|kredyt|credit|billing|balance|insufficient|płatno/i.test(m) ? 'voice.errMoney'
+          : /429|limit|przeciąż|rate|overloaded/i.test(m) ? 'voice.errLimit'
+          : /401|403|klucz|api key/i.test(m) ? 'voice.errKey'
+          : /komputer domowy|nie odpowiada|odrzuca połączenie|połącz|offline/i.test(m) ? 'voice.errConn'
+          : 'voice.errReply');
+      }
     }
   } finally {
     isGenerating = false;
@@ -2552,6 +2579,7 @@ async function runGeneration(conv, podpiecie = null) {
         // wróciło jako „pytanie" z mikrofonu.
         voiceOstatniaOdpowiedz = stripForSpeech(finalText);
         await speakText(finalText);
+        voiceKoniecMowienia = Date.now();
       }
       if (voiceMode) startQueryListening(); // rozmowa trwa – pytanie uzupełniające bez wake word
     } else {
@@ -2565,7 +2593,15 @@ async function runGeneration(conv, podpiecie = null) {
   }
 }
 
+/* „Zatrzymaj” w trakcie narzędzia (wyszukiwanie, zdjęcia, plan) nic nie robiło:
+   stop przerywał tylko strumień, a pętla narzędzi po wyniku od razu pytała
+   model drugi raz, płatnie, o odpowiedź, której nikt już nie chciał
+   (agencja, runda 5). Flaga tury zamyka pętlę po bieżącym kroku. */
+let turaPrzerwana = false;
+let voiceKoniecMowienia = 0;   // kiedy Cosmos skończył czytać odpowiedź (zapora echa)
+
 function stopGeneration() {
+  turaPrzerwana = true;
   /* Odkąd zamknięcie karty NIE przerywa generowania, samo `abort()` w
      przeglądarce już nie wystarcza: rozłączyłoby tylko widza, a serwer
      spokojnie dokończyłby odpowiedź i zapisał ją do rozmowy. Stop musi
@@ -2733,6 +2769,8 @@ function stripForSpeech(text) {
     .replace(/^[ \t]*\|(.+)\|[ \t]*$/gm, (_, w) => w.split('|').map((k) => k.trim()).filter(Boolean).join(', ') + '.')
     .replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]+/gm, '')           // punktory list
     .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
+    // „~1 h” to „około godziny” dla lektora (jednostkiNaGlos), nie znak do wycięcia.
+    .replace(/~\s*(?=[−–-]?\d)/g, getLang() === 'en' ? 'about ' : 'około ')
     .replace(/[*_#>|~]/g, '');
   /* Nagłówek, punkt listy i wiersz tabeli to osobne myśli – bez kropki lektor
      czytał „Plan Świt o 6:41" jednym tchem. Każda linia bez znaku końca
@@ -4278,6 +4316,11 @@ function startNasluchWlasny() {
     },
     onCisza: (powod) => zaradzGluchocie(powod),
     onPoziom: pokazPoziom,
+    /* Pytanie domyka dopiero ~1,3 s ciszy. Przy 700 ms zwykła pauza w środku
+       zdania („jaka będzie… jutro pogoda”) wysyłała samo „jaka będzie”, a reszta
+       szła do kosza, bo Cosmos już głuchł na czas odpowiedzi (agencja, runda 5).
+       Nasłuch słowa budzącego zostaje przy 700 ms: tam liczy się szybkość. */
+    ciszaMs: () => (voiceState === 'listening' ? 1300 : 700),
     onMowa: zmianaMowy,
     onPodglad: pokazPodglad,
     onRozpoznane: poRozpoznaniu,
@@ -4437,12 +4480,21 @@ function startVoiceRecognizer() {
       for (let i = Math.max(0, voiceZuzyteDo); i < e.results.length; i++) {
         latest = doklejRozpoznane(latest, e.results[i][0].transcript);
       }
-      const match = latest.match(WAKE_RE);
-      if (!match) return;
-      // Wszystkie wystąpienia, nie tylko pierwsze: przy ciągłym nasłuchu
-      // „Hej Kosmos" bywa rozpoznane kilka razy pod rząd i wcześniej lądowało
-      // w treści pytania jako „HejHejHej kosmosHej kosmos Co widzisz".
-      const after = bezSlowaBudzacego(latest);
+      /* PRYWATNOŚĆ. Dawniej samo „Hej, Cosmos” wysyłało do modelu to, co padło
+         w pokoju PRZED nim („jutro pogoda”), bo sklejaliśmy wszystkie wyniki,
+         a te bez słowa budzącego nie były oznaczane jako zużyte (agencja,
+         runda 5). Wyniki ostateczne bez słowa budzącego zużywamy od razu,
+         a pytaniem jest tylko tekst PO ostatnim słowie budzącym. */
+      const wzorzec = new RegExp(WAKE_RE.source, WAKE_RE.flags.includes('g') ? WAKE_RE.flags : WAKE_RE.flags + 'g');
+      let ostatnie = null;
+      for (const m of latest.matchAll(wzorzec)) ostatnie = m;
+      if (!ostatnie) {
+        let k = Math.max(0, voiceZuzyteDo);
+        while (k < e.results.length && e.results[k].isFinal) k++;
+        if (k > voiceZuzyteDo) oznaczZuzyte(e.results, k);
+        return;
+      }
+      const after = bezSlowaBudzacego(latest.slice(ostatnie.index + ostatnie[0].length).replace(/^[\s,.!?]+/, ''));
       oznaczZuzyte(e.results, e.results.length);
       chime(880);
       if (after.length > 5) { askVoice(after); return; }
@@ -4499,6 +4551,17 @@ function startVoiceRecognizer() {
     if (!rec.__ostatniaDlugosc) wznowienJalowych++;
     else wznowienJalowych = 0;
     if (voiceState === 'push') return;
+    /* Android: Chrome kończy sesję po każdej wypowiedzi i ciszy, a każde
+       wznowienie to dźwięk mikrofonu. Po odpowiedzi było ich 11 w 60 s
+       (agencja, runda 5). Jedna sesja: co usłyszała, idzie; nic, to kula. */
+    if (/Android/i.test(navigator.userAgent)) {
+      const tekst = bezSlowaBudzacego(voiceHeard);
+      voiceHeard = '';
+      clearTimeout(voiceSilence);
+      if (voiceState === 'listening' && tekst) askVoice(tekst);
+      else setVoiceState('push');
+      return;
+    }
     if (wznowienJalowych >= WZNOWIEN_ZANIM_PRZYCISK) { nasluchNaPrzycisk(); return; }
     setTimeout(() => { if (voiceMode && voiceState !== 'push') startVoiceRecognizer(); }, 250);
   };
@@ -4534,6 +4597,13 @@ function backToWake() {
     oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
   }
   ustawGluchote(false);
+  // Android nie utrzyma nasłuchu słowa budzącego bez ciągłego piszczenia.
+  if (/Android/i.test(navigator.userAgent) && silnikNasluchu() === 'przegladarka') {
+    if (voiceRec) { try { voiceRec.abort(); } catch { /* już zamknięty */ } voiceRec = null; }
+    setVoiceState('push');
+    el.voiceTranscript.textContent = '';
+    return;
+  }
   setVoiceState('wake');
   el.voiceTranscript.textContent = '';
   startVoiceRecognizer();
@@ -4546,7 +4616,13 @@ function askVoice(text) {
      przypadek, ale rozpoznawanie bywa opóźnione i zdanie Cosmosa potrafi
      domknąć się już po odmilczeniu. Jeśli „pytanie" jest tym, co przed chwilą
      sam powiedział – nie odpowiadamy na własne słowa. */
-  if (voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
+  /* Tylko przy rozpoznawaniu przeglądarki (jedyne, które słyszy własny głos
+     Cosmosa) i tylko tuż po jego wypowiedzi. Dawniej zapora działała zawsze
+     i połykała zwykłe dopytanie, które powtarza słowa z odpowiedzi: „A jutro
+     będzie pogoda?” po „Jutro będzie ładna pogoda…” znikało bez śladu
+     (agencja, runda 5). Własny strumień jest głuchy, gdy Cosmos mówi. */
+  const echoMozliwe = silnikNasluchu() === 'przegladarka' && Date.now() - voiceKoniecMowienia < 4000;
+  if (echoMozliwe && voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
     backToWake();
     return;
   }
@@ -5059,6 +5135,7 @@ function openSettings() {
   renderConfigInfo();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
+  komunikatLokalizacji('');
   fetch('/api/location').then((r) => r.json()).then((d) => { $('set-location').value = d.location || ''; }).catch(() => {});
   $('set-offline').checked = Boolean(settings.offline);
   $('set-timemachine').checked = Boolean(settings.timeMachine);
@@ -5167,11 +5244,37 @@ el.settingsSave.addEventListener('click', () => {
 /* Wykrycie lokalizacji: przeglądarka daje współrzędne, serwer zamienia je na
    nazwę. Współrzędne nie opuszczają Cosmosa inaczej niż przez ten jeden
    zapytanie – i tylko po kliknięciu, nigdy samo z siebie. */
+/* Wynik ustalania lokalizacji POD polem, nie w placeholderze pustego pola:
+   tam błąd był szary, po polsku także w EN i znikał po pierwszym znaku. */
+function komunikatLokalizacji(tekst) {
+  const m = $('set-location-msg');
+  m.textContent = tekst || '';
+  m.hidden = !tekst;
+}
+
+/* Nazwa wpisana ręcznie: serwer od razu szuka współrzędnych (bez nich Plener
+   nie policzy światła) i mówimy, co wyszło. */
+$('set-location').addEventListener('change', async (e) => {
+  const nazwa = e.currentTarget.value.trim();
+  if (!nazwa) { komunikatLokalizacji(''); return; }
+  try {
+    const r = await fetch('/api/location', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: nazwa }),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok) { komunikatLokalizacji(d.error || t('set.locationFailed')); return; }
+    const w = d.wspolrzedne;
+    komunikatLokalizacji(d.wspolrzedneNieznane ? t('set.locationNoCoords', { nazwa })
+      : w ? t('set.locationFound', { lat: w.lat.toFixed(2), lon: w.lon.toFixed(2) }) : '');
+  } catch { komunikatLokalizacji(t('set.locationFailed')); }
+});
+
 $('set-location-detect').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const pole = $('set-location');
   if (!navigator.geolocation) {
-    pole.placeholder = t('set.locationNoGps');
+    komunikatLokalizacji(t('set.locationNoGps'));
     return;
   }
   const dawny = btn.textContent;
@@ -5185,12 +5288,15 @@ $('set-location-detect').addEventListener('click', async (e) => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: poz.coords.latitude, lon: poz.coords.longitude }),
     });
-    const d = await r.json();
-    if (d.location) pole.value = d.location;
-    else pole.placeholder = d.error || t('set.locationFailed');
+    const d = await readJsonSafe(r);
+    if (d.location) {
+      pole.value = d.location;
+      komunikatLokalizacji(d.bezNazwy ? t('set.locationNoName')
+        : t('set.locationFound', { lat: Number(d.lat).toFixed(2), lon: Number(d.lon).toFixed(2) }));
+    } else komunikatLokalizacji(d.error || t('set.locationFailed'));
   } catch (err) {
     // Odmowa zgody to nie awaria – użytkownik zawsze może wpisać ręcznie.
-    pole.placeholder = err && err.code === 1 ? t('set.locationDenied') : t('set.locationFailed');
+    komunikatLokalizacji(err && err.code === 1 ? t('set.locationDenied') : t('set.locationFailed'));
   } finally {
     btn.disabled = false;
     btn.textContent = dawny;
@@ -5367,7 +5473,28 @@ $('backup-file').addEventListener('change', async () => {
   }
 });
 
+/* „Przywróć domyślne” kasowało wszystko od razu, bez pytania, a stoi tuż obok
+   „Zapisz” (agencja, runda 5). Pierwsze kliknięcie tylko pyta, drugie
+   w ciągu 5 s kasuje. confirm() nie wchodzi w grę: na telefonie w PWA bywa
+   zablokowany. */
+let resetUzbrojony = null;
 el.settingsReset.addEventListener('click', () => {
+  const btn = el.settingsReset;
+  if (!resetUzbrojony) {
+    btn.dataset.tekst = btn.textContent;
+    btn.textContent = t('set.resetConfirm');
+    btn.classList.add('uzbrojony');
+    resetUzbrojony = setTimeout(() => {
+      resetUzbrojony = null;
+      btn.textContent = btn.dataset.tekst;
+      btn.classList.remove('uzbrojony');
+    }, 5000);
+    return;
+  }
+  clearTimeout(resetUzbrojony);
+  resetUzbrojony = null;
+  btn.textContent = btn.dataset.tekst;
+  btn.classList.remove('uzbrojony');
   settings = { ...DEFAULT_SETTINGS };
   saveSettings();
   openSettings();
@@ -5379,8 +5506,8 @@ el.settingsReset.addEventListener('click', () => {
 // ----------------------------------------------------------------
 
 /** Wypisz, do czego dany model się nadaje. Pusty identyfikator chowa ramkę. */
-function renderModelInfo(boxEl, id) {
-  const info = typeof modelInfo === 'function' ? modelInfo(id) : null;
+function renderModelInfo(boxEl, id, silnik) {
+  const info = typeof modelInfo === 'function' ? modelInfo(id, silnik) : null;
   if (!id || !info) { boxEl.hidden = true; return; }
 
   const lang = getLang();
@@ -5468,7 +5595,7 @@ function renderCheckResult(box, r) {
       ? `<div class="check-ok">${escapeHtml(t('set.checkOkVision'))}</div>`
       : `<div class="check-warn">${escapeHtml(t('set.checkNoVision'))}</div>`);
   } else {
-    lines.push(`<div class="check-bad">${escapeHtml(t('set.checkFail'))}</div>`);
+    lines.push(`<div class="check-bad">${escapeHtml(t(r.siec ? 'set.checkNoConn' : 'set.checkFail'))}</div>`);
     if (r.podpowiedz) lines.push(`<div class="check-warn">${escapeHtml(r.podpowiedz)}</div>`);
     if (r.blad) lines.push(`<pre class="model-info-err">${escapeHtml(r.blad)}</pre>`);
   }
@@ -5589,7 +5716,7 @@ async function copyCheckReport(btn) {
 function refreshModelInfoBoxes() {
   for (const ep of SILNIKI_Z_MODELEM) {
     renderModelInfo($(`model-info-${ep}`), $(`set-model-${ep}`).value.trim()
-      || epConfig(ep).model || '');
+      || epConfig(ep).model || '', ep);
   }
 }
 
@@ -5600,15 +5727,18 @@ async function fetchModelsInto(epName, selectEl, btn) {
   try {
     const res = await fetch(`/api/models?endpoint=${epName}`);
     const data = await readJsonSafe(res);
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    const models = (data.data || []).map((m) => m.id).sort();
+    // `error` bywa obiektem dostawcy – dawniej na ekranie stało „[object Object]”.
+    if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : (data.error?.message || `HTTP ${res.status}`));
+    // Modele do obrazów, mowy i embeddingów nie trafiają do wyboru modelu czatu.
+    const models = (data.data || []).map((m) => m.id)
+      .filter((m) => typeof modelNotForChat !== 'function' || !modelNotForChat(m)).sort();
     if (!models.length) throw new Error(t('set.noModels'));
     // Znane modele na górę i z etykietą – inaczej wybiera się z listy
     // kilkudziesięciu identyfikatorów, nie wiedząc, czym się różnią.
     const described = [];
     const rest = [];
     for (const m of models) {
-      const info = typeof modelInfo === 'function' ? modelInfo(m) : null;
+      const info = typeof modelInfo === 'function' ? modelInfo(m, epName) : null;
       (info && !info.zgadywane ? described : rest).push([m, info]);
     }
     // Natywny wybierak Androida to lista na cały ekran, w której każda pozycja
@@ -5648,7 +5778,9 @@ async function fetchModelsInto(epName, selectEl, btn) {
     if (!all) {
       all = document.createElement('button');
       all.id = `check-all-${epName}`;
-      all.className = 'btn-secondary check-all';
+      // Sprawdzanie modeli jest tylko dla właściciela (zaproszona osoba dostaje 403
+      // i „Działa 0 z 7”, agencja, runda 5) – tak jak pojedyncze „Sprawdź”.
+      all.className = 'btn-secondary check-all tylko-wlasciciel';
       all.type = 'button';
       all.addEventListener('click', () => checkAllModels(epName));
       selectEl.insertAdjacentElement('afterend', all);
@@ -5770,7 +5902,7 @@ function updateModelBadge() {
 function setStatusRow(rowEl, online, extra) {
   const dot = rowEl.querySelector('.status-dot');
   const state = rowEl.querySelector('.status-state');
-  dot.className = 'status-dot ' + (online === true ? 'ok' : online === 'warn' ? 'warn' : 'err');
+  dot.className = 'status-dot ' + (online === true ? 'ok' : online === 'warn' ? 'warn' : online === 'brak' ? 'brak' : 'err');
   state.textContent = extra;
 }
 
@@ -5813,7 +5945,10 @@ async function refreshStatusWlasciwe() {
     } else {
       setStatusRow(el.statusCloud, st.cloud?.online === true, st.cloud?.online ? t('stat.online') : t('stat.offline'));
     }
-    setStatusRow(el.statusLocal, st.local?.online === true, st.local?.online ? t('stat.online') : t('stat.offline'));
+    /* Silnika bez dostępu nie ma w odpowiedzi. Zaproszona osoba widziała
+       „Lokalny GPU offline”, choć działał, tylko nie dla niej (agencja, runda 5). */
+    if (!st.local) setStatusRow(el.statusLocal, 'brak', t('stat.notForYou'));
+    else setStatusRow(el.statusLocal, st.local.online === true, st.local.online ? t('stat.online') : t('stat.offline'));
     stanSilnikow = {
       cloud: cloudCfg.hasApiKey ? (st.cloud?.online === true ? 'ok' : 'offline') : 'bez-klucza',
       local: st.local?.online === true ? 'ok' : 'offline',
@@ -5829,6 +5964,9 @@ async function refreshStatusWlasciwe() {
         .map(([k, v]) => (typeof v === 'string' ? `${k} (${v})` : k));
       setStatusRow(el.statusSenses, true, active.length ? t('stat.active', { n: active.length }) : t('stat.online'));
       el.statusSenses.title = active.length ? t('stat.sensesTip', { list: active.join(', ') }) : t('stat.online');
+    } else if (st.senses?.tylkoWlasciciel) {
+      setStatusRow(el.statusSenses, 'brak', t('stat.notForYou'));
+      el.statusSenses.title = t('stat.notForYouTip');
     } else {
       setStatusRow(el.statusSenses, 'warn', t('stat.offline'));
       el.statusSenses.title = t('stat.sensesRun');
@@ -5846,15 +5984,23 @@ async function loadServerConfig() {
 }
 
 async function loadServerConfigWlasciwe() {
+  let mamy = false;
   try {
     const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     serverConfig = await res.json();
     setServerReachable(true);
+    mamy = true;
   } catch {
     // interfejs działa dalej z pamięci podręcznej – pasek u góry mówi o awarii
     setServerReachable(false);
   }
-  buildEndpointTabs();
+  /* Bez konfiguracji zakładki zostają z pamięci. Dawniej jedno otwarcie bez
+     sieci (albo w trakcie restartu) budowało zakładki z pustej konfiguracji,
+     nadpisywało zapamiętaną listę i przestawiało silnik z Claude na NVIDIĘ
+     na stałe (agencja, runda 5). */
+  if (mamy) buildEndpointTabs();
+  else buildEndpointTabs(loadJson('cosmos.zakladki', null) || ['cloud']);
   updateModelBadge();
   refreshStatus();
 }
@@ -5882,6 +6028,26 @@ async function checkAuth() {
     return true; // serwer nieosiągalny – nie blokuj UI (offline)
   }
 }
+
+/* SESJA WYGASŁA W TRAKCIE PRACY. Każde /api/* odpowiadało wtedy 401, a na
+   ekranie stało „⚠ Wymagane logowanie.” z przyciskiem „Ponów”, który nigdy
+   nie zadziała (agencja, runda 5). Pierwsza taka odpowiedź pokazuje ekran
+   logowania; szkic w polu przeżywa przeładowanie po zalogowaniu. */
+let sesjaWygaslaPokazana = false;
+const fetchSurowy = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await fetchSurowy(...args);
+  if (res.status === 401 && !sesjaWygaslaPokazana) {
+    let sciezka = '';
+    try { sciezka = new URL(String(args[0]?.url || args[0] || ''), location.href).pathname; } catch { /* zły adres */ }
+    if (sciezka.startsWith('/api/') && !/^\/api\/(login|logout|auth)\b/.test(sciezka)) {
+      sesjaWygaslaPokazana = true;
+      showLogin();
+      $('login-error').textContent = t('login.expired');
+    }
+  }
+  return res;
+};
 
 function showLogin() {
   const overlay = $('login-overlay');

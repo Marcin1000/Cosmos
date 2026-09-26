@@ -374,7 +374,9 @@
       } else {
         ramekCichych++;
         uczTlo(rms);
-        if ((ramekCichych * dane.length) / naSekunde * 1000 >= o.ciszaMs) {
+        // Cisza domykająca może zależeć od stanu (pytanie dłuższa niż nasłuch).
+        const ciszaMs = typeof o.ciszaMs === 'function' ? o.ciszaMs() : o.ciszaMs;
+        if ((ramekCichych * dane.length) / naSekunde * 1000 >= ciszaMs) {
           domknij(naSekunde);
           return;
         }

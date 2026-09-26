@@ -204,7 +204,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   const dziwny = dobierz(dzien, { tryb: 'zdjecie', temat: 'pociągi towarowe', obiektyw: '24-70 f/2.8' });
   console.log(`9. temat spoza listy → ${dziwny.czas} ${dziwny.przyslona} ISO ${dziwny.iso}`);
   if (!dziwny.iso) fail.push('nieznany temat wywraca dobór');
-  if (!dziwny.powody.some((x) => /nie mam w słowniku/i.test(x))) {
+  if (!dziwny.powody.some((x) => /nie ma w słowniku/i.test(x))) {
     fail.push('nieznany temat przemilczany – użytkownik nie wie, że Cosmos zgadywał');
   }
 

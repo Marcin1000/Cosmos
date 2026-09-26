@@ -3858,3 +3858,9 @@ select::-ms-expand { display: none; }
 .set-karty button[hidden] { display: none; }
 #settings-modal .modal-body { position: relative; }   /* offsetTop bloków liczony od okna ustawień */
 @media (max-width: 720px) { .set-karty { top: -16px; margin: -16px -16px 0; padding: 10px 16px 8px; } }
+
+/* „Przywróć domyślne” uzbrojone: drugie kliknięcie kasuje ustawienia. */
+#settings-reset.uzbrojony { color: var(--danger, #c0392b); border-color: currentColor; }
+
+/* Kropka „niedostępne dla Ciebie”: szara, to nie awaria. */
+.status-dot.brak { background: var(--text-faint); box-shadow: none; }

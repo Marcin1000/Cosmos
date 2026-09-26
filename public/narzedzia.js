@@ -206,6 +206,20 @@ function utworzNarzedzia(z) {
     gdyLimit: (dop) => ({ tresc: t('search.enough'), etykieta: dop[1].trim() }),
     async wykonaj(k) {
       const q = k.dop[1].trim();
+      /* To samo zapytanie drugi raz w tej turze. Model potrafił zawołać
+         identyczne [SZUKAJ:] trzy razy, a na ekranie stały trzy te same
+         „Wyniki wyszukiwania” (agencja, runda 5). Plan, archiwum i zdjęcia
+         miały tę zaporę, wyszukiwanie nie. */
+      const odcisk = bezOgonkowKlient(q).toLowerCase().replace(/\s+/g, ' ');
+      if (!k.stan.szukaj) k.stan.szukaj = new Set();
+      if (k.stan.szukaj.has(odcisk)) {
+        dodajWynikNarzedzia(k.conv,
+          'TO ZAPYTANIE JUŻ WYSZUKAŁEŚ W TEJ TURZE i masz wyniki wyżej. Nie szukaj go '
+          + 'ponownie: odpowiedz na ich podstawie albo zapytaj o coś innego.',
+          q);
+        return { akcja: 'dalej' };
+      }
+      k.stan.szukaj.add(odcisk);
       /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
          jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć –
          i tak powstał plan Majorki z godzinami otwarcia atrakcji, których
@@ -516,7 +530,10 @@ function utworzNarzedzia(z) {
            tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
            się o niczym – i następne zdanie użytkownika trafiało w próżnię. */
         const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
-        pasek.domknij(t('chat.photosNone', { msg: powod }));
+        /* Człowiekowi jedno zdanie, bez nazw usług i angielskich wyjątków
+           („searxng: The operation was aborted…”); powód techniczny idzie
+           tylko do modelu, niżej (agencja, runda 5). */
+        pasek.domknij(t(powod ? 'chat.photosNoneErr' : 'chat.photosNoneEmpty'));
         dodajWynikNarzedzia(k.conv,
           `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
           + (powod ? `Powód techniczny: ${powod}\n` : '')

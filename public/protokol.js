@@ -38,7 +38,10 @@ function utworzProtokol() {
   const ZAM = '\\s*[\\]】]';
   const znacznik = (nazwa, grupa = `(${TRESC}+?)`) => new RegExp(`${OTW}${nazwa}${DWUKROPEK}${grupa}${ZAM}(?!\\()`, 'i');
 
-  const SEARCH_MARKER_RE = znacznik('SZUKAJ');
+  /* „[SEARCH: …]” – Qwen i Llama przy angielskiej rozmowie tłumaczą nazwę
+     znacznika. Stało to na ekranie, a wyszukiwanie nie ruszało (agencja-rozmowa,
+     runda 5). To samo polecenie, więc i to samo narzędzie. */
+  const SEARCH_MARKER_RE = znacznik('(?:SZUKAJ|SEARCH)');
 
   /** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
    *  To polecenie dla modelu, nie treść odpowiedzi – nigdy nie ma trafić na ekran.
@@ -59,20 +62,37 @@ function utworzProtokol() {
    *  Kolejność ma znaczenie: najpierw znika znacznik, potem sprzątamy płoty,
    *  które przez to opustoszały.
    */
-  const ZNACZNIKI = ['SZUKAJ', 'GRAFIKA', 'PLAN', 'ARCHIWUM', 'OBRAZ', 'AKCJA'];
+  const ZNACZNIKI = ['SZUKAJ', 'SEARCH', 'GRAFIKA', 'PLAN', 'ARCHIWUM', 'OBRAZ', 'AKCJA'];
 
   function stripSearchMarker(s) {
     let out = String(s || '');
+    const przed = out;
+    /* Wywołanie narzędzia w formacie modeli z function callingiem
+       (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes). Cosmos go nie
+       wykonuje, a stało na ekranie jako JSON. Urwane na końcu też znika. */
+    out = out.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)|<\/tool_call>/gi, '');
     for (const z of ZNACZNIKI) {
       /* Znacznik = nazwa, a zaraz po niej „:" albo „]" – i NIGDY odnośnik
          Markdown. Z dwukropkiem opcjonalnym „[Planty](…)", „[Archiwum
          Narodowe](…)" czy „[Obrazy Moneta](…)" znikały z odpowiedzi,
          a „[Archiwum…](…)" odpalało do tego narzędzie archiwum. */
       out = out.replace(new RegExp(`${OTW}${z}(?:${DWUKROPEK}${TRESC}*)?${ZAM}(?!\\()`, 'gi'), '');
+      /* Bez dwukropka („[SZUKAJ pogoda Kraków]”) – słabe modele gubią go.
+         Tylko nazwa WIELKIMI literami: „[Plan B]” czy „[Obraz Moneta]”
+         w zdaniu to zwykły tekst i ma zostać. Samo czyszczenie ekranu –
+         narzędzie rusza dalej tylko z dwukropkiem. */
+      out = out.replace(new RegExp(`${OTW}${z}\\s+${TRESC}+?${ZAM}(?!\\()`, 'g'), '');
       /* Urwany na końcu tekstu – i TYLKO na końcu, i tylko z dwukropkiem.
          W środku wypowiedzi otwarty nawias kwadratowy to zwykły nawias,
          a „[Plan B" na końcu zdania nie jest poleceniem. */
       out = out.replace(new RegExp(`${OTW}${z}${DWUKROPEK}${TRESC}*$`, 'i'), '');
+    }
+    /* Znacznik zapisany jako punkt listy („Sprawdzę:\n- [SZUKAJ: …]”)
+       zostawiał gołą kreskę albo „2.”. Tylko gdy coś wycięliśmy – samotny
+       punktor w tekście bez znaczników to nie nasza sprawa. */
+    if (out !== przed) {
+      out = out.split('\n').filter((l) => !/^[ \t]*(?:[-*+•]|\d{1,3}[.)])[ \t]*$/.test(l))
+        .join('\n').replace(/\n{3,}/g, '\n\n');
     }
     // Płot, w którym po usunięciu znacznika nie zostało nic prócz białych znaków.
     out = out.replace(/```[a-zA-Z-]*\s*```/g, '')
@@ -105,6 +125,9 @@ function utworzProtokol() {
     let t = stripSearchMarker(rozdzielMyslenie(acc).tresc);
     const m = t.match(/[[【]\s*([A-ZĄĆĘŁŃÓŚŹŻ]{0,8})$/i);
     if (m && ZNACZNIKI.some((zn) => zn.startsWith(m[1].toUpperCase()))) t = t.slice(0, m.index);
+    // Urwany początek „<tool_call>” też nie mignie na ekranie.
+    const ogon = t.match(/<[a-z_]{0,9}$/i);
+    if (ogon && '<tool_call>'.startsWith(ogon[0].toLowerCase())) t = t.slice(0, ogon.index);
     return t.replace(/<\/?t?h?i?n?k?$/i, '');
   }
 
@@ -274,30 +297,92 @@ function utworzProtokol() {
      ElevenLabs czytał „°C” po angielsku („degrisy”), a Piper i głos systemowy
      pomijali znak albo czytali go literami (zgłoszenie Marcina). Zamieniamy
      jednostki na słowa z polską odmianą: 1 stopień, 2 stopnie, 5 stopni,
-     20,5 stopnia. Tylko tuż po liczbie, żeby nie ruszać zwykłego tekstu. */
+     20,5 stopnia. Tylko tuż po liczbie, żeby nie ruszać zwykłego tekstu.
+
+     Runda 5 (agencja: frontend, rozmowa, copywriter): tak samo zapis
+     fotograficzny i jednostki z planu zdjęciowego, który jest rdzeniem Cosmosa
+     i najczęściej czytaną rzeczą w terenie. „f/2.8, 1/250 s, 20 s, 450 m,
+     1 h 20 min, 6:41–7:25” szło literami: „f łamane przez dwa kropka osiem”,
+     „es”, „em”, „ha”. Do tego skróty („np.”, „ok. 2 godz.”), minus zapisany
+     półpauzą („–2 °C” gubił minus), „~”, „≈”, „±” i „&”. */
+  // Koniec jednostki: nie litera i nie cyfra. `\b` w JS nie zna polskich liter
+  // („2 są” – po „s” stoi „ą”, dla `\b` to granica słowa).
+  const KONIEC = '(?![\\p{L}\\p{N}])';
   const JEDNOSTKI_PL = [
-    // [wzorzec jednostki, [1, 2–4, 5+, ułamek], dopisek]
-    [/°\s*C\b/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Celsjusza'],
-    [/°\s*F\b/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Fahrenheita'],
+    // [wzorzec jednostki, [1, 2–4, 5+, ułamek], dopisek, najmniej cyfr w liczbie]
+    [/°\s*C/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Celsjusza'],
+    [/°\s*F/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Fahrenheita'],
     [/°/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ''],
-    [/km\/h\b/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ' na godzinę'],
-    [/m\/s\b/, ['metr', 'metry', 'metrów', 'metra'], ' na sekundę'],
-    [/hPa\b/, ['hektopaskal', 'hektopaskale', 'hektopaskali', 'hektopaskala'], ''],
-    [/mm\b/, ['milimetr', 'milimetry', 'milimetrów', 'milimetra'], ''],
-    [/km\b/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ''],
+    [/km\/h/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ' na godzinę'],
+    [/m\/s/, ['metr', 'metry', 'metrów', 'metra'], ' na sekundę'],
+    [/hPa/, ['hektopaskal', 'hektopaskale', 'hektopaskali', 'hektopaskala'], ''],
+    [/mm/, ['milimetr', 'milimetry', 'milimetrów', 'milimetra'], ''],
+    [/cm/, ['centymetr', 'centymetry', 'centymetrów', 'centymetra'], ''],
+    [/km/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ''],
+    [/m/, ['metr', 'metry', 'metrów', 'metra'], ''],
     [/%/, ['procent', 'procent', 'procent', 'procent'], ''],
+    [/min/, ['minuta', 'minuty', 'minut', 'minuty'], ''],
+    [/(?:h|godz\.)/, ['godzina', 'godziny', 'godzin', 'godziny'], ''],
+    [/s/, ['sekunda', 'sekundy', 'sekund', 'sekundy'], ''],
+    [/l/, ['litr', 'litry', 'litrów', 'litra'], ''],
+    [/kg/, ['kilogram', 'kilogramy', 'kilogramów', 'kilograma'], ''],
+    [/kB/, ['kilobajt', 'kilobajty', 'kilobajtów', 'kilobajta'], ''],
+    [/MB/, ['megabajt', 'megabajty', 'megabajtów', 'megabajta'], ''],
+    [/GB/, ['gigabajt', 'gigabajty', 'gigabajtów', 'gigabajta'], ''],
+    [/px/, ['piksel', 'piksele', 'pikseli', 'piksela'], ''],
+    // Kelwiny tylko od czterech cyfr: „5600 K” to barwa światła, „4K” to wideo.
+    [/K/, ['kelwin', 'kelwiny', 'kelwinów', 'kelwina'], '', 4],
   ];
   const JEDNOSTKI_EN = [
-    [/°\s*C\b/, ['degree', 'degrees'], ' Celsius'],
-    [/°\s*F\b/, ['degree', 'degrees'], ' Fahrenheit'],
+    [/°\s*C/, ['degree', 'degrees'], ' Celsius'],
+    [/°\s*F/, ['degree', 'degrees'], ' Fahrenheit'],
     [/°/, ['degree', 'degrees'], ''],
-    [/km\/h\b/, ['kilometre', 'kilometres'], ' per hour'],
-    [/m\/s\b/, ['metre', 'metres'], ' per second'],
-    [/hPa\b/, ['hectopascal', 'hectopascals'], ''],
-    [/mm\b/, ['millimetre', 'millimetres'], ''],
-    [/km\b/, ['kilometre', 'kilometres'], ''],
+    [/km\/h/, ['kilometre', 'kilometres'], ' per hour'],
+    [/m\/s/, ['metre', 'metres'], ' per second'],
+    [/hPa/, ['hectopascal', 'hectopascals'], ''],
+    [/mm/, ['millimetre', 'millimetres'], ''],
+    [/cm/, ['centimetre', 'centimetres'], ''],
+    [/km/, ['kilometre', 'kilometres'], ''],
+    [/m/, ['metre', 'metres'], ''],
     [/%/, ['percent', 'percent'], ''],
+    [/min/, ['minute', 'minutes'], ''],
+    [/(?:h|godz\.)/, ['hour', 'hours'], ''],
+    [/s/, ['second', 'seconds'], ''],
+    [/l/, ['litre', 'litres'], ''],
+    [/kg/, ['kilogram', 'kilograms'], ''],
+    [/kB/, ['kilobyte', 'kilobytes'], ''],
+    [/MB/, ['megabyte', 'megabytes'], ''],
+    [/GB/, ['gigabyte', 'gigabytes'], ''],
+    [/px/, ['pixel', 'pixels'], ''],
+    [/K/, ['kelvin', 'kelvins'], '', 4],
   ];
+  // Jednostki, po których „10–20” to zakres („od 10 do 20 minut”).
+  const JEDNOSTKA_ZAKRESU = `(?:${JEDNOSTKI_PL.map(([w]) => w.source).join('|')})${KONIEC}`;
+
+  /* Skróty. Kropka skrótu bywa zarazem końcem zdania („…i tak dalej. Potem”):
+     przy skrótach, które zamykają zdanie, kropka zostaje, gdy po niej nic nie
+     ma albo zaczyna się nowe zdanie. „m.in. Wawel” to środek zdania. */
+  const SKROTY = [
+    // [wzorzec (bez kropki końcowej), po polsku, po angielsku, może zamykać zdanie]
+    [/m\.in/, 'między innymi', 'among others'],
+    [/n\.p\.m/, 'nad poziomem morza', 'above sea level', true],
+    [/np/, 'na przykład', 'for example'],
+    [/tj/, 'to jest', 'that is'],
+    [/itp/, 'i tak dalej', 'and so on', true],
+    [/itd/, 'i tak dalej', 'and so on', true],
+    [/temp/, 'temperatura', 'temperature'],
+    [/e\.g/, 'na przykład', 'for example'],
+    [/i\.e/, 'to jest', 'that is'],
+    // „ok.” tylko przed liczbą – „Ok.” na początku zdania to „okej”.
+    [/ok(?=\.\s*\d)/, 'około', 'about'],
+    // „godz.” bez liczby przed nim; po liczbie to jednostka (tabela wyżej).
+    [/o\s+godz/, 'o godzinie', 'at'],
+    [/(?:od|z)\s+godz/, 'od godziny', 'from'],
+    [/do\s+godz/, 'do godziny', 'until'],
+    [/w\s+godz/, 'w godzinach', 'between'],
+    [/godz(?=\.\s*\d)/, 'godzina', 'hour'],
+  ];
+
   function formaPl(liczba, [jeden, kilka, wiele, ulamek]) {
     if (/[.,]/.test(liczba)) return ulamek;
     const n = Math.abs(parseInt(liczba, 10));
@@ -305,24 +390,73 @@ function utworzProtokol() {
     if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) return kilka;
     return wiele;
   }
+  // Czy w tym miejscu kończy się zdanie (reszta pusta albo od wielkiej litery).
+  const koniecZdania = (reszta) => /^\s*(?:$|\p{Lu})/u.test(reszta);
+
   function jednostkiNaGlos(tekst, jezyk = 'pl') {
     const en = jezyk === 'en';
     let t = String(tekst || '');
-    // Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”.
-    t = t.replace(/(\p{L}+\s+)?(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)(?=\s*(?:°|%|km\/h|m\/s|hPa|mm\b|km\b))/gu,
-      (_, slowo = '', a, b) => {
-        const maOd = /^(?:od|from)\s+$/i.test(slowo);   // „od 10–20 °C” nie dostaje drugiego „od”
-        return `${slowo}${maOd ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
-      });
-    for (const [wzor, formy, dopisek] of (en ? JEDNOSTKI_EN : JEDNOSTKI_PL)) {
-      const re = new RegExp(`([−-]?)(\\d+(?:[.,]\\d+)?)\\s*${wzor.source}`, 'g');
-      t = t.replace(re, (_, znak, liczba) => {
-        const minus = znak ? 'minus ' : '';
-        const slowo = en ? (liczba === '1' ? formy[0] : formy[1]) : formaPl(liczba, formy);
-        return `${minus}${liczba} ${slowo}${dopisek}`;
+    // Selektor wariantu (U+FE0E/FE0F) zostaje po wyciętym „⚠︎” – niewidoczny, ale lektor go dostaje.
+    t = t.replace(/[︎️]/g, '');
+
+    for (const [wzor, pl, ang, zamyka] of SKROTY) {
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])${wzor.source}\\.`, 'giu');
+      t = t.replace(re, (cale, ...r) => {
+        const offset = r[r.length - 2];
+        const calosc = r[r.length - 1];
+        let slowo = en ? ang : pl;
+        if (/^\p{Lu}/u.test(cale)) slowo = slowo[0].toUpperCase() + slowo.slice(1);
+        return slowo + (zamyka && koniecZdania(calosc.slice(offset + cale.length)) ? '.' : '');
       });
     }
-    return t;
+
+    // „~20 min”, „≈ 3 h” → „około”; „± 10 zł” → „plus minus”.
+    t = t.replace(/~\s*(?=[−–-]?\d)/g, en ? 'about ' : 'około ')
+      .replace(/\s*≈\s*/g, (m, i) => (i === 0 ? '' : ' ') + (en ? 'about ' : 'około '))
+      .replace(/\s*±\s*/g, (m, i) => (i === 0 ? '' : ' ') + (en ? 'plus or minus ' : 'plus minus '));
+
+    // Przysłona: „f/2.8” → „f 2,8” (po polsku przecinek, inaczej „dwa kropka osiem”).
+    t = t.replace(/(?<![\p{L}\p{N}/])f\s*\/\s*(\d+)(?:[.,](\d+))?/gu,
+      (_, c, u) => `f ${c}${u ? (en ? '.' : ',') + u : ''}`);
+    // Czas naświetlania: „1/250 s” → „1/250 sekundy”.
+    t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}/])(\\d+)\\/(\\d+)\\s*s${KONIEC}`, 'gu'),
+      (_, a, b) => `${a}/${b} ${en ? 'of a second' : 'sekundy'}`);
+
+    const odDo = (slowo, a, b) => {
+      const maOd = /^(?:od|from)\s+$/i.test(slowo);   // „od 10–20 °C” nie dostaje drugiego „od”
+      return `${slowo}${maOd ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
+    };
+    // Zakres godzin „6:41–7:25”: „od 6:41 do 7:25”.
+    t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–\u2014-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
+      (_, slowo = '', a, b) => odDo(slowo, a, b));
+    // Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”.
+    t = t.replace(new RegExp(`(\\p{L}+\\s+)?(?<![\\p{N}.,:/])(\\d+(?:[.,]\\d+)?)\\s*[–-]\\s*(\\d+(?:[.,]\\d+)?)(?=\\s*${JEDNOSTKA_ZAKRESU})`, 'gu'),
+      (_, slowo = '', a, b) => odDo(slowo, a, b));
+
+    /* Minus i plus przed liczbą: „EV −0,7”, „do –2 °C” (półpauza – tak piszą
+       modele i polska typografia), „+1 EV”. Tylko po spacji, nawiasie albo na
+       początku i nie po liczbie: „10 – 20 osób” to nie minus, „COVID-19” też. */
+    t = t.replace(/(?<=^|[\s(])(?<!\p{N}\s*)[−–-](?=\d)/gu, 'minus ')
+      .replace(/(?<=^|[\s(])(?<!\p{N}\s*)\+(?=\d)/gu, 'plus ');
+
+    for (const [wzor, formy, dopisek, cyfr = 1] of (en ? JEDNOSTKI_EN : JEDNOSTKI_PL)) {
+      const re = new RegExp(`(?<![\\p{L}\\p{N}.,:/])(\\d{${cyfr},}(?:[.,]\\d+)?)\\s*${wzor.source}${KONIEC}`, 'gu');
+      t = t.replace(re, (cale, liczba, offset, calosc) => {
+        const slowo = en ? (liczba === '1' ? formy[0] : formy[1]) : formaPl(liczba, formy);
+        // „2 godz. Potem” – kropka skrótu była też końcem zdania.
+        const kropka = cale.endsWith('.') && koniecZdania(calosc.slice(offset + cale.length)) ? '.' : '';
+        return `${liczba} ${slowo}${dopisek}${kropka}`;
+      });
+    }
+
+    // „2× szybciej” → „2 razy”.
+    t = t.replace(/(\d)\s*×/g, `$1 ${en ? 'times' : 'razy'}`);
+    // „rock & roll”, „R&D” → „i” / „and”.
+    t = t.replace(/\s*&\s*/g, en ? ' and ' : ' i ');
+    /* Wiszący podpis na końcu: „…przed świtem. Szczegóły:” – adres, który stał
+       za dwukropkiem, wyciął stripForSpeech, a lektor czytał samo „Szczegóły”. */
+    t = t.replace(/([.!?…])\s+[^.!?…:]{1,40}:\s*$/u, '$1');
+    return t.replace(/ {2,}/g, ' ');
   }
 
   return {

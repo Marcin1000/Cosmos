@@ -158,19 +158,28 @@ function utworzNaukeWidok(z) {
   $('learn-save').addEventListener('click', async () => {
     const label = $('learn-label').value.trim();
     if (!label) { $('learn-recog-status').textContent = t('learn.needLabel'); return; }
+    /* Sama nazwa bez zdjęcia i bez opisu nic Cosmosa nie uczy, a pokazywało
+       „Nauczono: klucz” (agencja, runda 5). */
+    if (!learnShot && !$('learn-note').value.trim()) { $('learn-recog-status').textContent = t('learn.needShot'); return; }
     const body = {
       label, kind: $('learn-kind').value, note: $('learn-note').value.trim(),
       image: learnShot || null,
     };
     try {
       const r = await fetch('/api/lessons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!r.ok) throw 0;
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || '');
+      }
       $('learn-recog-status').textContent = t('learn.taught', { label });
       $('learn-label').value = ''; $('learn-note').value = ''; learnShot = null;
       $('learn-thumb').style.display = 'none';
       loadLessons();
       updateLearnBadge();
-    } catch { $('learn-recog-status').textContent = t('learn.teachErr'); }
+    } catch (err) {
+      // Powód z serwera (np. pełny dysk), a nie samo „nie udało się”.
+      $('learn-recog-status').textContent = [t('learn.teachErr'), err && err.message].filter(Boolean).join(' ');
+    }
   });
   async function loadLessons() {
     try {

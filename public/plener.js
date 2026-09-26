@@ -63,6 +63,8 @@ function utworzPlener(z) {
 
   /** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów –
    *  światło zmienia się w minutach, nie w klatkach. */
+  let ostatniaJasnosc = null;
+  let ostatniKadr = { w: 0, h: 0 };
   async function odswiezPlan(cap) {
     const box = $('plan-box');
     if (!box || box.hidden) return;
@@ -79,10 +81,14 @@ function utworzPlener(z) {
         // Puste = „weź z prognozy". Wybór ręczny wygrywa, bo stojąc na miejscu
         // widzisz niebo lepiej niż model pogodowy dla kwadratu kilometra.
         ...( $('plan-sky').value ? { zachmurzenie: $('plan-sky').value } : {} ),
-        szerokosc: cap ? cap.width : 0,
-        wysokosc: cap ? cap.height : 0,
+        szerokosc: cap ? cap.width : ostatniKadr.w,
+        wysokosc: cap ? cap.height : ostatniKadr.h,
       };
-      const j = cap ? jasnoscKadru(cap) : null;
+      /* Bez klatki (rozwinięcie nastaw, zmiana listy) bierzemy OSTATNI pomiar.
+         Dawniej szło żądanie bez jasności i przez ~10 s wracało „ISO 12800 ·
+         noc” dla oświetlonego pokoju (agencja, runda 5). */
+      const j = cap ? jasnoscKadru(cap) : ostatniaJasnosc;
+      if (cap) { ostatniKadr = { w: cap.width, h: cap.height }; if (j !== null) ostatniaJasnosc = j; }
       if (j !== null) dane.jasnosc = j;
       const r = await fetch('/api/plan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -136,13 +142,15 @@ function utworzPlener(z) {
     }
     /* Karta nieba (Plener) sama pokazuje fazę – w linijce pod nią byłaby
        powtórką. Wysokość z przecinkiem po polsku i z jednym miejscem po nim. */
-    const wys = Number(d.slonce.wysokosc).toLocaleString(jezyk(), { maximumFractionDigits: 1 });
     /* „noc (−28,9°)” obok „10°C” wyglądało jak mróz (zgłoszenie Marcina).
        To wysokość Słońca, więc mówimy to słowami: nad albo pod horyzontem. */
     const wysAbs = Math.abs(Number(d.slonce.wysokosc)).toLocaleString(jezyk(), { maximumFractionDigits: 0 });
     const slonce = t(Number(d.slonce.wysokosc) < 0 ? 'plan.sloncePod' : 'plan.slonceNad', { n: wysAbs });
-    if (pre !== 'fp') czesci.push(`${d.slonce.faza}, ${slonce}`);
-    else czesci.push(`${t('plan.slonce')} ${wys}°`);
+    // Faza przychodzi z serwera po polsku; w angielskim interfejsie tłumaczymy.
+    const faza = t(`faza.${d.slonce.faza}`);
+    const fazaTekst = faza.startsWith('faza.') ? d.slonce.faza : faza;
+    // W Plenerze fazę pokazuje karta nieba, więc tu sama wysokość (słowami).
+    czesci.push(pre !== 'fp' ? `${fazaTekst}, ${slonce}` : slonce);
     // Wnętrze: nastawy liczone dla światła lamp, nie Słońca (lib/plener-trasy.js).
     if (d.wnetrze) czesci.push(t('plan.zPomiaru'));
     // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy – przy wyborze
@@ -150,7 +158,7 @@ function utworzPlener(z) {
     if (d.pogoda) {
       czesci.push(`${d.pogoda.opis}`
         + (d.pogoda.temperatura !== null ? ` ${Math.round(d.pogoda.temperatura)}°C` : '')
-        + (d.pogoda.opadyProc > 30 ? ` · opady ${d.pogoda.opadyProc}%` : ''));
+        + (d.pogoda.opadyProc > 30 ? ` · ${t('plan.opady', { n: d.pogoda.opadyProc })}` : ''));
     }
     const light = $(pre + '-light');
     light.textContent = czesci.join(' · ');
@@ -162,7 +170,10 @@ function utworzPlener(z) {
     const zachod = d.slonce.doZachoduMin;
     const czas = document.createElement('span');
     czas.className = 'plan-urgent';
-    if (d.slonce.faza === 'złota godzina') {
+    /* „Złota godzina TERAZ” tylko dla planu na TERAZ. Plan na jutro rano
+       pokazywał „teraz” i minuty liczone od chwili planu (agencja, runda 5). */
+    const naTeraz = !d.kiedy || Math.abs(new Date(d.kiedy).getTime() - Date.now()) < 30 * 60000;
+    if (!naTeraz) { /* plan na inną chwilę: karta nieba mówi, co wtedy */ } else if (d.slonce.faza === 'złota godzina') {
       czas.textContent = ` · ${t('plan.goldenNow')}`
         + (zachod > 0 ? `, ${t('plan.toSunset', { n: ileCzasu(zachod) })}` : '');
     } else if (zloty > 0) {

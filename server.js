@@ -28,7 +28,7 @@ const { modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
 const {
   PORT, HOST, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
   sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, czytajJson, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
+  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, czytajJson, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow, opisBleduSieci, toStronaHtml,
 } = require('./lib/rdzen.js');
 /* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
    i trasy kont. Zasady – w nagłówkach tych modułów; bramka logowania zostaje
@@ -197,7 +197,7 @@ function terazTekst() {
     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: STREFA_CZASU });
   const godzina = t.toLocaleTimeString('pl-PL',
     { hour: '2-digit', minute: '2-digit', timeZone: STREFA_CZASU });
-  return `${dzien}, godzina ${godzina}`;
+  return `${dzien}, godzina ${godzina} (strefa ${STREFA_CZASU})`;
 }
 
 /* Współrzędne → nazwa miejscowości. Przeglądarka daje samo „52.05, 20.90",
@@ -221,7 +221,7 @@ async function handleGeokod(req, res) {
   const stoper = AbortSignal.timeout(GEOKOD_MS);
   try {
     const r = await fetch(url, { signal: stoper, headers: { 'User-Agent': 'Cosmos/2.0 (prywatny asystent)' } });
-    if (!r.ok) return sendJson(res, 502, { error: `Usługa nazw miejsc odpowiedziała ${r.status}.` });
+    if (!r.ok) return zapiszSameWspolrzedne();
     const d = await r.json();
     const a = d.address || {};
     // Od najbardziej konkretnego: wieś → miasteczko → miasto → gmina.
@@ -235,12 +235,17 @@ async function handleGeokod(req, res) {
     if (blad) return bladZapisu(res, blad);
     addEvent('lokalizacja', `Ustalono lokalizację: ${nazwa}`);
     return sendJson(res, 200, { location: nazwa, lat, lon });
-  } catch (err) {
-    return sendJson(res, 502, {
-      error: /timeout|abort/i.test(err.message)
-        ? `Usługa nazw miejsc nie odpowiedziała w ${GEOKOD_MS / 1000} s.`
-        : `Nie udało się ustalić miejsca: ${err.message}`,
-    });
+  } catch {
+    return zapiszSameWspolrzedne();
+  }
+  /* Usługa nazw zawiodła, ale współrzędne z telefonu są DOBRE i tylko one są
+     potrzebne do liczenia światła. Dawniej przepadały razem z błędem 502
+     (agencja, runda 5). Zapisujemy je z nazwą ze współrzędnych. */
+  function zapiszSameWspolrzedne() {
+    const nazwa = `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+    const blad = saveLocation(nazwa, { lat, lon });
+    if (blad) return bladZapisu(res, blad);
+    return sendJson(res, 200, { location: nazwa, lat, lon, bezNazwy: true });
   }
 }
 
@@ -915,7 +920,9 @@ async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
     // przy modelach ładowanych na żądanie znaczy zwykle tylko tyle, że model
     // wstawał z zimnego startu.
     const timeout = e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message);
-    return { ok: false, status: 0, timeout, error: scrubSecrets(e.message) };
+    /* Brak połączenia to NIE „niedostępny na Twoim koncie”. Przy uśpionym domu
+       „Sprawdź” twierdziło to drugie (agencja, runda 5). */
+    return { ok: false, status: 0, timeout, siec: !timeout, error: scrubSecrets(timeout ? e.message : opisBleduSieci(e, ep.label)) };
   }
 }
 
@@ -958,7 +965,7 @@ async function handleModelCheck(req, res) {
         ? 'Ten model nie służy do rozmowy (embeddingi / przeszukiwanie / OCR). '
           + 'Nie wybieraj go jako modelu czatu.'
         : 'Ten model odpowie, ale rozmówcą nie jest – to klasyfikator, tłumacz '
-          + 'albo model badawczy. Do czatu wybierz Nemotrona.',
+          + 'albo model badawczy. Do czatu wybierz model rozmowy z listy.',
       bladObrazy: null,
     });
   }
@@ -976,9 +983,13 @@ async function handleModelCheck(req, res) {
     obrazy: vision.ok,
     // „Nie zdążył odpowiedzieć" to nie to samo, co „nie masz dostępu”.
     niepewne: Boolean(text.timeout),
+    siec: Boolean(text.siec),
     blad: text.ok ? null : text.error,
     // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
     podpowiedz: text.ok ? null
+      : text.siec ? (ep === ENDPOINTS.local
+        ? 'To nie sprawa konta ani modelu: komputer domowy albo Ollama nie odpowiada. Sprawdź, czy komputer jest włączony i Ollama działa.'
+        : 'To nie sprawa konta ani modelu: serwer Cosmosa nie połączył się z dostawcą. Spróbuj za chwilę.')
       : (text.timeout
         ? 'Model nie odpowiedział na czas – u dostawcy wstaje z zimnego startu. '
           + 'Spróbuj go sprawdzić pojedynczo przyciskiem „Sprawdź”.'
@@ -999,15 +1010,28 @@ async function handleModels(req, res) {
       headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
       signal: AbortSignal.timeout(15000),
     });
-    const data = await upstream.json();
-    sendJson(res, upstream.status, data);
+    const tekst = await upstream.text();
+    let data = null;
+    try { data = JSON.parse(tekst); } catch { /* HTML albo pusto */ }
+    if (upstream.ok && data) return sendJson(res, 200, data);
+    /* Dostawca odmówił. Surowe ciało (`{error:{message,type}}`) dawało na
+       ekranie „[object Object]” (agencja, runda 5). Jedno zdanie po ludzku. */
+    const powod = data && (data.error?.message || (typeof data.error === 'string' && data.error) || data.message);
+    const klucz = upstream.status === 401 || upstream.status === 403;
+    return sendJson(res, 502, {
+      error: klucz
+        ? `${ep.label} odrzuca klucz API (HTTP ${upstream.status}). Sprawdź klucz w .env serwera albo własny klucz w Ustawieniach → Twoje konto.`
+        : toStronaHtml(tekst) || !powod
+          ? `${ep.label} nie oddał listy modeli (HTTP ${upstream.status}). Spróbuj za chwilę.`
+          : `${ep.label}: ${String(powod).slice(0, 200)} (HTTP ${upstream.status})`,
+    });
   } catch (err) {
     const local = ep === ENDPOINTS.local;
     if (local && !czyWlasciciel()) {
       return sendJson(res, 502, { error: 'Komputer właściciela z lokalnym modelem teraz nie odpowiada.' });
     }
     if (!local) {
-      return sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
+      return sendJson(res, 502, { error: opisBleduSieci(err, ep.label) });
     }
     /* Samo „fetch failed” nic nie mówi. Kod przyczyny rozróżnia dwie zupełnie
        różne sytuacje: komputer odpowiada, ale Ollama nie przyjmuje połączeń
@@ -1162,9 +1186,21 @@ async function trasyApi(req, res, p) {
     if (req.method === 'POST') {
       let d;
       try { d = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
-      const blad = saveLocation(d.location, d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null);
+      /* Nazwa wpisana ręcznie („Warszawa”, jak podpowiada pole) dostaje
+         współrzędne z wyszukiwarki miejsc. Dawniej zapisywała się sama nazwa,
+         a Plener liczy tylko ze współrzędnych i dalej prosił „Ustaw lokalizację”
+         (agencja, runda 5). Nie wyszło: zostaje nazwa i uczciwa informacja. */
+      let wsp = d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null;
+      let wspolrzedneNieznane = false;
+      const nazwa = String(d.location || '').trim();
+      if (!wsp && nazwa && nazwa !== U().location) {
+        const z = await wspolrzedneMiejsca(nazwa).catch(() => null);
+        if (z) wsp = { lat: z.lat, lon: z.lon };
+        else wspolrzedneNieznane = true;
+      }
+      const blad = saveLocation(d.location, wsp);
       if (blad) return bladZapisu(res, blad);
-      return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne });
+      return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne, wspolrzedneNieznane });
     }
   }
   if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);
@@ -1307,7 +1343,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/zaproszenie') return await handleZaproszenie(req, res);
 
     const u = ktoPyta(req);
-    if (!u) return sendJson(res, 401, { error: 'Wymagane logowanie.' });
+    if (!u) return sendJson(res, 401, { error: 'Sesja wygasła albo nie jesteś zalogowany. Zaloguj się ponownie.', kod: 'niezalogowany' });
     if (obcePochodzenie(req)) return sendJson(res, 403, { error: 'Żądanie z innej strony – odrzucone.' });
 
     /* Od tego miejsca wszystko dzieje się W IMIENIU tej osoby: dane, zdarzenia,

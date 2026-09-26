@@ -461,6 +461,8 @@ const MODEL_CATALOG = [
     dopasuj: ['llama3.2-vision', 'qwen2.5vl', 'qwen2.5-vl', 'minicpm-v', 'gemma3:4b', 'gemma3:12b', 'gemma3:27b',
       'llava', 'qwen2-vl', '-vl'],
     nazwa: 'Lokalny model wizyjny',
+    // Opis prawdziwy TYLKO na silniku lokalnym (patrz modelInfo).
+    tylkoLokalny: true,
     opis: 'Rozpoznaje obrazy na Twoim GPU – bez wysyłania zdjęć do chmury.',
     mocne: ['prywatna analiza zdjęć', 'praca offline'],
     kontekst: 'zależny od modelu',
@@ -511,13 +513,25 @@ function wariantyNazwy(id) {
   return [...new Set([k0, k1, k2])];
 }
 
-function modelInfo(id) {
+/* `silnik` (cloud / local / openai / claude), gdy wiadomo, gdzie model działa.
+   Chmurowy „…-vl” dostawał opis „Lokalny model wizyjny – bez wysyłania zdjęć
+   do chmury”: fałszywa obietnica prywatności (agencja, runda 5). */
+function modelInfo(id, silnik) {
   if (!id) return null;
   const key = String(id).toLowerCase();
   const warianty = wariantyNazwy(id);
   for (const entry of MODEL_CATALOG) {
     if (entry.dopasuj.some((frag) => warianty.some((w) => w.includes(frag)))) {
-      const { en, ...wpis } = entry;
+      if (entry.tylkoLokalny && silnik && silnik !== 'local') {
+        const en = jezykInterfejsu() === 'en';
+        return {
+          nazwa: en ? 'Vision model' : 'Model wizyjny',
+          opis: en ? 'Recognises images. Runs at the provider, so photos go to its cloud.'
+            : 'Rozpoznaje obrazy. Działa u dostawcy, więc zdjęcia trafiają do jego chmury.',
+          mocne: [], kontekst: null, cechy: ['wizja'], zgadywane: false,
+        };
+      }
+      const { en, tylkoLokalny, ...wpis } = entry;
       return { ...wpis, ...(jezykInterfejsu() === 'en' && en ? en : {}), zgadywane: false };
     }
   }
@@ -571,6 +585,10 @@ const NIE_DO_ROZMOWY = [
   'reward', 'genrm', 'detector', 'deplot',
   // z listy Ollamy: bge-m3 (embeddingi Cosmosa) nie ma w nazwie „embed"
   'bge-m3', 'bge-large', 'bge-small',
+  /* Z listy OpenAI: obrazy, mowa, moderacja, stare modele uzupełniania.
+     „Pobierz listę” podsuwała do czatu dall-e-3 i whisper-1 (agencja, runda 5). */
+  'dall-e', 'gpt-image', 'whisper', 'tts-', '-tts', 'transcribe', 'moderation',
+  'davinci', 'babbage', 'text-embedding', 'sora', 'realtime', 'audio-preview',
 ];
 
 /** Czy to model o innym przeznaczeniu niż rozmowa? */

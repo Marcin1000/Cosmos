@@ -132,6 +132,7 @@ function utworzTekst(z) {
     let i = 0;
     let para = [];
     let listStack = null; // 'ul' | 'ol'
+    let ostatniPunkt = -1; // indeks w `html` ostatniego <li> (dopisywanie wciętego ciągu dalszego)
 
     const flushPara = () => {
       if (para.length) {
@@ -216,21 +217,48 @@ function utworzTekst(z) {
         continue;
       }
 
-      // listy
+      /* LISTY. Dwie rzeczy dawały „1. 1. 1.” (agencja-rozmowa, runda 5):
+         1. Lista luźna – pusta linia między punktami („1. a\n\n2. b”), domyślny
+            styl GPT i Claude w planach i przepisach. Pusta linia zamykała listę,
+            więc każdy punkt był osobną listą z jednym punktem.
+         2. Numer z tekstu przepadał. Plan przedzielony siatką zdjęć
+            ([GRAFIKA: …] między punktami) to osobne wiadomości, a druga zaczyna
+            się od „2.” – i rysowała się jako „1.”. Stąd `<ol start>`. */
       const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
-      const olMatch = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      const olMatch = line.match(/^\s*(\d{1,9})[.)]\s+(.*)$/);
       if (ulMatch || olMatch) {
         flushPara();
         const type = ulMatch ? 'ul' : 'ol';
-        if (listStack !== type) { closeList(); html.push(`<${type}>`); listStack = type; }
-        html.push(`<li>${renderInline((ulMatch || olMatch)[1])}</li>`);
+        if (listStack !== type) {
+          closeList();
+          const start = olMatch ? parseInt(olMatch[1], 10) : 1;
+          html.push(start !== 1 ? `<ol start="${start}">` : `<${type}>`);
+          listStack = type;
+        }
+        html.push(`<li>${renderInline(ulMatch ? ulMatch[1] : olMatch[2])}</li>`);
+        ostatniPunkt = html.length - 1;
+        i++; continue;
+      }
+
+      // Wcięta linia pod punktem („1. Wawel\n   złota godzina”) – dalszy ciąg
+      // tego punktu, nie akapit wciśnięty między punkty listy.
+      if (listStack && ostatniPunkt === html.length - 1 && /^\s{2,}\S/.test(line)) {
+        html[ostatniPunkt] = html[ostatniPunkt].replace(/<\/li>$/, `<br>${renderInline(line.trim())}</li>`);
         i++; continue;
       }
 
       // pusta linia
       if (line.trim() === '') {
-        flushPara(); closeList();
-        i++; continue;
+        flushPara();
+        /* Lista luźna: pusta linia nie zamyka listy, jeśli dalej idzie punkt
+           tego samego rodzaju albo wcięty dalszy ciąg punktu. */
+        let j = i + 1;
+        while (j < lines.length && lines[j].trim() === '') j++;
+        const dalej = j < lines.length ? lines[j] : '';
+        const tenSam = listStack === 'ol' ? /^\s*\d{1,9}[.)]\s+/ : /^\s*[-*+]\s+/;
+        const ciagDalszy = /^\s{2,}\S/.test(dalej) && ostatniPunkt === html.length - 1;
+        if (!listStack || !(tenSam.test(dalej) || ciagDalszy)) closeList();
+        i = j; continue;
       }
 
       para.push(line);
