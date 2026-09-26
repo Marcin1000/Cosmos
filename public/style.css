@@ -468,6 +468,14 @@ body::after {
   gap: 2px;
   background: var(--bg-sidebar);
 }
+/* Miejsce na zakładki od pierwszej klatki. Budują się dopiero po sprawdzeniu
+   sesji, a pusty pasek (10×10) rozpychał potem cały pasek górny — przesunięcie
+   układu 0,09 przy KAŻDYM starcie (zespół IT, runda 4). Liczbę zakładek zna
+   skrypt w <head> (cosmos.zakladki); jedna zakładka to ~90 px. */
+.endpoint-switch:empty { min-height: 47px; min-width: 198px; }
+[data-zakladki="1"] .endpoint-switch:empty { min-width: 108px; }
+[data-zakladki="3"] .endpoint-switch:empty { min-width: 288px; }
+[data-zakladki="4"] .endpoint-switch:empty { min-width: 378px; }
 
 /* Każdy silnik ma swój kolor — ten sam, którym potem podpisana jest odpowiedź. */
 .endpoint-tab { --k: var(--k-nvidia); }
@@ -3210,6 +3218,8 @@ body::after {
     padding: 3px;
     border-radius: 13px;
   }
+  /* Na telefonie zakładki mają własny rząd na całą szerokość — rezerwujemy jego wysokość. */
+  .endpoint-switch:empty { min-height: 43px; min-width: 0; }
   .endpoint-tab { min-width: 0; padding: 6px 4px; font-size: 12.5px; gap: 6px; }
   .topbar .icon-btn { width: 32px; height: 32px; }
   .topbar .icon-btn svg { width: 17px; height: 17px; }

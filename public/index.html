@@ -14,12 +14,19 @@
       document.documentElement.dataset.theme = m;
       var s = localStorage.getItem('cosmos.endpoint');
       if (s) document.documentElement.dataset.silnik = s;
+      /* Ile zakładek silników będzie — pasek górny rezerwuje na nie miejsce od
+         pierwszej klatki (style.css, .endpoint-switch:empty). */
+      var z = JSON.parse(localStorage.getItem('cosmos.zakladki') || 'null');
+      document.documentElement.dataset.zakladki = String(z && z.length ? Math.min(z.length, 4) : 2);
     } catch (e) {}
   </script>
   <title>Cosmos</title>
   <meta name="description" content="Cosmos — osobisty, hybrydowy system AI. Jedna rozmowa przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI.">
   <!-- Aplikacja za logowaniem nie ma czego szukać w wyszukiwarkach; wizytówką jest strona pod „/". -->
   <meta name="robots" content="noindex">
+  <!-- Czcionka gotowa przed pierwszą klatką — z zastępczą łamały się inaczej nagłówek i podpowiedzi. -->
+  <link rel="preload" href="/fonts/Onest-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/Onest-latin-ext.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/style.css">
 
