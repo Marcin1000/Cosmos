@@ -412,8 +412,31 @@
           </div>
           <select id="model-select-local" style="display:none" class="mono"></select>
           <div class="model-info" id="model-info-local" hidden></div>
-          <span class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</span>
         </label>
+
+        <label data-karta="silniki" class="field tylko-z-openai">
+          <span class="field-label" data-i18n="set.modelOpenai">Model — OpenAI</span>
+          <div class="field-row">
+            <input type="text" id="set-model-openai" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-openai" data-i18n="set.fetchList">Pobierz listę</button>
+            <button class="btn-secondary tylko-wlasciciel" id="check-model-openai" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
+          </div>
+          <select id="model-select-openai" style="display:none" class="mono"></select>
+          <div class="model-info" id="model-info-openai" hidden></div>
+        </label>
+
+        <label data-karta="silniki" class="field tylko-z-claude">
+          <span class="field-label" data-i18n="set.modelClaude">Model — Claude</span>
+          <div class="field-row">
+            <input type="text" id="set-model-claude" data-i18n-ph="set.envDefault" placeholder="domyślny z .env" class="mono">
+            <button class="btn-secondary" id="fetch-models-claude" data-i18n="set.fetchList">Pobierz listę</button>
+            <button class="btn-secondary tylko-wlasciciel" id="check-model-claude" data-i18n="set.checkModel" data-i18n-title="set.checkTitle" title="Sprawdź, czy ten model działa na Twoim koncie i czy czyta obrazy">Sprawdź</button>
+          </div>
+          <select id="model-select-claude" style="display:none" class="mono"></select>
+          <div class="model-info" id="model-info-claude" hidden></div>
+        </label>
+
+        <p data-karta="silniki" class="field-hint" data-i18n="set.modelHint">Zostaw pola puste, aby używać modeli z konfiguracji serwera (.env).</p>
 
         <label data-karta="glos" class="field">
           <span class="field-label" data-i18n="set.mic">Mikrofon do dyktowania</span>
@@ -1097,6 +1120,7 @@
           <option value="lekkie" data-i18n="opt.skyLight">🌤 Lekkie</option>
           <option value="pochmurno" data-i18n="opt.skyCloudy">☁ Pochmurno</option>
           <option value="deszcz" data-i18n="opt.skyRain">🌧 Deszcz</option>
+          <option value="wnetrze" data-i18n="opt.skyIndoor">🏠 W pomieszczeniu</option>
         </select>
       </div>
       <div class="plan-light mono" id="plan-light"></div>
@@ -1174,7 +1198,7 @@
       <video id="voice-camera" autoplay playsinline muted></video>
       <span class="voice-camera-label mono ik ik-oko" data-i18n="voice.camLabel">podgląd</span>
     </div>
-    <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>
+    <p class="voice-hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>
   </div>
 
   <!-- ============ PODGLĄD OBRAZU (pełny ekran) ============ -->

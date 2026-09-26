@@ -67,6 +67,7 @@
     'pl.niebieska': 'blue hour',
     'pl.zlota': 'golden hour',
     'pl.dzien': 'soft light',
+    'pl.ostre': 'harsh light',
     'pl.wys': 'Sun altitude',
     'pl.azymut': 'Azimuth',
     'pl.chmury': 'Cloud cover',
@@ -171,6 +172,7 @@
     'pl.niebieska': PL['pl.niebieska'] || 'niebieska godzina',
     'pl.zlota': 'złota godzina',
     'pl.dzien': 'miękkie światło',
+    'pl.ostre': 'ostre światło',
   });
 
   /* Język: adres (/?lang=en) → zapisany wybór → polski. Języka przeglądarki nie
@@ -579,20 +581,32 @@
     return jezyk === 'en' ? s.replace('-', '−') : s.replace('.', ',').replace('-', '−');
   };
 
-  /* Wschód nad Morskim Okiem (49,20°N 20,07°E), 2 października, co 6,5 minuty:
-     [czas, wysokość °, azymut °, EV₁₀₀]. Policzone funkcjami aplikacji —
-     pozycjaSlonca() z lib/slonce.js i evZeSlonca() z lib/ekspozycja.js — a nie
-     wpisane na oko. Kadr: 60° poziomo wokół azymutu 98°, 9 px na stopień
-     wysokości; ta sama droga stoi w index.html jako ścieżka SVG. */
+  /* Cały dzień nad Morskim Okiem (49,20°N 20,07°E), 2 października, co 20 minut
+     od niebieskiej godziny rano do niebieskiej godziny wieczorem:
+     [czas, wysokość °, azymut °, EV₁₀₀]. Policzone funkcjami aplikacji,
+     pozycjaSlonca() z lib/slonce.js i evZeSlonca() z lib/ekspozycja.js, a nie
+     wpisane na oko. Kadr: azymut 88–272° na całą szerokość, 4 px na stopień
+     wysokości; ta sama droga (co 5 minut) stoi w index.html jako ścieżka SVG.
+     Dawniej scena pokazywała tylko 78 minut wschodu i łuk był krótką kreską. */
   const TABELA = [
-    ['06:21', -4.0, 90.6, 9.02], ['06:27', -2.9, 91.8, 9.55], ['06:34', -1.8, 93.0, 10.08],
-    ['06:40', -0.8, 94.3, 10.60], ['06:47', 0.3, 95.5, 11.13], ['06:53', 1.3, 96.7, 11.66],
-    ['07:00', 2.4, 98.0, 12.19], ['07:06', 3.4, 99.2, 12.64], ['07:13', 4.5, 100.5, 12.99],
-    ['07:19', 5.5, 101.7, 13.34], ['07:26', 6.5, 103.0, 13.56], ['07:32', 7.6, 104.2, 13.67],
-    ['07:39', 8.6, 105.5, 13.79],
+    ['06:20', -4.1, 90.4, 8.93], ['06:40', -0.9, 94.2, 10.56], ['07:00', 2.4, 98, 12.19],
+    ['07:20', 5.6, 101.8, 13.36], ['07:40', 8.8, 105.7, 13.81], ['08:00', 11.9, 109.7, 14.15],
+    ['08:20', 14.9, 113.7, 14.49], ['08:40', 17.8, 118, 14.59], ['09:00', 20.7, 122.3, 14.69],
+    ['09:20', 23.3, 126.9, 14.78], ['09:40', 25.9, 131.6, 14.86], ['10:00', 28.2, 136.5, 14.94],
+    ['10:20', 30.3, 141.7, 15.01], ['10:40', 32.2, 147.1, 15.04], ['11:00', 33.9, 152.8, 15.06],
+    ['11:20', 35.2, 158.6, 15.09], ['11:40', 36.2, 164.6, 15.1], ['12:00', 36.9, 170.8, 15.12],
+    ['12:20', 37.3, 177, 15.12], ['12:40', 37.3, 183.3, 15.12], ['13:00', 36.9, 189.5, 15.11],
+    ['13:20', 36.2, 195.7, 15.1], ['13:40', 35.1, 201.7, 15.09], ['14:00', 33.8, 207.5, 15.06],
+    ['14:20', 32.1, 213.1, 15.04], ['14:40', 30.2, 218.5, 15], ['15:00', 28, 223.7, 14.93],
+    ['15:20', 25.7, 228.6, 14.86], ['15:40', 23.1, 233.3, 14.77], ['16:00', 20.4, 237.8, 14.68],
+    ['16:20', 17.6, 242.2, 14.59], ['16:40', 14.6, 246.4, 14.46], ['17:00', 11.6, 250.4, 14.12],
+    ['17:20', 8.5, 254.4, 13.78], ['17:40', 5.3, 258.3, 13.27], ['18:00', 2.1, 262.1, 12.04],
+    ['18:20', -1.2, 265.9, 10.42], ['18:40', -4.4, 269.7, 8.78],
   ];
-  const X = (az) => 200 + (az - 98) * (400 / 60);
-  const Y = (h) => 178 - h * 9;
+  const KROK_MIN = 20;
+  const START_MIN = 6 * 60 + 20;
+  const X = (az) => 200 + (az - 180) * (376 / 184);
+  const Y = (h) => 178 - h * 4;
   /* Czasy naświetlania z typowej skali aparatu; przysłona f/8, ISO 100. */
   const PRZYSLONA = 8;
   const SKALA = [1, 0.5, 1 / 4, 1 / 8, 1 / 15, 1 / 30, 1 / 60, 1 / 125, 1 / 250, 1 / 500];
@@ -612,8 +626,8 @@
     const ev = e0 + (e1 - e0) * u;
     slonce.setAttribute('transform', `translate(${X(az).toFixed(1)} ${Y(wys).toFixed(1)})`);
     droga.style.strokeDashoffset = String(dlDrogi * (1 - p));
-    /* Wiersze co 6,5 min od 6:21; minuta liczona tak samo jak w tabeli (w dół). */
-    const minuty = Math.floor(6 * 60 + 21 + f * 6.5 + 1e-6);
+    /* Wiersze co 20 min od 6:20; minuta liczona tak samo jak w tabeli (w dół). */
+    const minuty = Math.floor(START_MIN + f * KROK_MIN + 1e-6);
     odczyt.czas.textContent = `${String(Math.floor(minuty / 60)).padStart(2, '0')}:${String(minuty % 60).padStart(2, '0')}`;
     odczyt.wys.textContent = `${przecinek(wys)}°`;
     odczyt.az.textContent = `${Math.round(az)}°`;
@@ -628,12 +642,13 @@
       }
       ostatniCzas = zapis;
     }
-    /* Progi jak w lib/slonce.js: −0,833° (wschód) i +6° (koniec złotej godziny). */
-    const faza = wys < -0.833 ? 'niebieska' : wys < 6 ? 'zlota' : 'dzien';
+    /* Progi jak fazaSwiatla() w lib/slonce.js: −0,833° (wschód), +6° (koniec złotej
+       godziny), 20° (powyżej światło jest ostre; scena obejmuje teraz południe). */
+    const faza = wys < -0.833 ? 'niebieska' : wys < 6 ? 'zlota' : wys < 20 ? 'dzien' : 'ostre';
     if (faza !== swiatlo) {
       swiatlo = faza;
       odczyt.swiatlo.textContent = t(`pl.${faza}`);
-      odczyt.swiatlo.className = `odznaka-swiatla ${faza === 'niebieska' ? '' : faza === 'zlota' ? 'zloto' : 'dzien'}`;
+      odczyt.swiatlo.className = `odznaka-swiatla ${faza === 'niebieska' ? '' : faza === 'zlota' ? 'zloto' : faza === 'ostre' ? 'dzien ostre' : 'dzien'}`;
     }
     niebo.noc.style.opacity = String(ogr(1 - (wys + 4) / 4));
     niebo.zloto.style.opacity = String(ogr(1 - Math.abs(wys - 1.5) / 5));

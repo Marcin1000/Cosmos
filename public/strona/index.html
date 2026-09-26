@@ -162,7 +162,7 @@
       <div class="kol">
         <dl class="liczby" data-pokaz>
           <div><dt><span class="licznik" data-od="1200" data-do="0">0</span></dt><dd data-t="liczby.zal">zależności npm w&nbsp;rdzeniu</dd></div>
-          <div><dt><span class="licznik" data-do="116">116</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
+          <div><dt><span class="licznik" data-do="120">120</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
           <div><dt><span class="licznik" data-do="6">6</span></dt><dd data-t="liczby.narzedzia">narzędzi, które model woła w&nbsp;trakcie odpowiedzi</dd></div>
           <div><dt><span class="licznik" data-do="4">4</span></dt><dd data-t="liczby.silniki">silniki w&nbsp;jednej rozmowie</dd></div>
         </dl>
@@ -280,11 +280,12 @@
           <div class="plener-scena">
             <div class="niebo" aria-hidden="true"><i class="n-noc"></i><i class="n-zloto"></i><i class="n-dzien"></i></div>
             <svg class="luk-slonca" viewBox="0 0 400 230" aria-hidden="true">
-              <!-- Droga Słońca 2 października nad Morskim Okiem: azymut → x, wysokość → y.
-                   Słońce rysowane przed górami, więc wschodzi zza grani. -->
-              <path class="luk-cien" d="M150.7 214.0 L158.7 204.1 L166.7 194.2 L175.3 185.2 L183.3 175.3 L191.3 166.3 L200.0 156.4 L208.0 147.4 L216.7 137.5 L224.7 128.5 L233.3 119.5 L241.3 109.6 L250.0 100.6"/>
-              <path class="luk-droga" id="luk-droga" pathLength="1" d="M150.7 214.0 L158.7 204.1 L166.7 194.2 L175.3 185.2 L183.3 175.3 L191.3 166.3 L200.0 156.4 L208.0 147.4 L216.7 137.5 L224.7 128.5 L233.3 119.5 L241.3 109.6 L250.0 100.6"/>
-              <g id="slonce" class="slonce" transform="translate(150.7 214)"><circle r="18" class="slonce-aura"/><circle r="8" class="slonce-tarcza"/></g>
+              <!-- Cała droga Słońca 2 października nad Morskim Okiem, od niebieskiej godziny
+                   rano do niebieskiej godziny wieczorem: azymut → x, wysokość → y.
+                   Słońce rysowane przed górami, więc wschodzi zza grani i za nią zachodzi. -->
+              <path class="luk-cien" d="M16.9 194.5 L18.8 191.3 L20.8 188.0 L22.7 184.7 L24.6 181.5 L26.6 178.2 L28.5 175.0 L30.4 171.7 L32.4 168.5 L34.3 165.3 L36.3 162.1 L38.2 158.8 L40.2 155.6 L42.2 152.5 L44.2 149.3 L46.2 146.1 L48.2 143.0 L50.2 139.8 L52.2 136.7 L54.2 133.6 L56.3 130.5 L58.3 127.5 L60.4 124.4 L62.5 121.4 L64.6 118.4 L66.7 115.4 L68.9 112.5 L71.0 109.6 L73.2 106.7 L75.4 103.8 L77.6 101.0 L79.9 98.2 L82.1 95.4 L84.4 92.6 L86.7 89.9 L89.0 87.3 L91.4 84.6 L93.8 82.0 L96.2 79.5 L98.6 77.0 L101.1 74.5 L103.6 72.1 L106.1 69.7 L108.6 67.4 L111.2 65.2 L113.8 62.9 L116.4 60.8 L119.1 58.7 L121.8 56.6 L124.5 54.6 L127.2 52.7 L130.0 50.8 L132.8 49.0 L135.6 47.3 L138.5 45.6 L141.4 44.0 L144.3 42.5 L147.3 41.1 L150.2 39.7 L153.2 38.4 L156.2 37.1 L159.3 36.0 L162.4 34.9 L165.4 33.9 L168.5 33.0 L171.7 32.2 L174.8 31.5 L178.0 30.8 L181.1 30.3 L184.3 29.8 L187.5 29.4 L190.7 29.1 L193.9 28.9 L197.1 28.8 L200.3 28.8 L203.5 28.8 L206.7 29.0 L209.9 29.2 L213.1 29.5 L216.3 29.9 L219.5 30.4 L222.6 31.0 L225.8 31.7 L228.9 32.5 L232.0 33.3 L235.1 34.2 L238.2 35.3 L241.3 36.3 L244.3 37.5 L247.3 38.8 L250.3 40.1 L253.3 41.5 L256.2 43.0 L259.1 44.5 L262.0 46.2 L264.8 47.8 L267.7 49.6 L270.5 51.4 L273.2 53.3 L276.0 55.3 L278.7 57.3 L281.4 59.3 L284.0 61.5 L286.6 63.6 L289.2 65.9 L291.8 68.2 L294.3 70.5 L296.8 72.9 L299.3 75.3 L301.7 77.8 L304.2 80.3 L306.6 82.9 L308.9 85.5 L311.3 88.1 L313.6 90.8 L315.9 93.5 L318.2 96.3 L320.4 99.1 L322.7 101.9 L324.9 104.7 L327.1 107.6 L329.2 110.5 L331.4 113.5 L333.5 116.4 L335.6 119.4 L337.7 122.4 L339.8 125.5 L341.9 128.5 L343.9 131.6 L346.0 134.7 L348.0 137.8 L350.0 140.9 L352.0 144.1 L354.0 147.2 L356.0 150.4 L358.0 153.6 L359.9 156.8 L361.9 160.0 L363.9 163.2 L365.8 166.4 L367.7 169.7 L369.7 172.9 L371.6 176.2 L373.6 179.4 L375.5 182.7 L377.4 185.9 L379.3 189.2 L381.3 192.5 L383.2 195.8"/>
+              <path class="luk-droga" id="luk-droga" pathLength="1" d="M16.9 194.5 L18.8 191.3 L20.8 188.0 L22.7 184.7 L24.6 181.5 L26.6 178.2 L28.5 175.0 L30.4 171.7 L32.4 168.5 L34.3 165.3 L36.3 162.1 L38.2 158.8 L40.2 155.6 L42.2 152.5 L44.2 149.3 L46.2 146.1 L48.2 143.0 L50.2 139.8 L52.2 136.7 L54.2 133.6 L56.3 130.5 L58.3 127.5 L60.4 124.4 L62.5 121.4 L64.6 118.4 L66.7 115.4 L68.9 112.5 L71.0 109.6 L73.2 106.7 L75.4 103.8 L77.6 101.0 L79.9 98.2 L82.1 95.4 L84.4 92.6 L86.7 89.9 L89.0 87.3 L91.4 84.6 L93.8 82.0 L96.2 79.5 L98.6 77.0 L101.1 74.5 L103.6 72.1 L106.1 69.7 L108.6 67.4 L111.2 65.2 L113.8 62.9 L116.4 60.8 L119.1 58.7 L121.8 56.6 L124.5 54.6 L127.2 52.7 L130.0 50.8 L132.8 49.0 L135.6 47.3 L138.5 45.6 L141.4 44.0 L144.3 42.5 L147.3 41.1 L150.2 39.7 L153.2 38.4 L156.2 37.1 L159.3 36.0 L162.4 34.9 L165.4 33.9 L168.5 33.0 L171.7 32.2 L174.8 31.5 L178.0 30.8 L181.1 30.3 L184.3 29.8 L187.5 29.4 L190.7 29.1 L193.9 28.9 L197.1 28.8 L200.3 28.8 L203.5 28.8 L206.7 29.0 L209.9 29.2 L213.1 29.5 L216.3 29.9 L219.5 30.4 L222.6 31.0 L225.8 31.7 L228.9 32.5 L232.0 33.3 L235.1 34.2 L238.2 35.3 L241.3 36.3 L244.3 37.5 L247.3 38.8 L250.3 40.1 L253.3 41.5 L256.2 43.0 L259.1 44.5 L262.0 46.2 L264.8 47.8 L267.7 49.6 L270.5 51.4 L273.2 53.3 L276.0 55.3 L278.7 57.3 L281.4 59.3 L284.0 61.5 L286.6 63.6 L289.2 65.9 L291.8 68.2 L294.3 70.5 L296.8 72.9 L299.3 75.3 L301.7 77.8 L304.2 80.3 L306.6 82.9 L308.9 85.5 L311.3 88.1 L313.6 90.8 L315.9 93.5 L318.2 96.3 L320.4 99.1 L322.7 101.9 L324.9 104.7 L327.1 107.6 L329.2 110.5 L331.4 113.5 L333.5 116.4 L335.6 119.4 L337.7 122.4 L339.8 125.5 L341.9 128.5 L343.9 131.6 L346.0 134.7 L348.0 137.8 L350.0 140.9 L352.0 144.1 L354.0 147.2 L356.0 150.4 L358.0 153.6 L359.9 156.8 L361.9 160.0 L363.9 163.2 L365.8 166.4 L367.7 169.7 L369.7 172.9 L371.6 176.2 L373.6 179.4 L375.5 182.7 L377.4 185.9 L379.3 189.2 L381.3 192.5 L383.2 195.8"/>
+              <g id="slonce" class="slonce" transform="translate(16.9 194.5)"><circle r="18" class="slonce-aura"/><circle r="8" class="slonce-tarcza"/></g>
               <g class="gory">
                 <path d="M0 230 L0 176 L46 150 L78 168 L126 118 L160 150 L196 128 L238 170 L276 136 L318 162 L352 144 L400 172 L400 230 Z"/>
                 <path class="gory2" d="M0 230 L0 196 L60 178 L110 192 L170 170 L230 194 L300 176 L360 190 L400 184 L400 230 Z"/>
@@ -292,14 +293,14 @@
             </svg>
             <div class="odczyt">
               <div class="odczyt-glowa">
-                <span class="mono odczyt-czas" id="p-czas">06:21</span>
+                <span class="mono odczyt-czas" id="p-czas">06:20</span>
                 <span class="odznaka-swiatla" id="p-swiatlo" data-t="pl.niebieska">niebieska godzina</span>
               </div>
               <dl class="odczyt-dane">
-                <div><dt data-t="pl.wys">Wysokość Słońca</dt><dd class="mono" id="p-wys">−4,0°</dd></div>
-                <div><dt data-t="pl.azymut">Azymut</dt><dd class="mono" id="p-az">91°</dd></div>
+                <div><dt data-t="pl.wys">Wysokość Słońca</dt><dd class="mono" id="p-wys">−4,1°</dd></div>
+                <div><dt data-t="pl.azymut">Azymut</dt><dd class="mono" id="p-az">90°</dd></div>
                 <div><dt data-t="pl.chmury">Zachmurzenie</dt><dd class="mono">12%</dd></div>
-                <div><dt>EV₁₀₀</dt><dd class="mono" id="p-ev">9,0</dd></div>
+                <div><dt>EV₁₀₀</dt><dd class="mono" id="p-ev">8,9</dd></div>
               </dl>
               <div class="nastawy mono" id="p-nastawy"><b>f/8</b><b id="p-czas-naswietlania">1/8 s</b><b>ISO 100</b></div>
               <div class="sprzet">
@@ -482,7 +483,7 @@
 
         <div class="fakty">
           <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f1.h">zależności w&nbsp;rdzeniu</h3><p data-t="pm.f1.p"><code>node server.js</code> i&nbsp;gotowe. Nie ma czego budować ani drzewa pakietów, które przestanie działać w&nbsp;nocy.</p></article>
-          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">116</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
+          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">120</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
           <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">15</span><h3 data-t="pm.f3.h">sekcji audytu</h3><p data-t="pm.f3.p">Audyt sprawdza też sam siebie: wzorzec, który przestał cokolwiek łapać, jest błędem, a&nbsp;nie ciszą.</p></article>
           <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi — grafiki trafiają pod gotowe punkty planu.</p></article>
         </div>

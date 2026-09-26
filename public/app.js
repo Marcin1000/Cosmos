@@ -18,6 +18,8 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   modelCloud: '',       // puste = model z konfiguracji serwera
   modelLocal: '',
+  modelOpenai: '',
+  modelClaude: '',
   systemPrompt: '',
   temperature: 0.6,
   /* 2048 to było za mało na rzeczy, o które Marcin realnie prosi. Plan
@@ -100,16 +102,10 @@ const el = {
   settingsClose: $('settings-close'),
   settingsSave: $('settings-save'),
   settingsReset: $('settings-reset'),
-  setModelCloud: $('set-model-cloud'),
-  setModelLocal: $('set-model-local'),
   setSystem: $('set-system'),
   setTemp: $('set-temp'),
   tempValue: $('temp-value'),
   setMaxTokens: $('set-maxtokens'),
-  fetchModelsCloud: $('fetch-models-cloud'),
-  fetchModelsLocal: $('fetch-models-local'),
-  modelSelectCloud: $('model-select-cloud'),
-  modelSelectLocal: $('model-select-local'),
   configInfo: $('config-info'),
   memoryList: $('memory-list'),
   memoryCount: $('memory-count'),
@@ -279,10 +275,17 @@ function epConfig(name = endpoint) {
   return serverConfig.endpoints[name] || {};
 }
 
+/* Model wybrany w Ustawieniach dla danego silnika — po jednym polu na silnik.
+   Dawniej tylko NVIDIA i lokalny miały swoje pole, więc na OpenAI i Claude
+   zostawał na zawsze model z .env i nie było jak go zmienić z aplikacji. */
+const SILNIKI_Z_MODELEM = ['cloud', 'local', 'openai', 'claude'];
+const POLE_MODELU = { cloud: 'modelCloud', local: 'modelLocal', openai: 'modelOpenai', claude: 'modelClaude' };
+function nadpisanieModelu(ep = endpoint) {
+  return (POLE_MODELU[ep] && settings[POLE_MODELU[ep]]) || '';
+}
+
 function currentModel() {
-  const override = endpoint === 'local' ? settings.modelLocal
-    : endpoint === 'cloud' ? settings.modelCloud : '';
-  return override || epConfig().model || '';
+  return nadpisanieModelu() || epConfig().model || '';
 }
 
 /* Treść wiadomości i mini-renderer Markdown mieszkają w `public/tekst.js`
@@ -1898,8 +1901,7 @@ async function streamOnce(conv, opcje = {}) {
   zapamietajBieg({ id: biegId, convId: conv.id, ostatnie: (Number(opcje.od) || 0) - 1 });
 
   try {
-    const modelOverride = znakTury ? znakTury.nadpisanie
-      : ep === 'local' ? settings.modelLocal : ep === 'cloud' ? settings.modelCloud : '';
+    const modelOverride = znakTury ? znakTury.nadpisanie : nadpisanieModelu(ep);
     const doModelu = podpiecie ? [] : toApiMessages(conv);
     let res = podpiecie
       ? await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${Number(opcje.od) || 0}`,
@@ -2218,7 +2220,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
-  scalRozmowy, granicaPonowienia,
+  scalRozmowy, granicaPonowienia, jednostkiNaGlos,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
@@ -2387,7 +2389,7 @@ async function runGeneration(conv, podpiecie = null) {
   conv.__turaOd = conv.messages.length;
   znakTury = {
     silnik: endpoint, model: currentModel() || '',
-    nadpisanie: endpoint === 'local' ? settings.modelLocal : endpoint === 'cloud' ? settings.modelCloud : '',
+    nadpisanie: nadpisanieModelu(),
   };
 
   try {
@@ -2741,6 +2743,8 @@ function stripForSpeech(text) {
     .replace(/\s+/g, ' ')
     .replace(/\s+([.,!?;:])/g, '$1')          // „100 ." po wyciętym przypisie
     .trim();
+  // „20 °C” → „20 stopni Celsjusza”; lektor czytał „degrisy” (public/protokol.js).
+  t = jednostkiNaGlos(t, getLang());
   /* Czytamy porcjami (porcjeGlosu), więc długość nie jest problemem techniczną
      — ale pięciominutowego monologu nikt nie słucha. Ucinamy na końcu zdania
      i MÓWIMY, że reszta jest na ekranie; dawniej cięcie było bez słowa. */
@@ -2828,8 +2832,13 @@ async function speakText(text) {
   // 1. Głos z serwera: ElevenLabs / OpenAI / Piper (kolejność ustawia serwer).
   if (ttsSerwera()) {
     const porcje = porcjeGlosu(clean);
+    /* Przerwanie ma działać też wtedy, gdy nagranie jeszcze się pobiera —
+       dotknięcie kuli w „MÓWIĘ…" nie może czekać na odpowiedź serwera. */
+    const przerwij = new AbortController();
+    ttsPrzerwij = przerwij;
     const pobierz = (fragment) => fetch('/api/tts', {
       method: 'POST',
+      signal: przerwij.signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: fragment, jezyk: getLang() === 'en' ? 'en' : 'pl' }),
     }).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))));
@@ -2845,6 +2854,7 @@ async function speakText(text) {
       zagrane++;
       if (speakSerial !== mine) return;
     }
+    if (speakSerial !== mine) return;   // przerwane w trakcie pobierania: bez głosu zastępczego
     if (zagrane === porcje.length) return;
     if (zagrane > 0) return;          // urwało się w połowie — nie czytamy od nowa innym głosem
   }
@@ -2897,8 +2907,10 @@ function splitForSpeech(text, max = 180) {
   return out.length ? out : [String(text)];
 }
 
+let ttsPrzerwij = null;
 function stopSpeaking() {
   speakSerial = null;                 // zatrzymaj kolejne kawałki wypowiedzi
+  if (ttsPrzerwij) { ttsPrzerwij.abort(); ttsPrzerwij = null; }
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
@@ -3758,6 +3770,7 @@ function getSR() {
 function setVoiceState(state) {
   voiceState = state;
   el.voiceOrb.className = 'voice-orb ' + state;
+  el.voiceOrb.dataset.podstan = '';
   el.voiceStatus.textContent = {
     wake: t('voice.wake'),
     listening: t('voice.listening'),
@@ -3767,7 +3780,64 @@ function setVoiceState(state) {
   }[state] || '';
   // W trybie „naciśnij" kula jest przyciskiem — musi to być widać i czuć.
   el.voiceOrb.style.cursor = 'pointer';
-  el.voiceHint.textContent = t(state === 'push' ? 'voice.hintPush' : 'voice.hint');
+  /* Podpowiedź mówi, co działa TERAZ. Dawniej stopka zawsze obiecywała
+     „Hej, Cosmos budzi asystenta", także w trybie rozmowy, w którym słowa
+     budzącego nie ma (mowę rozpoznaje chmura, otoczenia nie słuchamy).
+     Marcin: „nie wiem, czy mam kliknąć kulę, czy od razu mówić". */
+  el.voiceHint.textContent = t(state === 'push' ? 'voice.hintPush'
+    : state === 'speaking' ? 'voice.hintSpeaking'
+    : trybRozmowy() ? 'voice.hintTalk' : 'voice.hint');
+}
+
+/* Podstan słuchania: „słyszę cię" (mowa wykryta), „rozpoznaję" (nagranie
+   poszło do Whispera) albo nic (czekam). Bez tego ekran przez cały czas
+   pokazywał „SŁUCHAM…" i nie było wiadomo, czy dźwięk w ogóle dochodzi. */
+function ustawPodstan(podstan) {
+  if (voiceState !== 'listening') return;
+  el.voiceOrb.dataset.podstan = podstan;
+  el.voiceStatus.textContent = t(podstan === 'slysze' ? 'voice.hearing'
+    : podstan === 'rozpoznaje' ? 'voice.recognizing' : 'voice.listening');
+}
+
+/* Poziom głosu na kuli i słupkach — raz na klatkę, nie 47 razy na sekundę. */
+let poziomRamka = 0;
+let poziomTeraz = 0;
+function pokazPoziom(p) {
+  poziomTeraz = p;
+  if (poziomRamka) return;
+  poziomRamka = requestAnimationFrame(() => {
+    poziomRamka = 0;
+    el.voiceOverlay.style.setProperty('--poziom', poziomTeraz.toFixed(2));
+  });
+}
+
+/** Szkic rozpoznanego tekstu w trakcie mówienia (podgląd z nasluch.js). */
+function pokazPodglad(tekst) {
+  if (!voiceMode || voiceState !== 'listening') return;
+  el.voiceTranscript.textContent = bezSlowaBudzacego(tekst) || tekst;
+  el.voiceTranscript.classList.add('podglad');
+  delete el.voiceTranscript.dataset.komunikat;
+}
+
+function bezPodgladu() {
+  if (!el.voiceTranscript.classList.contains('podglad')) return;
+  el.voiceTranscript.classList.remove('podglad');
+  el.voiceTranscript.textContent = '';
+}
+
+function nasluchZajety() {
+  return Boolean(nasluch && (nasluch.wMowie() || nasluch.rozpoznaje()));
+}
+
+function zmianaMowy(start, wyslano) {
+  if (!voiceMode || voiceState !== 'listening') return;
+  ustawPodstan(start ? 'slysze' : wyslano ? 'rozpoznaje' : '');
+}
+
+function poRozpoznaniu() {
+  if (!voiceMode || voiceState !== 'listening') return;
+  bezPodgladu();
+  if (!nasluchZajety()) ustawPodstan('');
 }
 
 /* ============ PISZCZĄCY MIKROFON ============
@@ -4071,11 +4141,14 @@ let voiceHeard = '';          // złożone zdanie w trybie pytania
    pytanie — i model odpowiadał na „Nie udało się rozpoznać mowy: …".
    Zapamiętujemy więc, co było komunikatem. */
 function komunikatGlosu(tekst) {
+  el.voiceTranscript.classList.remove('podglad');
   el.voiceTranscript.textContent = tekst;
   el.voiceTranscript.dataset.komunikat = tekst;
 }
 function usłyszaneWPolu() {
   const pole = el.voiceTranscript.textContent || '';
+  // Szkic z podglądu nie jest pytaniem: ostateczny tekst przyjdzie z Whispera.
+  if (el.voiceTranscript.classList.contains('podglad')) return '';
   return pole === el.voiceTranscript.dataset.komunikat ? '' : pole;
 }
 /* Silnik rozpoznawania ustalony RAZ na sesję głosową. Liczony przy każdym
@@ -4121,7 +4194,7 @@ let voiceOstatniaOdpowiedz = '';
    komputerze domowym Cosmos wraca do Web Speech API bez pytania. */
 let nasluch = null;            // instancja NasluchWlasny albo null
 let nasluchCisza = null;       // powrót do nasłuchu słowa budzącego po ciszy
-const NASLUCH_CISZA_MS = 9000;
+const NASLUCH_CISZA_MS = 12000;
 
 /* ---- GDZIE ROZPOZNAĆ MOWĘ -------------------------------------------
    Serwer ma łańcuch źródeł (lib/glos.js): Whisper w zmysłach, własny serwer
@@ -4204,6 +4277,13 @@ function startNasluchWlasny() {
       }
     },
     onCisza: (powod) => zaradzGluchocie(powod),
+    onPoziom: pokazPoziom,
+    onMowa: zmianaMowy,
+    onPodglad: pokazPodglad,
+    onRozpoznane: poRozpoznaniu,
+    // Podgląd tylko dla pytania: nasłuchu otoczenia nie wysyłamy do chmury.
+    podglad: () => voiceMode && voiceState === 'listening' && !voiceDeaf,
+    adresPodgladu: () => adresStt('podglad'),
   });
   nasluch.gluchy(voiceDeaf);
   nasluch.start(nasluchOgraniczenia()).catch(async (err) => {
@@ -4272,6 +4352,7 @@ function wypowiedzZNasluchu(tekst) {
   const czyste = bezSlowaBudzacego(tekst);
   if (!czyste) return;
   clearTimeout(nasluchCisza);
+  el.voiceTranscript.classList.remove('podglad');
   el.voiceTranscript.textContent = czyste;
   askVoice(czyste);
 }
@@ -4281,11 +4362,23 @@ function wypowiedzZNasluchu(tekst) {
  *  ktoś powiedział „Hej, Kosmos" i się rozmyślił. */
 function czekajNaPytanie() {
   setVoiceState('listening');
+  el.voiceTranscript.classList.remove('podglad');
   el.voiceTranscript.textContent = '';
+  czekajDalej();
+}
+
+/* Mikrofon nie zamyka się w połowie zdania. Dawniej termin mijał bez względu
+   na to, co się działo: kto zaczął mówić w ósmej sekundzie, tracił zdanie
+   i „mówię, a on nic nie robi". Teraz termin czeka, dopóki trwa mowa albo
+   rozpoznawanie. Samego terminu mowa NIE przesuwa, bo wtedy szum w tle
+   (wentylator, telewizor) trzymałby mikrofon otwarty bez końca. */
+function czekajDalej(ms = NASLUCH_CISZA_MS) {
   clearTimeout(nasluchCisza);
   nasluchCisza = setTimeout(() => {
-    if (voiceMode && voiceState === 'listening') backToWake();
-  }, NASLUCH_CISZA_MS);
+    if (!voiceMode || voiceState !== 'listening') return;
+    if (nasluchZajety()) { czekajDalej(400); return; }
+    backToWake();
+  }, ms);
 }
 
 /** Jedno miejsce na zmianę „czy reagujemy na to, co słychać".
@@ -4377,6 +4470,7 @@ function startVoiceRecognizer() {
       }
     }
     el.voiceTranscript.textContent = doklejRozpoznane(voiceHeard, interim);
+    ustawPodstan('slysze');
 
     // Rozpoznawacz jest ciągły, więc sam nie zasygnalizuje końca pytania.
     // Kończymy po chwili ciszy od ostatniego usłyszanego słowa.
@@ -4495,6 +4589,7 @@ const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|st
 const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae])|(end|stop|save)\s+(note|recording))\b/i;
 
 async function handleVoiceQuery(text) {
+  el.voiceTranscript.classList.remove('podglad');
   el.voiceTranscript.textContent = text;
   /* Pytanie głosowe w trakcie pisanej odpowiedzi uruchamiało drugą generację
      obok pierwszej — obie lądowały w rozmowie na krzyż i obie były czytane. */
@@ -4567,6 +4662,18 @@ el.voiceClose.addEventListener('click', exitVoiceMode);
    pytania. Kolejne dotknięcie w trakcie słuchania kończy wypowiedź. */
 el.voiceOrb.addEventListener('click', () => {
   if (!voiceMode) return;
+  /* Dotknięcie w trakcie odpowiedzi przerywa ją i od razu słucha — jak
+     w asystentach w telefonie. Dawniej kula była wtedy martwa i trzeba było
+     wysłuchać całej odpowiedzi, żeby coś poprawić. Koniec czytania sam
+     przełącza na słuchanie (runGeneration → startQueryListening). */
+  if (voiceState === 'speaking') { stopSpeaking(); return; }
+  if (voiceState === 'listening' && nasluch) {
+    // Własny nasłuch: dotknięcie w trakcie mowy kończy wypowiedź od razu.
+    if (nasluch.zakoncz() || nasluch.rozpoznaje()) return;
+    clearTimeout(nasluchCisza);
+    backToWake();
+    return;
+  }
   if (voiceState === 'listening') {
     const tekst = bezSlowaBudzacego(usłyszaneWPolu());
     clearTimeout(voiceSilence);
@@ -4574,7 +4681,7 @@ el.voiceOrb.addEventListener('click', () => {
     if (tekst) askVoice(tekst); else backToWake();
     return;
   }
-  if (voiceState === 'thinking' || voiceState === 'speaking') return;
+  if (voiceState === 'thinking') return;
   nasluchRaz();
 });
 
@@ -4940,14 +5047,12 @@ function setEndpoint(name) {
 
 function openSettings() {
   konta_.odswiez().catch(() => { /* panel konta nie może zablokować Ustawień */ });
-  el.setModelCloud.value = settings.modelCloud;
-  el.setModelLocal.value = settings.modelLocal;
+  for (const ep of SILNIKI_Z_MODELEM) $(`set-model-${ep}`).value = nadpisanieModelu(ep);
   el.setSystem.value = settings.systemPrompt;
   el.setTemp.value = settings.temperature;
   el.tempValue.textContent = settings.temperature;
   el.setMaxTokens.value = settings.maxTokens;
-  el.modelSelectCloud.style.display = 'none';
-  el.modelSelectLocal.style.display = 'none';
+  for (const ep of SILNIKI_Z_MODELEM) $(`model-select-${ep}`).style.display = 'none';
   refreshModelInfoBoxes();
   loadMicList();
   odswiezWyborNasluchu();
@@ -5037,8 +5142,7 @@ el.setTemp.addEventListener('input', () => {
 });
 
 el.settingsSave.addEventListener('click', () => {
-  settings.modelCloud = el.setModelCloud.value.trim();
-  settings.modelLocal = el.setModelLocal.value.trim();
+  for (const ep of SILNIKI_Z_MODELEM) settings[POLE_MODELU[ep]] = $(`set-model-${ep}`).value.trim();
   settings.systemPrompt = el.setSystem.value;
   settings.temperature = parseFloat(el.setTemp.value);
   settings.maxTokens = parseInt(el.setMaxTokens.value, 10) || DEFAULT_SETTINGS.maxTokens;
@@ -5373,8 +5477,8 @@ function renderCheckResult(box, r) {
 }
 
 async function checkModelField(epName) {
-  const input = epName === 'local' ? el.setModelLocal : el.setModelCloud;
-  const sel = epName === 'local' ? el.modelSelectLocal : el.modelSelectCloud;
+  const input = $(`set-model-${epName}`);
+  const sel = $(`model-select-${epName}`);
   const btn = $(`check-model-${epName}`);
   const box = $(`model-info-${epName}`);
   const model = (input.value.trim() || sel.value || epConfig(epName).model || '').trim();
@@ -5402,7 +5506,7 @@ let lastCheckReport = '';
 /** Sprawdź po kolei całą pobraną listę i oznacz pozycje w wybieraku.
  *  Po kolei, nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań. */
 async function checkAllModels(epName) {
-  const sel = epName === 'local' ? el.modelSelectLocal : el.modelSelectCloud;
+  const sel = $(`model-select-${epName}`);
   const box = $(`model-info-${epName}`);
   const opts = [...sel.options].filter((o) => o.value);
   if (!opts.length) return;
@@ -5483,10 +5587,10 @@ async function copyCheckReport(btn) {
 }
 
 function refreshModelInfoBoxes() {
-  renderModelInfo($('model-info-cloud'), el.setModelCloud.value.trim()
-    || epConfig('cloud').model || '');
-  renderModelInfo($('model-info-local'), el.setModelLocal.value.trim()
-    || epConfig('local').model || '');
+  for (const ep of SILNIKI_Z_MODELEM) {
+    renderModelInfo($(`model-info-${ep}`), $(`set-model-${ep}`).value.trim()
+      || epConfig(ep).model || '');
+  }
 }
 
 async function fetchModelsInto(epName, selectEl, btn) {
@@ -5554,7 +5658,7 @@ async function fetchModelsInto(epName, selectEl, btn) {
   } catch (err) {
     // Nie alert: przy modelu lokalnym komunikat ma kilka linijek podpowiedzi,
     // a systemowe okienko na telefonie ucina je i nie da się z nich skopiować.
-    const box = $(epName === 'local' ? 'model-info-local' : 'model-info-cloud');
+    const box = $(`model-info-${epName}`);
     box.hidden = false;
     box.innerHTML = `<div class="model-info-warn">⚠︎ ${escapeHtml(t('set.fetchErr'))}</div>`
       + `<pre class="model-info-err">${escapeHtml(err.message)}</pre>`;
@@ -5564,21 +5668,18 @@ async function fetchModelsInto(epName, selectEl, btn) {
   }
 }
 
-el.fetchModelsCloud.addEventListener('click', () =>
-  fetchModelsInto('cloud', el.modelSelectCloud, el.fetchModelsCloud));
-el.fetchModelsLocal.addEventListener('click', () =>
-  fetchModelsInto('local', el.modelSelectLocal, el.fetchModelsLocal));
-
-el.modelSelectCloud.addEventListener('change', () => {
-  if (el.modelSelectCloud.value) el.setModelCloud.value = el.modelSelectCloud.value;
-  refreshModelInfoBoxes();
-});
-el.modelSelectLocal.addEventListener('change', () => {
-  if (el.modelSelectLocal.value) el.setModelLocal.value = el.modelSelectLocal.value;
-  refreshModelInfoBoxes();
-});
-// Także przy wpisywaniu z ręki — opis ma nadążać za tym, co widać w polu.
-el.setModelCloud.addEventListener('input', refreshModelInfoBoxes);
+for (const ep of SILNIKI_Z_MODELEM) {
+  const pole = $(`set-model-${ep}`);
+  const sel = $(`model-select-${ep}`);
+  $(`fetch-models-${ep}`).addEventListener('click', (e) =>
+    fetchModelsInto(ep, sel, e.currentTarget));
+  sel.addEventListener('change', () => {
+    if (sel.value) pole.value = sel.value;
+    refreshModelInfoBoxes();
+  });
+  // Także przy wpisywaniu z ręki — opis ma nadążać za tym, co widać w polu.
+  pole.addEventListener('input', refreshModelInfoBoxes);
+}
 $('set-mic').addEventListener('change', (e) => {
   localStorage.setItem('cosmos.micId', e.target.value);
 });
@@ -5641,11 +5742,11 @@ function odswiezWyborNasluchu() {
     : t('set.sttBrowser');
   $('set-stt-now').textContent = t('set.sttNow', { silnik });
 }
-$('check-model-cloud').addEventListener('click', () => checkModelField('cloud'));
-$('check-model-local').addEventListener('click', () => checkModelField('local'));
+for (const ep of SILNIKI_Z_MODELEM) {
+  $(`check-model-${ep}`).addEventListener('click', () => checkModelField(ep));
+}
 $('mic-refresh').addEventListener('click', loadMicList);
 $('polish-btn').addEventListener('click', polishPrompt);
-el.setModelLocal.addEventListener('input', refreshModelInfoBoxes);
 
 // ----------------------------------------------------------------
 // Status i konfiguracja serwera

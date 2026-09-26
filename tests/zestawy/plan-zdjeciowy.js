@@ -143,6 +143,28 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   if (d.kadr.uklad !== 'pionowo') fail.push('API zgubiło orientację kadru');
   if (typeof d.slonce.doZachoduMin !== 'number') fail.push('brak czasu do zachodu');
 
+  /* 13b. Kamera w pokoju wieczorem. Zgłoszenie Marcina: laptop w salonie,
+     Słońce 29° pod horyzontem, a panel „Nastawy kadru” liczył ISO 12800, bo
+     mieszał pomiar z kamery z nocnym Słońcem (EV −6). Pomiar, który nie
+     pasuje do Słońca, znaczy inne światło: liczymy z niego. */
+  const pokoj = await (await fetch(`${env.adres}/api/plan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kiedy: '2026-09-26T20:30:00Z', sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 25, obiektyw: '24-105 f/4',
+      zachmurzenie: 'lekkie', jasnosc: 0.45, szerokosc: 1920, wysokosc: 1080 }),
+  })).json();
+  console.log(`13b. pokój nocą (Słońce ${pokoj.slonce.wysokosc}°) → ${pokoj.ustawienia.czas} `
+    + `${pokoj.ustawienia.przyslona} ISO ${pokoj.ustawienia.iso}, wnetrze=${pokoj.wnetrze}`);
+  if (!(pokoj.ustawienia.iso >= 800 && pokoj.ustawienia.iso <= 3200)) fail.push(`oświetlony pokój nocą dostaje ISO ${pokoj.ustawienia.iso} zamiast 800–3200`);
+  if (pokoj.wnetrze !== true) fail.push('plan nie mówi, że światło wzięto z pomiaru kamery');
+  // A w dzień na zewnątrz pomiar zgodny ze Słońcem dalej idzie średnią.
+  const dzien = await (await fetch(`${env.adres}/api/plan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kiedy: '2026-06-21T10:00:00Z', zachmurzenie: 'bezchmurnie', jasnosc: 0.45,
+      pomiar: { iso: 100, czasS: 1 / 2000, przyslona: 8 } }),
+  })).json();
+  console.log(`     dzień na zewnątrz → wnetrze=${dzien.wnetrze}, źródło: ${dzien.zrodloEv}`);
+  if (dzien.wnetrze) fail.push('słoneczny dzień z pasującym pomiarem uznany za wnętrze');
+
   // 14. model wie o narzędziu (i mały nadal go nie dostaje)
   const prompt = await (await fetch(`${env.adres}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

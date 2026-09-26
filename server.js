@@ -1002,22 +1002,34 @@ async function handleModels(req, res) {
     const data = await upstream.json();
     sendJson(res, upstream.status, data);
   } catch (err) {
-    // „fetch failed” samo w sobie nie mówi nic. Najczęstszy powód przy modelu
-    // lokalnym to wyłączona Ollama albo nasłuch tylko na 127.0.0.1 — i to
-    // właśnie trzeba napisać, zamiast zostawiać użytkownika z komunikatem sieci.
     const local = ep === ENDPOINTS.local;
     if (local && !czyWlasciciel()) {
       return sendJson(res, 502, { error: 'Komputer właściciela z lokalnym modelem teraz nie odpowiada.' });
     }
-    const hint = local
-      ? `\n\nNajczęstsze przyczyny:\n`
-        + `• Ollama nie działa na komputerze domowym — uruchom ją (\`ollama serve\` albo ikona w zasobniku).\n`
-        + `• Ollama słucha tylko lokalnie — ustaw OLLAMA_HOST=0.0.0.0 i zrestartuj.\n`
-        + `• Komputer domowy jest wyłączony albo poza Tailscale.\n`
-        + `Sprawdź z serwera: curl ${ep.baseUrl}/models`
-      : '';
+    if (!local) {
+      return sendJson(res, 502, { error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}` });
+    }
+    /* Samo „fetch failed” nic nie mówi. Kod przyczyny rozróżnia dwie zupełnie
+       różne sytuacje: komputer odpowiada, ale Ollama nie przyjmuje połączeń
+       (odmowa), albo komputera w ogóle nie ma w sieci (cisza, brak trasy).
+       Zgłoszenie Marcina ze zrzutem: trzy podpowiedzi naraz i żadnej pewnej. */
+    const kod = err.cause?.code || err.code || (err.name === 'TimeoutError' ? 'ETIMEDOUT' : '');
+    const odmowa = kod === 'ECONNREFUSED';
+    const pierwsze = odmowa
+      ? 'Komputer domowy odpowiada, ale Ollama nie przyjmuje połączeń.'
+      : 'Komputer domowy nie odpowiada: jest wyłączony, uśpiony albo poza Tailscale.';
+    const coZrobic = odmowa
+      ? `\n\nCo zrobić na komputerze domowym:\n`
+        + `• Uruchom Ollamę (ikona w zasobniku albo \`ollama serve\`).\n`
+        + `• Jeśli działa: słucha tylko na 127.0.0.1. W cmd: setx OLLAMA_HOST 0.0.0.0, `
+        + `potem zamknij Ollamę z zasobnika i uruchom ponownie.`
+      : `\n\nCo zrobić:\n`
+        + `• Włącz albo obudź komputer domowy i sprawdź, czy Tailscale jest połączony.\n`
+        + `• Uśpiony komputer nie odbiera połączeń; w opcjach zasilania Windows ustaw `
+        + `„Uśpij: nigdy” na zasilaniu sieciowym, jeśli ma być dostępny zawsze.`;
     sendJson(res, 502, {
-      error: `Nie udało się pobrać listy modeli z ${ep.baseUrl}: ${err.message}${hint}`,
+      error: `${pierwsze}${coZrobic}\n\nAdres: ${ep.baseUrl}${kod ? ` (${kod})` : ''}\n`
+        + `Sprawdź z serwera: curl ${ep.baseUrl}/models`,
     });
   }
 }

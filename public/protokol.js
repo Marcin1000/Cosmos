@@ -270,6 +270,61 @@ function utworzProtokol() {
     return { ...serwer, ...tutaj, messages: [...b.slice(0, wspolne), ...serwerPo, ...tutajPo] };
   }
 
+  /* JEDNOSTKI NA GŁOS. Lektor dostaje tekst dla oka: „20 °C”, „12%”, „15 km/h”.
+     ElevenLabs czytał „°C” po angielsku („degrisy”), a Piper i głos systemowy
+     pomijali znak albo czytali go literami (zgłoszenie Marcina). Zamieniamy
+     jednostki na słowa z polską odmianą: 1 stopień, 2 stopnie, 5 stopni,
+     20,5 stopnia. Tylko tuż po liczbie, żeby nie ruszać zwykłego tekstu. */
+  const JEDNOSTKI_PL = [
+    // [wzorzec jednostki, [1, 2–4, 5+, ułamek], dopisek]
+    [/°\s*C\b/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Celsjusza'],
+    [/°\s*F\b/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ' Fahrenheita'],
+    [/°/, ['stopień', 'stopnie', 'stopni', 'stopnia'], ''],
+    [/km\/h\b/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ' na godzinę'],
+    [/m\/s\b/, ['metr', 'metry', 'metrów', 'metra'], ' na sekundę'],
+    [/hPa\b/, ['hektopaskal', 'hektopaskale', 'hektopaskali', 'hektopaskala'], ''],
+    [/mm\b/, ['milimetr', 'milimetry', 'milimetrów', 'milimetra'], ''],
+    [/km\b/, ['kilometr', 'kilometry', 'kilometrów', 'kilometra'], ''],
+    [/%/, ['procent', 'procent', 'procent', 'procent'], ''],
+  ];
+  const JEDNOSTKI_EN = [
+    [/°\s*C\b/, ['degree', 'degrees'], ' Celsius'],
+    [/°\s*F\b/, ['degree', 'degrees'], ' Fahrenheit'],
+    [/°/, ['degree', 'degrees'], ''],
+    [/km\/h\b/, ['kilometre', 'kilometres'], ' per hour'],
+    [/m\/s\b/, ['metre', 'metres'], ' per second'],
+    [/hPa\b/, ['hectopascal', 'hectopascals'], ''],
+    [/mm\b/, ['millimetre', 'millimetres'], ''],
+    [/km\b/, ['kilometre', 'kilometres'], ''],
+    [/%/, ['percent', 'percent'], ''],
+  ];
+  function formaPl(liczba, [jeden, kilka, wiele, ulamek]) {
+    if (/[.,]/.test(liczba)) return ulamek;
+    const n = Math.abs(parseInt(liczba, 10));
+    if (n === 1) return jeden;
+    if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) return kilka;
+    return wiele;
+  }
+  function jednostkiNaGlos(tekst, jezyk = 'pl') {
+    const en = jezyk === 'en';
+    let t = String(tekst || '');
+    // Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”.
+    t = t.replace(/(\p{L}+\s+)?(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)(?=\s*(?:°|%|km\/h|m\/s|hPa|mm\b|km\b))/gu,
+      (_, slowo = '', a, b) => {
+        const maOd = /^(?:od|from)\s+$/i.test(slowo);   // „od 10–20 °C” nie dostaje drugiego „od”
+        return `${slowo}${maOd ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
+      });
+    for (const [wzor, formy, dopisek] of (en ? JEDNOSTKI_EN : JEDNOSTKI_PL)) {
+      const re = new RegExp(`([−-]?)(\\d+(?:[.,]\\d+)?)\\s*${wzor.source}`, 'g');
+      t = t.replace(re, (_, znak, liczba) => {
+        const minus = znak ? 'minus ' : '';
+        const slowo = en ? (liczba === '1' ? formy[0] : formy[1]) : formaPl(liczba, formy);
+        return `${minus}${liczba} ${slowo}${dopisek}`;
+      });
+    }
+    return t;
+  }
+
   return {
     SEARCH_MARKER_RE,
     IMAGE_MARKER_RE,
@@ -290,6 +345,7 @@ function utworzProtokol() {
     bezOgonkowKlient,
     scalRozmowy,
     granicaPonowienia,
+    jednostkiNaGlos,
   };
 }
 

@@ -59,6 +59,13 @@
     maxMowyMs: 15000,
     // Ile ramek pod rząd musi przekroczyć próg, żeby uznać to za mowę.
     ramekNaStart: 3,
+    /* PODGLĄD W TRAKCIE MÓWIENIA. Zgłoszenie Marcina: „jak się mówi, to na
+       żywo mają się pojawiać słowa, bo tak nie wiadomo, czy to słyszy".
+       Whisper nie strumieniuje, więc co ~1,4 s wysyłamy to, co już zebrane,
+       i pokazujemy wynik jako szkic. Ostateczny tekst idzie jak dotąd, po
+       ciszy. Najwyżej jeden podgląd naraz, żeby nie zatkać łącza. */
+    podgladOdMs: 900,
+    podgladCoMs: 1400,
   };
 
   function dostepny() {
@@ -131,6 +138,13 @@
     const onPoziom = o.onPoziom || (() => {});
     const onBlad = o.onBlad || (() => {});
     o.onCisza = o.onCisza || (() => {});
+    // Początek i koniec wypowiedzi (drugi argument: czy poszła do rozpoznania).
+    const onMowa = o.onMowa || (() => {});
+    const onPodglad = o.onPodglad || (() => {});
+    // Koniec rozpoznawania wypowiedzi, także pustej albo nieudanej.
+    const onRozpoznane = o.onRozpoznane || (() => {});
+    // Czy wolno wysyłać podgląd (aplikacja: tylko pytanie, nie nasłuch otoczenia).
+    const podgladWolno = typeof o.podglad === 'function' ? o.podglad : () => false;
 
     let ctx = null;
     let strumien = null;
@@ -158,8 +172,14 @@
     let ramekDzwieku = 0;
     let przedbieg = [];           // ostatnie ramki sprzed wykrycia mowy
     let przedbiegProbek = 0;
+    let wypowiedz = 0;            // numer bieżącej wypowiedzi (podgląd spóźniony = do kosza)
+    let podgladWToku = false;
+    let ostatniPodglad = 0;
+    let rozpoznawanych = 0;       // wypowiedzi wysłane, na które czekamy
 
     function wyzeruj() {
+      if (wMowie) onMowa(false, false);
+      wypowiedz++;
       wMowie = false;
       ramekGlosnych = 0;
       ramekCichych = 0;
@@ -327,12 +347,15 @@
           ramekGlosnych++;
           if (ramekGlosnych >= o.ramekNaStart) {
             wMowie = true;
+            wypowiedz++;
+            ostatniPodglad = Date.now();
             ramekCichych = 0;
             ramekDzwieku = ramekGlosnych;
             zebrane = przedbieg.slice();
             zebranychProbek = przedbiegProbek;
             przedbieg = [];
             przedbiegProbek = 0;
+            onMowa(true);
           }
         } else {
           ramekGlosnych = 0;
@@ -356,7 +379,43 @@
           return;
         }
       }
-      if ((zebranychProbek / naSekunde) * 1000 >= o.maxMowyMs) domknij(naSekunde);
+      if ((zebranychProbek / naSekunde) * 1000 >= o.maxMowyMs) { domknij(naSekunde); return; }
+      if (!podgladWToku && (zebranychProbek / naSekunde) * 1000 >= o.podgladOdMs
+        && Date.now() - ostatniPodglad >= o.podgladCoMs && podgladWolno()) {
+        podglad(naSekunde);
+      }
+    }
+
+    /** Sklej zebrane ramki w jeden WAV 16 kHz. */
+    function sklej(kawalki, probek, naSekunde) {
+      const plaskie = new Float32Array(probek);
+      let poz = 0;
+      for (const k of kawalki) { plaskie.set(k, poz); poz += k.length; }
+      return wav(przeprobkuj(plaskie, naSekunde, o.czestotliwosc), o.czestotliwosc);
+    }
+
+    async function podglad(naSekunde) {
+      const moja = wypowiedz;
+      podgladWToku = true;
+      ostatniPodglad = Date.now();
+      try {
+        const res = await fetch(typeof o.adresPodgladu === 'function' ? o.adresPodgladu() : '/api/stt?tryb=podglad', {
+          method: 'POST', headers: { 'Content-Type': 'audio/wav' },
+          body: sklej(zebrane.slice(), zebranychProbek, naSekunde),
+        });
+        const dane = res.ok ? await res.json().catch(() => ({})) : {};
+        const tekst = String(dane.text || '').trim();
+        // Wypowiedź mogła się już skończyć: wtedy liczy się tylko wynik ostateczny.
+        if (moja === wypowiedz && wMowie && tekst && /[\p{L}\p{N}]/u.test(tekst)) onPodglad(tekst);
+      } catch { /* podgląd to tylko podgląd: błąd pokaże wynik ostateczny */ }
+      finally { podgladWToku = false; ostatniPodglad = Date.now(); }
+    }
+
+    /** Domknij wypowiedź TERAZ (dotknięcie kuli w trakcie mówienia). */
+    function zakoncz() {
+      if (!wMowie || !dziala) return false;
+      domknij(czestotliwoscWejscia());
+      return true;
     }
 
     /* Szum tła: SZYBKO w dół, WOLNO w górę.
@@ -383,17 +442,15 @@
       ramekDzwieku = 0;
       zebrane = [];
       zebranychProbek = 0;
+      wypowiedz++;
       // Miarą jest DŹWIĘK, nie długość paczki — patrz komentarz przy ramekDzwieku.
-      if ((glosnych * o.ramka / naSekunde) * 1000 < o.minMowyMs) return;   // kaszlnięcie
-
-      const plaskie = new Float32Array(probek);
-      let poz = 0;
-      for (const k of kawalki) { plaskie.set(k, poz); poz += k.length; }
-      const pcm = przeprobkuj(plaskie, naSekunde, o.czestotliwosc);
-      wyslij(wav(pcm, o.czestotliwosc));
+      if ((glosnych * o.ramka / naSekunde) * 1000 < o.minMowyMs) { onMowa(false, false); return; }   // kaszlnięcie
+      onMowa(false, true);
+      wyslij(sklej(kawalki, probek, naSekunde));
     }
 
     async function wyslij(blob) {
+      rozpoznawanych++;
       try {
         /* Adres podaje aplikacja: język rozmowy i to, czy to nasłuch słowa
            budzącego (tylko lokalny Whisper — otoczenia nie wysyłamy do chmury),
@@ -408,13 +465,18 @@
         if (!res.ok) throw new Error(dane.error || `HTTP ${res.status}`);
         const tekst = String(dane.text || '').trim();
         // Whisper na czystym szumie oddaje puste albo same znaki interpunkcyjne.
+        rozpoznawanych--;
+        onRozpoznane(tekst);
         if (tekst && /[\p{L}\p{N}]/u.test(tekst)) onWypowiedz(tekst);
       } catch (err) {
+        rozpoznawanych--;
+        onRozpoznane('');
         onBlad(err);
       }
     }
 
-    return { start, stop, gluchy, dziala: () => dziala, czyGluchy: () => gluchyFlag,
+    return { start, stop, gluchy, zakoncz, dziala: () => dziala, czyGluchy: () => gluchyFlag,
+      wMowie: () => wMowie, rozpoznaje: () => rozpoznawanych > 0,
       zywy: () => dziala && Date.now() - ostatniaRamka < CISZA_ALARM_MS };
   }
 

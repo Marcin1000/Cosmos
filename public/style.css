@@ -2849,6 +2849,13 @@ body::after {
 .voice-orb.wake .orb-fala:nth-child(3) { animation-delay: 1.2s; }
 .voice-orb.wake .orb-fala:nth-child(4) { animation-delay: 2.4s; }
 .voice-orb.listening .orb-rdzen { transform: scale(1.05); }
+/* Kula i słupki idą za PRAWDZIWYM poziomem mikrofonu (--poziom, 0–1, z nasluch.js).
+   Zanim cokolwiek zostanie rozpoznane, widać, że dźwięk dochodzi; cisza =
+   spokojna kula. Dawniej słupki tańczyły same, także gdy mikrofon nic nie słyszał. */
+.voice-orb.listening .orb-rdzen { transform: scale(calc(1.03 + var(--poziom, 0) * .2)); transition: transform .09s linear, filter .6s; }
+.voice-orb.listening[data-podstan="slysze"] .orb-aura { opacity: .85; animation-duration: 4s; }
+.voice-orb.listening[data-podstan="rozpoznaje"] .orb-aura { animation-duration: 2.2s; opacity: .7; }
+.voice-orb.listening[data-podstan="rozpoznaje"] .orb-rdzen { filter: hue-rotate(-20deg); }
 .voice-orb.thinking .orb-aura { animation-duration: 2.2s; opacity: .7; }
 .voice-orb.thinking .orb-rdzen { filter: hue-rotate(-40deg) saturate(1.2); animation: orb-oddech 1.6s ease-in-out infinite; }
 .voice-orb.speaking .orb-rdzen { animation: orb-mowi .55s ease-in-out infinite; }
@@ -2869,8 +2876,13 @@ body::after {
   width: 4px; height: 100%; border-radius: 4px; background: linear-gradient(#F2A57E, #C8643B);
   transform: scaleY(.12); opacity: .5; transition: opacity .4s;
 }
-.voice-overlay:has(.voice-orb.listening) .voice-fala b,
 .voice-overlay:has(.voice-orb.speaking) .voice-fala b { opacity: 1; animation: voice-slupek 1.2s ease-in-out infinite; }
+.voice-overlay:has(.voice-orb.listening) .voice-fala b {
+  opacity: 1; animation: none;
+  transform: scaleY(calc(.12 + var(--poziom, 0) * var(--w, .8)));
+  transition: transform .09s linear;
+}
+.voice-fala b:nth-child(3n) { --w: .55; } .voice-fala b:nth-child(3n + 1) { --w: .95; } .voice-fala b:nth-child(4n) { --w: .7; }
 .voice-fala b:nth-child(2n) { animation-duration: .9s !important; }
 .voice-fala b:nth-child(3n) { animation-duration: 1.4s !important; }
 .voice-fala b:nth-child(1) { animation-delay: -.2s; } .voice-fala b:nth-child(2) { animation-delay: -.5s; }
@@ -2912,6 +2924,8 @@ body::after {
   animation: voice-dymek .6s cubic-bezier(.2, .7, .1, 1) both;
 }
 .voice-transcript:empty, .voice-answer:empty { display: none; }
+/* Szkic w trakcie mówienia: przygaszony, bo może się jeszcze zmienić. */
+.voice-transcript.podglad { opacity: .72; font-style: italic; }
 @keyframes voice-dymek { from { opacity: 0; transform: translateY(10px); } }
 .voice-transcript {
   max-width: min(460px, 88%);
@@ -3618,6 +3632,8 @@ select::-ms-expand { display: none; }
 .rola-czlonek .tylko-wlasciciel { display: none !important; }
 /* Pole modelu lokalnego ma sens tylko dla kogoś, kto ma do lokalnego GPU prawo. */
 .bez-lokalnego .tylko-z-lokalnym { display: none !important; }
+.bez-openai .tylko-z-openai { display: none !important; }
+.bez-claude .tylko-z-claude { display: none !important; }
 
 .konto-blok {
   display: flex; flex-direction: column; gap: 10px;

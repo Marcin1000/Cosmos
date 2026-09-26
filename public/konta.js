@@ -167,8 +167,12 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('konto-wyloguj').hidden = !r.json.logowanie;
     $('konto-wyloguj-wszedzie').hidden = !r.json.logowanie;
     $('konto-haslo-stare').hidden = !u.maHaslo;
-    const maLokalny = (r.json.silniki || []).some((s) => s.nazwa === 'local');
-    document.body.classList.toggle('bez-lokalnego', !maLokalny);
+    // Pole modelu tylko dla silnika, którego ta osoba może użyć (klucz serwera,
+    // przyznany albo własny) — inne pole prowadziłoby do „Pobierz listę” bez szans.
+    const ma = (nazwa) => (r.json.silniki || []).some((s) => s.nazwa === nazwa);
+    document.body.classList.toggle('bez-lokalnego', !ma('local'));
+    document.body.classList.toggle('bez-openai', !ma('openai'));
+    document.body.classList.toggle('bez-claude', !ma('claude'));
     const k = r.json.klucze || {};
     $('konto-klucz-openai').placeholder = k.openai ? t('acc.keySet', { koncowka: k.openai }) : t('acc.keyOpenai');
     $('konto-klucz-claude').placeholder = k.claude ? t('acc.keySet', { koncowka: k.claude }) : t('acc.keyClaude');

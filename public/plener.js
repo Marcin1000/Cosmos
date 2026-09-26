@@ -137,8 +137,14 @@ function utworzPlener(z) {
     /* Karta nieba (Plener) sama pokazuje fazę — w linijce pod nią byłaby
        powtórką. Wysokość z przecinkiem po polsku i z jednym miejscem po nim. */
     const wys = Number(d.slonce.wysokosc).toLocaleString(jezyk(), { maximumFractionDigits: 1 });
-    if (pre !== 'fp') czesci.push(`${d.slonce.faza} (${wys}°)`);
+    /* „noc (−28,9°)” obok „10°C” wyglądało jak mróz (zgłoszenie Marcina).
+       To wysokość Słońca, więc mówimy to słowami: nad albo pod horyzontem. */
+    const wysAbs = Math.abs(Number(d.slonce.wysokosc)).toLocaleString(jezyk(), { maximumFractionDigits: 0 });
+    const slonce = t(Number(d.slonce.wysokosc) < 0 ? 'plan.sloncePod' : 'plan.slonceNad', { n: wysAbs });
+    if (pre !== 'fp') czesci.push(`${d.slonce.faza}, ${slonce}`);
     else czesci.push(`${t('plan.slonce')} ${wys}°`);
+    // Wnętrze: nastawy liczone dla światła lamp, nie Słońca (lib/plener-trasy.js).
+    if (d.wnetrze) czesci.push(t('plan.zPomiaru'));
     // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
     // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.
     if (d.pogoda) {
