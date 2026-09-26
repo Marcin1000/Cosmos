@@ -96,6 +96,19 @@ zmysly.listen(7112, () => model.listen(7113, async () => {
   console.log(`4. odpowiedź mimo odpuszczonej pamięci: ${/Odpowied/.test(tekst) ? 'jest' : 'BRAK'}`);
   if (!/Odpowied/.test(tekst)) fail.push('rozmowa przestała działać bez embeddingów');
 
+  /* 5. „Zapamiętaj" przy zawieszonej usłudze: odpowiedź najwyżej po kilku
+     sekundach, wpis zapisany bez wektora (dolicza się w tle). Dawniej zapis
+     czekał 60 s na wektor, a człowiek patrzył na wyszarzony przycisk. */
+  const t5 = Date.now();
+  const zap = await fetch('http://127.0.0.1:3112/api/memory', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Mam statyw Leofoto.' }),
+  });
+  const zapJson = await zap.json().catch(() => ({}));
+  const czasZapisu = Date.now() - t5;
+  console.log(`5. „Zapamiętaj" przy zawieszonej usłudze: ${(czasZapisu / 1000).toFixed(1)} s, zapisane: ${zapJson.ok === true}`);
+  if (!(zap.status === 200 && zapJson.ok === true)) fail.push(`zapis do pamięci nie przeszedł (${zap.status})`);
+  if (czasZapisu > 5000) fail.push(`zapis do pamięci czeka ${(czasZapisu / 1000).toFixed(1)} s na wektor`);
+
   process.kill(-srv.pid); zmysly.close(); model.close();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPAMIĘĆ NIE BLOKUJE ROZMOWY');
   process.exit(fail.length ? 1 : 0);
