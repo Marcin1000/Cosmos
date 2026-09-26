@@ -1051,6 +1051,14 @@ const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
 const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
 
 async function trasyApi(req, res, p) {
+  /* Restart w toku: nasłuch zostaje otwarty — statyka, wznowienie odpowiedzi,
+     zapis rozmowy działają — a nowej pracy nie zaczynamy: czytelne 503 z prośbą
+     o ponowienie. Dawniej `server.close()` na samym początku zamykania dawało
+     przez ~20 s dokańczania strony 502 Cloudflare wszystkim (zespół IT, runda 4). */
+  if (zamykanie && req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/'))) {
+    res.setHeader('Retry-After', '5');
+    return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje — wyślij za kilka sekund.', kod: 'aktualizacja' });
+  }
   if (!czyWlasciciel() && TYLKO_WLASCICIEL.some((w) => w.test(p))) {
     return sendJson(res, 403, { error: 'Ta funkcja jest dostępna tylko dla właściciela Cosmosa.' });
   }
@@ -1372,12 +1380,19 @@ function zamknijPorzadnie(sygnal) {
     zamykanie = true;
     // Liczniki wiadomości i „ostatnio widziany" zapisują się z opóźnieniem (lib/konta.js).
     konta.zapiszZalegle();
-    server.close();
     const koniec = Date.now() + CZAS_NA_DOKONCZENIE_MS;
+    /* Czekamy na odpowiedzi w toku, na czaty wysłane do dostawcy, który jeszcze
+       nie odpowiedział (OCZEKUJACE — dawniej ginęły bez śladu, zostawało samo
+       pytanie), i na zadania Studia. Nasłuch zamykamy dopiero potem. */
+    const wToku = () => biegi_.aktywne() + OCZEKUJACE.size + zadania_.ileWszystkich();
     const dokonczone = async () => {
-      if (biegi_.aktywne()) console.log(`  Zamykanie: czekam na ${biegi_.aktywne()} trwające odpowiedzi (do ${CZAS_NA_DOKONCZENIE_MS / 1000} s)…`);
-      while (biegi_.aktywne() && Date.now() < koniec) await new Promise((r) => setTimeout(r, 250));
+      if (wToku()) console.log(`  Zamykanie: czekam na ${wToku()} rzeczy w toku (do ${CZAS_NA_DOKONCZENIE_MS / 1000} s)…`);
+      while (wToku() && Date.now() < koniec) await new Promise((r) => setTimeout(r, 250));
+      // Kto dalej czeka na nagłówki dostawcy, dostaje 503 „aktualizacja" zamiast zerwanego połączenia.
+      for (const abort of OCZEKUJACE.values()) abort.abort(Object.assign(new Error('restart'), { kod: 'aktualizacja' }));
       biegi_.zapiszWszystkoTeraz('Serwer uruchamiał się ponownie i przerwał odpowiedź w tym miejscu. Zapytaj jeszcze raz, żeby dostać całość.');
+      server.close();
+      await new Promise((r) => setTimeout(r, 100));   // niech 503 zdążą wyjść
     };
     dokonczone().then(() => {
       /* Każda osoba ma własne archiwum i własną bazę wiedzy — zapisujemy to,

@@ -17,7 +17,10 @@
  *  10. Claude: `chat/completions` z samym Bearer, natywne /models z x-api-key,
  *  11. podpowiedź czyta TREŚĆ odmowy: brak środków, za długi kontekst, przeciążenie,
  *      a „ollama pull" tylko dla Ollamy,
- *  12. `<think>` w treści odpowiedzi pomocniczej nie trafia do człowieka. */
+ *  12. `<think>` w treści odpowiedzi pomocniczej nie trafia do człowieka,
+ *  13. llmComplete ma JEDEN termin na całość, z ponowieniem po `length`
+ *      włącznie — dawniej ponowienie liczyło od nowa i streszczenie modelem
+ *      rozumującym kończyło się za Cloudflare stroną 524 po 100 s. */
 const http = require('node:http');
 
 const problemy = [];
@@ -42,6 +45,13 @@ const atrapa = http.createServer((req, res) => {
       return res.end(JSON.stringify({ choices: [{ message: { content: '<think>The user asks in Polish, let me think.</think>\n\nKrótkie streszczenie.' }, finish_reason: 'stop' }] }));
     }
     if (b.model === 'tloczno' && limit429-- > 0) { res.writeHead(429, { 'Retry-After': '0' }); return res.end('{}'); }
+    // Model rozumujący, który myśli długo (tu 700 ms) i nie zdąży z odpowiedzią.
+    if (b.model === 'mysli-wolno') {
+      return setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: '', reasoning_content: 'Hmm…' }, finish_reason: 'length' }] }));
+      }, 700);
+    }
     if (b.model === 'mysli') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ choices: [{ message: { content: '', reasoning_content: 'We need to think in English.' }, finish_reason: 'length' }] }));
@@ -128,6 +138,21 @@ const atrapa = http.createServer((req, res) => {
   // --- 12. <think> w odpowiedzi pomocniczej
   const streszczenie = await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-w-tresci' });
   ok(streszczenie === 'Krótkie streszczenie.', `streszczenie bez <think> (${JSON.stringify(streszczenie)})`);
+
+  // --- 13. Jeden termin na całe llmComplete (tu 1 s zamiast 88 s)
+  zadania.length = 0;
+  let t0 = Date.now();
+  let bladTerminu = null;
+  try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-wolno', terminMs: 1000 }); } catch (e) { bladTerminu = e; }
+  const czas = Date.now() - t0;
+  ok(zadania.length === 1 && czas < 1300 && /budżet tokenów/.test(bladTerminu?.message || ''),
+    `za mało czasu na ponowienie — od razu czytelny błąd, bez drugiego żądania (${zadania.length} żądanie, ${czas} ms)`);
+  zadania.length = 0;
+  t0 = Date.now();
+  bladTerminu = null;
+  try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-wolno', terminMs: 400 }); } catch (e) { bladTerminu = e; }
+  ok(Date.now() - t0 < 700 && /nie odpowiedział w wyznaczonym czasie/.test(bladTerminu?.message || ''),
+    `termin mija w trakcie — ludzki komunikat zamiast „operation was aborted" (${Date.now() - t0} ms)`);
 
   atrapa.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nPARAMETRY MODELI OK');

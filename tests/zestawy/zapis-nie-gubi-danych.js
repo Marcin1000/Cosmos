@@ -91,6 +91,25 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     console.log(`3b. ten sam plik po resztce .tmp z trybem 644: ${trybPoResztce.toString(8)}`);
     if (trybPoResztce & 0o077) fail.push(`resztka .tmp przeniosła swój tryb na plik z tokenem (${trybPoResztce.toString(8)})`);
 
+    /* Pełny dysk w połowie zapisu: `.tmp` zostawał i zjadał resztę miejsca —
+       przy dużym indeksie bazy wiedzy padały potem drobne zapisy INNYCH osób.
+       Pełny dysk modelujemy podmianą writeSync na błąd ENOSPC po pierwszym kawałku. */
+    const indeks = path.join(kat, 'index.json');
+    zapiszAtomowo(indeks, STARE);
+    const prawdziwyWrite = fs.writeSync;
+    let kawalki = 0;
+    fs.writeSync = (...a) => {
+      if (++kawalki > 1) throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+      return prawdziwyWrite(a[0], a[1], a[2], Math.min(a[3], 1024), a[4]);   // małymi kawałkami
+    };
+    let rzucil = false;
+    try { zapiszAtomowo(indeks, 'y'.repeat(50_000)); } catch (e) { rzucil = e.code === 'ENOSPC'; } finally { fs.writeSync = prawdziwyWrite; }
+    const resztka = fs.existsSync(`${indeks}.tmp`);
+    console.log(`3c. pełny dysk w połowie zapisu → błąd: ${rzucil}, resztka .tmp: ${resztka}, stare dane: ${fs.readFileSync(indeks, 'utf8') === STARE}`);
+    if (!rzucil) fail.push('nieudany zapis nie zgłosił błędu (trasa odpowiedziałaby „ok")');
+    if (resztka) fail.push('nieudany zapis zostawił plik .tmp, który zjada miejsce');
+    if (fs.readFileSync(indeks, 'utf8') !== STARE) fail.push('nieudany zapis naruszył poprzednią wersję');
+
     fs.rmSync(kat, { recursive: true, force: true });
   }
 

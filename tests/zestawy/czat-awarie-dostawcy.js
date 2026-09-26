@@ -237,6 +237,15 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   const wRestart = czat('dlugo restart', { rozmowa: 'rozmowarestart', zerwijPoMs: 300 });
   await spij(450);
   process.kill(srv.pid, 'SIGTERM');
+  /* W trakcie dokańczania serwer dalej słucha: sesja i statyka działają, a nowy
+     czat dostaje czytelne 503. Dawniej nasłuch zamykał się od razu i przez
+     ~20 s każdy dostawał stronę 502 Cloudflare. */
+  await spij(50);
+  let authWTrakcie = 0;
+  try { authWTrakcie = (await fetch(`${S}/api/auth`)).status; } catch { /* nasłuch zamknięty */ }
+  const nowyWTrakcie = await czat('krotko po sygnale');
+  ok(authWTrakcie === 200 && nowyWTrakcie.status === 503 && nowyWTrakcie.json.kod === 'aktualizacja',
+    `15. w trakcie dokańczania: /api/auth → ${authWTrakcie || 'odmowa połączenia'}, nowy czat → ${nowyWTrakcie.status || nowyWTrakcie.wyjatek} (ma być 200 i 503)`);
   await wRestart;
   const t0 = Date.now();
   while (Date.now() - t0 < 15000) {
