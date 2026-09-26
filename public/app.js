@@ -5946,11 +5946,27 @@ async function refreshStatus() {
   try { await refreshStatusWlasciwe(); } finally { gotowyStatus(); }
 }
 
+/* Tylko NAJNOWSZE sprawdzenie ma głos. /api/status odpytuje silniki i trwa
+   do kilku sekund; starsze żądanie kończące się po nowszym, nieudanym,
+   chowało pasek „Brak połączenia”, choć serwera już nie było (wyścig
+   wyłapany przez pasek-offline pod obciążeniem baterii). */
+let statusNr = 0;
+/* O osiągalności decyduje żądanie WYSŁANE najpóźniej, nie to, które
+   najpóźniej wróciło – dotyczy i statusu, i konfiguracji. */
+let startOsiagalnosci = 0;
+function zglosOsiagalnosc(ok, start) {
+  if (start < startOsiagalnosci) return;
+  startOsiagalnosci = start;
+  setServerReachable(ok);
+}
 async function refreshStatusWlasciwe() {
+  const nr = ++statusNr;
+  const start = performance.now();
   try {
     const res = await fetch('/api/status');
     const st = await res.json();
-    setServerReachable(true);
+    if (nr !== statusNr) return;
+    zglosOsiagalnosc(true, start);
     const cloudCfg = epConfig('cloud');
     if (!cloudCfg.hasApiKey) {
       setStatusRow(el.statusCloud, 'warn', t('stat.noKey'));
@@ -5984,10 +6000,11 @@ async function refreshStatusWlasciwe() {
       el.statusSenses.title = t('stat.sensesRun');
     }
   } catch {
+    zglosOsiagalnosc(false, start);
+    if (nr !== statusNr) return;
     setStatusRow(el.statusCloud, false, '–');
     setStatusRow(el.statusLocal, false, '–');
     setStatusRow(el.statusSenses, false, '–');
-    setServerReachable(false);
   }
 }
 
@@ -5997,15 +6014,16 @@ async function loadServerConfig() {
 
 async function loadServerConfigWlasciwe() {
   let mamy = false;
+  const start = performance.now();
   try {
     const res = await fetch('/api/config');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     serverConfig = await res.json();
-    setServerReachable(true);
+    zglosOsiagalnosc(true, start);
     mamy = true;
   } catch {
     // interfejs działa dalej z pamięci podręcznej – pasek u góry mówi o awarii
-    setServerReachable(false);
+    zglosOsiagalnosc(false, start);
   }
   /* Bez konfiguracji zakładki zostają z pamięci. Dawniej jedno otwarcie bez
      sieci (albo w trakcie restartu) budowało zakładki z pustej konfiguracji,
