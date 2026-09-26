@@ -74,15 +74,24 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
           (ks) => ks.filter((k) => !k.hidden).map((k) => k.dataset.cel));
         if (!karty.includes('dom')) fail.push(`${w}px: brak karty „Dom" u właściciela`);
         for (const cel of karty) {
+          /* Dokąd przewinie klik — ta sama rachuba co w aplikacji. Czekamy na
+             CEL, nie na „bezruch": pod obciążeniem (pełna bateria) płynne
+             przewijanie rusza z opóźnieniem i dwa równe odczyty scrollTop
+             zdarzały się, zanim w ogóle ruszyło — test czytał podświetlenie
+             przy górze listy. */
+          const doKad = await pg.evaluate((g) => {
+            const cialo = document.querySelector('#settings-modal .modal-body');
+            const pasek = cialo.querySelector('.set-karty');
+            const pierwszy = [...cialo.querySelectorAll(`[data-karta="${g}"]`)].find((b) => b.offsetParent !== null);
+            const y = pierwszy.offsetTop - (pasek ? pasek.offsetHeight + 8 : 0);
+            return Math.max(0, Math.min(y, cialo.scrollHeight - cialo.clientHeight));
+          }, cel);
           await pg.click(`#settings-modal .set-karty [data-cel="${cel}"]`);
-          // przewijanie jest płynne — czekamy, aż stanie
-          let bylo = -1;
-          for (let i = 0; i < 40; i++) {
-            await pg.waitForTimeout(100);
-            const jest = await pg.$eval('#settings-modal .modal-body', (c) => c.scrollTop);
-            if (Math.abs(jest - bylo) < 1) break;
-            bylo = jest;
-          }
+          await pg.waitForFunction((y) => Math.abs(document.querySelector('#settings-modal .modal-body').scrollTop - y) < 2,
+            doKad, { timeout: 6000 }).catch(() => {});
+          // Podświetlenie liczy się w requestAnimationFrame po przewinięciu — dajmy mu chwilę (ale nie więcej).
+          await pg.waitForFunction((c) => document.querySelector('#settings-modal .set-karty .aktywna')?.dataset.cel === c,
+            cel, { timeout: 1500 }).catch(() => {});
           const swieci = await pg.$eval('#settings-modal .set-karty .aktywna', (k) => k.dataset.cel).catch(() => null);
           console.log(`   [${w}px] karta „${cel}" → świeci „${swieci}"`);
           if (swieci !== cel) fail.push(`${w}px: po kliknięciu karty „${cel}" świeci „${swieci}"`);
