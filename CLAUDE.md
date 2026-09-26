@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 110 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 111 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -151,7 +151,9 @@ sterowana flagą w payloadzie (`useSenses`, `useSearch`, `useActions`, `useMemor
 - profil użytkownika (zawsze, gdy niepusty),
 - KONTEKST PERCEPCJI — ostatnie zdarzenia ze zmysłów,
 - PAMIĘĆ DŁUGOTRWAŁA — wpisy przywołane semantycznie (embeddingi bge-m3 przez zmysły;
-  bez zmysłów — wyszukiwanie po słowach kluczowych),
+  bez zmysłów — wyszukiwanie po słowach kluczowych). Wpis trzyma `wektory: {model: wektor}`
+  dla dwóch dostawców naraz; czytaj i zapisuj je tylko przez `wektorDla` / `ustawWektor`
+  z `lib/pamiec.js` (pamięć, baza wiedzy, wzorce nauki),
 - BAZA WIEDZY — pozycje zaznaczone przez użytkownika (zawsze) + fragmenty dobrane
   automatycznie z reszty,
 - ZESTAW SPRZĘTU (`blokSprzetu()`) — korpus, obiektywy, dodatki **wraz z zasadą, że nastawy
