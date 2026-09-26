@@ -1584,6 +1584,9 @@ function toApiMessages(conv) {
     if (m.role === 'user' && !m.search) { granica = i; break; }
   }
   conv.messages.forEach((m, i) => {
+    // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura — serwer przy małym
+    // oknie modelu lokalnego wyrzuca tylko wiadomości sprzed niej.
+    if (i === granica) api.turaOd = api.length;
     if (m.error || m.role === 'action' || m.status) return;
     let text = msgText(m);
     const images = i === granica ? msgImages(m) : [];
@@ -1882,6 +1885,7 @@ async function streamOnce(conv, opcje = {}) {
   try {
     const modelOverride = znakTury ? znakTury.nadpisanie
       : ep === 'local' ? settings.modelLocal : ep === 'cloud' ? settings.modelCloud : '';
+    const doModelu = podpiecie ? [] : toApiMessages(conv);
     let res = podpiecie
       ? await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${Number(opcje.od) || 0}`,
         { signal: abortController.signal })
@@ -1892,7 +1896,8 @@ async function streamOnce(conv, opcje = {}) {
           endpoint: ep,
           // `dodatkowe` to dopisek na jedną turę, poza historią rozmowy —
           // służy dokańczaniu odpowiedzi uciętej limitem długości.
-          messages: [...toApiMessages(conv), ...(opcje.dodatkowe || [])],
+          messages: [...doModelu, ...(opcje.dodatkowe || [])],
+          turaOd: doModelu.turaOd,
           model: modelOverride || undefined,
           temperature: settings.temperature,
           max_tokens: settings.maxTokens,
@@ -1922,12 +1927,14 @@ async function streamOnce(conv, opcje = {}) {
     const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
     // Na silniku przyznanym przez właściciela członek dostaje model z jego listy.
     const spozaListy = res.headers.get('X-Cosmos-Model-Spoza-Listy');
-    // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu — mówimy ile.
-    const [okno, przyciete] = String(res.headers.get('X-Cosmos-Okno') || '').split(';').map(Number);
+    // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu — mówimy ile,
+    // a gdy nie zmieściła się nawet bieżąca tura, że jej najdłuższa część jest skrócona.
+    const [okno, przyciete, skrocone] = String(res.headers.get('X-Cosmos-Okno') || '').split(';').map(Number);
     lastModelNote = [
       spozaListy ? t('model.przyznany', { from: decodeURIComponent(spozaListy), to: used }) : '',
       swapped ? t('model.swapped', { from: decodeURIComponent(swapped), to: used }) : '',
       przyciete ? t('model.okno', { n: przyciete, okno }) : '',
+      skrocone ? t('model.oknoSkrocone', { okno }) : '',
     ].filter(Boolean).join(' ');
 
     const decoder = new TextDecoder();

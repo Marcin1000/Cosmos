@@ -5,8 +5,9 @@
    więc ich obietnice sprawdzamy w ułamku sekundy:
 
      1. Przycięcie do okna modelu lokalnego nigdy nie wyrzuca instrukcji ani
-        ostatniej wiadomości człowieka, wyrzuca od najstarszej tury, mieści
-        się w oknie i nie zmienia tablicy wejściowej.
+        bieżącej tury (w kaskadzie: pytania przed wynikami narzędzia), wyrzuca
+        od najstarszej tury, mieści się w oknie i nie zmienia tablicy
+        wejściowej; za duże wyniki skraca w środku, z dopiskiem dla modelu.
      2. Błąd dostawcy PO odpowiedzi 200 jest rozpoznawany we wszystkich
         znanych kształtach, a zwykły kawałek odpowiedzi — nie.
      3. „Myślą po cichu" (dłuższy limit ciszy) tylko modele, które naprawdę
@@ -60,6 +61,41 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
 
   const same = czat.przytnijDoOkna([{ role: 'system', content: dluga }, { role: 'user', content: dluga }], 512, 2048);
   ok(same.wiadomosci.length === 2 && same.limitZOkna === 512, 'gdy nie ma czego wyrzucić, nic nie ginie, a limit ma dolną granicę');
+}
+
+// --- 1b. kaskada: bieżąca tura to pytanie + wyniki narzędzia ------------------------------
+{
+  const instrukcje = { role: 'system', content: 'i'.repeat(3000) };        // ~1000 tokenów, jak wersja zwięzła
+  const tura = (wyniki) => [
+    instrukcje,
+    { role: 'user', content: `stare pytanie ${'s'.repeat(1500)}` },
+    { role: 'assistant', content: `stara odpowiedź ${'s'.repeat(1500)}` },
+    { role: 'user', content: 'Jaka jest dziś pogoda w Warszawie?' },
+    { role: 'assistant', content: 'Sprawdzę to.' },
+    { role: 'user', content: `WYNIKI WYSZUKIWANIA dla „pogoda Warszawa": ${wyniki}KONIEC WYNIKÓW` },
+  ];
+  const wej = tura('w'.repeat(6400));
+  const k = czat.przytnijDoOkna(wej, 4096, 2048, 3);
+  const teksty = k.wiadomosci.map((m) => m.content);
+  ok(teksty.includes('Jaka jest dziś pogoda w Warszawie?') && teksty.includes('Sprawdzę to.'),
+    'kaskada: pytanie i zapowiedź narzędzia zostają, choć ostatnia wiadomość to wyniki');
+  ok(!teksty.some((t) => /^stare/.test(t)) && k.przycietoTur === 2, 'wypadają tury sprzed bieżącej (i tyle zgłoszono)');
+
+  // Wyniki większe niż całe okno: skracamy je w środku, pytanie zostaje całe.
+  const duze = czat.przytnijDoOkna(tura('w'.repeat(20000)), 4096, 2048, 3);
+  const wyniki = duze.wiadomosci[duze.wiadomosci.length - 1].content;
+  const suma = duze.wiadomosci.reduce((a, m) => a + czat.szacujTokeny(m.content), 0);
+  ok(duze.skrocono && /skrócone do okna modelu/.test(wyniki), 'za duże wyniki są skrócone i model o tym wie');
+  ok(/^WYNIKI WYSZUKIWANIA/.test(wyniki) && /KONIEC WYNIKÓW$/.test(wyniki), 'skrócenie w środku — początek i koniec zostają');
+  ok(duze.wiadomosci.some((m) => m.content === 'Jaka jest dziś pogoda w Warszawie?'), 'pytanie zostaje także przy skracaniu');
+  ok(suma + 1024 <= 4096, `po skróceniu mieści się w oknie (${suma} tokenów + miejsce na odpowiedź)`);
+
+  // Klient bez `turaOd` (stara karta, mostek MCP): chroniona jak dawniej ostatnia wiadomość.
+  const stary = czat.przytnijDoOkna([
+    { role: 'user', content: `stare ${'s'.repeat(9000)}` }, { role: 'user', content: 'teraz' },
+  ], 2048, 1024);
+  ok(stary.wiadomosci.length === 1 && stary.wiadomosci[0].content === 'teraz' && !stary.skrocono,
+    'bez granicy tury chroniona ostatnia wiadomość');
 }
 
 // --- 2. błąd w strumieniu ------------------------------------------------------------
@@ -141,6 +177,21 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   ok(/wielkie\.jpg/.test(tekst) && /za duże/.test(tekst), 'za duży obraz — model dostaje zdanie z nazwą pliku');
   ok(/^TRYB GŁOSOWY/.test(dodatki[dodatki.length - 1].content), 'tryb głosowy jest ostatnim dodatkiem');
   ok(pytanoPamiec === 0, 'wyłączona pamięć nie jest w ogóle pytana');
+
+  // Granica tury podana przez klienta wskazuje po doklejeniu instrukcji to samo pytanie.
+  const kaskada = await wKontekscie(osoba, () => c.zlozKontekst({
+    endpoint: 'cloud', useMemory: false, turaOd: 3,
+    messages: [
+      { role: 'system', content: 'MOJA INSTRUKCJA' },
+      { role: 'user', content: 'stare' }, { role: 'assistant', content: 'stara odpowiedź' },
+      { role: 'user', content: 'PYTANIE' }, { role: 'assistant', content: 'Sprawdzę to.' },
+      { role: 'user', content: 'WYNIKI' },
+    ],
+  }, ep));
+  ok(kaskada.messages[kaskada.chronOd].content === 'PYTANIE', 'granica tury po doklejeniu instrukcji wskazuje pytanie');
+  const bezGranicy = await wKontekscie(osoba, () => c.zlozKontekst({ endpoint: 'cloud', useMemory: false, turaOd: 99,
+    messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' }] }, ep));
+  ok(bezGranicy.chronOd === bezGranicy.messages.length - 1, 'granica spoza tablicy — chroniona ostatnia wiadomość');
 
   const bezMiejsca = await wKontekscie(osoba, () => { stan.location = ''; return c.zlozKontekst({ endpoint: 'cloud', messages: [{ role: 'user', content: 'hej' }] }, ep); });
   const t2 = bezMiejsca.messages.map((m) => m.content).join('\n');

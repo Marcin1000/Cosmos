@@ -164,6 +164,7 @@ const I18N = {
     'model.swapped': '{from} nie widzi obrazów — na zdjęcie odpowiedział {to}.',
     'model.przyznany': 'Ten silnik masz od właściciela z modelem {to} — {from} nie jest na jego liście.',
     'model.okno': 'Lokalny model mieści {okno} tokenów — {n} najstarszych wiadomości tej rozmowy nie poszło do niego.',
+    'model.oknoSkrocone': 'Lokalny model mieści {okno} tokenów — najdłuższa część tej tury (zwykle wyniki narzędzia) poszła do niego skrócona.',
     'model.blindWarn': 'Wybrany model nie widzi obrazów, a nie masz ustawionego modelu wizyjnego. Zdjęcie zostanie pominięte — wybierz model z oznaczeniem „widzi obrazy” albo ustaw NEMOTRON_VISION_MODEL w .env.',
 
     // — źródło obrazu w panelu na żywo —
@@ -1015,6 +1016,7 @@ const I18N = {
     'model.swapped': '{from} cannot see images — {to} answered about the photo.',
     'model.przyznany': 'The owner shared this engine with you with {to} — {from} is not on their list.',
     'model.okno': 'The local model holds {okno} tokens — the {n} oldest messages of this chat were not sent to it.',
+    'model.oknoSkrocone': 'The local model holds {okno} tokens — the longest part of this turn (usually tool results) was sent to it shortened.',
     'model.blindWarn': 'The selected model cannot see images and no vision model is configured. The photo will be ignored — pick a model tagged “sees images” or set NEMOTRON_VISION_MODEL in .env.',
 
     'live.source': 'Video source',
