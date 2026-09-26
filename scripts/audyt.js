@@ -343,7 +343,9 @@ for (const [f, tekst] of Object.entries({
   'README.pl.md': rd('README.pl.md'),
   'CLAUDE.md': rd('CLAUDE.md'),
   'tests/README.md': rd('tests/README.md'),
-  'docs/obrazy/banner.svg': rd('docs/obrazy/banner.svg'),
+  /* Banner nie niesie już liczby zestawów: od rundy 4 to obraz PNG
+     z scripts/grafiki-marki.js, a liczba w obrazku i tak nie dałaby się
+     sprawdzić. Mniej miejsc, w których liczba może się zestarzeć. */
   /* Strona produktowa: liczba i słowo stoją w osobnych elementach
      („<span>94</span><dd>zestawy testów…"), więc czytamy ją bez znaczników. */
   'public/strona/index.html': rd('public/strona/index.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
@@ -359,6 +361,21 @@ for (const [f, tekst] of Object.entries({
 }
 zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
   : ok(`liczba zestawów w dokumentacji zgadza się z katalogiem (${ileZestawow})`);
+
+/* Obrazy w README. Grafiki marki i zrzuty wymieniamy całymi zestawami
+   (runda 4: banner.svg → banner-*.png) — wskazanie pliku, którego nie ma,
+   daje na GitHubie pustą ramkę na samej górze wizytówki. */
+const brakObrazow = [];
+for (const f of ['README.md', 'README.pl.md']) {
+  const tekst = rd(f);
+  for (const m of tekst.matchAll(/(?:src|srcset)="([^"]+)"|!\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    const adres = m[1] || m[2];
+    if (/^(https?:|data:)/.test(adres)) continue;
+    if (!fs.existsSync(path.join(R, adres))) brakObrazow.push(`${f}: ${adres}`);
+  }
+}
+brakObrazow.length ? zle('README wskazuje obrazy, których nie ma: ' + brakObrazow.join(', '))
+  : ok('każdy obraz wskazany w README istnieje');
 
 // ---------------------------------------------------------------- 8 SW
 sekcja('Service worker i PWA');
@@ -405,7 +422,11 @@ const wrazliwe = sledzone.filter((f) => /^\.env$|^data\//.test(f));
 wrazliwe.length ? zle('wrażliwe pliki w repo: ' + wrazliwe.join(', ')) : ok('brak wrażliwych plików w historii');
 const cfg = server.slice(server.indexOf('function handleConfig'), server.indexOf('function handleConfig') + 2500);
 /apiKey\s*:\s*(ep\.apiKey|process\.env)/.test(cfg) ? zle('/api/config oddaje klucz API') : ok('/api/config oddaje tylko hasApiKey');
-const scrubUzyte = (server.match(/scrubSecrets\(/g) || []).length;
+/* Liczymy w serwerze I w modułach: czat przeszedł do lib/czat.js (runda 4)
+   i razem z nim dwa z czterech miejsc, w których komunikat dostawcy trafia na
+   ekran. Liczenie w samym server.js zgłaszało wtedy dziurę, której nie było. */
+const serwerIModuly = [server, ...fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`))].join('\n');
+const scrubUzyte = (serwerIModuly.match(/scrubSecrets\(/g) || []).length;
 scrubUzyte >= 4 ? ok(`redakcja danych konta w ${scrubUzyte - 1} miejscach`) : zle('redakcja danych konta niekompletna');
 /* Bramka logowania — strukturalnie, nie po brzmieniu.
    Od kont (wrzesień 2026) router wygląda tak: kilka tras PUBLICZNYCH,
@@ -508,8 +529,9 @@ let liniiLib = 0;
 for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
 console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
 /* Próg idzie w dół za podziałem (runda 3: rozmowy i baza wiedzy do lib/,
-   2646 → 1971) — inaczej odzyskane linie odrosłyby po cichu. */
-liniiSerwer < 2100 ? ok('serwer poniżej 2100 linii')
+   2646 → 1971; runda 4: czat do lib/czat.js, 2026 → 1392) — inaczej
+   odzyskane linie odrosłyby po cichu. */
+liniiSerwer < 1500 ? ok('serwer poniżej 1500 linii')
   : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
 
 /* KLIENT TEŻ MA PRÓG — i to on jest teraz największym plikiem.

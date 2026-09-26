@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="113 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-113-4ac26b?style=flat-square">
+  <img alt="114 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-114-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 113 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 114 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -141,7 +141,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 113 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 114 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -982,7 +982,8 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 ## 🧩 Układ kodu
 
 ```
-server.js          router, czat, składanie kontekstu, manifest zdolności
+server.js          router, konfiguracja, manifest zdolności
+lib/czat.js        czat: składanie kontekstu, okno modelu lokalnego, wybór modelu, strumień
 lib/rozmowy.js     historia rozmów: plik na rozmowę, indeks, kopia zapasowa
 lib/baza-wiedzy.js baza wiedzy: pliki, linki, notatki, fragmenty z wektorami
 lib/instrukcje-narzedzi.js  opisy narzędzi doklejane do promptu systemowego
@@ -1243,7 +1244,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 113 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 114 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

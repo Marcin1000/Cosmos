@@ -30,34 +30,58 @@
    problemu, nad którą mamy władzę.
 */
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+// Dane serwera w katalogu tymczasowym — moduły czytają COSMOS_DATA_DIR przy wczytaniu.
+process.env.COSMOS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-rejestr-'));
 
 const fail = [];
 const KORZEN = path.join(__dirname, '..', '..');
-const serwer = fs.readFileSync(path.join(KORZEN, 'server.js'), 'utf8');
 
-/* --- 1. Reguła rejestru istnieje i jest DOPISYWANA PIERWSZA --------------
-   Liczy się kolejność w tablicy `extras`, bo tak model je czyta: instrukcja
+/* --- 1. Reguła rejestru istnieje i jest DOPISYWANA PRZED narzędziami ------
+   Liczy się kolejność wiadomości, bo tak model je czyta: instrukcja
    późniejsza nie unieważnia wcześniejszej, ale wcześniejsza nadaje ton.
-   Sprawdzamy więc, w jakiej kolejności server.js je dokłada — opisy narzędzi
-   wchodzą jednym `zbudujInstrukcje(...)`, więc wystarczy porównać te dwa
-   miejsca. Wcześniej stało tu porównanie pozycji dwóch fraz w pliku i padło,
-   gdy opis archiwum wyprowadził się do osobnego modułu. */
-const iRejestr = serwer.indexOf('JAK ODPOWIADASZ');
-const iNarzedzia = serwer.indexOf('extras.push(...zbudujInstrukcje(');
-console.log(`1. reguła „JAK ODPOWIADASZ": ${iRejestr >= 0 ? `pozycja ${iRejestr}` : 'BRAK'}, `
-  + `dopisanie opisów narzędzi: pozycja ${iNarzedzia}`);
+
+   Dawniej ten punkt porównywał pozycje dwóch fraz w TEKŚCIE server.js
+   i padł dwa razy bez żadnej usterki: raz gdy opis archiwum wyprowadził się
+   do modułu, drugi raz gdy cały czat przeszedł do lib/czat.js (runda 4).
+   Teraz składamy kontekst prawdziwą funkcją i patrzymy na wynik — na to,
+   co naprawdę pojedzie do modelu. */
+const czat = require(path.join(KORZEN, 'lib', 'czat.js'));
+const { wKontekscie } = require(path.join(KORZEN, 'lib', 'kontekst.js'));
+const skladacz = czat.utworz({
+  U: () => ({ location: '', profile: '', sprzet: null, wspolrzedne: null, kbItems: [] }),
+  archiwum: { ile: () => 59421 }, procedury: () => [], urzadzenia: () => [],
+  searchMemory: async () => [], memoryContextLines: () => '', kbSearch: async () => [],
+  obrazDlaModelu: () => null, biegi: {}, terazTekst: () => 'sobota, godzina 20:15',
+  capabilityManifest: async () => ({}), capabilityText: () => 'Jestem Cosmos.',
+  scrubSecrets: (s) => s,
+});
+
+(async () => {
+const { messages } = await wKontekscie({ id: 'wlasciciel', rola: 'wlasciciel' }, () => skladacz.zlozKontekst(
+  { endpoint: 'cloud', messages: [{ role: 'user', content: 'pokaż zdjęcia psa' }] },
+  { baseUrl: 'http://chmura/v1', model: 'nvidia/nemotron-3-super-120b-a12b' },
+));
+const tresci = messages.map((m) => (typeof m.content === 'string' ? m.content : ''));
+const iRejestr = tresci.findIndex((c) => /^JAK ODPOWIADASZ/.test(c));
+// Pierwszy blok z opisem narzędzia: wyszukiwanie, archiwum albo plan.
+const iNarzedzia = tresci.findIndex((c) => /\[SZUKAJ|ARCHIWUM MATERIAŁU|\[PLAN/.test(c));
+console.log(`1. reguła „JAK ODPOWIADASZ": ${iRejestr >= 0 ? `wiadomość ${iRejestr}` : 'BRAK'}, `
+  + `pierwszy opis narzędzi: wiadomość ${iNarzedzia} (z ${messages.length})`);
 if (iRejestr < 0) {
   fail.push('brak reguły „JAK ODPOWIADASZ" — nic nie oddziela wiedzy o mechanice '
     + 'od tego, co model mówi użytkownikowi');
 }
 if (iNarzedzia < 0) {
-  fail.push('nie znalazłem miejsca, w którym dokładane są opisy narzędzi — '
+  fail.push('w złożonym kontekście nie ma opisu żadnego narzędzia — '
     + 'zestaw nie ma czego porównać i przestał cokolwiek sprawdzać');
 } else if (iRejestr >= 0 && iRejestr > iNarzedzia) {
   fail.push('reguła rejestru jest dopisywana PO opisach narzędzi — ma iść przed nimi, '
     + 'bo dotyczy wszystkich');
 }
+const regula = iRejestr >= 0 ? tresci[iRejestr] : '';
 
 /* Co reguła musi obejmować. Każda pozycja odpowiada innemu cytatowi
    z prawdziwej rozmowy Marcina. */
@@ -70,9 +94,9 @@ const WYMAGANE = [
   [/nie opowiadaj, co robisz/i, 'zakaz komentowania własnej pracy („to moja wiedza…")'],
 ];
 for (const [wzor, opis] of WYMAGANE) {
-  if (!wzor.test(serwer)) fail.push(`reguła rejestru nie obejmuje: ${opis}`);
+  if (!wzor.test(regula)) fail.push(`reguła rejestru nie obejmuje: ${opis}`);
 }
-console.log(`   punktów reguły obecnych: ${WYMAGANE.filter(([w]) => w.test(serwer)).length}`
+console.log(`   punktów reguły obecnych: ${WYMAGANE.filter(([w]) => w.test(regula)).length}`
   + `/${WYMAGANE.length}`);
 
 /* --- 2. Instrukcje nie podsuwają gotowych zwrotów ------------------------
@@ -176,3 +200,4 @@ if (rozmiar > SUFIT) {
 
 console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nREJESTR ODPOWIEDZI OK');
 process.exit(fail.length ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

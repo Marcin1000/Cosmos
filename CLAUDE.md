@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 113 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 114 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -93,17 +93,17 @@ godzinę) — jest w **`docs/ZESPOLY.md`**. Przeczytaj go, zanim wypuścisz zesp
 
 ## Architektura
 
-Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2 tys. linii, `lib/` 14 tys. w 46
+Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 1,4 tys. linii, `lib/` 14,8 tys. w 47
 modułach, `public/` 13,3 tys. w 17 skryptach. Zero zależności npm w rdzeniu — nadal.
 
-### `server.js` — dyrygent (2 tys. linii, zero zależności)
+### `server.js` — dyrygent (1,4 tys. linii, zero zależności)
 
 Ręcznie pisany router na `node:http` (bez frameworka), sekcje oddzielone komentarzami
 `// ---`. Kolejność w routerze ma znaczenie: `/api/auth`, `/api/login`, `/api/logout`
 są przed bramką, a **każde inne `/api/*` przechodzi przez `isAuthed()`**.
 
-Serwer sam już niewiele liczy — trzyma router, składanie kontekstu i strumieniowanie,
-a resztę deleguje do `lib/`.
+Serwer sam już niewiele liczy — trzyma router, konfigurację i manifest zdolności,
+a resztę deleguje do `lib/` (czat razem ze składaniem kontekstu: `lib/czat.js`).
 
 ### `lib/` — dziedziny, każda osobno
 
@@ -121,6 +121,7 @@ robi większość szybkich zestawów.
 | `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, wyciąganie tekstu z dokumentów, wyszukiwanie w sieci |
 | `baza-wiedzy.js` | baza wiedzy: pliki, linki, notatki, fragmenty z wektorami, podgląd obrazu dla modelu |
 | `rozmowy.js` | historia rozmów: plik na rozmowę + indeks, dopisywanie odpowiedzi-sierot, kopia zapasowa |
+| `czat.js` | `POST /api/chat`: składanie kontekstu, okno modelu lokalnego, wybór modelu, wysyłka, biegi — kroki jako osobne funkcje, czyste na poziomie modułu |
 | `exif.js`, `raw-podglad.js`, `srt.js`, `kmz.js` | formaty plików, bez zależności zewnętrznych |
 | `canon.js`, `onedrive.js`, `zorza.js`, `miejsca.js` | integracje zewnętrzne |
 | `zadania.js` | praca dłuższa niż 100 s Cloudflare'a (Studio): czekanie do 75 s, potem 202 i dopytywanie |
@@ -141,7 +142,7 @@ robi większość szybkich zestawów.
 Dwa ostatnie **dopisują się do `ENDPOINTS` dopiero, gdy klucz jest ustawiony** — bez klucza
 nie ma zakładki w UI. `pickEndpoint()` przy nieznanej nazwie schodzi na `cloud`.
 
-### Sedno: składanie kontekstu w `handleChat()`
+### Sedno: składanie kontekstu w `lib/czat.js` (`zlozKontekst()`)
 
 To jest miejsce, które robi z Cosmosa „jeden organizm", a nie czat obok narzędzi. Przed
 wysłaniem do modelu doklejane są **dodatkowe wiadomości systemowe** (`extras`), każda
