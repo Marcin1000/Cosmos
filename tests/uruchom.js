@@ -49,6 +49,17 @@ function uruchomZestaw(z) {
     }, LIMIT_MS);
     p.on('close', (kod) => {
       clearTimeout(budzik);
+      /* Pełne wyjście padniętego zestawu do pliku. W podsumowaniu mieści się
+         jedna linijka („1 problem(ów)”), a zestaw, który pada tylko pod
+         obciążeniem baterii, trudno potem odtworzyć i nie wiadomo, KTÓRY
+         punkt zawiódł. */
+      if (kod !== 0) {
+        try {
+          const katalog = path.join(require('node:os').tmpdir(), 'cosmos-testy-padniete');
+          fs.mkdirSync(katalog, { recursive: true });
+          fs.writeFileSync(path.join(katalog, `${z.nazwa}.log`), wyjscie);
+        } catch { /* bez zapisu – podsumowanie i tak powie, że padł */ }
+      }
       resolve({ ...z, kod, wyjscie, czas: Date.now() - start });
     });
   });
