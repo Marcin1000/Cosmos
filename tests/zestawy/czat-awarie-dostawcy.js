@@ -21,6 +21,8 @@
  *  16. uśpiony komputer domowy → nazwana przyczyna i bezpiecznik 30 s,
  *  17. „Stop" w trakcie składania kontekstu (embeddingi czekają na śpiące zmysły)
  *      → nic nie idzie do dostawcy; dawniej rejestr stał PO składaniu,
+ *  19. odmowa FORMATU obrazu → „dostawca nie przyjmuje tego formatu", a nie
+ *      fałszywe „wybierz model, który widzi obrazy",
  *  18. drugi POST z tym samym biegiem (Chrome ponawia go sam, gdy połączenie
  *      padnie przed pierwszym bajtem) → jedno żądanie do dostawcy, ta sama odpowiedź. */
 const http = require('node:http');
@@ -47,7 +49,7 @@ const atrapa = http.createServer((req, res) => {
     let d = {}; try { d = JSON.parse(b); } catch { /* puste */ }
     const ost = [...(d.messages || [])].reverse().find((m) => m.role === 'user') || { content: '' };
     const t = typeof ost.content === 'string' ? ost.content : JSON.stringify(ost.content);
-    const slowo = (t.match(/przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu/) || [''])[0];
+    const slowo = (t.match(/przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat/) || [''])[0];
     if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; }
     if (slowo === 'przeciazony' && proby[slowo] < 3) {
       return blad(res, 529, { error: { message: 'Overloaded', type: 'overloaded_error' } }, { 'retry-after': '0.2' });
@@ -60,6 +62,9 @@ const atrapa = http.createServer((req, res) => {
     }
     if (slowo === 'zadlugo' && (d.max_tokens || d.max_completion_tokens) > 1100) {
       return blad(res, 400, { error: { message: "This model's maximum context length is 4096 tokens. However, you requested 5048 tokens (3000 in the messages, 2048 in the completion)." } });
+    }
+    if (slowo === 'zlyformat') {
+      return blad(res, 400, { error: { message: "You uploaded an unsupported image. Please make sure your image has of one the following formats: ['png', 'jpeg', 'gif', 'webp'].", type: 'invalid_request_error', code: 'invalid_image_format' } });
     }
     if (slowo === 'zdjecie' && d.model !== 'wizja-model') {
       return blad(res, 500, { error: 'this model is missing data required for image input' });
@@ -243,6 +248,11 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   ok(/: puls/.test(w.txt), '14. w czasie ciszy przeglądarka dostaje puls (Cloudflare nie zerwie)');
   w = await czat('myslipocichu', { dodatki: { model: 'zwykly-model' } });
   ok(w.koniec && /zamilkł/.test(w.koniec.blad || ''), '14. zwykły model milczący tak samo długo — dalej „zamilkł" po 1,5 s');
+
+  // --- 19: odmowa formatu obrazu
+  w = await czat('zlyformat', { tresc: [{ type: 'text', text: 'zlyformat — co tu jest?' }, { type: 'image_url', image_url: { url: 'data:image/bmp;base64,Qk0=' } }] });
+  ok(w.status === 400 && proby.zlyformat === 1 && /nie przyjmuje obrazu w tym formacie/.test(w.json.error || '') && !/widzi obrazy/.test(w.json.error || ''),
+    `19. odmowa formatu → rada o formacie, bez zbędnej próby modelem wizyjnym (${proby.zlyformat} żądanie: ${(w.json.error || '').slice(0, 50)}…)`);
 
   // --- 18: drugi POST z tym samym biegiem — jedno żądanie do dostawcy
   const biegDubel = los();

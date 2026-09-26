@@ -41,10 +41,14 @@ function utworzWysylke({ t }) {
      asynchronicznie — telefon nie zamiera. Mały obraz podglądu nie potrzebuje. */
   const PODGLAD_BOK = 1568;
   const PODGLAD_OD_BAJTOW = 1.5 * 1024 * 1024;
+  /* Formaty, które przyjmują i OpenAI, i Claude. Mały BMP, SVG czy AVIF szedł
+     do modelu w oryginale i każda wiadomość padała odmową 400 (zespół IT,
+     runda 4) — dostają podgląd JPEG niezależnie od rozmiaru. */
+  const PRZYJMOWANY = /^image\/(jpeg|png|gif|webp)$/;
   async function przygotujPodglad(zrodlo, id) {
     const bitmapa = await createImageBitmap(zrodlo);
     const skala = Math.min(1, PODGLAD_BOK / Math.max(bitmapa.width, bitmapa.height));
-    if (skala === 1 && zrodlo.size <= PODGLAD_OD_BAJTOW) { bitmapa.close(); return false; }
+    if (skala === 1 && zrodlo.size <= PODGLAD_OD_BAJTOW && PRZYJMOWANY.test(zrodlo.type || '')) { bitmapa.close(); return false; }
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(bitmapa.width * skala);
     canvas.height = Math.round(bitmapa.height * skala);
@@ -60,7 +64,8 @@ function utworzWysylke({ t }) {
 
   /** Stara pozycja bez podglądu — dorabiamy go przy zaznaczeniu, w tle. */
   async function podgladDlaPozycji(item) {
-    if (item.podglad || !/^image\//.test(item.mime || '') || item.size <= PODGLAD_OD_BAJTOW) return;
+    if (item.podglad || !/^image\//.test(item.mime || '')) return;
+    if (item.size <= PODGLAD_OD_BAJTOW && PRZYJMOWANY.test(item.mime)) return;
     try {
       const blob = await (await fetch(`/api/kb/raw?id=${encodeURIComponent(item.id)}`)).blob();
       if (await przygotujPodglad(blob, item.id)) item.podglad = true;
