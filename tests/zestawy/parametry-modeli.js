@@ -18,6 +18,8 @@
  *  11. podpowiedź czyta TREŚĆ odmowy: brak środków, za długi kontekst, przeciążenie,
  *      a „ollama pull" tylko dla Ollamy,
  *  12. `<think>` w treści odpowiedzi pomocniczej nie trafia do człowieka,
+ *  14. za duży limit odpowiedzi (gpt-4o: najwyżej 16 384) → jedna próba z limitem
+ *      z odmowy, a następne pytanie od razu dobre,
  *  13. llmComplete ma JEDEN termin na całość, z ponowieniem po `length`
  *      włącznie — dawniej ponowienie liczyło od nowa i streszczenie modelem
  *      rozumującym kończyło się za Cloudflare stroną 524 po 100 s. */
@@ -40,6 +42,10 @@ const atrapa = http.createServer((req, res) => {
       if (b.temperature !== undefined) return odmow("Unsupported value: 'temperature' does not support 0.7 with this model.");
     }
     if (b.model === 'zly') return odmow('The model `zly` does not exist.');
+    const limitOdp = b.max_completion_tokens ?? b.max_tokens;
+    if (b.model === 'limit16k' && limitOdp > 16384) {
+      return odmow(`max_tokens is too large: ${limitOdp}. This model supports at most 16384 completion tokens, whereas you provided ${limitOdp}.`);
+    }
     if (b.model === 'mysli-w-tresci') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ choices: [{ message: { content: '<think>The user asks in Polish, let me think.</think>\n\nKrótkie streszczenie.' }, finish_reason: 'stop' }] }));
@@ -138,6 +144,15 @@ const atrapa = http.createServer((req, res) => {
   // --- 12. <think> w odpowiedzi pomocniczej
   const streszczenie = await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-w-tresci' });
   ok(streszczenie === 'Krótkie streszczenie.', `streszczenie bez <think> (${JSON.stringify(streszczenie)})`);
+
+  // --- 14. Za duży limit odpowiedzi
+  zadania.length = 0;
+  r = await zapytajModel(ep, { ...cialo('limit16k'), max_tokens: 32000 });
+  ok(r.status === 200 && zadania.length === 2 && (zadania[1].max_tokens ?? zadania[1].max_completion_tokens) === 16384,
+    `limit 32 000 dla modelu z sufitem 16 384 → ponowienie z limitem z odmowy (${r.status}, ${zadania.length} żądania)`);
+  zadania.length = 0;
+  r = await zapytajModel(ep, { ...cialo('limit16k'), max_tokens: 32000 });
+  ok(r.status === 200 && zadania.length === 1, `następne pytanie od razu z dobrym limitem (${zadania.length} żądanie)`);
 
   // --- 13. Jeden termin na całe llmComplete (tu 1 s zamiast 88 s)
   zadania.length = 0;

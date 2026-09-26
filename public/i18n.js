@@ -165,6 +165,8 @@ const I18N = {
     'model.przyznany': 'Ten silnik masz od właściciela z modelem {to} — {from} nie jest na jego liście.',
     'model.okno': 'Lokalny model mieści {okno} tokenów — {n} najstarszych wiadomości tej rozmowy nie poszło do niego.',
     'model.oknoSkrocone': 'Lokalny model mieści {okno} tokenów — najdłuższa część tej tury (zwykle wyniki narzędzia) poszła do niego skrócona.',
+    'err.bramka': 'Cosmos chwilowo nie odpowiada (HTTP {status}) — pewnie właśnie się aktualizuje. Spróbuj ponownie za kilka sekund.',
+    'err.bramkaCzas': 'Serwer liczył dłużej niż 100 s i Cloudflare przerwał połączenie (HTTP {status}). Spróbuj ponownie albo wybierz szybszy model.',
     'model.blindWarn': 'Wybrany model nie widzi obrazów, a nie masz ustawionego modelu wizyjnego. Zdjęcie zostanie pominięte — wybierz model z oznaczeniem „widzi obrazy” albo ustaw NEMOTRON_VISION_MODEL w .env.',
 
     // — źródło obrazu w panelu na żywo —
@@ -1017,6 +1019,8 @@ const I18N = {
     'model.przyznany': 'The owner shared this engine with you with {to} — {from} is not on their list.',
     'model.okno': 'The local model holds {okno} tokens — the {n} oldest messages of this chat were not sent to it.',
     'model.oknoSkrocone': 'The local model holds {okno} tokens — the longest part of this turn (usually tool results) was sent to it shortened.',
+    'err.bramka': 'Cosmos is not responding right now (HTTP {status}) — it is probably updating. Try again in a few seconds.',
+    'err.bramkaCzas': 'The server worked for more than 100 s and Cloudflare closed the connection (HTTP {status}). Try again or pick a faster model.',
     'model.blindWarn': 'The selected model cannot see images and no vision model is configured. The photo will be ignored — pick a model tagged “sees images” or set NEMOTRON_VISION_MODEL in .env.',
 
     'live.source': 'Video source',

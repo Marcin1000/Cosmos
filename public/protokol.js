@@ -238,6 +238,21 @@ function utworzProtokol() {
       .replace(/ł/gi, 'l').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
+  /** Od której wiadomości uciąć rozmowę przy „Ponów"/„Regeneruj" pod wiadomością
+   *  `idx`. Zwykle od niej samej. Pod BŁĘDEM — od razu za pytaniem człowieka:
+   *  błąd, który przyszedł po fragmencie odpowiedzi, zostawiał ten fragment
+   *  jako ostatnią wiadomość, a Claude 4.6+/5 odrzuca to kodem 400 („does not
+   *  support assistant message prefill") — „Ponów" nie działało nigdy, a na
+   *  OpenAI zostawały dwie wiadomości asystenta (zespół IT, runda 4). */
+  function granicaPonowienia(wiadomosci, idx) {
+    const m = wiadomosci[idx];
+    if (!m || !m.error) return idx;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (wiadomosci[i].role === 'user' && !wiadomosci[i].search) return i + 1;
+    }
+    return idx;
+  }
+
   /** Scal: wspólny początek, potem to, co dopisał serwer (inne urządzenie),
    *  potem to, co dopisano tutaj. Wyjątek: odpowiedź zapisana przez serwer
    *  awaryjnie (`bieg` — nikt jej wtedy nie odebrał) ustępuje odpowiedzi,
@@ -274,6 +289,7 @@ function utworzProtokol() {
     naKontekst,
     bezOgonkowKlient,
     scalRozmowy,
+    granicaPonowienia,
   };
 }
 

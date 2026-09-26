@@ -991,7 +991,8 @@ async function runAction(m, msgEl) {
 function regenerateFrom(idx) {
   const conv = activeConv();
   if (!conv || isGenerating) return;
-  conv.messages = conv.messages.slice(0, idx); // usuń tę odpowiedź i wszystko po niej
+  // Usuń tę odpowiedź i wszystko po niej; pod błędem — całą turę po pytaniu (protokol.js).
+  conv.messages = conv.messages.slice(0, granicaPonowienia(conv.messages, idx));
   saveConversations();
   renderMessages();
   runGeneration(conv);
@@ -2198,7 +2199,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
-  scalRozmowy,
+  scalRozmowy, granicaPonowienia,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
@@ -2750,6 +2751,12 @@ async function readJsonSafe(res) {
   try {
     return JSON.parse(body);
   } catch {
+    /* Strona błędu Cloudflare'a (502 przy restarcie, 524 po 100 s ciszy) albo
+       innego pośrednika to HTML — na ekranie lądował jako „HTTP 502 — <!DOCTYPE
+       html>…". Człowiekowi mówimy, co się stało. */
+    if (/^\s*</.test(body) || [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527].includes(res.status)) {
+      return { error: t(res.status === 524 ? 'err.bramkaCzas' : 'err.bramka', { status: res.status }) };
+    }
     const short = body.trim().slice(0, 200) || `HTTP ${res.status}`;
     return { error: `HTTP ${res.status} — ${short}` };
   }
@@ -5913,6 +5920,9 @@ function sluchajZdarzen() {
   try { strumienZdarzen = new EventSource('/api/events/stream'); }
   catch { return; }
 
+  /* Udane połączenie zeruje zwłokę. Dawniej robiło to dopiero zdarzenie —
+     po serii restartów kanał, który już działał, wznawiał się potem co minutę. */
+  strumienZdarzen.onopen = () => { zwlokaWznowienia = 1000; };
   strumienZdarzen.addEventListener('zdarzenie', (e) => {
     zwlokaWznowienia = 1000;
     try { obsluzZdarzenie(JSON.parse(e.data)); } catch { /* zniekształcone */ }

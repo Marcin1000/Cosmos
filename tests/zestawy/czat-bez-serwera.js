@@ -17,7 +17,10 @@
         dodatki idą zaraz za nią; czas i miejsce, profil; obraz zaznaczony
         w bazie wiedzy trafia do OSTATNIEJ wiadomości człowieka, za duży —
         model dostaje o tym zdanie; tryb głosowy jest ostatnim dodatkiem;
-        wyłączona pamięć nie jest w ogóle pytana. */
+        wyłączona pamięć nie jest w ogóle pytana.
+     6. „Ponów" pod błędem, który przyszedł po fragmencie odpowiedzi, powtarza
+        całą turę od pytania — fragment nie zostaje ostatnią wiadomością
+        (Claude odrzuca to jako „prefill"); zwykłe „Regeneruj" bez zmian. */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -126,6 +129,22 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   ok(czat.rodzajBleduPolaczenia({ cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }) === 'uspiony'
     && czat.rodzajBleduPolaczenia({ code: 'ECONNREFUSED' }) === 'odmowa'
     && czat.rodzajBleduPolaczenia({ cause: { code: 'ENOTFOUND' } }) === 'dns', 'przyczyna braku połączenia rozpoznana po kodzie');
+}
+
+// --- 6. granica „Ponów" -------------------------------------------------------------------
+{
+  const { granicaPonowienia } = require('../../public/protokol.js').utworzProtokol();
+  const pytanie = { role: 'user', content: 'Pytanie' };
+  const fragment = { role: 'assistant', content: 'Połowa odpo' };
+  const blad = { role: 'assistant', content: 'Przeciążony', error: true };
+  const wyniki = { role: 'user', content: 'WYNIKI…', search: true };
+  const rozmowa = [{ role: 'user', content: 'wcześniej' }, { role: 'assistant', content: 'ok' }, pytanie, fragment, blad];
+  const od = granicaPonowienia(rozmowa, 4);
+  ok(od === 3 && rozmowa.slice(0, od).at(-1) === pytanie, 'Ponów pod błędem po fragmencie: tura od pytania, bez fragmentu na końcu');
+  const kaskada = [pytanie, { role: 'assistant', content: 'Sprawdzę.' }, wyniki, blad];
+  ok(granicaPonowienia(kaskada, 3) === 1, 'w kaskadzie wraca do pytania człowieka, nie do wyników narzędzia');
+  const zwykla = [pytanie, { role: 'assistant', content: 'Odpowiedź' }];
+  ok(granicaPonowienia(zwykla, 1) === 1, 'zwykłe „Regeneruj" ucina od tej odpowiedzi, jak dawniej');
 }
 
 // --- 5. składanie kontekstu na atrapach --------------------------------------------------
