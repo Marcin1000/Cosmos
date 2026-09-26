@@ -21,8 +21,18 @@ const up = http.createServer((req, res) => {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: msg } }));
     };
+    /* Silnik lokalny idzie bez klucza (LOCAL_API_KEY pusty) — wtedy atrapa
+       mówi jak prawdziwy serwer lokalny: Ollama („try pulling it first")
+       albo vLLM („does not exist"). Rada „ollama pull" ma paść tylko przy
+       Ollamie — przy vLLM byłaby fałszywym tropem. */
+    const lokalny = !req.headers.authorization;
+    if (lokalny && j.model === 'vllm/nie-ma-takiego') {
+      return bad(404, 'The model `vllm/nie-ma-takiego` does not exist.');
+    }
     if (j.model === 'meta/zablokowany') {
-      return bad(404, "Function 'meta/zablokowany' Not found for account.");
+      return bad(404, lokalny
+        ? 'model "meta/zablokowany" not found, try pulling it first'
+        : "Function 'meta/zablokowany' Not found for account.");
     }
     if (withImage && j.model !== 'nvidia/vl-8b') {
       return bad(400, 'This model does not support image content type.');
@@ -86,8 +96,15 @@ up.listen(7101, async () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint: 'local', model: 'meta/zablokowany' }),
   }).then((x) => x.json());
-  console.log(`5b. lokalny brak modelu → ${r5.podpowiedz}`);
+  console.log(`5b. lokalny brak modelu (Ollama) → ${r5.podpowiedz}`);
   if (!/ollama pull meta\/zablokowany/.test(r5.podpowiedz || '')) fail.push('brak komendy ollama pull');
+  const r5c = await fetch('http://127.0.0.1:3021/api/models/check', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: 'local', model: 'vllm/nie-ma-takiego' }),
+  }).then((x) => x.json());
+  console.log(`5c. lokalny brak modelu (vLLM) → ${r5c.podpowiedz}`);
+  if (/ollama pull/.test(r5c.podpowiedz || '')) fail.push('przy vLLM podpowiedź każe robić „ollama pull"');
+  if (!/served-model-name|Pobierz listę/.test(r5c.podpowiedz || '')) fail.push('przy vLLM brak rady, skąd wziąć nazwę modelu');
 
   // ---- UI ----
   const br = await przegladarka();

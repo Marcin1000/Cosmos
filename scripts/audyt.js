@@ -449,15 +449,21 @@ sekcja('Katalog modeli a rzeczywistość');
 const { modelInfo, modelSeesImages, modelNotForChat } = require(path.join(R, 'public/models.js'));
 const POMIAR_WZROK = ['nvidia/llama-3.1-nemotron-nano-vl-8b-v1', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   'nvidia/nemotron-nano-12b-v2-vl', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.2-11b-vision-instruct',
-  'meta/llama-3.2-90b-vision-instruct', 'nvidia/ising-calibration-1.5-31b', 'openai/gpt-oss-20b',
+  'meta/llama-3.2-90b-vision-instruct', 'nvidia/ising-calibration-1.5-31b',
   'thinkingmachines/inkling'];
+/* openai/gpt-oss-20b przeszedł kiedyś sondę z obrazkiem 1×1 — ale sonda mówi
+   tylko, że dostawca PRZYJĄŁ żądanie z obrazem, nie że model go widzi. To model
+   tekstowy (karta modelu OpenAI); zespół IT pokazał, że dostawca po prostu
+   pomija obraz. Z cechą „wizja" zdjęcia leciały do modelu, który ich nie
+   widzi — bez niej idą do ustawionego modelu wizyjnego. */
 const POMIAR_TEKST = ['nvidia/nemotron-3-nano-30b-a3b', 'nvidia/nemotron-3-super-120b-a12b',
   'nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/nemotron-mini-4b-instruct', 'nvidia/nvidia-nemotron-nano-9b-v2',
   'meta/llama-3.1-8b-instruct', 'meta/llama-3.2-1b-instruct', 'minimaxai/minimax-m3',
   'nvidia/llama-3.1-nemoguard-8b-content-safety', 'nvidia/llama-3.1-nemoguard-8b-topic-control',
   'nvidia/llama-3.1-nemotron-safety-guard-8b-v3', 'nvidia/llama-3.3-nemotron-super-49b-v1',
   'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'nvidia/nemotron-3.5-content-safety',
-  'nvidia/riva-translate-4b-instruct-v1.1', 'nvidia/riva-translate-4b-instruct-v2', 'openai/gpt-oss-120b'];
+  'nvidia/riva-translate-4b-instruct-v1.1', 'nvidia/riva-translate-4b-instruct-v2', 'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b'];
 const POMIAR_INNE = ['nvidia/llama-nemotron-embed-1b-v2', 'nvidia/nv-embedqa-e5-v5', 'nvidia/nvclip',
   'nvidia/nemotron-parse', 'nvidia/nemoretriever-parse', 'nvidia/nemotron-4-340b-reward'];
 let bezOpisu = 0; let rozjazd = 0;

@@ -53,12 +53,14 @@ up.listen(7089, async () => {
   console.log(`2. model wizyjny → odpowiedział: ${a.used}, podmiana: ${a.swapped || 'brak'}`);
   if (a.swapped) fail.push('podmienił model, który i tak widzi obrazy');
 
-  // model spoza katalogu, który odmawia → czytelny błąd zamiast „HTTP 400"
+  /* Model spoza katalogu odmawia zdjęcia, a model wizyjny JEST ustawiony →
+     jedno ponowienie z wizyjnym, jawnie (nagłówek podmiany). Dawniej — błąd,
+     choć było komu odpowiedzieć; nazwy z Ollamy katalog zna słabo, więc
+     o ślepocie modelu dowiadujemy się dopiero z odmowy. */
   a = await ask(3015, 'acme/nieznany-model-tekstowy');
-  const msg = typeof a.body === 'object' ? a.body.error : String(a.body);
-  console.log(`3. model spoza katalogu odmawia → HTTP ${a.status}`);
-  console.log(`   ${String(msg).split('\n')[0].slice(0, 90)}`);
-  if (!/odmówił przyjęcia zdjęcia|widzi obrazy/.test(String(msg))) fail.push('błąd 400 nadal nic nie mówi');
+  console.log(`3. model spoza katalogu odmawia, wizyjny ustawiony → HTTP ${a.status}, odpowiedział: ${a.used}, zamiast: ${a.swapped || '—'}`);
+  if (a.status !== 200 || a.used !== 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1') fail.push('odmowa obrazu nie przeszła na ustawiony model wizyjny');
+  if (a.swapped !== 'acme/nieznany-model-tekstowy') fail.push('ponowienie z modelem wizyjnym nie jest jawne (brak nagłówka podmiany)');
   try { process.kill(-srv.pid); } catch {}
 
   // B. bez modelu wizyjnego → czytelny błąd, nie bezużyteczna odpowiedź
@@ -71,6 +73,14 @@ up.listen(7089, async () => {
   console.log(`   ${String(m2).split('\n')[0].slice(0, 92)}`);
   if (a.status !== 400) fail.push('wysłał zdjęcie do ślepego modelu zamiast ostrzec');
   if (!/NEMOTRON_VISION_MODEL/.test(String(m2))) fail.push('błąd nie mówi, co ustawić');
+
+  // Model spoza katalogu odmawia, a ratunku nie ma (brak wizyjnego) → czytelny błąd zamiast „HTTP 400".
+  a = await ask(3016, 'acme/nieznany-model-tekstowy');
+  const msg = typeof a.body === 'object' ? a.body.error : String(a.body);
+  console.log(`4b. model spoza katalogu odmawia, brak wizyjnego → HTTP ${a.status}`);
+  console.log(`   ${String(msg).split('\n')[0].slice(0, 90)}`);
+  if (!/odmówił przyjęcia zdjęcia|widzi obrazy/.test(String(msg))) fail.push('błąd 400 nadal nic nie mówi');
+  if (!/NEMOTRON_VISION_MODEL/.test(String(msg))) fail.push('błąd po odmowie nie mówi, co ustawić');
 
   // C. zdjęcie z aparatu trafia do Galerii
   const b = await przegladarka({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });

@@ -34,7 +34,7 @@ const {
 /* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
    i trasy kont. Zasady — w nagłówkach tych modułów; bramka logowania zostaje
    niżej, w routerze (audyt sprawdza ją strukturalnie). */
-const { stan, naUzytkownika, wKontekscie, kto, czyWlasciciel, katalogDla,
+const { stan, naUzytkownika, istniejacy, wKontekscie, kto, czyWlasciciel, katalogDla,
   zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
 const konta = require('./lib/konta.js');
 const silniki = require('./lib/silniki.js');
@@ -3020,13 +3020,19 @@ function zamknijPorzadnie(sygnal) {
       biegi_.zapiszWszystkoTeraz('Serwer uruchamiał się ponownie i przerwał odpowiedź w tym miejscu. Zapytaj jeszcze raz, żeby dostać całość.');
     };
     dokonczone().then(() => {
-      /* Każda osoba ma własne archiwum, więc zapisujemy wszystkie, które są
-         w pamięci — w imieniu ich właścicieli. */
+      /* Każda osoba ma własne archiwum i własną bazę wiedzy — zapisujemy to,
+         co CZEKA na zapis, w imieniu właścicieli. Instancji, której nikt nie
+         wczytał, nie tworzymy (istniejacy): dawniej zamknięcie czytało cały
+         indeks archiwum z dysku tylko po to, żeby go od razu zapisać. */
       const zapisy = zaladowani().map((id) => {
         const u = konta.znajdz(id);
         if (!u) return Promise.resolve();
-        return wKontekscie(u, () => archiwum.zapisz())
-          .catch((err) => console.error(`Nie udało się dopisać archiwum (${u.login}):`, err.message));
+        return Promise.resolve(wKontekscie(u, () => {
+          const s = istniejacy('serwer');
+          if (s && s.kbZapisZaplanowany) { clearTimeout(s.kbZapisZaplanowany); s.kbZapisZaplanowany = null; saveKb(); }
+          const a = istniejacy('archiwum');
+          return a ? a.zapiszZalegle() : undefined;
+        })).catch((err) => console.error(`Nie udało się dopisać danych (${u.login}):`, err.message));
       });
       return Promise.all(zapisy);
     }).finally(() => process.exit(0));
