@@ -3260,6 +3260,13 @@ body::after {
   .kbd-hint { display: none; }
 }
 
+/* Licznik „~N tok. w kontekście" pojawia się przy pierwszej wiadomości i na
+   wąskim ekranie zawijał stopkę do drugiej linii — pole wiadomości podskakiwało
+   o 21 px (CLS 0,086). Na telefonie liczba tokenów i tak nic nie mówi. */
+@media (max-width: 720px) {
+  #token-estimate { display: none; }
+}
+
 /* ================= NAUKA ================= */
 .studio-tabs {
   display: flex;

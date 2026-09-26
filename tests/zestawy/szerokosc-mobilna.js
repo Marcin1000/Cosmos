@@ -91,6 +91,18 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await openModal('#timeline-btn', '#timeline-close', 'oś czasu', 'm7-timeline');
   await openModal('#gallery-btn', '#gallery-close', 'galeria', 'm8-gallery');
 
+  /* 5. Pisanie nie podnosi pola. Licznik „~N tok. w kontekście" dopisywał się
+     do stopki przy pierwszym znaku i na telefonie zawijał ją do drugiej linii
+     — pole podskakiwało o ~20 px (CLS 0,086). */
+  const gora = () => page.evaluate(() => Math.round(document.getElementById('input').getBoundingClientRect().top));
+  const przed = await gora();
+  await page.fill('#input', 'Cześć');
+  await page.waitForTimeout(150);
+  const skok = Math.abs((await gora()) - przed);
+  console.log(`${skok <= 1 ? 'OK ' : 'ZLE'} pierwszy znak w polu: pole przesunęło się o ${skok} px`);
+  if (skok > 1) problems.push(`pisanie podnosi pole o ${skok} px`);
+  await page.fill('#input', '');
+
   console.log(problems.length ? `\nPROBLEMY: ${problems.join('; ')}` : '\nWSZYSTKO OK');
   await browser.close();
   env.koniec();

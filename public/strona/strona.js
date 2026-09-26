@@ -231,6 +231,14 @@
 
   $$('[data-jezyk]').forEach((b) => b.addEventListener('click', () => zmienJezyk(b.dataset.jezyk)));
 
+  /* Język idzie za człowiekiem do aplikacji. Samo wejście pod /?lang=en nic nie
+     zapisuje, ale „Open Cosmos" kliknięte na angielskiej stronie to już wybór —
+     bez tego aplikacja witała po polsku kogoś, kto przed chwilą czytał po
+     angielsku (aplikacja czyta język tylko z cosmos.lang). */
+  $$('.js-wejscie').forEach((a) => a.addEventListener('click', () => {
+    if (zAdresu) try { localStorage.setItem('cosmos.lang', jezyk); } catch (e) { /* bez zapisu */ }
+  }));
+
   /* Podpowiedź „Read in English” — tylko gdy nikt jeszcze nie wybrał języka,
      adres go nie narzuca, a przeglądarka nie jest polska. */
   const podpowiedz = $('#podpowiedz-jezyka');

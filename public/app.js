@@ -5418,11 +5418,17 @@ document.addEventListener('keydown', (e) => {
     for (const k of karty) k.hidden = !widoczne(k.dataset.cel).length;
     const pasek = cialo.querySelector('.set-karty');
     const odGory = cialo.getBoundingClientRect().top + (pasek ? pasek.offsetHeight : 0) + 24;
+    /* Świeci grupa bloku, który czytasz — najniższego z tych, które minęły
+       pasek. Grupy są w HTML-u przeplecione (głos między silnikami, pierwszy
+       blok „Dane" przed „Domem"), więc dawne „ostatnia karta, której pierwszy
+       blok minął górę" po kliknięciu „Dom" zapalało „Dane" — Dom nie świecił
+       nigdy. */
     let biezaca = karty.find((k) => !k.hidden)?.dataset.cel;
-    for (const k of karty) {
-      if (k.hidden) continue;
-      const pierwszy = widoczne(k.dataset.cel)[0];
-      if (pierwszy && pierwszy.getBoundingClientRect().top <= odGory) biezaca = k.dataset.cel;
+    let najnizej = -Infinity;
+    for (const b of cialo.querySelectorAll('[data-karta]')) {
+      if (b.offsetParent === null) continue;
+      const y = b.getBoundingClientRect().top;
+      if (y <= odGory && y > najnizej) { najnizej = y; biezaca = b.dataset.karta; }
     }
     if (biezaca) zaznacz(biezaca);
   };

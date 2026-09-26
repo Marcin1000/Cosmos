@@ -18,7 +18,8 @@
  *  10. Bez JavaScriptu treść jest widoczna (czytniki, podgląd linku, NoScript).
  *  11. Angielski ma własny adres (/?lang=en), a „/” bez zapisanego wyboru
  *      zostaje po polsku także w angielskiej przeglądarce — inaczej robot
- *      en-US indeksuje angielski tekst pod polskim adresem.
+ *      en-US indeksuje angielski tekst pod polskim adresem. „Open Cosmos”
+ *      z angielskiej strony otwiera aplikację po angielsku.
  *  12. Opisy dla czytnika i meta description też są tłumaczone. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
@@ -195,6 +196,20 @@ const { srodowisko, przegladarka } = require('../pomoc');
     ok(/One thread/.test(await p.textContent('.hero-h')), '/?lang=en: nagłówek po angielsku');
     const kanon = await p.getAttribute('link[rel="canonical"]', 'href');
     ok(/[?&]lang=en/.test(kanon || ''), `/?lang=en: adres kanoniczny wskazuje wersję angielską (${kanon})`);
+    await ctx.close();
+  }
+  {
+    /* …ale „Open Cosmos" kliknięte na angielskiej stronie to już wybór:
+       aplikacja ma przywitać po angielsku kogoś, kto przed chwilą czytał po
+       angielsku. Konsoli tu nie śledzimy — to już aplikacja, nie strona. */
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } }, false);
+    await p.goto(env.adres + '/?lang=en', { waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    ok(await p.evaluate(() => localStorage.getItem('cosmos.lang')) === null, '/?lang=en: samo wejście też niczego nie zapisuje');
+    await Promise.all([p.waitForURL(/\/app\/?$/), p.locator('.js-wejscie:visible').first().click()]);
+    const poAngielsku = await p.waitForFunction(() => document.documentElement.lang === 'en', null, { timeout: 5000 })
+      .then(() => true, () => false);
+    ok(poAngielsku, `„Open Cosmos" z /?lang=en: aplikacja po angielsku (lang=${await p.evaluate(() => document.documentElement.lang)})`);
     await ctx.close();
   }
 

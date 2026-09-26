@@ -65,6 +65,29 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
       if (motyw === 'dark' && w === 1280) await pg.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'pola-desktop.png'), fullPage: false });
       if (motyw === 'dark' && w === 360) await pg.screenshot({ path: require('path').join(require('../pomoc').KATALOG_ZRZUTOW, 'pola-mobile.png'), fullPage: false });
+
+      /* Karty u góry Ustawień: kliknięta karta ma zaświecić. Grupy bloków są
+         w HTML-u przeplecione, więc „Dom" nie świecił nigdy — po kliknięciu
+         zapalały się „Dane". */
+      if (motyw === 'dark') {
+        const karty = await pg.$$eval('#settings-modal .set-karty [data-cel]',
+          (ks) => ks.filter((k) => !k.hidden).map((k) => k.dataset.cel));
+        if (!karty.includes('dom')) fail.push(`${w}px: brak karty „Dom" u właściciela`);
+        for (const cel of karty) {
+          await pg.click(`#settings-modal .set-karty [data-cel="${cel}"]`);
+          // przewijanie jest płynne — czekamy, aż stanie
+          let bylo = -1;
+          for (let i = 0; i < 40; i++) {
+            await pg.waitForTimeout(100);
+            const jest = await pg.$eval('#settings-modal .modal-body', (c) => c.scrollTop);
+            if (Math.abs(jest - bylo) < 1) break;
+            bylo = jest;
+          }
+          const swieci = await pg.$eval('#settings-modal .set-karty .aktywna', (k) => k.dataset.cel).catch(() => null);
+          console.log(`   [${w}px] karta „${cel}" → świeci „${swieci}"`);
+          if (swieci !== cel) fail.push(`${w}px: po kliknięciu karty „${cel}" świeci „${swieci}"`);
+        }
+      }
       await pg.close();
     }
   }
