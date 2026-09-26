@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="109 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-109-4ac26b?style=flat-square">
+  <img alt="110 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-110-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 109 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 110 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -141,7 +141,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 109 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 110 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -506,8 +506,14 @@ Przycisk **„Baza wiedzy"** w panelu bocznym otwiera Twój prywatny magazyn mat
   **Excel**, PowerPoint, grafiki, **audio i wideo**. Tekst jest wyciągany automatycznie
   (dokumenty — usługa zmysłów `/extract`; nagrania — transkrypcja Whisper; obrazy —
   opis detekcji YOLO, a przy użyciu w rozmowie trafiają do modelu wizyjnego).
-  Plik do 50 MB idzie na serwer w oryginalnej postaci, z paskiem „Wysyłam 37%" —
+  Plik do 95 MB idzie na serwer w oryginalnej postaci, z paskiem „Wysyłam 37%" —
   telefon nie zamiera nawet przy dużym nagraniu.
+- **Zdjęcia idą do modelu w mniejszej wersji.** Przy wgrywaniu dużego zdjęcia
+  przeglądarka robi podgląd (dłuższy bok 1568 px, JPEG) i to on trafia do modelu
+  wizyjnego — oryginał zostaje w bazie nietknięty. Zdjęcie z aparatu nie leci już
+  w każdej wiadomości jako kilkanaście MB. Starsze pozycje dostają podgląd przy
+  pierwszym zaznaczeniu ☑; do tego czasu model dostaje informację, że obraz jest za
+  duży, i poprosi o otwarcie bazy wiedzy.
 - **Linki do stron** — Cosmos pobiera treść strony i indeksuje ją jak plik.
 - **Notatki głosowe** — przycisk 🎙 w bazie (start/stop) albo **komendy głosowe**
   w trybie „Hej, Kosmos": powiedz *„nowa notatka"* / *„zacznij nagrywanie"*, dyktuj,
@@ -933,6 +939,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/konta` `/api/konta/*` | GET/POST/PUT/DELETE | **Tylko właściciel:** lista kont (bez treści — konto, ostatnia wizyta, zużycie, zajęte miejsce), wolne miejsce na dysku serwera, zaproszenia, przyznawanie silników, wylogowanie i usuwanie osoby |
 | `/api/conversations` `/api/conversations/meta` `/api/conversations/search` | GET/PUT/POST/DELETE | Rozmowy: treść, metadane (tytuł, przypięcie), szukanie po treści |
 | `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki (surowe ciało z typem w `Content-Type` i nazwą w nagłówku `X-Cosmos-Nazwa`; dawny JSON z base64 też działa), linki, notatki, pobieranie, wyszukiwanie |
+| `/api/kb/podglad?id=` | POST | Podgląd zdjęcia z bazy dla modelu (surowe ciało JPEG/WebP/PNG, do 3,5 MB); robi go przeglądarka, oryginał zostaje |
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
 | `/api/zadania` | GET | Praca w tle po odpowiedzi 202 (Studio): pracuje / gotowe z wynikiem / błąd — tylko własne zadania |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
@@ -1227,7 +1234,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 109 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 110 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

@@ -728,6 +728,28 @@ async function buildChunks(text) {
   }));
 }
 
+/* OBRAZ Z BAZY WIEDZY DLA MODELU. Zdjęcie 15 MB z aparatu szło do modelu
+   w oryginale — ~20 MB base64 w KAŻDEJ wiadomości, z płatnym przesyłem,
+   a u Claude'a ponad limit 5 MB na obraz (odrzucone żądanie). Serwer nie ma
+   dekodera obrazów (rdzeń bez zależności), więc mniejszą wersję (≤1568 px,
+   JPEG) robi przeglądarka i odsyła jako PODGLĄD pozycji: przy dodaniu pliku
+   albo przy zaznaczeniu starej pozycji. Oryginał zostaje do pobrania i edycji. */
+const OBRAZ_DO_MODELU_MAX = 3.5 * 1024 * 1024;   // po base64 ~4,7 MB — pod limitem 5 MB
+const podgladPlik = (id) => path.join(KB_FILES(), `${id}.podglad`);
+
+/** Obraz pozycji do wysłania modelowi: podgląd, a bez niego oryginał,
+ *  jeśli jest dość mały. Za duży bez podglądu → null (model dostaje o tym zdanie). */
+function obrazDlaModelu(it) {
+  if (it.podglad) {
+    try { return { mime: it.podglad.mime || 'image/jpeg', buf: fs.readFileSync(podgladPlik(it.id)) }; } catch { /* zniknął — spróbuj oryginału */ }
+  }
+  try {
+    const st = fs.statSync(path.join(KB_FILES(), it.id));
+    if (st.size > OBRAZ_DO_MODELU_MAX) return null;
+    return { mime: it.mime, buf: fs.readFileSync(path.join(KB_FILES(), it.id)) };
+  } catch { return null; }
+}
+
 function kbItemMeta(it) {
   return {
     id: it.id,
@@ -740,6 +762,7 @@ function kbItemMeta(it) {
     textChars: (it.text || '').length,
     preview: (it.text || '').slice(0, 140),
     przetwarzanie: it.przetwarzanie || '',   // np. nagranie przepisuje się w tle
+    podglad: Boolean(it.podglad),            // mniejsza wersja obrazu dla modelu
   };
 }
 
@@ -1147,6 +1170,7 @@ async function handleKb(req, res, pathname) {
     U().kbItems = U().kbItems.filter((it) => it.id !== id);
     if (item?.type === 'file') {
       try { fs.unlinkSync(path.join(KB_FILES(), item.id)); miejsce_.dolicz(-(item.size || 0)); } catch { /* już nie ma */ }
+      if (item.podglad) { try { fs.unlinkSync(podgladPlik(item.id)); miejsce_.dolicz(-(item.podglad.bajty || 0)); } catch { /* już nie ma */ } }
     }
     const blad = saveKb();
     if (blad) return bladZapisu(res, blad);
@@ -1172,6 +1196,27 @@ async function handleKb(req, res, pathname) {
       });
       return res.end(buf);
     } catch { res.writeHead(404); return res.end(); }
+  }
+
+  /* Podgląd obrazu dla modelu — mniejszą wersję robi przeglądarka (canvas),
+     bo serwer nie ma dekodera obrazów. Surowe ciało, jak /api/kb/file. */
+  if (pathname === '/api/kb/podglad' && req.method === 'POST') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+    const item = U().kbItems.find((it) => it.id === id && it.type === 'file' && /^image\//.test(it.mime || ''));
+    if (!item) { req.resume(); return sendJson(res, 404, { error: 'Nie ma takiego obrazu w bazie wiedzy.' }); }
+    const mime = String(req.headers['content-type'] || '').split(';')[0].trim();
+    if (!['image/jpeg', 'image/webp', 'image/png'].includes(mime)) { req.resume(); return sendJson(res, 415, { error: 'Podgląd: JPEG, WebP albo PNG.' }); }
+    let buf;
+    try { buf = await readBodyBuffer(req, OBRAZ_DO_MODELU_MAX); } catch { return sendJson(res, 413, { error: 'Podgląd za duży — najwyżej 3,5 MB.' }); }
+    if (!buf.length) return sendJson(res, 400, { error: 'Pusty podgląd.' });
+    await miejsce_.sprawdz(buf.length);
+    try { zapiszAtomowo(podgladPlik(item.id), buf); } catch (err) { return bladZapisu(res, err); }
+    const bylo = item.podglad;
+    item.podglad = { mime, bajty: buf.length };
+    const blad = saveKb();
+    if (blad) { item.podglad = bylo; return bladZapisu(res, blad); }
+    miejsce_.dolicz(buf.length - ((bylo && bylo.bajty) || 0));
+    return sendJson(res, 200, { ok: true, bajty: buf.length });
   }
 
   if (pathname === '/api/kb/search' && req.method === 'GET') {
@@ -1671,16 +1716,20 @@ async function handleChat(req, res) {
         const parts = Array.isArray(m.content)
           ? [...m.content]
           : [{ type: 'text', text: String(m.content) }];
+        const zaDuze = [];
         for (const it of imageItems) {
-          try {
-            const buf = fs.readFileSync(path.join(KB_FILES(), it.id));
-            parts.unshift({
-              type: 'image_url',
-              image_url: { url: `data:${it.mime};base64,${buf.toString('base64')}` },
-            });
-          } catch { /* plik zniknął z dysku */ }
+          const obraz = obrazDlaModelu(it);
+          if (!obraz) { zaDuze.push(it.name); continue; }
+          parts.unshift({
+            type: 'image_url',
+            image_url: { url: `data:${obraz.mime};base64,${obraz.buf.toString('base64')}` },
+          });
         }
         messages[idx] = { ...m, content: parts };
+        if (zaDuze.length) {
+          extras.push({ role: 'system', content: `Użytkownik zaznaczył obrazy, których nie da się wysłać — są za duże: `
+            + `${zaDuze.join(', ')}. Powiedz mu, że wystarczy otworzyć bazę wiedzy (przygotuje się mniejsza wersja).` });
+        }
       }
     }
   }

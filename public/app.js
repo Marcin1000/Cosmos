@@ -4022,7 +4022,7 @@ async function loadKbList() {
       check.title = t('kb.include');
       check.checked = kbSelected.has(item.id);
       check.addEventListener('change', () => {
-        if (check.checked) kbSelected.add(item.id);
+        if (check.checked) { kbSelected.add(item.id); podgladDlaPozycji(item); }
         else kbSelected.delete(item.id);
         saveKbSelected();
       });
@@ -4073,29 +4073,8 @@ async function loadKbList() {
   }
 }
 
-/* Plik idzie do bazy wiedzy jako SUROWE ciało, nie base64 w JSON-ie.
-   Kodowanie base64 i JSON.stringify działały w wątku głównym: plik 45 MB
-   zamrażał telefon na 4,7 s (bez przewijania, bez dotyku), a przez tunel szło
-   o jedną trzecią więcej danych. XMLHttpRequest zamiast fetch, bo tylko on
-   mówi, ile już wysłał — człowiek widzi „Wysyłam 37%", a nie jeden napis
-   przez minutę. Nazwa w nagłówku, nie w adresie (adresy lądują w dziennikach). */
-function wyslijPlikDoBazy(file, naPostep) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/kb/file');
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-    xhr.setRequestHeader('X-Cosmos-Nazwa', encodeURIComponent(file.name));
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable && naPostep) naPostep(e.loaded / e.total); };
-    xhr.onload = () => {
-      let d;
-      try { d = JSON.parse(xhr.responseText); } catch { d = { error: `HTTP ${xhr.status} — ${String(xhr.responseText || '').trim().slice(0, 200)}` }; }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(d);
-      else reject(new Error(d.error || `HTTP ${xhr.status}`));
-    };
-    xhr.onerror = () => reject(new Error(t('offline.title')));
-    xhr.send(file);
-  });
-}
+// Wysyłka pliku do bazy wiedzy i podgląd obrazu dla modelu — public/wysylka.js.
+const { wyslijPlikDoBazy, przygotujPodglad, podgladDlaPozycji } = utworzWysylke({ t });
 
 async function kbUploadFiles(files) {
   const list = [...files];
@@ -4109,11 +4088,12 @@ async function kbUploadFiles(files) {
       (/^(audio|video)/.test(file.type) ? t('kb.transcribing') : '…');
     kbSetStatus(t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: 0 }));
     try {
-      await wyslijPlikDoBazy(file, (czesc) => {
+      const d = await wyslijPlikDoBazy(file, (czesc) => {
         // Wysłane w całości — dalej serwer czyta tekst (albo przepisuje nagranie w tle).
         kbSetStatus(czesc >= 1 ? przetwarzam
           : t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: Math.floor(czesc * 100) }));
       });
+      if (d.item && /^image\//.test(file.type)) await przygotujPodglad(file, d.item.id).catch(() => false);
     } catch (err) {
       alert(t('kb.addErr', { name: file.name }) + '\n' + err.message);
     }

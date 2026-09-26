@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 109 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 110 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -158,7 +158,10 @@ sterowana flagą w payloadzie (`useSenses`, `useSearch`, `useActions`, `useMemor
 - opisy narzędzi (patrz protokół tagów).
 
 Obrazy z bazy wiedzy nie idą jako tekst — są wstrzykiwane jako `image_url` do **ostatniej
-wiadomości użytkownika**, żeby zobaczył je model wizyjny.
+wiadomości użytkownika**, żeby zobaczył je model wizyjny. Idzie **podgląd** (`<id>.podglad`,
+≤1568 px), nie oryginał — robi go przeglądarka (`public/wysylka.js`, `POST /api/kb/podglad`),
+bo serwer nie ma dekodera obrazów. Bez podglądu oryginał idzie tylko do 3,5 MB
+(`obrazDlaModelu()`); większy zostaje w domu, a model dostaje zdanie, że jest za duży.
 
 **Za Cloudflare (100 s bez bajtu = strona 524)** obowiązują trzy rzeczy: biegi wysyłają
 widzom puls `: puls` co 25 s (`lib/biegi.js`); `COSMOS_CISZA_MODELU_MS` przed nagłówkami
@@ -334,6 +337,7 @@ z pozostałych.
 | `i18n.js` | dwa słowniki (PL/EN) |
 | `studio-widok.js` | widok Studia: obraz, szablony, storyboard, edycja, dźwięk, wideo; zadania w tle |
 | `pwa.js` | service worker i pasek „Jest nowa wersja” |
+| `wysylka.js` | wysyłka pliku do bazy wiedzy z postępem; podgląd zdjęcia dla modelu |
 | `strona/` | strona produktowa pod `/` — osobna od aplikacji, własny CSS i skrypt |
 
 Moduły trzymają się wzorca dwustronnego, żeby ten sam plik działał w przeglądarce
