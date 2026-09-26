@@ -92,7 +92,10 @@ const LICZ_SR = () => {
     let s = await stan(p);
     ok(/listening/.test(s.klasa), `otwarcie → od razu „słucham" (${s.klasa})`);
     ok(s.sr === 0, `zero SpeechRecognition po otwarciu (${s.sr})`);
-    await p.waitForFunction(() => /push/.test(document.getElementById('voice-orb').className), null, { timeout: 15000 }).catch(() => {});
+    /* Mikrofon Chromium w teście pika co chwilę, a Cosmos nie zamyka słuchania
+       w trakcie „mowy”. Granica to okno 12 s plus twardy sufit 20 s
+       (NASLUCH_SUFIT_MS w app.js), więc czekamy do 35 s. */
+    await p.waitForFunction(() => /push/.test(document.getElementById('voice-orb').className), null, { timeout: 35000 }).catch(() => {});
     s = await stan(p);
     ok(/push/.test(s.klasa), `po ciszy kula czeka na dotknięcie (${s.klasa})`);
     await p.click('#voice-orb');

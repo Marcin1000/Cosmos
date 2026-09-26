@@ -4415,11 +4415,16 @@ function czekajNaPytanie() {
    i „mówię, a on nic nie robi". Teraz termin czeka, dopóki trwa mowa albo
    rozpoznawanie. Samego terminu mowa NIE przesuwa, bo wtedy szum w tle
    (wentylator, telewizor) trzymałby mikrofon otwarty bez końca. */
+/* Twardy sufit: nawet przy ciągłym szumie (telewizor, wentylator, który VAD
+   bierze za mowę) słuchanie kończy się najpóźniej 20 s po terminie. */
+const NASLUCH_SUFIT_MS = 20000;
+let nasluchSufit = 0;
 function czekajDalej(ms = NASLUCH_CISZA_MS) {
   clearTimeout(nasluchCisza);
+  if (ms === NASLUCH_CISZA_MS) nasluchSufit = Date.now() + NASLUCH_CISZA_MS + NASLUCH_SUFIT_MS;
   nasluchCisza = setTimeout(() => {
     if (!voiceMode || voiceState !== 'listening') return;
-    if (nasluchZajety()) { czekajDalej(400); return; }
+    if (nasluchZajety() && Date.now() < nasluchSufit) { czekajDalej(400); return; }
     backToWake();
   }, ms);
 }
