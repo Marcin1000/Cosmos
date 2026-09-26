@@ -124,6 +124,9 @@ robi większość szybkich zestawów.
 | `zadania.js` | praca dłuższa niż 100 s Cloudflare'a (Studio): czekanie do 75 s, potem 202 i dopytywanie |
 | `miejsce.js` | limit miejsca na osobę, 507 przy pełnym dysku, `bladZapisu` |
 | `statyka.js` | pliki statyczne, ETag, pamięć skompresowanych, **CSP aplikacji** |
+| `plener-trasy.js` | plan zdjęciowy, misja drona (KMZ), Canon, zestaw sprzętu |
+| `zmysly-proxy.js` | pośrednik do usługi zmysłów: ptak, wykrywanie, poza, Kinect |
+| `os-czasu.js` | oś czasu migawek otoczenia |
 
 Źródła inteligencji za wspólnym interfejsem OpenAI-compatible:
 
