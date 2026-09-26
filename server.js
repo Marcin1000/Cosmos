@@ -463,42 +463,42 @@ function extOf(name) {
 const BEZ_ZMYSLOW = 'Zmysły (rozpoznawanie, Whisper, YOLO) działają na komputerze właściciela — '
   + 'dostęp daje przełącznik „lokalny GPU" w panelu Dostęp. Mikrofon, głos i kamera z przeglądarki działają bez tego.';
 
-async function sensesExtract(name, buf) {
+async function sensesExtract(name, buf, czasMs = 90000) {
   if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, data: buf.toString('base64') }),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(czasMs),
     });
     if (!r.ok) return '';
     return (await r.json()).text || '';
   } catch { return ''; }
 }
 
-async function sensesTranscribe(buf, mime) {
+async function sensesTranscribe(buf, mime, czasMs = 600000) {
   if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/stt`, {
       method: 'POST',
       headers: { 'Content-Type': mime || 'application/octet-stream' },
       body: buf,
-      signal: AbortSignal.timeout(600000),
+      signal: AbortSignal.timeout(czasMs),
     });
     if (!r.ok) return '';
     return (await r.json()).text || '';
   } catch { return ''; }
 }
 
-async function sensesDetectSummary(buf, mime) {
+async function sensesDetectSummary(buf, mime, czasMs = 60000) {
   if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: `data:${mime};base64,${buf.toString('base64')}` }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(czasMs),
     });
     if (!r.ok) return '';
     return (await r.json()).summary || '';
@@ -519,11 +519,16 @@ async function handleDokument(req, res) {
     return sendJson(res, 413, { error: `Plik większy niż ${Math.round(DOKUMENT_MAX_B / 1e6)} MB.` });
   }
   const ext = extOf(nazwa);
-  const tekst = (await extractKbText(nazwa, req.headers['content-type'] || '', buf)) || '';
+  /* Przeglądarka czeka na ten tekst — całość musi się zmieścić przed limitem
+     Cloudflare (100 s), inaczej zamiast odpowiedzi przychodzi strona 524. */
+  const tekst = (await extractKbText(nazwa, req.headers['content-type'] || '', buf, { czasMs: 85000 })) || '';
   if (!tekst.trim()) {
     return sendJson(res, 200, {
       name: nazwa, chars: 0, text: '',
-      error: ext === 'pdf'
+      error: wymagaTranskrypcji(nazwa, req.headers['content-type'] || '')
+        ? 'Nie udało się przepisać nagrania od ręki (zmysły wyłączone albo nagranie za długie na minutę czekania). '
+          + 'Dodaj je do bazy wiedzy — tam przepisze się w tle.'
+        : ext === 'pdf'
         ? 'To wygląda na skan — nie ma w nim warstwy tekstowej. Odczytanie wymaga OCR, '
           + 'czyli uruchomionej usługi zmysłów na komputerze domowym.'
         : `Nie umiem odczytać pliku .${ext}. Obsługiwane: PDF, DOCX, XLSX, PPTX, CSV i pliki tekstowe.`,
@@ -856,8 +861,11 @@ function sprzetTekst(d) {
     .filter(Boolean).join(' ');
 }
 
-async function extractKbText(name, mime, buf) {
+const wymagaTranskrypcji = (name, mime) => AV_EXTS.has(extOf(name)) || /^(audio|video)\//.test(mime || '');
+
+async function extractKbText(name, mime, buf, { czasMs } = {}) {
   const ext = extOf(name);
+  const limit = (domyslny) => (czasMs ? Math.min(czasMs, domyslny) : domyslny);
   if (TEXT_EXTS.has(ext) || /^text\//.test(mime || '')) {
     return buf.toString('utf8').slice(0, 200000);
   }
@@ -868,15 +876,15 @@ async function extractKbText(name, mime, buf) {
     const { text, potrzebnyOcr } = czytajLokalnie(name, buf);
     if (text && !potrzebnyOcr) return text.slice(0, 200000);
     // Skan albo format, którego sami nie umiemy (doc, xls, odt) — do zmysłów.
-    const zeZmyslow = await sensesExtract(name, buf);
+    const zeZmyslow = await sensesExtract(name, buf, limit(90000));
     if (zeZmyslow) return zeZmyslow.slice(0, 200000);
     return text.slice(0, 200000);
   }
-  if (AV_EXTS.has(ext) || /^(audio|video)\//.test(mime || '')) {
-    return (await sensesTranscribe(buf, mime)).slice(0, 200000);
+  if (wymagaTranskrypcji(name, mime)) {
+    return (await sensesTranscribe(buf, mime, limit(600000))).slice(0, 200000);
   }
   if (/^image\//.test(mime || '')) {
-    const summary = await sensesDetectSummary(buf, mime);
+    const summary = await sensesDetectSummary(buf, mime, limit(60000));
     return summary ? `Na obrazie wykryto: ${summary}` : '';
   }
   return '';
@@ -915,6 +923,7 @@ function kbItemMeta(it) {
     time: it.time,
     textChars: (it.text || '').length,
     preview: (it.text || '').slice(0, 140),
+    przetwarzanie: it.przetwarzanie || '',   // np. nagranie przepisuje się w tle
   };
 }
 
@@ -977,6 +986,28 @@ async function kbAddFile(name, mime, buf, presetText = null) {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   fs.mkdirSync(KB_FILES(), { recursive: true });
   fs.writeFileSync(path.join(KB_FILES(), id), buf);
+  /* Nagranie przepisuje się W TLE. Transkrypcja godzinnego nagrania trwa
+     minuty, a żądanie, które na nią czekało, za Cloudflare kończyło się po
+     100 s stroną 524 — choć plik i tak się potem dodawał. Pozycja jest od
+     razu, tekst dochodzi, gdy zmysły skończą (kontekst osoby idzie za nami). */
+  if (presetText === null && wymagaTranskrypcji(name, mime)) {
+    const item = { id, type: 'file', name, mime, size: buf.length, time: Date.now(), text: '', chunks: [], przetwarzanie: 'transkrypcja' };
+    U().kbItems.push(item);
+    saveKb();
+    (async () => {
+      const text = await extractKbText(name, mime, buf);
+      item.text = text;
+      item.chunks = await buildChunks(text);
+      delete item.przetwarzanie;
+      saveKb();
+      addEvent('baza-wiedzy', text ? `przepisano nagranie „${name}"` : `nie udało się przepisać nagrania „${name}"`);
+    })().catch((err) => {
+      delete item.przetwarzanie;
+      saveKb();
+      console.error(`Transkrypcja „${name}" nie powiodła się:`, err.message);
+    });
+    return item;
+  }
   const text = presetText !== null ? presetText : await extractKbText(name, mime, buf);
   const item = {
     id, type: 'file', name, mime, size: buf.length, time: Date.now(),
@@ -1464,7 +1495,7 @@ async function handleStatus(req, res) {
     ...Object.entries(ENDPOINTS).map(async ([name, ep]) => {
       try {
         const r = await fetch(`${ep.baseUrl}/models`, {
-          headers: authHeaders(ep),
+          headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
           signal: AbortSignal.timeout(5000),
         });
         results[name] = { online: r.ok, status: r.status };
@@ -1524,7 +1555,8 @@ async function proxySenses(req, res, targetPath, { json = false, search = '' } =
       method: 'POST',
       headers: { 'Content-Type': req.headers['content-type'] || (json ? 'application/json' : 'application/octet-stream') },
       body,
-      signal: AbortSignal.timeout(120000),
+      // 90 s: za Cloudflare 100 s bez odpowiedzi to strona 524 zamiast czytelnego błędu.
+      signal: AbortSignal.timeout(90000),
     });
   } catch (err) {
     // Adres domu (Tailscale) i polecenie startu — tylko dla właściciela.
@@ -1623,6 +1655,68 @@ const OCZEKUJACE = new Map();
    strumienia. Modele rozumujące potrafią myśleć długo, ale przysyłają wtedy
    `reasoning_content` — cisza 90 s to już zawieszenie. */
 const CISZA_MODELU_MS = Number(process.env.COSMOS_CISZA_MODELU_MS) || 90_000;
+/* Odmowa przyjęcia obrazu — po treści, bo kod bywa różny (400 w chmurze,
+   500 w Ollamie i llama.cpp bez --mmproj). */
+const ODMOWA_OBRAZU = /image|vision|multimodal|mmproj|content.*type/i;
+/* Modele, które myślą PO CICHU: gpt-5+/o* i Claude przez warstwę zgodną nie
+   przysyłają `reasoning_content`, więc po nagłówkach potrafią milczeć minutami
+   (Claude 5 myśli adaptacyjnie, na trudnym zadaniu długo). Dla nich osobny,
+   dłuższy limit — tylko do PIERWSZEJ treści. Za Cloudflare to bezpieczne, bo
+   przeglądarka dostaje puls co 25 s (lib/biegi.js); limit przed nagłówkami
+   zostaje 90 s, bo wtedy przeglądarka nie ma jeszcze czym oddychać. */
+const CISZA_MYSLENIA_MS = Number(process.env.COSMOS_CISZA_MYSLENIA_MS) || 300_000;
+const cichoMysli = (ep, model) => Boolean(ep.anthropic) || /^claude/i.test(model)
+  || /^(o\d|gpt-([5-9]|\d{2,}))/i.test(String(model).replace(/^openai\//, ''));
+
+/* Lokalny GPU za uśpionym Tailscale: każda wiadomość czekała ~11,6 s na
+   „fetch failed" (limit połączenia), a następna płaciła to samo. Po porażce
+   POŁĄCZENIA pamiętamy ją przez 30 s i odpowiadamy od razu, z przyczyną
+   rozpoznaną po kodzie błędu zamiast gołego „fetch failed". */
+const LOKALNY_BEZPIECZNIK_MS = Number(process.env.COSMOS_BEZPIECZNIK_LOKALNEGO_MS) || 30_000;
+let lokalnyNiedostepny = { do: 0, rodzaj: '' };
+
+function rodzajBleduPolaczenia(err) {
+  const kod = String(err?.cause?.code || err?.code || '');
+  if (/UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH/.test(kod)) return 'uspiony';
+  if (/ECONNREFUSED/.test(kod)) return 'odmowa';
+  if (/ENOTFOUND|EAI_AGAIN/.test(kod)) return 'dns';
+  return '';
+}
+
+function komunikatLokalnego(rodzaj, ep, err) {
+  // Adres domu właściciela i rady o Ollamie są dla niego, nie dla gościa.
+  if (!czyWlasciciel()) return 'Komputer właściciela z lokalnym modelem teraz nie odpowiada — spróbuj później albo wybierz chmurę.';
+  if (rodzaj === 'uspiony') {
+    return `Komputer domowy nie odpowiada (${ep.baseUrl}) — jest uśpiony, wyłączony albo poza Tailscale. `
+      + 'Obudź go albo przełącz się na Chmurę.';
+  }
+  if (rodzaj === 'odmowa') {
+    return `Komputer domowy odpowiada, ale lokalny model nie przyjmuje połączeń (${ep.baseUrl}). `
+      + 'Uruchom Ollamę (albo vLLM); Ollama musi słuchać w sieci: OLLAMA_HOST=0.0.0.0.';
+  }
+  if (rodzaj === 'dns') {
+    return `Nazwa komputera domowego się nie rozwiązuje (${ep.baseUrl}) — sprawdź MagicDNS w Tailscale albo wpisz adres 100.x.y.z w LOCAL_BASE_URL.`;
+  }
+  return `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err?.message || ''})`;
+}
+
+/** Błąd dostawcy w środku strumienia — PO odpowiedzi 200. Udokumentowany
+ *  u Anthropic („an error can occur after the API returns a 200"), znany też
+ *  z vLLM. Zwraca treść błędu albo ''. */
+function bladWStrumieniu(blok) {
+  for (const linia of String(blok).split('\n')) {
+    const m = linia.match(/^data:\s*(\{.*\})\s*$/);
+    if (!m) continue;
+    try {
+      const j = JSON.parse(m[1]);
+      if (j.choices) continue;
+      const e = j.error ?? (j.object === 'error' ? j : null);
+      if (!e) continue;
+      return typeof e === 'string' ? e : String(e.message || e.type || JSON.stringify(e)).slice(0, 300);
+    } catch { /* niepełny blok */ }
+  }
+  return '';
+}
 
 async function handleChat(req, res) {
   let payload;
@@ -1653,6 +1747,11 @@ async function handleChat(req, res) {
       error: 'Brak klucza API dla chmury NVIDIA. Ustaw NVIDIA_API_KEY w pliku .env ' +
              '(klucz wygenerujesz na https://build.nvidia.com).',
     });
+  }
+  if (payload.endpoint === 'local' && Date.now() < lokalnyNiedostepny.do) {
+    const za = Math.ceil((lokalnyNiedostepny.do - Date.now()) / 1000);
+    return sendJson(res, 502, { kod: 'lokalny-niedostepny',
+      error: `${komunikatLokalnego(lokalnyNiedostepny.rodzaj, ep)} (Sprawdzone przed chwilą — kolejna próba możliwa za ${za} s.)` });
   }
 
   // Kontekst: percepcja + narzędzia + pamięć + baza wiedzy — jako dodatkowe
@@ -1938,30 +2037,53 @@ async function handleChat(req, res) {
   try {
     // Parametry pod dostawcę, poprawki po odmowie 400, ponowienia przy
     // 429/503 — wszystko w lib/model.js, wspólne z funkcjami pomocniczymi.
-    upstream = await zapytajModel(ep, body, {
+    const wyslij = () => zapytajModel(ep, body, {
       signal: abort.signal,
       // Pomiar płynności ma zobaczyć kapryśny model takim, jaki jest.
       ponowienia: payload.pomiar === true ? 0 : 2,
     });
+    upstream = await wyslij();
+    /* Zdjęcie odrzucone, a model wizyjny JEST ustawiony — jedna próba z nim,
+       zamiast błędu. Nazw z Ollamy katalog nie zna, więc o ślepocie modelu
+       dowiadujemy się dopiero z odmowy — a Ollama i llama.cpp odmawiają
+       kodem 500, nie 400 („missing data required for image input"). */
+    if (!upstream.ok && hasImages && ep.visionModel && model !== ep.visionModel
+      && [400, 415, 422, 500].includes(upstream.status)) {
+      const odmowa = await upstream.clone().text().catch(() => '');
+      if (ODMOWA_OBRAZU.test(odmowa)) {
+        upstream.body?.cancel().catch(() => {});
+        swappedFrom = swappedFrom || model;
+        model = ep.visionModel;
+        body.model = model;
+        upstream = await wyslij();
+      }
+    }
   } catch (err) {
     if (biegId) OCZEKUJACE.delete(biegId);
     clearTimeout(straznik);
     if (cisza) {
-      return sendJson(res, 504, { error: `Model nie odpowiedział w ${Math.round(CISZA_MODELU_MS / 1000)} s [${ep.label} · ${model}]. Spróbuj ponownie albo wybierz inny model.` });
+      return sendJson(res, 504, { error: `Model nie odpowiedział w ${Math.round(CISZA_MODELU_MS / 1000)} s [${ep.label} · ${model}]. `
+        + (payload.endpoint === 'local'
+          /* Zimny start: Ollama po przerwie ładuje model do pamięci karty —
+             duży potrafi potrzebować ponad minuty. To nie awaria. */
+          ? 'Jeśli to pierwsze pytanie po przerwie, lokalny model mógł właśnie ładować się do pamięci karty — spróbuj ponownie za chwilę. '
+            + 'Na stałe pomaga OLLAMA_KEEP_ALIVE=24h na komputerze domowym.'
+          : 'Spróbuj ponownie albo wybierz inny model.') });
     }
     // Przerwane „Stopem" przed nagłówkami — domykamy odpowiedź, żeby nie wisiała.
     if (abort.signal.aborted) { if (!res.headersSent) res.writeHead(204); return res.end(); }
-    return sendJson(res, 502, {
-      error: payload.endpoint !== 'local'
-        ? `Nie udało się połączyć z ${ep.baseUrl}: ${err.message}`
-        // Adres domu właściciela i rada „sprawdź Ollamę" są dla niego, nie dla gościa.
-        : czyWlasciciel()
-          ? `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err.message})`
-          : 'Komputer właściciela z lokalnym modelem teraz nie odpowiada — spróbuj później albo wybierz chmurę.',
-    });
+    if (payload.endpoint === 'local') {
+      const rodzaj = rodzajBleduPolaczenia(err);
+      // Bezpiecznik tylko dla porażek, które kosztują czekanie (uśpiony, DNS) — odmowa przychodzi od razu.
+      if (rodzaj === 'uspiony' || rodzaj === 'dns') lokalnyNiedostepny = { do: Date.now() + LOKALNY_BEZPIECZNIK_MS, rodzaj };
+      return sendJson(res, 502, { kod: 'lokalny-niedostepny', error: komunikatLokalnego(rodzaj, ep, err) });
+    }
+    return sendJson(res, 502, { error: `Nie udało się połączyć z ${ep.baseUrl}: ${err.message}` });
   }
 
   if (biegId) OCZEKUJACE.delete(biegId);
+  // Połączenie się udało — komputer domowy żyje, bezpiecznik zdjęty.
+  if (payload.endpoint === 'local') lokalnyNiedostepny = { do: 0, rodzaj: '' };
   if (!upstream.ok) {
     clearTimeout(straznik);
     let detail = '';
@@ -1969,7 +2091,8 @@ async function handleChat(req, res) {
     let message = `Błąd modelu (HTTP ${upstream.status}).`;
     try {
       const parsed = JSON.parse(detail);
-      message = parsed?.error?.message || parsed?.error || parsed?.detail || parsed?.title || message;
+      // `message` na wierzchu — stary format vLLM ({"object":"error","message":…}); bez tego znikał.
+      message = parsed?.error?.message || parsed?.error || parsed?.message || parsed?.detail || parsed?.title || message;
       if (typeof message !== 'string') message = JSON.stringify(message).slice(0, 300);
     } catch {
       if (detail) message = `${message} ${detail.slice(0, 300)}`;
@@ -1977,19 +2100,26 @@ async function handleChat(req, res) {
     // Model spoza katalogu, który jednak nie przyjmuje obrazów, poznajemy dopiero
     // po odmowie dostawcy. „Błąd modelu (HTTP 400)” nic użytkownikowi nie mówi —
     // zamieniamy to na tę samą wskazówkę, co przy modelach znanych.
-    if (upstream.status === 400 && hasImages && /image|vision|multimodal|content.*type/i.test(detail)) {
+    if ([400, 415, 422, 500].includes(upstream.status) && hasImages && ODMOWA_OBRAZU.test(detail)) {
+      const zmienna = payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL';
       return sendJson(res, 400, {
-        error: `Model „${model}" odmówił przyjęcia zdjęcia.\n\n`
-          + 'Wybierz w Ustawieniach model oznaczony „widzi obrazy”, albo ustaw '
-          + `${payload.endpoint === 'local' ? 'LOCAL_VISION_MODEL' : 'NEMOTRON_VISION_MODEL'} `
-          + 'w .env — Cosmos skieruje wtedy same zdjęcia do modelu wizyjnego, '
-          + `a rozmowę zostawi wybranemu.\n\nOdpowiedź dostawcy: ${String(detail).slice(0, 200)}`,
+        error: ep.visionModel
+          // Model wizyjny był ustawiony i to on odmówił — „ustaw model wizyjny" byłoby kpiną.
+          ? `Model wizyjny „${model}" odmówił przyjęcia zdjęcia.\n\n`
+            + `Sprawdź w Ustawieniach („Sprawdź"), czy ${zmienna} naprawdę widzi obrazy — `
+            + `w Ollamie model wizyjny to np. qwen2.5vl albo llama3.2-vision.\n\nOdpowiedź dostawcy: ${String(detail).slice(0, 200)}`
+          : `Model „${model}" odmówił przyjęcia zdjęcia.\n\n`
+            + 'Wybierz w Ustawieniach model oznaczony „widzi obrazy”'
+            + (['cloud', 'local'].includes(payload.endpoint || 'cloud')
+              ? `, albo ustaw ${zmienna} w .env — Cosmos skieruje wtedy same zdjęcia do modelu wizyjnego, a rozmowę zostawi wybranemu`
+              : '')
+            + `.\n\nOdpowiedź dostawcy: ${String(detail).slice(0, 200)}`,
       });
     }
     // Bez tego widać sam komunikat dostawcy i nie wiadomo nawet, którą zakładkę
     // silnika obwiniać ani jaki identyfikator modelu poleciał w żądaniu.
     const where = `[${ep.label} · ${model}]`;
-    const hint = modelErrorHint(payload.endpoint, model, upstream.status);
+    const hint = modelErrorHint(payload.endpoint, model, upstream.status, { tresc: detail, baseUrl: ep.baseUrl });
     // Ten komunikat ląduje na ekranie, a stamtąd na zrzutach ekranu — dostawca
     // wpisuje w niego identyfikator konta, który nikomu nie jest potrzebny.
     return sendJson(res, upstream.status, { error: `${where} ${scrubSecrets(message)}${hint}` });
@@ -2028,6 +2158,7 @@ async function handleChat(req, res) {
     model,
     silnik: payload.endpoint,
     podmienionyZ: swappedFrom,
+    spozaListy: modelSpozaListy,
   });
   bieg.przerwij = () => abort.abort();
   biegi_.podepnij(biegId, 0, res);
@@ -2042,14 +2173,30 @@ async function handleChat(req, res) {
        który po prostu się urwał, wyglądał dotąd jak pełna odpowiedź — urwane
        zdanie lądowało w rozmowie jako gotowe. */
     let koniecWidziany = false;
+    let bladDostawcy = '';
+    let bylaTresc = false;
     const zjedz = (blok) => {
       if (!blok.trim()) return;
+      /* Błąd po 200 szedł do przeglądarki jak zwykły blok, a ona go nie
+         rozumiała — człowiek widział „połączenie się zerwało" zamiast
+         „dostawca przeciążony". Teraz zamyka bieg z nazwaną przyczyną. */
+      const blad = bladWStrumieniu(blok);
+      if (blad) { bladDostawcy = blad; return; }
       if (/^data:\s*\[DONE\]/m.test(blok) || /"finish_reason"\s*:\s*"[a-z_]+"/.test(blok)) koniecWidziany = true;
+      if (!bylaTresc && /"(content|reasoning_content|reasoning)"\s*:\s*"[^"]/.test(blok)) bylaTresc = true;
       biegi_.dopisz(bieg, blok);
     };
+    // Po nagłówkach, przed pierwszą treścią: dłuższy limit dla modeli myślących po cichu.
+    const czuwaj = () => {
+      if (bylaTresc || !cichoMysli(ep, model)) return pilnujCiszy();
+      clearTimeout(straznik);
+      straznik = setTimeout(() => { cisza = true; abort.abort(); }, CISZA_MYSLENIA_MS);
+      if (straznik.unref) straznik.unref();
+    };
+    czuwaj();
     try {
       for await (const chunk of upstream.body) {
-        pilnujCiszy();
+        czuwaj();
         // llama-cpp-python i część serwerów rozdziela ramki „\r\n\r\n" —
         // bez ujednolicenia cała odpowiedź przychodziła jednym kawałkiem na końcu.
         ogon = (ogon + dekoder.decode(chunk, { stream: true })).replace(/\r\n|\r(?!$)/g, '\n');
@@ -2061,11 +2208,15 @@ async function handleChat(req, res) {
       }
       clearTimeout(straznik);
       zjedz(ogon.replace(/\r$/, ''));
-      biegi_.zakoncz(bieg, koniecWidziany ? '' : 'Model urwał odpowiedź w połowie — połączenie z dostawcą się zerwało. Spróbuj ponownie.');
+      biegi_.zakoncz(bieg, bladDostawcy
+        ? `Dostawca przerwał odpowiedź: ${scrubSecrets(bladDostawcy)}${modelErrorHint(payload.endpoint, model, 0, { tresc: bladDostawcy, baseUrl: ep.baseUrl })}`
+        : koniecWidziany ? '' : 'Model urwał odpowiedź w połowie — połączenie z dostawcą się zerwało. Spróbuj ponownie.');
     } catch (err) {
       clearTimeout(straznik);
       const powod = cisza
-        ? `Model zamilkł na ${Math.round(CISZA_MODELU_MS / 1000)} s w trakcie odpowiedzi. Spróbuj ponownie.`
+        ? (bylaTresc || !cichoMysli(ep, model)
+          ? `Model zamilkł na ${Math.round(CISZA_MODELU_MS / 1000)} s w trakcie odpowiedzi. Spróbuj ponownie.`
+          : `Model myślał ponad ${Math.round(CISZA_MYSLENIA_MS / 60000)} min i nie zaczął odpowiadać. Spróbuj ponownie albo zadaj prostsze pytanie.`)
         : abort.signal.aborted ? ''
           : /terminated|socket|ECONNRESET|other side closed/i.test(err.message || '')
             ? 'Połączenie z dostawcą modelu zerwało się w trakcie odpowiedzi. Spróbuj ponownie.'
@@ -2102,8 +2253,12 @@ function scrubSecrets(msg) {
 }
 
 const PROBE_TIMEOUT_MS = 75000;
+/* Całe sprawdzenie modelu (rozmowa + obraz, z ponowieniem) musi się zmieścić
+   przed limitem Cloudflare (100 s bez odpowiedzi → strona 524). Wcześniej
+   dwie sondy po 75 s z ponowieniem potrafiły trwać 300 s. */
+const BUDZET_SPRAWDZENIA_MS = 88_000;
 
-async function probeOnce(ep, model, withImage) {
+async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
   const content = withImage
     ? [{ type: 'image_url', image_url: { url: PROBE_PNG } }, { type: 'text', text: 'hi' }]
     : 'hi';
@@ -2112,7 +2267,7 @@ async function probeOnce(ep, model, withImage) {
       method: 'POST',
       headers: authHeaders(ep),
       body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false }),
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(czasMs),
     });
     if (r.ok) return { ok: true };
     let detail = '';
@@ -2120,7 +2275,7 @@ async function probeOnce(ep, model, withImage) {
     let msg = `HTTP ${r.status}`;
     try {
       const j = JSON.parse(detail);
-      msg = j?.error?.message || j?.detail || j?.title || msg;
+      msg = j?.error?.message || j?.message || j?.detail || j?.title || msg;
       if (typeof msg !== 'string') msg = JSON.stringify(msg);
     } catch { if (detail) msg = detail.slice(0, 200); }
     return { ok: false, status: r.status, error: scrubSecrets(msg) };
@@ -2137,10 +2292,12 @@ async function probeOnce(ep, model, withImage) {
  *  Pierwsze żądanie do modelu, którego dostawca nie trzyma rozgrzanego,
  *  potrafi trwać dłużej niż każde następne — jedna odmowa to za mało, żeby
  *  napisać komuś „ten model nie działa". */
-async function probeModel(ep, model, withImage) {
-  const first = await probeOnce(ep, model, withImage);
-  if (first.ok || !first.timeout) return first;
-  const second = await probeOnce(ep, model, withImage);
+async function probeModel(ep, model, withImage, doKiedy = Date.now() + BUDZET_SPRAWDZENIA_MS) {
+  const zostalo = () => doKiedy - Date.now();
+  if (zostalo() < 3000) return { ok: false, status: 0, timeout: true, error: 'Zabrakło czasu na to sprawdzenie.' };
+  const first = await probeOnce(ep, model, withImage, Math.min(PROBE_TIMEOUT_MS, zostalo()));
+  if (first.ok || !first.timeout || zostalo() < 5000) return first;
+  const second = await probeOnce(ep, model, withImage, Math.min(PROBE_TIMEOUT_MS, zostalo()));
   return second.timeout ? { ...second, timeout: true } : second;
 }
 
@@ -2175,10 +2332,11 @@ async function handleModelCheck(req, res) {
     });
   }
 
-  const text = await probeModel(ep, model, false);
+  const doKiedy = Date.now() + BUDZET_SPRAWDZENIA_MS;
+  const text = await probeModel(ep, model, false, doKiedy);
   // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej
   // zdublowalibyśmy ten sam błąd dostępu i niepotrzebnie obciążyli limit.
-  const vision = text.ok ? await probeModel(ep, model, true) : { ok: false, skipped: true };
+  const vision = text.ok ? await probeModel(ep, model, true, doKiedy) : { ok: false, skipped: true };
 
   return sendJson(res, 200, {
     model,
@@ -2193,7 +2351,7 @@ async function handleModelCheck(req, res) {
       : (text.timeout
         ? 'Model nie odpowiedział na czas — u dostawcy wstaje z zimnego startu. '
           + 'Spróbuj go sprawdzić pojedynczo przyciskiem „Sprawdź”.'
-        : modelErrorHint(data.endpoint, model, text.status).trim()),
+        : modelErrorHint(data.endpoint, model, text.status, { tresc: text.error, baseUrl: ep.baseUrl }).trim()),
     bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
   });
 }
@@ -2207,7 +2365,7 @@ async function handleModels(req, res) {
   const ep = pickEndpoint(url.searchParams.get('endpoint'));
   try {
     const upstream = await fetch(`${ep.baseUrl}/models`, {
-      headers: authHeaders(ep),
+      headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
       signal: AbortSignal.timeout(15000),
     });
     const data = await upstream.json();
@@ -2744,19 +2902,38 @@ function start(port = PORT) {
    Bez tego `systemctl restart` w środku indeksowania albo rozpoznawania
    treści wyrzucałby do kosza całą pracę od ostatniego zapisu. Timer zapisu
    jest `unref`-owany, więc sam z siebie przy wyjściu nie zdąży. */
+/* Restart w trakcie odpowiedzi kasował ją w całości: proces kończył się
+   w 10 ms, bieg znikał, a rozmowa zostawała z samym pytaniem. Teraz serwer
+   przestaje przyjmować nowe połączenia, daje trwającym odpowiedziom do 20 s
+   na dokończenie (systemd czeka 30 s — TimeoutStopSec), a resztę zapisuje
+   w rozmowach tak, jak ją zastał. Drugi sygnał (Ctrl+C dwa razy) — od razu. */
+const CZAS_NA_DOKONCZENIE_MS = Number(process.env.COSMOS_CZAS_NA_DOKONCZENIE_MS) || 20_000;
+let zamykanie = false;
+
 function zamknijPorzadnie(sygnal) {
   process.on(sygnal, () => {
+    if (zamykanie) process.exit(0);
+    zamykanie = true;
     // Liczniki wiadomości i „ostatnio widziany" zapisują się z opóźnieniem (lib/konta.js).
     konta.zapiszZalegle();
-    /* Każda osoba ma własne archiwum, więc zapisujemy wszystkie, które są
-       w pamięci — w imieniu ich właścicieli. */
-    const zapisy = zaladowani().map((id) => {
-      const u = konta.znajdz(id);
-      if (!u) return Promise.resolve();
-      return wKontekscie(u, () => archiwum.zapisz())
-        .catch((err) => console.error(`Nie udało się dopisać archiwum (${u.login}):`, err.message));
-    });
-    Promise.all(zapisy).finally(() => process.exit(0));
+    server.close();
+    const koniec = Date.now() + CZAS_NA_DOKONCZENIE_MS;
+    const dokonczone = async () => {
+      if (biegi_.aktywne()) console.log(`  Zamykanie: czekam na ${biegi_.aktywne()} trwające odpowiedzi (do ${CZAS_NA_DOKONCZENIE_MS / 1000} s)…`);
+      while (biegi_.aktywne() && Date.now() < koniec) await new Promise((r) => setTimeout(r, 250));
+      biegi_.zapiszWszystkoTeraz('Serwer uruchamiał się ponownie i przerwał odpowiedź w tym miejscu. Zapytaj jeszcze raz, żeby dostać całość.');
+    };
+    dokonczone().then(() => {
+      /* Każda osoba ma własne archiwum, więc zapisujemy wszystkie, które są
+         w pamięci — w imieniu ich właścicieli. */
+      const zapisy = zaladowani().map((id) => {
+        const u = konta.znajdz(id);
+        if (!u) return Promise.resolve();
+        return wKontekscie(u, () => archiwum.zapisz())
+          .catch((err) => console.error(`Nie udało się dopisać archiwum (${u.login}):`, err.message));
+      });
+      return Promise.all(zapisy);
+    }).finally(() => process.exit(0));
   });
 }
 

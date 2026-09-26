@@ -8,7 +8,16 @@
  *   3. drugie pytanie do tego samego modelu idzie od razu poprawne (bez odmowy),
  *   4. 429 z Retry-After → ponowienie i odpowiedź,
  *   5. 400 z innego powodu → oddane wołającemu bez pętli,
- *   6. llmComplete nie oddaje toku myślenia jako odpowiedzi. */
+ *   6. llmComplete nie oddaje toku myślenia jako odpowiedzi,
+ *   7. Claude dostaje od razu to, co przyjmuje: bez top_p/top_k, a rodzina 5
+ *      i Opus 4.7/4.8 — bez temperatury (dokumentacja Anthropic; treści tej
+ *      odmowy nie da się przewidzieć, więc zgadywanie „z odmowy" nie wystarczy),
+ *   8. sufit 16 000 tylko dla modeli myślących — Haiku 4.5 dostaje to, co ustawiono,
+ *   9. gpt-6 to model rozumujący; API OpenAI zawsze max_completion_tokens,
+ *  10. Claude: `chat/completions` z samym Bearer, natywne /models z x-api-key,
+ *  11. podpowiedź czyta TREŚĆ odmowy: brak środków, za długi kontekst, przeciążenie,
+ *      a „ollama pull" tylko dla Ollamy,
+ *  12. `<think>` w treści odpowiedzi pomocniczej nie trafia do człowieka. */
 const http = require('node:http');
 
 const problemy = [];
@@ -28,6 +37,10 @@ const atrapa = http.createServer((req, res) => {
       if (b.temperature !== undefined) return odmow("Unsupported value: 'temperature' does not support 0.7 with this model.");
     }
     if (b.model === 'zly') return odmow('The model `zly` does not exist.');
+    if (b.model === 'mysli-w-tresci') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ choices: [{ message: { content: '<think>The user asks in Polish, let me think.</think>\n\nKrótkie streszczenie.' }, finish_reason: 'stop' }] }));
+    }
     if (b.model === 'tloczno' && limit429-- > 0) { res.writeHead(429, { 'Retry-After': '0' }); return res.end('{}'); }
     if (b.model === 'mysli') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -75,6 +88,46 @@ const atrapa = http.createServer((req, res) => {
   let blad = null;
   try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli' }); } catch (e) { blad = e; }
   ok(blad && !/think in English/.test(blad.message), 'llmComplete nie oddaje toku myślenia jako odpowiedzi');
+
+  // --- 7–9. Parametry pod dostawcę bez straconego żądania
+  const { parametryDla } = require('../../lib/model.js');
+  const claudeEp = { baseUrl: 'https://api.anthropic.com/v1', anthropic: true, apiKey: 'k' };
+  const zClaude = (model) => parametryDla(claudeEp, { model, temperature: 0.6, top_p: 0.95, top_k: 40, max_tokens: 2048 });
+  for (const m of ['claude-sonnet-5', 'claude-opus-5-5', 'claude-opus-4-8', 'claude-fable-5-1']) {
+    const b = zClaude(m);
+    ok(b.temperature === undefined && b.top_p === undefined && b.top_k === undefined, `${m}: bez samplingu (${JSON.stringify(b)})`);
+  }
+  const haiku = zClaude('claude-haiku-4-5-20251001');
+  ok(haiku.temperature === 0.6 && haiku.top_p === undefined, `Haiku 4.5: temperatura zostaje, top_p nie (razem → 400)`);
+  ok(haiku.max_tokens === 2048, `Haiku 4.5 nie myśli sam — limit bez podwyższenia (${haiku.max_tokens})`);
+  ok(zClaude('claude-sonnet-5').max_tokens >= 16000, 'Sonnet 5 myśli sam — sufit mieści myślenie');
+  const gpt6 = parametryDla({ baseUrl: 'https://api.openai.com/v1' }, { model: 'gpt-6-luna', temperature: 0.6, top_p: 0.9, max_tokens: 700 });
+  ok(gpt6.max_completion_tokens >= 16000 && gpt6.max_tokens === undefined && gpt6.temperature === undefined,
+    `gpt-6: rozumujący od pierwszego żądania (${JSON.stringify(gpt6)})`);
+  const gpt4o = parametryDla({ baseUrl: 'https://api.openai.com/v1' }, { model: 'gpt-4o-mini', temperature: 0.6, max_tokens: 700 });
+  ok(gpt4o.max_completion_tokens === 700 && gpt4o.temperature === 0.6, 'API OpenAI: max_completion_tokens także dla gpt-4o');
+  const vllm = parametryDla({ baseUrl: 'http://100.64.0.7:8000/v1' }, { model: 'gpt-4o-mini', max_tokens: 700 });
+  ok(vllm.max_tokens === 700, 'inny serwer zgodny z OpenAI: max_tokens bez zmian');
+
+  // --- 10. Nagłówki Claude'a
+  const { authHeaders, modelErrorHint } = require('../../lib/rdzen.js');
+  const czat = authHeaders(claudeEp);
+  const natywne = authHeaders(claudeEp, { natywne: true });
+  ok(czat.Authorization === 'Bearer k' && !czat['x-api-key'], 'Claude, chat/completions: sam Bearer (jak SDK OpenAI)');
+  ok(natywne['x-api-key'] === 'k' && natywne['anthropic-version'] && !natywne.Authorization, 'Claude, natywne /models: x-api-key + anthropic-version');
+
+  // --- 11. Podpowiedzi z treści odmowy
+  const quota = modelErrorHint('openai', 'gpt-4o', 429, { tresc: 'You exceeded your current quota, please check your plan and billing details.' });
+  ok(/środki/.test(quota) && !/za chwilę/.test(quota), 'brak środków: „doładuj", nie „spróbuj za chwilę"');
+  ok(/za długa/.test(modelErrorHint('cloud', 'm', 400, { tresc: "This model's maximum context length is 4096 tokens." })), 'za długi kontekst: rada, co zrobić');
+  ok(/przeciążony/.test(modelErrorHint('claude', 'm', 529)), '529: dostawca przeciążony');
+  ok(/ollama pull/.test(modelErrorHint('local', 'qwen3:8b', 404, { baseUrl: 'http://100.64.0.7:11434/v1' })), '404 w Ollamie: ollama pull');
+  const vllm404 = modelErrorHint('local', 'Qwen/Qwen3-8B', 404, { baseUrl: 'http://100.64.0.7:8000/v1', tresc: 'The model `x` does not exist.' });
+  ok(!/ollama pull/.test(vllm404) && /served-model-name/.test(vllm404), '404 w vLLM: bez fałszywego tropu „ollama pull"');
+
+  // --- 12. <think> w odpowiedzi pomocniczej
+  const streszczenie = await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-w-tresci' });
+  ok(streszczenie === 'Krótkie streszczenie.', `streszczenie bez <think> (${JSON.stringify(streszczenie)})`);
 
   atrapa.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nPARAMETRY MODELI OK');

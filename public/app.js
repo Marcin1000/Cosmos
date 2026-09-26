@@ -1915,7 +1915,12 @@ async function streamOnce(conv, opcje = {}) {
        którą nikt nie przyszedł. Zgadywanie po tym, czy gniazdo było otwarte,
        już próbowaliśmy — myliło się w obie strony. */
     potwierdzOdbior(biegId);
-    if (bladBiegu) throw new Error(bladBiegu);
+    if (bladBiegu) {
+      // Napisany już fragment idzie razem z błędem — wyżej trafi do rozmowy.
+      const e = new Error(bladBiegu);
+      e.partial = rozdzielMyslenie(acc).tresc;
+      throw e;
+    }
     // `<think>` w treści to myślenie, nie odpowiedź — i nie wolno z niego
     // wyławiać znaczników narzędzi.
     {
@@ -1935,9 +1940,8 @@ async function streamOnce(conv, opcje = {}) {
   } catch (err) {
     clearInterval(waitTimer);
     zapamietajBieg(null);
-    if (err.name === 'AbortError') {
-      err.partial = acc;
-    }
+    // Przerwanie i zerwanie też niosą to, co już przyszło.
+    if (err.partial === undefined) err.partial = err.name === 'AbortError' ? acc : rozdzielMyslenie(acc).tresc;
     throw err;
   }
 }
@@ -2185,7 +2189,14 @@ async function domknijOdpowiedz(conv, surowe) {
   }
   const samoMyslenie = !tresc && Boolean(lastReasoning);
   if (samoMyslenie) lastThink = lastReasoning;
-  const finalText = samoMyslenie ? t('budgetSpentOnThinking') : (tresc || t('emptyReply'));
+  /* Pusto i „length", a toku myślenia brak: gpt-5 czy Claude 5 myślą PO CICHU
+     (dostawca go nie oddaje) i zużyły cały budżet. „Pusta odpowiedź modelu"
+     wyglądała na usterkę, a to kwestia jednego ustawienia. */
+  const budzetPoCichu = !tresc && !lastReasoning && lastFinish === 'length';
+  const finalText = samoMyslenie ? t('budgetSpentOnThinking')
+    : budzetPoCichu ? t('budgetSpentSilently') : (tresc || t('emptyReply'));
+  // Dostawca uciął odpowiedź filtrem treści — wygląda jak zwykła, więc mówimy to wprost.
+  if (lastFinish === 'content_filter') lastModelNote = [lastModelNote, t('model.filtr')].filter(Boolean).join(' ');
 
   if (akcja) {
     const widoczne = tresc;
@@ -2352,6 +2363,11 @@ async function runGeneration(conv, podpiecie = null) {
         saveConversations();
       }
     } else {
+      /* Błąd w połowie odpowiedzi (dostawca przeciążony, zerwane połączenie):
+         napisany fragment zostaje, a pod nim — co się stało. Dawniej znikał
+         razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
+      const czesc = stripSearchMarker(err.partial || '');
+      if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true });
       saveConversations();
       if (voiceMode) finalText = t('voice.errReply');
@@ -4151,7 +4167,8 @@ async function loadKbList() {
       const bits = [];
       if (item.size) bits.push(fmtSize(item.size));
       bits.push(new Date(item.time).toLocaleDateString(getLang()));
-      bits.push(item.textChars ? `tekst: ${item.textChars} zn.` : 'bez tekstu');
+      bits.push(item.przetwarzanie ? t('kb.wTle')
+        : item.textChars ? t('kb.chars', { n: item.textChars }) : t('kb.noText'));
       meta.textContent = bits.join(' · ');
       meta.title = item.preview || '';
       main.append(name, meta);
