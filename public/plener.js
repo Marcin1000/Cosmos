@@ -149,8 +149,7 @@ function utworzPlener(z) {
     // Faza przychodzi z serwera po polsku; w angielskim interfejsie tłumaczymy.
     const faza = t(`faza.${d.slonce.faza}`);
     const fazaTekst = faza.startsWith('faza.') ? d.slonce.faza : faza;
-    // W Plenerze fazę pokazuje karta nieba, więc tu sama wysokość (słowami).
-    czesci.push(pre !== 'fp' ? `${fazaTekst}, ${slonce}` : slonce);
+    czesci.push(`${fazaTekst}, ${slonce}`);
     // Wnętrze: nastawy liczone dla światła lamp, nie Słońca (lib/plener-trasy.js).
     if (d.wnetrze) czesci.push(t('plan.zPomiaru'));
     // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy – przy wyborze

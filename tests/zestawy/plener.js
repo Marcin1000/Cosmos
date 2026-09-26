@@ -143,7 +143,7 @@ if (!maPrzegladarke()) {
   if (faza(dzien.swiatlo) === faza(wieczor.swiatlo)) {
     fail.push('rano i wieczorem to samo światło – podana godzina nie dotarła do serwera');
   }
-  if (!/wysoko|dzień|południe|złot|niebiesk|zmierzch|zachod|noc/i.test(dzien.swiatlo)) {
+  if (!/wysoko|dzień|południe|złot|niebiesk|zmierzch|zachod|noc|ostre|miękkie/i.test(dzien.swiatlo)) {
     fail.push(`plan nie nazwał fazy światła: „${dzien.swiatlo}"`);
   }
 
