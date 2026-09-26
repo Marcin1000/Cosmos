@@ -19,7 +19,7 @@
     navAria: 'Sections',
     stopkaAria: 'Footer',
     'nav.hybryda': 'Hybrid',
-    'nav.plener': 'Planner',
+    'nav.plener': 'Field',
     'nav.pamiec': 'Memory',
     'nav.glos': 'Voice',
     'nav.prywatnosc': 'Privacy',
@@ -30,7 +30,7 @@
     'hero.h': 'One thread. <em>Every engine.</em>',
     'hero.lead': 'Cosmos runs one conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI. Switch engines mid-thread and nothing resets – same memory, same tools, same context.',
     'hero.zobacz': 'See how it works',
-    'hero.uwaga': 'Invitation-only. Accounts are created by the instance administrator.',
+    'hero.uwaga': 'Invitation-only. The administrator sends the invites.',
     'czat.aria': 'Example conversation: one question, four engines answering in turn within the same thread',
     'czat.status': 'one thread',
     'czat.przelacznik': 'Switch engines mid-conversation',
@@ -58,7 +58,7 @@
     'hyb.5.h': 'Model choice',
     'hyb.5.p': 'No single provider wins at everything. Reasoning, vision, long context and speech each have a different winner this month – so switching is one click.',
     'pl.et': 'Shoot planner',
-    'pl.h': 'It does the math.',
+    'pl.h': 'It doesn’t guess. It calculates.',
     'pl.lead': 'Instead of describing light, Cosmos computes it: sun position from ephemerides, an hourly forecast, the exposure. Settings stay inside the kit you actually own – suggesting f/2.8 to someone with f/4 glass is worse than no suggestion at all.',
     'pl.c1': 'Sun ephemerides: sunrise, sunset, golden and blue hour',
     'pl.c2': 'Hour-by-hour weather and cloud cover',
@@ -91,14 +91,14 @@
     'pam.k4.h': 'Works without the extra services too',
     'pam.k4.p': 'If the embedding service is down, recall falls back to keywords and keeps working.',
     'glos.et': 'Voice & camera',
-    'glos.h': 'Say “Hey Cosmos” and keep talking.',
-    'glos.lead': 'Voice mode with a wake word, a camera that sees what you’re holding, a depth sensor. Each has a fallback, so losing one service never takes the whole thing down. Listening for the wake word stays at home: only what you deliberately say to Cosmos goes to the cloud.',
-    'glos.ty': 'Hey Cosmos, what am I holding?',
+    'glos.h': 'Say “Hey, Cosmos”, or just tap and talk.',
+    'glos.lead': 'Voice mode, a camera that sees what you’re holding, a depth sensor. Each has a fallback, so losing one service never takes the whole thing down. While the home computer is on, listening for the wake word stays at home and only what you deliberately say to Cosmos goes to the cloud.',
+    'glos.ty': 'Hey, Cosmos, what am I holding?',
     'glos.on': 'A 24–105 lens. The cap’s still on.',
     'glos.z1': 'your own speech server, then OpenAI',
     'glos.z2': 'OpenAI, Piper, then the system voice',
     'glos.z3': 'keyword search',
-    'glos.android': 'Chrome on Android ends listening after every sentence and restarts on its own. Cosmos filters out the repeats, and when the restarts pile up it switches to push-to-talk.',
+    'glos.android': 'Chrome on Android can’t keep listening continuously, so Cosmos goes straight to tap-to-talk instead of chiming the microphone every few seconds.',
     'ciag.et': 'Continuity',
     'ciag.h': 'Lock your phone. The answer keeps going.',
     'ciag.lead': 'Answers are generated on the server; the browser only attaches to them. Screen lock, a tunnel, Wi-Fi handing over to LTE – when you’re back, you rejoin the same stream right where it broke off.',
@@ -111,7 +111,7 @@
     'ciag.l4': 'client back – rejoins the same reply',
     'pryw.et': 'Privacy & accounts',
     'pryw.h': 'Invitation-only, isolated by design.',
-    'pryw.lead': 'Accounts are created by the instance administrator. Every account has its own conversations, memory, profile and knowledge base. The admin panel shows accounts, last visits and message counts – not content, because the app doesn’t hand it over. Your data lives on the server Cosmos runs on. A conversation with a cloud engine is also seen by that engine’s provider; with a local model nothing leaves the house.',
+    'pryw.lead': 'Invites come from the administrator. Every account has its own conversations, memory, profile and knowledge base. The admin panel shows accounts, last visits and message counts – not content, because the app doesn’t hand it over. Your data lives on the server Cosmos runs on. A conversation with a cloud engine is also seen by that engine’s provider; with a local model nothing leaves the house.',
     'pryw.c1': 'Engines are granted by the administrator – or you add your own API key and the provider bills you directly',
     'pryw.c2': 'Passwords stored as scrypt hashes; sessions stored only as hashes',
     'pryw.c3': 'If code can’t tell whose request it is, it fails instead of falling back to a default',
@@ -142,24 +142,21 @@
     'pm.f4.h': 'tool rounds per turn',
     'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
     'cta.h': 'Got an invitation? Your Cosmos is ready.',
-    'cta.p': 'Open the link from your invitation and set a login and password in a minute. Already have an account? Sign in. No invitation? Run your own Cosmos – the code is open.',
+    'cta.p': 'Open the link from your invitation and set a login and password in a minute. Already have an account? Sign in. No invitation? Run your own Cosmos: the code is public, for non-commercial use.',
     'cta.kod': 'Run your own Cosmos',
     'stopka.opis': 'A personal, hybrid AI system.',
     'stopka.kod': 'Source code (non-commercial use)',
   };
 
-  const META = {
-    pl: {
-      adres: 'https://cosmosai.live/',
-      title: 'Cosmos – jedna rozmowa, każdy model',
-      opis: 'Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat – liczy.',
-    },
-    en: {
-      adres: 'https://cosmosai.live/?lang=en',
-      title: 'Cosmos – one thread, every engine',
-      opis: 'Cosmos is a personal, hybrid AI system. One conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI – and instead of describing the world, it does the math.',
-    },
-  };
+  /* Głowa dokumentu (tytuł, opis, canonical, og:*): obie wersje stoją w index.html
+     jako treść + data-en. Pod /?lang=en serwer podał już angielską, a polską
+     odłożył do data-pl (lib/statyka.js) – więc bierzemy obie z atrybutów,
+     a brakującą z bieżącej wartości. */
+  const GLOWA = $$('head [data-en], head [data-pl]').map((el) => {
+    const atr = el.tagName === 'META' ? 'content' : el.tagName === 'LINK' ? 'href' : null;
+    const teraz = atr ? el.getAttribute(atr) : el.textContent;
+    return { el, atr, pl: el.dataset.pl ?? teraz, en: el.dataset.en ?? teraz };
+  });
 
   /* Polski oryginał zbieramy z dokumentu, zanim cokolwiek podmienimy –
      jedno źródło prawdy, bez drugiej kopii tekstów w skrypcie. */
@@ -203,10 +200,10 @@
     });
     $$('[data-t-aria]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.tAria)));
     $$('[data-jezyk]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.jezyk === jezyk)));
-    document.title = META[jezyk].title;
-    $('meta[name="description"]').setAttribute('content', META[jezyk].opis);
-    $('link[rel="canonical"]').setAttribute('href', META[jezyk].adres);
-    $('meta[property="og:url"]').setAttribute('content', META[jezyk].adres);
+    GLOWA.forEach(({ el, atr, pl, en }) => {
+      const w = jezyk === 'en' ? en : pl;
+      if (atr) el.setAttribute(atr, w); else el.textContent = w;
+    });
     rozbijNaSlowa();
     formatujLiczby();
     swiatlo = null;
@@ -227,8 +224,27 @@
       history.replaceState(history.state, '', u.pathname + u.search + u.hash);
     } catch (e) { /* bez zmiany adresu */ }
     schowajPodpowiedz();
-    if (document.startViewTransition && !ruchOgraniczony) document.startViewTransition(zastosujJezyk);
-    else zastosujJezyk();
+    if (document.startViewTransition && !ruchOgraniczony) document.startViewTransition(zastosujWMiejscu);
+    else zastosujWMiejscu();
+  }
+
+  /* Podmiana tekstów zmienia wysokość wszystkiego nad widokiem (inne długości
+     zdań), a węzeł, którego przeglądarka trzymała się przy przewijaniu, znika
+     razem ze starym innerHTML. Bez korekty człowiek czytający Pamięć lądował
+     430 px niżej, na końcu Pleneru. Trzymamy się pierwszego bloku tekstu, który
+     jest w widoku pod nawigacją (sam element zostaje, zmienia się tylko jego
+     treść), i po podmianie wracamy na jego wysokość. */
+  function zastosujWMiejscu() {
+    const podNawigacja = nav.getBoundingClientRect().bottom;
+    const kotwica = scrollY > 0
+      ? $$('main h2, main h3, main p, main li, main dt').find((e) => e.getBoundingClientRect().bottom > podNawigacja)
+      : null;
+    const przed = kotwica ? kotwica.getBoundingClientRect().top : 0;
+    zastosujJezyk();
+    if (kotwica) {
+      const roznica = kotwica.getBoundingClientRect().top - przed;
+      if (Math.abs(roznica) >= 1) scrollBy({ top: roznica, behavior: 'instant' });
+    }
   }
 
   $$('[data-jezyk]').forEach((b) => b.addEventListener('click', () => zmienJezyk(b.dataset.jezyk)));
@@ -303,27 +319,31 @@
   };
   const KOLEJNOSC = ['cloud', 'local', 'claude', 'openai'];
 
+  /* Każdy silnik ma własną odpowiedź – tekst zależy od tego, KTO odpowiada,
+     a nie od numeru kroku. Dawniej kliknięty OpenAI dostawał zdanie z kolejki,
+     np. „Przejrzane lokalnie – nic nie wyszło z komputera”, czyli demo przeczyło
+     obietnicy prywatności modelu lokalnego stojącej obok. */
   const ROZMOWA = {
     pl: {
       /* Te same zdania stoją w index.html (duch i pierwsza odpowiedź) –
          zmieniając je, zmień oba miejsca. Liczby: 2 października nad Morskim
          Okiem wg lib/slonce.js i lib/ekspozycja.js, jak w Plenerze niżej. */
       pyt: 'Jutro świt w\u00A0górach. Jakie nastawy przy 24–105 f/4?',
-      kroki: [
-        'Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz – f/4 to Twoje maksimum.',
-        'W archiwum masz 212 zdjęć z\u00A0tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie – nic nie wyszło z\u00A0komputera.',
-        'Kadr: kamienie na pierwszym planie, horyzont w\u00A0górnej tercji. O\u00A07:00 f/8, 1/60 s, ISO 100 – mieści się w\u00A0Twoim sprzęcie.',
-        'Zapisać to jako plan na jutro? Nic nie trafi do pamięci bez Twojej zgody.',
-      ],
+      odp: {
+        cloud: 'Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz – f/4 to Twoje maksimum.',
+        local: 'W archiwum masz 212 zdjęć z\u00A0tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie – nic nie wyszło z\u00A0komputera.',
+        claude: 'Kadr: kamienie na pierwszym planie, horyzont w\u00A0górnej tercji. O\u00A07:00 f/8, 1/60 s, ISO 100 – mieści się w\u00A0Twoim sprzęcie.',
+        openai: 'Zapisać to jako plan na jutro? Nic nie trafi do pamięci bez Twojej zgody.',
+      },
     },
     en: {
       pyt: 'Mountains at dawn tomorrow. Settings for a 24–105 f/4?',
-      kroki: [
-        'Golden hour runs 6:40–7:22, sun rising at 94°. I’m planning around the lens you own – f/4 is as wide as it goes.',
-        'Your archive has 212 frames from this spot; the best are from October at 6:55. Reviewed locally – nothing left the machine.',
-        'Frame: rocks in the foreground, horizon on the upper third. At 7:00, f/8, 1/60 s, ISO 100 – all within your kit.',
-        'Save this as tomorrow’s plan? Nothing goes into memory until you approve it.',
-      ],
+      odp: {
+        cloud: 'Golden hour runs 6:40–7:22, sun rising at 94°. I’m planning around the lens you own – f/4 is as wide as it goes.',
+        local: 'Your archive has 212 frames from this spot; the best are from October at 6:55. Reviewed locally – nothing left the machine.',
+        claude: 'Frame: rocks in the foreground, horizon on the upper third. At 7:00, f/8, 1/60 s, ISO 100 – all within your kit.',
+        openai: 'Save this as tomorrow’s plan? Nothing goes into memory until you approve it.',
+      },
     },
   };
 
@@ -334,12 +354,13 @@
     const pillTekst = $('#pill-tekst');
     const przyciski = $$('[data-silnik]');
     const przelacznik = $('.przelacznik');
-    let krok = 0;
+    let krok = 0;            // ile odpowiedzi stoi w bieżącej rundzie
+    const powiedzieli = new Set();   // silniki, które w tej rundzie już odpowiedziały
     let pokolenie = 0;       // każde odNowa() unieważnia trwające pisanie
     let autoplay = true;
     let zajety = false;
     let widoczny = true;
-    let biezace = null;      // odpowiedź w trakcie pisania: { tr, tekst }
+    let biezace = null;      // odpowiedź w trakcie pisania: { tr, tekst, silnik }
     let zegar = 0;
 
     const czekaj = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -385,30 +406,35 @@
          tylko inny język. */
       if (duch.dataset.jezyk === jezyk) return;
       const r = ROZMOWA[jezyk];
-      duch.replaceChildren(wiadomoscTy(r.pyt), ...r.kroki.map((tx, i) => odpowiedz(KOLEJNOSC[i], tx, true).d));
+      duch.replaceChildren(wiadomoscTy(r.pyt), ...KOLEJNOSC.map((s) => odpowiedz(s, r.odp[s], true).d));
       duch.dataset.jezyk = jezyk;
     }
 
     async function pisz(silnik) {
       const moje = pokolenie;
       const r = ROZMOWA[jezyk];
-      if (krok >= r.kroki.length) {
+      /* Runda kończy się po czterech odpowiedziach albo gdy wybrany silnik już
+         w niej mówił – wtedy pytanie pada od nowa, zamiast powtórki zdania. */
+      if (krok >= KOLEJNOSC.length || powiedzieli.has(silnik)) {
         zywy.classList.add('znika');
         await czekaj(ruchOgraniczony ? 0 : 520);
         if (moje !== pokolenie) return;
         zywy.classList.remove('znika');
         zywy.replaceChildren(wiadomoscTy(r.pyt));
         krok = 0;
+        powiedzieli.clear();
         await czekaj(ruchOgraniczony ? 0 : 500);
         if (moje !== pokolenie) return;
       }
       ustawSilnik(silnik);
       zywy.dataset.jezyk = '';
-      const tekst = r.kroki[krok++];
+      const tekst = r.odp[silnik];
+      krok++;
+      powiedzieli.add(silnik);
       if (ruchOgraniczony) { zywy.appendChild(odpowiedz(silnik, tekst, true).d); return; }
       const { d, tr } = odpowiedz(silnik, '', false);
       zywy.appendChild(d);
-      biezace = { tr, tekst };
+      biezace = { tr, tekst, silnik };
       await czekaj(380);
       const slowa = tekst.split(' ');
       for (let i = 0; i < slowa.length; i++) {
@@ -427,10 +453,10 @@
       while (moje === pokolenie && autoplay) {
         if (!widoczny || document.hidden) { await czekaj(400); continue; }
         zajety = true;
-        await pisz(KOLEJNOSC[krok % 4]);
+        await pisz(KOLEJNOSC[krok % KOLEJNOSC.length]);
         zajety = false;
         if (moje !== pokolenie) return;
-        await czekaj(krok >= 4 ? 4200 : 1100);
+        await czekaj(krok >= KOLEJNOSC.length ? 4200 : 1100);
       }
     }
 
@@ -438,6 +464,7 @@
       pokolenie++;
       clearTimeout(zegar);
       krok = 0;
+      powiedzieli.clear();
       zajety = false;
       biezace = null;
       autoplay = true;
@@ -447,14 +474,15 @@
          Gdy ten sam język już jest w HTML-u, zostawiamy węzły (bez powtórki
          animacji wejścia). */
       if (zywy.dataset.jezyk !== jezyk) {
-        zywy.replaceChildren(wiadomoscTy(ROZMOWA[jezyk].pyt), odpowiedz(KOLEJNOSC[0], ROZMOWA[jezyk].kroki[0], true).d);
+        zywy.replaceChildren(wiadomoscTy(ROZMOWA[jezyk].pyt), odpowiedz(KOLEJNOSC[0], ROZMOWA[jezyk].odp[KOLEJNOSC[0]], true).d);
       }
       zywy.dataset.jezyk = '';
       krok = 1;
+      powiedzieli.add(KOLEJNOSC[0]);
       if (ruchOgraniczony) {
         /* Bez ruchu: cała rozmowa widoczna od razu, przełącznik działa bez animacji. */
-        ROZMOWA[jezyk].kroki.slice(1).forEach((tx, i) => zywy.appendChild(odpowiedz(KOLEJNOSC[i + 1], tx, true).d));
-        krok = 4;
+        KOLEJNOSC.slice(1).forEach((s) => { zywy.appendChild(odpowiedz(s, ROZMOWA[jezyk].odp[s], true).d); powiedzieli.add(s); });
+        krok = KOLEJNOSC.length;
         ustawSilnik('openai');
         return;
       }
@@ -465,9 +493,12 @@
     przyciski.forEach((b) => b.addEventListener('click', async () => {
       autoplay = false;
       clearTimeout(zegar);
-      /* Przerwana odpowiedź nie zostaje urwana w pół zdania – dopisujemy ją od razu. */
+      /* Przerwana odpowiedź nie zostaje urwana w pół zdania – dopisujemy ją od razu.
+         Klik w silnik, który właśnie pisze, tylko ją kończy. */
+      const tenSam = biezace && biezace.silnik === b.dataset.silnik;
       if (biezace) { biezace.tr.textContent = biezace.tekst; biezace = null; }
       const moje = ++pokolenie;
+      if (tenSam) { zajety = false; return; }
       zajety = true;
       await pisz(b.dataset.silnik);
       if (moje === pokolenie) zajety = false;
@@ -685,6 +716,7 @@
     const calosc = doc.scrollHeight - vh;
     const rm = glowna.getBoundingClientRect();
     const rp = ruchOgraniczony ? null : plenerTor.getBoundingClientRect();
+    const rs = ruchOgraniczony ? null : scenaPlener.getBoundingClientRect();
     const rk = ruchOgraniczony ? null : przekrojTor.getBoundingClientRect();
     let aktywny = -1;
     sekcje.forEach((s, i) => { if (s && s.getBoundingClientRect().top < vh * 0.4) aktywny = i; });
@@ -701,8 +733,15 @@
     watek.style.setProperty('--pp', pp.toFixed(4));
     watek.style.setProperty('--pp-px', `${(pp * rm.height).toFixed(1)}px`);
 
-    if (ruchOgraniczony) { plener(0.55); przekroj(0.5); } else {
-      plener(ogr(-rp.top / Math.max(1, rp.height - vh * 0.8)));
+    /* Bez ruchu scena stoi w złotej godzinie wieczorem (~18:02, Słońce nisko nad
+       granią) – dla tego obrazu jest cała sekcja, a nie dla południa. */
+    if (ruchOgraniczony) { plener(0.955); przekroj(0.5); } else {
+      /* Dzień mija dokładnie wtedy, gdy scena stoi przyklejona: od chwili, gdy
+         dojeżdża do swojego „top”, do chwili, gdy tor ją puszcza. Położenie sceny
+         w torze mówi to wprost przy każdej szerokości i wysokości ekranu – dawny
+         dzielnik z wysokości okna kończył wieczór, gdy karta już odjeżdżała pod
+         nawigację. */
+      plener(ogr((rs.top - rp.top) / Math.max(1, rp.height - rs.height)));
       ostatniP = ogr((vh - rk.top) / (vh + rk.height));
       przekroj(ostatniP);
     }

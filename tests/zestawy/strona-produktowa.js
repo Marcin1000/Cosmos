@@ -24,7 +24,18 @@
  *  13. Skok do sekcji (link w menu, adres z #sekcją) trafia w jej początek.
  *      Sekcje poza ekranem nie liczą się przy starcie (content-visibility),
  *      więc ich wysokość jest do pierwszego narysowania szacowana – i skok
- *      „w ciemno" lądował o setki pikseli obok. */
+ *      „w ciemno" lądował o setki pikseli obok.
+ *  14. Rozmowa pokazowa: odpowiedź należy do klikniętego silnika, a nie do
+ *      numeru kroku. Kliknięty OpenAI mówił „Przejrzane lokalnie – nic nie
+ *      wyszło z komputera” – demo przeczyło obietnicy prywatności obok.
+ *  15. Zmiana języka w połowie strony zostawia człowieka tam, gdzie czytał
+ *      (dawniej nagłówek Pamięci lądował 430 px niżej).
+ *  16. /?lang=en w SUROWYM HTML-u jest angielska: lang, canonical, og:*, tytuł,
+ *      opis. Roboty i podgląd linku nie uruchamiają skryptów. Obie wersje mają
+ *      własny ETag, a powrót na polski przywraca polską głowę.
+ *  17. 320 px: przycisk wejścia w nawigacji mieści się na ekranie; 1024 i 768 px:
+ *      podpowiedź „Read in English” nie zasłania przełącznika silników,
+ *      a nazwa modelu w pigułce nie jest ucięta. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -121,9 +132,9 @@ const { srodowisko, przegladarka } = require('../pomoc');
     await ctx.close();
   }
 
-  // --- 5. telefon: bez poziomego przewijania --------------------------------
-  for (const jezyk of ['pl', 'en']) {
-    const { ctx, p } = await nowaStrona({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true, locale: jezyk === 'en' ? 'en-US' : 'pl-PL' });
+  // --- 5. telefon: bez poziomego przewijania (17: także 320 px) --------------
+  for (const [szer, jezyk] of [[360, 'pl'], [360, 'en'], [320, 'pl'], [320, 'en']]) {
+    const { ctx, p } = await nowaStrona({ viewport: { width: szer, height: 780 }, isMobile: true, hasTouch: true, locale: jezyk === 'en' ? 'en-US' : 'pl-PL' });
     await p.goto(env.adres + (jezyk === 'en' ? '/?lang=en' : '/'), { waitUntil: 'load' });
     await p.waitForFunction((j) => document.documentElement.lang === j, jezyk, { timeout: 3000 }).catch(() => {});
     await p.waitForTimeout(400);
@@ -134,7 +145,10 @@ const { srodowisko, przegladarka } = require('../pomoc');
       await p.waitForTimeout(40);
       najgorzej = Math.max(najgorzej, await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth));
     }
-    ok(najgorzej <= 0, `telefon 360 px (${jezyk}): brak poziomego przewijania (nadmiar ${najgorzej} px)`);
+    ok(najgorzej <= 0, `telefon ${szer} px (${jezyk}): brak poziomego przewijania (nadmiar ${najgorzej} px)`);
+    await p.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
+    const przycisk = await p.evaluate(() => { const r = document.querySelector('.nav .js-wejscie').getBoundingClientRect(); return { l: r.left, p: r.right, w: document.documentElement.clientWidth }; });
+    ok(przycisk.l >= 0 && przycisk.p <= przycisk.w, `telefon ${szer} px (${jezyk}): przycisk wejścia w nawigacji cały na ekranie (${Math.round(przycisk.l)}–${Math.round(przycisk.p)} z ${przycisk.w})`);
     await ctx.close();
   }
 
@@ -237,6 +251,122 @@ const { srodowisko, przegladarka } = require('../pomoc');
     const poAngielsku = await p.waitForFunction(() => document.documentElement.lang === 'en', null, { timeout: 5000 })
       .then(() => true, () => false);
     ok(poAngielsku, `„Open Cosmos" z /?lang=en: aplikacja po angielsku (lang=${await p.evaluate(() => document.documentElement.lang)})`);
+    await ctx.close();
+  }
+
+  // --- 14. rozmowa pokazowa: tekst należy do silnika -------------------------
+  for (const ruch of ['no-preference', 'reduce']) {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 }, reducedMotion: ruch });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    /* Wzór: niewidoczny „duch” z index.html – pełna rozmowa, każda odpowiedź
+       podpisana swoim silnikiem. Niezależny od skryptu, który ją odtwarza. */
+    const norm = (t) => t.replace(/\s+/g, ' ').trim();
+    const wzor = await p.evaluate(() => [...document.querySelectorAll('#czat-duch .odp')]
+      .map((o) => [o.querySelector('.odp-silnik').textContent, o.querySelector('.odp-tekst').textContent]));
+    const wzorMapa = Object.fromEntries(wzor.map(([s, t]) => [s, norm(t)]));
+    /* Kolejność inna niż w autoodtwarzaniu, zaczynając od OpenAI – to on
+       dostawał zdanie lokalnego GPU. Po każdym kliknięciu czekamy, aż
+       odpowiedź się dopisze (silnik, który już mówił, zaczyna rundę od nowa). */
+    const NAZWY = { cloud: 'NVIDIA Nemotron', local: 'Lokalny GPU', claude: 'Claude', openai: 'OpenAI' };
+    const cudze = [];
+    for (const s of ['openai', 'local', 'claude', 'cloud', 'openai']) {
+      await p.click(`[data-silnik="${s}"]`);
+      await p.waitForTimeout(ruch === 'reduce' ? 150 : 3200);
+      const [podpis, tekst] = await p.evaluate(() => { const o = [...document.querySelectorAll('#czat-zywy .odp')].pop(); return [o.querySelector('.odp-silnik').textContent, o.querySelector('.odp-tekst').textContent]; });
+      if (podpis !== NAZWY[s] || norm(tekst) !== wzorMapa[NAZWY[s]]) cudze.push(`${s} → ${podpis}: „${norm(tekst).slice(0, 44)}…”`);
+    }
+    ok(Object.keys(wzorMapa).length === 4 && cudze.length === 0,
+      `rozmowa pokazowa (${ruch}): każdy kliknięty silnik mówi swoje zdanie${cudze.length ? ' – cudze: ' + cudze.join('; ') : ''}`);
+    await ctx.close();
+  }
+
+  // --- 15. zmiana języka w połowie strony nie gubi miejsca ------------------
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    const tel = viewport.width < 500;
+    const { ctx, p } = await nowaStrona({ viewport, isMobile: tel, hasTouch: tel });
+    await p.goto(env.adres + '/#pamiec', { waitUntil: 'load' });
+    await p.waitForTimeout(900);
+    const gora = () => p.evaluate(() => document.querySelector('#pamiec h2').getBoundingClientRect().top);
+    const przed = await gora();
+    /* Klik z DOM-u, nie p.click(): Playwright przed kliknięciem „przewija do”
+       przyklejonej nawigacji i sam przesuwa stronę o kilkaset pikseli – człowiek
+       stukający w PL/EN tego nie robi. */
+    await p.evaluate(() => document.querySelector('[data-jezyk="en"]').click());
+    await p.waitForFunction(() => document.documentElement.lang === 'en');
+    await p.waitForTimeout(700);
+    const po = await gora();
+    ok(Math.abs(po - przed) <= 8, `${viewport.width}px: zmiana języka w połowie strony zostawia nagłówek Pamięci na miejscu (${Math.round(przed)} → ${Math.round(po)} px)`);
+    await ctx.close();
+  }
+
+  // --- 16. /?lang=en: angielska głowa w surowym HTML-u ------------------------
+  {
+    const pobierz = async (adres, naglowki = {}) => { const r = await fetch(env.adres + adres, { headers: naglowki }); return { r, html: await r.text() }; };
+    const meta = (html, wzor) => ((html.match(wzor) || [])[1] || '');
+    const en = await pobierz('/?lang=en');
+    const pl = await pobierz('/');
+    const opis = (h) => meta(h, /<meta name="description" content="([^"]*)"/);
+    const sprawdz = {
+      'lang="en"': /<html lang="en"/.test(en.html),
+      canonical: meta(en.html, /<link rel="canonical" href="([^"]*)"/) === 'https://cosmosai.live/?lang=en',
+      'og:url': meta(en.html, /<meta property="og:url" content="([^"]*)"/) === 'https://cosmosai.live/?lang=en',
+      title: /one thread/i.test(meta(en.html, /<title[^>]*>([^<]*)<\/title>/)),
+      description: /personal, hybrid AI system/.test(opis(en.html)),
+      'og:title': /one thread/i.test(meta(en.html, /<meta property="og:title" content="([^"]*)"/)),
+      'og:description': /personal, hybrid AI system/i.test(meta(en.html, /<meta property="og:description" content="([^"]*)"/)),
+      'og:locale': meta(en.html, /<meta property="og:locale" content="([^"]*)"/) === 'en_GB'
+        && meta(en.html, /<meta property="og:locale:alternate" content="([^"]*)"/) === 'pl_PL',
+    };
+    const zle = Object.entries(sprawdz).filter(([, v]) => !v).map(([k]) => k);
+    ok(zle.length === 0, `/?lang=en: surowy HTML po angielsku${zle.length ? ' – po polsku: ' + zle.join(', ') : ' (lang, canonical, og:*, title, description)'}`);
+    ok(/<html lang="pl"/.test(pl.html) && meta(pl.html, /<link rel="canonical" href="([^"]*)"/) === 'https://cosmosai.live/'
+      && /jedna rozmowa/.test(meta(pl.html, /<title[^>]*>([^<]*)<\/title>/)), '„/”: surowy HTML zostaje polski');
+    const etagEn = en.r.headers.get('etag');
+    const etagPl = pl.r.headers.get('etag');
+    const ponownie = await pobierz('/?lang=en', { 'If-None-Match': etagEn });
+    const cudzy = await pobierz('/?lang=en', { 'If-None-Match': etagPl });
+    ok(etagEn && etagPl && etagEn !== etagPl && ponownie.r.status === 304 && cudzy.r.status === 200,
+      `/?lang=en: własny ETag (304 dla swojego, 200 dla polskiego; ${ponownie.r.status}/${cudzy.r.status})`);
+
+    /* Powrót na polski w przeglądarce: głowa wraca do polskiej wersji, którą
+       serwer odłożył do data-pl. */
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } });
+    await p.goto(env.adres + '/?lang=en', { waitUntil: 'load' });
+    await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
+    await p.click('[data-jezyk="pl"]');
+    await p.waitForFunction(() => document.documentElement.lang === 'pl');
+    const glowa = await p.evaluate(() => ({
+      tytul: document.title,
+      kanon: document.querySelector('link[rel="canonical"]').href,
+      og: document.querySelector('meta[property="og:title"]').content,
+      opis: document.querySelector('meta[name="description"]').content,
+      loc: document.querySelector('meta[property="og:locale"]').content,
+    }));
+    ok(/jedna rozmowa/.test(glowa.tytul) && glowa.kanon === 'https://cosmosai.live/' && /jedna rozmowa/.test(glowa.og)
+      && glowa.opis === opis(pl.html) && glowa.loc === 'pl_PL', `/?lang=en → PL: głowa wraca do polskiej (${glowa.tytul}; ${glowa.kanon}; ${glowa.loc})`);
+    await ctx.close();
+  }
+
+  // --- 17. 1024 i 768 px: podpowiedź języka i pigułka modelu -----------------
+  for (const viewport of [{ width: 1024, height: 768 }, { width: 768, height: 1024 }]) {
+    const { ctx, p } = await nowaStrona({ viewport, locale: 'en-US' });
+    await p.goto(env.adres + '/', { waitUntil: 'load' });
+    await p.waitForSelector('#podpowiedz-jezyka:not([hidden])', { timeout: 3000 }).catch(() => {});
+    const zakryte = await p.evaluate(() => {
+      const pj = document.getElementById('podpowiedz-jezyka');
+      if (pj.hidden) return null;
+      const a = pj.getBoundingClientRect();
+      return [...document.querySelectorAll('[data-silnik]')].filter((b) => {
+        const r = b.getBoundingClientRect();
+        return r.left < a.right && a.left < r.right && r.top < a.bottom && a.top < r.bottom;
+      }).map((b) => b.dataset.silnik);
+    });
+    ok(Array.isArray(zakryte) && zakryte.length === 0, `${viewport.width} px: podpowiedź „Read in English” nie zasłania przełącznika silników${zakryte && zakryte.length ? ' – zasłania: ' + zakryte.join(', ') : zakryte ? '' : ' (podpowiedzi nie ma)'}`);
+    await p.click('[data-silnik="local"]');
+    await p.waitForFunction(() => /local/.test(document.querySelector('#pill-tekst').textContent), null, { timeout: 3000 }).catch(() => {});
+    await p.waitForTimeout(600);
+    const pigulka = await p.evaluate(() => { const e = document.getElementById('pill-tekst'); return { tekst: e.textContent, sw: e.scrollWidth, cw: e.clientWidth }; });
+    ok(pigulka.sw <= pigulka.cw + 1, `${viewport.width} px: nazwa modelu w pigułce cała („${pigulka.tekst}”, ${pigulka.sw}/${pigulka.cw} px)`);
     await ctx.close();
   }
 

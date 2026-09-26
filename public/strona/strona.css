@@ -333,7 +333,10 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .pill-tekst { line-height: 1.35; display: inline-block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pill-tekst.zmiana { animation: pill-zmiana .5s var(--wolno); }
 @keyframes pill-zmiana { 0% { transform: translateY(0); opacity: 1; } 45% { transform: translateY(-110%); opacity: 0; } 55% { transform: translateY(110%); opacity: 0; } 100% { transform: none; opacity: 1; } }
-.czat-status { display: inline-flex; align-items: center; gap: 7px; font: 500 11px/1 var(--mono); color: var(--przygaszony); letter-spacing: .06em; text-transform: uppercase; }
+.czat-status { display: inline-flex; align-items: center; gap: 7px; font: 500 11px/1 var(--mono); color: var(--przygaszony); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+/* Wąska karta (1024 px, dwie kolumny hero): „jeden wątek” ustępuje miejsca
+   pełnej nazwie modelu – ucięte „local-gpu” mówiło mniej niż brak statusu. */
+@media (min-width: 980px) and (max-width: 1180px) { .czat-status { display: none; } }
 .czat-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--k-nvidia); animation: puls 2s infinite; }
 @keyframes puls { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 
@@ -506,6 +509,21 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   .plener-tekst { position: sticky; top: 120px; }
 }
 .plener-tor { height: 190vh; position: relative; }
+/* Pod sceną jest już koniec toru – pełny dolny odstęp sekcji dokładał do górnego
+   odstępu Pamięci ~400 px pustego tła. */
+.plener { padding-bottom: clamp(40px, 5vw, 72px); }
+/* Telefon poziomo: scena (niebo nad kartą) jest wyższa niż ekran i łuku nie było
+   widać wcale, gdy Słońce po nim jechało. Niebo staje obok karty i mieści się
+   w wysokości ekranu; dłuższy tor daje dniu tyle przewijania co w pionie. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .plener-tor { height: 300vh; }
+  .plener-scena { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); top: 64px; }
+  .plener-scena .niebo { height: 100%; width: calc(100% * 1.15 / 2.15); }
+  .luk-slonca { align-self: end; max-height: calc(100svh - 80px); }
+  .odczyt { padding: 14px 16px; gap: 10px; justify-content: center; }
+  .odczyt-czas { font-size: 26px; }
+  .nastawy b { padding: 8px 4px; font-size: 14px; }
+}
 .plener-scena {
   position: sticky; top: max(88px, calc(50vh - 300px));
   border-radius: var(--r-xl); overflow: hidden; border: 1px solid var(--linia); box-shadow: var(--cien-3);
@@ -801,6 +819,18 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .podpowiedz-jezyka .pj-tak svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .podpowiedz-jezyka .pj-nie { color: var(--przygaszony); padding-inline: 10px; font-size: 18px; line-height: 1; }
 .podpowiedz-jezyka button:hover { background: var(--tlo-2); }
+/* W prawym dolnym rogu węższych ekranów stoi przełącznik silników rozmowy
+   pokazowej: przy dwóch kolumnach hero (980–1180 px) podpowiedź idzie na środek
+   dołu, między kolumny; przy jednej kolumnie (tablet) przełącznik zajmuje cały
+   dół pierwszego ekranu, więc podpowiedź staje pod nawigacją, obok etykiety hero.
+   Na telefonie karta ma całą szerokość i róg zasłania najmniej – zostaje w rogu. */
+@media (min-width: 980px) and (max-width: 1180px) {
+  .podpowiedz-jezyka { right: auto; left: 50%; translate: -50% 0; }
+}
+@media (min-width: 561px) and (max-width: 979px) {
+  .podpowiedz-jezyka { bottom: auto; top: 80px; right: var(--margines); }
+}
+
 
 /* --- przejście między językami (View Transitions) ----------------------- */
 ::view-transition-old(root) { animation: vt-wyjdz .28s var(--wolno) both; }
@@ -828,9 +858,19 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   .pokoj { padding: 10px; }
   .ciag-scena { grid-template-columns: 1fr; justify-items: center; }
   .serwer { width: 100%; }
-  .plener-tor { height: 170vh; }
+  .plener-tor { height: 260vh; }   /* 170vh: cały dzień w jednym ruchu kciuka, złota godzina ~40 px */
   .zapas li { grid-template-columns: auto 24px 1fr; gap: 8px; }
   .zapas .mono { min-width: 0; }
+}
+
+/* Najwęższe telefony (320 px: iPhone SE 1. gen., Android z powiększonym
+   rozmiarem wyświetlania): sam znak zamiast napisu COSMOS, inaczej przycisk
+   wejścia wystawał poza ekran i strona przewijała się w bok. */
+@media (max-width: 359px) {
+  .marka span { display: none; }
+  .nav-w { gap: 8px; }
+  .nav-prawa { gap: 6px; }
+  .btn-maly { padding-inline: 12px; }
 }
 
 /* --- ograniczony ruch: wszystko widać od razu, nic się nie rusza -------- */

@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <script>
     /* Stary link z zaproszeniem (/#zaproszenie=…) prowadzi od razu do aplikacji.
-       Stoi przed wszystkim innym, żeby zaproszony nie zobaczył mignięcia strony. */
-    if (/^#zaproszenie=/.test(location.hash)) location.replace('/app' + location.hash);
+       Stoi przed wszystkim innym, żeby zaproszony nie zobaczył mignięcia strony,
+       a window.stop() nie pozwala pobierać stylów i skryptu, których i tak nie użyje.
+       Najpierw stop, potem przejście: stop() po replace() przerwałby też samo przejście. */
+    if (/^#zaproszenie=/.test(location.hash)) { if (window.stop) window.stop(); location.replace('/app' + location.hash); }
     /* Język: najpierw adres (/?lang=en – osobny adres dla wyszukiwarek),
        potem wybór zapisany wcześniej, a bez obu – polski. Języka przeglądarki
        nie zgadujemy: robot z lokalizacją en-US indeksowałby wtedy angielską
@@ -23,23 +25,26 @@
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Cosmos – jedna rozmowa, każdy model</title>
-  <meta name="description" content="Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat – liczy.">
+  <!-- Atrybut data-en to angielska wersja: pod /?lang=en serwer (lib/statyka.js)
+       podmienia ją w surowym HTML-u (roboty i podgląd linku nie uruchamiają
+       skryptów), a polską odkłada do data-pl. strona.js czyta obie stąd. -->
+  <title data-en="Cosmos – one thread, every engine">Cosmos – jedna rozmowa, każdy model</title>
+  <meta name="description" content="Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat – liczy." data-en="Cosmos is a personal, hybrid AI system. One conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI, and instead of describing the world, it calculates.">
   <meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
-  <link rel="canonical" href="https://cosmosai.live/">
+  <link rel="canonical" href="https://cosmosai.live/" data-en="https://cosmosai.live/?lang=en">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Cosmos">
-  <meta property="og:url" content="https://cosmosai.live/">
-  <meta property="og:title" content="Cosmos – jedna rozmowa, każdy model">
-  <meta property="og:description" content="Osobisty, hybrydowy system AI. Jedna rozmowa przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI.">
+  <meta property="og:url" content="https://cosmosai.live/" data-en="https://cosmosai.live/?lang=en">
+  <meta property="og:title" content="Cosmos – jedna rozmowa, każdy model" data-en="Cosmos – one thread, every engine">
+  <meta property="og:description" content="Osobisty, hybrydowy system AI. Jedna rozmowa przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI." data-en="A personal, hybrid AI system. One conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI.">
   <meta property="og:image" content="https://cosmosai.live/strona/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Znak Cosmosa i napis: jedna rozmowa, każdy model – chmura NVIDIA, lokalny GPU, Claude i OpenAI">
-  <meta property="og:locale" content="pl_PL">
-  <meta property="og:locale:alternate" content="en_GB">
+  <meta property="og:locale" content="pl_PL" data-en="en_GB">
+  <meta property="og:locale:alternate" content="en_GB" data-en="pl_PL">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="alternate" hreflang="pl" href="https://cosmosai.live/">
   <link rel="alternate" hreflang="en" href="https://cosmosai.live/?lang=en">
@@ -52,7 +57,7 @@
   <link rel="stylesheet" href="/strona/strona.css">
   <script src="/strona/strona.js" defer></script>
   <!-- Bez JavaScriptu nikt nie odsłoni bloków pojawiających się przy przewijaniu. -->
-  <noscript><style>[data-pokaz] { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+  <noscript><style>[data-pokaz], .transkrypt p { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
 </head>
 <body>
   <a class="pomin" href="#tresc" data-t="pomin">Przejdź do treści</a>
@@ -124,7 +129,7 @@
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
             <a class="btn btn-jasny btn-duzy magnes" href="#hybryda"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
           </div>
-          <p class="hero-uwaga wejscie" style="--d:7"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span data-t="hero.uwaga">Dostęp na zaproszenie. Konta zakłada administrator instancji.</span></p>
+          <p class="hero-uwaga wejscie" style="--d:7"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span data-t="hero.uwaga">Dostęp na zaproszenie. Zaproszenie wysyła administrator.</span></p>
         </div>
 
         <div class="hero-scena wejscie" style="--d:3">
@@ -155,14 +160,14 @@
               <button type="button" data-silnik="openai" style="--k:var(--k-openai)"><i></i>OpenAI</button>
             </div>
           </div>
-          <p class="scena-podpis" data-t="czat.podpis">Kliknij silnik – następna odpowiedź przyjdzie z&nbsp;niego, w&nbsp;tym samym wątku.</p>
+          <p class="scena-podpis" data-t="czat.podpis">Wybierz silnik – następna odpowiedź przyjdzie z&nbsp;niego, w&nbsp;tym samym wątku.</p>
         </div>
       </div>
 
       <div class="kol">
         <dl class="liczby" data-pokaz>
           <div><dt><span class="licznik" data-od="1200" data-do="0">0</span></dt><dd data-t="liczby.zal">zależności npm w&nbsp;rdzeniu</dd></div>
-          <div><dt><span class="licznik" data-do="120">120</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
+          <div><dt><span class="licznik" data-do="122">122</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
           <div><dt><span class="licznik" data-do="6">6</span></dt><dd data-t="liczby.narzedzia">narzędzi, które model woła w&nbsp;trakcie odpowiedzi</dd></div>
           <div><dt><span class="licznik" data-do="4">4</span></dt><dd data-t="liczby.silniki">silniki w&nbsp;jednej rozmowie</dd></div>
         </dl>
@@ -287,7 +292,9 @@
               <path class="luk-droga" id="luk-droga" pathLength="1" d="M16.9 194.5 L18.8 191.3 L20.8 188.0 L22.7 184.7 L24.6 181.5 L26.6 178.2 L28.5 175.0 L30.4 171.7 L32.4 168.5 L34.3 165.3 L36.3 162.1 L38.2 158.8 L40.2 155.6 L42.2 152.5 L44.2 149.3 L46.2 146.1 L48.2 143.0 L50.2 139.8 L52.2 136.7 L54.2 133.6 L56.3 130.5 L58.3 127.5 L60.4 124.4 L62.5 121.4 L64.6 118.4 L66.7 115.4 L68.9 112.5 L71.0 109.6 L73.2 106.7 L75.4 103.8 L77.6 101.0 L79.9 98.2 L82.1 95.4 L84.4 92.6 L86.7 89.9 L89.0 87.3 L91.4 84.6 L93.8 82.0 L96.2 79.5 L98.6 77.0 L101.1 74.5 L103.6 72.1 L106.1 69.7 L108.6 67.4 L111.2 65.2 L113.8 62.9 L116.4 60.8 L119.1 58.7 L121.8 56.6 L124.5 54.6 L127.2 52.7 L130.0 50.8 L132.8 49.0 L135.6 47.3 L138.5 45.6 L141.4 44.0 L144.3 42.5 L147.3 41.1 L150.2 39.7 L153.2 38.4 L156.2 37.1 L159.3 36.0 L162.4 34.9 L165.4 33.9 L168.5 33.0 L171.7 32.2 L174.8 31.5 L178.0 30.8 L181.1 30.3 L184.3 29.8 L187.5 29.4 L190.7 29.1 L193.9 28.9 L197.1 28.8 L200.3 28.8 L203.5 28.8 L206.7 29.0 L209.9 29.2 L213.1 29.5 L216.3 29.9 L219.5 30.4 L222.6 31.0 L225.8 31.7 L228.9 32.5 L232.0 33.3 L235.1 34.2 L238.2 35.3 L241.3 36.3 L244.3 37.5 L247.3 38.8 L250.3 40.1 L253.3 41.5 L256.2 43.0 L259.1 44.5 L262.0 46.2 L264.8 47.8 L267.7 49.6 L270.5 51.4 L273.2 53.3 L276.0 55.3 L278.7 57.3 L281.4 59.3 L284.0 61.5 L286.6 63.6 L289.2 65.9 L291.8 68.2 L294.3 70.5 L296.8 72.9 L299.3 75.3 L301.7 77.8 L304.2 80.3 L306.6 82.9 L308.9 85.5 L311.3 88.1 L313.6 90.8 L315.9 93.5 L318.2 96.3 L320.4 99.1 L322.7 101.9 L324.9 104.7 L327.1 107.6 L329.2 110.5 L331.4 113.5 L333.5 116.4 L335.6 119.4 L337.7 122.4 L339.8 125.5 L341.9 128.5 L343.9 131.6 L346.0 134.7 L348.0 137.8 L350.0 140.9 L352.0 144.1 L354.0 147.2 L356.0 150.4 L358.0 153.6 L359.9 156.8 L361.9 160.0 L363.9 163.2 L365.8 166.4 L367.7 169.7 L369.7 172.9 L371.6 176.2 L373.6 179.4 L375.5 182.7 L377.4 185.9 L379.3 189.2 L381.3 192.5 L383.2 195.8"/>
               <g id="slonce" class="slonce" transform="translate(16.9 194.5)"><circle r="18" class="slonce-aura"/><circle r="8" class="slonce-tarcza"/></g>
               <g class="gory">
-                <path d="M0 230 L0 176 L46 150 L78 168 L126 118 L160 150 L196 128 L238 170 L276 136 L318 162 L352 144 L400 172 L400 230 Z"/>
+                <!-- Skraje grani leżą pod horyzontem obliczeń (y 178 = wysokość 0°): tarcza
+                     wychodzi zza nich o 6:42 i chowa się o 18:17, zgodnie z godzinami na karcie. -->
+                <path d="M0 230 L0 188 L34 178 L62 156 L92 170 L126 118 L160 150 L196 128 L238 170 L276 136 L318 162 L344 150 L372 180 L400 186 L400 230 Z"/>
                 <path class="gory2" d="M0 230 L0 196 L60 178 L110 192 L170 170 L230 194 L300 176 L360 190 L400 184 L400 230 Z"/>
               </g>
             </svg>
@@ -299,7 +306,7 @@
               <dl class="odczyt-dane">
                 <div><dt data-t="pl.wys">Wysokość Słońca</dt><dd class="mono" id="p-wys">−4,1°</dd></div>
                 <div><dt data-t="pl.azymut">Azymut</dt><dd class="mono" id="p-az">90°</dd></div>
-                <div><dt data-t="pl.chmury">Zachmurzenie</dt><dd class="mono">12%</dd></div>
+                <div><dt data-t="pl.chmury">Zachmurzenie</dt><dd class="mono">0%</dd></div>
                 <div><dt>EV₁₀₀</dt><dd class="mono" id="p-ev">8,9</dd></div>
               </dl>
               <div class="nastawy mono" id="p-nastawy"><b>f/8</b><b id="p-czas-naswietlania">1/8 s</b><b>ISO 100</b></div>
@@ -375,14 +382,14 @@
         </div>
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-claude)"></span><span data-t="glos.et">Głos i&nbsp;kamera</span></p>
-          <h2 data-t="glos.h">Powiedz „Hej, Cosmos” i&nbsp;mów dalej.</h2>
-          <p class="lead" data-t="glos.lead">Tryb głosowy ze słowem budzącym, kamera, która widzi, co trzymasz, i&nbsp;czujnik głębi. Każda z&nbsp;tych usług ma zapasową ścieżkę, więc brak jednej nie wyłącza całości. Nasłuch słowa budzącego zostaje w&nbsp;domu: do chmury trafia tylko to, co świadomie mówisz do Cosmosa.</p>
+          <h2 data-t="glos.h">Powiedz „Hej, Cosmos” albo po prostu dotknij i&nbsp;mów.</h2>
+          <p class="lead" data-t="glos.lead">Tryb głosowy, kamera, która widzi, co trzymasz, i&nbsp;czujnik głębi. Każda z&nbsp;tych usług ma zapasową ścieżkę, więc brak jednej nie wyłącza całości. Gdy działa komputer domowy, nasłuch słowa budzącego zostaje w&nbsp;domu i&nbsp;do chmury trafia tylko to, co świadomie mówisz do Cosmosa.</p>
           <ul class="zapas">
             <li><span class="mono">Whisper</span><i aria-hidden="true"></i><span data-t="glos.z1">własny serwer mowy, potem OpenAI</span></li>
             <li><span class="mono">ElevenLabs</span><i aria-hidden="true"></i><span data-t="glos.z2">OpenAI, Piper, na końcu głos systemowy</span></li>
             <li><span class="mono">bge-m3</span><i aria-hidden="true"></i><span data-t="glos.z3">słowa kluczowe</span></li>
           </ul>
-          <p class="przypis" data-t="glos.android">Chrome na Androidzie kończy nasłuch po każdym zdaniu i&nbsp;sam go wznawia. Cosmos odsiewa powtórzenia, a&nbsp;gdy wznowień jest za dużo, przechodzi na „naciśnij, aby mówić”.</p>
+          <p class="przypis" data-t="glos.android">Na telefonie z&nbsp;Androidem Chrome nie utrzymuje ciągłego nasłuchu, więc Cosmos od razu pokazuje „dotknij, aby mówić” zamiast piszczeć mikrofonem co kilka sekund.</p>
         </header>
       </div>
     </section>
@@ -428,7 +435,7 @@
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-local)"></span><span data-t="pryw.et">Prywatność i&nbsp;konta</span></p>
           <h2 data-t="pryw.h">Dostęp na zaproszenie.</h2>
-          <p class="lead" data-t="pryw.lead">Konta zakłada administrator instancji. Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy. Panel administratora pokazuje listę kont, ostatnie wizyty i&nbsp;liczbę wiadomości – treści nie pokazuje, bo aplikacja mu jej nie udostępnia. Dane leżą na serwerze, na którym działa Cosmos. Rozmowę z&nbsp;silnikiem w&nbsp;chmurze widzi też dostawca tego silnika; przy modelu lokalnym nic nie wychodzi z&nbsp;domu.</p>
+          <p class="lead" data-t="pryw.lead">Zaproszenia wysyła administrator. Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy. Panel administratora pokazuje listę kont, ostatnie wizyty i&nbsp;liczbę wiadomości – treści nie pokazuje, bo aplikacja mu jej nie udostępnia. Dane leżą na serwerze, na którym działa Cosmos. Rozmowę z&nbsp;silnikiem w&nbsp;chmurze widzi też dostawca tego silnika; przy modelu lokalnym nic nie wychodzi z&nbsp;domu.</p>
           <ul class="lista-cech">
             <li data-t="pryw.c1">Silniki przyznaje administrator – albo dodajesz własny klucz API, a&nbsp;koszty idą na Twój rachunek u&nbsp;dostawcy</li>
             <li data-t="pryw.c2">Hasła przechowywane jako skróty scrypt, sesje – wyłącznie jako skróty</li>
@@ -483,7 +490,7 @@
 
         <div class="fakty">
           <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f1.h">zależności w&nbsp;rdzeniu</h3><p data-t="pm.f1.p"><code>node server.js</code> i&nbsp;gotowe. Nie ma czego budować ani drzewa pakietów, które przestanie działać w&nbsp;nocy.</p></article>
-          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">120</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
+          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">122</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
           <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">15</span><h3 data-t="pm.f3.h">sekcji audytu</h3><p data-t="pm.f3.p">Audyt sprawdza też sam siebie: wzorzec, który przestał cokolwiek łapać, jest błędem, a&nbsp;nie ciszą.</p></article>
           <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi – grafiki trafiają pod gotowe punkty planu.</p></article>
         </div>
@@ -497,7 +504,7 @@
           <div class="cta-zorza" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <svg class="znak cta-znak" aria-hidden="true"><use href="#znak"/></svg>
           <h2 data-t="cta.h">Masz zaproszenie? Twój Cosmos już czeka.</h2>
-          <p data-t="cta.p">Otwórz link z&nbsp;zaproszenia – login i&nbsp;hasło ustawisz w&nbsp;minutę. Masz już konto? Zaloguj się. Nie masz zaproszenia? Postaw własny Cosmos – kod jest otwarty.</p>
+          <p data-t="cta.p">Otwórz link z&nbsp;zaproszenia – login i&nbsp;hasło ustawisz w&nbsp;minutę. Masz już konto? Zaloguj się. Nie masz zaproszenia? Postaw własny Cosmos: kod jest publiczny, do użytku niekomercyjnego.</p>
           <div class="hero-cta">
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
             <a class="btn btn-jasny btn-duzy magnes" href="https://github.com/Marcin1000/Cosmos#readme" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" class="gh"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span data-t="cta.kod">Postaw własny Cosmos</span></a>
