@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 108 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 109 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -121,6 +121,9 @@ robi większość szybkich zestawów.
 | `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, baza wiedzy, wyszukiwanie w sieci |
 | `exif.js`, `raw-podglad.js`, `srt.js`, `kmz.js` | formaty plików, bez zależności zewnętrznych |
 | `canon.js`, `onedrive.js`, `zorza.js`, `miejsca.js` | integracje zewnętrzne |
+| `zadania.js` | praca dłuższa niż 100 s Cloudflare'a (Studio): czekanie do 75 s, potem 202 i dopytywanie |
+| `miejsce.js` | limit miejsca na osobę, 507 przy pełnym dysku, `bladZapisu` |
+| `statyka.js` | pliki statyczne, ETag, pamięć skompresowanych, **CSP aplikacji** |
 
 Źródła inteligencji za wspólnym interfejsem OpenAI-compatible:
 
@@ -304,6 +307,11 @@ Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności. Ceną jes
 
 `public/index.html` ładuje skrypty bezpośrednio tagami `<script>`. Nie ma bundlera,
 transpilacji ani modułów ES — pliki lecą do przeglądarki takie, jakie są.
+
+**Aplikacja ma CSP** (`lib/statyka.js`): skrypty wyłącznie z naszego adresu plus skrypt
+inline z `index.html`, którego skrót serwer liczy z pliku. Nie dodawaj atrybutów `on*=`,
+linków `javascript:` ani `eval` — przeglądarka je zablokuje (zestaw `csp-aplikacji`).
+Zapytania tylko do własnego adresu (`connect-src 'self'`); coś z zewnątrz = przez serwer.
 
 Kolejność w `index.html` ma znaczenie: `app.js` jest **ostatni**, bo woła fabryki
 z pozostałych.

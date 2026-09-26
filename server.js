@@ -108,24 +108,8 @@ const { llmComplete, blindToImages, zapytajModel } = require('./lib/model.js');
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.txt': 'text/plain; charset=utf-8',
-  '.xml': 'application/xml; charset=utf-8',
-};
-
-/* Typy, które opłaca się kompresować — tekst. Cloudflare robi to sam, ale
-   instancja wystawiona bez niego wysyłała 225 kB zamiast ~60. */
-const KOMPRESUJ = /^(text\/|application\/(json|xml|javascript|manifest\+json)|image\/svg)/;
+// Pliki statyczne (strona, aplikacja, czcionki, ikony) i CSP aplikacji — lib/statyka.js.
+const { serveStatic } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
 
 
 // ---------------------------------------------------------------------------
@@ -2597,74 +2581,6 @@ async function handleModels(req, res) {
 // ---------------------------------------------------------------------------
 // Pliki statyczne
 // ---------------------------------------------------------------------------
-
-function serveStatic(req, res) {
-  let urlPath;
-  // „/%E0" to zepsuty adres, nie awaria serwera — 400 zamiast 500.
-  try { urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch {
-    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Bad request');
-  }
-  /* Pod „/" stoi strona produktowa, a sam Cosmos pod „/app". Aplikacja ładuje
-     swoje pliki ścieżkami bezwzględnymi (/app.js, /style.css), więc działa
-     tak samo spod „/app" i „/app/". */
-  if (urlPath === '/') urlPath = '/strona/index.html';
-  else if (urlPath === '/app' || urlPath === '/app/') urlPath = '/index.html';
-
-  const filePath = path.join(PUBLIC_DIR, urlPath);
-  // Z separatorem: sam prefiks przepuściłby sąsiedni katalog „public-cokolwiek".
-  if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
-    res.writeHead(403);
-    return res.end('Forbidden');
-  }
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('Not found');
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const headers = {
-      'Content-Type': MIME[ext] || 'application/octet-stream',
-      /* Publiczna domena: przeglądarka nie zgaduje typu pliku, strona nie daje
-         się osadzić w cudzej ramce (klikanie w Cosmosa „przez szybę" obcej
-         strony), a adres Cosmosa nie wycieka w nagłówku Referer do stron,
-         do których prowadzą linki z odpowiedzi. */
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'same-origin',
-    };
-    /* Czcionki i ikony są niezmienne pod swoją nazwą — przeglądarka i Cloudflare
-       trzymają je rok. Nowa ikona = nowa nazwa pliku, inaczej nikt jej nie zobaczy. */
-    if (ext === '.woff2' || urlPath.startsWith('/icons/')) {
-      headers['Cache-Control'] = 'public, max-age=31536000, immutable';
-    } else {
-      /* Kod aplikacji: wolno trzymać, ale trzeba zapytać, czy jest nowszy.
-         Bez tego nagłówka Cloudflare trzyma .js i .css u siebie około dwóch
-         godzin — po aktualizacji telefony dostawałyby stary app.js, i żadne
-         podniesienie wersji service workera by tego nie naprawiło, bo sam
-         sw.js też przychodziłby z pamięci Cloudflare. */
-      headers['Cache-Control'] = 'no-cache';
-      /* „no-cache" = zapytaj, czy się zmieniło. Bez ETag odpowiedź brzmiała
-         zawsze „tak" i każda wizyta pobierała całe 120 kB od nowa. */
-      const etag = `W/"${require('node:crypto').createHash('sha1').update(data).digest('base64url').slice(0, 22)}"`;
-      headers.ETag = etag;
-      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(etag)) {
-        res.writeHead(304, headers);
-        return res.end();
-      }
-    }
-    const ae = String(req.headers['accept-encoding'] || '');
-    if (KOMPRESUJ.test(headers['Content-Type']) && data.length > 1024) {
-      headers.Vary = 'Accept-Encoding';
-      const zlib = require('node:zlib');
-      if (/\bbr\b/.test(ae)) { data = zlib.brotliCompressSync(data, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }); headers['Content-Encoding'] = 'br'; }
-      else if (/\bgzip\b/.test(ae)) { data = zlib.gzipSync(data); headers['Content-Encoding'] = 'gzip'; }
-    }
-    res.writeHead(200, headers);
-    res.end(data);
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Router + start

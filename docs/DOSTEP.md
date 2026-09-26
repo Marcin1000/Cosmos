@@ -250,6 +250,10 @@ będzie przekierowywać portów ani stawiać VPN-a.
 - **Obrazy z cudzych serwerów** (miniatury wyszukiwania, OneDrive) — tylko
   PNG, JPEG, GIF, WebP, AVIF, z nagłówkami `nosniff` i `sandbox`. SVG może
   zawierać skrypt, więc nie przechodzi.
+- **CSP aplikacji** — przeglądarka uruchamia w `/app` tylko skrypty z adresu
+  Cosmosa i jeden znany skrypt z `index.html`. Nawet gdyby imię wpisane przez
+  gościa albo odpowiedź modelu przemyciły kod do strony, nie wykona się.
+  Cosmosa nie da się też osadzić w cudzej ramce.
 - **Dane na dysku** — uszkodzony plik (zanik zasilania, ręczna edycja) nie
   daje po cichu pustego stanu: obok zostaje kopia `*.uszkodzony-<czas>`,
   a Cosmos wraca do poprzedniej wersji z `.bak`. Przy uszkodzonym pliku kont
