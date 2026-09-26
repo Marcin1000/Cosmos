@@ -28,7 +28,7 @@ const { modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./pub
 const {
   PORT, HOST, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
   sendJson, readBodyBuffer, readJson, pickEndpoint,
-  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
+  modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, czytajJson, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
 } = require('./lib/rdzen.js');
 /* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
    i trasy kont. Zasady — w nagłówkach tych modułów; bramka logowania zostaje
@@ -310,7 +310,7 @@ async function handleOneDrive(req, res, p) {
       redirectUri: process.env.ONEDRIVE_REDIRECT_URI || null,
       indeksowanie: U().indeksowanie
         ? { trwa: U().indeksowanie.trwa, przejrzanych: U().indeksowanie.przejrzanych,
-            dodanych: U().indeksowanie.dodanych, blad: U().indeksowanie.blad }
+            dodanych: U().indeksowanie.dodanych, blad: U().indeksowanie.blad, wznowione: U().indeksowanie.wznowione }
         : null,
       wArchiwum: archiwum.ile(),
       // Ile z tego ma już dane z plików — patrz `postep()` w lib/archiwum.js.
@@ -365,32 +365,18 @@ async function handleOneDrive(req, res, p) {
     }
     let d = {};
     try { d = await readJson(req); } catch { /* bez parametrów też można */ }
-    U().indeksowanie = { trwa: true, przejrzanych: 0, dodanych: 0, blad: null, sygnal: { przerwane: false } };
-    /* Indeksowanie idzie W TLE i nie blokuje odpowiedzi: przy 2 TB trwa
-       kilkanaście minut, a przeglądarka zerwałaby połączenie po minucie. */
-    (async () => {
-      try {
-        await onedrive.indeksuj(async (paczka) => {
-          // Porcjami — strona z Graph to setki plików, liczonych jednym ciągiem.
-          await archiwum.dodajPorcjami(paczka);
-          U().indeksowanie.dodanych += paczka.length;
-        }, { folder: d.folder || '', limit: Number(d.limit) || 100000, sygnal: U().indeksowanie.sygnal });
-        addEvent('archiwum', `OneDrive: zindeksowano ${U().indeksowanie.dodanych} plików`);
-      } catch (err) {
-        U().indeksowanie.blad = err.message;
-        console.error('Indeksowanie OneDrive:', err.message);
-      } finally {
-        U().indeksowanie.trwa = false;
-        // `zapisz()` jest asynchroniczny — czekamy, żeby „U().indeksowanie
-        // skończone" znaczyło też „zapisane na dysk".
-        await archiwum.zapisz();
-      }
-    })();
-    return sendJson(res, 202, { ruszylo: true });
+    // Zapisana kolejka tego samego folderu = dokończ, zamiast zaczynać od korzenia.
+    const zapisana = d.odNowa ? null : czytajJson(KOLEJKA_ONEDRIVE(), null);
+    const folder = d.folder || '';
+    const wznow = zapisana && zapisana.folder === folder ? zapisana : null;
+    ruszIndeksowanieOneDrive({ folder, limit: Number(d.limit) || (wznow && wznow.limit) || 100000, wznow });
+    return sendJson(res, 202, { ruszylo: true, wznowione: Boolean(wznow) });
   }
 
   if (p === '/api/onedrive/index' && req.method === 'DELETE') {
     if (U().indeksowanie) U().indeksowanie.sygnal.przerwane = true;
+    // Człowiek przerwał świadomie — następne indeksowanie zaczyna od początku.
+    if (U().indeksowanie) U().indeksowanie.porzuc = true;
     return sendJson(res, 200, { przerwano: true });
   }
 
@@ -418,6 +404,74 @@ async function handleOneDrive(req, res, p) {
   }
 
   return sendJson(res, 404, { error: 'Nieznana trasa OneDrive.' });
+}
+
+/* Kolejka folderów OneDrive na dysku osoby — żeby restart serwera w połowie
+   przejścia po 2 TB nie zaczynał go od korzenia. Zapis najwyżej co
+   KOLEJKA_ZAPIS_MS (kolejka potrafi mieć tysiące adresów), usunięcie po
+   skończeniu albo po przerwaniu przez człowieka. Błąd Graph (wygasły token,
+   brak sieci) kolejkę ZOSTAWIA — do dokończenia. */
+const KOLEJKA_ONEDRIVE = () => path.join(U().katalog, 'onedrive-kolejka.json');
+const KOLEJKA_ZAPIS_MS = Number(process.env.COSMOS_ONEDRIVE_ZAPIS_MS ?? 2000);
+
+function ruszIndeksowanieOneDrive({ folder, limit, wznow }) {
+  const ind = {
+    trwa: true, przejrzanych: (wznow && wznow.przejrzanych) || 0, dodanych: (wznow && wznow.dodanych) || 0,
+    blad: null, sygnal: { przerwane: false }, wznowione: Boolean(wznow), porzuc: false,
+  };
+  U().indeksowanie = ind;
+  const plik = KOLEJKA_ONEDRIVE();
+  let ostatniZapis = 0;
+  /* Indeksowanie idzie W TLE i nie blokuje odpowiedzi: przy 2 TB trwa
+     kilkanaście minut, a przeglądarka zerwałaby połączenie po minucie. */
+  (async () => {
+    try {
+      const wynik = await onedrive.indeksuj(async (paczka) => {
+        // Porcjami — strona z Graph to setki plików, liczonych jednym ciągiem.
+        await archiwum.dodajPorcjami(paczka);
+        ind.dodanych += paczka.length;
+      }, {
+        folder, limit, sygnal: ind.sygnal, wznow,
+        naPostep: async (stanKolejki) => {
+          ind.przejrzanych = stanKolejki.przejrzanych;
+          if (Date.now() - ostatniZapis < KOLEJKA_ZAPIS_MS) return;
+          ostatniZapis = Date.now();
+          /* Najpierw archiwum, potem kolejka: kolejka nie może obiecywać
+             folderów „zrobionych", których wpisów nie ma jeszcze na dysku. */
+          await archiwum.zapisz();
+          try { zapiszAtomowo(plik, JSON.stringify({ folder, limit, ...stanKolejki, zapisano: Date.now() })); } catch { /* następnym razem */ }
+        },
+      });
+      if (wynik.skonczone || ind.porzuc) { try { fs.unlinkSync(plik); } catch { /* nie było */ } }
+      addEvent('archiwum', `OneDrive: zindeksowano ${ind.dodanych} plików${ind.wznowione ? ' (wznowione po przerwie)' : ''}`);
+    } catch (err) {
+      ind.blad = err.message;
+      console.error('Indeksowanie OneDrive:', err.message);
+    } finally {
+      ind.trwa = false;
+      // `zapisz()` jest asynchroniczny — czekamy, żeby „indeksowanie
+      // skończone" znaczyło też „zapisane na dysk".
+      await archiwum.zapisz();
+    }
+  })();
+}
+
+/** Po starcie serwera: dokończ przerwane indeksowania — każdej osoby w jej imieniu. */
+function wznowIndeksowaniaOneDrive() {
+  const zwloka = Number(process.env.COSMOS_WZNOW_ONEDRIVE_MS ?? 15000);
+  setTimeout(() => {
+    for (const osoba of konta.wszyscy()) {
+      const u = konta.znajdz(osoba.id);
+      if (!u) continue;
+      wKontekscie(u, () => {
+        const zapisana = czytajJson(KOLEJKA_ONEDRIVE(), null);
+        if (!zapisana || !Array.isArray(zapisana.doOdwiedzenia) || !onedrive.polaczony()) return;
+        if (U().indeksowanie && U().indeksowanie.trwa) return;
+        console.log(`  → OneDrive: wznawiam indeksowanie (${zapisana.doOdwiedzenia.length} w kolejce, ${zapisana.dodanych || 0} już dodanych)`);
+        ruszIndeksowanieOneDrive({ folder: zapisana.folder || '', limit: zapisana.limit || 100000, wznow: zapisana });
+      });
+    }
+  }, zwloka).unref();
 }
 
 const oczekiwaneStany = new Set();
@@ -1911,6 +1965,7 @@ function start(port = PORT) {
       }
       console.log('');
       startScheduler();
+      wznowIndeksowaniaOneDrive();
       resolve(server);
     }));
   });

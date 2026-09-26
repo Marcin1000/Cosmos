@@ -316,6 +316,7 @@ const I18N = {
        kazało zaczynać całe dociąganie od nowa. */
     'arch.throttled': 'Microsoft każe zwolnić (429). Czekam {sekund} s i próbuję dalej — {zostalo} do zrobienia.',
     'arch.indexing': 'Indeksuję… dodano {n} plików.',
+    'arch.indexingResumed': 'Dokańczam indeksowanie przerwane restartem… dodano {n} plików.',
     'arch.indexError': '⚠︎ Indeksowanie przerwane: {msg}',
     'arch.empty': 'Archiwum jest puste.',
     'arch.confirmDisconnect': 'Odłączyć OneDrive? Zaindeksowany materiał zostaje — '
@@ -1158,6 +1159,7 @@ const I18N = {
     'arch.batchStuck': 'Stopped: the queue is not shrinking ({zostalo} left). Reason: {powod}',
     'arch.throttled': 'Microsoft is throttling (429). Waiting {sekund}s and retrying — {zostalo} left.',
     'arch.indexing': 'Indexing… {n} files added.',
+    'arch.indexingResumed': 'Finishing indexing interrupted by a restart… {n} files added.',
     'arch.indexError': '⚠︎ Indexing stopped: {msg}',
     'arch.empty': 'The archive is empty.',
     'arch.confirmDisconnect': 'Disconnect OneDrive? The indexed material stays — '

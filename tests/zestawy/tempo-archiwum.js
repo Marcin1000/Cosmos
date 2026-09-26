@@ -204,14 +204,17 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   const katalogOd = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-od-'));
   fs.writeFileSync(path.join(katalogOd, 'onedrive.json'),
     JSON.stringify({ refresh_token: 'y', access_token: '', wygasa: 0, od: Date.now() }));
-  /* Adresy Microsoftu są w module na stałe, więc podmieniamy je przez
-     zmienne środowiskowe modułu — tak samo jak w innych zestawach. */
-  const kod = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'onedrive.js'), 'utf8')
-    .replace(/const GRAF = '[^']*'/, `const GRAF = 'http://127.0.0.1:${port}'`)
-    .replace(/const TOKEN = '[^']*'/, `const TOKEN = 'http://127.0.0.1:${port}/oauth2/token'`);
-  const podmieniony = path.join(katalogOd, 'onedrive-test.js');
-  fs.writeFileSync(podmieniony, kod.replace(/require\('\.\//g, `require('${path.join(__dirname, '..', '..', 'lib')}/`));
-  const od = require(podmieniony).utworz({
+  /* Adresy Microsoftu moduł czyta przy wczytaniu (ONEDRIVE_GRAPH_URL,
+     ONEDRIVE_TOKEN_URL). Dawniej zestaw podmieniał je regexpem w TEKŚCIE
+     modułu — i padł, gdy ta linijka zmieniła brzmienie, choć działała. */
+  const onedriveNa = (adres) => {
+    process.env.ONEDRIVE_GRAPH_URL = adres;
+    process.env.ONEDRIVE_TOKEN_URL = `${adres}/oauth2/token`;
+    const plik = require.resolve('../../lib/onedrive.js');
+    delete require.cache[plik];
+    return require(plik);
+  };
+  const od = onedriveNa(`http://127.0.0.1:${port}`).utworz({
     katalogDanych: katalogOd, clientId: 'a', clientSecret: 'b', redirectUri: 'http://x',
   });
 
@@ -264,16 +267,10 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   });
   await new Promise((r) => beznadziejne.listen(0, r));
   const port2 = beznadziejne.address().port;
-  const kod2 = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'onedrive.js'), 'utf8')
-    .replace(/const GRAF = '[^']*'/, `const GRAF = 'http://127.0.0.1:${port2}'`)
-    .replace(/const TOKEN = '[^']*'/, `const TOKEN = 'http://127.0.0.1:${port2}/oauth2/token'`)
-    .replace(/require\('\.\//g, `require('${path.join(__dirname, '..', '..', 'lib')}/`);
   const katalogOd2 = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-od2-'));
   fs.writeFileSync(path.join(katalogOd2, 'onedrive.json'),
     JSON.stringify({ refresh_token: 'y', access_token: '', wygasa: 0, od: Date.now() }));
-  const plik2 = path.join(katalogOd2, 'onedrive-test.js');
-  fs.writeFileSync(plik2, kod2);
-  const od2 = require(plik2).utworz({
+  const od2 = onedriveNa(`http://127.0.0.1:${port2}`).utworz({
     katalogDanych: katalogOd2, clientId: 'a', clientSecret: 'b', redirectUri: 'http://x',
   });
 

@@ -433,7 +433,7 @@ async function odswiezArchiwum() {
 
   const indeks = d.indeksowanie;
   if (indeks && indeks.trwa) {
-    stanEl.textContent = t('arch.indexing', { n: indeks.dodanych });
+    stanEl.textContent = t(indeks.wznowione ? 'arch.indexingResumed' : 'arch.indexing', { n: indeks.dodanych });
     przycisk(t('arch.stop'), async () => {
       await fetch('/api/onedrive/index', { method: 'DELETE' }).catch(() => {});
       odswiezArchiwum();
