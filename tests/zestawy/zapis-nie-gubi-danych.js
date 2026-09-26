@@ -294,6 +294,38 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     fs.rmSync(kat, { recursive: true, force: true });
   }
 
+  /* ---- 4. Nagranie przerwane restartem nie wisi „w tle" na zawsze ----
+     Transkrypcja żyła tylko w pamięci procesu: po restarcie pozycja zostawała
+     „przepisuje się w tle", bez tekstu, na zawsze. Przy pierwszym zajrzeniu
+     do bazy wiedzy rusza od nowa (tu zmysłów nie ma, więc kończy się pustym
+     tekstem — ważne, że się KOŃCZY), a po dwóch przerwanych próbach
+     przestaje udawać, że trwa. */
+  {
+    const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-transkrypcja-'));
+    const kb = path.join(kat, 'uzytkownicy', 'wlasciciel', 'kb');
+    fs.mkdirSync(path.join(kb, 'files'), { recursive: true });
+    fs.writeFileSync(path.join(kb, 'files', 'nagr1'), Buffer.alloc(2048));
+    fs.writeFileSync(path.join(kb, 'files', 'nagr2'), Buffer.alloc(2048));
+    const pozycja = (id, prob) => ({ id, type: 'file', name: `${id}.mp3`, mime: 'audio/mpeg', size: 2048, time: Date.now(),
+      text: '', chunks: [], przetwarzanie: 'transkrypcja', ...(prob ? { probPrzepisania: prob } : {}) });
+    fs.writeFileSync(path.join(kb, 'index.json'), JSON.stringify([pozycja('nagr1'), pozycja('nagr2', 2)]));
+    const srv = uruchom('node', ['server.js'], { cwd: KORZEN, env: { ...bazaEnv, PORT: '3490', COSMOS_DATA_DIR: kat, SENSES_URL: 'http://127.0.0.1:9', EMBED_PROVIDER: 'off' } });
+    let wTle = ['?'];
+    if (await czekajNa('http://127.0.0.1:3490/')) {
+      await fetch('http://127.0.0.1:3490/api/kb');
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const items = (await (await fetch('http://127.0.0.1:3490/api/kb')).json()).items || [];
+        wTle = items.filter((it) => it.przetwarzanie).map((it) => it.name);
+        if (!wTle.length) break;
+      }
+    }
+    zabij(srv);
+    console.log(`9. nagrania przerwane restartem, po pierwszym zajrzeniu do bazy: wciąż „w tle": ${wTle.join(', ') || 'żadne'}`);
+    if (wTle.length) fail.push(`nagranie przerwane restartem dalej „przepisuje się w tle" (${wTle.join(', ')})`);
+    fs.rmSync(kat, { recursive: true, force: true });
+  }
+
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nZAPIS NIE GUBI DANYCH OK');
   process.exit(fail.length ? 1 : 0);
 })();
