@@ -112,11 +112,27 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
     voiceState = 'wake';
     voiceDeaf = false;
     voiceOstatniaOdpowiedz = 'Dobrze, dam znać jeśli będę potrzebował czegoś jeszcze';
+    voiceKoniecMowienia = Date.now();          // Cosmos skończył mówić przed chwilą
     askVoice('dobrze dam znać jeśli będę potrzebował czegoś jeszcze');
     return window.__zadane.length;
   });
   console.log(`3. echo własnej odpowiedzi przez askVoice → zadano: ${odrzucone}`);
   if (odrzucone) fail.push('askVoice przyjął zdanie identyczne z własną odpowiedzią');
+
+  /* 3b. To samo zdanie DŁUGO po wypowiedzi to nie echo, tylko dopytanie
+     powtarzające słowa z odpowiedzi. Zapora bez okna czasu połykała je bez
+     śladu (agencja, runda 5: „A jutro będzie pogoda?” po „Jutro będzie…”). */
+  const dopytanie = await pg.evaluate(() => {
+    window.__zadane = [];
+    voiceState = 'listening';
+    voiceDeaf = false;
+    voiceOstatniaOdpowiedz = 'Jutro będzie ładna pogoda, słonecznie do dwudziestu stopni';
+    voiceKoniecMowienia = Date.now() - 10000;
+    askVoice('a jutro będzie ładna pogoda słonecznie');
+    return window.__zadane.length;
+  });
+  console.log(`3b. dopytanie 10 s po odpowiedzi → zadano: ${dopytanie}`);
+  if (!dopytanie) fail.push('dopytanie powtarzające słowa z odpowiedzi zostało połknięte jako echo');
 
   // 4. ale prawdziwe, inne pytanie ma przejść
   const przeszlo = await pg.evaluate(() => {
