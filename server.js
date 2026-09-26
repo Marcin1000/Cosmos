@@ -383,6 +383,9 @@ async function handleOneDrive(req, res, p) {
     if (U().indeksowanie) U().indeksowanie.sygnal.przerwane = true;
     // Człowiek przerwał świadomie — następne indeksowanie zaczyna od początku.
     if (U().indeksowanie) U().indeksowanie.porzuc = true;
+    /* Bez trwającego indeksowania (np. po nieudanym wznowieniu) kolejki nie
+       skasowałby nikt — „Stop" robi to wprost. */
+    if (!U().indeksowanie || !U().indeksowanie.trwa) { try { fs.unlinkSync(KOLEJKA_ONEDRIVE()); } catch { /* nie było */ } }
     return sendJson(res, 200, { przerwano: true });
   }
 
@@ -443,8 +446,10 @@ function ruszIndeksowanieOneDrive({ folder, limit, wznow }) {
           if (Date.now() - ostatniZapis < KOLEJKA_ZAPIS_MS) return;
           ostatniZapis = Date.now();
           /* Najpierw archiwum, potem kolejka: kolejka nie może obiecywać
-             folderów „zrobionych", których wpisów nie ma jeszcze na dysku. */
-          await archiwum.zapisz();
+             folderów „zrobionych", których wpisów nie ma jeszcze na dysku. Stąd
+             zapis obejmujący wszystko do teraz — i kolejka tylko po udanym
+             (pełny dysk: kilkukilobajtowa kolejka by się zapisała, a archiwum nie). */
+          if (!(await archiwum.zapiszPoTeraz())) return;
           try { zapiszAtomowo(plik, JSON.stringify({ folder, limit, ...stanKolejki, zapisano: Date.now() })); } catch { /* następnym razem */ }
         },
       });

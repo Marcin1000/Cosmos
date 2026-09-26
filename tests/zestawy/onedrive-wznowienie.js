@@ -13,7 +13,14 @@
         folderów, których wpisów nie ma na dysku).
      3. Po skończeniu kolejka znika z dysku; status mówi, że to wznowienie.
      4. Przerwanie przez człowieka (Przerwij) kasuje kolejkę — następne
-        indeksowanie zaczyna od początku, bo tak zdecydował. */
+        indeksowanie zaczyna od początku, bo tak zdecydował.
+     0. Na module: zapis archiwum, na który czeka kolejka, obejmuje WSZYSTKIE
+        wpisy dodane przed nim (także gdy trwał starszy zapis) i mówi, czy się
+        udał — kolejka zapisuje się tylko po udanym.
+     5. Folder skasowany albo przeniesiony od zapisania kolejki (404) nie
+        blokuje wznowienia na zawsze — jest pomijany; kolejka w złym kształcie
+        nie wywraca pętli; „Przerwij" bez trwającego indeksowania też kasuje
+        kolejkę. Dawniej jedynym wyjściem było SSH i rm. */
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -39,6 +46,10 @@ const graph = http.createServer((req, res) => {
   const sciezka = new URL(req.url, 'http://x').pathname.replace(/^\/graph/, '');
   pytania.set(sciezka, (pytania.get(sciezka) || 0) + 1);
   const odpowiedz = () => {
+    if (sciezka === '/me/drive/items/fUSUNIETY/children') {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end('{"error":{"code":"itemNotFound","message":"Item does not exist"}}');
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     if (sciezka === '/me/drive/root/children') {
       return res.end(JSON.stringify({ value: FOLDERY.map((f) => ({ id: `f${f}`, name: `Folder ${f}`, folder: { childCount: 1 } })) }));
@@ -69,6 +80,30 @@ const status = async () => (await fetch(`${ADRES}/api/onedrive/status`)).json();
 const zabijTwardo = (p) => { try { process.kill(-p.pid, 'SIGKILL'); } catch { /* */ } };
 
 (async () => {
+  // --- 0. zapis archiwum pod kolejkę: wszystko do teraz, z wynikiem ----------------------
+  {
+    const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-luka-'));
+    const a = require('../../lib/archiwum.js').utworz(kat);
+    const wpis = (i) => ({ id: `onedrive:F-${i}`, zrodlo: 'onedrive', nazwa: `IMG_${i}.JPG`, sciezka: `/S/IMG_${i}.JPG`, typ: 'zdjecie', kiedy: '2025-05-05T10:00:00' });
+    const naDysku = () => { try { return JSON.parse(fs.readFileSync(path.join(kat, 'archiwum.json'), 'utf8')).length; } catch { return 0; } };
+    const rename = fs.promises.rename;
+    fs.promises.rename = async (...x) => { await czekaj(300); return rename(...x); };   // wolny dysk VPS
+    await a.dodajPorcjami(Array.from({ length: 1000 }, (_, i) => wpis(i)));
+    const starszy = a.zapisz();
+    await czekaj(50);
+    await a.dodajPorcjami(Array.from({ length: 500 }, (_, i) => wpis(1000 + i)));   // strona z Graph w trakcie zapisu
+    const udany = await a.zapiszPoTeraz();
+    ok(udany === true && naDysku() === 1500, `zapis pod kolejkę obejmuje wpisy dodane w trakcie starszego zapisu (${naDysku()} z 1500)`);
+    await starszy;
+    fs.promises.rename = async () => { throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' }); };
+    await a.dodajPorcjami([wpis(2000)]);
+    const nieudany = await a.zapiszPoTeraz();
+    fs.promises.rename = rename;
+    ok(nieudany === false && !fs.existsSync(path.join(kat, 'archiwum.json.tmp')),
+      'nieudany zapis archiwum mówi „nie" (kolejka się wtedy nie zapisze) i nie zostawia .tmp');
+    fs.rmSync(kat, { recursive: true, force: true });
+  }
+
   await new Promise((r) => graph.listen(PORT + 100, '127.0.0.1', r));
 
   // Katalog danych z połączonym OneDrive (token ważny — bez logowania u Microsoftu).
@@ -114,6 +149,29 @@ const zabijTwardo = (p) => { try { process.kill(-p.pid, 'SIGKILL'); } catch { /*
   pusc('/me/drive/items/fa/children');
   await az(async () => !(await status()).indeksowanie.trwa);
   ok(byla && !fs.existsSync(kolejka), 'Przerwij kasuje zapisaną kolejkę — następnym razem od początku');
+
+  // --- 5. skasowany folder, zły kształt kolejki, Przerwij bez indeksowania ----------------
+  const indeksuj = () => fetch(`${ADRES}/api/onedrive/index`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  fs.writeFileSync(kolejka, JSON.stringify({ folder: '', limit: 100000, przejrzanych: 8, dodanych: 4,
+    doOdwiedzenia: ['/me/drive/items/fUSUNIETY/children?x=1', '/me/drive/items/fd/children?x=1'] }));
+  pytania.clear();
+  await indeksuj();
+  await az(async () => { const st = await status(); return st.indeksowanie && !st.indeksowanie.trwa; });
+  const poUsunietym = await status();
+  ok(!poUsunietym.indeksowanie.blad && pytania.get('/me/drive/items/fd/children') === 1 && !fs.existsSync(kolejka),
+    `skasowany folder w kolejce pominięty, reszta przejrzana, kolejka usunięta (błąd: ${poUsunietym.indeksowanie.blad || 'brak'})`);
+
+  fs.writeFileSync(kolejka, JSON.stringify({ folder: '', limit: 100000, doOdwiedzenia: [123, null] }));
+  pytania.clear();
+  await indeksuj();
+  await az(async () => { const st = await status(); return st.indeksowanie && !st.indeksowanie.trwa; });
+  const poZlym = await status();
+  ok(!poZlym.indeksowanie.blad && pytania.get('/me/drive/root/children') === 1,
+    `kolejka w złym kształcie — indeksowanie od korzenia zamiast błędu w pętli (błąd: ${poZlym.indeksowanie.blad || 'brak'})`);
+
+  fs.writeFileSync(kolejka, JSON.stringify({ folder: '', limit: 100000, doOdwiedzenia: ['/me/drive/items/fUSUNIETY/children?x=1'] }));
+  await fetch(`${ADRES}/api/onedrive/index`, { method: 'DELETE' });
+  ok(!fs.existsSync(kolejka), 'Przerwij bez trwającego indeksowania kasuje kolejkę z dysku');
 
   process.kill(-drugi.pid);
   graph.close();
