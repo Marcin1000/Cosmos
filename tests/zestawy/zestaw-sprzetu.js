@@ -74,7 +74,7 @@ const { srodowisko } = require('../pomoc');
   const r3 = await (await fetch(`${env.adres}/api/plan`, { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ lat: 50.06, lon: 19.94, kiedy: '2026-06-21T10:00', tryb: 'zdjecie' }) })).json();
-  const nieznany = (r3.ustawienia.powody || []).some((x) => /Nie mam .* w katalogu/.test(x));
+  const nieznany = (r3.ustawienia.powody || []).some((x) => /nie ma w katalogu/i.test(x));
   console.log(`6. „Canon R6 Mark II" z pola tekstowego → „nie mam w katalogu": ${nieznany}`);
   if (nieznany) fail.push('własny aparat Marcina nie trafił we własny wpis katalogowy');
 

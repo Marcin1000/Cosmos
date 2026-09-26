@@ -216,7 +216,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   if (rozpoznajSprzet('Fujifilm X-T5').klasa !== 'aparat-aps-c') fail.push('APS-C nierozpoznany');
   if (rozpoznajSprzet('Sony A7 IV').klasa !== 'aparat-pelna-klatka') fail.push('pełna klatka nierozpoznana');
   const obcy = dobierz(dzien, { tryb: 'zdjecie', sprzet: 'Sony A7 IV', temat: 'portret', obiektyw: '85mm f/1.8' });
-  if (!obcy.powody.some((x) => /nie mam .* w katalogu/i.test(x))) {
+  if (!obcy.powody.some((x) => /nie ma w katalogu/i.test(x))) {
     fail.push('nieznany korpus podstawiony po cichu');
   }
 
