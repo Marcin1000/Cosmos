@@ -1,13 +1,17 @@
 <p align="center">
-  <img src="docs/obrazy/banner.svg" alt="Cosmos — hybrydowe środowisko AI: lokalnie i w chmurze" width="880">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/banner-pl-ciemny.jpg">
+    <img src="docs/obrazy/banner-pl.jpg" alt="Cosmos — jedna rozmowa, każdy model: chmura NVIDIA, lokalny GPU, Claude i OpenAI w jednym wątku" width="880">
+  </picture>
 </p>
 
 <p align="center">
-  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
-  <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="114 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-114-4ac26b?style=flat-square">
-  <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
-  <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
+  <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
+  <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
+  <img alt="114 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-114-5E9E3A?style=flat-square">
+  <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-5E616B?style=flat-square">
+  <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
 
 ---
@@ -31,10 +35,23 @@ odczytać. Okno kontekstu zapełnia się podpisanymi adresami miniatur zamiast
 zdjęciami. Archiwum 57 tysięcy plików odpowiada poprawnie i bezużytecznie.
 Większość tego repozytorium to kształt, jaki zostawiły po sobie te problemy.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/rozmowa-pl-ciemny.png">
+    <img src="docs/obrazy/rozmowa-pl.png" alt="Rozmowa w Cosmosie: chmura NVIDIA liczy plan zdjęciowy, a na pytanie uzupełniające odpowiada Claude w tym samym wątku; każda odpowiedź ma kolor i podpis swojego silnika" width="900">
+  </picture>
+</p>
+
+Jeden wątek, dwa silniki: chmura NVIDIA liczy plan, Claude odpowiada na pytanie
+uzupełniające — a każda odpowiedź zachowuje kolor i podpis silnika, który ją napisał.
+
 ## Architektura
 
 <p align="center">
-  <img src="docs/obrazy/architecture.svg" alt="Architektura Cosmosa w czterech warstwach" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/architektura-pl-ciemny.png">
+    <img src="docs/obrazy/architektura-pl.png" alt="Architektura Cosmosa w czterech warstwach: wnioskowanie (lokalny GPU i chmura za jednym przełącznikiem), rozdział multimodalny, kaskada narzędzi z mostkiem MCP, krawędź — interfejsy, zmysły, sprzęt" width="900">
+  </picture>
 </p>
 
 Cztery warstwy i jedna zasada między nimi: **każda dostaje tylko to, czego
@@ -166,6 +183,10 @@ node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 
 ## Strona produktowa i adres aplikacji
 
+<p align="center">
+  <img src="docs/obrazy/strona-pl.jpg" alt="Strona produktowa cosmosai.live: Jedna rozmowa. Każdy model." width="900">
+</p>
+
 Pod `/` stoi strona produktowa (na serwerze: `https://cosmosai.live`), a sam Cosmos
 mieszka pod **`/app`**. Stąd kilka praktycznych rzeczy:
 
@@ -183,6 +204,11 @@ mieszka pod **`/app`**. Stąd kilka praktycznych rzeczy:
   angielskie w `strona.js` — pisane osobno, nie tłumaczone zdanie w zdanie.
 - Znak (planeta z pierścieniem z czterech łuków — po jednym na silnik) i wszystkie
   ikony powstają z jednego źródła: `node scripts/ikony.js`.
+- **Grafiki marki** — banner i schemat architektury do README oraz grafiki na LinkedIn,
+  GitHuba, X i relacje (`docs/grafiki/`, PL i EN) — renderuje z tych samych czcionek,
+  kolorów i znaku `scripts/grafiki-marki.js`, na prawdziwych zrzutach aplikacji
+  z `scripts/zrzuty-readme.js`. Kolejność: najpierw zrzuty, potem grafiki
+  (oba przez `NODE_PATH=/opt/node22/lib/node_modules`, bo potrzebują Playwrighta).
 
 # Dokumentacja techniczna
 

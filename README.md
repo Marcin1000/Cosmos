@@ -1,13 +1,17 @@
 <p align="center">
-  <img src="docs/obrazy/banner.svg" alt="Cosmos — hybrid local / cloud AI environment" width="880">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/banner-en-ciemny.jpg">
+    <img src="docs/obrazy/banner-en.jpg" alt="Cosmos — one thread, every engine: NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation" width="880">
+  </picture>
 </p>
 
 <p align="center">
-  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
-  <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-0969da?style=flat-square">
-  <img alt="114 test suites" src="https://img.shields.io/badge/test%20suites-114-4ac26b?style=flat-square">
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-6e7781?style=flat-square">
-  <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-d4a72c?style=flat-square"></a>
+  <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
+  <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
+  <img alt="114 test suites" src="https://img.shields.io/badge/test%20suites-114-5E9E3A?style=flat-square">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-5E616B?style=flat-square">
+  <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
 
 ---
@@ -31,7 +35,10 @@ this repository is the shape those problems left behind.
 ## Architecture
 
 <p align="center">
-  <img src="docs/obrazy/architecture.svg" alt="Cosmos architecture in four layers: inference backends, multimodal routing, tool cascade, edge interfaces" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/architektura-en-ciemny.png">
+    <img src="docs/obrazy/architektura-en.png" alt="Cosmos architecture in four layers: inference (local GPU and cloud APIs behind one switch), multimodal routing, tool cascade with MCP bridge, edge interfaces, sensors and hardware" width="900">
+  </picture>
 </p>
 
 Four layers, one rule between them: **each layer only receives what it needs to
@@ -42,8 +49,8 @@ cannot reach something cannot quietly start depending on it.
 
 | Layer | What lives there | Lines |
 |---|---|---|
-| Inference | provider adapters, streaming, resumable runs | `server.js`, `lib/rdzen.js` |
-| Routing | model catalogue, capability detection, prompt assembly | `lib/instrukcje-narzedzi.js`, `public/models.js` |
+| Inference | provider adapters, streaming, resumable runs | `lib/czat.js`, `lib/model.js`, `lib/biegi.js` |
+| Routing | model catalogue, capability detection, context assembly | `lib/czat.js`, `lib/instrukcje-narzedzi.js`, `public/models.js` |
 | Tools | one contract per tool, four rounds per turn | `public/narzedzia.js` |
 | Edge | PWA, voice, camera, sensors, hardware | `public/`, `senses/` |
 
@@ -91,7 +98,7 @@ costing every message an 11-second connect timeout.
 
 These are the parts I would actually defend in a review.
 
-**Zero runtime dependencies in the Node core.** 28 500 lines of production code,
+**Zero runtime dependencies in the Node core.** 31 000 lines of production JavaScript,
 `node server.js`, nothing to build. Deployment to a VPS is `git clone`. There is
 no dependency tree to audit and nothing that breaks overnight. Python sensors are
 the deliberate exception — nobody should write an object detector from scratch —
@@ -165,29 +172,35 @@ answered a question. The interesting column is the last one.
 ## What it looks like
 
 <p align="center">
-  <img src="docs/obrazy/01-chat.png" alt="Cosmos chat: engine switcher, collapsed chain of thought, computed camera settings in a table, code block, sources" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/rozmowa-en-ciemny.png">
+    <img src="docs/obrazy/rozmowa-en.png" alt="Cosmos chat: NVIDIA’s cloud answers with a computed shoot plan, then Claude answers the follow-up in the same thread; each reply carries its engine’s colour and signature" width="900">
+  </picture>
 </p>
 
-Tool results, reasoning traces and search interstitials collapse to a single
-quiet line. They are available and out of the way — an answer with fourteen of
-them should still read as an answer.
+One thread, two engines: NVIDIA’s cloud computes the plan, Claude answers the
+follow-up — and each reply keeps the colour and signature of the engine that
+wrote it. Tool results, reasoning traces and search interstitials collapse to a
+single quiet line; an answer with fourteen of them should still read as an answer.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/obrazy/03-shoot-plan.png" alt="Shoot plan panel with computed shutter, aperture and ISO plus the reasoning behind each" ></td>
-<td width="50%"><img src="docs/obrazy/06-voice.png" alt="Voice mode with live transcript and answer" ></td>
+<td width="52%"><img src="docs/obrazy/plener-en.png" alt="Shoot planner: the Sun’s path over the ridge at Morskie Oko at 06:55, computed elevation and azimuth, and shutter, aperture and ISO for the lens you own" ></td>
+<td width="24%"><img src="docs/obrazy/telefon-en.png" alt="Cosmos on a phone in the dark theme: one answer from NVIDIA’s cloud, the next from the home GPU, each with its own thread colour" ></td>
+<td width="24%"><img src="docs/obrazy/glos-en.jpg" alt="Voice mode with live transcript and spoken answer" ></td>
 </tr>
 <tr>
-<td><b>Shoot planner.</b> Settings computed for the place, the light and the
-lenses you own — with the reasoning, because a number without a reason cannot
-be argued with.</td>
-<td><b>Voice mode.</b> Wake word, live transcript, spoken answer. Falls back to
-push-to-talk when the browser cannot hold a continuous session.</td>
+<td><b>Shoot planner.</b> The Sun’s real path for the place and the minute,
+and settings that fit the lenses you own — computed, not described.</td>
+<td><b>On the phone.</b> Installed as an app. The first answer came from
+NVIDIA’s cloud, the next from the home GPU — each keeps its engine’s thread.</td>
+<td><b>Voice mode.</b> Live transcript, spoken answer, push-to-talk when the
+browser cannot hold a continuous session.</td>
 </tr>
 </table>
 
 <p align="center">
-  <img src="docs/obrazy/04-archive.png" alt="Photo archive results as a thumbnail grid with capture time and focal length" width="900">
+  <img src="docs/obrazy/archiwum-en.png" alt="Photo archive results as a thumbnail grid with capture time, light and focal length" width="900">
 </p>
 
 Archive results come back as a grid the human browses and a summary the model
@@ -197,7 +210,10 @@ so, the human gets every file.
 > Screenshots are captured from the real interface by
 > [`scripts/zrzuty-readme.js`](scripts/zrzuty-readme.js) against the test
 > environment — real rendering, mock model and mock data. Personal content
-> stays out of a public repository.
+> stays out of a public repository. The banner, the architecture diagram and
+> the social graphics in [`docs/grafiki/`](docs/grafiki/) are rendered from the
+> same fonts, colours and mark as the app by
+> [`scripts/grafiki-marki.js`](scripts/grafiki-marki.js).
 
 ---
 
@@ -213,7 +229,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 114 suites + 9 Python selftests (~16 min)
+npm test                  # 114 suites + 9 Python selftests (~20 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -224,6 +240,10 @@ installing as a phone app — are covered in the setup guide below.
 ---
 
 ## Product page
+
+<p align="center">
+  <img src="docs/obrazy/strona-en.jpg" alt="The cosmosai.live product page: One thread. Every engine." width="900">
+</p>
 
 `/` serves a product page for [cosmosai.live](https://cosmosai.live); Cosmos
 itself lives at `/app`. The page is written in Polish and English separately —

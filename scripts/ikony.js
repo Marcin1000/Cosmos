@@ -104,4 +104,7 @@ async function main() {
   await przegladarka.close();
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+/* Znak jest potrzebny też grafikom marki (scripts/grafiki-marki.js) — jedno
+   źródło kształtu, więc eksport; pliki zapisujemy tylko przy uruchomieniu wprost. */
+if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
+module.exports = { znak, JASNE, CIEMNE };

@@ -405,6 +405,11 @@ spod `/app/` trafiłaby w `/app/app.js` i aplikacja wstałaby bez skryptów.
 - Liczby na stronie (zestawy testów) pilnuje audyt razem z README.
 - Znak i ikony generuje `scripts/ikony.js` z jednego źródła. Pliki w `public/icons/`
   serwer oddaje jako niezmienne (rok w pamięci) — **nowy wygląd = nowa nazwa pliku**.
+- Obrazy do README (`docs/obrazy/`) i grafiki do serwisów (`docs/grafiki/`) powstają
+  skryptami, nie ręcznie: `scripts/zrzuty-readme.js` (prawdziwa aplikacja pod `/app`,
+  dane testowe, strefa Europe/Warsaw) i `scripts/grafiki-marki.js` (banner, schemat,
+  LinkedIn, GitHub, X; znak z `scripts/ikony.js`). Zmiana wyglądu aplikacji = ponowne
+  uruchomienie obu, w tej kolejności.
 
 ### Mostek MCP (`mcp/cosmos-mcp.js`)
 
