@@ -57,6 +57,13 @@ Tailscale jako tylne wejście działa dalej przez `tailscale serve --bg 3000`
 (adres `https://<nazwa-vps>.<tailnet>.ts.net`) — sam adres `100.x.y.z:3000`
 przy `COSMOS_HOST=127.0.0.1` już nie odpowie.
 
+To samo dotyczy wszystkiego, co łączy się z VPS-em pod `http://100.x.y.z:3000`:
+obserwatora kamery w domu (`COSMOS_URL` w `senses/watcher.py`) i mostka MCP
+(`COSMOS_URL` w konfiguracji Claude Desktop / Cursora). Zmień im adres na ten
+z `tailscale serve` albo na `https://cosmosai.live` — inaczej zdarzenia z kamery
+przestaną dochodzić, a nic tego głośno nie zgłosi. Połączenia w drugą stronę
+(VPS → Ollama i zmysły na domowym PC) działają bez zmian.
+
 `COSMOS_PASSWORD` działa **tylko przy pierwszym starcie**: staje się hasłem
 Twojego konta. Potem hasło zmieniasz w **Ustawienia → Twoje konto**.
 
@@ -205,7 +212,8 @@ będzie przekierowywać portów ani stawiać VPN-a.
 | „Za dużo nieudanych prób. Spróbuj ponownie za N min." | Pięć pomyłek z jednego adresu → kwadrans przerwy. Z innego adresu (np. telefon na LTE zamiast Wi-Fi) da się wejść od razu. |
 | „To zaproszenie wygasło albo zostało już użyte" | Wystaw nowe. Stare linki nie wracają — serwer trzyma tylko skrót tokenu, więc nawet Ty nie odtworzysz starego linku. |
 | Osoba nie widzi zakładki Claude / OpenAI | Włącz jej przełącznik w panelu Dostęp albo niech wpisze własny klucz. |
-| Po aktualizacji telefon pokazuje starą wersję | Odśwież dwa razy (pierwsze pobiera nowy service worker, drugie go włącza). |
+| Po aktualizacji telefon pokazuje starą wersję | Na dole pojawia się „Jest nowa wersja Cosmosa. Odśwież" — kliknij. Nie pojawiło się? Przełącz się na chwilę do innej aplikacji i wróć (wtedy Cosmos sprawdza wersję) albo odśwież dwa razy. |
+| Po ustawieniu `COSMOS_HOST=127.0.0.1` obserwator kamery albo mostek MCP milczą | Łączą się jeszcze pod `http://100.x.y.z:3000`. Zmień im `COSMOS_URL` na adres z `tailscale serve` albo `https://cosmosai.live`. |
 | `cosmosai.live` pokazuje błąd 502 | Tunel działa, ale Cosmos nie: `sudo systemctl status cosmos --no-pager`. |
 | `cosmosai.live` pokazuje błąd 1033 | Nie działa tunel: `sudo systemctl restart cloudflared`. |
 | Lista kont z wiersza poleceń | `node scripts/konto.js lista` |
