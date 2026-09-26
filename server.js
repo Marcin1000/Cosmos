@@ -684,7 +684,8 @@ async function handleOneDrive(req, res, p) {
     (async () => {
       try {
         await onedrive.indeksuj(async (paczka) => {
-          archiwum.dodaj(paczka);
+          // Porcjami — strona z Graph to setki plików, liczonych jednym ciągiem.
+          await archiwum.dodajPorcjami(paczka);
           U().indeksowanie.dodanych += paczka.length;
         }, { folder: d.folder || '', limit: Number(d.limit) || 100000, sygnal: U().indeksowanie.sygnal });
         addEvent('archiwum', `OneDrive: zindeksowano ${U().indeksowanie.dodanych} plików`);

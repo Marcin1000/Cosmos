@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 107 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 108 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -294,6 +294,11 @@ Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności. Ceną jes
   innym błędzie (`lib/miejsce.js`). Stan w pamięci zmieniaj dopiero po udanym zapisie.
   Nowy zapis pliku w imieniu osoby woła przedtem `miejsce_.sprawdz(bajty)` (limit
   `COSMOS_LIMIT_MB_OSOBY`); `kbAddFile` robi to za wszystkich, którzy idą przez bazę wiedzy.
+- **Długie liczenie w żądaniu — porcjami.** Pętla zdarzeń jest jedna dla wszystkich
+  osób: paczka 5000 wpisów archiwum liczona jednym ciągiem stawiała serwer na ~2 s,
+  razem ze strumieniami czatu. Praca na tysiącach elementów oddaje pętlę co ~100 ms
+  (`archiwum.dodajPorcjami`, `await new Promise(setImmediate)`); pilnuje tego
+  `archiwum-bez-zamrozen`.
 
 ### Front-end — bez budowania
 
