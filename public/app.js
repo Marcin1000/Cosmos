@@ -5729,10 +5729,15 @@ async function fetchModelsInto(epName, selectEl, btn) {
     const data = await readJsonSafe(res);
     // `error` bywa obiektem dostawcy – dawniej na ekranie stało „[object Object]”.
     if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : (data.error?.message || `HTTP ${res.status}`));
-    // Modele do obrazów, mowy i embeddingów nie trafiają do wyboru modelu czatu.
-    const models = (data.data || []).map((m) => m.id)
-      .filter((m) => typeof modelNotForChat !== 'function' || !modelNotForChat(m)).sort();
-    if (!models.length) throw new Error(t('set.noModels'));
+    /* Modele do obrazów, mowy i embeddingów idą do osobnej grupy na końcu
+       („Nie do rozmowy”). Na liście OpenAI dall-e-3 i whisper-1 stały między
+       modelami czatu jak równe (agencja, runda 5). Zostają, bo „Sprawdź
+       wszystkie” oznacza je ⚙ i to jest informacja. */
+    const wszystkie = (data.data || []).map((m) => m.id).sort();
+    const nieDoRozmowy = (m) => typeof modelNotForChat === 'function' && modelNotForChat(m);
+    const models = wszystkie.filter((m) => !nieDoRozmowy(m));
+    const inne = wszystkie.filter(nieDoRozmowy);
+    if (!wszystkie.length) throw new Error(t('set.noModels'));
     // Znane modele na górę i z etykietą – inaczej wybiera się z listy
     // kilkudziesięciu identyfikatorów, nie wiedząc, czym się różnią.
     const described = [];
@@ -5770,7 +5775,9 @@ async function fetchModelsInto(epName, selectEl, btn) {
       + (described.length ? `<optgroup label="${t('model.known')}">`
           + described.map(option).join('') + '</optgroup>' : '')
       + (rest.length ? `<optgroup label="${t('model.other')}">`
-          + rest.map(option).join('') + '</optgroup>' : '');
+          + rest.map(option).join('') + '</optgroup>' : '')
+      + (inne.length ? `<optgroup label="${t('model.notChat')}">`
+          + inne.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('') + '</optgroup>' : '');
     selectEl.style.display = '';
 
     // Dopiero po pobraniu listy ma sens sprawdzanie jej w całości.

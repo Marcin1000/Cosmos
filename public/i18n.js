@@ -159,6 +159,7 @@ const I18N = {
 
     // – opis modelu –
     'model.known': 'Rozpoznane modele',
+    'model.notChat': 'Nie do rozmowy (obrazy, mowa, embeddingi)',
     'model.other': 'Pozostałe',
     'model.bestFor': 'Najlepszy do:',
     'model.guessed': 'Model spoza katalogu – poniższe cechy odczytane z nazwy, mogą być niepełne.',
@@ -1046,6 +1047,7 @@ const I18N = {
     'offline.retrying': 'Checking…',
 
     'model.known': 'Recognised models',
+    'model.notChat': 'Not for chat (images, speech, embeddings)',
     'model.other': 'Others',
     'model.bestFor': 'Best for:',
     'model.guessed': 'Model not in the catalogue – the traits below are read from its name and may be incomplete.',
