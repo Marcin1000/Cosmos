@@ -102,6 +102,15 @@ script the page loads, and do its own patterns still match anything? A regex tha
 silently stops matching returns an empty list, and an empty list reads exactly
 like "all clear". That has happened three times; it is now a hard failure.
 
+**Plain JSON files, but a damaged one never becomes empty state.** There is no
+database — at this scale it would add a dependency and nothing else. The price is
+that a file cut short by a power loss used to parse as "nothing" and be
+overwritten with an empty list on the next save; that is how member accounts
+vanished in a measured run. Now a damaged file is set aside as
+`*.uszkodzony-<time>`, the previous version comes back from a hard-linked `.bak`,
+and a damaged accounts file with no backup stops the server from starting rather
+than letting it start without its people.
+
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
 a genuine limitation for outside readers — the reasoning is dense and it is all

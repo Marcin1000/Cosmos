@@ -15,10 +15,10 @@ function utworzKonta({ $, t }) {
   let ja = null;
   let kontaSerwera = null;
 
-  async function zadaj(sciezka, { metoda = 'GET', dane } = {}) {
+  async function zadaj(sciezka, { metoda = 'GET', dane, naglowki = {} } = {}) {
     const r = await fetch(sciezka, {
       method: metoda,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...naglowki },
       body: dane === undefined ? undefined : JSON.stringify(dane),
     });
     let json = {};
@@ -80,7 +80,8 @@ function utworzKonta({ $, t }) {
     const nakladka = $('invite-overlay');
     const blad = $('invite-error');
     nakladka.style.display = '';
-    const r = await zadaj(`/api/zaproszenie?token=${encodeURIComponent(token)}`);
+    // Token w nagłówku, nie w adresie — adresy lądują w logach po drodze.
+    const r = await zadaj('/api/zaproszenie', { naglowki: { 'X-Cosmos-Zaproszenie': token } });
     if (!r.ok) {
       $('invite-sub').textContent = r.json.error || t('inv.expired');
       for (const id of ['invite-name', 'invite-login', 'invite-pass', 'invite-pass2', 'invite-submit']) $(id).hidden = true;

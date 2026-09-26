@@ -26,9 +26,10 @@ const { modelNotForChat, modelNotAChatPartner, modelToolLevel } = require('./pub
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
    wie nic o rozmowach, zmysłach ani o Studiu. */
 const {
-  PORT, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
+  PORT, HOST, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
   sendJson, readBodyBuffer, readJson, pickEndpoint,
   modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
+  NAGLOWKI_CUDZEGO,
 } = require('./lib/rdzen.js');
 /* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
    i trasy kont. Zasady — w nagłówkach tych modułów; bramka logowania zostaje
@@ -439,7 +440,8 @@ const KB_INDEX = () => path.join(KB_DIR(), 'index.json');
 function saveKb() {
   try {
     fs.mkdirSync(KB_FILES(), { recursive: true });
-    zapiszAtomowo(KB_INDEX(), JSON.stringify(U().kbItems));
+    // `.bak`: indeksu bazy wiedzy nie da się odbudować z plików — opisy i wektory są tylko tu.
+    zapiszAtomowo(KB_INDEX(), JSON.stringify(U().kbItems), { kopia: true });
   } catch (err) {
     console.error('Nie udało się zapisać bazy wiedzy:', err.message);
   }
@@ -454,7 +456,15 @@ function extOf(name) {
   return (String(name).split('.').pop() || '').toLowerCase();
 }
 
+/* Zmysły to domowe GPU właściciela: członek bez przyznanego „lokalnego GPU"
+   ich nie używa (lib/silniki.js → zmyslyDozwolone). Wyciąganie tekstu
+   i transkrypcja zwracają wtedy pusty tekst — tak samo jak przy wyłączonych
+   zmysłach, więc dalsza ścieżka jest ta sama. */
+const BEZ_ZMYSLOW = 'Zmysły (rozpoznawanie, Whisper, YOLO) działają na komputerze właściciela — '
+  + 'dostęp daje przełącznik „lokalny GPU" w panelu Dostęp. Mikrofon, głos i kamera z przeglądarki działają bez tego.';
+
 async function sensesExtract(name, buf) {
+  if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/extract`, {
       method: 'POST',
@@ -468,6 +478,7 @@ async function sensesExtract(name, buf) {
 }
 
 async function sensesTranscribe(buf, mime) {
+  if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/stt`, {
       method: 'POST',
@@ -481,6 +492,7 @@ async function sensesTranscribe(buf, mime) {
 }
 
 async function sensesDetectSummary(buf, mime) {
+  if (!silniki.zmyslyDozwolone()) return '';
   try {
     const r = await fetch(`${SENSES_URL}/detect`, {
       method: 'POST',
@@ -1081,7 +1093,8 @@ function moduleExists(...parts) {
 }
 
 async function capabilityManifest() {
-  const senses = await sensesState();
+  // Członek bez zgody na zmysły ich nie ma — model nie może mu ich obiecywać.
+  const senses = silniki.zmyslyDozwolone() ? await sensesState() : { online: false, caps: {} };
   const imgs = imageProviders().map((p) => p.label);
   let playwright = false;
   try { require.resolve('playwright'); playwright = true; } catch { /* brak */ }
@@ -1134,8 +1147,14 @@ async function capabilityManifest() {
       kartyUjec: true,
       archiwum: onedrive.skonfigurowany(),
     },
-    trening: { przykladyChat: buildTrainingDataset('chat').count,
-      skrypt: moduleExists('training', 'qlora_example.py') },
+    /* Liczba rozmów, nie dokładna liczba przykładów. Dokładną liczy
+       buildTrainingDataset, czytając i parsując KAŻDĄ rozmowę — a manifest
+       idzie do kontekstu przy każdej wiadomości: 114 ms stania serwera na
+       wiadomość przy 300 rozmowach. Dokładnie liczy /api/train/env, gdy
+       ktoś naprawdę otwiera trening. Trening jest tylko u właściciela. */
+    trening: czyWlasciciel()
+      ? { przykladyChat: U().convIndex.length, skrypt: moduleExists('training', 'qlora_example.py') }
+      : null,
     brakujace: missing,
   };
 }
@@ -1177,7 +1196,7 @@ function capabilityText(m) {
       + `do pobrania jako .kmz, aparat Canon po Wi-Fi=${yes(m.plener.aparatPoWifi)}, `
       + `archiwum materiału=${yes(m.plener.archiwum)}. Sprzęt użytkownika: `
       + `${m.plener.sprzet || 'niepodany — poproś o uzupełnienie w Plenerze'}`,
-    `Trening własnego modelu: przykładów=${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}`,
+    m.trening ? `Trening własnego modelu: rozmów do nauki≈${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}` : null,
     '',
     'JAK SIĘ UCZYSZ (za zgodą użytkownika): możesz zapamiętywać fakty, zapisywać notatki, '
       + 'uczyć się rozpoznawania obiektów z kamery, uczyć się procedur (także nagranych z ekranu), '
@@ -1188,7 +1207,7 @@ function capabilityText(m) {
   if (m.brakujace.length) {
     lines.push('Obecnie niedostępne (i jak włączyć): ' + m.brakujace.join('; ') + '.');
   }
-  return lines.join('\n');
+  return lines.filter((l) => l !== null).join('\n');
 }
 
 // --- Backlog usprawnień: pomysły Cosmosa na samego siebie ---
@@ -1408,11 +1427,15 @@ function handleConfig(res) {
   /* Zakładki silników to to, czego TA osoba może użyć — nie to, co ma serwer.
      Członek bez przyznanego Claude'a nie widzi zakładki Claude, chyba że wpisał
      własny klucz; wtedy `zrodlo: 'wlasny'` mówi, że płaci sam. */
+  /* Adres lokalnego silnika i zmysłów to adres domu właściciela (Tailscale),
+     a folder eksportu — ścieżka na jego dysku. Członkowi nie są do niczego
+     potrzebne, więc ich nie dostaje. */
+  const wlasciciel = czyWlasciciel();
   const endpoints = {};
   for (const { nazwa, zrodlo, ep } of silniki.dostepne()) {
     endpoints[nazwa] = {
       label: ep.label,
-      baseUrl: ep.baseUrl,
+      baseUrl: nazwa === 'local' && !wlasciciel ? '' : ep.baseUrl,
       model: ep.model,
       visionModel: ep.visionModel || '',
       hasApiKey: nazwa === 'local' ? true : Boolean(ep.apiKey),
@@ -1422,7 +1445,7 @@ function handleConfig(res) {
   sendJson(res, 200, {
     app: 'Cosmos',
     endpoints,
-    senses: { baseUrl: SENSES_URL },
+    senses: wlasciciel ? { baseUrl: SENSES_URL } : {},
     uzytkownik: kto(),
     glos: glos.mozliwosci(),
     studio: {
@@ -1430,7 +1453,7 @@ function handleConfig(res) {
       image: imageProviders().length > 0,
       speech: Boolean(STUDIO.eleven.key),
       video: Boolean(STUDIO.seedance.key),
-      exportDir: STUDIO.exportDir,
+      exportDir: wlasciciel ? STUDIO.exportDir : null,
     },
   });
 }
@@ -1460,6 +1483,9 @@ async function handleStatus(req, res) {
     })(),
   ]);
   results.embeddings = embedStatus(results.senses?.caps?.embed);
+  /* Bez zgody na zmysły przeglądarka nie może ich zobaczyć jako „online" —
+     inaczej kierowałaby do nich mowę i wykrywanie, a dostawała 403. */
+  if (!silniki.zmyslyDozwolone()) results.senses = { online: false, caps: {}, tylkoWlasciciel: true };
   sendJson(res, 200, results);
 }
 
@@ -1490,6 +1516,7 @@ async function handleEvents(req, res) {
 // ---------------------------------------------------------------------------
 
 async function proxySenses(req, res, targetPath, { json = false, search = '' } = {}) {
+  if (!silniki.zmyslyDozwolone()) return sendJson(res, 403, { error: BEZ_ZMYSLOW, kod: 'zmysly-niedostepne' });
   let upstream;
   try {
     const body = await readBodyBuffer(req);
@@ -1500,9 +1527,12 @@ async function proxySenses(req, res, targetPath, { json = false, search = '' } =
       signal: AbortSignal.timeout(120000),
     });
   } catch (err) {
+    // Adres domu (Tailscale) i polecenie startu — tylko dla właściciela.
     return sendJson(res, 502, {
-      error: `Usługa percepcji (Cosmos Senses) nie odpowiada pod ${SENSES_URL}. ` +
-             `Uruchom ją: python senses/service.py (${err.message})`,
+      error: czyWlasciciel()
+        ? `Usługa percepcji (Cosmos Senses) nie odpowiada pod ${SENSES_URL}. `
+          + `Uruchom ją: python senses/service.py (${err.message})`
+        : 'Usługa percepcji na komputerze właściciela teraz nie odpowiada.',
     });
   }
   const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
@@ -1565,6 +1595,7 @@ async function proxySensesGet(req, res, targetPath, search = '') {
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
+    // Trasy stąd (Kinect) są tylko dla właściciela — adres może zostać.
     return sendJson(res, 502, {
       error: `Usługa percepcji nie odpowiada pod ${SENSES_URL}. ` +
              `Uruchom ją: python senses/service.py (${err.message})`,
@@ -1573,6 +1604,7 @@ async function proxySensesGet(req, res, targetPath, search = '') {
   const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
   const buf = Buffer.from(await upstream.arrayBuffer());
   res.writeHead(upstream.status, {
+    ...NAGLOWKI_CUDZEGO,   // treść z innego procesu pod naszą domeną — bez zgadywania typu i bez skryptów
     'Content-Type': contentType,
     'Content-Length': buf.length,
     'Cache-Control': 'no-store',
@@ -1818,7 +1850,10 @@ async function handleChat(req, res) {
   const hasImages = Boolean(ostatniaOdCzlowieka && Array.isArray(ostatniaOdCzlowieka.content)
     && ostatniaOdCzlowieka.content.some((p) => p.type === 'image_url'));
 
-  let model = payload.model || ep.model;
+  /* Na silniku przyznanym przez właściciela członek dostaje modele z jego
+     listy (lib/silniki.js → granice). Zamiana jest jawna — nagłówek niżej. */
+  const { model: modelOsoby, zamiast: modelSpozaListy } = silniki.modelDozwolony(payload.endpoint, payload.model || ep.model);
+  let model = modelOsoby;
 
   if (!model) {
     return sendJson(res, 400, {
@@ -1855,7 +1890,7 @@ async function handleChat(req, res) {
     model,
     messages,
     temperature: typeof payload.temperature === 'number' ? payload.temperature : 0.6,
-    max_tokens: Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048,
+    max_tokens: silniki.tokenyDozwolone(payload.endpoint, Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048),
     top_p: typeof payload.top_p === 'number' ? payload.top_p : 0.95,
     stream: true,
   };
@@ -1917,9 +1952,12 @@ async function handleChat(req, res) {
     // Przerwane „Stopem" przed nagłówkami — domykamy odpowiedź, żeby nie wisiała.
     if (abort.signal.aborted) { if (!res.headersSent) res.writeHead(204); return res.end(); }
     return sendJson(res, 502, {
-      error: payload.endpoint === 'local'
-        ? `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err.message})`
-        : `Nie udało się połączyć z ${ep.baseUrl}: ${err.message}`,
+      error: payload.endpoint !== 'local'
+        ? `Nie udało się połączyć z ${ep.baseUrl}: ${err.message}`
+        // Adres domu właściciela i rada „sprawdź Ollamę" są dla niego, nie dla gościa.
+        : czyWlasciciel()
+          ? `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err.message})`
+          : 'Komputer właściciela z lokalnym modelem teraz nie odpowiada — spróbuj później albo wybierz chmurę.',
     });
   }
 
@@ -1969,6 +2007,7 @@ async function handleChat(req, res) {
       // a podmiana za plecami użytkownika byłaby nieuczciwa.
       'X-Cosmos-Model': encodeURIComponent(model),
       ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
+      ...(modelSpozaListy ? { 'X-Cosmos-Model-Spoza-Listy': encodeURIComponent(modelSpozaListy) } : {}),
     });
     try {
       for await (const chunk of upstream.body) { pilnujCiszy(); res.write(chunk); }
@@ -2178,6 +2217,9 @@ async function handleModels(req, res) {
     // lokalnym to wyłączona Ollama albo nasłuch tylko na 127.0.0.1 — i to
     // właśnie trzeba napisać, zamiast zostawiać użytkownika z komunikatem sieci.
     const local = ep === ENDPOINTS.local;
+    if (local && !czyWlasciciel()) {
+      return sendJson(res, 502, { error: 'Komputer właściciela z lokalnym modelem teraz nie odpowiada.' });
+    }
     const hint = local
       ? `\n\nNajczęstsze przyczyny:\n`
         + `• Ollama nie działa na komputerze domowym — uruchom ją (\`ollama serve\` albo ikona w zasobniku).\n`
@@ -2598,7 +2640,13 @@ async function trasyApi(req, res, p) {
   return sendJson(res, 404, { error: 'Nie ma takiej trasy.' });
 }
 
+/* HSTS tylko za HTTPS — to samo ustawienie, które każe ciastku jechać wyłącznie
+   szyfrowanym połączeniem. Bez niego pierwsze wejście wpisane z ręki idzie
+   zwykłym HTTP i da się je przechwycić, zanim Cloudflare przekieruje. */
+const HSTS = process.env.COSMOS_COOKIE_SECURE === '1';
+
 const server = http.createServer(async (req, res) => {
+  if (HSTS) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   try {
     const p = new URL(req.url, 'http://localhost').pathname;
     if (!p.startsWith('/api/')) {
@@ -2608,6 +2656,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     // --- publiczne: logowanie i zaproszenia ---
+    /* Też z kontrolą pochodzenia. Cudza strona mogła wysłać formularz
+       logowania z SWOIMI danymi — Twoja przeglądarka zostawała zalogowana
+       na obce konto i Twoje rozmowy trafiały do niego („login CSRF"). */
+    if ((p === '/api/login' || p === '/api/logout' || p === '/api/zaproszenie') && obcePochodzenie(req)) {
+      return sendJson(res, 403, { error: 'Żądanie z innej strony — odrzucone.' });
+    }
     if (p === '/api/auth' && req.method === 'GET') {
       const u = ktoPyta(req);
       return sendJson(res, 200, { required: authEnabled(), authed: Boolean(u), uzytkownik: u });
@@ -2630,6 +2684,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 function start(port = PORT) {
+  /* Nowe pliki tylko dla procesu Cosmosa (0600/0700): rozmowy, pamięć, kopie.
+     Z domyślną maską 022 każde konto na maszynie czytało cudze rozmowy.
+     W systemd to samo robi `UMask=0077` (docs/START-TUTAJ.md). */
+  try { process.umask(0o077); } catch { /* Windows, wątek roboczy */ }
   return new Promise((resolve) => {
     const migracja = migrujDoKont();
     konta.przeladuj();
@@ -2637,10 +2695,10 @@ function start(port = PORT) {
       haslo: process.env.COSMOS_PASSWORD || '',
       login: process.env.COSMOS_LOGIN || '',
       nazwa: process.env.COSMOS_NAZWA || process.env.COSMOS_LOGIN || '',
-    }).then((wlasciciel) => server.listen(port, () => {
+    }).then((wlasciciel) => server.listen(...(HOST ? [port, HOST] : [port]), () => {
       console.log('');
       console.log('  ✦ Cosmos');
-      console.log(`  → UI:      http://localhost:${port}`);
+      console.log(`  → UI:      http://localhost:${port}${HOST ? `  (nasłuch tylko na ${HOST})` : ''}`);
       console.log(`  → Chmura:  ${ENDPOINTS.cloud.baseUrl}  (model: ${ENDPOINTS.cloud.model})`);
       console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
@@ -2688,6 +2746,8 @@ function start(port = PORT) {
    jest `unref`-owany, więc sam z siebie przy wyjściu nie zdąży. */
 function zamknijPorzadnie(sygnal) {
   process.on(sygnal, () => {
+    // Liczniki wiadomości i „ostatnio widziany" zapisują się z opóźnieniem (lib/konta.js).
+    konta.zapiszZalegle();
     /* Każda osoba ma własne archiwum, więc zapisujemy wszystkie, które są
        w pamięci — w imieniu ich właścicieli. */
     const zapisy = zaladowani().map((id) => {

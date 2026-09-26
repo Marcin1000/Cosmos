@@ -451,6 +451,7 @@ cd /opt/cosmos
 
 ```bash
 cp .env.example .env
+chmod 600 .env        # klucze API tylko dla właściciela pliku, nie dla każdego konta na VPS-ie
 nano .env
 ```
 Uzupełnij **koniecznie**:
@@ -486,24 +487,46 @@ Zapisz adres, który VPS dostanie (np. `100.101.102.103`) — pod nim będziesz 
 sudo tee /etc/systemd/system/cosmos.service > /dev/null <<'EOF'
 [Unit]
 Description=Cosmos
-After=network.target
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=/opt/cosmos
 ExecStart=/usr/bin/node server.js
 Restart=always
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
 User=root
 Environment=PORT=3000
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+sudo systemctl daemon-reload
 sudo systemctl enable cosmos
 sudo systemctl start cosmos
 sudo systemctl status cosmos
 ```
 Jeśli widzisz `active (running)` — Cosmos działa i będzie działał zawsze.
+
+Co znaczą dodatkowe linie — każda wzięła się z konkretnej awarii:
+
+- `StartLimitIntervalSec=0` i `RestartSec=3` — domyślnie systemd po pięciu
+  szybkich awariach (np. po `git pull` z błędem) **przestaje** podnosić usługę
+  i strona stoi na błędzie 502, aż ktoś to zauważy. Teraz próbuje co 3 sekundy.
+- `TimeoutStopSec=30` — przy restarcie Cosmos ma chwilę, żeby zapisać na dysk
+  to, co trzyma w pamięci.
+- `UMask=0077` — nowe pliki (rozmowy, pamięć, kopie) czyta tylko Cosmos, a nie
+  każde konto na serwerze.
+
+Masz już tę usługę ze starszej instrukcji? Wklej powyższy blok jeszcze raz
+i wykonaj `sudo systemctl daemon-reload && sudo systemctl restart cosmos`.
 
 ## KROK 7 — Wejdź z telefonu i Surface Pro
 

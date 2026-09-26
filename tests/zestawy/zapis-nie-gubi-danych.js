@@ -22,8 +22,9 @@
 */
 const fs = require('node:fs');
 const path = require('node:path');
-const { srodowisko, katalogOsoby } = require('../pomoc');
-const { zapiszAtomowo } = require('../../lib/rdzen.js');
+const { spawnSync } = require('node:child_process');
+const { srodowisko, katalogOsoby, KORZEN, uruchom, zabij, czekajNa } = require('../pomoc');
+const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
 
 (async () => {
   const fail = [];
@@ -80,6 +81,75 @@ const { zapiszAtomowo } = require('../../lib/rdzen.js');
     console.log(`3. tryb dostępu pliku z poświadczeniami: ${tryb.toString(8)}`);
     if (tryb & 0o077) fail.push(`plik z tokenem czytelny dla innych (${tryb.toString(8)})`);
 
+    /* Resztka po przerwanym zapisie ma SWÓJ tryb — `mode` działa tylko przy
+       zakładaniu pliku. Gdyby zapis ją otworzył zamiast założyć plik od
+       nowa, token dostałby 0644 po poprzednim, nieudanym przebiegu. */
+    fs.writeFileSync(`${tajny}.tmp`, 'resztka', { mode: 0o644 });
+    fs.chmodSync(`${tajny}.tmp`, 0o644);
+    zapiszAtomowo(tajny, '{"refresh_token":"y"}', { mode: 0o600 });
+    const trybPoResztce = fs.statSync(tajny).mode & 0o777;
+    console.log(`3b. ten sam plik po resztce .tmp z trybem 644: ${trybPoResztce.toString(8)}`);
+    if (trybPoResztce & 0o077) fail.push(`resztka .tmp przeniosła swój tryb na plik z tokenem (${trybPoResztce.toString(8)})`);
+
+    fs.rmSync(kat, { recursive: true, force: true });
+  }
+
+  /* ---- 1c. Uszkodzony plik nie daje po cichu pustego stanu ----
+     Dawniej każdy moduł czytał `try { JSON.parse } catch { return [] }`.
+     Ucięty plik dawał pusty stan bez słowa, a PIERWSZY zapis nadpisywał go
+     pustą listą — tak ginęły konta członków, pamięć i indeks rozmów.
+     Teraz: kopia uszkodzonego pliku obok, przywrócenie z `.bak`, a przy
+     kontach serwer woli nie wstać, niż wstać bez nich. */
+  {
+    const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-uszk-'));
+    const plik = path.join(kat, 'memory.json');
+    const kopie = () => fs.readdirSync(kat).filter((f) => f.startsWith('memory.json.uszkodzony-'));
+
+    const brak = czytajJson(plik, ['domyślna']);
+    if (JSON.stringify(brak) !== '["domyślna"]') fail.push('brak pliku nie dał wartości domyślnej');
+
+    // a) uszkodzony, bez kopii — wartość domyślna, ALE ucięta treść zachowana obok
+    const UCIETY = '[{"id":"a","text":"Fotografuje Canonem R6 II"},{"id":"b","te';
+    fs.writeFileSync(plik, UCIETY);
+    const a = czytajJson(plik, []);
+    const kopiaA = kopie();
+    console.log(`6a. ucięty plik bez .bak → ${JSON.stringify(a)}, kopia obok: ${kopiaA.length}`);
+    if (!kopiaA.length || fs.readFileSync(path.join(kat, kopiaA[0]), 'utf8') !== UCIETY) {
+      fail.push('uszkodzony plik nie został zachowany obok przed nadpisaniem');
+    }
+
+    // b) zapis z `kopia: true` odkłada poprzednią wersję jako .bak
+    zapiszAtomowo(plik, JSON.stringify([{ id: 'v1' }]), { kopia: true });
+    zapiszAtomowo(plik, JSON.stringify([{ id: 'v2' }]), { kopia: true });
+    const bak = JSON.parse(fs.readFileSync(`${plik}.bak`, 'utf8'));
+    console.log(`6b. po dwóch zapisach .bak trzyma: ${bak[0]?.id}`);
+    if (bak[0]?.id !== 'v1') fail.push(`.bak nie trzyma poprzedniej wersji (${JSON.stringify(bak)})`);
+
+    // c) uszkodzony plik z .bak — dane wracają, i to NA DYSKU
+    fs.writeFileSync(plik, '{"ucięte');
+    const c = czytajJson(plik, []);
+    console.log(`6c. ucięty plik z .bak → ${JSON.stringify(c)}`);
+    if (c[0]?.id !== 'v1') fail.push(`nie przywrócono danych z .bak (${JSON.stringify(c)})`);
+    let naDysku = null;
+    try { naDysku = JSON.parse(fs.readFileSync(plik, 'utf8')); } catch { /* dalej uszkodzony */ }
+    if (naDysku?.[0]?.id !== 'v1') {
+      fail.push('plik na dysku został uszkodzony — następny zapis odłożyłby śmieci jako .bak');
+    }
+
+    // d) pusty plik to też uszkodzenie, nie „pusta lista"
+    const pusty = path.join(kat, 'pusty.json');
+    fs.writeFileSync(pusty, '');
+    czytajJson(pusty, []);
+    if (!fs.readdirSync(kat).some((f) => f.startsWith('pusty.json.uszkodzony-'))) fail.push('pusty plik przeszedł bez śladu');
+
+    // e) krytyczny (konta) bez kopii — wyjątek zamiast pustej listy
+    const konta = path.join(kat, 'uzytkownicy.json');
+    fs.writeFileSync(konta, '[{"id":"wlasciciel","login":"marcin"},{"id":"u');
+    let rzucil = false;
+    try { czytajJson(konta, [], { krytyczny: true }); } catch { rzucil = true; }
+    console.log(`6e. uszkodzone konta bez .bak → ${rzucil ? 'wyjątek' : 'pusta lista (ŹLE)'}`);
+    if (!rzucil) fail.push('uszkodzony plik kont dał pustą listę zamiast zatrzymać start');
+
     fs.rmSync(kat, { recursive: true, force: true });
   }
 
@@ -129,6 +199,53 @@ const { zapiszAtomowo } = require('../../lib/rdzen.js');
   if (osierocone.length) fail.push(`zostały pliki tymczasowe: ${osierocone.slice(0, 4).join(', ')}`);
 
   env.koniec();
+
+  /* ---- 3. Start serwera na uszkodzonych danych ----
+     a) Konta uszkodzone, kopii brak → serwer NIE wstaje. Wstałby „bez kont",
+        zapewnijWlasciciela od razu zapisałby plik z samym właścicielem
+        i członkowie zniknęliby na zawsze.
+     b) Indeks rozmów uszkodzony, pliki rozmów na dysku → lista wraca
+        odbudowana z plików, a nie pusta. */
+  const bazaEnv = { ...process.env, NVIDIA_API_KEY: 'test', COSMOS_PASSWORD: '', COSMOS_API_TOKEN: '' };
+  {
+    const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-konta-uszk-'));
+    fs.mkdirSync(path.join(kat, 'konta'), { recursive: true });
+    fs.writeFileSync(path.join(kat, 'konta', 'uzytkownicy.json'), '[{"id":"wlasciciel","login":"marcin"},{"id":"u');
+    const start = spawnSync('node', ['server.js'], { cwd: KORZEN, encoding: 'utf8', timeout: 20000,
+      env: { ...bazaEnv, PORT: '3491', COSMOS_DATA_DIR: kat } });
+    /* Serwer, który WSTAŁ, kończy się dopiero sygnałem po limicie czasu — a na
+       SIGTERM odpowiada porządnym wyjściem z kodem 0. Odmowa startu to kod ≠ 0. */
+    const wstal = start.status === null || start.status === 0;
+    console.log(`7. serwer z uszkodzonym plikiem kont: ${wstal ? 'WSTAŁ (ŹLE)' : `odmówił startu (kod ${start.status})`}`);
+    if (wstal) fail.push('serwer wstał mimo uszkodzonego pliku kont');
+    if (!/uzytkownicy\.json/.test(start.stderr || '')) fail.push('komunikat przy odmowie startu nie mówi, który plik jest uszkodzony');
+    const zostal = fs.readFileSync(path.join(kat, 'konta', 'uzytkownicy.json'), 'utf8');
+    if (!zostal.includes('"u')) fail.push('uszkodzony plik kont został nadpisany');
+    fs.rmSync(kat, { recursive: true, force: true });
+  }
+  {
+    const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-indeks-uszk-'));
+    const rozmowy = path.join(kat, 'uzytkownicy', 'wlasciciel', 'conversations');
+    fs.mkdirSync(rozmowy, { recursive: true });
+    const teraz = Date.now();
+    for (const [id, tytul, przesuniecie, pinned] of [['alfa1', 'Plan na Tatry', 2, false], ['beta2', 'Zorza w listopadzie', 1, true], ['gamma3', 'Obiektywy do nieba', 0, false]]) {
+      fs.writeFileSync(path.join(rozmowy, `${id}.json`), JSON.stringify({ id, title: tytul, pinned,
+        createdAt: teraz - przesuniecie * 60000, updatedAt: teraz - przesuniecie * 60000,
+        messages: [{ role: 'user', content: tytul }] }));
+    }
+    fs.writeFileSync(path.join(rozmowy, 'index.json'), '[{"id":"alfa1","title":"Plan');
+    const srv = uruchom('node', ['server.js'], { cwd: KORZEN, env: { ...bazaEnv, PORT: '3490', COSMOS_DATA_DIR: kat } });
+    let lista = [];
+    if (await czekajNa('http://127.0.0.1:3490/')) {
+      lista = (await (await fetch('http://127.0.0.1:3490/api/conversations')).json()).conversations || [];
+    }
+    zabij(srv);
+    console.log(`8. uszkodzony indeks, 3 rozmowy na dysku → na liście: ${lista.map((c) => c.id).join(', ') || 'nic'}`);
+    if (lista.length !== 3) fail.push(`indeks rozmów nie odbudował się z plików (${lista.length} z 3)`);
+    if (lista[0]?.id !== 'beta2') fail.push(`przypięta rozmowa nie stoi na górze po odbudowie (${lista[0]?.id})`);
+    fs.rmSync(kat, { recursive: true, force: true });
+  }
+
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nZAPIS NIE GUBI DANYCH OK');
   process.exit(fail.length ? 1 : 0);
 })();

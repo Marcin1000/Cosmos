@@ -1800,12 +1800,13 @@ async function streamOnce(conv, opcje = {}) {
     // Serwer mógł skierować zdjęcie do modelu wizyjnego. Podmiana za plecami
     // użytkownika byłaby nieuczciwa — mówimy, kto naprawdę odpowiedział.
     const swapped = res.headers.get('X-Cosmos-Model-Swapped-From');
-    if (swapped) {
-      const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
-      lastModelNote = t('model.swapped', { from: decodeURIComponent(swapped), to: used });
-    } else {
-      lastModelNote = '';
-    }
+    const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
+    // Na silniku przyznanym przez właściciela członek dostaje model z jego listy.
+    const spozaListy = res.headers.get('X-Cosmos-Model-Spoza-Listy');
+    lastModelNote = [
+      spozaListy ? t('model.przyznany', { from: decodeURIComponent(spozaListy), to: used }) : '',
+      swapped ? t('model.swapped', { from: decodeURIComponent(swapped), to: used }) : '',
+    ].filter(Boolean).join(' ');
 
     const decoder = new TextDecoder();
     let buffer = '';

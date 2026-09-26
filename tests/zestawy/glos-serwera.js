@@ -74,6 +74,8 @@ const atrapa = http.createServer((req, res) => {
   const silniki = {
     dostep: (nazwa, u) => (nazwa === 'openai' && u.rola === 'wlasciciel' ? { ok: true, ep: EP_OPENAI } : { ok: false }),
     studioDozwolone: (u) => u.rola === 'wlasciciel',
+    // Zmysły = domowe GPU właściciela: gość tylko z przyznanym „lokalnym GPU" (lib/silniki.js).
+    zmyslyDozwolone: (u) => u.rola === 'wlasciciel' || Boolean(u.silniki && u.silniki.local),
   };
   const STUDIO = { eleven: { key: 'klucz-el', base: `${A}/el`, voice: 'glos1', model: 'eleven_multilingual_v2' } };
   const glos = utworz({ SENSES_URL: `${A}/zm`, silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO, env: {} });
@@ -143,6 +145,17 @@ const atrapa = http.createServer((req, res) => {
   d = await r.json();
   ok(r.status === 200 && d.zrodlo === 'zmysly' && d.text === 'z Whispera', `zmysły żyją → lokalny Whisper, także dla nasłuchu (${d.zrodlo})`);
   ok(!wywolania.some((w) => w.url.startsWith('/oa/')), 'przy żywych zmysłach nic nie poszło do chmury');
+  /* Gość bez przyznanego „lokalnego GPU" nie zajmuje Whispera na komputerze
+     właściciela — nawet gdy zmysły żyją. Z przyznaniem — tak. */
+  ktoTeraz = gosc;
+  wywolania.length = 0;
+  r = await fetch(`http://127.0.0.1:${serwer2.address().port}/api/stt?jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  ok(r.status === 502 && !wywolania.some((w) => w.url === '/zm/stt'), `gość bez zgody nie trafia do zmysłów właściciela (${r.status})`);
+  ktoTeraz = { ...gosc, silniki: { local: true } };
+  r = await fetch(`http://127.0.0.1:${serwer2.address().port}/api/stt?jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  d = await r.json();
+  ok(r.status === 200 && d.zrodlo === 'zmysly', `gość z przyznanym „lokalnym GPU" dostaje Whispera (${d.zrodlo})`);
+  ktoTeraz = wlasciciel;
 
   // --- 6. własny serwer rozpoznawania (STT_BASE_URL)
   const glos3 = (env) => utworz({ SENSES_URL: 'http://127.0.0.1:1', silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO, env });

@@ -40,7 +40,22 @@ COSMOS_PASSWORD=twoje-dotychczasowe-haslo
 COSMOS_LOGIN=marcin
 COSMOS_NAZWA=Marcin
 COSMOS_COOKIE_SECURE=1
+COSMOS_HOST=127.0.0.1
 ```
+
+`COSMOS_HOST=127.0.0.1` sprawia, że Cosmos słucha **tylko na samym VPS-ie**.
+Tunel łączy się lokalnie, więc działa jak dotąd — a `http://<IP-VPS>:3000`
+przestaje odpowiadać. Bez tego port 3000 był osiągalny z internetu wprost:
+po zwykłym HTTP (hasło jawnym tekstem), z pominięciem Cloudflare. Dla
+pewności włącz też zaporę — zostaw tylko SSH:
+
+```
+sudo ufw allow OpenSSH && sudo ufw enable
+```
+
+Tailscale jako tylne wejście działa dalej przez `tailscale serve --bg 3000`
+(adres `https://<nazwa-vps>.<tailnet>.ts.net`) — sam adres `100.x.y.z:3000`
+przy `COSMOS_HOST=127.0.0.1` już nie odpowie.
 
 `COSMOS_PASSWORD` działa **tylko przy pierwszym starcie**: staje się hasłem
 Twojego konta. Potem hasło zmieniasz w **Ustawienia → Twoje konto**.
@@ -92,6 +107,11 @@ Ma pokazać `active (running)`, a w panelu Cloudflare tunel zmieni status na
 **Save**. Po minucie `https://cosmosai.live` pokaże stronę produktową,
 a `https://cosmosai.live/app` — ekran logowania.
 
+W ustawieniach dodatkowych (*Additional application settings → HTTP Settings*)
+**nie ustawiaj `HTTP Host Header`**. Cosmos porównuje nagłówek `Host`
+z `Origin`, żeby odrzucać żądania z cudzych stron; gdy tunel podmieni `Host`
+na `localhost`, ta kontrola się wyłącza i zostaje sama ochrona ciastka.
+
 ### 2d. Uruchom ponownie Cosmosa
 
 ```
@@ -116,6 +136,17 @@ Szukaj linii `Logowanie: WŁĄCZONE — kont: 1, login właściciela: marcin`.
 Przy każdej osobie masz przełączniki **lokalny GPU / OpenAI / Claude /
 Studio**. Włączone — ta osoba korzysta z nich na Twoich kluczach. Wyłączone —
 nie ma ich, chyba że wpisze własny klucz.
+
+Na Twoich kluczach osoba dostaje **model z `.env`** (i jego wizyjny) — nie
+dowolny z cennika. Inne modele dopuszczasz w `.env`:
+`COSMOS_MODELE_PRZYZNANE=gpt-4o-mini,claude-haiku-4-5`. Długość jednej
+odpowiedzi ma sufit `COSMOS_MAX_TOKENS_CZLONKA` (domyślnie 8192). Z własnym
+kluczem osoba wybiera, co chce — płaci sama.
+
+**Lokalny GPU** to też **zmysły** na Twoim komputerze: Whisper, czytanie
+głosem Piper, wykrywanie obiektów, wyciąganie tekstu z PDF-ów, powiększanie
+obrazów. Bez tego przełącznika osoba ma mikrofon, głos i kamerę
+z przeglądarki, a Twój komputer nie pracuje dla niej.
 
 **Wyloguj wszędzie** zamyka wszystkie sesje tej osoby (np. zgubiony telefon).
 **Usuń konto** odbiera dostęp od razu, a dane tej osoby trafiają do
@@ -152,8 +183,8 @@ czegokolwiek.
 
 | Zmysł | Co trzeba zrobić |
 |---|---|
-| Mikrofon, dyktowanie, „naciśnij, aby mówić" | nic — przeglądarka |
-| Czytanie na głos | nic — głos systemu |
+| Mikrofon, dyktowanie, „naciśnij, aby mówić" | nic — przeglądarka; z przełącznikiem **lokalny GPU** — Whisper na Twoim komputerze |
+| Czytanie na głos | nic — głos systemu; z przełącznikiem **lokalny GPU** — Piper |
 | Kamera (zdjęcie do rozmowy, tryb głosowy z kamerą) | nic — przeglądarka zapyta o zgodę |
 | Kinect, YOLO na żywo, Whisper na własnej karcie | **jeszcze nie** — patrz niżej |
 
@@ -189,14 +220,25 @@ będzie przekierowywać portów ani stawiać VPN-a.
   Pliki kont mają uprawnienia `0600`.
 - **Blokada** — 5 pomyłek z jednego adresu albo 10 pod jednym loginem →
   kwadrans przerwy. Za tunelem adres bierzemy z `CF-Connecting-IP`, ale ufamy
-  mu **tylko** wtedy, gdy połączenie przyszło z tej samej maszyny.
+  mu **tylko** wtedy, gdy połączenie przyszło z tej samej maszyny. Adresy IPv6
+  liczymy po całej sieci `/64` — łącze domowe ma ich 2⁶⁴, więc zmiana adresu
+  co pięć prób nic nie daje.
 - **Zaproszenia** — jednorazowe, ważne 7 dni. Token siedzi po `#` w linku,
   więc nie trafia do logów serwera ani Cloudflare.
 - **Izolacja** — każde żądanie wykonuje się w imieniu konkretnej osoby
   (`lib/kontekst.js`). Próba sięgnięcia do danych bez ustalonej osoby kończy
   się błędem, a nie cichym dostępem do czegokolwiek wspólnego.
 - **Obce strony** — ciastko `SameSite=Lax` i dodatkowo odrzucanie żądań
-  zmieniających dane, gdy nagłówek `Origin` wskazuje inną domenę.
+  zmieniających dane, gdy nagłówek `Origin` wskazuje inną domenę. Dotyczy to
+  też logowania i zaproszeń: cudza strona nie zaloguje Twojej przeglądarki
+  na swoje konto.
+- **Obrazy z cudzych serwerów** (miniatury wyszukiwania, OneDrive) — tylko
+  PNG, JPEG, GIF, WebP, AVIF, z nagłówkami `nosniff` i `sandbox`. SVG może
+  zawierać skrypt, więc nie przechodzi.
+- **Dane na dysku** — uszkodzony plik (zanik zasilania, ręczna edycja) nie
+  daje po cichu pustego stanu: obok zostaje kopia `*.uszkodzony-<czas>`,
+  a Cosmos wraca do poprzedniej wersji z `.bak`. Przy uszkodzonym pliku kont
+  bez kopii serwer **nie wstaje** — zamiast wstać bez członków.
 - **Nagłówki** — `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`.
   Kod aplikacji idzie z `Cache-Control: no-cache`, więc Cloudflare nie
   podsunie starej wersji po aktualizacji.

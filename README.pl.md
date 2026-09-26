@@ -89,6 +89,14 @@ Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy ze
 woła dziś to, co sprawdza, a każdy nowy jest weryfikowany pod kątem tego, czy
 **pada na starym, wadliwym kodzie**, zanim trafi do repozytorium.
 
+**Zwykłe pliki JSON, ale uszkodzony nigdy nie staje się pustym stanem.** Bazy
+danych nie ma — przy tej skali dołożyłaby zależność i nic więcej. Ceną było to, że
+plik ucięty przy zaniku zasilania czytał się jak „nic" i przy następnym zapisie
+nadpisywała go pusta lista; tak w pomiarze zniknęły konta członków. Teraz
+uszkodzony plik zostaje odłożony jako `*.uszkodzony-<czas>`, poprzednia wersja
+wraca z `.bak` (twarde dowiązanie, zero kopiowania), a uszkodzony plik kont bez
+kopii zatrzymuje start serwera, zamiast pozwolić mu wstać bez ludzi.
+
 **Audyt sprawdza, czy sam nie kłamie.** `scripts/audyt.js` przechodzi 15 sekcji
 statycznych — pokrycie tras, parytet tłumaczeń, martwe identyfikatory, wyciek
 sekretów, rozruch próbny. Sekcja 0 audytuje audytora: czy wciąż czyta każdy
