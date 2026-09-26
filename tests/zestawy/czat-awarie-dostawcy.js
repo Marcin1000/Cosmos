@@ -266,7 +266,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   // --- 17: „Stop" w trakcie składania kontekstu (osobny serwer: zmysły-czarna dziura i wpis pamięci)
   const czarnaDziura = require('node:net').createServer(() => { /* przyjmuje i milczy */ });
   await new Promise((r) => czarnaDziura.listen(0, '127.0.0.1', r));
-  const PORT3 = 3493;
+  const PORT3 = 3489;
   const srv3 = serwerCosmosa(PORT3, {
     NEMOTRON_BASE_URL: `http://127.0.0.1:${atrapa.address().port}/v1`,
     SENSES_URL: `http://127.0.0.1:${czarnaDziura.address().port}`, EMBED_PROVIDER: 'senses',

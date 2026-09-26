@@ -3071,7 +3071,9 @@ body::after {
 .nowa-wersja {
   position: fixed;
   left: 50%;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  /* U góry, pod paskiem narzędzi. Na dole leżał NA polu wiadomości i jego
+     przyciskach — po każdym wdrożeniu, bez zamknięcia (zespół IT, runda 4). */
+  top: calc(72px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   z-index: 60;
   display: flex;
@@ -3086,7 +3088,9 @@ body::after {
   color: var(--text);
   font-size: 13.5px;
 }
+.nowa-wersja span { flex: 1; }
 .nowa-wersja button {
+  white-space: nowrap;
   border: 0;
   border-radius: 10px;
   padding: 7px 12px;
@@ -3097,9 +3101,24 @@ body::after {
   cursor: pointer;
 }
 
+.nowa-wersja button.nowa-wersja-pozniej {
+  background: transparent;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
 /* ============================ MOBILE ============================ */
 
 @media (max-width: 720px) {
+  /* Pasek górny ma na telefonie dwa rzędy (narzędzia + zakładki silników);
+     na całą szerokość — wyśrodkowany łamał napis na cztery linie. */
+  .nowa-wersja {
+    top: calc(128px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
   .sidebar {
     position: fixed;
     z-index: 40;

@@ -32,7 +32,13 @@ function uruchomPwa({ t }) {
       przycisk.type = 'button';
       przycisk.textContent = t('app.reload');
       przycisk.addEventListener('click', () => location.reload());
-      pasek.append(napis, przycisk);
+      // „Później" — pasek nie może wisieć, dopóki ktoś nie przeładuje strony.
+      const pozniej = document.createElement('button');
+      pozniej.type = 'button';
+      pozniej.className = 'nowa-wersja-pozniej';
+      pozniej.textContent = t('app.later');
+      pozniej.addEventListener('click', () => pasek.remove());
+      pasek.append(napis, pozniej, przycisk);
       document.body.appendChild(pasek);
     });
     window.addEventListener('load', () => {
