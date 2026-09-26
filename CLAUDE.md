@@ -94,7 +94,7 @@ godzinę) — jest w **`docs/ZESPOLY.md`**. Przeczytaj go, zanim wypuścisz zesp
 ## Architektura
 
 Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2 tys. linii, `lib/` 14 tys. w 46
-modułach, `public/` 13,3 tys. w 15 skryptach. Zero zależności npm w rdzeniu — nadal.
+modułach, `public/` 13,3 tys. w 17 skryptach. Zero zależności npm w rdzeniu — nadal.
 
 ### `server.js` — dyrygent (2 tys. linii, zero zależności)
 
@@ -340,6 +340,8 @@ z pozostałych.
 | `studio-widok.js` | widok Studia: obraz, szablony, storyboard, edycja, dźwięk, wideo; zadania w tle |
 | `pwa.js` | service worker i pasek „Jest nowa wersja” |
 | `wysylka.js` | wysyłka pliku do bazy wiedzy z postępem; podgląd zdjęcia dla modelu |
+| `kamera.js` | kamera na żywo: podgląd, Kinect, detekcja, sylwetka, dopasowanie panelu |
+| `nauka-widok.js` | panel Nauka: rozpoznawanie, procedury, rutyny, runner z potwierdzeniem |
 | `strona/` | strona produktowa pod `/` — osobna od aplikacji, własny CSS i skrypt |
 
 Moduły trzymają się wzorca dwustronnego, żeby ten sam plik działał w przeglądarce

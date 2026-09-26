@@ -300,7 +300,7 @@ async function poczekajNaUklad(pg) {
          i przy każdym takcie wpisuje proporcję PRAWDZIWEJ atrapy kamery
          (16:9), kasując tę, którą tu podstawiamy. Zestaw mierzyłby wtedy raz
          kadr pionowy, a raz poziomy, zależnie od tego, gdzie akurat trafi. */
-      clearInterval(liveTimer); liveTimer = null;
+      wstrzymajWykrywanie();
       const panel = document.getElementById('live-panel');
       panel.style.setProperty('--live-ar', '9 / 16');
       panel.style.setProperty('--live-arn', String(9 / 16));

@@ -507,7 +507,9 @@ const liniiSerwer = server.split('\n').length;
 let liniiLib = 0;
 for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
 console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
-liniiSerwer < 2600 ? ok('serwer zszedł poniżej 2600 linii')
+/* Próg idzie w dół za podziałem (runda 3: rozmowy i baza wiedzy do lib/,
+   2646 → 1971) — inaczej odzyskane linie odrosłyby po cichu. */
+liniiSerwer < 2100 ? ok('serwer poniżej 2100 linii')
   : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
 
 /* KLIENT TEŻ MA PRÓG — i to on jest teraz największym plikiem.
@@ -521,7 +523,8 @@ const liniiApp = rd('public/app.js').split('\n').length;
 const liniiKlient = plikiKlienta.reduce((n, f) => n + rd(`public/${f}`).split('\n').length, 0);
 console.log(`    public/app.js ${liniiApp} linii + ${plikiKlienta.length - 1} modułów `
   + `(${liniiKlient - liniiApp} linii)`);
-liniiApp < 7000 ? ok('klient zszedł poniżej 7000 linii')
+// Runda 3: kamera i Nauka do osobnych plików, 6972 → ~5930.
+liniiApp < 6100 ? ok('klient poniżej 6100 linii')
   : hmm(`public/app.js ma ${liniiApp} linii — największy plik projektu, `
     + 'wart wydzielenia kolejnego modułu');
 // Żaden identyfikator z modułu nie może być używany bez importu — inaczej

@@ -1015,7 +1015,10 @@ zdarzeń, a wszystko, co da się opisać jako „wchodzą dane, wychodzi wynik",
 mieszka obok:
 
 ```
-public/app.js      stan rozmowy, kaskada odpowiedzi, kamera, ustawienia
+public/app.js      stan rozmowy, kaskada odpowiedzi, asystent głosowy, ustawienia
+public/kamera.js   kamera na żywo: podgląd, Kinect, detekcja, sylwetka
+public/nauka-widok.js  panel Nauka: rozpoznawanie, procedury, rutyny
+public/wysylka.js  wysyłka do bazy wiedzy z postępem, podgląd zdjęcia dla modelu
 public/i18n.js     tłumaczenia PL/EN
 public/models.js   katalog modeli — wspólny z serwerem
 public/narzedzia.js  rejestr narzędzi modelu: jedno miejsce na jedno narzędzie
