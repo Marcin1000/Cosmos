@@ -606,7 +606,8 @@ const GLOBALE_NODE = new Set(['require', 'module', 'exports', 'process', 'consol
   'Intl', 'structuredClone', 'queueMicrotask', 'BigInt', 'Symbol', 'Proxy', 'Reflect',
   'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
   'encodeURI', 'decodeURI', 'atob', 'btoa', 'FormData', 'Blob', 'File', 'Headers',
-  'Request', 'Response', 'AbortController', 'WebSocket', 'performance']);
+  'Request', 'Response', 'AbortController', 'WebSocket', 'performance',
+  'ArrayBuffer', 'DataView', 'Float32Array', 'Float64Array', 'Uint8Array', 'Int32Array']);
 const SLOWA_JS = new Set(['const', 'let', 'var', 'function', 'async', 'await', 'return', 'if',
   'else', 'for', 'while', 'of', 'in', 'new', 'typeof', 'instanceof', 'try', 'catch', 'finally',
   'throw', 'break', 'continue', 'switch', 'case', 'default', 'do', 'delete', 'void', 'yield',

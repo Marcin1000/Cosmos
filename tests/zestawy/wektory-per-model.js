@@ -140,6 +140,43 @@ async function az(warunek, ms = 3000) {
   pamiecModul.ustawWektor(stary, 'C', [7]);
   ok(Object.keys(stary.wektory).join(',') === 'B,C', `najwyżej ${pamiecModul.MAKS_MODELI} modele, najdawniejszy wypada (${Object.keys(stary.wektory)})`);
 
+  // --- zapis zwarty: napis f32 zamiast tablicy liczb -------------------------------------
+  /* Tablica liczb w JSON-ie to ~18 znaków na liczbę: przy dwóch modelach indeks
+     bazy wiedzy ważył 110 MB, a jego zapis (JSON.stringify w pętli zdarzeń)
+     stawiał serwer wszystkim na 2–3 s. */
+  const losowy = (n) => Array.from({ length: n }, () => Math.random() * 2 - 1);
+  const zs = losowy(1024), ch = losowy(2048);
+  const zwarty = { text: 'fragment' };
+  pamiecModul.ustawWektor(zwarty, 'senses:1024', zs);
+  pamiecModul.ustawWektor(zwarty, 'nvidia:x', ch);
+  const tablicowy = { text: 'fragment', wektory: { 'senses:1024': zs, 'nvidia:x': ch } };
+  const rozmiar = (o) => JSON.stringify(o).length;
+  ok(rozmiar(zwarty) * 3 < rozmiar(tablicowy),
+    `zapis zwarty co najmniej 3× mniejszy (${Math.round(rozmiar(zwarty) / 1024)} KB zamiast ${Math.round(rozmiar(tablicowy) / 1024)} KB)`);
+  const odczyt = pamiecModul.wektorDla(zwarty, 'nvidia:x');
+  ok(odczyt && odczyt.length === 2048 && odczyt.every((x, i) => Math.abs(x - ch[i]) < 1e-6), 'odczyt oddaje te same liczby (precyzja float32)');
+  const zapytanie = losowy(2048);
+  ok(Math.abs(pamiecModul.cosine(zapytanie, odczyt) - pamiecModul.cosine(zapytanie, ch)) < 1e-6, 'cosinus taki sam jak na tablicy');
+  ok(pamiecModul.wektorDla(zwarty, 'nvidia:x') === odczyt, 'drugi odczyt bez dekodowania od nowa');
+  const nowy = losowy(2048);
+  pamiecModul.ustawWektor(zwarty, 'nvidia:x', nowy);
+  ok(Math.abs(pamiecModul.wektorDla(zwarty, 'nvidia:x')[0] - nowy[0]) < 1e-6, 'nowy wektor tego modelu unieważnia odczyt z pamięci');
+  const poDrodze = JSON.parse(JSON.stringify(zwarty));
+  ok(pamiecModul.wektorDla(poDrodze, 'senses:1024')?.length === 1024 && pamiecModul.maWektor(poDrodze), 'wektor przeżywa zapis i odczyt pliku');
+
+  // Pliki sprzed zmiany: tablice czytamy wprost, a kompaktujWektory zamienia je przy wczytaniu.
+  const plik = [
+    { text: 'nowy kształt', wektory: { A: [0.5, 0.25] } },
+    { text: 'stary kształt', embedding: [1, 2], embModel: 'B' },
+    { name: 'dokument', chunks: [{ text: 'fragment', wektory: { A: [0.75, 1] } }] },
+  ];
+  ok(pamiecModul.wektorDla(plik[0], 'A')?.[1] === 0.25, 'tablica sprzed zmiany czytana wprost');
+  pamiecModul.kompaktujWektory(plik);
+  ok(typeof plik[0].wektory.A === 'string' && typeof plik[2].chunks[0].wektory.A === 'string' && typeof plik[1].wektory.B === 'string'
+    && !('embedding' in plik[1]), 'kompaktowanie zamienia tablice (także fragmenty i stary kształt)');
+  ok(pamiecModul.wektorDla(plik[0], 'A')?.[1] === 0.25 && pamiecModul.wektorDla(plik[1], 'B')?.[1] === 2
+    && pamiecModul.wektorDla(plik[2].chunks[0], 'A')?.[0] === 0.75, 'po kompaktowaniu te same wartości');
+
   zmysly.close(); chmura.close();
   fs.rmSync(katalog, { recursive: true, force: true });
   console.log(fail.length ? `\nDO POPRAWY (${fail.length}):\n- ${fail.join('\n- ')}` : '\nWEKTORY PER MODEL OK');
