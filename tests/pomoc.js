@@ -144,6 +144,7 @@ const PORTY_ATRAP = {
   'mock-echo-systemu.js': [7116],
   'mock-grafiki.js': [7117],
   'mock-canon.js': [7120],
+  'mock-studio.js': [9095],
   // atrapa kształtów prognozy SWPC stawiana wprost w zestawie zorza-ksztalty
   'ksztalty-swpc': [7789],
   // atrapa Open-Meteo + Microsoft Graph tworzona wprost w zestawie
@@ -297,6 +298,25 @@ const SRODOWISKA = {
     port: 3407,
     atrapy: [['fake_senses.py', null]],
     env: { SENSES_URL: 'http://127.0.0.1:7060' },
+  },
+  /* Studio z atrapą generatorów (obrazy, dźwięk, wideo) i krótkim czekaniem
+     przed 202 — prompt ze słowem POWOLI trwa dłużej niż cierpliwość serwera. */
+  studio: {
+    port: 3414,
+    atrapy: [['mock-upstream.js', null], ['mock-studio.js', null]],
+    env: {
+      LOCAL_API_KEY: 'test',
+      NEMOTRON_BASE_URL: 'http://127.0.0.1:9099/v1',
+      LOCAL_BASE_URL: 'http://127.0.0.1:9098/v1',
+      OPENAI_API_KEY: 'test-studio',
+      OPENAI_BASE_URL: 'http://127.0.0.1:9095/v1',
+      ELEVENLABS_API_KEY: 'test-studio',
+      ELEVENLABS_BASE_URL: 'http://127.0.0.1:9095',
+      SEEDANCE_API_KEY: 'test-studio',
+      SEEDANCE_BASE_URL: 'http://127.0.0.1:9095/api/v3',
+      COSMOS_CZEKAJ_NA_ZADANIE_MS: '400',
+      COSMOS_ZADANIA_NARAZ: '2',
+    },
   },
 };
 

@@ -59,9 +59,10 @@ function stanowisko({ odpowiedzi = {} } = {}) {
     readJsonSafe: async (r) => r.json(),
     fetch: async (adres) => {
       dziennik.adresy.push(String(adres));
-      const dane = odpowiedzi[Object.keys(odpowiedzi).find((k) => String(adres).includes(k))]
+      // `__status` w odpowiedzi atrapy = inny kod HTTP (np. 202 z numerem zadania).
+      const { __status: kod = 200, ...dane } = odpowiedzi[Object.keys(odpowiedzi).find((k) => String(adres).includes(k))]
         || { };
-      return { ok: true, status: 200, json: async () => dane };
+      return { ok: kod >= 200 && kod < 300, status: kod, json: async () => dane };
     },
     webSearch: async (q) => `WYNIKI DLA: ${q}`,
     naKafelek: (w) => ({ thumb: w.id, title: w.nazwa }),
@@ -335,6 +336,26 @@ async function uruchom(st, nazwa, acc, stan) {
     if (st.poNazwie.szukaj.zawszeDozwolone) {
       fail.push('wyszukiwanie jest oznaczone jako zawsze dozwolone — pętla nie miałaby końca');
     }
+  }
+
+  /* --- 5b. Obraz, który generuje się dłużej, niż Cloudflare czeka --------
+     Serwer odpowiada wtedy 202 z numerem zadania (lib/zadania.js). Znacznik
+     [OBRAZ:] w czacie ma dopytać /api/zadania i wstawić gotowy obraz — a nie
+     pokazać „brak obrazu", bo pierwsza odpowiedź nie miała adresu. */
+  {
+    const st = stanowisko({ odpowiedzi: {
+      '/api/studio/image': { __status: 202, ok: true, zadanie: 'z-1', stan: 'pracuje' },
+      '/api/zadania': { stan: 'gotowe', wynik: { url: '/api/kb/raw?id=z-tla' } },
+    } });
+    const w = await uruchom(st, 'obraz', '[OBRAZ: kot o zmierzchu]');
+    const obraz = st.conv.messages.find((m) => m.content && Array.isArray(m.content.images));
+    const dopytal = st.dziennik.adresy.some((a) => a.includes('/api/zadania?id=z-1'));
+    console.log(`5b. obraz z zadania w tle → ${obraz ? obraz.content.images[0] : 'brak'}, dopytał: ${dopytal}`);
+    if (!dopytal) fail.push('[OBRAZ:] po odpowiedzi 202 nie dopytuje zadania w tle');
+    if (!obraz || obraz.content.images[0] !== '/api/kb/raw?id=z-tla') {
+      fail.push('[OBRAZ:] po odpowiedzi 202 nie wstawia obrazu z zadania w tle');
+    }
+    if (!w || w.akcja !== 'koniec') fail.push('[OBRAZ:] z zadania w tle nie kończy tury');
   }
 
   /* --- 6. Błąd sieci nie przerywa tury, tylko wraca do modelu ------------

@@ -1,7 +1,7 @@
 # Testy Cosmosa
 
 ```bash
-npm test                    # wszystko (104 zestawów + 9 selftestów Pythona, ~12 min)
+npm test                    # wszystko (105 zestawów + 9 selftestów Pythona, ~12 min)
 npm run test:szybkie        # tylko bez przeglądarki (~30 s)
 npm test -- kinect zdjec    # zestawy, których nazwa zawiera te słowa
 npm test -- --lista         # co jest do uruchomienia
@@ -62,6 +62,7 @@ Dostępne środowiska (`pomoc.js` → `SRODOWISKA`):
 | `zmysly` | Kinect, mowa, wykrywanie — bez modelu |
 | `tlo` | praca w tle — jak `pelne`, ale z krótkim `COSMOS_BIEG_SIEROTA_MS` |
 | `grafikiWRozmowie` | model proszący o grafiki **i** źródła, które je oddają |
+| `studio` | Studio z atrapą generatorów (obraz, dźwięk, wideo) i czekaniem 0,4 s przed 202 — zadania w tle |
 | `goly` | sam serwer, żadnych atrap |
 
 ### Umowy z atrapą `mock-upstream`
@@ -78,6 +79,13 @@ ustawił sytuację, której inaczej nie da się wywołać:
 | `zdjęcia miejsc` | oddaje `[GRAFIKA: A; B]`, potem próbuje powtórzyć to samo, a po odcięciu dopisuje tekst — trzy tury, tak jak w prawdziwej rozmowie |
 | `urwana` | kończy strumień w połowie adresu z `finish_reason: "length"`, a na prośbę o kontynuację oddaje resztę |
 | `przerwij mnie` | strumień, w którym `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu — po naciśnięciu „stop” w dowolnym momencie zostaje znacznik bez zamknięcia |
+
+### Umowy z atrapą `mock-studio`
+
+| Słowo w prompcie lub tekście | Co robi atrapa |
+|---|---|
+| `POWOLI` | odpowiada po 1,5 s — dłużej, niż serwer w środowisku `studio` czeka przed 202; przy wideo spowalnia też pobranie gotowego filmu |
+| `BLAD` | generator odpowiada 500 z opisem błędu |
 
 Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.

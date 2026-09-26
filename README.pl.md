@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-3c873a?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-0969da?style=flat-square">
-  <img alt="104 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-104-4ac26b?style=flat-square">
+  <img alt="105 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-105-4ac26b?style=flat-square">
   <img alt="Licencja MIT" src="https://img.shields.io/badge/licencja-MIT-6e7781?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-d4a72c?style=flat-square"></a>
 </p>
@@ -82,7 +82,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem — nikt nie powinien pisać detektora
 obiektów od zera — i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 104 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 105 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -134,7 +134,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 104 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 105 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -821,6 +821,13 @@ czego użyjesz — środkami ze swoich kont):
 do niej automatycznie (z promptem jako opisem), więc możesz się do nich odnosić
 w rozmowie i używać ich w kolejnych krokach (obraz z OpenAI → wideo w Seedance).
 
+**Długie generowanie nie przepada.** Obraz w wysokiej jakości, cztery warianty
+albo storyboard potrafią trwać kilka minut — dłużej, niż Cloudflare trzyma
+żądanie (100 s, potem strona błędu 524). Po ~75 s Studio pisze „Trwa dłużej niż
+zwykle", a serwer kończy pracę w tle. Możesz zamknąć Studio albo przejść do
+innej aplikacji — wynik i tak trafi do bazy wiedzy. Jedna osoba może mieć
+naraz najwyżej trzy takie zadania.
+
 **Studio to więcej niż jeden przycisk „generuj":**
 - **Warianty** — jednym poleceniem stwórz 1 / 2 / 4 wersje tego samego promptu.
 - **Szablony promptów** — gotowe style (np. fotorealizm, plakat, ikona) doklejane
@@ -918,6 +925,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/conversations` `/api/conversations/meta` `/api/conversations/search` | GET/PUT/POST/DELETE | Rozmowy: treść, metadane (tytuł, przypięcie), szukanie po treści |
 | `/api/kb` `/api/kb/file` `/api/kb/link` `/api/kb/note` `/api/kb/raw` `/api/kb/search` | GET/POST/DELETE | Baza wiedzy: pliki, linki, notatki, pobieranie, wyszukiwanie |
 | `/api/studio/*` | GET/POST | Studio: obraz, warianty, storyboard, edycja, upscale, dźwięk, wideo + status |
+| `/api/zadania` | GET | Praca w tle po odpowiedzi 202 (Studio): pracuje / gotowe z wynikiem / błąd — tylko własne zadania |
 | `/api/timeline` | GET/POST/DELETE | Oś czasu (Digital Time Machine) |
 | `/api/gear` | GET/PUT | Zestaw sprzętu użytkownika (korpus, obiektywy) — domyślny dla planu zdjęciowego |
 | `/api/canon/status` | GET | Czy aparat odpowiada po CCAPI: model, numer, firmware |
@@ -1210,7 +1218,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 104 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 105 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

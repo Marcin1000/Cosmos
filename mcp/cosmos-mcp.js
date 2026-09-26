@@ -29,6 +29,34 @@ const COSMOS_TOKEN = process.env.COSMOS_TOKEN || '';
 
 const authHeaders = COSMOS_TOKEN ? { Authorization: `Bearer ${COSMOS_TOKEN}` } : {};
 
+/* Studio odpowiada wynikiem, gdy zdąży w ~75 s. Dłuższe generowanie wraca
+   jako 202 z numerem zadania (za Cloudflare dłuższe żądanie kończy się 524)
+   — wtedy dopytujemy GET /api/zadania?id=…, aż praca się skończy. */
+async function wynikStudia(r) {
+  const d = await r.json();
+  if (!(r.status === 202 && d.zadanie)) {
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  }
+  const koniec = Date.now() + 20 * 60_000;
+  while (Date.now() < koniec) {
+    await new Promise((ok) => setTimeout(ok, 3000));
+    let s;
+    try {
+      const odp = await fetch(`${COSMOS_URL}/api/zadania?id=${encodeURIComponent(d.zadanie)}`, { headers: authHeaders });
+      if (odp.status === 404) throw new Error('Cosmos nie zna już tego zadania (restart serwera?) — sprawdź bazę wiedzy.');
+      if (!odp.ok) continue;
+      s = await odp.json();
+    } catch (err) {
+      if (/nie zna/.test(err.message)) throw err;
+      continue;
+    }
+    if (s.stan === 'gotowe') return s.wynik;
+    if (s.stan === 'blad') throw new Error(s.error || 'Generowanie nie powiodło się.');
+  }
+  throw new Error('Generowanie trwa ponad 20 minut — wynik trafi do bazy wiedzy Cosmosa.');
+}
+
 const TOOLS = [
   {
     name: 'cosmos_kb_search',
@@ -123,8 +151,7 @@ async function callTool(name, args = {}) {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ prompt: args.prompt }),
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      const d = await wynikStudia(r);
       return `Wygenerowano obraz „${d.item.name}” — dostępny pod ${COSMOS_URL}${d.url}` +
              (d.exported ? ` oraz w ${d.exported}` : '');
     }

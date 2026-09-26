@@ -3312,6 +3312,19 @@ el.studioModal.addEventListener('click', (e) => {
   if (e.target === el.studioModal) el.studioModal.style.display = 'none';
 });
 
+/* Studio: praca dłuższa niż ~75 s wraca jako zadanie w tle (202), które
+   dopytujemy — czekajNaZadanie w narzedzia.js. Człowiek widzi, że trwa
+   dłużej niż zwykle, i wie, że wynik i tak trafi do bazy wiedzy. */
+function zadanieStudia(gdzie) {
+  return {
+    pobierz: (...a) => fetch(...a), readJsonSafe, t,
+    naPostep: (s) => {
+      if (!gdzie || !s.sekund) return;
+      studioOut(gdzie, `<span class="studio-note"><span class="studio-spinner"></span>${escapeHtml(t('st.dluzej', { s: s.sekund }))}</span>`);
+    },
+  };
+}
+
 $('studio-image-go').addEventListener('click', jedenNaRaz(async () => {
   const prompt = $('studio-image-prompt').value.trim();
   if (!prompt) return;
@@ -3327,8 +3340,7 @@ $('studio-image-go').addEventListener('click', jedenNaRaz(async () => {
         provider: $('studio-image-provider').value || undefined,
       }),
     });
-    const d = await readJsonSafe(res);
-    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    const d = await czekajNaZadanie(res, zadanieStudia('image'));
     const imgs = (d.items || [{ item: d.item, url: d.url }])
       .map((r) => `<img src="${escapeHtml(r.url)}" alt="wygenerowany obraz">`).join('');
     studioOut('image', imgs + studioNote(d.item, d.exported));
@@ -3377,8 +3389,7 @@ $('studio-sb-go').addEventListener('click', jedenNaRaz(async () => {
         size: $('studio-image-size').value, provider: $('studio-image-provider').value || undefined,
       }),
     });
-    const d = await readJsonSafe(res);
-    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    const d = await czekajNaZadanie(res, zadanieStudia('sb'));
     studioOut('sb', d.frames.map((f) =>
       `<div class="sb-frame"><span class="sb-num">${f.shot}</span><img src="${escapeHtml(f.url)}" title="${escapeHtml(f.prompt)}"></div>`).join(''));
   } catch (err) {
@@ -3459,8 +3470,7 @@ $('studio-edit-go').addEventListener('click', jedenNaRaz(async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageId: editState.imageId, prompt, mask: mask.toDataURL('image/png') }),
     });
-    const d = await readJsonSafe(res);
-    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    const d = await czekajNaZadanie(res, zadanieStudia('edit'));
     studioOut('edit', `<img src="${escapeHtml(d.url)}">` + studioNote(d.item, d.exported));
   } catch (err) {
     studioOut('edit', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
@@ -4140,8 +4150,7 @@ async function renderGallery() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: b.dataset.up }),
       });
-      const d = await readJsonSafe(r);
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      await czekajNaZadanie(r, zadanieStudia(null));
       renderGallery();
     } catch (err) {
       alert(err.message);
@@ -4181,8 +4190,7 @@ $('studio-speech-go').addEventListener('click', jedenNaRaz(async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voiceId: $('studio-speech-voice').value.trim() || undefined }),
     });
-    const d = await readJsonSafe(res);
-    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    const d = await czekajNaZadanie(res, zadanieStudia('speech'));
     studioOut('speech', `<audio controls src="${escapeHtml(d.url)}"></audio>` + studioNote(d.item, d.exported));
   } catch (err) {
     studioOut('speech', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);

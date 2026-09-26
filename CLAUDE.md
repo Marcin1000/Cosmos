@@ -55,7 +55,7 @@ python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ## Testy i audyt
 
 ```bash
-npm test                  # 104 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 105 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -158,7 +158,10 @@ wiadomości użytkownika**, żeby zobaczył je model wizyjny.
 widzom puls `: puls` co 25 s (`lib/biegi.js`); `COSMOS_CISZA_MODELU_MS` przed nagłówkami
 zostaje ≤ 95 s, bo przeglądarka nie ma wtedy jeszcze pulsu; każde żądanie, na które czeka
 przeglądarka, mieści się w ~90 s (dłuższa praca — w tle, jak transkrypcja nagrania do
-bazy wiedzy). Modele myślące po cichu (gpt-5+, Claude 5) mają osobny limit do pierwszej
+bazy wiedzy). Studio robi to przez `lib/zadania.js`: trasa czeka na wynik do 75 s,
+potem odpowiada 202 z numerem zadania, a przeglądarka (`czekajNaZadanie`
+w `public/narzedzia.js`) i mostek MCP dopytują `GET /api/zadania?id=…`. Nowa długa
+praca w imieniu osoby idzie tą samą drogą. Modele myślące po cichu (gpt-5+, Claude 5) mają osobny limit do pierwszej
 treści. Restart (SIGTERM) daje biegom do 20 s i zapisuje resztę w rozmowach.
 
 Dla modelu lokalnego czat liczy **okno kontekstu** (`LOCAL_NUM_CTX`, dla Ollamy domyślnie

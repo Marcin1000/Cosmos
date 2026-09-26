@@ -44,6 +44,55 @@
    ============================================================ */
 
 /**
+ * Wynik pracy Studia, która na serwerze może trwać dłużej niż 100 s.
+ *
+ * Cloudflare zrywa żądanie bez odpowiedzi po 100 s (strona 524), więc serwer
+ * czeka na generowanie najwyżej ~75 s. Zdąży — odpowiada wynikiem jak zawsze.
+ * Nie zdąży — odpowiada 202 z numerem zadania, a tu dopytujemy
+ * GET /api/zadania?id=…, aż praca się skończy (lib/zadania.js).
+ *
+ * @param {Response} odp odpowiedź na żądanie, które zaczęło pracę
+ * @param {object} o
+ * @param {Function} o.pobierz fetch
+ * @param {Function} o.readJsonSafe bezpieczny odczyt JSON
+ * @param {Function} o.t tłumaczenia
+ * @param {Function} [o.naPostep] wołane przy każdym „jeszcze pracuje" ({ sekund })
+ * @param {Function} [o.spij] czekanie (podmieniane w testach)
+ * @returns {Promise<object>} dane jak z szybkiej ścieżki; błąd rzuca
+ */
+async function czekajNaZadanie(odp, { pobierz, readJsonSafe, t, naPostep, spij, coIleMs = 2500, maksMs = 20 * 60_000 }) {
+  const d = await readJsonSafe(odp);
+  if (!(odp.status === 202 && d.zadanie)) {
+    if (!odp.ok) throw new Error(d.error || `HTTP ${odp.status}`);
+    return d;
+  }
+  const czekaj = spij || ((ms) => new Promise((ok) => setTimeout(ok, ms)));
+  const start = Date.now();
+  let pomylek = 0;
+  if (naPostep) naPostep({ sekund: 0 });
+  while (Date.now() - start < maksMs) {
+    await czekaj(coIleMs);
+    let r;
+    // Chwilowy brak sieci (telefon w windzie) to nie koniec zadania — dopytamy za chwilę.
+    try { r = await pobierz(`/api/zadania?id=${encodeURIComponent(d.zadanie)}`); } catch {
+      if (++pomylek > 40) throw new Error(t('zadanie.bezSieci'));
+      continue;
+    }
+    const s = await readJsonSafe(r);
+    if (r.status === 404) throw new Error(t('zadanie.zgubione'));
+    if (!r.ok) {
+      if (++pomylek > 40) throw new Error(s.error || `HTTP ${r.status}`);
+      continue;
+    }
+    pomylek = 0;
+    if (s.stan === 'gotowe') return s.wynik || {};
+    if (s.stan === 'blad') throw new Error(s.error || t('zadanie.nieudane'));
+    if (naPostep) naPostep(s);
+  }
+  throw new Error(t('zadanie.zaDlugo'));
+}
+
+/**
  * Zbuduj listę narzędzi. Kolejność na liście = kolejność sprawdzania.
  *
  * @param {object} z zależności
@@ -133,6 +182,16 @@ function utworzNarzedzia(z) {
       const d = await readJsonSafe(r);
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       return d;
+    } catch (err) {
+      return { error: err.message };
+    }
+  }
+
+  /** Jak `jsonem`, ale dla Studia: praca dłuższa niż ~75 s wraca jako numer
+   *  zadania, które dopytujemy aż do wyniku (`czekajNaZadanie`). */
+  async function zeStudia(adres, opcje) {
+    try {
+      return await czekajNaZadanie(await pobierz(adres, opcje), { pobierz, readJsonSafe, t });
     } catch (err) {
       return { error: err.message };
     }
@@ -531,7 +590,7 @@ function utworzNarzedzia(z) {
     async wykonaj(k) {
       const pasek = zapowiedz(k.conv, k.przed, t('chat.genImage'));
       await mowGlosem(t('voice.generatingImage'));
-      const d = await jsonem('/api/studio/image', {
+      const d = await zeStudia('/api/studio/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: k.dop[1].trim() }),
@@ -563,5 +622,5 @@ function utworzNarzedzia(z) {
   return [szukaj, archiwum, plan, plotno, kod, grafiki, obraz];
 }
 
-if (typeof window !== 'undefined') window.utworzNarzedzia = utworzNarzedzia;
-if (typeof module !== 'undefined') module.exports = { utworzNarzedzia };
+if (typeof window !== 'undefined') Object.assign(window, { utworzNarzedzia, czekajNaZadanie });
+if (typeof module !== 'undefined') module.exports = { utworzNarzedzia, czekajNaZadanie };

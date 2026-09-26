@@ -482,6 +482,11 @@ const I18N = {
     'st.genVideoTask': 'Zlecam zadanie wideo…',
     'st.genVideo': 'Generuję wideo… ({min} min — to może potrwać kilka minut)',
     'st.videoTimeout': 'Przekroczono limit 20 minut oczekiwania.',
+    'st.dluzej': 'Trwa dłużej niż zwykle ({s} s). Wynik trafi też do bazy wiedzy — możesz zamknąć Studio.',
+    'zadanie.zgubione': 'Serwer nie zna już tego zadania — pewnie uruchomiono go ponownie. Jeśli wynik powstał, jest w bazie wiedzy.',
+    'zadanie.zaDlugo': 'Serwer pracuje nad tym ponad 20 minut. Gdy skończy, wynik trafi do bazy wiedzy.',
+    'zadanie.nieudane': 'Zadanie nie powiodło się.',
+    'zadanie.bezSieci': 'Od kilku minut brak połączenia z serwerem. Gdy wynik powstanie, trafi do bazy wiedzy.',
     'st.videoFailed': 'Zadanie nie powiodło się.',
 
     // — baza wiedzy —
@@ -1313,6 +1318,11 @@ const I18N = {
     'st.genVideoTask': 'Submitting video task…',
     'st.genVideo': 'Generating video… ({min} min — this may take a few minutes)',
     'st.videoTimeout': 'Exceeded the 20-minute wait limit.',
+    'st.dluzej': 'Taking longer than usual ({s} s). The result will also be saved to the knowledge base — you can close the Studio.',
+    'zadanie.zgubione': 'The server no longer knows this task — it was probably restarted. If the result was created, it is in the knowledge base.',
+    'zadanie.zaDlugo': 'The server has been working on this for over 20 minutes. When it finishes, the result will go to the knowledge base.',
+    'zadanie.nieudane': 'The task failed.',
+    'zadanie.bezSieci': 'No connection to the server for several minutes. Once the result is ready, it will go to the knowledge base.',
     'st.videoFailed': 'The task failed.',
 
     'kb.upload': 'Add files',

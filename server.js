@@ -98,6 +98,8 @@ const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
+// Praca dłuższa niż 100 s Cloudflare'a (Studio) — zadanie w tle z numerem do dopytywania.
+const zadania_ = require('./lib/zadania.js').utworzZadania();
 const { llmComplete, blindToImages, zapytajModel } = require('./lib/model.js');
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je raz, po zdefiniowaniu obu stron — krzyżowe `require`
@@ -2566,7 +2568,7 @@ function serveStatic(req, res) {
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
-studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems });
+studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems, zadania: zadania_ });
 urzadzenia_.polacz({ addEvent, recentEvents, rutyny, routineView });
 trening_.polacz({ addEvent, rozmowy: () => U().convIndex, convPath, profil: () => U().profile });
 nauka_.polacz({
@@ -2864,6 +2866,7 @@ async function trasyApi(req, res, p) {
   if (p === '/api/routines' || p === '/api/routines/due') return await handleRoutines(req, res, p);
   if (p.startsWith('/api/kb')) return await handleKb(req, res, p);
   if (p.startsWith('/api/studio')) return await handleStudio(req, res, p);
+  if (p === '/api/zadania' && req.method === 'GET') return zadania_.obsluzStan(req, res);
   if (p === '/api/stt' && req.method === 'POST') return await glos.handleStt(req, res);
   /* Ptak z dźwięku (BirdNET). Osobna trasa, a nie „jeszcze jeden tryb STT",
      bo to inne pytanie: nie „co ktoś powiedział", tylko „kto to śpiewa".
