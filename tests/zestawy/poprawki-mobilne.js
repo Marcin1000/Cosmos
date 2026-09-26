@@ -82,7 +82,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await m.evaluate(() => openSettings());
   await m.waitForTimeout(1200);
   const opts = await m.evaluate(async () => {
-    await fetchModelsInto('cloud', el.modelSelectCloud, el.fetchModelsCloud);
+    await fetchModelsInto('cloud', document.getElementById('model-select-cloud'), document.getElementById('fetch-models-cloud'));
     const s = document.getElementById('model-select-cloud');
     return {
       shown: s.style.display !== 'none',
