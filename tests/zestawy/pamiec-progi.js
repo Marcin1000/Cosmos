@@ -10,6 +10,7 @@ const path = require('node:path');
 const http = require('node:http');
 
 const problemy = [];
+const wektor64 = (poczatek) => Array.from({ length: 64 }, (_, i) => (i < poczatek.length ? poczatek[i] : 0));
 const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) problemy.push(opis); };
 
 const zmysly = http.createServer((req, res) => {
@@ -17,7 +18,8 @@ const zmysly = http.createServer((req, res) => {
   req.on('data', (c) => { b += c; }).on('end', () => {
     const n = (JSON.parse(b || '{}').texts || ['x']).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => [0.3, 0.1, 0.9]), model: 'nowy-model' }));
+    // 64 wymiary — krótsze wektory Cosmos słusznie odrzuca jako śmieci (lib/pamiec.js, wektoryWPorzadku).
+    res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => wektor64([0.3, 0.1, 0.9])), model: 'nowy-model' }));
   });
 });
 
@@ -44,7 +46,7 @@ const zmysly = http.createServer((req, res) => {
       zadaniaNv.push({ url: req.url, auth: req.headers.authorization || '' });
       const n = (JSON.parse(b || '{}').input || ['x']).length;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ data: Array.from({ length: n }, (_, i) => ({ index: i, embedding: [0.1, 0.2, 0.3] })), model: 'nv-embed' }));
+      res.end(JSON.stringify({ data: Array.from({ length: n }, (_, i) => ({ index: i, embedding: wektor64([0.1, 0.2, 0.3]) })), model: 'nv-embed' }));
     });
   });
   await new Promise((r) => nvidia.listen(0, '127.0.0.1', r));
@@ -55,6 +57,19 @@ const zmysly = http.createServer((req, res) => {
   ok(Boolean(wynikNv && wynikNv.vectors && wynikNv.vectors.length === 1), `embeddingi z chmury NVIDIA działają (${wynikNv ? 'wektor' : 'null'})`);
   ok(zadaniaNv.some((z) => /embeddings/.test(z.url) && /nvapi-test/.test(z.auth)), `żądanie do NVIDII wyszło z kluczem (${zadaniaNv.length})`);
   nvidia.close();
+
+  /* Śmieci z usługi (wektory 3-wymiarowe, niepełny komplet) nie mogą trafić
+     do pamięci ani bazy wiedzy — potem „pasowały" do każdego pytania. */
+  const smieci = require('node:http').createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ vectors: [[0.3, 0.1, 0.9]] }));
+  });
+  await new Promise((r) => smieci.listen(0, '127.0.0.1', r));
+  process.env.EMBED_PROVIDER = 'senses';
+  const p3 = utworz({ katalogDanych: kat, sensesUrl: `http://127.0.0.1:${smieci.address().port}`, chmura: {}, sendJson: () => {}, readJson: async () => ({}) });
+  const wynikSmieci = await p3.embedTexts(['jaki mam aparat', 'drugi tekst'], 3000, 'query');
+  ok(wynikSmieci === null, `wektory 3-wymiarowe i niepełny komplet odrzucone (${wynikSmieci ? 'przyjęte' : 'null'})`);
+  smieci.close();
 
   zmysly.close();
   fs.rmSync(kat, { recursive: true, force: true });

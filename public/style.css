@@ -539,7 +539,10 @@ body::after {
      na `.welcome` — na komputerze jej rozmyte brzegi wychodzą poza kolumnę
      720 px i ucięcie dałoby dwie pionowe krawędzie światła. */
   overflow-x: hidden;
-  scroll-behavior: smooth;
+  /* BEZ `scroll-behavior: smooth`. Przy strumieniu animacja nie nadążała:
+     jedna klatka z tabelą rosła o >120 px w trakcie przewijania i widok już
+     nie wracał na dół — długa odpowiedź pisała się poza ekranem (zmierzone:
+     52 z 61 próbek, do 5588 px od dołu). Kto chce płynnie, przewija sam. */
   z-index: 1;
 }
 
@@ -3063,6 +3066,36 @@ body::after {
   overflow-y: auto;
 }
 
+/* Pasek „Jest nowa wersja — Odśwież" po wdrożeniu (app.js, controllerchange). */
+.nowa-wersja {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 13.5px;
+}
+.nowa-wersja button {
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 12px;
+  background: var(--text);            /* neutralnie, jak przyciski strony — kolor mają tylko silniki */
+  color: var(--bg-elevated);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* ============================ MOBILE ============================ */
 
 @media (max-width: 720px) {
@@ -3073,6 +3106,10 @@ body::after {
     box-shadow: var(--shadow);
   }
   .sidebar.collapsed { margin-left: -288px; }
+  /* Zanim aplikacja wystartuje (startApp dodaje .gotowa), panel jest schowany
+     bez względu na klasy — inaczej migał otwarty przy każdym starcie. */
+  .app:not(.gotowa) .sidebar { margin-left: -288px; transition: none; }
+  .app:not(.gotowa) .sidebar-scrim { opacity: 0; pointer-events: none; }
   #expand-btn { display: inline-flex; }
 
   /* Druga siatka bezpieczeństwa dla przycisków rozmowy: nie każda przeglądarka

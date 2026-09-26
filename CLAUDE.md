@@ -154,6 +154,17 @@ sterowana flagą w payloadzie (`useSenses`, `useSearch`, `useActions`, `useMemor
 Obrazy z bazy wiedzy nie idą jako tekst — są wstrzykiwane jako `image_url` do **ostatniej
 wiadomości użytkownika**, żeby zobaczył je model wizyjny.
 
+**Za Cloudflare (100 s bez bajtu = strona 524)** obowiązują trzy rzeczy: biegi wysyłają
+widzom puls `: puls` co 25 s (`lib/biegi.js`); `COSMOS_CISZA_MODELU_MS` przed nagłówkami
+zostaje ≤ 95 s, bo przeglądarka nie ma wtedy jeszcze pulsu; każde żądanie, na które czeka
+przeglądarka, mieści się w ~90 s (dłuższa praca — w tle, jak transkrypcja nagrania do
+bazy wiedzy). Modele myślące po cichu (gpt-5+, Claude 5) mają osobny limit do pierwszej
+treści. Restart (SIGTERM) daje biegom do 20 s i zapisuje resztę w rozmowach.
+
+Dla modelu lokalnego czat liczy **okno kontekstu** (`LOCAL_NUM_CTX`, dla Ollamy domyślnie
+4096): przy małym oknie krótsza wersja instrukcji, najstarsze tury wypadają jawnie
+(nagłówek `X-Cosmos-Okno`), limit odpowiedzi dopasowany do reszty.
+
 ### Protokół tagów — narzędzia bez function calling
 
 Model nie ma tool-callingu; zamiast tego instrukcja systemowa każe mu napisać znacznik
@@ -176,6 +187,10 @@ błąd w tym kodzie.
 do czterech rund. Zanim to powstało, model prosił o plan i o zdjęcia, a dostawał tylko plan;
 przy ponownej prośbie generował plan od nowa i Marcin dostawał trzy plany i zero zdjęć.
 Grafiki lecą **po** zwycięskim narzędziu, żeby zdjęcia trafiły pod gotowe punkty planu.
+
+Wzorce znaczników są tolerancyjne (spacja po nawiasie, nawiasy i dwukropek pełnej
+szerokości `【SZUKAJ：…】`, jak piszą małe modele lokalne i Qwen) — nowy znacznik buduj
+funkcją `znacznik(nazwa)` w `public/protokol.js`, nie ręcznym regexpem.
 
 **Znaczniki nie mają prawa stanąć na ekranie** — ani w całości, ani urwane w połowie
 (skończył się budżet tokenów, człowiek nacisnął „stop"), ani opakowane w ```blok```.
@@ -235,9 +250,16 @@ Zasady, których nie wolno łamać:
    wygoda, nie zabezpieczenie.
 6. **Wybór silnika idzie przez `pickEndpoint`**, który pyta strażnika z `lib/silniki.js`
    (przyznane uprawnienia, własne klucze). Nie czytaj `ENDPOINTS[nazwa]` wprost w nowym
-   kodzie — ominąłbyś uprawnienia i płaciłby właściciel.
+   kodzie — ominąłbyś uprawnienia i płaciłby właściciel. Na silniku **przyznanym** model
+   i `max_tokens` przechodzą przez `silniki.modelDozwolony` / `tokenyDozwolone` (lista
+   właściciela, sufit) — nowe wywołanie modelu w imieniu osoby korzysta z nich (czat
+   i `llmComplete` już to robią).
 7. **Dane od innych osób (imiona, loginy) do DOM-u tylko przez `textContent`.**
    Panel Dostęp pokazuje właścicielowi imiona wpisane przez gości.
+8. **Zmysły to domowe GPU właściciela** — każda droga do `SENSES_URL` w imieniu osoby
+   sprawdza `silniki.zmyslyDozwolone()` (trasa → 403, wyciąganie tekstu → pusty wynik).
+   Adres domu (`SENSES_URL`, `LOCAL_BASE_URL`) i ścieżki serwera nie trafiają do członka
+   ani w `/api/config`, ani w komunikatach błędów.
 
 Pilnują tego zestawy `izolacja-osob`, `konta-i-logowanie`, `konta-w-przegladarce`.
 
@@ -254,7 +276,15 @@ Stary układ (wszystko wprost w `data/`) przenosi się sam przy starcie do katal
 właściciela, z kopią `data/kopia-przed-kontami-*/` — patrz `migrujDoKont()` w `server.js`.
 Testy czytające pliki z dysku pytają o ścieżkę `katalogOsoby(env)` z `tests/pomoc.js`.
 
-Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności.
+Bez bazy danych — przy tej skali wystarcza i nie wnosi zależności. Ceną jest dyscyplina:
+
+- **Odczyt JSON-a z danymi tylko przez `czytajJson`** (`lib/rdzen.js`), nigdy
+  `try { JSON.parse } catch { return [] }`. Uszkodzony plik dawał pusty stan, a pierwszy
+  zapis go nadpisywał — tak ginęli członkowie i pamięć. `czytajJson` odkłada kopię
+  `*.uszkodzony-<czas>`, wraca do `.bak`, a przy `krytyczny` (konta) zatrzymuje start.
+- **Zapis przez `zapiszAtomowo`.** `kopia: true` (poprzednia wersja jako `.bak`, twarde
+  dowiązanie) dla danych nie do odtworzenia; `trwale: true` (fsync) tylko dla małych
+  krytycznych plików — fsync stoi w pętli zdarzeń. Duże i częste zapisy — odroczone.
 
 ### Front-end — bez budowania
 

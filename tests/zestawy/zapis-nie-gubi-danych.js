@@ -185,6 +185,35 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
   }
   console.log('4. rozmowa, indeks rozmów i sprzęt: zapisane i parsowalne');
 
+  /* 4b. DWA URZĄDZENIA. Zapis z nieaktualnej kopii nadpisywał całą rozmowę —
+     telefon kasował wiadomości napisane w międzyczasie na komputerze. Zapis
+     mówi teraz, na której wersji się opiera; nowszej serwer nie nadpisze. */
+  const put = async (tresc) => {
+    const r = await fetch(`${env.adres}/api/conversations?id=wersje1`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tresc) });
+    return { kod: r.status, json: await r.json().catch(() => ({})) };
+  };
+  const bazowe = [{ role: 'user', content: 'Plan na Tatry?' }, { role: 'assistant', content: 'Morskie Oko o świcie.' }];
+  const v1 = await put({ title: 'Tatry', messages: bazowe });
+  await new Promise((r) => setTimeout(r, 5));
+  const zKomputera = await put({ title: 'Tatry', messages: [...bazowe, { role: 'user', content: 'A pogoda?' }],
+    bazaUpdatedAt: v1.json.meta.updatedAt });
+  const zTelefonu = await put({ title: 'Tatry', messages: [...bazowe, { role: 'user', content: 'A nocleg?' }],
+    bazaUpdatedAt: v1.json.meta.updatedAt });
+  console.log(`4b. zapis z komputera → ${zKomputera.kod}, spóźniony zapis z telefonu → ${zTelefonu.kod}`);
+  if (zKomputera.kod !== 200) fail.push(`zapis na aktualnej wersji odrzucony (${zKomputera.kod})`);
+  if (zTelefonu.kod !== 409 || !zTelefonu.json.rozmowa
+    || !zTelefonu.json.rozmowa.messages.some((m) => m.content === 'A pogoda?')) {
+    fail.push(`zapis z nieaktualnej kopii nie dostał 409 z nowszą wersją (${zTelefonu.kod})`);
+  }
+  const { scalRozmowy } = require('../../public/protokol.js').utworzProtokol();
+  const scalona = scalRozmowy({ messages: [...bazowe, { role: 'user', content: 'A nocleg?' }] }, zTelefonu.json.rozmowa || { messages: [] });
+  const tresci = scalona.messages.map((m) => m.content);
+  console.log(`    po scaleniu: ${tresci.slice(2).join(' | ')}`);
+  if (!(tresci.includes('A pogoda?') && tresci.includes('A nocleg?'))) fail.push('scalenie zgubiło wiadomość z któregoś urządzenia');
+  const bezBazy = await put({ title: 'Tatry', messages: bazowe });
+  if (bezBazy.kod !== 200) fail.push(`zapis bez wersji (stary klient, skrypty) odrzucony (${bezBazy.kod})`);
+
   // Żadnych osieroconych plików tymczasowych w katalogu danych.
   const osierocone = [];
   const przejdz = (kat) => {

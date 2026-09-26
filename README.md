@@ -76,6 +76,15 @@ The interesting part is not that both exist — it is that they share one
 conversation, one tool cascade, and one set of guarantees. Switching providers
 mid-thread must not lose the thread.
 
+Sharing a thread means respecting each side's limits instead of pretending they
+are the same. A home Ollama holds 4 096 tokens by default and silently drops the
+oldest messages when a prompt overflows — in one measured search cascade it
+dropped the user's actual question. So the local path gets a budget: a shorter
+tool description when the window is small, oldest turns trimmed openly (with a
+note under the reply), and a reply limit that fits what is left. A sleeping home
+PC behind Tailscale is named as such and short-circuited for 30 s, rather than
+costing every message an 11-second connect timeout.
+
 ---
 
 ## Engineering notes

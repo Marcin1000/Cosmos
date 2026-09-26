@@ -19,7 +19,8 @@ const zmysly = http.createServer((req, res) => {
   req.on('end', () => setTimeout(() => {
     const n = (JSON.parse(b).texts || ['x']).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => [0.1, 0.2, 0.3]), model: 'atrapa-embed' }));
+    // 64 wymiary — krótsze Cosmos odrzuca jako śmieci (lib/pamiec.js).
+    res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => Array.from({ length: 64 }, (_, i) => (i < 3 ? [0.1, 0.2, 0.3][i] : 0))), model: 'atrapa-embed' }));
   }, opoznienieEmbed));
 });
 

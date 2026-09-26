@@ -26,18 +26,19 @@ const { tenSamTekst } = utworzMowe({ WAKE_RE: /\bhej kosmos/i });
 
 const fail = [];
 
-/* Wzorce znaczników — te same, co w app.js. Trzymamy je tu z ręki, bo
-   przepisanie ich z pliku regexpem byłoby dokładnie tym testem po źródle,
-   od którego uciekamy. */
+/* Wzorce znaczników i czyszczenie — PRAWDZIWE, z public/protokol.js, tak jak
+   w app.js. Dawniej test trzymał własną kopię „z ręki" i dlatego nie mógł
+   zauważyć, że protokół nie rozpoznaje „【SZUKAJ：…】" z modelu Qwen. */
+const protokol = require(path.join(__dirname, '..', '..', 'public', 'protokol.js')).utworzProtokol();
 const WZORCE = {
-  SZUKAJ: /\[SZUKAJ:\s*([^\]\n]+)\]/i,
-  ARCHIWUM: /\[ARCHIWUM:\s*([^\]\n]*)\](?!\()/i,
-  PLAN: /\[PLAN:\s*([^\]\n]*)\](?!\()/i,
-  PLOTNO_NOWE: /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i,
-  PLOTNO_ZMIANA: /```płótno-zmiana\s*\n([\s\S]*?)```/i,
-  KOD: /```uruchom\s*\n([\s\S]*?)```/i,
-  GRAFIKA: /\[GRAFIKA:\s*([^\]\n]+)\]/i,
-  OBRAZ: /\[OBRAZ:\s*([^\]\n]+)\]/i,
+  SZUKAJ: protokol.SEARCH_MARKER_RE,
+  ARCHIWUM: protokol.ARCHIVE_RE,
+  PLAN: protokol.PLAN_RE,
+  PLOTNO_NOWE: protokol.CANVAS_NEW_RE,
+  PLOTNO_ZMIANA: protokol.CANVAS_PATCH_RE,
+  KOD: protokol.RUN_FENCE_RE,
+  GRAFIKA: protokol.PHOTO_MARKER_RE,
+  OBRAZ: protokol.IMAGE_MARKER_RE,
 };
 
 /** Świeży zestaw narzędzi z atrapami. Każdy przypadek dostaje własny,
@@ -54,11 +55,7 @@ function stanowisko({ odpowiedzi = {} } = {}) {
       dziennik.doModelu.push({ tresc, etykieta });
       c.messages.push({ role: 'user', content: tresc, search: true });
     },
-    /* Prawdziwe czyszczenie znaczników byłoby kopią z app.js, a kopia
-       rozjeżdża się po cichu. Tu wystarczy coś, co usuwa WSZYSTKIE — bo
-       sprawdzamy, czy kaskada w ogóle je przez to przepuszcza. */
-    stripSearchMarker: (x) => String(x || '')
-      .replace(/\[(SZUKAJ|ARCHIWUM|PLAN|GRAFIKA|OBRAZ):?[^\]]*\]/gi, '').trim(),
+    stripSearchMarker: protokol.stripSearchMarker,
     readJsonSafe: async (r) => r.json(),
     fetch: async (adres) => {
       dziennik.adresy.push(String(adres));
@@ -159,6 +156,47 @@ async function uruchom(st, nazwa, acc, stan) {
     const maUwage = /3 wyszukań|TYLKO to jedno/.test(doModelu);
     console.log(`   model wie, że wykonano jedno z trzech: ${maUwage}`);
     if (!maUwage) fail.push('model nie dowiaduje się, że pozostałe wyszukania nie poszły');
+  }
+
+  /* --- 2b. Znacznik ZE SPACJĄ albo w nawiasach pełnej szerokości ---------
+     Małe modele lokalne piszą „[ SZUKAJ: …]", Qwen — „【SZUKAJ：…】". Dotąd
+     polecenie stało na ekranie, a wyszukiwanie nie ruszało. */
+  {
+    const st = stanowisko();
+    const acc = 'Sprawdzę prognozę.\n【SZUKAJ：pogoda Kraków jutro】';
+    const trafione = st.narzedzia.filter((n) => n.dopasuj(acc)).map((n) => n.nazwa);
+    await uruchom(st, 'szukaj', acc);
+    const naEkranie = st.conv.messages.filter((m) => m.role === 'assistant')
+      .map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    const zapytanie = st.dziennik.doModelu.map((x) => x.tresc).join('\n');
+    console.log(`2b. „【SZUKAJ：…】" → narzędzie: ${trafione[0] || 'żadne'}, na ekranie znacznik: ${/SZUKAJ/.test(naEkranie)}`);
+    if (trafione[0] !== 'szukaj') fail.push(`znacznik pełnej szerokości nie uruchomił wyszukiwania (${trafione})`);
+    if (!/pogoda Kraków jutro/.test(zapytanie)) fail.push('wyszukanie nie dostało treści zapytania ze znacznika pełnej szerokości');
+    if (/SZUKAJ|【|】/.test(naEkranie)) fail.push('znacznik pełnej szerokości został na ekranie');
+    const zeSpacja = stanowisko();
+    if (!zeSpacja.narzedzia.some((n) => n.nazwa === 'szukaj' && n.dopasuj('[ SZUKAJ: pogoda ]'))) fail.push('„[ SZUKAJ: … ]" ze spacją nie rozpoznany');
+    if (zeSpacja.narzedzia.some((n) => n.dopasuj('Zobacz [Szukaj w Google](https://google.com) i [Plan B].'))) {
+      fail.push('odnośnik Markdown albo zwykły nawias w zdaniu odpalił narzędzie');
+    }
+  }
+
+  /* --- 2c. Pasek „w toku" domyka się po narzędziu -----------------------
+     „Przeszukuję archiwum…", „Generuję obraz…" i „Liczę…" zostawały
+     w rozmowie na zawsze — także nad gotową odpowiedzią i nad błędem. */
+  {
+    const wToku = ['chat.searchingArchive', 'chat.genImage', 'chat.running'];
+    const zostaly = (st) => st.conv.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .filter((c) => wToku.includes(c.trim()));   // atrapa `t` oddaje sam klucz
+    const stA = stanowisko({ odpowiedzi: { '/api/archive/search': { znaleziono: 3, wyniki: [] } } });
+    await uruchom(stA, 'archiwum', '[ARCHIWUM: rok=2025]');
+    const stO = stanowisko({ odpowiedzi: { '/api/studio/image': { error: 'brak klucza' } } });
+    await uruchom(stO, 'obraz', '[OBRAZ: a red fox]');
+    const stK = stanowisko({ odpowiedzi: { '/api/run': { stdout: '4', stderr: '', wyniki: [] } } });
+    await uruchom(stK, 'kod', '```uruchom\nprint(2+2)\n```');
+    const razem = [...zostaly(stA), ...zostaly(stO), ...zostaly(stK)];
+    console.log(`2c. pasków „w toku" po archiwum, obrazie (z błędem) i kodzie: ${razem.length}`);
+    if (razem.length) fail.push(`paski „w toku" zostały w rozmowie: ${razem.join(' | ')}`);
   }
 
   /* --- 3. Powtórzone zapytanie do archiwum jest odcinane ----------------- */

@@ -27,7 +27,18 @@
  * @returns {object} znaczniki i budowanie kontekstu
  */
 function utworzProtokol() {
-  const SEARCH_MARKER_RE = /\[SZUKAJ:\s*([^\]\n]+)\]/i;
+  /* Znacznik po tolerancyjnemu: małe modele lokalne piszą „[ SZUKAJ: …]"
+     ze spacją, a Qwen — nawiasy i dwukropek pełnej szerokości („【SZUKAJ：…】").
+     Dotąd takie polecenie lądowało na ekranie, a narzędzie nie ruszało.
+     Dwukropek zostaje obowiązkowy i odnośnik Markdown dalej jest odnośnikiem:
+     „[Szukaj w Google](…)" czy „[Plan B]" w zdaniu nie mogą niczego odpalić. */
+  const OTW = '[\\[【]\\s*';
+  const DWUKROPEK = '\\s*[:：]\\s*';
+  const TRESC = '[^\\]】\\n]';
+  const ZAM = '\\s*[\\]】]';
+  const znacznik = (nazwa, grupa = `(${TRESC}+?)`) => new RegExp(`${OTW}${nazwa}${DWUKROPEK}${grupa}${ZAM}(?!\\()`, 'i');
+
+  const SEARCH_MARKER_RE = znacznik('SZUKAJ');
 
   /** Usuń dyrektywę wyszukiwania z tekstu pokazywanego użytkownikowi.
    *  To polecenie dla modelu, nie treść odpowiedzi — nigdy nie ma trafić na ekran.
@@ -57,11 +68,11 @@ function utworzProtokol() {
          Markdown. Z dwukropkiem opcjonalnym „[Planty](…)", „[Archiwum
          Narodowe](…)" czy „[Obrazy Moneta](…)" znikały z odpowiedzi,
          a „[Archiwum…](…)" odpalało do tego narzędzie archiwum. */
-      out = out.replace(new RegExp(`\\[${z}(?:\\s*:[^\\]\\n]*)?\\](?!\\()`, 'gi'), '');
+      out = out.replace(new RegExp(`${OTW}${z}(?:${DWUKROPEK}${TRESC}*)?${ZAM}(?!\\()`, 'gi'), '');
       /* Urwany na końcu tekstu — i TYLKO na końcu, i tylko z dwukropkiem.
          W środku wypowiedzi otwarty nawias kwadratowy to zwykły nawias,
          a „[Plan B" na końcu zdania nie jest poleceniem. */
-      out = out.replace(new RegExp(`\\[${z}\\s*:[^\\]\\n]*$`, 'i'), '');
+      out = out.replace(new RegExp(`${OTW}${z}${DWUKROPEK}${TRESC}*$`, 'i'), '');
     }
     // Płot, w którym po usunięciu znacznika nie zostało nic prócz białych znaków.
     out = out.replace(/```[a-zA-Z-]*\s*```/g, '')
@@ -92,7 +103,7 @@ function utworzProtokol() {
    *  przez ułamek sekundy przy każdym narzędziu. */
   function widokWToku(acc) {
     let t = stripSearchMarker(rozdzielMyslenie(acc).tresc);
-    const m = t.match(/\[([A-ZĄĆĘŁŃÓŚŹŻ]{0,8})$/i);
+    const m = t.match(/[[【]\s*([A-ZĄĆĘŁŃÓŚŹŻ]{0,8})$/i);
     if (m && ZNACZNIKI.some((zn) => zn.startsWith(m[1].toUpperCase()))) t = t.slice(0, m.index);
     return t.replace(/<\/?t?h?i?n?k?$/i, '');
   }
@@ -201,11 +212,11 @@ function utworzProtokol() {
     return naglowek + tresc.slice(0, ARCH_LIMIT_ZNAKOW);
   }
 
-  const IMAGE_MARKER_RE = /\[OBRAZ:\s*([^\]\n]+)\]/i;
+  const IMAGE_MARKER_RE = znacznik('OBRAZ');
   /* Znalezione zdjęcia to co innego niż wygenerowane. Bez tego znacznika model
      na „pokaż zdjęcia tych miejsc" odpowiadał „nie mam dostępu do wyszukiwania
      obrazów" i proponował wizje artystyczne zamiast prawdziwej Majorki. */
-  const PHOTO_MARKER_RE = /\[GRAFIKA:\s*([^\]\n]+)\]/i;
+  const PHOTO_MARKER_RE = znacznik('GRAFIKA');
   /* Kod do wykonania. Jedyne narzędzie zapisane blokiem, nie znacznikiem —
      program nie mieści się w jednej linii. */
   const RUN_FENCE_RE = /```uruchom\s*\n([\s\S]*?)```/i;
@@ -215,9 +226,9 @@ function utworzProtokol() {
   const CANVAS_NEW_RE = /```płótno(?::\s*([^\n]*))?\s*\n([\s\S]*?)```/i;
   const CANVAS_PATCH_RE = /```płótno-zmiana\s*\n([\s\S]*?)```/i;
   // Dwukropek obowiązkowy i nigdy odnośnik — „[Archiwum Narodowe](…)" to link.
-  const ARCHIVE_RE = /\[ARCHIWUM:\s*([^\]\n]*)\](?!\()/i;
-  const PLAN_RE = /\[PLAN:\s*([^\]\n]*)\](?!\()/i;
-  const ACTION_RE = /\[AKCJA:\s*([^|\]]+)\|\s*([^\]]+)\]/i;
+  const ARCHIVE_RE = znacznik('ARCHIWUM', `(${TRESC}*?)`);
+  const PLAN_RE = znacznik('PLAN', `(${TRESC}*?)`);
+  const ACTION_RE = new RegExp(`${OTW}AKCJA${DWUKROPEK}([^|\\]】]+)\\|\\s*([^\\]】]+?)${ZAM}`, 'i');
 
   /* „Katedra La Seu" i „katedra la seu" to to samo pytanie o zdjęcia. Bez
      ujednolicenia model prosiłby o tę samą rzecz raz po raz, tylko inaczej
@@ -225,6 +236,23 @@ function utworzProtokol() {
   function bezOgonkowKlient(s) {
     return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/ł/gi, 'l').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  /** Scal: wspólny początek, potem to, co dopisał serwer (inne urządzenie),
+   *  potem to, co dopisano tutaj. Wyjątek: odpowiedź zapisana przez serwer
+   *  awaryjnie (`bieg` — nikt jej wtedy nie odebrał) ustępuje odpowiedzi,
+   *  którą ta karta ma u siebie — inaczej ta sama odpowiedź stałaby dwa razy. */
+  function scalRozmowy(tutaj, serwer) {
+    const podpis = (m) => JSON.stringify([m.role, m.content]);
+    const a = tutaj.messages || [];
+    const b = serwer.messages || [];
+    let wspolne = 0;
+    while (wspolne < a.length && wspolne < b.length && podpis(a[wspolne]) === podpis(b[wspolne])) wspolne++;
+    const zSerwera = new Set(b.map(podpis));
+    const tutajPo = a.slice(wspolne).filter((m) => !zSerwera.has(podpis(m)));
+    const mamSwojaOdpowiedz = tutajPo.some((m) => m.role === 'assistant');
+    const serwerPo = b.slice(wspolne).filter((m) => !(m.bieg && mamSwojaOdpowiedz));
+    return { ...serwer, ...tutaj, messages: [...b.slice(0, wspolne), ...serwerPo, ...tutajPo] };
   }
 
   return {
@@ -245,6 +273,7 @@ function utworzProtokol() {
     widokWToku,
     naKontekst,
     bezOgonkowKlient,
+    scalRozmowy,
   };
 }
 

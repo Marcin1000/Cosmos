@@ -44,6 +44,7 @@ const readline = require('readline');
 
 const KORZEN = path.resolve(__dirname, '..');
 const { modelNotAChatPartner } = require('../public/models.js');
+const { rozdzielMyslenie } = require('../public/protokol.js').utworzProtokol();
 const ADRES = process.env.COSMOS_URL || 'http://localhost:3000';
 const POWTORZENIA = Number(process.env.PLYNNOSC_PROBY || 3);
 const PYTANIE = 'Napisz jednym zdaniem, czym jest fotografia poklatkowa.';
@@ -98,6 +99,7 @@ async function jedenPomiar(endpoint, model) {
   let pierwszy = 0;
   let znaki = 0;
   let myslenie = 0;
+  let mysleniaWTresci = 0;
   let doTresci = 0;
   let blad = '';
   try {
@@ -123,29 +125,49 @@ async function jedenPomiar(endpoint, model) {
     }
     const czytnik = r.body.getReader();
     const dek = new TextDecoder();
-    for (;;) {
-      const { value, done } = await czytnik.read();
-      if (done) break;
-      const kawalek = dek.decode(value, { stream: true });
-      for (const linia of kawalek.split('\n')) {
-        if (!linia.startsWith('data: ') || linia.includes('[DONE]')) continue;
+    /* Ramki SSE składamy z bufora, jak aplikacja: kawałek sieci potrafi
+       przeciąć ramkę w pół i wtedy ginęła. `data:` przyjmujemy też bez
+       spacji (TGI). A treść liczymy PO rozdzieleniu myślenia: `<think>`
+       wprost w treści (vLLM bez parsera, Ollama z szablonem społeczności)
+       dawało ten samemu modelowi raz „✦", raz „~" — zależnie od serwera. */
+    let bufor = '';
+    let acc = '';
+    const zjedz = (ramka) => {
+      for (const linia of ramka.split('\n')) {
+        if (!linia.startsWith('data:')) continue;
+        const dane = linia.slice(5).trim();
+        if (!dane || dane === '[DONE]') continue;
         try {
-          const d = JSON.parse(linia.slice(6)).choices?.[0]?.delta || {};
+          const d = JSON.parse(dane).choices?.[0]?.delta || {};
           const tekst = d.content || '';
+          const mysl = d.reasoning_content || d.reasoning || '';
           // Tok myślenia też liczy się jako „coś się dzieje" — użytkownik
           // widzi ruch na ekranie i to jest właśnie różnica między
           // „myśli" a „zawiesiło się".
-          const widoczne = tekst || d.reasoning_content || d.reasoning || '';
-          if (widoczne && !pierwszy) pierwszy = Date.now() - t0;
-          // Osobno: kiedy pojawiła się TREŚĆ, a nie sam tok myślenia.
-          // Przy modelu rozumującym to dwie różne chwile i dwa różne
-          // doświadczenia — „coś się dzieje" kontra „mam odpowiedź".
-          if (tekst && !doTresci) doTresci = Date.now() - t0;
-          znaki += tekst.length;
-          myslenie += (d.reasoning_content || d.reasoning || '').length;
+          if ((tekst || mysl) && !pierwszy) pierwszy = Date.now() - t0;
+          myslenie += mysl.length;
+          if (!tekst) continue;
+          acc += tekst;
+          /* Osobno: kiedy pojawiła się TREŚĆ, a nie sam tok myślenia. Przy
+             modelu rozumującym to dwie różne chwile i dwa różne doświadczenia
+             — „coś się dzieje" kontra „mam odpowiedź". */
+          const { tresc, think } = rozdzielMyslenie(acc);
+          if (tresc.trim() && !doTresci) doTresci = Date.now() - t0;
+          znaki = tresc.length;
+          mysleniaWTresci = think.length;
         } catch { /* niepełna ramka */ }
       }
+    };
+    for (;;) {
+      const { value, done } = await czytnik.read();
+      if (done) break;
+      bufor = (bufor + dek.decode(value, { stream: true })).replace(/\r\n/g, '\n');
+      const ramki = bufor.split('\n\n');
+      bufor = ramki.pop();
+      for (const ramka of ramki) zjedz(ramka);
     }
+    if (bufor.trim()) zjedz(bufor);
+    myslenie += mysleniaWTresci;
   } catch (e) {
     blad = /timeout|abort/i.test(e.message) ? 'przekroczony czas (120 s)' : e.message.slice(0, 90);
   }

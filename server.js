@@ -401,6 +401,18 @@ async function handleConversations(req, res, pathname) {
   if (req.method === 'PUT' && id) {
     let conv;
     try { conv = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }
+    /* Zapis z nieaktualnej kopii (drugie urządzenie) nie nadpisuje nowszej
+       wersji — 409 z nią, klient scala. Bez `bazaUpdatedAt` (stary klient,
+       skrypty) — dawne zachowanie. */
+    const baza = Number(conv.bazaUpdatedAt);
+    delete conv.bazaUpdatedAt;
+    if (Number.isFinite(baza) && baza > 0) {
+      let naDysku = null;
+      try { naDysku = JSON.parse(fs.readFileSync(convPath(id), 'utf8')); } catch { /* nowa rozmowa */ }
+      if (naDysku && Number(naDysku.updatedAt) > baza) {
+        return sendJson(res, 409, { error: 'Ta rozmowa zmieniła się w międzyczasie na innym urządzeniu.', rozmowa: naDysku });
+      }
+    }
     conv.id = id;
     conv.updatedAt = Date.now();
     if (!conv.createdAt) conv.createdAt = conv.updatedAt;
@@ -929,8 +941,29 @@ function kbItemMeta(it) {
 
 // Przeliczenie fragmentów bazy wiedzy na aktualny model embeddingów.
 // Działa w tle i pilnuje, by nie uruchomić się dwa razy naraz.
+/* Dwie rzeczy zmierzone przez zespół IT: każda zmiana dostawcy embeddingów
+   (zmysły zasnęły → chmura, zmysły wróciły → z powrotem) przeliczała bazę
+   przy KAŻDYM czacie i zapisywała cały indeks — 40 MB synchronicznie, pętla
+   zdarzeń stała do 1,5 s. Teraz: model musi się utrzymać kilka minut, zanim
+   ruszy przeliczanie (chwilowa drzemka zmysłów nic nie przepisuje), a zapis
+   przeliczonych wektorów jest odroczony i zbiorczy. */
+const REEMBED_ZWLOKA_MS = Number(process.env.COSMOS_REEMBED_ZWLOKA_MS) || 5 * 60 * 1000;
+const REEMBED_ZAPIS_MS = 20_000;
+function zapiszKbWkrotce() {
+  const stanOsobyTeraz = U();
+  if (stanOsobyTeraz.kbZapisZaplanowany) return;
+  const u = kto();
+  stanOsobyTeraz.kbZapisZaplanowany = setTimeout(() => {
+    stanOsobyTeraz.kbZapisZaplanowany = null;
+    wKontekscie(u, saveKb);
+  }, REEMBED_ZAPIS_MS);
+  if (stanOsobyTeraz.kbZapisZaplanowany.unref) stanOsobyTeraz.kbZapisZaplanowany.unref();
+}
+
 async function reembedKbChunks(model, budget = 40) {
   if (U().reembedBusy) return;
+  const cel = U().reembedCel;
+  if (!cel || cel.model !== model) { U().reembedCel = { model, od: Date.now() }; }
   const stale = [];
   for (const it of U().kbItems) {
     for (const ch of it.chunks || []) {
@@ -940,12 +973,17 @@ async function reembedKbChunks(model, budget = 40) {
     if (stale.length >= budget) break;
   }
   if (!stale.length) return;
+  /* Fragmenty BEZ wektora (plik dodany, gdy embeddingów nie było) liczymy od
+     razu; przepisywanie wektorów z innego modelu — dopiero gdy nowy model
+     utrzymał się przez REEMBED_ZWLOKA_MS. */
+  const tylkoPuste = stale.every((c) => !Array.isArray(c.embedding) || !c.embedding.length);
+  if (!tylkoPuste && Date.now() - U().reembedCel.od < REEMBED_ZWLOKA_MS) return;
   U().reembedBusy = true;
   try {
     const embs = await embedTexts(stale.map((c) => c.text), 60000, 'passage');
     if (embs) {
       stale.forEach((c, i) => { c.embedding = embs.vectors[i]; c.embModel = embs.model; });
-      saveKb();
+      zapiszKbWkrotce();
       console.log(`  → Przeliczono ${stale.length} fragmentów bazy wiedzy na model ${model}`);
     }
   } catch { /* spróbujemy przy następnym pytaniu */ } finally {
@@ -1700,6 +1738,26 @@ function komunikatLokalnego(rodzaj, ep, err) {
   return `Nie udało się połączyć z lokalnym modelem (${ep.baseUrl}). Sprawdź, czy Ollama/vLLM działa. (${err?.message || ''})`;
 }
 
+/* Okno kontekstu lokalnego modelu. LOCAL_NUM_CTX, a bez niego: 4096 dla
+   Ollamy (jej domyślne; na komputerze domowym ustaw OLLAMA_CONTEXT_LENGTH
+   i to samo tutaj), 0 = bez budżetu dla vLLM/NIM, które znają swoje okno
+   i odmawiają głośno zamiast obcinać po cichu. */
+function oknoLokalneDla(ep) {
+  const ustawione = Number(process.env.LOCAL_NUM_CTX);
+  if (Number.isFinite(ustawione) && ustawione > 0) return ustawione;
+  return /:11434\b/.test(ep.baseUrl || '') ? 4096 : 0;
+}
+
+/** Zgrubnie: ile tokenów zajmie treść. Polszczyzna w tokenizerach Llamy
+ *  i Qwena to ok. 3 znaki na token; obraz liczymy jak ~800 tokenów. */
+function szacujTokeny(tresc) {
+  if (typeof tresc === 'string') return Math.ceil(tresc.length / 3) + 4;
+  if (Array.isArray(tresc)) {
+    return tresc.reduce((a, p) => a + (p.type === 'text' ? Math.ceil(String(p.text || '').length / 3) : 800), 4);
+  }
+  return 4;
+}
+
 /** Błąd dostawcy w środku strumienia — PO odpowiedzi 200. Udokumentowany
  *  u Anthropic („an error can occur after the API returns a 200"), znany też
  *  z vLLM. Zwraca treść błędu albo ''. */
@@ -1718,11 +1776,19 @@ function bladWStrumieniu(blok) {
   return '';
 }
 
+/* Limit ciała czatu. Wspólne 32 MB pozwalało sześcioma równoległymi czatami
+   po 24 MB podnieść pamięć serwera o gigabajt. Oficjalna aplikacja zmniejsza
+   zdjęcia do 1024 px, więc 16 MB to kilka zdjęć z dużym zapasem. */
+const CZAT_MAX_B = Number(process.env.COSMOS_CZAT_MAX_BYTES) || 16 * 1024 * 1024;
+
 async function handleChat(req, res) {
   let payload;
   try {
-    payload = await readJson(req);
-  } catch {
+    payload = await readJson(req, CZAT_MAX_B);
+  } catch (err) {
+    if (/too large|za duż/i.test(err.message || '')) {
+      return sendJson(res, 413, { error: `Wiadomość jest za duża (limit ${Math.round(CZAT_MAX_B / 1048576)} MB) — wyślij mniej albo mniejsze zdjęcia.` });
+    }
     return sendJson(res, 400, { error: 'Nieprawidłowy JSON w żądaniu.' });
   }
 
@@ -1768,7 +1834,13 @@ async function handleChat(req, res) {
   /* Ile instrukcji ten model uniesie. Dotąd każdy dostawał ten sam prompt
      na 1351 tokenów — także model 4-miliardowy, który żadnego z opisanych
      narzędzi nie umie użyć, a znacznik wypisałby użytkownikowi na ekran. */
-  const poziom = modelToolLevel(payload.model || ep.model || '');
+  let poziom = modelToolLevel(payload.model || ep.model || '');
+  /* Małe okno lokalnego modelu (Ollama domyślnie 4096): pełny opis narzędzi
+     to 3,3–3,8 tys. tokenów — nie zostawało miejsca na rozmowę ani odpowiedź,
+     a Ollama po cichu wyrzucała najstarsze wiadomości, w kaskadzie nawet
+     samo PYTANIE. Przy takim oknie wersja krótka (ok. 1 tys. tokenów). */
+  const oknoLokalne = payload.endpoint === 'local' ? oknoLokalneDla(ep) : 0;
+  if (poziom === 'pelny' && oknoLokalne && oknoLokalne <= 8192) poziom = 'zwiezly';
   const bezNarzedzi = poziom === 'rozmowa';
   const krotko = poziom !== 'pelny';
 
@@ -1941,6 +2013,26 @@ async function handleChat(req, res) {
     messages.splice(insertAt, 0, ...extras);
   }
 
+  /* Reszta budżetu okna lokalnego: najpierw wypadają NAJSTARSZE tury rozmowy
+     (nigdy instrukcje i nigdy ostatnia wiadomość człowieka), potem limit
+     odpowiedzi schodzi do tego, co zostało. Jawnie — nagłówek niżej — zamiast
+     cichego obcinania po stronie Ollamy, które zabierało początek promptu. */
+  let przycietoTur = 0;
+  let limitZOkna = 0;
+  if (oknoLokalne) {
+    const zadane = Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048;
+    const naOdpowiedz = Math.min(zadane, 1024);
+    let suma = messages.reduce((a, m) => a + szacujTokeny(m.content), 0);
+    while (suma + naOdpowiedz > oknoLokalne) {
+      const i = messages.findIndex((m, idx) => m.role !== 'system' && idx < messages.length - 1);
+      if (i < 0) break;
+      suma -= szacujTokeny(messages[i].content);
+      messages.splice(i, 1);
+      przycietoTur++;
+    }
+    limitZOkna = Math.max(512, Math.min(zadane, oknoLokalne - suma - 32));
+  }
+
   // Wybór modelu — po zbudowaniu kontekstu, bo baza wiedzy mogła dodać obrazy.
   /* Liczy się OSTATNIA wiadomość człowieka. Zdjęcie z pierwszej tury
      kierowało każdą następną do modelu wizyjnego, choć rozmowa dawno o nim
@@ -1989,7 +2081,7 @@ async function handleChat(req, res) {
     model,
     messages,
     temperature: typeof payload.temperature === 'number' ? payload.temperature : 0.6,
-    max_tokens: silniki.tokenyDozwolone(payload.endpoint, Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048),
+    max_tokens: limitZOkna || silniki.tokenyDozwolone(payload.endpoint, Number.isInteger(payload.max_tokens) ? payload.max_tokens : 2048),
     top_p: typeof payload.top_p === 'number' ? payload.top_p : 0.95,
     stream: true,
   };
@@ -2020,7 +2112,9 @@ async function handleChat(req, res) {
   /* „Stop" zanim dostawca odpowie nagłówkami: biegu jeszcze nie ma, więc
      /api/chat/stop nie miał czego przerwać — odpowiedź rodziła się mimo to
      i po 20 s lądowała w rozmowie. Rejestr trwa od wysłania do nagłówków. */
-  if (biegId) OCZEKUJACE.set(biegId, abort);
+  // Klucz z osobą — jak w lib/biegi.js: znajomość cudzego id nie pozwala przerwać cudzego żądania.
+  const kluczOczekujacego = `${kto().id}:${biegId}`;
+  if (biegId) OCZEKUJACE.set(kluczOczekujacego, abort);
   /* Własny limit na ciszę dostawcy. Bez niego czekaliśmy do domyślnych
      300 s fetcha z migającym kursorem. Po nagłówkach ten sam zegar pilnuje
      przerw między kawałkami strumienia (pompa niżej go odnawia). */
@@ -2059,7 +2153,7 @@ async function handleChat(req, res) {
       }
     }
   } catch (err) {
-    if (biegId) OCZEKUJACE.delete(biegId);
+    if (biegId) OCZEKUJACE.delete(kluczOczekujacego);
     clearTimeout(straznik);
     if (cisza) {
       return sendJson(res, 504, { error: `Model nie odpowiedział w ${Math.round(CISZA_MODELU_MS / 1000)} s [${ep.label} · ${model}]. `
@@ -2081,7 +2175,7 @@ async function handleChat(req, res) {
     return sendJson(res, 502, { error: `Nie udało się połączyć z ${ep.baseUrl}: ${err.message}` });
   }
 
-  if (biegId) OCZEKUJACE.delete(biegId);
+  if (biegId) OCZEKUJACE.delete(kluczOczekujacego);
   // Połączenie się udało — komputer domowy żyje, bezpiecznik zdjęty.
   if (payload.endpoint === 'local') lokalnyNiedostepny = { do: 0, rodzaj: '' };
   if (!upstream.ok) {
@@ -2138,6 +2232,7 @@ async function handleChat(req, res) {
       'X-Cosmos-Model': encodeURIComponent(model),
       ...(swappedFrom ? { 'X-Cosmos-Model-Swapped-From': encodeURIComponent(swappedFrom) } : {}),
       ...(modelSpozaListy ? { 'X-Cosmos-Model-Spoza-Listy': encodeURIComponent(modelSpozaListy) } : {}),
+      ...(przycietoTur ? { 'X-Cosmos-Okno': `${oknoLokalne};${przycietoTur}` } : {}),
     });
     try {
       for await (const chunk of upstream.body) { pilnujCiszy(); res.write(chunk); }
@@ -2159,6 +2254,7 @@ async function handleChat(req, res) {
     silnik: payload.endpoint,
     podmienionyZ: swappedFrom,
     spozaListy: modelSpozaListy,
+    okno: przycietoTur ? `${oknoLokalne};${przycietoTur}` : '',
   });
   bieg.przerwij = () => abort.abort();
   biegi_.podepnij(biegId, 0, res);
@@ -2539,8 +2635,8 @@ async function trasyApi(req, res, p) {
     const b = biegi_.daj(id);
     if (b && b.przerwij) b.przerwij();
     // Bieg jeszcze się nie urodził — dostawca nie odpowiedział nagłówkami.
-    const czeka = !b && OCZEKUJACE.get(id);
-    if (czeka) { czeka.abort(); OCZEKUJACE.delete(id); }
+    const czeka = !b && OCZEKUJACE.get(`${kto().id}:${id}`);
+    if (czeka) { czeka.abort(); OCZEKUJACE.delete(`${kto().id}:${id}`); }
     return sendJson(res, 200, { ok: Boolean(b || czeka) });
   }
   if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);

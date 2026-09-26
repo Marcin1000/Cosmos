@@ -409,7 +409,18 @@ ollama pull rwxproject/nemotron-nano-9b-v2-q4_k_m
 LOCAL_BASE_URL=http://localhost:11434/v1
 LOCAL_MODEL=rwxproject/nemotron-nano-9b-v2-q4_k_m
 LOCAL_VISION_MODEL=qwen2.5vl   # lokalny model wizyjny (opcjonalnie)
+LOCAL_NUM_CTX=16384            # okno kontekstu — to samo co OLLAMA_CONTEXT_LENGTH
 ```
+
+Dwie zmienne środowiskowe **na komputerze domowym** (Windows: Ustawienia systemu →
+Zmienne środowiskowe, potem restart Ollamy):
+
+- `OLLAMA_CONTEXT_LENGTH=16384` — Ollama domyślnie mieści 4096 tokenów i przy
+  przepełnieniu po cichu wyrzuca najstarsze wiadomości. Cosmos wie o oknie
+  z `LOCAL_NUM_CTX`: przy małym daje modelowi krótszy opis narzędzi, najstarsze
+  wiadomości pomija jawnie (z adnotacją pod odpowiedzią) i dopasowuje limit odpowiedzi.
+- `OLLAMA_KEEP_ALIVE=24h` — model zostaje w pamięci karty. Domyślnie Ollama
+  zwalnia go po 5 minutach i pierwsze pytanie po przerwie czeka na zimny start.
 
 > Nemotron Nano 9B v2 nie ma oficjalnego wpisu w bibliotece Ollamy — dostępne są tylko
 > konwersje społeczności. Wybór wersji (`q4_k_m` vs `q8_0`…), weryfikacja po pobraniu

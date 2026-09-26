@@ -150,7 +150,7 @@ function utworzNarzedzia(z) {
          jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć —
          i tak powstał plan Majorki z godzinami otwarcia atrakcji, których
          nikt nie sprawdził. Musi wiedzieć, ile z jego zapytań poszło. */
-      const ile = (k.acc.match(/\[SZUKAJ:/gi) || []).length;
+      const ile = (k.acc.match(/[[【]\s*SZUKAJ\s*[:：]/gi) || []).length;   // tolerancyjnie, jak protokol.js
       const pasek = zapowiedz(k.conv, k.przed, t('chat.searching', { q }));
       await mowGlosem(t('voice.searching'));
       const wyniki = await webSearch(q);
@@ -216,11 +216,15 @@ function utworzNarzedzia(z) {
       }
       k.stan.archiwum.add(odcisk);
 
-      zapowiedz(k.conv, k.przed, t('chat.searchingArchive'));
+      const pasek = zapowiedz(k.conv, k.przed, t('chat.searchingArchive'));
       // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
       const dane = await jsonem(grupuj
         ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
         : `/api/archive/search?limit=${PORCJA_ARCHIWUM}&${q}`);
+      /* Pasek się domyka — „Przeszukuję…" zostawało w rozmowie na zawsze,
+         także nad gotową odpowiedzią. */
+      pasek.domknij(dane.error ? t('chat.archiveFail') : t('chat.archiveDone', {
+        n: Number(dane.znaleziono) || (dane.wyniki || []).length || (dane.grupy || []).length || 0 }));
 
       /* PODGLĄDY, nie tylko opis słowami. Wynik archiwum szedł kiedyś
          wyłącznie do modelu jako tekst, więc na „pokaż zdjęcia z rana"
@@ -341,11 +345,9 @@ function utworzNarzedzia(z) {
     dopasuj: (acc) => acc.match(WZORCE.KOD),
     async wykonaj(k) {
       const program = k.dop[1];
-      k.conv.messages.push({
-        role: 'assistant',
-        content: (k.przed ? k.przed + '\n\n' : '') + t('chat.running'),
-        code: program,
-      });
+      const zPrzed = k.przed ? k.przed + '\n\n' : '';
+      const wiadomoscKodu = { role: 'assistant', content: zPrzed + t('chat.running'), code: program };
+      k.conv.messages.push(wiadomoscKodu);
       saveConversations();
       renderMessages();
       let wynik = await jsonem('/api/run', {
@@ -354,6 +356,8 @@ function utworzNarzedzia(z) {
         // Program dostaje treść załączników tej rozmowy jako pliki.
         body: JSON.stringify({ code: program, files: zebranyMaterial(k.conv) }),
       });
+      // „Liczę…" nad gotowym wynikiem wyglądało, jakby program wciąż pracował.
+      wiadomoscKodu.content = zPrzed + t(wynik.error ? 'chat.runFail' : 'chat.runDone');
       if (wynik.error) wynik = { stdout: '', stderr: wynik.error, wyniki: [] };
       k.conv.messages.push({ role: 'assistant', content: { text: '', run: wynik } });
       // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
@@ -525,13 +529,15 @@ function utworzNarzedzia(z) {
     zawszeDozwolone: true,
     dopasuj: (acc) => acc.match(WZORCE.OBRAZ),
     async wykonaj(k) {
-      zapowiedz(k.conv, k.przed, t('chat.genImage'));
+      const pasek = zapowiedz(k.conv, k.przed, t('chat.genImage'));
       await mowGlosem(t('voice.generatingImage'));
       const d = await jsonem('/api/studio/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: k.dop[1].trim() }),
       });
+      // „Generuję obraz…" stało dotąd także nad komunikatem o błędzie.
+      pasek.domknij(t(d.error ? 'chat.genImageFail' : 'chat.genImageDone'));
       if (d.error) {
         k.conv.messages.push({
           role: 'assistant',

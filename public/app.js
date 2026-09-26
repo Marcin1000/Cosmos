@@ -182,32 +182,82 @@ function saveConversations(natychmiast = false) {
   activeConversation.updatedAt = Date.now();
 
   // odśwież metadane w indeksie (pasek boczny) i wypłyń na górę
+  const i = conversations.findIndex((c) => c.id === activeConversation.id);
   const meta = {
     id: activeConversation.id,
     title: activeConversation.title,
     createdAt: activeConversation.createdAt,
     updatedAt: activeConversation.updatedAt,
+    // Pinezka zostaje — nowa wiadomość w przypiętej rozmowie ją zdejmowała do odświeżenia strony.
+    pinned: Boolean((i >= 0 && conversations[i].pinned) || activeConversation.pinned),
   };
-  const i = conversations.findIndex((c) => c.id === activeConversation.id);
   if (i >= 0) conversations[i] = meta; else conversations.unshift(meta);
-  conversations.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  conversations.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0));
   renderSidebar();
   cacheConvIndex();
 
   try { localStorage.setItem('cosmos.conv.' + activeConversation.id, JSON.stringify(activeConversation)); } catch { /* limit */ }
 
-  const snapshot = JSON.stringify(activeConversation);
-  const id = activeConversation.id;
-  const wyslij = () => fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: snapshot,
-  }).catch(() => { /* offline — zostaje kopia w localStorage */ });
-
+  const conv = activeConversation;
+  const id = conv.id;
   clearTimeout(convSaveTimer);
-  if (natychmiast) wyslij();
-  else convSaveTimer = setTimeout(wyslij, 400);
+  if (natychmiast) zapiszNaSerwerze(id, conv);
+  else convSaveTimer = setTimeout(() => zapiszNaSerwerze(id, conv), 400);
 }
+
+/* DWA URZĄDZENIA, JEDNA ROZMOWA. Zapis wysyłał cały dokument, a serwer go
+   nadpisywał — telefon z nieaktualną kopią kasował wiadomości napisane
+   w międzyczasie na komputerze. Teraz zapis mówi, na której wersji się opiera
+   (`bazaUpdatedAt`); gdy serwer ma nowszą, odpowiada 409 z nią, a my scalamy
+   i zapisujemy jeszcze raz. Zapisy jednej rozmowy idą po kolei, więc własne
+   szybkie zapisy nie biorą się nawzajem za „cudze". */
+const wersjaNaSerwerze = new Map();   // id rozmowy → updatedAt ostatniej znanej wersji z serwera
+const zapisyWToku = new Map();        // id rozmowy → obietnica ostatniego zapisu
+
+function zapiszNaSerwerze(id, conv, proba = 0) {
+  const poprzedni = zapisyWToku.get(id) || Promise.resolve();
+  const teraz = poprzedni.then(async () => {
+    const baza = wersjaNaSerwerze.get(id);
+    let r;
+    try {
+      r = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...conv, ...(baza ? { bazaUpdatedAt: baza } : {}) }),
+      });
+    } catch { return; /* offline — zostaje kopia w localStorage */ }
+    const d = await readJsonSafe(r).catch(() => ({}));
+    if (r.ok && d.meta) { wersjaNaSerwerze.set(id, d.meta.updatedAt); return; }
+    if (r.status === 409 && d.rozmowa && proba < 2) {
+      const scalona = scalRozmowy(conv, d.rozmowa);
+      wersjaNaSerwerze.set(id, d.rozmowa.updatedAt);
+      if (activeConversation && activeConversation.id === id) {
+        activeConversation.messages = scalona.messages;
+        renderMessages({ przewin: sledzeDol });
+      }
+      try { localStorage.setItem('cosmos.conv.' + id, JSON.stringify(scalona)); } catch { /* limit */ }
+      zapiszNaSerwerze(id, activeConversation && activeConversation.id === id ? activeConversation : scalona, proba + 1);
+    }
+  });
+  zapisyWToku.set(id, teraz.catch(() => {}));
+  return teraz;
+}
+
+/* Powrót do karty (telefon wyjęty z kieszeni): świeża wersja aktywnej
+   rozmowy, zanim ktoś zacznie pisać do nieaktualnej. */
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !activeId || isGenerating) return;
+  const id = activeId;
+  try {
+    const r = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
+    if (!r.ok || activeId !== id || isGenerating) return;
+    const zSerwera = naprawStareRuchyNarzedzi(await r.json());
+    if ((zSerwera.updatedAt || 0) <= (wersjaNaSerwerze.get(id) || 0)) return;
+    wersjaNaSerwerze.set(id, zSerwera.updatedAt);
+    activeConversation = scalRozmowy(activeConversation || { messages: [] }, zSerwera);
+    renderMessages({ przewin: sledzeDol });
+  } catch { /* offline */ }
+});
 
 function cacheConvIndex() {
   try { localStorage.setItem('cosmos.convIndex', JSON.stringify(conversations)); } catch { /* limit */ }
@@ -969,8 +1019,10 @@ function editFrom(idx) {
   el.input.focus();
 }
 
-function renderMessages() {
+function renderMessages({ przewin = true } = {}) {
   const conv = activeConv();
+  // Kto czyta wyżej, zostaje tam po przebudowie — bez tego innerHTML = '' ustawiał widok na samą górę.
+  const byloScroll = el.chatScroll.scrollTop;
   // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć —
   // inaczej przy nowej rozmowie zostaje na ekranie cudzy dokument.
   pokazPlotno(conv);
@@ -987,14 +1039,37 @@ function renderMessages() {
   conv.messages.forEach((m, idx) => {
     el.messages.appendChild(messageElement(m, idx));
   });
-  scrollToBottom(true);
+  if (przewin) scrollToBottom(true);
+  else { el.chatScroll.scrollTop = byloScroll; ostatniScrollTop = byloScroll; }
 }
+
+/* Czy człowiek „jedzie" razem z odpowiedzią na dole rozmowy. Decydują
+   o tym JEGO ruchy, nie odległość od dołu liczona po fakcie: gdy odpowiedź
+   rośnie szybciej, niż da się przewinąć, odległość myli się w jedną stronę
+   i widok zostaje w tyle na zawsze. W górę widok może pojechać tylko ręką
+   człowieka — program przewija wyłącznie w dół — więc ruch w górę wyłącza
+   jazdę, a powrót na sam dół ją włącza. */
+let sledzeDol = true;
+let ostatniScrollTop = 0;
+const przyDole = () => {
+  const sc = el.chatScroll;
+  return sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+};
 
 function scrollToBottom(force = false) {
   const sc = el.chatScroll;
-  const nearBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 120;
-  if (force || nearBottom) sc.scrollTop = sc.scrollHeight;
+  if (force) sledzeDol = true;
+  if (sledzeDol) sc.scrollTop = sc.scrollHeight;
+  ostatniScrollTop = sc.scrollTop;
 }
+
+el.chatScroll.addEventListener('scroll', () => {
+  const sc = el.chatScroll;
+  if (sc.scrollTop < ostatniScrollTop - 4) sledzeDol = false;
+  else if (przyDole()) sledzeDol = true;
+  ostatniScrollTop = sc.scrollTop;
+}, { passive: true });
+el.chatScroll.addEventListener('wheel', (e) => { if (e.deltaY < 0) sledzeDol = false; }, { passive: true });
 
 // ----------------------------------------------------------------
 // Operacje na rozmowach
@@ -1069,16 +1144,35 @@ async function selectConversation(id) {
   zapamietajOstatnia(id);
   renderSidebar();
   collapseSidebarOnMobile();
-  el.messages.innerHTML = '';
-  el.welcome.style.display = 'none';
+  /* Od razu kopia z przeglądarki, jeśli jest — bez pustego ekranu i skoku
+     układu, gdy dojdzie wersja z serwera (na telefonie CLS do 1,17). */
+  const kopia = naprawStareRuchyNarzedzi(loadJson('cosmos.conv.' + id, null));
+  if (kopia) {
+    activeConversation = kopia;
+    renderMessages();
+  } else {
+    el.messages.innerHTML = '';
+    el.welcome.style.display = 'none';
+  }
+  let zSerwera = null;
   try {
     const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error();
-    activeConversation = naprawStareRuchyNarzedzi(await res.json());
-  } catch {
-    activeConversation = naprawStareRuchyNarzedzi(loadJson('cosmos.conv.' + id, null)); // podgląd offline
+    zSerwera = naprawStareRuchyNarzedzi(await res.json());
+  } catch { /* offline — zostaje kopia */ }
+  /* Człowiek mógł w tym czasie stuknąć inną rozmowę. Bez tego sprawdzenia
+     panel podświetlał B, na ekranie stała A, a następna wiadomość zapisywała
+     się w A — najwolniejsza odpowiedź wygrywała wyścig. */
+  if (activeId !== id) return;
+  if (!zSerwera) {
+    if (!kopia) { activeConversation = null; renderMessages(); }
+    return;
   }
-  renderMessages();
+  const taSama = kopia && kopia.updatedAt === zSerwera.updatedAt
+    && (kopia.messages || []).length === (zSerwera.messages || []).length;
+  wersjaNaSerwerze.set(id, zSerwera.updatedAt);
+  activeConversation = zSerwera;
+  if (!taSama) renderMessages();
 }
 
 function deleteConversation(id) {
@@ -1535,7 +1629,20 @@ function toApiMessages(conv) {
    okazuje się, że pytanie było niepotrzebne. */
 let kolejka = [];
 
+/* Kolejka i niewysłany szkic przeżywają odświeżenie i ubicie aplikacji
+   w tle (Android robi to bez pytania) — dawniej ginęły. Klucze pod
+   `cosmos.conv.`, więc znikają przy zmianie osoby (konta.js). */
+const KLUCZ_KOLEJKI = 'cosmos.conv.kolejka';
+const KLUCZ_SZKICU = 'cosmos.conv.szkic';
+function zapamietajKolejke() {
+  try {
+    if (kolejka.length) localStorage.setItem(KLUCZ_KOLEJKI, JSON.stringify(kolejka));
+    else localStorage.removeItem(KLUCZ_KOLEJKI);
+  } catch { /* za duża (zdjęcia) albo bez pamięci — zostaje w tej karcie */ }
+}
+
 function renderKolejka() {
+  zapamietajKolejke();
   const box = $('queue-box');
   if (!box) return;
   box.innerHTML = '';
@@ -1592,6 +1699,7 @@ async function sendMessage() {
         }
       : text;
     kolejka.push({ text, content, images: pendingImages.length });
+    try { localStorage.removeItem(KLUCZ_SZKICU); } catch { /* bez pamięci */ }
     pendingImages = [];
     pendingDocs = [];
     renderAttachments();
@@ -1603,6 +1711,7 @@ async function sendMessage() {
     return;
   }
 
+  try { localStorage.removeItem(KLUCZ_SZKICU); } catch { /* bez pamięci */ }
   const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
   if (edycjaOd && edycjaOd.convId === conv.id) conv.messages = conv.messages.slice(0, edycjaOd.idx);
   edycjaOd = null;
@@ -1717,8 +1826,15 @@ async function streamOnce(conv, opcje = {}) {
     schedulePaint();
   }, 1000);
 
+  /* Malowanie przebudowuje całą odpowiedź, więc kosztuje tym więcej, im jest
+     dłuższa. Na telefonie długa odpowiedź zajmowała 78% wątku głównego,
+     a pisanie w polu szło 3× wolniej. Odstęp między malowaniami rośnie z ich
+     kosztem — wątek ma zawsze co najmniej tyle wolnego, ile zjadło malowanie. */
+  let czasMalowania = 0;
+  let ostatnieMalowanie = 0;
   const paint = () => {
     renderQueued = false;
+    const t0 = performance.now();
     /* Myślenie z `<think>` w treści idzie do panelu myślenia, a znaczniki
        i ich urwane początki nie migają na ekranie w trakcie pisania. Panel
        myślenia jest zwinięty — rozumowanie bywa po angielsku i pełne
@@ -1744,12 +1860,15 @@ async function streamOnce(conv, opcje = {}) {
     const cel = bloki.length ? bloki[bloki.length - 1] : (koniec && /^(P|H[1-6])$/.test(koniec.tagName) ? koniec : tresc);
     cel.appendChild(kursor);
     scrollToBottom();
+    ostatnieMalowanie = performance.now();
+    czasMalowania = ostatnieMalowanie - t0;
   };
   const schedulePaint = () => {
-    if (!renderQueued) {
-      renderQueued = true;
-      requestAnimationFrame(paint);
-    }
+    if (renderQueued) return;
+    renderQueued = true;
+    const zostalo = Math.min(400, czasMalowania * 2) - (performance.now() - ostatnieMalowanie);
+    if (zostalo > 0) setTimeout(() => requestAnimationFrame(paint), zostalo);
+    else requestAnimationFrame(paint);
   };
 
   /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
@@ -1803,9 +1922,12 @@ async function streamOnce(conv, opcje = {}) {
     const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
     // Na silniku przyznanym przez właściciela członek dostaje model z jego listy.
     const spozaListy = res.headers.get('X-Cosmos-Model-Spoza-Listy');
+    // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu — mówimy ile.
+    const [okno, przyciete] = String(res.headers.get('X-Cosmos-Okno') || '').split(';').map(Number);
     lastModelNote = [
       spozaListy ? t('model.przyznany', { from: decodeURIComponent(spozaListy), to: used }) : '',
       swapped ? t('model.swapped', { from: decodeURIComponent(swapped), to: used }) : '',
+      przyciete ? t('model.okno', { n: przyciete, okno }) : '',
     ].filter(Boolean).join(' ');
 
     const decoder = new TextDecoder();
@@ -1942,6 +2064,13 @@ async function streamOnce(conv, opcje = {}) {
     zapamietajBieg(null);
     // Przerwanie i zerwanie też niosą to, co już przyszło.
     if (err.partial === undefined) err.partial = err.name === 'AbortError' ? acc : rozdzielMyslenie(acc).tresc;
+    /* Brak sieci: przeglądarka mówi „Failed to fetch" po angielsku i nie mówi,
+       co zrobić. Po ludzku i z radą. */
+    if (err.name === 'TypeError' && /fetch|network|load failed/i.test(err.message || '')) {
+      const poLudzku = new Error(t('chat.offlineSend'));
+      poLudzku.partial = err.partial;
+      throw poLudzku;
+    }
     throw err;
   }
 }
@@ -2062,6 +2191,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
+  scalRozmowy,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
@@ -2382,7 +2512,9 @@ async function runGeneration(conv, podpiecie = null) {
        te 400 ms zwłoki byłyby jedynym momentem, w którym gotowa odpowiedź
        nie istnieje nigdzie poza pamięcią karty. */
     saveConversations(true);
-    renderMessages();
+    /* Koniec odpowiedzi nie ściąga na dół kogoś, kto przewinął do początku,
+       żeby czytać — tak było: 5600 px lotu w dół w chwili zakończenia. */
+    renderMessages({ przewin: sledzeDol });
     if (voiceMode) {
       if (finalText) {
         el.voiceAnswer.textContent = stripForSpeech(finalText);
@@ -2500,10 +2632,18 @@ function autosizeInput() {
   el.input.style.height = Math.min(el.input.scrollHeight, 220) + 'px';
 }
 
+let zapisSzkicu = null;
 el.input.addEventListener('input', () => {
   autosizeInput();
   updateSendButton();
   updateTokenEstimate();
+  clearTimeout(zapisSzkicu);
+  zapisSzkicu = setTimeout(() => {
+    try {
+      if (el.input.value.trim()) localStorage.setItem(KLUCZ_SZKICU, el.input.value);
+      else localStorage.removeItem(KLUCZ_SZKICU);
+    } catch { /* bez pamięci */ }
+  }, 300);
 });
 
 el.input.addEventListener('keydown', (e) => {
@@ -3151,13 +3291,28 @@ async function openStudio() {
   } catch { /* sekcje zostają w stanie domyślnym */ }
 }
 
+/* Płatne generowanie: drugie kliknięcie w trakcie było drugim płatnym
+   żądaniem u dostawcy (zmierzone: dwa kliknięcia = dwa generowania, także
+   wideo — najdroższe). Przycisk jest zajęty, dopóki żądanie trwa. */
+function jedenNaRaz(fn) {
+  return async function (...argumenty) {
+    if (this.disabled || this.getAttribute('aria-busy') === 'true') return undefined;
+    this.disabled = true;
+    this.setAttribute('aria-busy', 'true');
+    try { return await fn.apply(this, argumenty); } finally {
+      this.disabled = false;
+      this.removeAttribute('aria-busy');
+    }
+  };
+}
+
 el.studioBtn.addEventListener('click', openStudio);
 el.studioClose.addEventListener('click', () => { el.studioModal.style.display = 'none'; });
 el.studioModal.addEventListener('click', (e) => {
   if (e.target === el.studioModal) el.studioModal.style.display = 'none';
 });
 
-$('studio-image-go').addEventListener('click', async () => {
+$('studio-image-go').addEventListener('click', jedenNaRaz(async () => {
   const prompt = $('studio-image-prompt').value.trim();
   if (!prompt) return;
   studioOut('image', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genImage')}</span>`);
@@ -3180,7 +3335,7 @@ $('studio-image-go').addEventListener('click', async () => {
   } catch (err) {
     studioOut('image', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
-});
+}));
 
 // --- szablony promptów obrazu (localStorage) ---
 function loadPromptTemplates() {
@@ -3210,7 +3365,7 @@ $('studio-image-tpl-save').addEventListener('click', () => {
 });
 
 // --- Storyboard: scena → ujęcia → kadry ---
-$('studio-sb-go').addEventListener('click', async () => {
+$('studio-sb-go').addEventListener('click', jedenNaRaz(async () => {
   const scene = $('studio-sb-scene').value.trim();
   if (!scene) return;
   studioOut('sb', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genStoryboard')}</span>`);
@@ -3229,7 +3384,7 @@ $('studio-sb-go').addEventListener('click', async () => {
   } catch (err) {
     studioOut('sb', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
-});
+}));
 
 // --- Inpainting: malowanie maski na obrazie z bazy ---
 const editState = { imageId: null, paint: null, ctx: null, painting: false };
@@ -3287,7 +3442,7 @@ $('studio-edit-img').addEventListener('change', (e) => loadEditImage(e.target.va
 $('studio-edit-clear').addEventListener('click', () => {
   if (editState.paint) { editState.paint.getContext('2d').clearRect(0, 0, editState.paint.width, editState.paint.height); editRedraw(); }
 });
-$('studio-edit-go').addEventListener('click', async () => {
+$('studio-edit-go').addEventListener('click', jedenNaRaz(async () => {
   if (!editState.imageId) { alert(t('st.editNoImg')); return; }
   const prompt = $('studio-edit-prompt').value.trim();
   if (!prompt) return;
@@ -3310,7 +3465,7 @@ $('studio-edit-go').addEventListener('click', async () => {
   } catch (err) {
     studioOut('edit', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
-});
+}));
 
 // ----------------------------------------------------------------
 // KAMERA NA ŻYWO — podgląd + detekcja YOLO + zdarzenia percepcji
@@ -4016,7 +4171,7 @@ $('gallery-filters').addEventListener('click', (e) => {
   renderGallery();
 });
 
-$('studio-speech-go').addEventListener('click', async () => {
+$('studio-speech-go').addEventListener('click', jedenNaRaz(async () => {
   const text = $('studio-speech-text').value.trim();
   if (!text) return;
   studioOut('speech', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genSound')}</span>`);
@@ -4032,9 +4187,9 @@ $('studio-speech-go').addEventListener('click', async () => {
   } catch (err) {
     studioOut('speech', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
-});
+}));
 
-$('studio-video-go').addEventListener('click', async () => {
+$('studio-video-go').addEventListener('click', jedenNaRaz(async () => {
   const prompt = $('studio-video-prompt').value.trim();
   if (!prompt) return;
   studioOut('video', `<span class="studio-note"><span class="studio-spinner"></span>${t('st.genVideoTask')}</span>`);
@@ -4074,7 +4229,7 @@ $('studio-video-go').addEventListener('click', async () => {
   } catch (err) {
     studioOut('video', `<span class="studio-error">✗ ${escapeHtml(err.message)}</span>`);
   }
-});
+}));
 
 // ----------------------------------------------------------------
 // BAZA WIEDZY — pliki, linki, notatki głosowe
@@ -5420,6 +5575,18 @@ $('summarize-btn').addEventListener('click', async () => {
     .map((m) => `${m.role === 'user' ? t('exportYou') : 'Cosmos'}: ${msgText(m)}`).join('\n');
   const btn = $('summarize-btn');
   btn.disabled = true;
+  /* Pasek „streszczam…" W ROZMOWIE — dawniej nic nie mówiło, że coś trwa.
+     I zapis do TEJ rozmowy, nawet gdy człowiek w międzyczasie przeszedł do
+     innej: saveConversations zapisuje aktywną, więc streszczenie przepadało. */
+  const pasek = { role: 'assistant', content: t('sum.working'), status: true };
+  conv.messages.push(pasek);
+  renderMessages({ przewin: sledzeDol });
+  const utrwal = () => {
+    if (activeConversation && activeConversation.id === conv.id) { saveConversations(); renderMessages({ przewin: sledzeDol }); return; }
+    conv.updatedAt = Date.now();
+    try { localStorage.setItem('cosmos.conv.' + conv.id, JSON.stringify(conv)); } catch { /* limit */ }
+    zapiszNaSerwerze(conv.id, conv);
+  };
   try {
     const res = await fetch('/api/summarize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5427,12 +5594,12 @@ $('summarize-btn').addEventListener('click', async () => {
     });
     const d = await readJsonSafe(res);
     if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-    conv.messages.push({ role: 'assistant', content: `**${t('summarize')}:**\n\n${d.summary}` });
-    saveConversations();
-    renderMessages();
+    Object.assign(pasek, { content: `**${t('summarize')}:**\n\n${d.summary}`, status: false, ...znakSilnika() });
+    utrwal();
     if (settings.speak) speakText(d.summary);
   } catch (err) {
-    alert(err.message);
+    Object.assign(pasek, { content: `⚠︎ ${t('sum.failed')}: ${err.message}`, status: false, error: true });
+    utrwal();
   } finally {
     btn.disabled = false;
   }
@@ -5510,13 +5677,20 @@ const ENDPOINT_TABS = {
   claude: ['Claude', '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 6.8H21l-5.4 4 2 6.9-5.6-4.2-5.6 4.2 2-6.9-5.4-4h6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'],
 };
 
-function buildEndpointTabs() {
+/* Zakładki rysujemy od razu, z listy zapamiętanej przy poprzedniej wizycie,
+   a po /api/config — z prawdziwej. Pusty przełącznik rósł po konfiguracji
+   i cały czat skakał o 13,4 px (CLS 0,087 z samego tego skoku). */
+function buildEndpointTabs(zPamieci = null) {
   el.endpointSwitch.innerHTML = '';
   const available = [];
   for (const key of Object.keys(ENDPOINT_TABS)) {
-    const ep = serverConfig.endpoints?.[key];
-    if (!ep) continue;
-    if ((key === 'openai' || key === 'claude') && !ep.hasApiKey) continue;
+    if (zPamieci) {
+      if (!zPamieci.includes(key)) continue;
+    } else {
+      const ep = serverConfig.endpoints?.[key];
+      if (!ep) continue;
+      if ((key === 'openai' || key === 'claude') && !ep.hasApiKey) continue;
+    }
     available.push(key);
     const btn = document.createElement('button');
     btn.className = 'endpoint-tab';
@@ -5526,6 +5700,9 @@ function buildEndpointTabs() {
     btn.innerHTML = ENDPOINT_TABS[key][1] + label;
     btn.addEventListener('click', () => setEndpoint(key));
     el.endpointSwitch.appendChild(btn);
+  }
+  if (!zPamieci) {
+    try { localStorage.setItem('cosmos.zakladki', JSON.stringify(available)); } catch { /* bez pamięci */ }
   }
   setEndpoint(available.includes(endpoint) ? endpoint : 'cloud');
 }
@@ -6369,8 +6546,34 @@ async function loadServerConfigWlasciwe() {
 // ----------------------------------------------------------------
 
 if ('serviceWorker' in navigator) {
+  /* Nowa wersja po wdrożeniu. Service worker przejmuje stronę od razu
+     (skipWaiting + claim), ale wczytany już kod jest stary — dawniej nowy
+     działał dopiero przy DRUGIM otwarciu, bez słowa, a aplikacja otwarta
+     w tle nie dowiadywała się o nim wcale. Teraz: sprawdzenie przy powrocie
+     do karty i pasek „Jest nowa wersja — Odśwież". Bez przeładowania za
+     plecami — w połowie odpowiedzi człowiek straciłby wątek. */
+  const bylKontroler = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!bylKontroler || document.getElementById('nowa-wersja')) return;
+    const pasek = document.createElement('div');
+    pasek.id = 'nowa-wersja';
+    pasek.className = 'nowa-wersja';
+    pasek.setAttribute('role', 'status');
+    const napis = document.createElement('span');
+    napis.textContent = t('app.newVersion');
+    const przycisk = document.createElement('button');
+    przycisk.type = 'button';
+    przycisk.textContent = t('app.reload');
+    przycisk.addEventListener('click', () => location.reload());
+    pasek.append(napis, przycisk);
+    document.body.appendChild(pasek);
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => { /* offline dev */ });
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => { /* offline */ });
+      });
+    }).catch(() => { /* offline dev */ });
   });
 }
 
@@ -6444,12 +6647,21 @@ async function boot() {
 function startApp() {
   applyI18n();
   collapseSidebarOnMobile(); // na telefonie zacznij z ukrytym panelem, widoczny czat
+  buildEndpointTabs(loadJson('cosmos.zakladki', null) || ['cloud']);
   setEndpoint(endpoint);
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();
   /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
      powstawała w tle — wznowienie musi mieć do czego wrócić. */
-  loadConversations().then(przywrocOstatnia).then(wznowBieg).catch(() => { /* wznowienie nie może blokować startu */ });
+  // Szkic i kolejka sprzed odświeżenia — kolejka rusza, gdy nic się nie liczy.
+  try {
+    const szkic = localStorage.getItem(KLUCZ_SZKICU);
+    if (szkic && !el.input.value) { el.input.value = szkic; autosizeInput(); updateSendButton(); }
+    const zapisana = JSON.parse(localStorage.getItem(KLUCZ_KOLEJKI) || '[]');
+    if (Array.isArray(zapisana) && zapisana.length) { kolejka = zapisana; renderKolejka(); }
+  } catch { /* bez pamięci */ }
+  loadConversations().then(przywrocOstatnia).then(wznowBieg).then(() => ruszKolejke())
+    .catch(() => { /* wznowienie nie może blokować startu */ });
   renderMessages();
   updateSendButton();
   loadServerConfig();
@@ -6462,6 +6674,10 @@ function startApp() {
   pollDueRoutines();
   setInterval(pollDueRoutines, 60000);
   el.input.focus();
+  /* Dopiero teraz panel boczny na telefonie może się pokazać — do tej chwili
+     CSS trzyma go schowanego (.app:not(.gotowa)). Bez tego przy każdym
+     starcie migał otwarty z przyciemnieniem przez ~0,4 s. */
+  document.querySelector('.app').classList.add('gotowa');
 }
 
 // ----------------------------------------------------------------

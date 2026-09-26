@@ -41,7 +41,8 @@ function utworzKonta({ $, t }) {
      pokazałaby się nowej osobie przy pierwszym zaniku sieci. Dlatego
      przeglądarka pamięta, czyja jest kopia, i czyści ją przy zmianie osoby
      i przy wylogowaniu. Ustawienia urządzenia (język, mikrofon) zostają. */
-  const PAMIEC_OSOBY = [/^cosmos\.conv\./, /^cosmos\.convIndex$/, /^cosmos\.kbSelected$/, /^cosmos\.promptTemplates$/];
+  // `cosmos.zakladki` też: zakładki silników zależą od osoby (przyznania właściciela).
+  const PAMIEC_OSOBY = [/^cosmos\.conv\./, /^cosmos\.convIndex$/, /^cosmos\.kbSelected$/, /^cosmos\.promptTemplates$/, /^cosmos\.zakladki$/];
   function wyczyscPamiecOsoby(magazyn = (typeof localStorage !== 'undefined' ? localStorage : null)) {
     if (!magazyn) return 0;
     const klucze = [];

@@ -230,7 +230,7 @@ const MODEL_CATALOG = [
     },
   },
   {
-    dopasuj: ['llama-3.1-8b-instruct', 'llama-3.2-1b-instruct', 'llama-3.2-3b-instruct'],
+    dopasuj: ['llama-3.1-8b-instruct', 'llama-3.2-1b-instruct', 'llama-3.2-3b-instruct', 'llama-3.1-8b'],
     nazwa: 'Llama mała (1B–8B)',
     opis: 'Lekka Llama — szybka, do prostych zadań i dużej liczby zapytań.',
     mocne: ['szybkie odpowiedzi', 'klasyfikacja', 'proste przetwarzanie'],
@@ -250,16 +250,19 @@ const MODEL_CATALOG = [
   {
     dopasuj: ['gpt-oss-20b'],
     nazwa: 'GPT-OSS 20B',
-    opis: 'Otwarty model OpenAI z widocznym tokiem myślenia; ten wariant przyjmuje zdjęcia.',
-    mocne: ['rozumowanie', 'kod', 'wyjaśnianie krok po kroku', 'pytania o zdjęcie'],
+    /* Model TEKSTOWY (karta modelu OpenAI). Cecha „wizja" stała tu po sondzie
+       z obrazkiem 1×1, którą dostawca po prostu zignorował — zdjęcia leciały
+       do modelu, który ich nie widzi. */
+    opis: 'Otwarty model OpenAI z widocznym tokiem myślenia — sam tekst.',
+    mocne: ['rozumowanie', 'kod', 'wyjaśnianie krok po kroku'],
     kontekst: 'duży',
-    cechy: ['wizja', 'rozumowanie', 'narzędzia'],
-    uwaga: 'Zdjęcia przyjmuje, ale do ich opisu lepszy jest model wizyjny (Nano Omni, 12B VL).',
+    cechy: ['rozumowanie', 'narzędzia'],
+    uwaga: 'Zdjęć nie widzi — do nich weź model wizyjny (Nano Omni, 12B VL, lokalnie qwen2.5vl).',
     en: {
-      opis: 'Open OpenAI model with visible reasoning; this variant accepts photos.',
-      mocne: ['reasoning', 'code', 'step-by-step explanations', 'questions about a photo'],
+      opis: 'Open OpenAI model with visible reasoning — text only.',
+      mocne: ['reasoning', 'code', 'step-by-step explanations'],
       kontekst: 'large',
-      uwaga: 'It accepts photos, but a vision model (Nano Omni, 12B VL) describes them better.',
+      uwaga: 'It cannot see photos — use a vision model for them (Nano Omni, 12B VL, locally qwen2.5vl).',
     },
   },
   {
@@ -417,9 +420,46 @@ const MODEL_CATALOG = [
     },
   },
 
-  // ---- lokalne ----
+  // ---- lokalne (nazwy z Ollamy: „rodzina:rozmiar") ----
+  /* Nazwy z Ollamy („llama3.2:3b", „qwen3:4b") katalog znał słabo, więc każdy
+     mały model dostawał pełny prompt z narzędziami — 3,3–3,8 tys. tokenów przy
+     oknie 4096 — i wypisywał znaczniki na ekran zamiast ich używać. */
   {
-    dopasuj: ['llava', 'qwen2.5vl', 'qwen2-vl', '-vl'],
+    dopasuj: ['llama3.2:1b', 'llama3.2:3b', 'qwen2.5:0.5b', 'qwen2.5:1.5b', 'qwen2.5:3b',
+      'gemma3:1b', 'gemma3:270m', 'phi4-mini', 'smollm'],
+    nazwa: 'Mały model lokalny (do 4B)',
+    opis: 'Mały model na Twojej karcie — szybki, do krótkiej rozmowy bez narzędzi.',
+    mocne: ['szybkie odpowiedzi', 'prywatność', 'praca bez internetu'],
+    kontekst: 'mały',
+    cechy: ['szybki'],
+    uwaga: 'Narzędzi (wyszukiwanie, plan, archiwum) nie umie — Cosmos ich mu nie opisuje. Po polsku słaby.',
+    en: {
+      nazwa: 'Small local model (up to 4B)',
+      opis: 'A small model on your GPU — fast, for short chats without tools.',
+      mocne: ['quick answers', 'privacy', 'works offline'],
+      kontekst: 'small',
+      uwaga: 'It cannot use tools (search, plan, archive), so Cosmos does not describe them to it. Weak in Polish.',
+    },
+  },
+  {
+    dopasuj: ['qwen3:0.6b', 'qwen3:1.7b', 'qwen3:4b'],
+    nazwa: 'Qwen3 mały (do 4B)',
+    opis: 'Mały Qwen3 z trybem myślenia — rozsądny kompromis na słabszej karcie.',
+    mocne: ['krótkie rozumowanie', 'proste zadania', 'praca bez internetu'],
+    kontekst: 'średni',
+    cechy: ['szybki', 'rozumowanie'],
+    uwaga: 'Dostaje narzędzia w krótkiej wersji. Myślenie zjada limit odpowiedzi — daj co najmniej 1500 tokenów.',
+    en: {
+      nazwa: 'Small Qwen3 (up to 4B)',
+      opis: 'A small Qwen3 with a thinking mode — a sensible compromise on a weaker GPU.',
+      mocne: ['short reasoning', 'simple tasks', 'works offline'],
+      kontekst: 'medium',
+      uwaga: 'Gets the short version of the tools. Thinking eats the reply budget — give it at least 1500 tokens.',
+    },
+  },
+  {
+    dopasuj: ['llama3.2-vision', 'qwen2.5vl', 'qwen2.5-vl', 'minicpm-v', 'gemma3:4b', 'gemma3:12b', 'gemma3:27b',
+      'llava', 'qwen2-vl', '-vl'],
     nazwa: 'Lokalny model wizyjny',
     opis: 'Rozpoznaje obrazy na Twoim GPU — bez wysyłania zdjęć do chmury.',
     mocne: ['prywatna analiza zdjęć', 'praca offline'],
@@ -460,11 +500,23 @@ function jezykInterfejsu() {
 
 /** Znajdź opis modelu po jego identyfikatorze. Zwraca null, gdy nic nie pasuje.
     Pola tekstowe w języku interfejsu (patrz `en` w nagłówku pliku). */
+/* Warianty nazwy do dopasowania. Ollama pisze „rodzina:rozmiar" i bez
+   myślnika przed numerem wersji („llama3.1:8b", „gpt-oss:20b"), katalog —
+   jak NVIDIA i Hugging Face („llama-3.1-8b", „gpt-oss-20b"). Bez tego
+   gpt-oss:20b trafiał we wpis 120B, a llama3.1:8b był dla katalogu obcy. */
+function wariantyNazwy(id) {
+  const k0 = String(id).toLowerCase();
+  const k1 = k0.replace(/:/g, '-');
+  const k2 = k1.replace(/([a-z])(\d)/g, '$1-$2');
+  return [...new Set([k0, k1, k2])];
+}
+
 function modelInfo(id) {
   if (!id) return null;
   const key = String(id).toLowerCase();
+  const warianty = wariantyNazwy(id);
   for (const entry of MODEL_CATALOG) {
-    if (entry.dopasuj.some((frag) => key.includes(frag))) {
+    if (entry.dopasuj.some((frag) => warianty.some((w) => w.includes(frag)))) {
       const { en, ...wpis } = entry;
       return { ...wpis, ...(jezykInterfejsu() === 'en' && en ? en : {}), zgadywane: false };
     }
@@ -517,6 +569,8 @@ function modelToolLevel(id) {
 const NIE_DO_ROZMOWY = [
   'embed', 'rerank', 'nvclip', 'nemoretriever', 'ocr', '-parse',
   'reward', 'genrm', 'detector', 'deplot',
+  // z listy Ollamy: bge-m3 (embeddingi Cosmosa) nie ma w nazwie „embed"
+  'bge-m3', 'bge-large', 'bge-small',
 ];
 
 /** Czy to model o innym przeznaczeniu niż rozmowa? */
@@ -534,6 +588,8 @@ function modelNotForChat(id) {
 const NIE_ROZMOWCA = [
   'nemoguard', 'safety-guard', 'content-safety', 'topic-control',
   'llama-guard', 'riva-translate', 'ising-calibration',
+  // klasyfikatory bezpieczeństwa z Ollamy — odpowiedzą, ale tylko „bezpieczne / nie"
+  'shieldgemma', 'granite3-guardian', 'guardian',
 ];
 
 /** Czy model odpowiada, ale nie nadaje się na rozmówcę? */
