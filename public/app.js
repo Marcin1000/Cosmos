@@ -1087,6 +1087,7 @@ function collapseSidebarOnMobile() {
 function newConversation() {
   if (isGenerating) stopGeneration();
   activeId = null;
+  renderKolejka();
   zapamietajOstatnia(null);
   activeConversation = null;
   renderSidebar();
@@ -1142,6 +1143,7 @@ async function przywrocOstatnia() {
 async function selectConversation(id) {
   if (isGenerating) stopGeneration();
   activeId = id;
+  renderKolejka();   // kolejka pokazuje pozycje TEJ rozmowy
   zapamietajOstatnia(id);
   renderSidebar();
   collapseSidebarOnMobile();
@@ -1167,6 +1169,7 @@ async function selectConversation(id) {
   if (activeId !== id) return;
   if (!zSerwera) {
     if (!kopia) { activeConversation = null; renderMessages(); }
+    else ruszKolejke();
     return;
   }
   const taSama = kopia && kopia.updatedAt === zSerwera.updatedAt
@@ -1174,6 +1177,8 @@ async function selectConversation(id) {
   wersjaNaSerwerze.set(id, zSerwera.updatedAt);
   activeConversation = zSerwera;
   if (!taSama) renderMessages();
+  // Pytania wpisane w TEJ rozmowie, które czekały, aż do niej wrócisz.
+  ruszKolejke();
 }
 
 function deleteConversation(id) {
@@ -1645,14 +1650,21 @@ function zapamietajKolejke() {
   } catch { /* za duża (zdjęcia) albo bez pamięci — zostaje w tej karcie */ }
 }
 
+/* Pozycja kolejki należy do rozmowy, w której ją wpisano. Dawniej po
+   przełączeniu się na inną rozmowę pytanie szło tam, gdzie człowiek akurat
+   był — do zupełnie innego wątku (zespół IT, płynność, runda 4). Pozycje
+   bez rozmowy (zapisane przed tą zmianą) idą jak dawniej. */
+const wTejRozmowie = (poz) => !poz.convId || poz.convId === activeId;
+
 function renderKolejka() {
   zapamietajKolejke();
   const box = $('queue-box');
   if (!box) return;
   box.innerHTML = '';
-  box.hidden = !kolejka.length;
-  if (!kolejka.length) return;
+  box.hidden = !kolejka.some(wTejRozmowie);
+  if (box.hidden) return;
   for (const [i, poz] of kolejka.entries()) {
+    if (!wTejRozmowie(poz)) continue;
     const el2 = document.createElement('div');
     el2.className = 'queue-item';
     const txt = document.createElement('span');
@@ -1673,8 +1685,10 @@ function renderKolejka() {
 
 /** Po zakończeniu generowania — wyślij następną z kolejki. */
 async function ruszKolejke() {
-  if (isGenerating || !kolejka.length) return;
-  const poz = kolejka.shift();
+  if (isGenerating) return;
+  const i = kolejka.findIndex(wTejRozmowie);
+  if (i < 0) return;
+  const [poz] = kolejka.splice(i, 1);
   renderKolejka();
   const conv = ensureConversation(poz.text || '');
   conv.messages.push({ role: 'user', content: poz.content });
@@ -1702,7 +1716,7 @@ async function sendMessage() {
           ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
         }
       : text;
-    kolejka.push({ text, content, images: pendingImages.length });
+    kolejka.push({ text, content, images: pendingImages.length, convId: activeId });
     try { localStorage.removeItem(KLUCZ_SZKICU); } catch { /* bez pamięci */ }
     pendingImages = [];
     pendingDocs = [];

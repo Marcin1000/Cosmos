@@ -16,6 +16,10 @@
         się, że pytanie było niepotrzebne, a nieodwracalna kolejka zmusza do
         wysłania czegoś, czego już się nie chce.
 
+   Czwarta rzecz (zespół IT, płynność, runda 4): pytanie z kolejki idzie do
+   rozmowy, w której je WPISANO. Po przełączeniu się na inną rozmowę trafiało
+   tam, gdzie człowiek akurat był — do zupełnie innego wątku.
+
    Przy okazji drugie zgłoszenie z tej samej rozmowy: „Cosmos sam się wznawiał
    jako kolejne zapytanie". Sprawdzamy, że pętla narzędzi ma twardy limit
    i nie potrafi kręcić się w nieskończoność.
@@ -154,6 +158,27 @@ if (!maPrzegladarke()) {
   if (!/function dodajWynikNarzedzia[\s\S]{0,300}search: true/.test(zrodlo)) {
     fail.push('dodajWynikNarzedzia nie ustawia flagi search');
   }
+
+  /* ---- 9. Kolejka należy do rozmowy, w której ją wpisano ---- */
+  const idA = await pg.evaluate(() => activeId);
+  await pg.evaluate(() => newConversation());
+  await wyslij('rozmowa B powoli');
+  await wyslij('pytanie z kolejki B');
+  const idB = await pg.evaluate(() => activeId);
+  await pg.evaluate((id) => selectConversation(id), idA);   // przełączenie przerywa odpowiedź w B
+  await pg.waitForTimeout(2500);
+  const wA = await pytania();
+  const kolejkaWA = await wKolejce();
+  console.log(`9. po przejściu do A: pytania A ${JSON.stringify(wA.slice(-2))}, kolejka widoczna w A: ${kolejkaWA.length}`);
+  if (wA.includes('pytanie z kolejki B')) fail.push('pytanie z kolejki rozmowy B poszło do rozmowy A');
+  if (kolejkaWA.length) fail.push('w rozmowie A widać kolejkę rozmowy B');
+  await pg.evaluate((id) => selectConversation(id), idB);
+  for (let i = 0; i < 40 && (await generuje() || (await wKolejce()).length || !(await pytania()).includes('pytanie z kolejki B')); i++) {
+    await pg.waitForTimeout(500);
+  }
+  const wB = await pytania();
+  console.log(`   po powrocie do B: ${JSON.stringify(wB.slice(-2))}`);
+  if (!wB.includes('pytanie z kolejki B')) fail.push('po powrocie do B pytanie z jej kolejki nie poszło');
 
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/kolejka.png` });
   console.log(`8. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
