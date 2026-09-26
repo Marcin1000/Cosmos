@@ -481,7 +481,13 @@
   // -------------------------------------------------------------------------
 
   const liczniki = $$('.licznik');
-  const fmt = (n) => new Intl.NumberFormat(jezyk === 'en' ? 'en-US' : 'pl-PL').format(n);
+  /* Formatery raz na język, nie w każdej klatce: nowy Intl.NumberFormat to
+     kilka milisekund na telefonie, a liczniki wołają go 60 razy na sekundę. */
+  const formatery = {};
+  const fmt = (n) => {
+    const loc = jezyk === 'en' ? 'en-US' : 'pl-PL';
+    return (formatery[loc] ||= new Intl.NumberFormat(loc)).format(n);
+  };
   function formatujLiczby() { liczniki.forEach((l) => { l.textContent = fmt(Number(l.dataset.do)); }); }
   function odliczaj(l) {
     if (ruchOgraniczony) return;
@@ -550,8 +556,12 @@
   const stos = $('.stos');
   const droga = $('#luk-droga');
   const slonce = $('#slonce');
-  const dlDrogi = droga.getTotalLength();
-  droga.style.strokeDasharray = String(dlDrogi);
+  /* Długość łuku to 1 z definicji (pathLength="1" w index.html). Dawniej
+     getTotalLength() w trakcie wykonywania skryptu wymuszał pełny układ
+     strony, zanim cokolwiek się narysowało — na telefonie ~55 ms z 500 ms
+     pierwszego długiego zadania. */
+  const dlDrogi = 1;
+  droga.style.strokeDasharray = '1';
   const scenaPlener = $('.plener-scena');
   const niebo = { noc: $('.n-noc'), zloto: $('.n-zloto'), dzien: $('.n-dzien') };
   const odczyt = {
@@ -652,10 +662,19 @@
   let czeka = false;
   function klatka() {
     czeka = false;
+    /* NAJPIERW wszystkie odczyty układu, POTEM zapisy. Przeplatane (zapis
+       klasy, odczyt prostokąta, zapis zmiennej, odczyt…) wymuszały przeliczenie
+       stylu i układu kilka razy w jednej klatce przewijania. */
     const vh = innerHeight;
     const y = scrollY;
-    nav.classList.toggle('przewiniety', y > 8);
     const calosc = doc.scrollHeight - vh;
+    const rm = glowna.getBoundingClientRect();
+    const rp = ruchOgraniczony ? null : plenerTor.getBoundingClientRect();
+    const rk = ruchOgraniczony ? null : przekrojTor.getBoundingClientRect();
+    let aktywny = -1;
+    sekcje.forEach((s, i) => { if (s && s.getBoundingClientRect().top < vh * 0.4) aktywny = i; });
+
+    nav.classList.toggle('przewiniety', y > 8);
     /* Zmienne tylko na elementach, które ich używają: --pp na <html> albo <main>
        dziedziczy cała strona i każda klatka przewijania przeliczała styl
        wszystkich elementów (ślad Chrome: 11,8 s → 0,4 s). */
@@ -663,21 +682,15 @@
 
     /* nić: postęp liczony względem głównej treści; głowica jedzie transformem
        (--pp-px), bo „top” liczony z --pp przesuwał ją w układzie — CLS. */
-    const rm = glowna.getBoundingClientRect();
     const pp = ogr((vh * 0.5 - rm.top) / rm.height);
     watek.style.setProperty('--pp', pp.toFixed(4));
     watek.style.setProperty('--pp-px', `${(pp * rm.height).toFixed(1)}px`);
 
     if (ruchOgraniczony) { plener(0.55); przekroj(0.5); } else {
-      const rp = plenerTor.getBoundingClientRect();
       plener(ogr(-rp.top / Math.max(1, rp.height - vh * 0.8)));
-      const rk = przekrojTor.getBoundingClientRect();
       ostatniP = ogr((vh - rk.top) / (vh + rk.height));
       przekroj(ostatniP);
     }
-
-    let aktywny = -1;
-    sekcje.forEach((s, i) => { if (s && s.getBoundingClientRect().top < vh * 0.4) aktywny = i; });
     linki.forEach((a, i) => a.classList.toggle('aktywny', i === aktywny));
   }
   const przewin = () => { if (!czeka) { czeka = true; requestAnimationFrame(klatka); } };
@@ -739,8 +752,13 @@
   // Start
   // -------------------------------------------------------------------------
 
+  /* Po polsku liczby stoją w HTML-u już sformatowane — pierwszy
+     Intl.NumberFormat (~25 ms na telefonie) powstaje dopiero, gdy liczniki
+     wjadą w widok. Pierwsza klatka przewijania w requestAnimationFrame, nie
+     tutaj: odczyt prostokątów w trakcie skryptu wymuszał pełny układ strony
+     w tym samym długim zadaniu co wykonanie skryptu. */
   if (jezyk === 'en') zastosujJezyk();
-  else { rozbijNaSlowa(); formatujLiczby(); czat.odNowa(); }
+  else { rozbijNaSlowa(); czat.odNowa(); }
   doc.classList.remove('czeka-na-jezyk');
-  klatka();
+  requestAnimationFrame(klatka);
 })();

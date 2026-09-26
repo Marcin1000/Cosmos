@@ -221,6 +221,17 @@ main:focus { outline: none; }
 }
 .kropka { width: 8px; height: 8px; border-radius: 50%; background: var(--k, var(--k-nvidia)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--k, var(--k-nvidia)) 18%, transparent); }
 .sekcja { padding-block: clamp(88px, 12vw, 168px); position: relative; }
+/* Sekcje poza ekranem nie liczą się przy starcie: pierwszy układ strony
+   obejmował wszystkie ~940 obiektów naraz i na telefonie był najdłuższym
+   zadaniem (~270 ms przy CPU ×4). `auto` w rozmiarze zapamiętuje prawdziwą
+   wysokość po pierwszym narysowaniu, więc powrót w górę nie skacze.
+   Bez plenera i przekroju: ich animacje liczą się z geometrii toru przy
+   każdej klatce przewijania i potrzebują prawdziwych wymiarów od razu. */
+.sekcja:not(.plener):not(.pod-maska) { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
+/* Skok do kotwicy (link w menu, adres z #sekcją) liczy pozycję celu z wysokości
+   sekcji nad nim — szacowane trafiały o setki pikseli obok. Gdy jest cel,
+   liczymy wszystko naprawdę: człowiek i tak właśnie przewija przez całą stronę. */
+html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: visible; }
 .sekcja-glowa { display: flex; flex-direction: column; gap: 20px; max-width: 760px; margin-bottom: clamp(40px, 5vw, 64px); }
 .sekcja-glowa h2 { font-size: clamp(34px, 5.2vw, 64px); line-height: 1.02; letter-spacing: -.035em; }
 .h-duzy { font-size: clamp(46px, 6.4vw, 92px) !important; letter-spacing: -.05em !important; line-height: .95 !important; }

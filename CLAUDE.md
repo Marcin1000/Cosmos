@@ -397,6 +397,10 @@ spod `/app/` trafiłaby w `/app/app.js` i aplikacja wstałaby bez skryptów.
 - Stary link `/#zaproszenie=…` przekierowuje skrypt w `<head>` strony — przed
   czymkolwiek innym. Nowe linki z panelu Dostęp mają już `/app#zaproszenie=…`.
 - Service worker omija `/` i `/strona/` — strona ma przychodzić świeża.
+- Sekcje poza pierwszym ekranem mają `content-visibility: auto` (telefon: pierwsze
+  długie zadanie ~470 → ~280 ms przy CPU ×4). Skok do kotwicy działa dzięki
+  `html:has(:target)`, który je wtedy włącza — nowa sekcja z animacją liczoną
+  z geometrii toru (jak plener, przekrój) musi być z tego wyłączona.
 - Liczby na stronie (zestawy testów) pilnuje audyt razem z README.
 - Znak i ikony generuje `scripts/ikony.js` z jednego źródła. Pliki w `public/icons/`
   serwer oddaje jako niezmienne (rok w pamięci) — **nowy wygląd = nowa nazwa pliku**.

@@ -20,7 +20,11 @@
  *      zostaje po polsku także w angielskiej przeglądarce — inaczej robot
  *      en-US indeksuje angielski tekst pod polskim adresem. „Open Cosmos”
  *      z angielskiej strony otwiera aplikację po angielsku.
- *  12. Opisy dla czytnika i meta description też są tłumaczone. */
+ *  12. Opisy dla czytnika i meta description też są tłumaczone.
+ *  13. Skok do sekcji (link w menu, adres z #sekcją) trafia w jej początek.
+ *      Sekcje poza ekranem nie liczą się przy starcie (content-visibility),
+ *      więc ich wysokość jest do pierwszego narysowania szacowana — i skok
+ *      „w ciemno" lądował o setki pikseli obok. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -161,6 +165,29 @@ const { srodowisko, przegladarka } = require('../pomoc');
     await p.waitForTimeout(2500);
     const cls = await p.evaluate(() => window.__cls);
     ok(cls < 0.1, `CLS ${opis} przy skrypcie spóźnionym o 400 ms: ${cls.toFixed(4)} (< 0,1)`);
+    await ctx.close();
+  }
+
+  // --- 13. skok do sekcji trafia --------------------------------------------
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
+    const { ctx, p } = await nowaStrona({ viewport, isMobile: viewport.width < 500, hasTouch: viewport.width < 500 });
+    const chybione = [];
+    const gora = (id) => p.evaluate((i) => Math.round(document.getElementById(i).getBoundingClientRect().top), id);
+    const padding = await (async () => { await p.goto(env.adres + '/', { waitUntil: 'load' }); return p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0); })();
+    // z menu: te same linki, które klika człowiek
+    for (const id of ['prywatnosc', 'dostep', 'pamiec']) {
+      await p.goto(env.adres + '/', { waitUntil: 'load' });
+      await p.evaluate((i) => { location.hash = i; }, id);
+      await p.waitForFunction((i) => Math.abs(document.getElementById(i).getBoundingClientRect().top - (parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0)) < 4, id, { timeout: 4000 }).catch(() => {});
+      const g = await gora(id);
+      if (Math.abs(g - padding) > 4) chybione.push(`#${id} z menu: ${g}px`);
+    }
+    // wejście prosto z adresu
+    await p.goto(env.adres + '/#prywatnosc', { waitUntil: 'load' });
+    await p.waitForTimeout(800);
+    const g = await gora('prywatnosc');
+    if (Math.abs(g - padding) > 4) chybione.push(`/#prywatnosc z adresu: ${g}px`);
+    ok(chybione.length === 0, `${viewport.width}px: skok do sekcji trafia w jej początek (${chybione.join(', ') || `wszystkie na ${padding}px`})`);
     await ctx.close();
   }
 
