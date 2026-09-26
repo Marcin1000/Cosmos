@@ -82,6 +82,15 @@ nie trafi i uruchamiacz po cichu pominie 48 zestawów przeglądarkowych. Przed b
 serwery (`pkill -f 'node server.js'`) i **nie uruchamiaj dwóch baterii naraz** — walczą
 o porty i dają fałszywe awarie.
 
+## Zespoły agentów
+
+Przeglądy i poprawki robią dwa zespoły agentów zdefiniowane w `.claude/agents/`:
+**agencja** (`agencja-*`: UX/UI, frontend, backend, rozmowa, strona — projekt i frontend,
+copywriter, wykonawca) i **zespół IT** (`it-*`: infrastruktura i Cloudflare, konta, modele
+komercyjne, modele open source, płynność, backend). Wspólny protokół — tablica, porty, twarde
+zasady i **przetrwanie limitu sesji** (dziennik roli, wznawianie z pamięcią, strażnik co
+godzinę) — jest w **`docs/ZESPOLY.md`**. Przeczytaj go, zanim wypuścisz zespół.
+
 ## Architektura
 
 Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,9 tys. linii, `lib/` 10,6 tys. w 34
