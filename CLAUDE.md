@@ -9,7 +9,7 @@ dokumentacja, teksty commitów. Nowy kod pisz tak samo. Interfejs ma dwa języki
 ale kod mówi po polsku.
 
 **Bez długich myślników.** Nigdzie w repozytorium (kod, komentarze, teksty interfejsu,
-dokumentacja, commity): zamiast „—” półpauza „–” albo przebudowane zdanie. Kod, który musi
+dokumentacja, commity): zamiast długiego myślnika (U+2014) półpauza „–” albo przebudowane zdanie. Kod, który musi
 rozpoznać długi myślnik w cudzym tekście (odpowiedź modelu, strona z sieci), zapisuje go
 jako `\u2014`. Pilnuje tego audyt.
 
