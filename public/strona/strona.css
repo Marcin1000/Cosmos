@@ -1,9 +1,9 @@
-/* Cosmos — strona produktowa (cosmosai.live/)
+/* Cosmos – strona produktowa (cosmosai.live/)
    Kierunek „Jeden wątek”: jasno i spokojnie jak w dobrym edytorze, a przez
    całą stronę biegnie nić, która zmienia kolor razem z silnikiem.
-   Bez frameworków i bez budowania — tak jak cała reszta Cosmosa. */
+   Bez frameworków i bez budowania – tak jak cała reszta Cosmosa. */
 
-/* Czcionki (Onest, Martian Mono) przychodzą z /fonts/fonts.css — tego samego pliku
+/* Czcionki (Onest, Martian Mono) przychodzą z /fonts/fonts.css – tego samego pliku
    używa aplikacja, więc przeglądarka pobiera je raz. */
 
 /* --- tokeny ------------------------------------------------------------- */
@@ -14,7 +14,7 @@
   --powierzchnia: #FFFFFF;
   --tekst: #16171B;
   --przygaszony: #5E616B;
-  --blady: #686B75;          /* 4,9:1 na tle — AA dla drobnego tekstu */
+  --blady: #686B75;          /* 4,9:1 na tle – AA dla drobnego tekstu */
   --linia: #E3E1DA;
   --linia-2: #D5D2C9;
   --k-nvidia: #5E9E3A;
@@ -86,7 +86,7 @@ body {
   overflow-x: hidden; overflow-x: clip; text-rendering: optimizeLegibility;
   font-feature-settings: "ss01", "cv11";
 }
-/* ziarno — bez niego jasne tło wygląda jak pusty dokument */
+/* ziarno – bez niego jasne tło wygląda jak pusty dokument */
 body::after {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .045;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -144,7 +144,7 @@ code { font: 500 .88em var(--mono); background: var(--tlo-2); border: 1px solid 
 .btn-jasny:hover { border-color: var(--linia-2); }
 .btn .strzalka { transition: transform .4s var(--sprezyna); display: inline-block; width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* Napis przycisku wejścia rezerwuje szerokość dłuższego z dwóch („Zaloguj się”
-   / „Otwórz Cosmos”) — podmiana po /api/auth nie przesuwa nawigacji. */
+   / „Otwórz Cosmos”) – podmiana po /api/auth nie przesuwa nawigacji. */
 .js-wejscie-tekst { display: inline-grid; justify-items: center; }
 .js-wejscie-tekst::after { content: attr(data-alt); height: 0; overflow: hidden; visibility: hidden; }
 .btn:hover .strzalka { transform: translateX(4px); }
@@ -229,7 +229,7 @@ main:focus { outline: none; }
    każdej klatce przewijania i potrzebują prawdziwych wymiarów od razu. */
 .sekcja:not(.plener):not(.pod-maska) { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
 /* Skok do kotwicy (link w menu, adres z #sekcją) liczy pozycję celu z wysokości
-   sekcji nad nim — szacowane trafiały o setki pikseli obok. Gdy jest cel,
+   sekcji nad nim – szacowane trafiały o setki pikseli obok. Gdy jest cel,
    liczymy wszystko naprawdę: człowiek i tak właśnie przewija przez całą stronę. */
 html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: visible; }
 .sekcja-glowa { display: flex; flex-direction: column; gap: 20px; max-width: 760px; margin-bottom: clamp(40px, 5vw, 64px); }
@@ -263,7 +263,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .zorza {
   /* Góra w pikselach, nie w procentach: przy „inset: -20%” zależała od wysokości
      hero i cała zorza (prawie ekran) liczyła się jako przesunięcie układu.
-     Koła są już rozmyte gradientem — filter: blur(80px) na kontenerze
+     Koła są już rozmyte gradientem – filter: blur(80px) na kontenerze
      i mix-blend-mode kosztowały ~25 klatek na sekundę. */
   position: absolute; left: -10%; right: -10%; top: -180px; height: calc(100% + 180px);
   pointer-events: none; z-index: 0; opacity: .55;
@@ -319,7 +319,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   transition: transform .8s var(--wolno);
 }
 .czat::before {
-  /* ramka w kolorze silnika, który teraz odpowiada — spokojna, bez wirowania */
+  /* ramka w kolorze silnika, który teraz odpowiada – spokojna, bez wirowania */
   content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
   border: 1px solid var(--k-akt, var(--k-nvidia)); opacity: .5; transition: border-color .5s;
 }
@@ -351,7 +351,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   border: 1px solid color-mix(in srgb, var(--linia) 70%, transparent);
 }
 .odp::before {
-  /* odcinek nici w kolorze silnika — rysuje się z góry na dół */
+  /* odcinek nici w kolorze silnika – rysuje się z góry na dół */
   content: ""; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--k);
   transform-origin: top; transform: scaleY(0); animation: nic .7s var(--wolno) forwards;
 }
@@ -380,7 +380,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 }
 .przelacznik button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Wąski przełącznik (telefon, 1024 px) mówi „Lokalny” zamiast uciętego
-   „Lokalny G…” — dopisek „GPU” chowa się, gdy się nie mieści. */
+   „Lokalny G…” – dopisek „GPU” chowa się, gdy się nie mieści. */
 .przelacznik { container-type: inline-size; }
 @container (max-width: 420px) { .przel-dop { display: none; } }
 .przelacznik button i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--k); }
@@ -416,7 +416,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .bento { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 720px) { .bento { grid-template-columns: repeat(2, 1fr); } .bento > .karta-router { grid-column: 1 / -1; } }
 /* Na całą szerokość w dwóch kolumnach ruter nie może rosnąć z proporcji
-   do ~650 px wysokości — trzymamy go w wysokości ekranu laptopa. */
+   do ~650 px wysokości – trzymamy go w wysokości ekranu laptopa. */
 @media (min-width: 720px) and (max-width: 1039px) { .router { aspect-ratio: auto; height: 400px; } }
 @media (min-width: 1040px) {
   .bento { grid-template-columns: repeat(6, 1fr); }
@@ -555,7 +555,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   .bento-pamiec > .karta:not(.karta-wspomnienia) { grid-column: span 3; }
 }
 .przywolanie { display: flex; flex-direction: column; gap: 18px; margin-bottom: 18px; }
-/* Karta jest wysoka jak trzy sąsiednie — przywołanie wypełnia środek,
+/* Karta jest wysoka jak trzy sąsiednie – przywołanie wypełnia środek,
    zamiast zostawiać pustkę nad podpisem. */
 .karta-wspomnienia { justify-content: center; gap: 28px; }
 .karta-wspomnienia .przywolanie { gap: 22px; margin-bottom: 0; }
@@ -658,7 +658,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .serwer-log li { opacity: .25; padding-left: 14px; position: relative; }
 .serwer-log li::before { content: ""; position: absolute; left: 0; top: .45em; width: 6px; height: 6px; border-radius: 50%; background: var(--linia-2); }
 
-/* scenariusz: 12 s w pętli — pisze, ekran gaśnie, serwer pisze dalej, ekran wraca */
+/* scenariusz: 12 s w pętli – pisze, ekran gaśnie, serwer pisze dalej, ekran wraca */
 .ciag-scena.gra .tel-odp i { animation: linia-odp 12s infinite; }
 .ciag-scena.gra .tel-odp i:nth-child(1) { --t0: 4%; } .ciag-scena.gra .tel-odp i:nth-child(2) { --t0: 8%; }
 .ciag-scena.gra .tel-odp i:nth-child(3) { --t0: 12%; }

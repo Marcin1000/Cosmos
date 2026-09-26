@@ -1,6 +1,6 @@
 /* Warstwa głosowa: nic na nic nie nachodzi, kula jest kulą.
 
-   Marcin przysłał cztery zrzuty z trybu głosowego — dwa z telefonu w pionie,
+   Marcin przysłał cztery zrzuty z trybu głosowego – dwa z telefonu w pionie,
    dwa w poziomie. Na wszystkich rozpoznane pytanie, odpowiedź i podpowiedź
    na dole leżały jedno na drugim, litera na literze. W poziomie kula była
    spłaszczonym spodkiem zamiast kulą.
@@ -18,11 +18,11 @@
 const { srodowisko, przegladarka, maPrzegladarke, KATALOG_ZRZUTOW } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
-// Dokładnie to, co zobaczył Marcin — z jego zrzutu, słowo w słowo.
+// Dokładnie to, co zobaczył Marcin – z jego zrzutu, słowo w słowo.
 const DLUGIE_PYTANIE = 'Jakiejakiejakie sąjakie są największejakie są największejakie '
   + 'są największejakie są największejakie są największe atrakcjejakie są największe '
   + 'atrakcjejakie są największe atrakcjejakie są największe atrakcje najakie są '
@@ -53,7 +53,7 @@ const EKRANY = [
     await pg.waitForTimeout(900);
 
     /* Wchodzimy w tryb głosowy i wypełniamy go treścią wprost. Nie udajemy
-       mikrofonu — mierzymy UKŁAD, a układ nie wie, skąd wziął się tekst. */
+       mikrofonu – mierzymy UKŁAD, a układ nie wie, skąd wziął się tekst. */
     await pg.evaluate(([pytanie, odpowiedz]) => {
       document.getElementById('voice-overlay').style.display = '';
       document.getElementById('voice-transcript').textContent = pytanie;
@@ -107,7 +107,7 @@ const EKRANY = [
     for (const z of zachodzi) console.log(`   ${z}`);
 
     if (zachodzi.length) {
-      fail.push(`${nazwa}: bloki nachodzą na siebie — ${zachodzi.join('; ')}`);
+      fail.push(`${nazwa}: bloki nachodzą na siebie – ${zachodzi.join('; ')}`);
     }
     if (owal > 1) {
       fail.push(`${nazwa}: kula jest elipsą ${Math.round(orb.w)}×${Math.round(orb.h)} px`);

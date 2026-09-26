@@ -1,5 +1,5 @@
 // Wyniki wyszukiwarki: reklamy odrzucone, przekierowania rozpakowane, bez duplikatów
-// Import zamiast wycinania regexem — trzeci raz ten sam problem: przy każdym
+// Import zamiast wycinania regexem – trzeci raz ten sam problem: przy każdym
 // przeniesieniu funkcji do modułu test padał, choć kod działał.
 const { resolveDdgUrl } = require('../../lib/szukanie.js');
 

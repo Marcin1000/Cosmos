@@ -9,7 +9,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   const browser = await przegladarka();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const fail = [];
-  // MJPEG: jedno połączenie na strumień. Liczymy połączenia, nie klatki —
+  // MJPEG: jedno połączenie na strumień. Liczymy połączenia, nie klatki –
   // ich przybywanie sprawdzamy po zmianie treści obrazu.
   const frameReqs = [];
   const streamReqs = [];
@@ -58,7 +58,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (s.select !== 'kinect-color') fail.push('lista nie odzwierciedla źródła');
   await page.screenshot({ path: `${SHOT}/kinect-live.png` });
 
-  // Odświeżanie: obraz ma się zmieniać, a połączeń ma NIE przybywać —
+  // Odświeżanie: obraz ma się zmieniać, a połączeń ma NIE przybywać –
   // na tym polega przewaga MJPEG nad odpytywaniem klatka po klatce.
   const pixA = await snapshot();
   const conn = streamReqs.length;
@@ -88,7 +88,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   const n2 = frameReqs.length + streamReqs.length;
   console.log(`4. po zamknięciu: ${n1} → ${n2} zapytań, src wyczyszczony=${!src1}`);
   if (n2 > n1) fail.push('odpytywanie trwa po zamknięciu panelu');
-  if (src1) fail.push('src obrazka nie wyczyszczony — MJPEG zostaje otwarty w tle');
+  if (src1) fail.push('src obrazka nie wyczyszczony – MJPEG zostaje otwarty w tle');
 
   console.log(fail.length ? '\nPROBLEMY: ' + fail.join('; ') : '\nPODGLĄD Z KINECTA OK');
   await browser.close();

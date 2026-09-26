@@ -1,11 +1,11 @@
-/* Czy ta operacja może UBYĆ INFORMACJI? — pytanie zadane systematycznie.
+/* Czy ta operacja może UBYĆ INFORMACJI? – pytanie zadane systematycznie.
 
    Marcin, po tym jak znalazłem kasowanie 55 tysięcy rozpoznanych plików przy
    ponownym indeksowaniu: „to pytanie należy zadać systematycznie wszystkim
    ścieżkom zapisu archiwum".
 
    Tamtą usterkę znalazłem CZYTAJĄC KOD, nie przez test i nie przez użycie.
-   Przeszła przez wszystkie audyty, bo żaden nie pytał o ubytek informacji —
+   Przeszła przez wszystkie audyty, bo żaden nie pytał o ubytek informacji –
    pytały o poprawność wyniku, a wynik po skasowaniu jest formalnie poprawny:
    pliki się zgadzają co do liczby, tylko są puste.
 
@@ -13,14 +13,14 @@
    każdej sprawdza to samo: czy po operacji zostało wszystko, co było.
    Ścieżek jest pięć:
 
-     1. `dodaj()` z listowania źródła      — ponowne indeksowanie
-     2. `dodaj()` z przebiegu po EXIF      — dociąganie danych z plików
-     3. `dodaj()` z przebiegu po obrazie   — rozpoznawanie treści
-     4. wczytanie indeksu z dysku          — restart serwera
-     5. `usunZrodlo()`                     — jedyne celowe kasowanie
+     1. `dodaj()` z listowania źródła      – ponowne indeksowanie
+     2. `dodaj()` z przebiegu po EXIF      – dociąganie danych z plików
+     3. `dodaj()` z przebiegu po obrazie   – rozpoznawanie treści
+     4. wczytanie indeksu z dysku          – restart serwera
+     5. `usunZrodlo()`                     – jedyne celowe kasowanie
 
    Do tego dwa przypadki brzegowe, które wyszły przy pisaniu tego zestawu
-   i okazały się prawdziwymi usterkami — opisane przy swoich punktach.
+   i okazały się prawdziwymi usterkami – opisane przy swoich punktach.
 */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -29,7 +29,7 @@ const { utworz } = require('../../lib/archiwum.js');
 
 const fail = [];
 
-/** Pełny wpis po wszystkich przebiegach — tyle informacji ma przeżyć. */
+/** Pełny wpis po wszystkich przebiegach – tyle informacji ma przeżyć. */
 function bogatyWpis() {
   return {
     id: 'onedrive:x1', zrodlo: 'onedrive', typ: 'zdjecie',
@@ -73,7 +73,7 @@ function nowyKatalog(nazwa) {
 (async () => {
   /* --- 1. PONOWNE LISTOWANIE ŹRÓDŁA ------------------------------------
      Najgroźniejsza ścieżka i ta, która realnie kasowała pracę. Listowanie
-     zna nazwę, ścieżkę i to, co chmura sama wyczytała z JPEG-a — nie zna
+     zna nazwę, ścieżkę i to, co chmura sama wyczytała z JPEG-a – nie zna
      niczego, co policzyliśmy później. */
   console.log('1. ponowne listowanie źródła (indeksuj OneDrive drugi raz)');
   {
@@ -120,11 +120,11 @@ function nowyKatalog(nazwa) {
   }
 
   /* --- 5. INDEKS ZE STARSZEJ WERSJI -------------------------------------
-     Wpisy wczytują się z dysku SUROWE — bez normalizacji. Wpis zapisany
+     Wpisy wczytują się z dysku SUROWE – bez normalizacji. Wpis zapisany
      przez starszą wersję nie ma pól, które doszły później, a scalanie
      zakłada, że są. Zmierzone: pierwsze `dodaj` dla takiego wpisu rzucało
      `Cannot read properties of undefined (reading 'length')` i przerywało
-     CAŁE indeksowanie — nie jeden plik, tylko całą paczkę.
+     CAŁE indeksowanie – nie jeden plik, tylko całą paczkę.
      To nie jest hipoteza: tak zachowywał się kod, zanim ten punkt powstał. */
   console.log('5. indeks zapisany przez starszą wersję');
   {
@@ -133,7 +133,7 @@ function nowyKatalog(nazwa) {
       id: 'onedrive:x1', zrodlo: 'onedrive', nazwa: '3B9A4703.CR3',
       sciezka: '/Zdjęcia/Góry 2022/3B9A4703.CR3', typ: 'zdjecie',
       kiedy: '2022-08-14T15:30:12', aparat: 'Canon EOS R6m2', exifCzytany: true,
-      // Ani `obiekty`, ani `obejrzane`, ani `dataZrodlo` — tak wyglądał wpis wcześniej.
+      // Ani `obiekty`, ani `obejrzane`, ani `dataZrodlo` – tak wyglądał wpis wcześniej.
     }]));
     const a = utworz(kat);
     let wywrotka = '';
@@ -144,21 +144,21 @@ function nowyKatalog(nazwa) {
         kiedy: '2026-08-08T20:19:00', dataZrodlo: 'plik',
       }]);
     } catch (err) { wywrotka = err.message; }
-    console.log(`   dodaj na starym wpisie: ${wywrotka ? `WYWROTKA — ${wywrotka}` : 'przeszło'}`);
+    console.log(`   dodaj na starym wpisie: ${wywrotka ? `WYWROTKA – ${wywrotka}` : 'przeszło'}`);
     if (wywrotka) {
       fail.push(`ponowne indeksowanie wywraca się na wpisie ze starszej wersji (${wywrotka}) `
-        + '— pada cała paczka, nie jeden plik');
+        + '– pada cała paczka, nie jeden plik');
     } else {
       const po = a.szukaj({})[0];
       if (po.kiedy !== '2022-08-14T15:30:12') {
-        fail.push(`stary wpis stracił datę z EXIF-u (${po.kiedy}) — `
+        fail.push(`stary wpis stracił datę z EXIF-u (${po.kiedy}) – `
           + '`exifCzytany` miało go obronić');
       }
     }
   }
 
   /* --- 6. USUWANIE ŹRÓDŁA JEST CELOWE, ALE MA BYĆ JEDYNE ----------------
-     `usunZrodlo` to jedyna operacja, która MA usuwać — i dobrze, że jest.
+     `usunZrodlo` to jedyna operacja, która MA usuwać – i dobrze, że jest.
      Sprawdzamy dwie rzeczy: że usuwa dokładnie to, o co poproszono,
      i że nie rusza niczego innego. */
   console.log('6. celowe usunięcie źródła');
@@ -178,12 +178,12 @@ function nowyKatalog(nazwa) {
   }
 
   /* --- 7. ODŁĄCZENIE ŹRÓDŁA TO NIE TO SAMO CO USUNIĘCIE MATERIAŁU -------
-     Znalezione przy tym audycie. Odłączenie OneDrive kasowało CAŁY indeks —
+     Znalezione przy tym audycie. Odłączenie OneDrive kasowało CAŁY indeks –
      czyli u Marcina 55 tysięcy plików razem z rozpoznanymi treściami
      i dociągniętym EXIF-em. Wystarczyło odłączyć i podłączyć konto, żeby
      stracić godziny pracy karty graficznej.
 
-     A przecież indeks jest pasywny i ma działać BEZ połączenia — to jest
+     A przecież indeks jest pasywny i ma działać BEZ połączenia – to jest
      wprost zapisane w nagłówku `lib/archiwum.js`: „zapytania działają nawet
      wtedy, gdy te źródła są offline. Dlatego »ile klipów 50 mm w tym roku«
      odpowie z telefonu w terenie przy wyłączonym komputerze domowym".
@@ -197,7 +197,7 @@ function nowyKatalog(nazwa) {
 
        Pierwsza wersja szukała napisu `usunZrodlo(` w siedmiuset znakach za
        adresem trasy. Zdałaby również wtedy, gdyby kasowanie przeniosło się
-       o akapit dalej albo schowało w funkcji pomocniczej — czyli w każdej
+       o akapit dalej albo schowało w funkcji pomocniczej – czyli w każdej
        sytuacji, w której naprawdę warto o niej wiedzieć. Tu stawiamy serwer
        na przygotowanym indeksie, odłączamy konto i liczymy, co zostało. */
     const { uruchom, zabij, czekajNa, zwolnijPorty, KORZEN } = require('../pomoc');
@@ -229,11 +229,11 @@ function nowyKatalog(nazwa) {
       console.log(`   w indeksie przed: ${przedOdlaczeniem}, po odłączeniu: ${poOdlaczeniu} `
         + `(trasa melduje: usunięto ${odp.usunieto}, zachowano ${odp.zachowano})`);
       if (przedOdlaczeniem !== przed.length) {
-        fail.push(`serwer wczytał ${przedOdlaczeniem} z ${przed.length} wpisów — `
+        fail.push(`serwer wczytał ${przedOdlaczeniem} z ${przed.length} wpisów – `
           + 'punkt 7 nie mierzyłby niczego');
       } else if (poOdlaczeniu !== przed.length) {
         fail.push(`odłączenie OneDrive zabrało ${przed.length - poOdlaczeniu} z ${przed.length} `
-          + 'wpisów razem z rozpoznanymi treściami — a indeks ma z założenia działać offline');
+          + 'wpisów razem z rozpoznanymi treściami – a indeks ma z założenia działać offline');
       }
       // Rozpoznana treść też ma zostać, nie tylko liczba wpisów.
       const r = await fetch(`${adres}/api/archive/search?zrodlo=onedrive&limit=1`);

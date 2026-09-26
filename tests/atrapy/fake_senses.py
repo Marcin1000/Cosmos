@@ -24,7 +24,7 @@ class H(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             try:
                 for i in range(40):
-                    # każda klatka inna — inaczej test „czy się odświeża" nic nie mierzy
+                    # każda klatka inna – inaczej test „czy się odświeża" nic nie mierzy
                     base = (20, 80, 200) if depth else (200, 120, 40)
                     frame = png(64, 48, ((base[0] + i * 5) % 256, base[1], base[2]))
                     self.wfile.write(b"--kosmos\r\nContent-Type: image/png\r\n"

@@ -51,7 +51,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
       convs: items.length,
     };
   });
-  console.log(`1. panel boczny: obszarów przewijania=${sb.n} (${sb.scrollers.join(', ') || '—'})`);
+  console.log(`1. panel boczny: obszarów przewijania=${sb.n} (${sb.scrollers.join(', ') || '–'})`);
   console.log(`   po przewinięciu na dół „Zmysły" widoczne=${sb.sensesVisible} → „${sb.sensesText}"`);
   if (sb.n !== 1) fail.push(`${sb.n} suwaki w panelu bocznym zamiast jednego`);
   if (!sb.sensesVisible) fail.push('pasek „Zmysły" nadal nieosiągalny');
@@ -77,7 +77,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (top.whole < 4) fail.push(`za mało rozmów widocznych (${top.whole})`);
   await m.screenshot({ path: SHOT + '/fix2-sidebar.png' });
 
-  // 3. lista modeli — krótkie etykiety na wąskim ekranie
+  // 3. lista modeli – krótkie etykiety na wąskim ekranie
   await m.keyboard.press('Escape');
   await m.evaluate(() => openSettings());
   await m.waitForTimeout(1200);
@@ -93,7 +93,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   });
   console.log(`3. lista modeli na 360px: najdłuższa etykieta ${opts.longest} zn.`);
   opts.labels.forEach((l) => console.log(`     „${l}"`));
-  console.log(`   wartości (identyfikatory) zachowane: ${opts.values[0] || '—'}`);
+  console.log(`   wartości (identyfikatory) zachowane: ${opts.values[0] || '–'}`);
   if (opts.longest > 48) fail.push(`etykieta modelu za długa na telefon (${opts.longest} zn.)`);
   if (!(opts.values[0] || '').includes('/')) fail.push('identyfikator modelu zgubiony w value');
   const all = await m.evaluate(() =>
@@ -128,7 +128,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   const usedExact = JSON.stringify(flipReq).includes('exact');
   console.log(`4. kamera: ${flip.before} → ${flip.after}, obraz ${flip.w}px`);
   console.log(`   żądanie przy przełączaniu: ${JSON.stringify(flipReq.video || flipReq)}`);
-  if (!usedExact) fail.push('przełączanie nadal używa `ideal` — przeglądarka może to zignorować');
+  if (!usedExact) fail.push('przełączanie nadal używa `ideal` – przeglądarka może to zignorować');
   if (flip.before === flip.after) fail.push('kierunek kamery się nie zmienił');
   if (!flip.w) fail.push('brak obrazu po przełączeniu');
   await m.keyboard.press('Escape');
@@ -150,7 +150,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   });
   console.log(`5. czytanie: ${speech.n} kawałków, najdłuższy ${speech.longest} zn.`);
   console.log(`   tekst zachowany w całości: ${speech.joined === speech.original}`);
-  if (speech.longest > 185) fail.push(`kawałek za długi (${speech.longest}) — Chrome go utnie`);
+  if (speech.longest > 185) fail.push(`kawałek za długi (${speech.longest}) – Chrome go utnie`);
   if (speech.joined !== speech.original) fail.push('cięcie zgubiło lub zmieniło tekst');
   if (speech.brokenWord) fail.push('rozerwane słowo na granicy kawałka');
 
@@ -176,7 +176,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   });
   console.log(`6. dyktowanie: start=${dict.afterStart}, po samoistnym końcu=${dict.afterAuto}, `
     + `po kliknięciu stop=${dict.afterStop}`);
-  if (dict.afterAuto <= dict.afterStart) fail.push('dyktowanie nie wznawia się — urywa w połowie');
+  if (dict.afterAuto <= dict.afterStart) fail.push('dyktowanie nie wznawia się – urywa w połowie');
   if (dict.afterStop !== dict.afterAuto) fail.push('dyktowanie wznawia się mimo zatrzymania przez użytkownika');
 
   // 7. błąd nie-JSON pokazuje treść, nie „Unexpected token"

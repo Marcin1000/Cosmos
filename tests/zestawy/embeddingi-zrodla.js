@@ -1,7 +1,7 @@
 /* Embeddingi: skąd biorą się wektory pytania i kto może użyć zmysłów.
 
    Runda 4, zespół IT (modele open source) zmierzył dwie rzeczy:
-     • Komputer domowy śpi, chmura działa — KAŻDA wiadomość czekała ~6,2 s,
+     • Komputer domowy śpi, chmura działa – KAŻDA wiadomość czekała ~6,2 s,
        zanim model dostał pytanie: pamięć czekała cały budżet na zmysły,
        baza wiedzy drugi raz, a karencja po awarii była jedna na oba źródła
        i zerowana sukcesem chmury, więc nie włączała się nigdy.
@@ -10,13 +10,13 @@
 
    Co musi być prawdą:
      1. Po jednej nieudanej próbie zmysłów następne pytanie z rozmowy idzie od
-        razu do chmury — zmysły nie dostają nic nowego, odpowiedź przychodzi
+        razu do chmury – zmysły nie dostają nic nowego, odpowiedź przychodzi
         w ułamku budżetu.
-     2. Przeliczanie w tle (długi budżet) karencji nie słucha — próbuje zmysłów.
+     2. Przeliczanie w tle (długi budżet) karencji nie słucha – próbuje zmysłów.
      3. To samo pytanie z jednej wiadomości (pamięć, potem baza wiedzy) liczy
         się raz.
      4. Członek bez zgody na zmysły: ani jednego żądania do zmysłów, także gdy
-        działają; wektory z chmury. Członek ze zgodą i właściciel — zmysły. */
+        działają; wektory z chmury. Członek ze zgodą i właściciel – zmysły. */
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -99,7 +99,7 @@ const nasluch = (serwer) => new Promise((r) => serwer.listen(0, '127.0.0.1', () 
   const a = await wKontekscie(wlasciciel, () => q.embedTexts(['Który obiektyw na klify?'], 1200, 'query'));
   const b = await wKontekscie(wlasciciel, () => q.embedTexts(['Który obiektyw na klify?'], 1200, 'query'));
   ok(a && b && a.vectors[0] === b.vectors[0] && doZmyslow - zmyslyPrzed === 1 && doChmury === chmuraPrzed,
-    'pamięć i baza wiedzy pytają o to samo zdanie — liczy się raz');
+    'pamięć i baza wiedzy pytają o to samo zdanie – liczy się raz');
 
   // --- 4. zgoda na zmysły ------------------------------------------------------------------------
   const ania = { id: 'ania', rola: 'czlonek', silniki: { local: false } };

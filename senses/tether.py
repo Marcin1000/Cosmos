@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Cosmos Tether — Canon R6 II (i inne) jako sterowany przyrząd.
+Cosmos Tether – Canon R6 II (i inne) jako sterowany przyrząd.
 
 Aparat podpięty kablem przestaje być „aparatem", a staje się urządzeniem
 pomiarowym, którym Cosmos steruje:
 
-  info    — co za aparat jest podłączony i jakie ma ustawienia
-  shot    — pojedyncze zdjęcie (z pobraniem pliku)
-  stack   — focus stacking: seria z przesuwaną ostrością → jeden ostry kadr
-  bracket — bracketing ekspozycji (HDR, trudne kontrastowo wnętrza)
-  watch   — wyzwalanie zdarzeniem: „zrób zdjęcie, gdy YOLO zobaczy ptaka"
+  info    – co za aparat jest podłączony i jakie ma ustawienia
+  shot    – pojedyncze zdjęcie (z pobraniem pliku)
+  stack   – focus stacking: seria z przesuwaną ostrością → jeden ostry kadr
+  bracket – bracketing ekspozycji (HDR, trudne kontrastowo wnętrza)
+  watch   – wyzwalanie zdarzeniem: „zrób zdjęcie, gdy YOLO zobaczy ptaka"
 
 Sterowanie przez **gPhoto2** (darmowe, Linux/macOS; na Windows przez WSL albo
-Canon EOS SDK). Bez gPhoto2 moduł nie udaje, że działa — mówi wprost, czego brakuje.
+Canon EOS SDK). Bez gPhoto2 moduł nie udaje, że działa – mówi wprost, czego brakuje.
 
 Sprawdź logikę bez aparatu:  python tether.py selftest
 """
@@ -53,7 +53,7 @@ def require_gphoto() -> str:
     g = gphoto()
     if not g:
         sys.exit(
-            "Nie znaleziono gphoto2 — bez niego nie da się sterować aparatem.\n"
+            "Nie znaleziono gphoto2 – bez niego nie da się sterować aparatem.\n"
             "  Linux:  sudo apt install gphoto2\n"
             "  macOS:  brew install gphoto2\n"
             "  Windows: użyj WSL albo Canon EOS Utility / EOS SDK.\n"
@@ -83,7 +83,7 @@ def cmd_focus_step(step: int) -> list[str]:
 
 
 def focus_plan(frames: int, step: int) -> list[int]:
-    """Sekwencja kroków ostrości dla stackingu — od najbliższego do najdalszego."""
+    """Sekwencja kroków ostrości dla stackingu – od najbliższego do najdalszego."""
     if frames < 1:
         return []
     return [0] + [step] * (frames - 1)
@@ -116,7 +116,7 @@ def run(args_list: list[str], quiet: bool = False) -> tuple[int, str]:
 
 def cmd_info(_args) -> None:
     require_gphoto()
-    print("\n✦ Cosmos Tether — podłączony aparat")
+    print("\n✦ Cosmos Tether – podłączony aparat")
     code, out = run(["gphoto2", "--auto-detect"], quiet=True)
     print(out or "(brak odpowiedzi)")
     if code == 0:
@@ -128,7 +128,7 @@ def cmd_shot(args) -> None:
     out = Path(args.out or "zdjecia")
     out.mkdir(parents=True, exist_ok=True)
     target = out / f"cosmos-{time.strftime('%Y%m%d-%H%M%S')}.%C"
-    print(f"\n✦ Cosmos Tether — zdjęcie → {target}")
+    print(f"\n✦ Cosmos Tether – zdjęcie → {target}")
     code, _ = run(cmd_capture(target))
     print("  ✓ Gotowe." if code == 0 else "  ✗ Nie udało się zrobić zdjęcia.")
     if code == 0:
@@ -140,7 +140,7 @@ def cmd_stack(args) -> None:
     out = Path(args.out or "focus-stack")
     out.mkdir(parents=True, exist_ok=True)
     plan = focus_plan(args.frames, args.step)
-    print(f"\n✦ Cosmos Tether — focus stacking: {args.frames} klatek, krok {args.step}")
+    print(f"\n✦ Cosmos Tether – focus stacking: {args.frames} klatek, krok {args.step}")
     print("  Ustaw aparat na ostrość ręczną i wyceluj na najbliższy punkt obiektu.\n")
     for i, step in enumerate(plan, 1):
         if step:
@@ -159,7 +159,7 @@ def cmd_bracket(args) -> None:
     out = Path(args.out or "bracket")
     out.mkdir(parents=True, exist_ok=True)
     evs = bracket_plan(0.0, args.stops, args.frames)
-    print(f"\n✦ Cosmos Tether — bracketing: {evs} EV")
+    print(f"\n✦ Cosmos Tether – bracketing: {evs} EV")
     for i, ev in enumerate(evs, 1):
         run(cmd_set("exposurecompensation", f"{ev}"), quiet=True)
         target = out / f"ev{ev:+.1f}-{i:02d}.%C"
@@ -179,7 +179,7 @@ def cmd_watch(args) -> None:
         sys.exit("Tryb 'watch' wymaga:  pip install requests")
     out = Path(args.out or "wyzwalane")
     out.mkdir(parents=True, exist_ok=True)
-    print(f"\n✦ Cosmos Tether — czekam na zdarzenie: „{args.trigger}”. Ctrl+C kończy.\n")
+    print(f"\n✦ Cosmos Tether – czekam na zdarzenie: „{args.trigger}”. Ctrl+C kończy.\n")
     seen = 0
     last_shot = 0.0
     try:
@@ -202,7 +202,7 @@ def cmd_watch(args) -> None:
 
 
 def cmd_selftest(_args) -> None:
-    print("\n✦ Cosmos Tether — samotest (logika, bez aparatu)\n")
+    print("\n✦ Cosmos Tether – samotest (logika, bez aparatu)\n")
     ok = True
 
     c = cmd_capture(Path("/tmp/x.%C"))

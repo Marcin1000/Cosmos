@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-Cosmos PanTilt — Ronin-S (i dowolna głowica) jako „szyja" Cosmosa.
+Cosmos PanTilt – Ronin-S (i dowolna głowica) jako „szyja" Cosmosa.
 
 Ronin to nie tylko stabilizator: to trzy silniki z enkoderami i IMU, czyli gotowa
 głowica pan/tilt. Ten moduł liczy **wzorce ruchu** i wysyła je do sterownika:
 
-  gigapano — siatka pozycji pokrywająca zadany obszar nieba/sceny z zakładką
-  timelapse— powolny, równomierny najazd między dwoma punktami
-  track    — krok korekcyjny, gdy YOLO wykryje obiekt poza środkiem kadru
-  scan     — obrót 360° z kadrami do fotogrametrii wnętrza
+  gigapano – siatka pozycji pokrywająca zadany obszar nieba/sceny z zakładką
+  timelapse– powolny, równomierny najazd między dwoma punktami
+  track    – krok korekcyjny, gdy YOLO wykryje obiekt poza środkiem kadru
+  scan     – obrót 360° z kadrami do fotogrametrii wnętrza
 
 Sterowniki (backend):
-  sim    — nic nie porusza, tylko wypisuje ruchy (domyślny, do testów i podglądu)
-  serial — wysyła proste komendy tekstowe „PAN <deg> TILT <deg>" po porcie szeregowym
+  sim    – nic nie porusza, tylko wypisuje ruchy (domyślny, do testów i podglądu)
+  serial – wysyła proste komendy tekstowe „PAN <deg> TILT <deg>" po porcie szeregowym
            (pasuje do własnego sterownika, płytki Arduino/ESP z silnikami krokowymi)
-  ronin  — DJI Ronin przez SDK/Bluetooth: WYMAGA oficjalnego SDK od DJI.
+  ronin  – DJI Ronin przez SDK/Bluetooth: WYMAGA oficjalnego SDK od DJI.
            Moduł przygotowuje komendy i punkt wejścia; samo połączenie trzeba
            dopiąć zgodnie z licencją i dokumentacją DJI (patrz senses/README.md).
 
-Geometria wzorców jest w pełni policzalna — sprawdź: python pantilt.py selftest
+Geometria wzorców jest w pełni policzalna – sprawdź: python pantilt.py selftest
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def send_event(summary: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wzorce ruchu (czysta geometria — testowalna bez sprzętu)
+# Wzorce ruchu (czysta geometria – testowalna bez sprzętu)
 # ---------------------------------------------------------------------------
 
 def gigapano_grid(fov_h: float, fov_v: float, span_h: float, span_v: float,
@@ -56,7 +56,7 @@ def gigapano_grid(fov_h: float, fov_v: float, span_h: float, span_v: float,
     """Siatka pozycji (pan, tilt) pokrywająca span_h × span_v z zadaną zakładką.
 
     Zwraca pozycje wężykiem (boustrofedon), żeby głowica nie wracała na początek
-    każdego rzędu — mniej ruchu, mniej drgań, krótszy czas.
+    każdego rzędu – mniej ruchu, mniej drgań, krótszy czas.
     """
     if not (0 <= overlap < 0.95):
         raise ValueError("Zakładka musi być w przedziale 0–0.95")
@@ -65,7 +65,7 @@ def gigapano_grid(fov_h: float, fov_v: float, span_h: float, span_v: float,
     cols = max(1, math.ceil((span_h - fov_h) / step_h) + 1) if span_h > fov_h else 1
     rows = max(1, math.ceil((span_v - fov_v) / step_v) + 1) if span_v > fov_v else 1
 
-    # Siatka bywa szersza niż zadany obszar (liczba kadrów jest całkowita) —
+    # Siatka bywa szersza niż zadany obszar (liczba kadrów jest całkowita) –
     # wyśrodkuj ją, żeby panorama nie była przekrzywiona na jedną stronę.
     real_h = fov_h + (cols - 1) * step_h
     real_v = fov_v + (rows - 1) * step_v
@@ -84,7 +84,7 @@ def gigapano_grid(fov_h: float, fov_v: float, span_h: float, span_v: float,
 
 def timelapse_path(start: tuple[float, float], end: tuple[float, float],
                    shots: int) -> list[tuple[float, float]]:
-    """Równomierny najazd — pozycje dla kolejnych klatek timelapse'u."""
+    """Równomierny najazd – pozycje dla kolejnych klatek timelapse'u."""
     if shots < 2:
         return [start]
     return [(round(start[0] + (end[0] - start[0]) * i / (shots - 1), 3),
@@ -97,7 +97,7 @@ def track_step(box: tuple[float, float, float, float], frame_w: int, frame_h: in
                deadzone: float = 0.08) -> tuple[float, float]:
     """Korekta (Δpan, Δtilt), żeby wyśrodkować wykryty obiekt.
 
-    box: (x1, y1, x2, y2) w pikselach — prosto z YOLO.
+    box: (x1, y1, x2, y2) w pikselach – prosto z YOLO.
     Martwa strefa zapobiega drganiu głowicy przy drobnych ruchach obiektu.
     """
     cx = (box[0] + box[2]) / 2.0
@@ -115,7 +115,7 @@ def track_step(box: tuple[float, float, float, float], frame_w: int, frame_h: in
 
 def room_scan(fov_h: float, tilts: list[float], overlap: float = 0.3
               ) -> list[tuple[float, float]]:
-    """Pełny obrót 360° na kilku wysokościach — kadry do fotogrametrii wnętrza."""
+    """Pełny obrót 360° na kilku wysokościach – kadry do fotogrametrii wnętrza."""
     step = fov_h * (1 - overlap)
     n = max(1, math.ceil(360.0 / step))
     out = []
@@ -150,7 +150,7 @@ class Head:
             sys.exit(
                 "Backend 'ronin' wymaga oficjalnego SDK DJI, którego nie można "
                 "dołączyć do tego repozytorium.\n"
-                "Podłącz go w funkcji Head.goto() — komendy i wzorce są już gotowe.\n"
+                "Podłącz go w funkcji Head.goto() – komendy i wzorce są już gotowe.\n"
                 "Na razie użyj --backend sim (podgląd) albo serial (własny sterownik).")
 
     def goto(self, pan: float, tilt: float) -> None:
@@ -172,7 +172,7 @@ def run_positions(head: Head, positions: list[tuple[float, float]], label: str) 
     for pan, tilt in positions:
         head.goto(pan, tilt)
     print(f"  ✓ Wykonano {head.moves} ruchów.")
-    send_event(f"głowica: {label.lower()} — {len(positions)} pozycji")
+    send_event(f"głowica: {label.lower()} – {len(positions)} pozycji")
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ def run_positions(head: Head, positions: list[tuple[float, float]], label: str) 
 
 def cmd_gigapano(args) -> None:
     pos = gigapano_grid(args.fov_h, args.fov_v, args.span_h, args.span_v, args.overlap)
-    print(f"\n✦ Cosmos PanTilt — gigapanorama {args.span_h}° × {args.span_v}°")
+    print(f"\n✦ Cosmos PanTilt – gigapanorama {args.span_h}° × {args.span_v}°")
     print(f"  Pole widzenia obiektywu: {args.fov_h}° × {args.fov_v}°, zakładka {args.overlap * 100:.0f}%")
     head = Head(args.backend, args.port)
     run_positions(head, pos, "Gigapanorama")
@@ -191,7 +191,7 @@ def cmd_gigapano(args) -> None:
 def cmd_timelapse(args) -> None:
     pos = timelapse_path((args.from_pan, args.from_tilt), (args.to_pan, args.to_tilt), args.shots)
     total_min = args.shots * args.interval / 60.0
-    print(f"\n✦ Cosmos PanTilt — motion timelapse")
+    print(f"\n✦ Cosmos PanTilt – motion timelapse")
     print(f"  {args.shots} klatek co {args.interval}s → {total_min:.1f} min nagrywania")
     head = Head(args.backend, args.port)
     print(f"\n  Ruch: {len(pos)} pozycji")
@@ -206,7 +206,7 @@ def cmd_timelapse(args) -> None:
 def cmd_scan(args) -> None:
     tilts = [float(t) for t in args.tilts.split(",")]
     pos = room_scan(args.fov_h, tilts, args.overlap)
-    print(f"\n✦ Cosmos PanTilt — skan pomieszczenia (360° × {len(tilts)} poziomy)")
+    print(f"\n✦ Cosmos PanTilt – skan pomieszczenia (360° × {len(tilts)} poziomy)")
     head = Head(args.backend, args.port)
     run_positions(head, pos, "Skan")
     head.close()
@@ -214,7 +214,7 @@ def cmd_scan(args) -> None:
 
 
 def cmd_selftest(_args) -> None:
-    print("\n✦ Cosmos PanTilt — samotest\n")
+    print("\n✦ Cosmos PanTilt – samotest\n")
     ok = True
 
     # 1) Gigapanorama pokrywa cały zadany obszar
@@ -224,17 +224,17 @@ def cmd_selftest(_args) -> None:
     covers_h = min(pans) - 15 <= -60 + 1 and max(pans) + 15 >= 60 - 1
     covers_v = min(tilts) - 10 <= -30 + 1 and max(tilts) + 10 >= 30 - 1
     print(f"  1. Gigapano 120°×60°: {len(pos)} pozycji, pan {min(pans):.0f}…{max(pans):.0f}°, "
-          f"tilt {min(tilts):.0f}…{max(tilts):.0f}° — pokrycie {'OK' if covers_h and covers_v else 'BRAK'}")
+          f"tilt {min(tilts):.0f}…{max(tilts):.0f}° – pokrycie {'OK' if covers_h and covers_v else 'BRAK'}")
     ok &= covers_h and covers_v
 
     # 1b) Siatka jest wyśrodkowana (panorama nie może być przekrzywiona)
     sym_h = abs(min(pans) + max(pans)) < 0.01
     sym_v = abs(min(tilts) + max(tilts)) < 0.01
     print(f"  1b. Symetria siatki: pan {min(pans):+.1f}/{max(pans):+.1f}, "
-          f"tilt {min(tilts):+.1f}/{max(tilts):+.1f} — {'wyśrodkowana' if sym_h and sym_v else 'PRZEKRZYWIONA'}")
+          f"tilt {min(tilts):+.1f}/{max(tilts):+.1f} – {'wyśrodkowana' if sym_h and sym_v else 'PRZEKRZYWIONA'}")
     ok &= sym_h and sym_v
 
-    # 2) Zakładka rzeczywiście jest — sąsiednie kadry zachodzą na siebie
+    # 2) Zakładka rzeczywiście jest – sąsiednie kadry zachodzą na siebie
     row0 = sorted({p for p, t in pos if abs(t - tilts[0]) < 1e-6})
     gap = row0[1] - row0[0] if len(row0) > 1 else 0
     print(f"  2. Odstęp kadrów w rzędzie: {gap:.1f}° przy FOV 30° → zakładka "

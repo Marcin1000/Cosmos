@@ -14,26 +14,26 @@
 
    To nie są halucynacje. To są ZDANIA Z MOJEGO PROMPTU, oddane człowiekowi,
    który zapytał o psa. Każda naprawa dokładała modelowi wyjaśnienie, jak
-   działa system — a model uczciwie przekazywał je dalej. Nazwy pól, składnia
+   działa system – a model uczciwie przekazywał je dalej. Nazwy pól, składnia
    filtrów, nazwa panelu i cudza firma w jednym akapicie, plus mówienie
    o rozmówcy w trzeciej osobie, bo tak brzmiały instrukcje.
 
    Ten zestaw pilnuje dwóch rzeczy naraz:
 
      1. że reguła rejestru („JAK ODPOWIADASZ") w ogóle jest i stoi PRZED
-        opisami narzędzi — bo instrukcja czytana później nie unieważnia
+        opisami narzędzi – bo instrukcja czytana później nie unieważnia
         wcześniejszej,
      2. że instrukcje narzędzi nie zawierają gotowych zwrotów do recytacji.
 
    Punkt 2 jest z natury przybliżony: nie da się sprawdzić, co model powie.
-   Da się sprawdzić, czego mu nie podsuwamy — i to jest jedyna część tego
+   Da się sprawdzić, czego mu nie podsuwamy – i to jest jedyna część tego
    problemu, nad którą mamy władzę.
 */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-// Dane serwera w katalogu tymczasowym — moduły czytają COSMOS_DATA_DIR przy wczytaniu.
+// Dane serwera w katalogu tymczasowym – moduły czytają COSMOS_DATA_DIR przy wczytaniu.
 process.env.COSMOS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-rejestr-'));
 
 const fail = [];
@@ -46,7 +46,7 @@ const KORZEN = path.join(__dirname, '..', '..');
    Dawniej ten punkt porównywał pozycje dwóch fraz w TEKŚCIE server.js
    i padł dwa razy bez żadnej usterki: raz gdy opis archiwum wyprowadził się
    do modułu, drugi raz gdy cały czat przeszedł do lib/czat.js (runda 4).
-   Teraz składamy kontekst prawdziwą funkcją i patrzymy na wynik — na to,
+   Teraz składamy kontekst prawdziwą funkcją i patrzymy na wynik – na to,
    co naprawdę pojedzie do modelu. */
 const czat = require(path.join(KORZEN, 'lib', 'czat.js'));
 const { wKontekscie } = require(path.join(KORZEN, 'lib', 'kontekst.js'));
@@ -71,14 +71,14 @@ const iNarzedzia = tresci.findIndex((c) => /\[SZUKAJ|ARCHIWUM MATERIAŁU|\[PLAN/
 console.log(`1. reguła „JAK ODPOWIADASZ": ${iRejestr >= 0 ? `wiadomość ${iRejestr}` : 'BRAK'}, `
   + `pierwszy opis narzędzi: wiadomość ${iNarzedzia} (z ${messages.length})`);
 if (iRejestr < 0) {
-  fail.push('brak reguły „JAK ODPOWIADASZ" — nic nie oddziela wiedzy o mechanice '
+  fail.push('brak reguły „JAK ODPOWIADASZ" – nic nie oddziela wiedzy o mechanice '
     + 'od tego, co model mówi użytkownikowi');
 }
 if (iNarzedzia < 0) {
-  fail.push('w złożonym kontekście nie ma opisu żadnego narzędzia — '
+  fail.push('w złożonym kontekście nie ma opisu żadnego narzędzia – '
     + 'zestaw nie ma czego porównać i przestał cokolwiek sprawdzać');
 } else if (iRejestr >= 0 && iRejestr > iNarzedzia) {
-  fail.push('reguła rejestru jest dopisywana PO opisach narzędzi — ma iść przed nimi, '
+  fail.push('reguła rejestru jest dopisywana PO opisach narzędzi – ma iść przed nimi, '
     + 'bo dotyczy wszystkich');
 }
 const regula = iRejestr >= 0 ? tresci[iRejestr] : '';
@@ -102,12 +102,12 @@ console.log(`   punktów reguły obecnych: ${WYMAGANE.filter(([w]) => w.test(reg
 /* --- 2. Instrukcje nie podsuwają gotowych zwrotów ------------------------
    Instrukcje narzędzi mieszkają teraz w osobnym module, więc SKŁADAMY JE
    NAPRAWDĘ i czytamy to, co pojedzie do modelu. Pierwsza wersja tego zestawu
-   wyłuskiwała literały regexpem po server.js — działało, ale sprawdzało
+   wyłuskiwała literały regexpem po server.js – działało, ale sprawdzało
    tekst pliku zamiast wyniku, więc przegapiłoby każdą treść budowaną
    warunkowo albo sklejaną w locie. */
 const { zbudujInstrukcje } = require(path.join(KORZEN, 'lib', 'instrukcje-narzedzi.js'));
 const bloki = zbudujInstrukcje({
-  // Wszystko włączone — chcemy zobaczyć KOMPLET instrukcji, nie wycinek.
+  // Wszystko włączone – chcemy zobaczyć KOMPLET instrukcji, nie wycinek.
   payload: {},
   krotko: false,
   bezNarzedzi: false,
@@ -122,19 +122,19 @@ const bloki = zbudujInstrukcje({
 const doModelu = bloki.map((b) => b.content).join('\n');
 console.log(`   złożono ${bloki.length} bloków instrukcji, ${doModelu.length} znaków`);
 if (bloki.length < 6) {
-  fail.push(`złożyło się tylko ${bloki.length} bloków instrukcji — przy wszystkim `
+  fail.push(`złożyło się tylko ${bloki.length} bloków instrukcji – przy wszystkim `
     + 'włączonym powinno być co najmniej sześć; zestaw mierzy wycinek zamiast całości');
 }
 
 const ZAKAZANE = [
-  [/Microsoft Graph/, 'nazwa cudzej firmy — model recytował ją użytkownikowi'],
-  [/Dociągnij dane z plików/, 'nazwa przycisku w panelu — model odsyłał do niej w odpowiedzi'],
+  [/Microsoft Graph/, 'nazwa cudzej firmy – model recytował ją użytkownikowi'],
+  [/Dociągnij dane z plików/, 'nazwa przycisku w panelu – model odsyłał do niej w odpowiedzi'],
   [/Plenerze →/, 'ścieżka po interfejsie w instrukcji dla modelu'],
-  [/pokaż kolejne/, 'nazwa przycisku — model tłumaczył użytkownikowi, jak przewijać wyniki'],
+  [/pokaż kolejne/, 'nazwa przycisku – model tłumaczył użytkownikowi, jak przewijać wyniki'],
 ];
 for (const [wzor, opis] of ZAKAZANE) {
   const jest = wzor.test(doModelu);
-  console.log(`2. ${jest ? 'ŹLE' : 'ok '} — ${opis}`);
+  console.log(`2. ${jest ? 'ŹLE' : 'ok '} – ${opis}`);
   if (jest) {
     fail.push(`instrukcja dla modelu zawiera „${wzor.source}": ${opis}. `
       + 'Opisz ZACHOWANIE, nie podawaj gotowego zwrotu.');
@@ -145,7 +145,7 @@ for (const [wzor, opis] of ZAKAZANE) {
    Nagłówek doklejany do wyniku archiwum trafia do modelu tą samą drogą
    i pierwsza wersja zawierała dokładnie ten sam błąd.
 
-   Nie czytamy już `public/app.js` tekstem — budujemy nagłówek naprawdę,
+   Nie czytamy już `public/app.js` tekstem – budujemy nagłówek naprawdę,
    podając wynik wyszukiwania większy niż próbka. Dzięki temu sprawdzenie
    przetrwa przeprowadzkę funkcji i, co ważniejsze, mierzy to, co model
    RZECZYWIŚCIE dostanie, a nie to, co jest wpisane w pliku. */
@@ -163,14 +163,14 @@ if (!maRegule) {
   fail.push('brak nagłówka wyjaśniającego modelowi, że limit dotyczy jego, nie użytkownika');
 }
 if (/pokaż kolejne/.test(naglowek)) {
-  fail.push('nagłówek wyniku archiwum podaje modelowi nazwę przycisku — '
+  fail.push('nagłówek wyniku archiwum podaje modelowi nazwę przycisku – '
     + 'a on ją potem powtarza użytkownikowi');
 }
 // Liczba do podania człowiekowi ma być PEŁNA, nie rozmiarem próbki.
 if (!naglowek.includes('311')) {
   fail.push('nagłówek nie podaje modelowi pełnej liczby znalezionych plików');
 }
-/* A gdy wynik mieści się w całości, żadnego nagłówka być nie może — inaczej
+/* A gdy wynik mieści się w całości, żadnego nagłówka być nie może – inaczej
    model tłumaczyłby się z limitu, którego nie ma. */
 {
   const maly = utworzProtokol().naKontekst({
@@ -186,7 +186,7 @@ if (!naglowek.includes('311')) {
    Nie jako sztywny limit, tylko jako czujnik: ta sekcja rosła przy każdej
    naprawie i to jej rozrost wyprodukował wycieki. Gdy znów zacznie puchnąć,
    niech ktoś na to spojrzy, zamiast dowiedzieć się z zapisu rozmowy.
-   Mierzymy ZŁOŻONY blok, a nie kawałek pliku — bo do modelu jedzie ten
+   Mierzymy ZŁOŻONY blok, a nie kawałek pliku – bo do modelu jedzie ten
    pierwszy i tylko jego rozmiar cokolwiek znaczy. */
 const blokArchiwum = bloki.find((b) => /ARCHIWUM MATERIAŁU/.test(b.content));
 const rozmiar = blokArchiwum ? blokArchiwum.content.length : 0;
@@ -195,7 +195,7 @@ console.log(`4. instrukcja archiwum: ${rozmiar} znaków (sufit ostrzegawczy ${SU
 if (rozmiar > SUFIT) {
   fail.push(`instrukcja archiwum urosła do ${rozmiar} znaków. Nie jest to samo w sobie `
     + 'usterką, ale każdy poprzedni przyrost skończył się cytowaniem jej użytkownikowi '
-    + '— przejrzyj, co da się zamienić na zachowanie zamiast na kolejny akapit.');
+    + '– przejrzyj, co da się zamienić na zachowanie zamiast na kolejny akapit.');
 }
 
 console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nREJESTR ODPOWIEDZI OK');

@@ -2,14 +2,14 @@
 # Sprawdza po kolei każdy model z listy dostawcy i wypisuje tabelę:
 # które naprawdę działają na Twoim koncie i które czytają obrazy.
 #
-# To samo robi przycisk „Sprawdź wszystkie z listy" w Ustawieniach — ta wersja
+# To samo robi przycisk „Sprawdź wszystkie z listy" w Ustawieniach – ta wersja
 # przydaje się wtedy, gdy wynik trzeba komuś wysłać albo zapisać do pliku.
 #
 #   ./scripts/sprawdz-modele.sh                 # chmura, serwer lokalny
 #   ./scripts/sprawdz-modele.sh local           # silnik lokalny (Ollama)
 #   ./scripts/sprawdz-modele.sh cloud > wynik.txt
 #
-# Hasło bierzemy z .env — dzięki temu nie trafia do historii poleceń.
+# Hasło bierzemy z .env – dzięki temu nie trafia do historii poleceń.
 # (Wpisane ręcznie w wierszu poleceń zostawiłoby ślad w ~/.bash_history,
 #  a hasło z wykrzyknikiem dodatkowo rozbija się o rozwijanie historii basha.)
 
@@ -25,7 +25,7 @@ command -v curl >/dev/null || { echo "Brak curl."; exit 1; }
 
 # --- logowanie (tylko jeśli serwer go wymaga) ---
 AUTH="$(curl -s --max-time 10 "$BASE/api/auth")" || {
-  echo "Nie mogę się połączyć z $BASE — czy Cosmos działa? (systemctl status cosmos)"; exit 1; }
+  echo "Nie mogę się połączyć z $BASE – czy Cosmos działa? (systemctl status cosmos)"; exit 1; }
 
 if [[ "$AUTH" == *'"required":true'* ]]; then
   PASS=""
@@ -54,8 +54,8 @@ if [[ "$N" -eq 0 ]]; then
   exit 1
 fi
 
-echo "Silnik: $EP — modeli na liście: $N"
-echo "Sprawdzam po kolei (nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań)."
+echo "Silnik: $EP – modeli na liście: $N"
+echo "Sprawdzam po kolei (nie równolegle – inaczej dostawca odrzuci nas za nadmiar żądań)."
 echo
 
 OK=0; VIS=0; BAD=0; I=0
@@ -78,7 +78,7 @@ while IFS= read -r M; do
   else
     BAD=$((BAD + 1))
     POWOD="$(printf '%s' "$R" | grep -o '"blad":"[^"]*"' | cut -d'"' -f4 | head -c 120)"
-    NIEDZIALA+=("$M — ${POWOD:-brak odpowiedzi}")
+    NIEDZIALA+=("$M – ${POWOD:-brak odpowiedzi}")
   fi
 done <<< "$MODELS"
 

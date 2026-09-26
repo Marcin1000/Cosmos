@@ -14,10 +14,10 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   // wstaw rozmowę z obrazem (jak po wygenerowaniu grafiki)
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC';
   await page.evaluate((png) => {
-    // przez wewnętrzne funkcje aplikacji — układ w localStorage jest jej sprawą
+    // przez wewnętrzne funkcje aplikacji – układ w localStorage jest jej sprawą
     activeId = 'test-img';
     activeConversation = { id: 'test-img', title: 'Grafika', messages: [
-      { role: 'assistant', content: { text: 'Gotowe — obraz zapisany.', images: [png] } }] };
+      { role: 'assistant', content: { text: 'Gotowe – obraz zapisany.', images: [png] } }] };
     renderMessages();
   }, PNG);
   await page.waitForTimeout(600);

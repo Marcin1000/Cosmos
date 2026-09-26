@@ -1,10 +1,10 @@
 /* Strona produktowa pod „/" i aplikacja pod „/app".
  *
  * Co musi być prawdą, żeby strona była wizytówką, a nie przeszkodą:
- *   1. „/" to strona, „/app" to Cosmos — i nic z aplikacji nie zgubiło się
+ *   1. „/" to strona, „/app" to Cosmos – i nic z aplikacji nie zgubiło się
  *      przy przeprowadzce (pliki ładowane ścieżkami bezwzględnymi).
  *   2. Stary link z zaproszeniem (/#zaproszenie=…) dalej otwiera formularz
- *      dołączenia — żaden wysłany link nie może przestać działać.
+ *      dołączenia – żaden wysłany link nie może przestać działać.
  *   3. Przełącznik PL/EN podmienia KAŻDY tekst. Brak angielskiego wpisu
  *      oznaczałby polskie zdanie w angielskiej wersji, a to wygląda gorzej niż
  *      literówka.
@@ -14,16 +14,16 @@
  *   7. Przełącznik silników w rozmowie pokazowej naprawdę przełącza.
  *   8. Zero błędów w konsoli.
  *   9. Układ nie skacze (CLS < 0,1), nawet gdy strona.js dochodzi 400 ms po
- *      stylach — tak jest w prawdziwej sieci, a lokalnie wyścig tego nie łapie.
+ *      stylach – tak jest w prawdziwej sieci, a lokalnie wyścig tego nie łapie.
  *  10. Bez JavaScriptu treść jest widoczna (czytniki, podgląd linku, NoScript).
  *  11. Angielski ma własny adres (/?lang=en), a „/” bez zapisanego wyboru
- *      zostaje po polsku także w angielskiej przeglądarce — inaczej robot
+ *      zostaje po polsku także w angielskiej przeglądarce – inaczej robot
  *      en-US indeksuje angielski tekst pod polskim adresem. „Open Cosmos”
  *      z angielskiej strony otwiera aplikację po angielsku.
  *  12. Opisy dla czytnika i meta description też są tłumaczone.
  *  13. Skok do sekcji (link w menu, adres z #sekcją) trafia w jej początek.
  *      Sekcje poza ekranem nie liczą się przy starcie (content-visibility),
- *      więc ich wysokość jest do pierwszego narysowania szacowana — i skok
+ *      więc ich wysokość jest do pierwszego narysowania szacowana – i skok
  *      „w ciemno" lądował o setki pikseli obok. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
@@ -63,7 +63,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   // --- 2. stary link z zaproszeniem -----------------------------------------
   {
     /* Zmyślony token: serwer słusznie odpowie 410, a aplikacja zapisze to
-       w konsoli — tu liczy się tylko, dokąd prowadzi link. */
+       w konsoli – tu liczy się tylko, dokąd prowadzi link. */
     const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } }, false);
     const token = 'x'.repeat(32);
     await p.goto(`${env.adres}/#zaproszenie=${token}`, { waitUntil: 'load' });
@@ -90,18 +90,18 @@ const { srodowisko, przegladarka } = require('../pomoc');
     await p.click('[data-jezyk="en"]');
     await p.waitForFunction(() => document.documentElement.lang === 'en');
     const angielskie = await p.evaluate(() => [...document.querySelectorAll('[data-t]')].map((el) => [el.dataset.t, el.textContent.trim()]));
-    /* Słowa, które w obu językach brzmią tak samo — i tylko one. */
+    /* Słowa, które w obu językach brzmią tak samo – i tylko one. */
     const TAKIE_SAME = new Set(['pm.w2']);   // „Routing"
     const bezTlumaczenia = polskie.filter(([k, tekst], i) => tekst && !TAKIE_SAME.has(k) && angielskie[i][1] === tekst).map(([k]) => k);
-    ok(bezTlumaczenia.length === 0, `każdy tekst ma angielską wersję${bezTlumaczenia.length ? ' — brak: ' + [...new Set(bezTlumaczenia)].join(', ') : ''}`);
+    ok(bezTlumaczenia.length === 0, `każdy tekst ma angielską wersję${bezTlumaczenia.length ? ' – brak: ' + [...new Set(bezTlumaczenia)].join(', ') : ''}`);
     ok(/One thread/.test(await p.textContent('.hero-h')), 'nagłówek po angielsku');
     ok(/one thread/i.test(await p.title()), 'tytuł karty po angielsku');
     const opisyEn = await zbierzOpisy();
     const ariaBez = opisyPl.aria.filter(([, pl], i) => !pl || pl === opisyEn.aria[i][1]).map(([k]) => k);
-    ok(opisyPl.aria.length > 0 && ariaBez.length === 0, `opisy dla czytnika (aria-label) tłumaczone${ariaBez.length ? ' — brak: ' + ariaBez.join(', ') : ''}`);
+    ok(opisyPl.aria.length > 0 && ariaBez.length === 0, `opisy dla czytnika (aria-label) tłumaczone${ariaBez.length ? ' – brak: ' + ariaBez.join(', ') : ''}`);
     ok(opisyEn.opis && opisyEn.opis !== opisyPl.opis, 'meta description zmienia się na angielski');
 
-    /* Adres „/” bez ?lang — język musi przyjść z zapisanego wyboru. */
+    /* Adres „/” bez ?lang – język musi przyjść z zapisanego wyboru. */
     await p.goto(env.adres + '/', { waitUntil: 'load' });
     await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));
     ok(await p.evaluate(() => document.documentElement.lang) === 'en', 'angielski przeżywa przeładowanie');
@@ -158,7 +158,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
       new PerformanceObserver((l) => l.getEntries().forEach((e) => { if (!e.hadRecentInput) window.__cls += e.value; }))
         .observe({ type: 'layout-shift', buffered: true });
     });
-    /* Style i HTML od razu, skrypt 400 ms później — pierwsze malowanie
+    /* Style i HTML od razu, skrypt 400 ms później – pierwsze malowanie
        następuje bez niego, więc wszystko, co skrypt dobudowuje, widać jako skok. */
     await p.route('**/strona/strona.js', async (r) => { await new Promise((z) => setTimeout(z, 400)); await r.continue(); });
     await p.goto(env.adres + adres, { waitUntil: 'load' });
@@ -228,7 +228,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   {
     /* …ale „Open Cosmos" kliknięte na angielskiej stronie to już wybór:
        aplikacja ma przywitać po angielsku kogoś, kto przed chwilą czytał po
-       angielsku. Konsoli tu nie śledzimy — to już aplikacja, nie strona. */
+       angielsku. Konsoli tu nie śledzimy – to już aplikacja, nie strona. */
     const { ctx, p } = await nowaStrona({ viewport: { width: 1280, height: 800 } }, false);
     await p.goto(env.adres + '/?lang=en', { waitUntil: 'load' });
     await p.waitForFunction(() => !document.documentElement.classList.contains('czeka-na-jezyk'));

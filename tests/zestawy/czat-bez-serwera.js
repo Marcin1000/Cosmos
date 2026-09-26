@@ -1,4 +1,4 @@
-/* Czat bez serwera — kroki lib/czat.js wołane wprost.
+/* Czat bez serwera – kroki lib/czat.js wołane wprost.
 
    Do rundy 4 cały czat był jedną funkcją w server.js i sprawdzić go dało się
    tylko przez HTTP, z atrapą modelu i przeglądarką. Teraz kroki są osobne,
@@ -9,23 +9,23 @@
         od najstarszej tury, mieści się w oknie i nie zmienia tablicy
         wejściowej; za duże wyniki skraca w środku, z dopiskiem dla modelu.
      2. Błąd dostawcy PO odpowiedzi 200 jest rozpoznawany we wszystkich
-        znanych kształtach, a zwykły kawałek odpowiedzi — nie.
+        znanych kształtach, a zwykły kawałek odpowiedzi – nie.
      3. „Myślą po cichu" (dłuższy limit ciszy) tylko modele, które naprawdę
         nie przysyłają rozumowania: Claude, gpt-5+, o*.
-     4. Okno Ollamy bez ustawienia to 4096, vLLM — bez budżetu, LOCAL_NUM_CTX wygrywa.
+     4. Okno Ollamy bez ustawienia to 4096, vLLM – bez budżetu, LOCAL_NUM_CTX wygrywa.
      5. Składanie kontekstu: własna instrukcja systemowa zostaje pierwsza,
         dodatki idą zaraz za nią; czas i miejsce, profil; obraz zaznaczony
-        w bazie wiedzy trafia do OSTATNIEJ wiadomości człowieka, za duży —
+        w bazie wiedzy trafia do OSTATNIEJ wiadomości człowieka, za duży –
         model dostaje o tym zdanie; tryb głosowy jest ostatnim dodatkiem;
         wyłączona pamięć nie jest w ogóle pytana.
      6. „Ponów" pod błędem, który przyszedł po fragmencie odpowiedzi, powtarza
-        całą turę od pytania — fragment nie zostaje ostatnią wiadomością
+        całą turę od pytania – fragment nie zostaje ostatnią wiadomością
         (Claude odrzuca to jako „prefill"); zwykłe „Regeneruj" bez zmian. */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-// Dane serwera w katalogu tymczasowym — moduły czytają COSMOS_DATA_DIR przy wczytaniu.
+// Dane serwera w katalogu tymczasowym – moduły czytają COSMOS_DATA_DIR przy wczytaniu.
 process.env.COSMOS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-czat-'));
 delete process.env.LOCAL_NUM_CTX;
 
@@ -89,7 +89,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   const wyniki = duze.wiadomosci[duze.wiadomosci.length - 1].content;
   const suma = duze.wiadomosci.reduce((a, m) => a + czat.szacujTokeny(m.content), 0);
   ok(duze.skrocono && /skrócone do okna modelu/.test(wyniki), 'za duże wyniki są skrócone i model o tym wie');
-  ok(/^WYNIKI WYSZUKIWANIA/.test(wyniki) && /KONIEC WYNIKÓW$/.test(wyniki), 'skrócenie w środku — początek i koniec zostają');
+  ok(/^WYNIKI WYSZUKIWANIA/.test(wyniki) && /KONIEC WYNIKÓW$/.test(wyniki), 'skrócenie w środku – początek i koniec zostają');
   ok(duze.wiadomosci.some((m) => m.content === 'Jaka jest dziś pogoda w Warszawie?'), 'pytanie zostaje także przy skracaniu');
   ok(suma + 1024 <= 4096, `po skróceniu mieści się w oknie (${suma} tokenów + miejsce na odpowiedź)`);
 
@@ -115,8 +115,8 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
 {
   const c = (m, ep = {}) => czat.cichoMysli(ep, m);
   ok(c('claude-sonnet-5') && c('gpt-5-mini') && c('openai/gpt-5') && c('o3') && c('x', { anthropic: true }),
-    'Claude, gpt-5+, o* i warstwa Anthropic — dłuższy limit do pierwszej treści');
-  ok(!c('gpt-4o-mini') && !c('nvidia/nemotron-3-super') && !c('qwen3:8b'), 'modele przysyłające rozumowanie (albo szybkie) — zwykły limit');
+    'Claude, gpt-5+, o* i warstwa Anthropic – dłuższy limit do pierwszej treści');
+  ok(!c('gpt-4o-mini') && !c('nvidia/nemotron-3-super') && !c('qwen3:8b'), 'modele przysyłające rozumowanie (albo szybkie) – zwykły limit');
 }
 
 // --- 4. okno modelu lokalnego ------------------------------------------------------------
@@ -193,7 +193,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   ok(obrazy.length === 1 && obrazy[0].image_url.url === `data:image/jpeg;base64,${Buffer.from('JPEG').toString('base64')}`,
     'zaznaczony obraz trafia do OSTATNIEJ wiadomości człowieka');
   ok(typeof messages[1 + dodatki.length].content === 'string', 'wcześniejsze wiadomości człowieka bez obrazów');
-  ok(/wielkie\.jpg/.test(tekst) && /za duże/.test(tekst), 'za duży obraz — model dostaje zdanie z nazwą pliku');
+  ok(/wielkie\.jpg/.test(tekst) && /za duże/.test(tekst), 'za duży obraz – model dostaje zdanie z nazwą pliku');
   ok(/^TRYB GŁOSOWY/.test(dodatki[dodatki.length - 1].content), 'tryb głosowy jest ostatnim dodatkiem');
   ok(pytanoPamiec === 0, 'wyłączona pamięć nie jest w ogóle pytana');
 
@@ -210,7 +210,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   ok(kaskada.messages[kaskada.chronOd].content === 'PYTANIE', 'granica tury po doklejeniu instrukcji wskazuje pytanie');
   const bezGranicy = await wKontekscie(osoba, () => c.zlozKontekst({ endpoint: 'cloud', useMemory: false, turaOd: 99,
     messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' }] }, ep));
-  ok(bezGranicy.chronOd === bezGranicy.messages.length - 1, 'granica spoza tablicy — chroniona ostatnia wiadomość');
+  ok(bezGranicy.chronOd === bezGranicy.messages.length - 1, 'granica spoza tablicy – chroniona ostatnia wiadomość');
 
   const bezMiejsca = await wKontekscie(osoba, () => { stan.location = ''; return c.zlozKontekst({ endpoint: 'cloud', messages: [{ role: 'user', content: 'hej' }] }, ep); });
   const t2 = bezMiejsca.messages.map((m) => m.content).join('\n');

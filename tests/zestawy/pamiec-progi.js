@@ -2,7 +2,7 @@
  *
  * Tak jest po każdej zmianie dostawcy embeddingów (zmysły padły, „auto"
  * przeszło na chmurę). Wpis dostaje wtedy wynik ze słów kluczowych, a ten
- * był mierzony progiem wektorowym 0,35 — „jaki mam aparat" dawało 0,29
+ * był mierzony progiem wektorowym 0,35 – „jaki mam aparat" dawało 0,29
  * i pamięć milczała. Próg ma zależeć od tego, jak policzono wynik. */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -18,7 +18,7 @@ const zmysly = http.createServer((req, res) => {
   req.on('data', (c) => { b += c; }).on('end', () => {
     const n = (JSON.parse(b || '{}').texts || ['x']).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    // 64 wymiary — krótsze wektory Cosmos słusznie odrzuca jako śmieci (lib/pamiec.js, wektoryWPorzadku).
+    // 64 wymiary – krótsze wektory Cosmos słusznie odrzuca jako śmieci (lib/pamiec.js, wektoryWPorzadku).
     res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => wektor64([0.3, 0.1, 0.9])), model: 'nowy-model' }));
   });
 });
@@ -37,7 +37,7 @@ const zmysly = http.createServer((req, res) => {
   ok(wynik.some((m) => m.id === 'a'), `wpis z innym modelem wektorów przywołany słowami kluczowymi (${wynik.map((m) => m.id).join(',') || 'nic'})`);
   ok(!wynik.some((m) => m.id === 'b'), 'niepasujący wpis dalej pominięty');
   /* Embeddingi z chmury NVIDIA (zmysły śpią). Przez brakujący import
-     `authHeaders` żądanie nie wychodziło NIGDY, a błąd połykał `catch` —
+     `authHeaders` żądanie nie wychodziło NIGDY, a błąd połykał `catch` –
      status mówił „chmura NVIDIA", a pamięć działała tylko na słowach. */
   const zadaniaNv = [];
   const nvidia = require('node:http').createServer((req, res) => {
@@ -59,7 +59,7 @@ const zmysly = http.createServer((req, res) => {
   nvidia.close();
 
   /* Śmieci z usługi (wektory 3-wymiarowe, niepełny komplet) nie mogą trafić
-     do pamięci ani bazy wiedzy — potem „pasowały" do każdego pytania. */
+     do pamięci ani bazy wiedzy – potem „pasowały" do każdego pytania. */
   const smieci = require('node:http').createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ vectors: [[0.3, 0.1, 0.9]] }));

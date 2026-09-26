@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Cosmos FlightPlan — parametry lotu dronem pod fotogrametrię.
+Cosmos FlightPlan – parametry lotu dronem pod fotogrametrię.
 
 Odpowiada na pytania, które zadajesz PRZED każdym przelotem:
   • Na jakiej wysokości lecieć, żeby uzyskać zadaną dokładność?
   • Ile zdjęć zrobię i czy starczy baterii?
   • Jakie pokrycie ustawić dla terenu, a jakie dla elewacji?
 
-Wszystko liczone z optyki — deterministycznie, bez zgadywania:
+Wszystko liczone z optyki – deterministycznie, bez zgadywania:
     GSD = (szerokość matrycy × wysokość × 100) / (ogniskowa × szerokość zdjęcia w px)
 
-  plan     — parametry jednego lotu (wysokość → GSD, liczba zdjęć, czas)
-  matrix   — macierz eksperymentu: wysokość × pokrycie (do badania jakości modelu)
-  target   — odwrotnie: mam wymaganą dokładność, na jakiej wysokości lecieć?
+  plan     – parametry jednego lotu (wysokość → GSD, liczba zdjęć, czas)
+  matrix   – macierz eksperymentu: wysokość × pokrycie (do badania jakości modelu)
+  target   – odwrotnie: mam wymaganą dokładność, na jakiej wysokości lecieć?
 
 Zależności: brak (czysta matematyka). Uruchom `--selftest`, by sprawdzić liczby.
 """
@@ -27,7 +27,7 @@ CAMERAS = {
     "mavic3": {"nazwa": "DJI Mavic 3 (Hasselblad 4/3)", "sensor_mm": 17.3,
                "focal_mm": 12.29, "px_w": 5280, "px_h": 3956, "speed_ms": 8.0,
                "battery_min": 46},
-    "mavic3-tele": {"nazwa": "DJI Mavic 3 — teleobiektyw", "sensor_mm": 6.4,
+    "mavic3-tele": {"nazwa": "DJI Mavic 3 – teleobiektyw", "sensor_mm": 6.4,
                     "focal_mm": 24.0, "px_w": 4000, "px_h": 3000, "speed_ms": 6.0,
                     "battery_min": 46},
     "r6ii": {"nazwa": "Canon R6 II (pełna klatka, 24 mm)", "sensor_mm": 36.0,
@@ -37,10 +37,10 @@ CAMERAS = {
 
 # Zalecane pokrycia dla różnych celów (przód, bok)
 PRESETS = {
-    "teren": (0.80, 0.70, "mapowanie terenu — siatka, aparat w dół"),
-    "obiekt": (0.85, 0.80, "pojedynczy obiekt — orbita, aparat pod kątem"),
-    "elewacja": (0.90, 0.80, "ściana/elewacja — lot pionowy, aparat poziomo"),
-    "szybki": (0.70, 0.60, "szybki przegląd — mniej zdjęć, gorszy model"),
+    "teren": (0.80, 0.70, "mapowanie terenu – siatka, aparat w dół"),
+    "obiekt": (0.85, 0.80, "pojedynczy obiekt – orbita, aparat pod kątem"),
+    "elewacja": (0.90, 0.80, "ściana/elewacja – lot pionowy, aparat poziomo"),
+    "szybki": (0.70, 0.60, "szybki przegląd – mniej zdjęć, gorszy model"),
 }
 
 
@@ -90,7 +90,7 @@ def cmd_plan(args) -> None:
         side = args.side
     p = plan(cam, args.altitude, args.width, args.length, front, side)
 
-    print(f"\n✦ Cosmos FlightPlan — {cam['nazwa']}")
+    print(f"\n✦ Cosmos FlightPlan – {cam['nazwa']}")
     print(f"  Cel: {opis}")
     print(f"  Teren: {args.width} × {args.length} m, wysokość lotu {args.altitude} m")
     print(f"\n  Rozdzielczość (GSD):   {p['gsd_cm']} cm/px")
@@ -106,14 +106,14 @@ def cmd_plan(args) -> None:
     if p["baterii"] > 1:
         print(f"  ⚠ Potrzebujesz {math.ceil(p['baterii'])} baterii albo mniejszego pokrycia.")
     if p["zdjec"] > 800:
-        print(f"  ⚠ {p['zdjec']} zdjęć to długa rekonstrukcja — rozważ wyższy lot.")
+        print(f"  ⚠ {p['zdjec']} zdjęć to długa rekonstrukcja – rozważ wyższy lot.")
     print(f"\n  Po locie:  python senses/photoscan.py <folder> --dense")
 
 
 def cmd_target(args) -> None:
     cam = CAMERAS[args.camera]
     alt = altitude_for_gsd(cam, args.gsd)
-    print(f"\n✦ Cosmos FlightPlan — wysokość dla zadanej dokładności")
+    print(f"\n✦ Cosmos FlightPlan – wysokość dla zadanej dokładności")
     print(f"  Aparat: {cam['nazwa']}")
     print(f"  Chcesz {args.gsd} cm/px  →  leć na wysokości {alt:.1f} m")
     for g in (0.5, 1.0, 2.0, 3.0, 5.0):
@@ -123,9 +123,9 @@ def cmd_target(args) -> None:
 
 
 def cmd_matrix(args) -> None:
-    """Macierz eksperymentu — do badania „ile zdjęć naprawdę potrzeba"."""
+    """Macierz eksperymentu – do badania „ile zdjęć naprawdę potrzeba"."""
     cam = CAMERAS[args.camera]
-    print(f"\n✦ Cosmos FlightPlan — macierz eksperymentu ({cam['nazwa']})")
+    print(f"\n✦ Cosmos FlightPlan – macierz eksperymentu ({cam['nazwa']})")
     print(f"  Teren {args.width} × {args.length} m\n")
     alts = [float(a) for a in args.altitudes.split(",")]
     fronts = [float(o) for o in args.overlaps.split(",")]
@@ -142,11 +142,11 @@ def cmd_matrix(args) -> None:
 
 
 def cmd_selftest() -> None:
-    print("\n✦ Cosmos FlightPlan — samotest\n")
+    print("\n✦ Cosmos FlightPlan – samotest\n")
     ok = True
     cam = CAMERAS["mavic3"]
 
-    # 1) GSD Mavica 3 z 50 m — wartość znana z dokumentacji (~1,33 cm/px)
+    # 1) GSD Mavica 3 z 50 m – wartość znana z dokumentacji (~1,33 cm/px)
     g = gsd_cm(cam, 50)
     print(f"  1. GSD Mavic 3 @ 50 m: {g:.3f} cm/px (oczekiwane ~1,33)")
     ok &= abs(g - 1.333) < 0.02

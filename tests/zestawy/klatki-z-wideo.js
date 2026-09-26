@@ -1,7 +1,7 @@
 /* Klip wrzucony do rozmowy → klatki kluczowe wycięte W PRZEGLĄDARCE.
 
    Pomysł z claude-video: model nie czyta wideo, model czyta klatki. Wysyłanie
-   klipu na serwer odpada z arytmetyki — minuta z R6 II to 300-500 MB, a te same
+   klipu na serwer odpada z arytmetyki – minuta z R6 II to 300-500 MB, a te same
    klatki `<video>` + `<canvas>` wyjmują na miejscu, dekoderem sprzętowym, który
    i tak siedzi w każdym urządzeniu.
 
@@ -17,7 +17,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 (async () => {
   if (!maPrzegladarke()) {
-    console.log('Brak Chromium — pomijam.');
+    console.log('Brak Chromium – pomijam.');
     process.exit(0);
   }
   const env = await srodowisko('goly');
@@ -29,7 +29,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await p.waitForTimeout(500);
 
   /* Klip testowy: 2 sekundy, kolor zmieniający się w czasie. Dzięki temu
-     z samych klatek widać, CZY zostały wzięte z różnych momentów — cztery
+     z samych klatek widać, CZY zostały wzięte z różnych momentów – cztery
      identyczne obrazy przeszłyby każdy test na „liczbę klatek". */
   const wynik = await p.evaluate(async () => {
     const canvas = document.createElement('canvas');
@@ -48,7 +48,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       const rysuj = () => {
         const t = (performance.now() - start) / 2000;
         if (t >= 1) return ok();
-        // Od czerni do bieli — jasność klatki mówi, z którego momentu pochodzi.
+        // Od czerni do bieli – jasność klatki mówi, z którego momentu pochodzi.
         const j = Math.round(t * 255);
         ctx.fillStyle = `rgb(${j},${j},${j})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -70,7 +70,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       blad = e.message;
     }
 
-    // Jasność każdej klatki — czy naprawdę pochodzą z różnych momentów.
+    // Jasność każdej klatki – czy naprawdę pochodzą z różnych momentów.
     const jasnosci = [];
     for (const src of pendingImages.slice(przed)) {
       const img = new Image();
@@ -101,7 +101,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
     + `${wynik.blad ? ` (błąd: ${wynik.blad})` : ''}`);
   if (wynik.blad) fail.push(`wczytywanie wideo rzuciło wyjątkiem: ${wynik.blad}`);
   if (wynik.klatek !== 4) {
-    fail.push(`z klipu wyszły ${wynik.klatek} klatki zamiast 4 — najpewniej `
+    fail.push(`z klipu wyszły ${wynik.klatek} klatki zamiast 4 – najpewniej `
       + 'nie udało się poznać długości pliku bez nagłówka');
   }
 
@@ -112,13 +112,13 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (!rosnie) fail.push('klatki nie są w kolejności czasu');
   if (rozpietosc < 40) {
     fail.push(`wszystkie klatki wyglądają tak samo (rozpiętość ${rozpietosc}) `
-      + '— przewijanie nie zadziałało i to jest cztery razy ta sama klatka');
+      + '– przewijanie nie zadziałało i to jest cztery razy ta sama klatka');
   }
 
   console.log(`3. notatka: „${String(wynik.notatka).slice(0, 90)}…"`);
   if (wynik.trwaWczytywanie) fail.push('załącznik został w stanie „wczytuję"');
   if (!wynik.notatka) {
-    fail.push('brak notatki — model dostanie cztery luźne zdjęcia zamiast jednego ujęcia');
+    fail.push('brak notatki – model dostanie cztery luźne zdjęcia zamiast jednego ujęcia');
   } else {
     if (!/proba\.webm/.test(wynik.notatka)) fail.push('notatka nie mówi, z jakiego pliku są klatki');
     if (!/JEDNEGO KLIPU|ONE CLIP/.test(wynik.notatka)) {

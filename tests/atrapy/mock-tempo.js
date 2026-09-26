@@ -1,4 +1,4 @@
-// Atrapa modeli o różnej płynności — do sprawdzenia skryptu scripts/plynnosc.js.
+// Atrapa modeli o różnej płynności – do sprawdzenia skryptu scripts/plynnosc.js.
 // Każdy model ma inny czas do pierwszego znaku i inne tempo pisania.
 const http = require('http');
 
@@ -14,9 +14,9 @@ const MODELE = {
   // Rozumujący: cały budżet w myślenie, treści zero. Dawniej: „pusta odpowiedź".
   'rozumujacy/samo-myslenie': { pierwszy: 400, naZnak: 10, tylkoMyslenie: true },
   // Myśli długo, POTEM odpowiada. „Pierwszy znak" po 0,3 s wygląda na
-  // błyskawiczną odpowiedź, a to dopiero „…myślę" — treść przychodzi po 3 s.
+  // błyskawiczną odpowiedź, a to dopiero „…myślę" – treść przychodzi po 3 s.
   'rozumujacy/mysli-potem-mowi': { pierwszy: 300, naZnak: 8, myslenieMs: 3000 },
-  // Rusza wcześnie, kończy późno — i odwrotnie. Ranking liczony po pierwszym
+  // Rusza wcześnie, kończy późno – i odwrotnie. Ranking liczony po pierwszym
   // znaku stawiał „zwlekacza" nad „sprinterem", choć czekało się na niego
   // siedem razy dłużej.
   'zwlekacz/szybki-start-wolny-koniec': { pierwszy: 250, naZnak: 300 },
@@ -46,7 +46,7 @@ http.createServer((req, res) => {
       licznik[id] = (licznik[id] || 0) + 1;
       if (licznik[id] % cfg.padaCo === 0) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: { message: 'Przeciążenie — spróbuj później.' } }));
+        return res.end(JSON.stringify({ error: { message: 'Przeciążenie – spróbuj później.' } }));
       }
     }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });

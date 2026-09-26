@@ -1,5 +1,5 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
-// Escape ma zamykać każdą nakładkę, a przy dwóch otwartych — tylko wierzchnią
+// Escape ma zamykać każdą nakładkę, a przy dwóch otwartych – tylko wierzchnią
 
 const CASES = [
   { name: 'ustawienia',  open: '#settings-btn', id: 'settings-modal' },
@@ -34,7 +34,7 @@ const shown = (page, id) => page.evaluate((i) => document.getElementById(i).styl
     if (stillOpen) { fail.push(c.name); await page.click(`#${c.id.replace('-modal', '')}-close`).catch(() => {}); await page.waitForTimeout(200); }
   }
 
-  // dwie warstwy: kamera nad czatem — Escape zdejmuje tylko kamerę
+  // dwie warstwy: kamera nad czatem – Escape zdejmuje tylko kamerę
   await page.context().grantPermissions(['camera']);
   await page.click('#settings-btn');
   await page.waitForTimeout(300);

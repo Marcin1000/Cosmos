@@ -33,14 +33,14 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await page.waitForSelector('.attachment img', { timeout: 5000 });
   console.log('Zdjęcie z kamery dodane jako załącznik: true');
 
-  // 4. wyślij ze zdjęciem — powinien odpowiedzieć model wizyjny
+  // 4. wyślij ze zdjęciem – powinien odpowiedzieć model wizyjny
   await page.fill('#input', 'Co widzisz przez kamerę?');
   await page.click('#send-btn');
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.msg-assistant')].some(m => /Widzę/.test(m.textContent)), null, { timeout: 15000 });
   console.log('Model wizyjny odpowiedział na zdjęcie z kamery: true');
 
-  // 5. STT przez /api/stt (symulacja: bez klikania mic — bezpośredni fetch jak zrobiłby to handler)
+  // 5. STT przez /api/stt (symulacja: bez klikania mic – bezpośredni fetch jak zrobiłby to handler)
   const stt = await page.evaluate(async () => {
     const res = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'audio/webm' }, body: new Blob([new Uint8Array(64)]) });
     return (await res.json()).text;
@@ -56,7 +56,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   });
   console.log('Przełącznik głosu aktywny:', ttsActive, '| TTS zwraca audio:', ttsOk);
 
-  // 7. zapytaj o zmiany w pokoju — kontekst percepcji
+  // 7. zapytaj o zmiany w pokoju – kontekst percepcji
   await page.fill('#input', 'Co się ostatnio zmieniło w pokoju?');
   await page.click('#send-btn');
   await page.waitForFunction(() =>

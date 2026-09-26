@@ -1,9 +1,9 @@
-/* Czcionki Cosmosa — te same w aplikacji i na stronie produktowej.
+/* Czcionki Cosmosa – te same w aplikacji i na stronie produktowej.
    Onest (tekst) i Martian Mono (kod, nazwy modeli, liczby), obie na licencji OFL,
    z własnego serwera: bez zapytań do Google i działają offline. Pliki są
    zmiennymi fontami, więc jedna para plików obsługuje wszystkie grubości. */
 
-/* latin-ext — polskie znaki */
+/* latin-ext – polskie znaki */
 @font-face {
   font-family: 'Onest';
   font-style: normal;
@@ -32,7 +32,7 @@
   descent-override: 29%;
   line-gap-override: 0%;
 }
-/* Martian Mono w wersji zwężonej (87,5%) — pełna szerokość rozpychała nazwy modeli. */
+/* Martian Mono w wersji zwężonej (87,5%) – pełna szerokość rozpychała nazwy modeli. */
 @font-face {
   font-family: 'Martian Mono';
   font-style: normal;

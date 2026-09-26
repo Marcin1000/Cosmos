@@ -8,17 +8,17 @@
      największe atrakcjejakie są największe atrakcjejakie są największe
      atrakcje najakie są największe atrakcje na Majorce
 
-   Model dostał TO — i uczciwie napisał w toku myślenia „Seems garbled due
+   Model dostał TO – i uczciwie napisał w toku myślenia „Seems garbled due
    to repetition". Odpowiedź wyszła dobra tylko dlatego, że domyślił się
    pytania. Przy dłuższym albo mniej oczywistym zdaniu nie miałby czego się
    domyślić.
 
    PRZYCZYNA NIE LEŻY W ROZPOZNAWANIU MOWY. Chrome na Androidzie nie
-   obsługuje `continuous` — kończy sesję po każdej wypowiedzi i po każdej
+   obsługuje `continuous` – kończy sesję po każdej wypowiedzi i po każdej
    ciszy. Wznowiona sesja rozpoznaje od nowa audio, które częściowo już
    słyszeliśmy, więc dostajemy coraz dłuższe wersje tego samego zdania.
    Kod robił wtedy `voiceHeard += transcript` i sklejał je wszystkie, gołym
-   plusem — stąd brak spacji między powtórzeniami.
+   plusem – stąd brak spacji między powtórzeniami.
 
    Zestaw odtwarza dokładnie tę sekwencję i wymaga, żeby na końcu stało
    jedno czyste zdanie. Sprawdza też stronę odwrotną, ważniejszą: scalanie
@@ -84,13 +84,13 @@ const zloz = (fragmenty) => fragmenty.reduce((acc, f) => M.doklej(acc, f), '');
 
 /* --- 4. CZEGO SCALANIE ZJEŚĆ NIE MOŻE ---------------------------------
    Strona odwrotna i ważniejsza. Gdyby `doklej` był zbyt gorliwy, gubiłby
-   treść — a to jest gorsze niż powtórzenie, bo niewidoczne. */
+   treść – a to jest gorsze niż powtórzenie, bo niewidoczne. */
 {
   const przypadki = [
     [['dzień dobry', 'jak leci'], 'dzień dobry jak leci', 'dwa różne zdania'],
     [['pokaż zdjęcia', 'pokaż filmy'], 'pokaż zdjęcia pokaż filmy',
       'dwa polecenia zaczynające się tak samo'],
-    [['tak', 'tak'], 'tak', 'to samo słowo dwa razy — to jest powtórzenie rozpoznania'],
+    [['tak', 'tak'], 'tak', 'to samo słowo dwa razy – to jest powtórzenie rozpoznania'],
     [['nie nie nie', 'zdecydowanie nie'], 'nie nie nie zdecydowanie nie',
       'celowe powtórzenie w środku zdania zostaje'],
     [['', 'sam początek'], 'sam początek', 'pusty początek'],
@@ -99,7 +99,7 @@ const zloz = (fragmenty) => fragmenty.reduce((acc, f) => M.doklej(acc, f), '');
   for (const [fragmenty, oczek, opis] of przypadki) {
     const got = zloz(fragmenty);
     const ok = got === oczek;
-    console.log(`4. ${ok ? 'ok ' : 'ŹLE'} — ${opis}: „${got}"`);
+    console.log(`4. ${ok ? 'ok ' : 'ŹLE'} – ${opis}: „${got}"`);
     if (!ok) fail.push(`${opis}: „${got}" zamiast „${oczek}"`);
   }
 }
@@ -123,14 +123,14 @@ const zloz = (fragmenty) => fragmenty.reduce((acc, f) => M.doklej(acc, f), '');
     ['Hej co słychać', 'co słychać'],
     /* A tego ruszyć NIE WOLNO: pytanie o kosmos, bez słowa budzącego.
        Sprzątanie sierot po wyciętej frazie działa tylko wtedy, gdy fraza
-       naprawdę w zdaniu była — inaczej zjadłoby pierwsze słowo. */
+       naprawdę w zdaniu była – inaczej zjadłoby pierwsze słowo. */
     ['Kosmos jest wielki, prawda?', 'Kosmos jest wielki, prawda?'],
     ['kosmos pokaż zdjęcia', 'kosmos pokaż zdjęcia'],
   ];
   for (const [wejscie, oczek] of przypadki) {
     const got = M.bezSlowaBudzacego(wejscie).trim();
     const ok = got.toLowerCase() === oczek.toLowerCase();
-    console.log(`5. ${ok ? 'ok ' : 'ŹLE'} — „${wejscie}" → „${got}"`);
+    console.log(`5. ${ok ? 'ok ' : 'ŹLE'} – „${wejscie}" → „${got}"`);
     if (!ok) fail.push(`słowo budzące: „${wejscie}" → „${got}" zamiast „${oczek}"`);
   }
 }

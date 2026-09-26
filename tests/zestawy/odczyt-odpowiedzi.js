@@ -48,7 +48,7 @@ const cases = [
       console.log(`  ${shows && hasStatus ? '✓' : '✗'} ${name.padEnd(28)} → ${e.message.slice(0, 78)}`);
       if (!shows || !hasStatus) fail.push(name + ' (błąd nie pokazuje treści/statusu)');
       if (/Unexpected non-whitespace|is not valid JSON/.test(e.message)) {
-        fail.push(name + ' — surowy błąd parsera nadal wycieka');
+        fail.push(name + ' – surowy błąd parsera nadal wycieka');
       }
     }
   }

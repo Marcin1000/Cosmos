@@ -9,7 +9,7 @@
         (tu: NVIDIA, OpenAI i Claude z kluczem serwera).
      2. „Pobierz listę" na OpenAI i Claude pokazuje modele od tego dostawcy.
      3. Model wybrany w Ustawieniach NAPRAWDĘ idzie w żądaniu czatu na tym
-        silniku — i tylko na nim (NVIDIA dalej dostaje swój).
+        silniku – i tylko na nim (NVIDIA dalej dostaje swój).
      4. Wybór przeżywa przeładowanie strony.
 */
 const http = require('node:http');

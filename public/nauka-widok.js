@@ -1,9 +1,9 @@
 /* ============================================================
-   NAUKA — rozpoznawanie (przez zmysły), procedury, rutyny, asystent z bramką
+   NAUKA – rozpoznawanie (przez zmysły), procedury, rutyny, asystent z bramką
 
    Panel „Nauka": wzorce do rozpoznawania z kamery, procedury nagrane
    w przeglądarce (Playwright po stronie serwera), rutyny o stałej porze
-   i runner. Tryb auto działa wyłącznie dla procedur z samych odczytów —
+   i runner. Tryb auto działa wyłącznie dla procedur z samych odczytów –
    bramkę trzyma serwer (lib/nauka.js, automation/runner.js); tu jest tylko
    widok i potwierdzenia człowieka.
 
@@ -317,7 +317,7 @@ function utworzNaukeWidok(z) {
     try {
       const s = await (await fetch('/api/procedures/record/status')).json();
       if (!s.recording && recPollTimer) {
-        // przeglądarka zamknięta ręcznie — pozwól zapisać przez „Zakończ"
+        // przeglądarka zamknięta ręcznie – pozwól zapisać przez „Zakończ"
         $('rec-status').textContent = t('rec.closed');
       }
     } catch { /* offline */ }
@@ -360,7 +360,7 @@ function utworzNaukeWidok(z) {
   });
   $('proc-run').addEventListener('click', () => {
     if (!procStepsData.length) return;
-    runProcedure({ name: $('proc-name').value.trim() || '—', steps: procStepsData });
+    runProcedure({ name: $('proc-name').value.trim() || '–', steps: procStepsData });
   });
 
   // --- Runner (asystent z bramką) ---
@@ -477,7 +477,7 @@ function utworzNaukeWidok(z) {
     fetch('/api/routines', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, pending: false }) });
   }
 
-  // pastylka licznika przy „Nauka" — liczba oczekujących rutyn
+  // pastylka licznika przy „Nauka" – liczba oczekujących rutyn
   async function updateLearnBadge() {
     try {
       const { due } = await (await fetch('/api/routines/due')).json();

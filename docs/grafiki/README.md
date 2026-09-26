@@ -13,9 +13,9 @@ NODE_PATH=/opt/node22/lib/node_modules node scripts/grafiki-marki.js   # potem g
 | Plik | Rozmiar | Gdzie |
 |---|---|---|
 | `linkedin-post-*.jpg` | 1200×627 | post z obrazem i podgląd udostępnionego linku na LinkedIn; pasuje też do Facebooka |
-| `linkedin-post-*-ciemny.jpg` | 1200×627 | to samo w ciemnym motywie — lepiej wygląda przy ciemnym LinkedIn |
+| `linkedin-post-*-ciemny.jpg` | 1200×627 | to samo w ciemnym motywie – lepiej wygląda przy ciemnym LinkedIn |
 | `linkedin-kwadrat-*.jpg` | 1080×1080 | post kwadratowy: LinkedIn, Instagram, Facebook |
-| `linkedin-pion-*.jpg` | 1080×1350 | post pionowy 4:5 — zajmuje najwięcej miejsca w strumieniu na telefonie |
+| `linkedin-pion-*.jpg` | 1080×1350 | post pionowy 4:5 – zajmuje najwięcej miejsca w strumieniu na telefonie |
 | `linkedin-baner-*.jpg` | 1584×396 | tło profilu LinkedIn (Profil → ikona ołówka na tle). Lewa trzecia część jest celowo pusta: tam wchodzi zdjęcie profilowe |
 | `x-*.jpg` | 1600×900 | post na X (Twitter); także slajd 16:9 |
 | `relacja-*.jpg` | 1080×1920 | relacja/story 9:16: Instagram, Facebook |

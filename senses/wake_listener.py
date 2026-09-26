@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Cosmos Wake Listener — lokalne słowo aktywujące „Hej, Kosmos".
+Cosmos Wake Listener – lokalne słowo aktywujące „Hej, Kosmos".
 
 Nasłuchuje mikrofonu w tle (nawet gdy przeglądarka jest zamknięta) i po
 wykryciu słowa aktywującego wysyła zdarzenie do Cosmosa. Dzięki temu
-asystent może „budzić się" bez otwartej karty — inaczej niż wbudowane
+asystent może „budzić się" bez otwartej karty – inaczej niż wbudowane
 w przeglądarkę Web Speech API, które działa tylko przy otwartym Cosmosie.
 
 Wymagania:
@@ -15,12 +15,12 @@ Uruchomienie:
 
 Zmienne środowiskowe:
     COSMOS_URL   adres Cosmosa (domyślnie http://localhost:3000)
-    COSMOS_TOKEN COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
-    WAKE_MODEL   nazwa modelu słowa aktywującego (domyślnie 'hey_jarvis' —
+    COSMOS_TOKEN COSMOS_API_TOKEN serwera – wymagany, gdy Cosmos ma hasło
+    WAKE_MODEL   nazwa modelu słowa aktywującego (domyślnie 'hey_jarvis' –
                  openWakeWord ma gotowe modele; własne „Hej Kosmos" możesz
                  wytrenować wg dokumentacji openWakeWord)
 
-Uwaga: openWakeWord nie ma gotowego polskiego „Hej Kosmos" — do czasu
+Uwaga: openWakeWord nie ma gotowego polskiego „Hej Kosmos" – do czasu
 własnego modelu użyj gotowego (np. 'hey_jarvis') albo trybu głosowego
 w przeglądarce (przycisk fal dźwiękowych w Cosmosie).
 """
@@ -35,14 +35,14 @@ def _dep_error(pakiety: str) -> str:
     """Komunikat o brakującej zależności.
 
     Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
-    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    nigdy nie jest brak pakietu – tylko nieaktywowane środowisko. Sama rada
     „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
     """
     msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
     venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if os.path.isdir(venv) and not in_venv:
-        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany – "
                "tylko nie w tym Pythonie.\n\n"
                "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
                "  Windows:      .venv\\Scripts\\activate\n"
@@ -76,7 +76,7 @@ def _auth() -> dict:
 def notify():
     try:
         requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
-                      json={"type": "wake", "summary": "wykryto słowo aktywujące — asystent gotowy"},
+                      json={"type": "wake", "summary": "wykryto słowo aktywujące – asystent gotowy"},
                       timeout=5)
         print("→ wake!")
     except requests.RequestException as e:
@@ -85,7 +85,7 @@ def notify():
 
 def main():
     model = Model(wakeword_models=[WAKE_MODEL])
-    print(f"✦ Cosmos Wake Listener — model '{WAKE_MODEL}', cel: {COSMOS_URL}")
+    print(f"✦ Cosmos Wake Listener – model '{WAKE_MODEL}', cel: {COSMOS_URL}")
     print("  Nasłuchuję… (Ctrl+C aby zakończyć)")
     last = 0.0
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16", blocksize=CHUNK) as stream:

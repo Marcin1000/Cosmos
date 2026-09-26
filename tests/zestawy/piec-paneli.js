@@ -1,19 +1,19 @@
 /* Pięć paneli, które nikt nie sprawdzał osobno.
 
    Z mojego własnego audytu: Nauka, Galeria, Baza wiedzy, Studio i Oś czasu
-   mają razem ponad trzydzieści tras serwera i kilkanaście ekranów — a testów
+   mają razem ponad trzydzieści tras serwera i kilkanaście ekranów – a testów
    dedykowanych nie miały żadnych. Wchodziły najwyżej pobocznie: `klawisz-escape`
    otwiera je i zamyka, `uklad-bez-przepelnien` mierzy ich szerokość. Obie te
    rzeczy przechodzą również dla panelu, który wyświetla pustkę.
 
    To nie jest teoretyczna dziura. Panel bierze dane z serwera i buduje z nich
-   DOM — czyli dokładnie ta droga, na której poprzednie usterki się chowały:
+   DOM – czyli dokładnie ta droga, na której poprzednie usterki się chowały:
    trasa oddaje `{items: []}` zamiast `{items: [...]}`, klient czyta inną
    nazwę pola, kafelek buduje się bez przycisku. Wszystko to wygląda jak
    „panel jest pusty, pewnie nic nie dodałem".
 
    Zestaw robi więc dla każdego panelu jedno i to samo, DROGĄ UŻYTKOWNIKA:
-     1. wkłada dane (przez trasę zapisu — tak, jak zrobiłby to interfejs),
+     1. wkłada dane (przez trasę zapisu – tak, jak zrobiłby to interfejs),
      2. otwiera panel klikając w przycisk, nie wołając funkcji,
      3. sprawdza, że dane są WIDOCZNE na ekranie,
      4. wykonuje główną akcję panelu i sprawdza jej skutek,
@@ -25,11 +25,11 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
-// Najmniejszy poprawny PNG — jeden czerwony piksel. Nie potrzebujemy większego.
+// Najmniejszy poprawny PNG – jeden czerwony piksel. Nie potrzebujemy większego.
 const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 (async () => {
@@ -49,7 +49,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
   await pg.waitForTimeout(1200);
 
-  /** Wołanie trasy z poziomu strony — to jest ta sama droga, którą chodzi panel. */
+  /** Wołanie trasy z poziomu strony – to jest ta sama droga, którą chodzi panel. */
   const api = (adres, opcje) => pg.evaluate(async ([a, o]) => {
     const r = await fetch(a, o ? { ...o, headers: { 'Content-Type': 'application/json' } } : undefined);
     return { kod: r.status, dane: await r.json().catch(() => ({})) };
@@ -61,7 +61,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   }, id);
 
   /* =====================================================================
-     1. BAZA WIEDZY — wkładamy notatkę i sprawdzamy, czy ją widać
+     1. BAZA WIEDZY – wkładamy notatkę i sprawdzamy, czy ją widać
      ===================================================================== */
   {
     const dodana = await api('/api/kb/note', {
@@ -86,7 +86,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
 
     /* ODZNACZANIE, CO IDZIE DO ROZMOWY.
        Odznaka przy przycisku pokazuje liczbę pozycji ZAZNACZONYCH, nie
-       wszystkich — to znaczy „tyle rzeczy z bazy model dostanie razem
+       wszystkich – to znaczy „tyle rzeczy z bazy model dostanie razem
        z pytaniem". Pierwsza wersja tego testu zakładała, że odznaka liczy
        całą bazę, i zgłosiła usterkę tam, gdzie kod był w porządku.
        Sprawdzamy więc rzecz właściwą: czy zaznaczenie ptaszka zmienia
@@ -97,7 +97,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     const poZaznaczeniu = ((await pg.textContent('#kb-badge')) || '').trim();
     console.log(`   odznaka: przed „${przedZaznaczeniem}", po zaznaczeniu „${poZaznaczeniu}"`);
     if (!/\d/.test(poZaznaczeniu)) {
-      fail.push('Baza wiedzy: zaznaczenie pozycji nie zmienia licznika przy przycisku — '
+      fail.push('Baza wiedzy: zaznaczenie pozycji nie zmienia licznika przy przycisku – '
         + 'nie widać, ile wiedzy jedzie razem z pytaniem');
     }
 
@@ -107,7 +107,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   }
 
   /* =====================================================================
-     2. GALERIA — obraz, filtry, wybór pierwszej klatki, kasowanie
+     2. GALERIA – obraz, filtry, wybór pierwszej klatki, kasowanie
      ===================================================================== */
   {
     const wgrany = await api('/api/kb/file', {
@@ -123,7 +123,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (!komorek) {
       fail.push('Galeria: wgrany obraz nie pojawia się w siatce');
     } else {
-      /* FILTR. Kliknięcie „obrazy" ma zostawić obraz, a „dźwięk" schować go —
+      /* FILTR. Kliknięcie „obrazy" ma zostawić obraz, a „dźwięk" schować go –
          filtr, który niczego nie filtruje, wygląda dokładnie tak samo jak
          działający, dopóki nie ma czego odsiać. */
       const filtr = async (rodzaj) => {
@@ -141,7 +141,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
       await filtr('all');
 
       /* PIERWSZA KLATKA. Przycisk 🎬 zapamiętuje obraz jako klatkę startową
-         wideo — a jedynym potwierdzeniem jest to, że po odświeżeniu siatki
+         wideo – a jedynym potwierdzeniem jest to, że po odświeżeniu siatki
          przycisk ma klasę `frame-on`. Ta pamięć siedzi w `localStorage`,
          więc łatwo o wersję, która zapisuje i nie odczytuje. */
       const klatka = pg.locator('#gallery-grid [data-frame]').first();
@@ -151,12 +151,12 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
         const oznaczony = await pg.locator('#gallery-grid [data-frame].frame-on').count();
         console.log(`   po wskazaniu pierwszej klatki oznaczonych przycisków: ${oznaczony}`);
         if (!oznaczony) {
-          fail.push('Galeria: wybór pierwszej klatki nie zostawia śladu na przycisku — '
+          fail.push('Galeria: wybór pierwszej klatki nie zostawia śladu na przycisku – '
             + 'nie da się poznać, który obraz jest wybrany');
         }
       }
 
-      // KASOWANIE — z siatki i z bazy naraz.
+      // KASOWANIE – z siatki i z bazy naraz.
       await pg.locator('#gallery-grid [data-del]').first().click();
       await pg.waitForTimeout(900);
       const poKasowaniu = await pg.locator('#gallery-grid .gallery-cell').count();
@@ -169,7 +169,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   }
 
   /* =====================================================================
-     3. OŚ CZASU — migawka otoczenia, różnice, kasowanie
+     3. OŚ CZASU – migawka otoczenia, różnice, kasowanie
      ===================================================================== */
   {
     await api('/api/timeline', {
@@ -195,7 +195,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     console.log(`   różnice: nowy przedmiot ${maPojawienie ? 'jest' : 'BRAK'}, `
       + `zniknięty ${maZniknięcie ? 'jest' : 'BRAK'}`);
     if (!maPojawienie || !maZniknięcie) {
-      fail.push('Oś czasu: nie widać, co się zmieniło między migawkami — '
+      fail.push('Oś czasu: nie widać, co się zmieniło między migawkami – '
         + 'a to jest jedyny powód, dla którego ten panel istnieje');
     }
     if (wierszy) {
@@ -211,7 +211,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   }
 
   /* =====================================================================
-     4. NAUKA — cztery zakładki, każda z własną treścią
+     4. NAUKA – cztery zakładki, każda z własną treścią
      ===================================================================== */
   {
     await api('/api/lessons', {
@@ -230,7 +230,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (!otwarta) fail.push('Nauka: kliknięcie w przycisk nie otwiera panelu');
 
     /* ZAKŁADKI. Cztery panele w jednym oknie, przełączane bez przeładowania.
-       Sprawdzamy, że przełącznik NAPRAWDĘ przełącza — czyli że po kliknięciu
+       Sprawdzamy, że przełącznik NAPRAWDĘ przełącza – czyli że po kliknięciu
        widać dokładnie jeden panel i to ten wskazany. */
     const zakladki = ['recog', 'proc', 'routine', 'ideas'];
     for (const z of zakladki) {
@@ -257,7 +257,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (!/klucz do domu/i.test(lekcje)) {
       fail.push('Nauka: nauczony wzorzec nie pojawia się na liście rozpoznawania');
     }
-    // A zapisana procedura — na liście procedur.
+    // A zapisana procedura – na liście procedur.
     await pg.click('[data-learn-tab="proc"]');
     await pg.waitForTimeout(600);
     const procedury = (await pg.textContent('#learn-pane-proc')) || '';
@@ -271,7 +271,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
   }
 
   /* =====================================================================
-     5. STUDIO — pięć sekcji i uczciwa informacja o braku kluczy
+     5. STUDIO – pięć sekcji i uczciwa informacja o braku kluczy
      ===================================================================== */
   {
     await pg.click('#studio-btn');
@@ -288,14 +288,14 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     if (!otwarte) fail.push('Studio: kliknięcie w przycisk nie otwiera panelu');
     if (brakujace.length) fail.push(`Studio: nie widać sekcji: ${brakujace.join(', ')}`);
 
-    /* BEZ KLUCZA API sekcja jest WYŁĄCZANA — i to jest dobre zachowanie:
+    /* BEZ KLUCZA API sekcja jest WYŁĄCZANA – i to jest dobre zachowanie:
        przycisk, który po naciśnięciu nic nie robi, jest gorszy od przycisku,
        którego nie da się nacisnąć. Ale wyłączenie musi być WYTŁUMACZONE.
        Sam wyszarzony przycisk bez powodu wygląda dokładnie tak samo jak
        zepsuty.
 
        Pierwsza wersja tego punktu klikała „Generuj obraz" i czekała na
-       komunikat. Kliknięcie nie doszło — bo `.studio-section.disabled
+       komunikat. Kliknięcie nie doszło – bo `.studio-section.disabled
        .btn-primary` ma `pointer-events: none`. Kod działał poprawnie,
        to test pytał o niewłaściwą rzecz. */
     const stan = await pg.evaluate((lista) => lista.map((s) => {
@@ -309,9 +309,9 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     }), sekcje);
     for (const s of stan) {
       console.log(`   ${s.sekcja}: ${s.wylaczona ? 'wyłączona' : 'czynna'}`
-        + (s.powod ? ` — „${s.powod}"` : ''));
+        + (s.powod ? ` – „${s.powod}"` : ''));
       if (s.wylaczona && !s.powod) {
-        fail.push(`Studio: sekcja „${s.sekcja}" jest wyłączona bez podania powodu — `
+        fail.push(`Studio: sekcja „${s.sekcja}" jest wyłączona bez podania powodu – `
           + 'użytkownik widzi wyszarzony przycisk i nie wie, czego brakuje');
       }
       if (!s.wylaczona && s.powod) {
@@ -324,7 +324,7 @@ const PIKSEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ
     }
 
     /* Lista obrazów do edycji bierze się z Bazy wiedzy. Wybór ma być
-       możliwy albo jawnie pusty — nigdy „wygląda na wybieralny, ale nie ma
+       możliwy albo jawnie pusty – nigdy „wygląda na wybieralny, ale nie ma
        w nim nic i nie wiadomo dlaczego". */
     const opcjeEdycji = await pg.locator('#studio-edit-img option').count();
     console.log(`   obrazów do wyboru w edycji: ${opcjeEdycji - 1} (+ pozycja „wybierz")`);

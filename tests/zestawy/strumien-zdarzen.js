@@ -1,6 +1,6 @@
 // „Hej, Kosmos" wykryte na domowym komputerze musi dotrzeć do telefonu.
 // Dotąd przeglądarka tylko WYSYŁAŁA zdarzenia i nigdy się nie dowiadywała,
-// że coś się stało — wake_listener.py umierał w logu serwera.
+// że coś się stało – wake_listener.py umierał w logu serwera.
 const { srodowisko, przegladarka } = require('../pomoc');
 
 const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
@@ -49,7 +49,7 @@ const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
   const ctx = await b.newContext({ permissions: ['microphone'] });
   const pg2 = await ctx.newPage();
   await pg2.addInitScript(() => {
-    // Chromium bez prawdziwego mikrofonu — podstawiamy rozpoznawanie mowy,
+    // Chromium bez prawdziwego mikrofonu – podstawiamy rozpoznawanie mowy,
     // żeby mierzyć nasze zachowanie, a nie brak sprzętu w obrazie.
     window.SpeechRecognition = class { start() {} stop() {} abort() {} addEventListener() {} };
     window.webkitSpeechRecognition = window.SpeechRecognition;
@@ -82,7 +82,7 @@ const wyslijZdarzenie = (adres, type, summary) => fetch(`${adres}/api/events`, {
   console.log(`4. przełącznik wyłączony → mikrofon zostaje wyłączony: ${cichy}`);
   if (!cichy) fail.push('mikrofon włączył się mimo wyłączonego przełącznika');
 
-  // 5. drugie zdarzenie po chwili też dociera — strumień żyje, nie był
+  // 5. drugie zdarzenie po chwili też dociera – strumień żyje, nie był
   //    jednorazowy (EventSource nie pojawia się w Resource Timing, więc
   //    mierzymy zachowanie, a nie wpis w przeglądarce)
   await pg.waitForTimeout(1500);

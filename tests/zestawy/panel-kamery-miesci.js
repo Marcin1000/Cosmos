@@ -1,9 +1,9 @@
-/* Panel kamery MA SIĘ MIEŚCIĆ w oknie — w każdym trybie i na każdej wysokości.
+/* Panel kamery MA SIĘ MIEŚCIĆ w oknie – w każdym trybie i na każdej wysokości.
  *
  *  Marcin, po dołożeniu pudełka nastaw: „Nie mieści mi się to teraz na ekranie.
  *  W obu przypadkach nie mogę też scrollować w dół lub w górę." Na zrzutach
  *  widać ucięty nagłówek „KAMERA NA ŻYWO" u góry i ucięty przycisk migawki
- *  na dole — treść wychodziła poza panel, a panel miał `overflow: hidden`,
+ *  na dole – treść wychodziła poza panel, a panel miał `overflow: hidden`,
  *  więc nie było jak do niej dojechać.
  *
  *  Przyczyna była w liczeniu wysokości ze STAŁEJ: szerokość panelu wynikała
@@ -14,19 +14,19 @@
  *
  *  Dlatego ten zestaw nie sprawdza żadnej konkretnej liczby pikseli, tylko
  *  własność, która ma być prawdziwa zawsze: panel mieści się w oknie, nagłówek
- *  jest widoczny, a do przycisku migawki da się dojechać — albo dlatego, że
+ *  jest widoczny, a do przycisku migawki da się dojechać – albo dlatego, że
  *  jest w panelu, albo dlatego, że treść pod obrazem się przewija.
  */
 const { srodowisko, przegladarka, maPrzegladarke, KATALOG_ZRZUTOW } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
-/* Cztery okna, w tym dwa niskie. Najciaśniejsze jest 390×640 — telefon,
+/* Cztery okna, w tym dwa niskie. Najciaśniejsze jest 390×640 – telefon,
    na którym pasek adresu i pasek nawigacji zjadły swoje. */
-/* Dolne granice szerokości panelu z `public/style.css` — poniżej nich panel
+/* Dolne granice szerokości panelu z `public/style.css` – poniżej nich panel
    nie ma już czym ustąpić i dopiero wtedy wolno przewijać dolną część.
    Są trzy, bo panel ma trzy układy, i zestaw musi znać ten sam podział
    co arkusz stylów: w rogu 200 px, powiększony na wąskim ekranie 240 px,
@@ -44,13 +44,13 @@ const OKNA = [
   ['telefon 390×844', { width: 390, height: 844 }],
   /* Telefon TRZYMANY POZIOMO. Marcin: „trzymając telefon w poziomie, jak kadr
      aparatu, w głównej mierze to działa i wygląda tragicznie." Ekran ma wtedy
-     ~330 px wysokości — mniej, niż zajmują same paski panelu — więc układ
+     ~330 px wysokości – mniej, niż zajmują same paski panelu – więc układ
      pionowy nie ma prawa się zmieścić. Bez tych dwóch okien zestaw w ogóle
      nie widział przypadku, na który Marcin patrzył. */
   ['telefon poziomo 844×390', { width: 844, height: 390 }],
   ['telefon poziomo 740×360', { width: 740, height: 360 }],
   /* Najciaśniejszy poziom, tuż nad progiem dwóch kolumn (600 px). Tu wiąże
-     już szerokość ekranu, a nie wysokość — czyli przypadek, w którym obraz
+     już szerokość ekranu, a nie wysokość – czyli przypadek, w którym obraz
      najłatwiej wypycha się poza panel i jest po cichu ucinany. */
   ['telefon poziomo 620×340', { width: 620, height: 340 }],
   ['laptop 1440×700', { width: 1440, height: 700 }],
@@ -64,7 +64,7 @@ const OKNA = [
  *  przez kilka rund pomiaru. Czekanie „na 400 ms" mierzyło stan w połowie tej
  *  drogi i zgłaszało usterkę, której w gotowym układzie nie ma: panel złapany
  *  przy 311 px, choć docelowo schodzi do 200 px. To ten sam błąd, co mierzenie
- *  czasem zamiast warunkiem — wynik zależy wtedy od obciążenia maszyny,
+ *  czasem zamiast warunkiem – wynik zależy wtedy od obciążenia maszyny,
  *  a nie od kodu.
  *
  *  @param {object} pg strona Playwrighta
@@ -123,13 +123,13 @@ async function poczekajNaUklad(pg) {
           gora: Math.round(pr.top),
           glowaWidoczna: glowa.getBoundingClientRect().top >= -1,
           przyciskWPanelu: przycisk.getBoundingClientRect().bottom <= pr.bottom + 1,
-          // `overflow-y: auto` sam nie wystarczy — treść musi się DAĆ przewinąć.
+          // `overflow-y: auto` sam nie wystarczy – treść musi się DAĆ przewinąć.
           przewija: Boolean(body) && body.scrollHeight > body.clientHeight + 1,
           ileNiemiesci: body ? body.scrollHeight - body.clientHeight : 0,
           przewijalny: body ? getComputedStyle(body).overflowY : 'brak elementu',
           scena: scena ? Math.round(scena.getBoundingClientRect().height) : -1,
           /* Proporcja SCENY kontra proporcja, o którą poprosiliśmy. Rozjazd
-             znaczy czarne pasy — bo obraz mieści się w scenie wpisanej
+             znaczy czarne pasy – bo obraz mieści się w scenie wpisanej
              w inny kształt niż on sam. */
           scenaProp: scena
             ? scena.getBoundingClientRect().width / scena.getBoundingClientRect().height : 0,
@@ -143,11 +143,11 @@ async function poczekajNaUklad(pg) {
           /* „Pełna szerokość" liczona MARGINESEM, nie procentem. Procent
              zawodzi, bo `100vw` obejmuje pasek przewijania: panel szeroki
              dokładnie na `calc(100vw - 24px)` wychodził 350 px przy oknie
-             390 px, czyli 89,7% — tuż pod progiem 90%. Margines jest tym,
+             390 px, czyli 89,7% – tuż pod progiem 90%. Margines jest tym,
              co arkusz stylów faktycznie zadaje, więc mierzmy to samo. */
           naCalaSzerokosc: pr.width >= window.innerWidth - 48,
           /* POZIOMY ROZJAZD. Marcin: „wszystko rozjeżdża się, jak włączy się
-             tryb pełnoekranowy". Zestaw mierzył dotąd wyłącznie pion — a treść
+             tryb pełnoekranowy". Zestaw mierzył dotąd wyłącznie pion – a treść
              szersza niż panel wypycha pasek przewijania w bok i ucina liczby
              nastaw po prawej. */
           zaSzerokoPanel: panel.scrollWidth - panel.clientWidth,
@@ -159,7 +159,7 @@ async function poczekajNaUklad(pg) {
           statusLinia: parseFloat(getComputedStyle(document.getElementById('live-status')).lineHeight),
           statusPion: getComputedStyle(document.getElementById('live-status')).paddingTop,
           /* Ile obrazu wychodzi poza panel. Panel ma `overflow: hidden`, więc
-             scena wyższa niż jej miejsce jest przycinana BEZ ŚLADU — dół kadru
+             scena wyższa niż jej miejsce jest przycinana BEZ ŚLADU – dół kadru
              znika, a wszystkie dotychczasowe pomiary dalej mówią „mieści się".
              Marcin widział to na zrzucie z telefonu trzymanego poziomo. */
           scenaPozaPanelem: scena
@@ -168,29 +168,29 @@ async function poczekajNaUklad(pg) {
       });
       /* Nic nie ma prawa być szersze niż panel. Poziomy pasek przewijania
          w oknie wielkości panelu kamery znaczy, że któryś element nie umie
-         się zwęzić — a wtedy liczby nastaw uciekają poza prawą krawędź. */
+         się zwęzić – a wtedy liczby nastaw uciekają poza prawą krawędź. */
       if (r.zaSzerokoPanel > 1) {
         fail.push(`${nazwa} / ${tryb}: treść panelu jest o ${r.zaSzerokoPanel} px szersza `
-          + 'niż on sam — poziomy rozjazd');
+          + 'niż on sam – poziomy rozjazd');
       }
       if (r.zaSzerokoDol > 1) {
         fail.push(`${nazwa} / ${tryb}: dolna część jest o ${r.zaSzerokoDol} px szersza `
-          + 'niż panel — poziomy rozjazd pod obrazem');
+          + 'niż panel – poziomy rozjazd pod obrazem');
       }
       /* Status ma się kończyć na pełnym wierszu. Ucięty w połowie wygląda
-         jak tekst wchodzący pod pudełko nastaw — i tak właśnie zgłosił to
+         jak tekst wchodzący pod pudełko nastaw – i tak właśnie zgłosił to
          Marcin: „ten tekst wchodzi nieładnie pod Nastawy". */
       if (r.statusH > 0 && r.statusLinia > 0) {
         const wiersze = (r.statusH - 16) / r.statusLinia;
         const ulamek = Math.abs(wiersze - Math.round(wiersze));
         if (ulamek > 0.2) {
           fail.push(`${nazwa} / ${tryb}: status ma ${wiersze.toFixed(2)} wiersza `
-            + '— ostatni jest ucięty w połowie i wchodzi pod nastawy');
+            + '– ostatni jest ucięty w połowie i wchodzi pod nastawy');
         }
       }
       if (r.scenaPozaPanelem > 1) {
         fail.push(`${nazwa} / ${tryb}: obraz wychodzi o ${r.scenaPozaPanelem} px poza panel `
-          + '— dół kadru jest ucinany bez śladu przez `overflow: hidden`');
+          + '– dół kadru jest ucinany bez śladu przez `overflow: hidden`');
       }
       const miesci = r.panel <= r.okno && r.gora >= -1 && r.glowaWidoczna;
       const dojedzie = r.przyciskWPanelu || r.przewija;
@@ -202,9 +202,9 @@ async function poczekajNaUklad(pg) {
       }
       if (!dojedzie) {
         fail.push(`${nazwa} / ${tryb}: nie da się dojechać do przycisku migawki `
-          + `(poza panelem, a treść się nie przewija — overflow: ${r.przewijalny})`);
+          + `(poza panelem, a treść się nie przewija – overflow: ${r.przewijalny})`);
       }
-      // Obraz nie może zniknąć do zera przy ciasnocie — to już nie jest podgląd.
+      // Obraz nie może zniknąć do zera przy ciasnocie – to już nie jest podgląd.
       if (r.scena >= 0 && r.scena < 100) {
         fail.push(`${nazwa} / ${tryb}: obraz skurczył się do ${r.scena} px`);
       }
@@ -215,7 +215,7 @@ async function poczekajNaUklad(pg) {
        *
        *  Poprzednia wersja tego zestawu przepuszczała ten stan bez słowa,
        *  bo pytała tylko „czy panel się mieści" i „czy da się dojechać do
-       *  migawki" — a na jedno i drugie ścisnięty pasek przewijania odpowiada
+       *  migawki" – a na jedno i drugie ścisnięty pasek przewijania odpowiada
        *  TAK. Zestaw był zielony przy układzie, który użytkownik nazwał
        *  zepsutym; to gorsze niż brak zestawu, bo daje spokój bez pokrycia.
        *
@@ -224,14 +224,14 @@ async function poczekajNaUklad(pg) {
        *  najwęższy jak można, wolno zwinąć dół w przewijalny pasek.
        *
        *  Sprawdzamy to przez szerokość panelu, a nie przez wysokość obrazu.
-       *  Pierwsza wersja pytała „czy obraz ma ponad 260 px" — próg wzięty
+       *  Pierwsza wersja pytała „czy obraz ma ponad 260 px" – próg wzięty
        *  z sufitu, który przy kadrze pionowym znaczył co innego niż przy
        *  poziomym. Szerokość jest jednoznaczna: albo panel dobił do swojej
        *  dolnej granicy i naprawdę nie ma czym ustąpić, albo nie dobił
        *  i przewijanie jest przedwczesne. */
       /* Zwężenie pomaga TYLKO w pływającym panelu jednokolumnowym. Na
          telefonie panel z założenia bierze całą szerokość ekranu, a w układzie
-         dwukolumnowym sterowanie stoi OBOK obrazu i ma własną, stałą kolumnę —
+         dwukolumnowym sterowanie stoi OBOK obrazu i ma własną, stałą kolumnę –
          zwężanie panelu nie doda mu ani piksela wysokości. W obu tych układach
          przewijanie dolnej części jest poprawnym zachowaniem, nie usterką,
          i pytanie „czemu panel się nie zwęził" jest źle postawione. */
@@ -240,7 +240,7 @@ async function poczekajNaUklad(pg) {
           && r.ileNiemiesci > ZNACZACE_PRZEWINIECIE_PX && r.panelW > podloga + 10) {
         fail.push(`${nazwa} / ${tryb}: dół nie mieści się o ${r.ileNiemiesci} px, `
           + `choć panel ma ${r.panelW} px szerokości i mógł się zwęzić do ${podloga} px `
-          + '— to jest „duże okno podglądu, a pod nim małe okienko przesuwalne"');
+          + '– to jest „duże okno podglądu, a pod nim małe okienko przesuwalne"');
       }
       /* SCENA MA TRZYMAĆ PROPORCJĘ KADRU.
        *
@@ -251,7 +251,7 @@ async function poczekajNaUklad(pg) {
        *  Przyczyną była DOLNA GRANICA szerokości panelu: kadr 9:16 dzieli
        *  dostępną wysokość przez 0,5625, więc wyliczona szerokość schodziła
        *  poniżej 200 px, granica ją podnosiła, a wtedy scena chciała być
-       *  wyższa niż zostało miejsca — i ścinał ją sufit wysokości, łamiąc
+       *  wyższa niż zostało miejsca – i ścinał ją sufit wysokości, łamiąc
        *  proporcję. Każdy krok z osobna był rozsądny; razem dały pasek obrazu.
        *
        *  Zestaw pilnował wcześniej wysokości i przewijania, ale nigdy KSZTAŁTU,
@@ -269,7 +269,7 @@ async function poczekajNaUklad(pg) {
           if (strata > 5) {
             fail.push(`${nazwa} / ${tryb}: scena ma proporcję ${r.scenaProp.toFixed(2)} `
               + `zamiast ${r.zadanaProp.toFixed(2)}, a obraz jest wpisywany w całości `
-              + `— czarne pasy na ~${strata}% sceny`);
+              + `– czarne pasy na ~${strata}% sceny`);
           }
         } else if (strata > 50) {
           /* Przycięcie jest dozwolone i celowe: na telefonie panel bierze całą
@@ -290,7 +290,7 @@ async function poczekajNaUklad(pg) {
     await pg.waitForTimeout(600);
     await sprawdz('powiększony + rozwinięte', (viewport.width >= 900 ? PODLOGA_DWIE_KOLUMNY : PODLOGA_POWIEKSZONY_WASKI));
 
-    /* KADR PIONOWY — telefon trzymany normalnie. Atrapa kamery w Chromium
+    /* KADR PIONOWY – telefon trzymany normalnie. Atrapa kamery w Chromium
        jest pozioma, więc proporcję podstawiamy ręcznie; inaczej ten zestaw
        nigdy nie zobaczyłby przypadku, w którym panel realnie się rozjeżdżał.
        Przy 340 px szerokości kadr 9:16 daje scenę wysoką na 604 px, czyli

@@ -1,4 +1,4 @@
-"""Atrapa dostawcy, który — jak modele rozumujące OpenAI — odrzuca
+"""Atrapa dostawcy, który – jak modele rozumujące OpenAI – odrzuca
 max_tokens i własną temperaturę. Sprawdza, czy serwer ponawia poprawnie."""
 import http.server, json
 

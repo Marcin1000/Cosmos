@@ -2,14 +2,14 @@
 
    Marcin: „dobre było wprowadzenie kolejkowania odpowiedzi w trakcie
    udzielania odpowiedzi przez Cosmos tak jak w Claude". Do tej pory pole
-   tekstowe było w tym czasie martwe — `sendMessage` wychodziło od razu przy
+   tekstowe było w tym czasie martwe – `sendMessage` wychodziło od razu przy
    `isGenerating`, więc myśl, która przyszła w połowie czytania, trzeba było
    trzymać w głowie albo przerywać generowanie.
 
    Trzy rzeczy, które muszą działać, żeby to było użyteczne, a nie tylko
    „nie gubi się":
 
-     1. Wiadomość napisana w trakcie ZOSTAJE i jest WIDOCZNA — inaczej nie
+     1. Wiadomość napisana w trakcie ZOSTAJE i jest WIDOCZNA – inaczej nie
         wiadomo, czy poszła, czy przepadła.
      2. Idzie SAMA po zakończeniu odpowiedzi, w kolejności napisania.
      3. Da się ją WYJĄĆ przed wysłaniem. W połowie odpowiedzi często okazuje
@@ -18,7 +18,7 @@
 
    Czwarta rzecz (zespół IT, płynność, runda 4): pytanie z kolejki idzie do
    rozmowy, w której je WPISANO. Po przełączeniu się na inną rozmowę trafiało
-   tam, gdzie człowiek akurat był — do zupełnie innego wątku.
+   tam, gdzie człowiek akurat był – do zupełnie innego wątku.
 
    Przy okazji drugie zgłoszenie z tej samej rozmowy: „Cosmos sam się wznawiał
    jako kolejne zapytanie". Sprawdzamy, że pętla narzędzi ma twardy limit
@@ -53,11 +53,11 @@ if (!maPrzegladarke()) {
 
   /* ---- 1. Pierwsza wiadomość rusza normalnie ----
      „powoli" to umowa z atrapą: rozciąga strumień na kilka sekund. Bez tego
-     nie ma czego kolejkować — odpowiedź kończy się, zanim test zdąży napisać
+     nie ma czego kolejkować – odpowiedź kończy się, zanim test zdąży napisać
      drugie zdanie, i zestaw sprawdzałby zupełnie inną sytuację niż ta,
      w której Marcin dopisuje myśl w połowie czytania. */
   await wyslij('pierwsze pytanie powoli');
-  console.log(`1. po wysłaniu pierwszej — generuje: ${await generuje()}`);
+  console.log(`1. po wysłaniu pierwszej – generuje: ${await generuje()}`);
   if (!await generuje()) fail.push('pierwsza wiadomość nie uruchomiła generowania');
 
   /* ---- 2. Pisanie w trakcie: nie ginie, ląduje w kolejce ---- */
@@ -68,10 +68,10 @@ if (!maPrzegladarke()) {
   if (kolejka.length !== 2) fail.push(`w kolejce ${kolejka.length} pozycji zamiast 2`);
   if (kolejka[0] !== 'drugie pytanie') fail.push('kolejka nie zachowuje kolejności napisania');
 
-  // Pole musi się wyczyścić — inaczej nie wiadomo, czy wiadomość poszła.
+  // Pole musi się wyczyścić – inaczej nie wiadomo, czy wiadomość poszła.
   const wPolu = await pg.inputValue('#input');
   console.log(`   pole po wysłaniu do kolejki: „${wPolu}"`);
-  if (wPolu) fail.push('pole nie zostało wyczyszczone — nie wiadomo, czy wiadomość poszła');
+  if (wPolu) fail.push('pole nie zostało wyczyszczone – nie wiadomo, czy wiadomość poszła');
 
   // Kolejkowana wiadomość NIE jest jeszcze pytaniem w rozmowie.
   const teraz = await pytania();
@@ -92,7 +92,7 @@ if (!maPrzegladarke()) {
     if (poUsunieciu[0] !== 'drugie pytanie') fail.push('usunięto niewłaściwą pozycję');
   } else {
     console.log('3. brak przycisku wyjęcia z kolejki');
-    fail.push('kolejkowanej wiadomości nie da się wyjąć — brak przycisku');
+    fail.push('kolejkowanej wiadomości nie da się wyjąć – brak przycisku');
   }
 
   /* ---- 4. Po zakończeniu odpowiedzi kolejka rusza SAMA ---- */
@@ -117,7 +117,7 @@ if (!maPrzegladarke()) {
   if (odpowiedzi < 2) fail.push(`tylko ${odpowiedzi} odpowiedzi na dwa pytania`);
 
   /* ---- 6. Pętla narzędzi ma twardy limit ----
-     „Cosmos sam się wznawiał jako kolejne zapytanie" — to była pętla narzędzi
+     „Cosmos sam się wznawiał jako kolejne zapytanie" – to była pętla narzędzi
      widziana z zewnątrz: model wołał archiwum, dostawał wynik, wołał znowu.
      Limit istnieje w kodzie, ale musi być SPRAWDZANY, bo bez niego jedno
      pytanie potrafi zająć całą sesję. */
@@ -125,15 +125,15 @@ if (!maPrzegladarke()) {
   const maxSzukan = (zrodlo.match(/const MAX_SEARCHES = (\d+)/) || [])[1];
   console.log(`6. MAX_SEARCHES = ${maxSzukan}`);
   if (!maxSzukan || Number(maxSzukan) > 4) {
-    fail.push(`limit rund narzędzi to ${maxSzukan} — jedno pytanie może zająć całą sesję`);
+    fail.push(`limit rund narzędzi to ${maxSzukan} – jedno pytanie może zająć całą sesję`);
   }
   /* Odcinanie POWTÓRZONYCH zapytań do archiwum sprawdza teraz zestaw
-     `kaskada-narzedzi` — i sprawdza je ZACHOWANIEM: woła narzędzie dwa razy
+     `kaskada-narzedzi` – i sprawdza je ZACHOWANIEM: woła narzędzie dwa razy
      tym samym filtrem i liczy, ile zapytań naprawdę poszło.
 
      Tutaj stał wcześniej `if (!/pytaniaArchiwum/.test(zrodlo))`, czyli test
      obecności nazwy zmiennej w pliku. Padł przy przeniesieniu kaskady do
-     `public/narzedzia.js`, mimo że hamulec działał bez zmian — bo pilnował
+     `public/narzedzia.js`, mimo że hamulec działał bez zmian – bo pilnował
      nazwy, a nie własności. Dokładnie ta kruchość, o której pisał Marcin:
      „za dużo testów sprawdza tekst źródła, nie zachowanie".
 
@@ -141,18 +141,18 @@ if (!maPrzegladarke()) {
      mieszka w app.js. */
 
   /* ---- 7. Żaden ruch narzędzia nie udaje wiadomości użytkownika ----
-     Wyniki narzędzi wracają do modelu z `role: 'user'` — taki jest protokół.
+     Wyniki narzędzi wracają do modelu z `role: 'user'` – taki jest protokół.
      Na ekranie odróżnia je JEDYNIE flaga `search`; bez niej rysuje się zwykły
      dymek z pytaniem, którego nikt nie zadał, i wygląda to dokładnie tak, jak
      Marcin to opisał: rozmowa wznawia się sama. Zamiast pilnować flagi w pięciu
-     miejscach mamy jedną furtkę `dodajWynikNarzedzia` — i tu sprawdzamy, że
+     miejscach mamy jedną furtkę `dodajWynikNarzedzia` – i tu sprawdzamy, że
      nikt jej nie obszedł. */
   const ciało = zrodlo.slice(zrodlo.indexOf('async function runGeneration'),
     zrodlo.indexOf('function stopGeneration'));
   const nagie = (ciało.match(/role: 'user'/g) || []).length;
   console.log(`7. surowych wstawek role:'user' w runGeneration: ${nagie}`);
   if (nagie) {
-    fail.push(`${nagie} wyników narzędzia omija dodajWynikNarzedzia — narysują się `
+    fail.push(`${nagie} wyników narzędzia omija dodajWynikNarzedzia – narysują się `
       + 'jako pytania, których użytkownik nie zadał');
   }
   if (!/function dodajWynikNarzedzia[\s\S]{0,300}search: true/.test(zrodlo)) {

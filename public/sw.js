@@ -1,6 +1,6 @@
-/* Cosmos — service worker (PWA)
+/* Cosmos – service worker (PWA)
    Statyczne pliki: cache-first (działa offline).
-   API: zawsze sieć — czat wymaga połączenia z modelem. */
+   API: zawsze sieć – czat wymaga połączenia z modelem. */
 
 const CACHE = 'cosmos-v133';
 
@@ -56,7 +56,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API i streaming — zawsze przez sieć
+  // API i streaming – zawsze przez sieć
   if (url.pathname.startsWith('/api/') || event.request.method !== 'GET') return;
   /* Strona produktowa (/ i /strona/) nie jest częścią aplikacji offline:
      ma przychodzić świeża, a nie z pamięci telefonu sprzed tygodnia. */

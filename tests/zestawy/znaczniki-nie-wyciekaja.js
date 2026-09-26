@@ -2,21 +2,21 @@
 
    Marcin przysłał zapis rozmowy, w którym widniało gołe
    `[ARCHIWUM: grupuj=rok]`, a kawałek niżej pusty blok kodu bez ani jednego
-   znaku w środku. Znacznik jest instrukcją dla modelu — poleceniem „sięgnij
-   do archiwum" — i dla użytkownika znaczy tyle, co wyciek wewnętrznego
+   znaku w środku. Znacznik jest instrukcją dla modelu – poleceniem „sięgnij
+   do archiwum" – i dla użytkownika znaczy tyle, co wyciek wewnętrznego
    protokołu. Pusty płot wygląda z kolei na zgubioną odpowiedź.
 
    Czyszczenie istniało od dawna, ale miało dwie dziury i obie brały się
    z tego samego założenia: że model zawsze napisze znacznik w całości,
    samodzielnie, w osobnej linii.
 
-     1. ZNACZNIK URWANY. Wypowiedź kończy się w połowie znacznika — bo
+     1. ZNACZNIK URWANY. Wypowiedź kończy się w połowie znacznika – bo
         skończył się budżet tokenów albo Marcin nacisnął „stop". Bez
         domykającego `]` żaden wzorzec nie pasował.
      2. ZNACZNIK W PŁOCIE. Model lubi opakować polecenie w ```blok```.
         Usunięcie samego znacznika zostawiało parę płotków bez zawartości.
 
-   Do tego przerwana odpowiedź szła na ekran zupełnie bez czyszczenia — a to
+   Do tego przerwana odpowiedź szła na ekran zupełnie bez czyszczenia – a to
    właśnie ona najczęściej urywa się w trakcie sięgania po narzędzie.
 
    Zestaw sprawdza też stronę odwrotną i ważniejszą: czyszczenie nie może
@@ -26,7 +26,7 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -36,9 +36,9 @@ const PRZYPADKI = [
     'znacznik w całości, na końcu wypowiedzi'],
   ['[ARCHIWUM: grupuj=rok]', '', 'sam znacznik i nic poza nim'],
   ['Sprawdzam.\n[ARCHIWUM: folder=Mazury 2026', 'Sprawdzam.',
-    'znacznik urwany — zabrakło tokenów albo przerwano generowanie'],
+    'znacznik urwany – zabrakło tokenów albo przerwano generowanie'],
   ['Już patrzę.\n```\n[ARCHIWUM: grupuj=aparat]\n```', 'Już patrzę.',
-    'znacznik w płocie — po jego usunięciu płot ma zniknąć razem z nim'],
+    'znacznik w płocie – po jego usunięciu płot ma zniknąć razem z nim'],
   ['Patrzę.\n```json\n[ARCHIWUM: rok=2026]\n```', 'Patrzę.',
     'płot z nazwą języka też'],
   ['[SZUKAJ: pogoda Mazury]', '', 'wyszukiwanie w internecie'],
@@ -49,12 +49,12 @@ const PRZYPADKI = [
   /* --- i strona odwrotna: czego ruszać NIE WOLNO --------------------------
      Wzorzec na urwany znacznik kończy się na `$`, więc łapie tylko koniec
      tekstu. Gdyby działał w środku, zjadłby resztę zdania od pierwszego
-     nawiasu — a nawiasy kwadratowe są w Markdownie na porządku dziennym. */
+     nawiasu – a nawiasy kwadratowe są w Markdownie na porządku dziennym. */
   ['Zdjęcia [1] i [2] są ostre.', 'Zdjęcia [1] i [2] są ostre.',
     'zwykłe nawiasy w środku zdania'],
   ['Zobacz [dokumentację](https://example.com).', 'Zobacz [dokumentację](https://example.com).',
     'odnośnik w Markdownie'],
-  ['Plik nazywa się [ARCHIWUM] — tak go nazwałeś.', 'Plik nazywa się  — tak go nazwałeś.',
+  ['Plik nazywa się [ARCHIWUM] – tak go nazwałeś.', 'Plik nazywa się  – tak go nazwałeś.',
     'znacznik bez treści też jest znacznikiem (tu akurat zjada, i tak ma być)'],
   ['```js\nconst x = 1;\n```', '```js\nconst x = 1;\n```',
     'płot z prawdziwym kodem zostaje nietknięty'],
@@ -74,7 +74,7 @@ const PRZYPADKI = [
   /* --- 1. Czyszczenie znaczników -----------------------------------------
      Czysta funkcja z `public/protokol.js`, wywoływana wprost w Node.
      Wcześniej szła przez `page.evaluate` i sięgała po `window.stripSearchMarker`
-     — co przestało istnieć w chwili, gdy funkcja przeniosła się do modułu
+     – co przestało istnieć w chwili, gdy funkcja przeniosła się do modułu
      i nie była już globalną deklaracją skryptu. Przeglądarka niczego tu nie
      wnosiła: to jest napis na wejściu i napis na wyjściu. */
   const { utworzProtokol } = require('../../public/protokol.js');
@@ -82,7 +82,7 @@ const PRZYPADKI = [
   for (const [wejscie, oczek, opis] of PRZYPADKI) {
     const got = stripSearchMarker(wejscie);
     const ok = got === oczek;
-    console.log(`1. ${ok ? 'ok ' : 'ŹLE'} — ${opis}`);
+    console.log(`1. ${ok ? 'ok ' : 'ŹLE'} – ${opis}`);
     if (!ok) {
       fail.push(`${opis}: dostałem ${JSON.stringify(got)}, `
         + `spodziewane ${JSON.stringify(oczek)}`);
@@ -90,7 +90,7 @@ const PRZYPADKI = [
   }
 
   /* --- 2. PRZERWANA ODPOWIEDŹ TEŻ PRZECHODZI PRZEZ CZYSZCZENIE ------------
-     Jedyna droga, którą tekst z modelu trafiał na ekran surowy — i najczęstsza,
+     Jedyna droga, którą tekst z modelu trafiał na ekran surowy – i najczęstsza,
      bo przerywa się wtedy, gdy coś trwa za długo, czyli dokładnie w trakcie
      sięgania po narzędzie.
 
@@ -105,7 +105,7 @@ const PRZYPADKI = [
   await pg.click('#send-btn');
   /* Czekamy na zdanie PRZED znacznikiem, a potem chwilę, żeby strumień
      wszedł w sam znacznik. Na ekranie znacznika nie widać już nawet w trakcie
-     pisania (widokWToku) — i to też jest gwarancja: sprawdzamy ją tu. */
+     pisania (widokWToku) – i to też jest gwarancja: sprawdzamy ją tu. */
   await pg.waitForFunction(
     () => /Zaraz sprawdzę archiwum/.test(document.querySelector('.msg-assistant')?.textContent || ''),
     null, { timeout: 15000 },
@@ -123,10 +123,10 @@ const PRZYPADKI = [
   console.log(`2. po „stop" w połowie znacznika: ${wyciekl ? 'ZNACZNIK NA EKRANIE' : 'czysto'}`
     + ` (${naEkranie.trim().slice(0, 60)}…)`);
   if (wyciekl) {
-    fail.push('przerwana odpowiedź idzie na ekran bez czyszczenia znaczników — '
+    fail.push('przerwana odpowiedź idzie na ekran bez czyszczenia znaczników – '
       + `widać „${naEkranie.match(/\[ARCHIWUM[^\n]{0,40}/)[0]}"`);
   }
-  // Sam początek wypowiedzi ma zostać — czyszczenie nie może zjeść odpowiedzi.
+  // Sam początek wypowiedzi ma zostać – czyszczenie nie może zjeść odpowiedzi.
   if (!/Zaraz sprawdzę archiwum/.test(naEkranie)) {
     fail.push('po przerwaniu zniknęła cała odpowiedź, nie tylko znacznik');
   }

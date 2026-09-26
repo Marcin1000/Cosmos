@@ -1,29 +1,29 @@
-/* Izolacja osób — czy zaproszony gość widzi wyłącznie swoje.
+/* Izolacja osób – czy zaproszony gość widzi wyłącznie swoje.
 
    Cosmos przez dwa lata był jednoosobowy: jeden katalog danych, jedna lista
    zdarzeń, wykonywanie kodu włączone domyślnie. Gdyby wpuścić gościa na
    takim kodzie, zobaczyłby profil właściciela z jego adresem, jego rozmowy,
-   obraz z jego kamery w swoim kontekście — i mógłby uruchomić program na
+   obraz z jego kamery w swoim kontekście – i mógłby uruchomić program na
    serwerze, obok pliku ze wszystkimi kluczami.
 
    Zestaw stawia serwer z hasłem, zakłada właściciela i członka przez
    prawdziwe zaproszenie, a potem sprawdza z obu stron:
-     1. dane właściciela są dla członka NIEWIDOCZNE — każdą drogą, którą
+     1. dane właściciela są dla członka NIEWIDOCZNE – każdą drogą, którą
         da się je odczytać (profil, lokalizacja, sprzęt, rozmowy, wyszukiwanie
         w rozmowach, kopia zapasowa, statystyki),
      2. zapis członka nie nadpisuje danych właściciela,
      3. zdarzenia (kamera, mikrofon, czujniki) trafiają tylko do właściciela
-        zdarzenia — strumień SSE drugiej osoby milczy,
+        zdarzenia – strumień SSE drugiej osoby milczy,
      4. trasy działające na serwerze albo w domu właściciela zwracają członkowi
         403, a model członka nie dostaje nawet opisu narzędzia „uruchom kod",
-     5. silniki: bez przyznania i bez klucza — odmowa z wyjaśnieniem, a tam,
+     5. silniki: bez przyznania i bez klucza – odmowa z wyjaśnieniem, a tam,
         gdzie strażnik podmienia silnik, zapytanie idzie kluczem NVIDIA,
         nigdy płatnym kluczem właściciela; własny klucz członka płaci za
-        członka; przyznanie przez właściciela — płaci właściciel,
+        członka; przyznanie przez właściciela – płaci właściciel,
      6. cudzego biegu (odpowiedzi w tle) nie da się podejrzeć,
      7. właściciel widzi zużycie członka, ale nie jego treści.
 
-   Atrapa modelu zapamiętuje nagłówek Authorization każdego zapytania —
+   Atrapa modelu zapamiętuje nagłówek Authorization każdego zapytania –
    dzięki temu widać nie „czy odpowiedziało", tylko CZYIM kluczem.
 */
 const http = require('node:http');
@@ -98,7 +98,7 @@ function klient(ip) {
             if (done) break;
             ramki.push(dekoder.decode(value));
           }
-        } catch { /* przerwane — tak ma być */ }
+        } catch { /* przerwane – tak ma być */ }
       })();
       return { ramki, gotowe: new Promise((r2) => setTimeout(() => { clearTimeout(koniec); r2(ramki.join('')); }, ms + 100)) };
     },
@@ -181,7 +181,7 @@ function klient(ip) {
   const studio = await ania.zadaj('/api/studio/tasks');
   ok(studio.kod === 403, `Studio bez przyznania → ${studio.kod}`);
 
-  // Instrukcja „uruchom kod" — właściciel ją dostaje, członek nie.
+  // Instrukcja „uruchom kod" – właściciel ją dostaje, członek nie.
   zapytania.length = 0;
   await marcin.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'cloud', messages: [{ role: 'user', content: 'policz średnią 1 2 3' }] } });
   const sysW = (zapytania.find((z) => z.systemowe) || {}).systemowe || '';
@@ -226,7 +226,7 @@ function klient(ip) {
 
   await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAni, silniki: { openai: false } } });
   klucz = await polish(ania);
-  ok(klucz === KLUCZ_NVIDIA, 'po odebraniu uprawnienia — z powrotem NVIDIA, od następnego zapytania');
+  ok(klucz === KLUCZ_NVIDIA, 'po odebraniu uprawnienia – z powrotem NVIDIA, od następnego zapytania');
 
   // --- 6. Cudzy bieg ------------------------------------------------------------
   const BIEG = 'biegwlasciciela01';

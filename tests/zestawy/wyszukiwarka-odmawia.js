@@ -1,6 +1,6 @@
-/* „Wyszukiwarka nie odpowiada" — kiedy odpowiada aż za dobrze.
+/* „Wyszukiwarka nie odpowiada" – kiedy odpowiada aż za dobrze.
 
-   Marcin zapytał Cosmosa o pogodę w Warszawie i dostał „błąd — Wyszukiwarka
+   Marcin zapytał Cosmosa o pogodę w Warszawie i dostał „błąd – Wyszukiwarka
    nie odpowiada (fetch failed). Sprawdź połączenie z internetem." Połączenie
    miał sprawne. Pomiar na jego VPS-ie pokazał coś innego niż awaria sieci:
 
@@ -8,22 +8,22 @@
      próba 3-10 → HTTP 202, ~14 200 znaków  (strona weryfikacyjna)
 
    DuckDuckGo ogranicza ruch z adresów centrów danych. Oddaje wtedy stronę
-   weryfikacyjną — ale ze statusem 202, który mieści się w zakresie „ok",
+   weryfikacyjną – ale ze statusem 202, który mieści się w zakresie „ok",
    więc `fetch` nie rzuca, `r.ok` jest prawdą, a kod leciał dalej. Parser nie
    znajdował ani jednej klasy `result__a` i meldował „0 wyników".
 
    To jest gorsze niż błąd, bo wygląda jak odpowiedź: człowiek myśli, że
-   internet nic nie ma na ten temat, i zawęża zapytanie — a trzeba postawić
+   internet nic nie ma na ten temat, i zawęża zapytanie – a trzeba postawić
    SearXNG. Dwa różne stany muszą prowadzić do dwóch różnych komunikatów.
 
    Zestaw sprawdza obie strony, bo obie mogą zawieść niezależnie:
      1. ODMOWA (202 bez trafień) ma dać błąd mówiący o ograniczaniu ruchu.
-     2. PRAWDZIWY BRAK TRAFIEŃ (200 bez trafień) NIE MOŻE go dawać — inaczej
+     2. PRAWDZIWY BRAK TRAFIEŃ (200 bez trafień) NIE MOŻE go dawać – inaczej
         zamienilibyśmy jedno mylące zdanie na drugie.
      3. Przy awarii połączenia komunikat ma nieść przyczynę z `err.cause`,
         a nie samo „fetch failed”.
 */
-// Atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
+// Atrapy stron stoją na 127.0.0.1 – jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
 process.env.POBIERANIE_ZAUFANE = '127.0.0.1,localhost';
 
 const http = require('node:http');
@@ -31,7 +31,7 @@ const http = require('node:http');
 const fail = [];
 
 /* Port poznajemy dopiero po `listen`, a atrapa SearXNG musi oddać adres
-   strony na tym samym serwerze — stąd zmienna wypełniana po starcie. */
+   strony na tym samym serwerze – stąd zmienna wypełniana po starcie. */
 let PORT = 0;
 
 /* Serwer, który udaje DuckDuckGo. Każda ścieżka to inny scenariusz. */
@@ -102,18 +102,18 @@ function atrapa() {
   const nieKlamieOSieci = !/sprawdź połączenie z internetem/i.test(odmowa.error || '');
   console.log(`1. HTTP 202 bez trafień → error: ${JSON.stringify((odmowa.error || '(brak)').slice(0, 70))}`);
   if (!odmowa.error) {
-    fail.push('odmowa wyszukiwarki (202) przechodzi jako zwykły pusty wynik — '
+    fail.push('odmowa wyszukiwarki (202) przechodzi jako zwykły pusty wynik – '
       + 'człowiek widzi „0 wyników" i zawęża zapytanie zamiast postawić SearXNG');
   } else if (!mowiOOgraniczeniu) {
     fail.push(`komunikat przy 202 nie mówi o ograniczaniu ruchu: ${odmowa.error}`);
   }
-  if (!nieKlamieOSieci) fail.push('komunikat przy 202 odsyła do sprawdzania internetu — a internet działa');
+  if (!nieKlamieOSieci) fail.push('komunikat przy 202 odsyła do sprawdzania internetu – a internet działa');
 
   // --- 2. PRAWDZIWY BRAK TRAFIEŃ: 200 bez wyników --------------------------
   /* Strona odwrotna. Gdyby punkt 1 załatwić przez „pusto = odmowa", ten
-     punkt by padł — i słusznie, bo to dwa różne stany świata. */
+     punkt by padł – i słusznie, bo to dwa różne stany świata. */
   const pusto = await wolaj(`${baza}/pusto`, 'zapytanie bez trafień');
-  console.log(`2. HTTP 200 bez trafień → error: ${JSON.stringify(pusto.error || '(brak — dobrze)')}`);
+  console.log(`2. HTTP 200 bez trafień → error: ${JSON.stringify(pusto.error || '(brak – dobrze)')}`);
   if (pusto.error) {
     fail.push('uczciwy brak trafień (HTTP 200) jest zgłaszany jako awaria wyszukiwarki: '
       + pusto.error);
@@ -133,7 +133,7 @@ function atrapa() {
      a konkret (ECONNREFUSED) schowa w `err.cause`. Właśnie ten konkret
      Marcin powinien był zobaczyć zamiast rady o sprawdzeniu internetu.
 
-     Port bierzemy z jądra i dopiero potem zwalniamy — stały numer bywa
+     Port bierzemy z jądra i dopiero potem zwalniamy – stały numer bywa
      zajęty, a numer poniżej 1024 daje „bad port" zamiast odmowy połączenia,
      czyli mierzyłby co innego, niż udaje. */
   const wolnyPort = await new Promise((g) => {
@@ -147,18 +147,18 @@ function atrapa() {
   if (!martwy.error) {
     fail.push('awaria połączenia nie daje żadnego błędu');
   } else if (!/przyczyna:/i.test(martwy.error)) {
-    fail.push('komunikat o awarii nie niesie przyczyny z err.cause — '
+    fail.push('komunikat o awarii nie niesie przyczyny z err.cause – '
       + `każda awaria wygląda tak samo: ${martwy.error}`);
   }
 
   /* --- 5. SEARXNG TEŻ MUSI DOWOZIĆ TREŚĆ STRON ---------------------------
      Nagłówek tego pliku obiecuje, że Cosmos „nie tylko zbiera linki, ale
-     POBIERA TREŚĆ dwóch pierwszych stron" — bo bez tego model dostawał same
+     POBIERA TREŚĆ dwóch pierwszych stron" – bo bez tego model dostawał same
      tytuły i w kółko prosił o kolejne wyszukiwanie, aż wyczerpał rundy.
 
      Obietnica była spełniona tylko na drodze DuckDuckGo. Droga SearXNG
-     zwracała wyniki od razu, więc kto włączył SEARXNG_URL — czyli dokładnie
-     ten, kto uciekał przed odmowami DuckDuckGo — po cichu wracał do usterki,
+     zwracała wyniki od razu, więc kto włączył SEARXNG_URL – czyli dokładnie
+     ten, kto uciekał przed odmowami DuckDuckGo – po cichu wracał do usterki,
      dla której `fetchPageText` powstało.
 
      Atrapa oddaje zajawkę BEZ liczby i osobną stronę, na której ta liczba
@@ -183,7 +183,7 @@ function atrapa() {
   if (przezSearxng.silnik !== 'searxng') {
     fail.push(`zapytanie nie poszło przez SearXNG (silnik: ${przezSearxng.silnik})`);
   } else if (!maTresc) {
-    fail.push('wyniki z SearXNG nie niosą treści stron — model dostaje same zajawki '
+    fail.push('wyniki z SearXNG nie niosą treści stron – model dostaje same zajawki '
       + 'i będzie prosił o kolejne wyszukiwania, tak jak przed powstaniem fetchPageText');
   }
 

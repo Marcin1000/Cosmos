@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cosmos Kinect Watcher — zmysł głębi (Kinect 360).
+Cosmos Kinect Watcher – zmysł głębi (Kinect 360).
 
 Czyta mapę głębi z Kinecta przez sterownik libfreenect i wysyła do Cosmosa
 zdarzenia o tym, co dzieje się w przestrzeni:
@@ -8,11 +8,11 @@ zdarzenia o tym, co dzieje się w przestrzeni:
   • ruch w pomieszczeniu (start / koniec),
   • zmiana dystansu najbliższego obiektu.
 
-Kinect RGB działa jak zwykła kamera — do obrazu użyj watcher.py (YOLO)
+Kinect RGB działa jak zwykła kamera – do obrazu użyj watcher.py (YOLO)
 albo MediaPipe (sylwetka). Ten skrypt zajmuje się wyłącznie GŁĘBIĄ,
 czyli tym, czego zwykła kamera nie widzi.
 
-Moduł sam wybiera sterownik — nie musisz nic ustawiać:
+Moduł sam wybiera sterownik – nie musisz nic ustawiać:
   • Windows → Kinect for Windows SDK 1.8 przez kinect_win.py (ctypes).
     Dodatkowo daje ŚLEDZENIE SZKIELETU: postawa (stoi/siedzi), gesty,
     pozycja w kadrze. libfreenect tego nie potrafi w ogóle.
@@ -22,11 +22,11 @@ Wymagania:
     Windows: Kinect for Windows SDK 1.8 + pip install numpy requests
              (bez libfreenect, bez Zadiga, bez kompilatora)
     Linux:   sudo apt install freenect + pip install freenect numpy requests
-    W obu przypadkach Kinect 360 musi mieć własny zasilacz — sam USB nie wystarcza.
+    W obu przypadkach Kinect 360 musi mieć własny zasilacz – sam USB nie wystarcza.
 
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
-    COSMOS_TOKEN    COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
+    COSMOS_TOKEN    COSMOS_API_TOKEN serwera – wymagany, gdy Cosmos ma hasło
     WATCH_INTERVAL  sekundy między analizami (domyślnie 2)
     KINECT_BACKEND  wymuś sterownik: auto (domyślnie) | win | freenect
     KINECT_SKELETON 0 wyłącza zdarzenia o postawie (Windows)
@@ -81,7 +81,7 @@ def _posture_line(opis: dict) -> str:
 # ---------------------------------------------------------------------------
 
 class FreenectSource:
-    """libfreenect — otwarty sterownik. Sama głębia, bez szkieletu."""
+    """libfreenect – otwarty sterownik. Sama głębia, bez szkieletu."""
 
     name = "libfreenect"
     has_skeleton = False
@@ -129,7 +129,7 @@ class WinSdkSource:
 def open_source():
     """Wybierz sterownik: wymuszony przez KINECT_BACKEND albo pierwszy działający.
 
-    Na Windowsie kolejność jest odwrotna do intuicji z Linuksa — najpierw SDK,
+    Na Windowsie kolejność jest odwrotna do intuicji z Linuksa – najpierw SDK,
     bo jest już zainstalowane razem ze sterownikiem czujnika i daje szkielet,
     a libfreenect wymagałby podmiany sterownika i utraty SDK.
     """
@@ -146,7 +146,7 @@ def open_source():
     raise SystemExit(
         "Nie udało się otworzyć Kinecta żadnym sterownikiem:\n"
         + "\n".join(problems)
-        + "\n\nWindows: zainstaluj Kinect for Windows SDK 1.8 —"
+        + "\n\nWindows: zainstaluj Kinect for Windows SDK 1.8 –"
           "\n  https://www.microsoft.com/en-us/download/details.aspx?id=40278"
           "\n  Sprawdź:  python kinect_win.py info"
           "\nLinux:   sudo apt install freenect && pip install freenect"
@@ -156,16 +156,16 @@ def open_source():
 
 def main() -> None:
     source = open_source()
-    print(f"✦ Cosmos Kinect Watcher — sterownik: {source.name}")
+    print(f"✦ Cosmos Kinect Watcher – sterownik: {source.name}")
     print(f"  Analiza co {INTERVAL}s, cel: {COSMOS_URL}")
     if source.has_skeleton:
         print("  Śledzenie sylwetki włączone (postawa, gesty, pozycja w kadrze).")
-    send_event(f"czujnik głębi (Kinect) uruchomiony — {source.name}")
+    send_event(f"czujnik głębi (Kinect) uruchomiony – {source.name}")
 
     try:
         _loop(source)
     finally:
-        # Czujnik zostaje zajęty, dopóki go nie zwolnimy — bez tego kolejne
+        # Czujnik zostaje zajęty, dopóki go nie zwolnimy – bez tego kolejne
         # uruchomienie kończy się „urządzenie w użyciu".
         source.close()
 
@@ -185,7 +185,7 @@ def _loop(source) -> None:
             time.sleep(5)
             continue
 
-        # 0. Sylwetka — najbogatsza informacja, gdy sterownik ją daje.
+        # 0. Sylwetka – najbogatsza informacja, gdy sterownik ją daje.
         #    Zgłaszamy tylko zmiany opisu, żeby nie zalewać kontekstu.
         for person in source.skeletons():
             line = person["opis"]
@@ -220,7 +220,7 @@ def _loop(source) -> None:
                     moving = now_moving
         prev_depth = depth
 
-        # 3. Najbliższy obiekt (5. percentyl — odporny na szum)
+        # 3. Najbliższy obiekt (5. percentyl – odporny na szum)
         nearest = int(np.percentile(valid, 5))
         if last_nearest is None or abs(nearest - last_nearest) > NEAREST_DELTA_MM:
             send_event(f"najbliższy obiekt znajduje się ok. {nearest / 1000:.1f} m od czujnika")

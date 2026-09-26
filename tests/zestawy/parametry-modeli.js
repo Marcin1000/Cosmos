@@ -4,15 +4,15 @@
  * jedną ponowną próbę, więc gpt-5 (odmowa `max_tokens`, potem `temperature`)
  * nie odpowiadał nigdy. Atrapa zachowuje się jak prawdziwy dostawca:
  *   1. gpt-5 dostaje od razu max_completion_tokens i żadnej temperatury,
- *   2. model odmawiający kolejno dwóch parametrów — i tak odpowiada,
+ *   2. model odmawiający kolejno dwóch parametrów – i tak odpowiada,
  *   3. drugie pytanie do tego samego modelu idzie od razu poprawne (bez odmowy),
  *   4. 429 z Retry-After → ponowienie i odpowiedź,
  *   5. 400 z innego powodu → oddane wołającemu bez pętli,
  *   6. llmComplete nie oddaje toku myślenia jako odpowiedzi,
  *   7. Claude dostaje od razu to, co przyjmuje: bez top_p/top_k, a rodzina 5
- *      i Opus 4.7/4.8 — bez temperatury (dokumentacja Anthropic; treści tej
+ *      i Opus 4.7/4.8 – bez temperatury (dokumentacja Anthropic; treści tej
  *      odmowy nie da się przewidzieć, więc zgadywanie „z odmowy" nie wystarczy),
- *   8. sufit 16 000 tylko dla modeli myślących — Haiku 4.5 dostaje to, co ustawiono,
+ *   8. sufit 16 000 tylko dla modeli myślących – Haiku 4.5 dostaje to, co ustawiono,
  *   9. gpt-6 to model rozumujący; API OpenAI zawsze max_completion_tokens,
  *  10. Claude: `chat/completions` z samym Bearer, natywne /models z x-api-key,
  *  11. podpowiedź czyta TREŚĆ odmowy: brak środków, za długi kontekst, przeciążenie,
@@ -21,7 +21,7 @@
  *  14. za duży limit odpowiedzi (gpt-4o: najwyżej 16 384) → jedna próba z limitem
  *      z odmowy, a następne pytanie od razu dobre,
  *  13. llmComplete ma JEDEN termin na całość, z ponowieniem po `length`
- *      włącznie — dawniej ponowienie liczyło od nowa i streszczenie modelem
+ *      włącznie – dawniej ponowienie liczyło od nowa i streszczenie modelem
  *      rozumującym kończyło się za Cloudflare stroną 524 po 100 s. */
 const http = require('node:http');
 
@@ -88,7 +88,7 @@ const atrapa = http.createServer((req, res) => {
 
   zadania.length = 0;
   r = await zapytajModel(ep, cialo('wybredny'));
-  ok(r.status === 200, `model odmawiający dwóch parametrów po kolei — odpowiada (${r.status}, żądań ${zadania.length})`);
+  ok(r.status === 200, `model odmawiający dwóch parametrów po kolei – odpowiada (${r.status}, żądań ${zadania.length})`);
   zadania.length = 0;
   r = await zapytajModel(ep, cialo('wybredny'));
   ok(r.status === 200 && zadania.length === 1, `drugie pytanie od razu poprawne (${zadania.length} żądanie)`);
@@ -99,7 +99,7 @@ const atrapa = http.createServer((req, res) => {
 
   zadania.length = 0;
   r = await zapytajModel(ep, cialo('zly'));
-  ok(r.status === 400 && zadania.length === 1, `inna odmowa 400 — bez pętli (${zadania.length})`);
+  ok(r.status === 400 && zadania.length === 1, `inna odmowa 400 – bez pętli (${zadania.length})`);
 
   let blad = null;
   try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli' }); } catch (e) { blad = e; }
@@ -115,8 +115,8 @@ const atrapa = http.createServer((req, res) => {
   }
   const haiku = zClaude('claude-haiku-4-5-20251001');
   ok(haiku.temperature === 0.6 && haiku.top_p === undefined, `Haiku 4.5: temperatura zostaje, top_p nie (razem → 400)`);
-  ok(haiku.max_tokens === 2048, `Haiku 4.5 nie myśli sam — limit bez podwyższenia (${haiku.max_tokens})`);
-  ok(zClaude('claude-sonnet-5').max_tokens >= 16000, 'Sonnet 5 myśli sam — sufit mieści myślenie');
+  ok(haiku.max_tokens === 2048, `Haiku 4.5 nie myśli sam – limit bez podwyższenia (${haiku.max_tokens})`);
+  ok(zClaude('claude-sonnet-5').max_tokens >= 16000, 'Sonnet 5 myśli sam – sufit mieści myślenie');
   const gpt6 = parametryDla({ baseUrl: 'https://api.openai.com/v1' }, { model: 'gpt-6-luna', temperature: 0.6, top_p: 0.9, max_tokens: 700 });
   ok(gpt6.max_completion_tokens >= 16000 && gpt6.max_tokens === undefined && gpt6.temperature === undefined,
     `gpt-6: rozumujący od pierwszego żądania (${JSON.stringify(gpt6)})`);
@@ -161,13 +161,13 @@ const atrapa = http.createServer((req, res) => {
   try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-wolno', terminMs: 1000 }); } catch (e) { bladTerminu = e; }
   const czas = Date.now() - t0;
   ok(zadania.length === 1 && czas < 1300 && /budżet tokenów/.test(bladTerminu?.message || ''),
-    `za mało czasu na ponowienie — od razu czytelny błąd, bez drugiego żądania (${zadania.length} żądanie, ${czas} ms)`);
+    `za mało czasu na ponowienie – od razu czytelny błąd, bez drugiego żądania (${zadania.length} żądanie, ${czas} ms)`);
   zadania.length = 0;
   t0 = Date.now();
   bladTerminu = null;
   try { await llmComplete([{ role: 'user', content: 'x' }], { model: 'mysli-wolno', terminMs: 400 }); } catch (e) { bladTerminu = e; }
   ok(Date.now() - t0 < 700 && /nie odpowiedział w wyznaczonym czasie/.test(bladTerminu?.message || ''),
-    `termin mija w trakcie — ludzki komunikat zamiast „operation was aborted" (${Date.now() - t0} ms)`);
+    `termin mija w trakcie – ludzki komunikat zamiast „operation was aborted" (${Date.now() - t0} ms)`);
 
   atrapa.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nPARAMETRY MODELI OK');

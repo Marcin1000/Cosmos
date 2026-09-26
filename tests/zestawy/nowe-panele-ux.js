@@ -3,7 +3,7 @@
    Przez sześć partii doszło do interfejsu sześć nowych rzeczy: kafelki
    dokumentów, siatka znalezionych zdjęć, panel wyniku programu, płótno,
    plan zdjęciowy przy kamerze i panel archiwum w Ustawieniach. Każda z nich
-   powstała osobno i osobno wyglądała dobrze — a razem mają się zmieścić
+   powstała osobno i osobno wyglądała dobrze – a razem mają się zmieścić
    na ekranie telefonu o szerokości 360 px.
 
    Sprawdzamy trzy rzeczy, na które nikt nie patrzy, dopóki nie zawiodą:
@@ -12,7 +12,7 @@
 const { srodowisko, przegladarka, maPrzegladarke, KATALOG_ZRZUTOW } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -30,7 +30,7 @@ const WASKI = { width: 360, height: 740 };
   await pg.goto(env.adres + '/app', { waitUntil: 'load' });
   await pg.waitForTimeout(400);
 
-  /** Czy strona przewija się w bok — najczęstsza wpadka na wąskim ekranie. */
+  /** Czy strona przewija się w bok – najczęstsza wpadka na wąskim ekranie. */
   const wBok = async (gdzie) => {
     const r = await pg.evaluate(() => ({
       s: document.documentElement.scrollWidth, i: window.innerWidth,
@@ -46,21 +46,21 @@ const WASKI = { width: 360, height: 740 };
     /* `checkVisibility()`, nie `offsetParent`. Zamknięte `<details>` chowa
        treść przez `content-visibility`: rozmiar zostaje niezerowy, a element
        nie jest rysowany. Sprawdzanie `offsetParent` kazałoby mierzyć coś,
-       czego nie widać — i pomiar wychodziłby zawsze na zielono. */
+       czego nie widać – i pomiar wychodziłby zawsze na zielono. */
     const widac = typeof el?.checkVisibility === 'function' ? el.checkVisibility() : Boolean(el?.offsetParent);
     if (!el || el.hidden || !widac) return null;
     const e = el.getBoundingClientRect();
     return { poza: e.right > window.innerWidth + 1 || e.left < -1, szer: Math.round(e.width) };
   }, sel).then((r) => {
     if (!r) return;
-    console.log(`   ${gdzie}: ${r.szer} px${r.poza ? ' — WYSTAJE ⚠' : ''}`);
+    console.log(`   ${gdzie}: ${r.szer} px${r.poza ? ' – WYSTAJE ⚠' : ''}`);
     if (r.poza) fail.push(`${gdzie} wystaje poza ekran`);
   });
 
   console.log('1. czat na 360 px');
   await wBok('czat');
 
-  /* 2. Płótno. Na wąskim ekranie ma zajmować CAŁY ekran — panel na 46%
+  /* 2. Płótno. Na wąskim ekranie ma zajmować CAŁY ekran – panel na 46%
      szerokości przy 360 px dawał kolumnę, w której nie da się przeczytać
      zdania. Reguła jest w CSS pod media query, więc sprawdzamy ją realnie. */
   console.log('2. płótno');
@@ -77,14 +77,14 @@ const WASKI = { width: 360, height: 740 };
   });
   console.log(`   szerokość ${plotno.szer} px z ${plotno.okno} px okna`);
   if (plotno.szer < plotno.okno * 0.9) {
-    fail.push(`płótno zajmuje tylko ${plotno.szer} px — na telefonie ma być pełnoekranowe`);
+    fail.push(`płótno zajmuje tylko ${plotno.szer} px – na telefonie ma być pełnoekranowe`);
   }
   await wBok('płótno otwarte');
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-plotno-360.png` });
   await pg.evaluate(() => pokazPlotno(null));
 
   /* 3. Kafelki dokumentów i siatka zdjęć w wiadomości. Nazwy plików bywają
-     długie, a adresy źródeł jeszcze dłuższe — bez ucinania rozpychają czat. */
+     długie, a adresy źródeł jeszcze dłuższe – bez ucinania rozpychają czat. */
   console.log('3. załączniki i zdjęcia w wiadomości');
   await pg.evaluate(() => {
     const c = ensureConversation('test');
@@ -104,10 +104,10 @@ const WASKI = { width: 360, height: 740 };
     return g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0;
   });
   console.log(`   siatka zdjęć: ${kolumny} kolumny`);
-  if (kolumny < 2) fail.push('siatka zdjęć zwinęła się do jednej kolumny — miniatury są za duże');
+  if (kolumny < 2) fail.push('siatka zdjęć zwinęła się do jednej kolumny – miniatury są za duże');
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-zalaczniki-360.png` });
 
-  // 4. panel wyniku programu — długie linie muszą się zawijać, nie rozpychać
+  // 4. panel wyniku programu – długie linie muszą się zawijać, nie rozpychać
   console.log('4. wynik programu');
   await pg.evaluate(() => {
     const c = activeConv();
@@ -122,7 +122,7 @@ const WASKI = { width: 360, height: 740 };
 
   // 5. Ustawienia: pola profilu i lokalizacji
   console.log('5. Ustawienia');
-  /* Na telefonie przycisk Ustawień siedzi w schowanym panelu bocznym —
+  /* Na telefonie przycisk Ustawień siedzi w schowanym panelu bocznym –
      najpierw trzeba go wysunąć. To nie usterka, tylko sposób działania
      interfejsu; test musi robić to samo co człowiek. */
   await pg.evaluate(() => {
@@ -138,7 +138,7 @@ const WASKI = { width: 360, height: 740 };
   await pg.keyboard.press('Escape');
   await pg.waitForTimeout(300);
 
-  /* 5b. Plener — sprzęt, plan, aparat, misja i archiwum w jednym oknie.
+  /* 5b. Plener – sprzęt, plan, aparat, misja i archiwum w jednym oknie.
      Archiwum przeprowadziło się tutaj z Ustawień, więc sprawdzenie jego
      stanu przeprowadza się razem z nim. */
   console.log('5b. Plener');
@@ -155,7 +155,7 @@ const WASKI = { width: 360, height: 740 };
   if (!/ONEDRIVE_CLIENT_ID/.test(archTekst || '')) {
     fail.push('panel archiwum nie mówi, co ustawić w .env');
   }
-  /* Cele dotykowe sprawdzamy TU, przy otwartym oknie — schowany element ma
+  /* Cele dotykowe sprawdzamy TU, przy otwartym oknie – schowany element ma
      zerowe wymiary i każde sprawdzenie jego rozmiaru przechodzi zawsze.
      Sześć pól liczbowych misji obok siebie na 360 px to najciaśniejsze
      miejsce w całym interfejsie, więc jeśli gdziekolwiek ma być za ciasno,
@@ -166,7 +166,7 @@ const WASKI = { width: 360, height: 740 };
       const r = el.getBoundingClientRect();
       if (r.width && r.height && r.height < 28) out.push(`${el.id || el.className}: ${Math.round(r.height)} px`);
       // Przyciski ikonowe (× zamknięcia) są kwadratowe i mniejsze z założenia
-      // — taki sam jak we wszystkich pozostałych oknach, więc nie tutaj.
+      // – taki sam jak we wszystkich pozostałych oknach, więc nie tutaj.
       if (r.width && r.width < 44 && !el.classList.contains('icon-btn')) {
         out.push(`${el.id || el.className}: szer. ${Math.round(r.width)} px`);
       }
@@ -178,7 +178,7 @@ const WASKI = { width: 360, height: 740 };
 
   /* Lista rozwijana węższa niż ~125 px ucina własną treść: „Wideo 25"
      wychodziło jako „Wideo 2!". Szerokość pola to jedyna rzecz, którą da się
-     tu zmierzyć — czy napis się mieści, przeglądarka nie powie. */
+     tu zmierzyć – czy napis się mieści, przeglądarka nie powie. */
   const waskieListy = await pg.evaluate(() => [...document.querySelectorAll('#plener-modal select')]
     .map((e) => ({ id: e.id, w: Math.round(e.getBoundingClientRect().width) }))
     .filter((x) => x.w > 0 && x.w < 125));
@@ -193,7 +193,7 @@ const WASKI = { width: 360, height: 740 };
   await pg.waitForTimeout(300);
 
   /* 6. Panel planu przy kamerze. Trzy listy rozwijane obok siebie na 360 px
-     to test na `min-width: 0` — bez niego pola rozpychają panel. */
+     to test na `min-width: 0` – bez niego pola rozpychają panel. */
   console.log('6. plan zdjęciowy przy kamerze');
   /* Rozwijamy PRZED wstawieniem wyniku i czekamy, aż odświeżenie wywołane
      rozwinięciem wróci. Inaczej jego odpowiedź („brak lokalizacji") nadpisuje
@@ -202,23 +202,23 @@ const WASKI = { width: 360, height: 740 };
     document.getElementById('live-panel').style.display = '';
     const box = document.getElementById('plan-box');
     box.hidden = false;
-    // Stan PRZED jakimkolwiek naszym kliknięciem — świeża karta, pusta pamięć.
+    // Stan PRZED jakimkolwiek naszym kliknięciem – świeża karta, pusta pamięć.
     const zwiniete = !box.open;
     box.open = true;
     return zwiniete;
   });
   console.log(`   domyślnie zwinięte: ${domyslnieZwiniete}`);
   if (!domyslnieZwiniete) {
-    fail.push('pudełko nastaw jest domyślnie rozwinięte — zabiera jedną trzecią panelu kamery');
+    fail.push('pudełko nastaw jest domyślnie rozwinięte – zabiera jedną trzecią panelu kamery');
   }
   await pg.waitForTimeout(600);
 
   /* Plan podstawiamy PRZEZ TRASĘ, a nie wywołaniem funkcji rysującej.
-     Wcześniej stało tu `pokazPlan({...})` w `page.evaluate` — i przestało
+     Wcześniej stało tu `pokazPlan({...})` w `page.evaluate` – i przestało
      działać, gdy plan przeniósł się do `public/plener.js` i nie był już
      globalną deklaracją skryptu. Tak jest zresztą lepiej: mierzymy układ
      tego, co narysuje się po prawdziwej odpowiedzi serwera, razem z całą
-     drogą pobrania — a nie samego renderera.
+     drogą pobrania – a nie samego renderera.
 
      Zmiana listy „tryb" wywołuje odświeżenie planu, więc wystarczy ona
      zamiast sięgania do środka modułu. */
@@ -235,7 +235,7 @@ const WASKI = { width: 360, height: 740 };
         czas: '1/60',
         przyslona: 'f/11',
         iso: 100,
-        powody: ['Czas 1/60 s wynika z reguły 180° przy 25 kl./s — to on daje naturalne rozmycie ruchu.'],
+        powody: ['Czas 1/60 s wynika z reguły 180° przy 25 kl./s – to on daje naturalne rozmycie ruchu.'],
       },
     }),
   }));
@@ -252,41 +252,41 @@ const WASKI = { width: 360, height: 740 };
   if (!/1\/60/.test(nastawy || '')) fail.push('panel planu nie pokazał nastaw');
   const swiatlo = await pg.textContent('#plan-light');
   if (!/złota godzina TERAZ/.test(swiatlo || '')) {
-    fail.push('trwająca złota godzina nie jest oznaczona — pokazałby ujemne minuty');
+    fail.push('trwająca złota godzina nie jest oznaczona – pokazałby ujemne minuty');
   }
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-plan-360.png` });
 
   /* 6b. Trzy rzeczy, o które Marcin zapytał wprost, patrząc na ten panel
      w telefonie: „nie wiem, czy tak to miało być".
 
-     — Pudełko nastaw NIE MIAŁO TYTUŁU. Trzy listy rozwijane pojawiały się
+     – Pudełko nastaw NIE MIAŁO TYTUŁU. Trzy listy rozwijane pojawiały się
        pod obrazem z kamery i nic nie mówiło, czego dotyczą.
-     — Napisy w listach BYŁY UCINANE („🌤 Z pro" zamiast „Z prognozy”), bo
+     – Napisy w listach BYŁY UCINANE („🌤 Z pro" zamiast „Z prognozy”), bo
        trzy pola wciśnięte w szerokość telefonu nie mają jak się zmieścić.
-     — Ta sama treść co pod obrazem migała DRUGI RAZ w dymku nad panelem. */
+     – Ta sama treść co pod obrazem migała DRUGI RAZ w dymku nad panelem. */
   console.log('6b. czytelność pudełka nastaw');
   const tytul = await pg.textContent('.plan-box-title').catch(() => null);
   console.log(`   tytuł pudełka: ${JSON.stringify(tytul)}`);
   if (!tytul || !tytul.trim()) {
-    fail.push('pudełko nastaw bez tytułu — trzy listy rozwijane bez wyjaśnienia, czego dotyczą');
+    fail.push('pudełko nastaw bez tytułu – trzy listy rozwijane bez wyjaśnienia, czego dotyczą');
   }
   const uciete = await pg.evaluate(() => [...document.querySelectorAll('#plan-box select')]
     .filter((s) => s.scrollWidth > s.clientWidth + 1)
     .map((s) => `${s.id}: „${s.options[s.selectedIndex].text}"`));
   console.log(`   pola z uciętym napisem: ${uciete.length ? uciete.join(', ') : 'brak'}`);
   if (uciete.length) fail.push(`ucięte napisy w listach nastaw: ${uciete.join(', ')}`);
-  // Tytuł też się nie może uciąć — „NASTAWY…" jest gorsze niż brak tytułu.
+  // Tytuł też się nie może uciąć – „NASTAWY…" jest gorsze niż brak tytułu.
   const tytulUciety = await pg.evaluate(() => {
     const el = document.querySelector('#plan-box .plan-box-title');
     return el && el.offsetParent ? el.scrollWidth > el.clientWidth + 1 : false;
   });
   console.log(`   tytuł ucięty: ${tytulUciety}`);
-  if (tytulUciety) fail.push('tytuł pudełka nastaw ucina się — pokazuje „NASTAWY…" zamiast nazwy');
+  if (tytulUciety) fail.push('tytuł pudełka nastaw ucina się – pokazuje „NASTAWY…" zamiast nazwy');
 
   /* 6b2. ZWIJANIE. Panel kamery zajmuje na telefonie 743 z 844 px ekranu,
      a rozwinięte pudełko to ponad jedna trzecia panelu. Marcin: „faktycznie
      zabiera sporo miejsca". Zwinięte ma zostawić w pasku to, po co się tu
-     patrzy — czas, przysłonę i ISO — i schować listy oraz uzasadnienie. */
+     patrzy – czas, przysłonę i ISO – i schować listy oraz uzasadnienie. */
   console.log('6b2. zwijanie pudełka nastaw');
   const zwijanie = await pg.evaluate(() => {
     const box = document.getElementById('plan-box');
@@ -303,7 +303,7 @@ const WASKI = { width: 360, height: 740 };
       nastawyWidoczne: Boolean(shot && shot.offsetParent) && shot.textContent.trim(),
       /* Zamknięte `<details>` chowa treść przez `content-visibility`:
          zmierzone w Chromium `offsetParent` zostaje ustawiony, a rect ma
-         131×35 px — mimo że elementu nie widać. Jedyne, co mówi prawdę,
+         131×35 px – mimo że elementu nie widać. Jedyne, co mówi prawdę,
          to `checkVisibility()`. */
       listyWidoczne: Boolean(listy && listy.checkVisibility()),
     };
@@ -312,11 +312,11 @@ const WASKI = { width: 360, height: 740 };
   console.log(`   w zwiniętym pasku: nastawy „${zwijanie.nastawyWidoczne}", `
     + `listy widoczne: ${zwijanie.listyWidoczne}`);
   if (!(zwijanie.zwiniete < zwijanie.rozwiniete - 60)) {
-    fail.push(`zwinięcie oszczędza ${zwijanie.rozwiniete - zwijanie.zwiniete} px — pudełko się nie zwija`);
+    fail.push(`zwinięcie oszczędza ${zwijanie.rozwiniete - zwijanie.zwiniete} px – pudełko się nie zwija`);
   }
   if (zwijanie.listyWidoczne) fail.push('listy nastaw widoczne mimo zwiniętego pudełka');
   if (!/\d/.test(zwijanie.nastawyWidoczne || '')) {
-    fail.push('zwinięty pasek nie pokazuje nastaw — chowa jedyną rzecz, po którą się tu zagląda');
+    fail.push('zwinięty pasek nie pokazuje nastaw – chowa jedyną rzecz, po którą się tu zagląda');
   }
   // Stan ma przetrwać zamknięcie panelu, żeby nie klikać tego za każdym razem.
   const pamieta = await pg.evaluate(() => {
@@ -329,7 +329,7 @@ const WASKI = { width: 360, height: 740 };
   if (pamieta !== '1') fail.push('rozwinięcie pudełka nie jest zapamiętywane');
   await pg.evaluate(() => { document.getElementById('plan-box').open = true; });
 
-  /* Dymek zdarzeń percepcji ma milczeć, gdy podgląd jest otwarty — pod
+  /* Dymek zdarzeń percepcji ma milczeć, gdy podgląd jest otwarty – pod
      obrazem stoi to samo, na stałe zamiast na sześć sekund. */
   console.log('6c. dymek percepcji przy otwartym podglądzie');
   const dymek = await pg.evaluate(() => {
@@ -352,12 +352,12 @@ const WASKI = { width: 360, height: 740 };
     fail.push('dymek percepcji miga nad panelem, choć to samo widać pod obrazem');
   }
   if (!dymek.przyZamknietym) {
-    fail.push('dymek percepcji milczy także przy zamkniętym podglądzie — wtedy nie widać tego nigdzie');
+    fail.push('dymek percepcji milczy także przy zamkniętym podglądzie – wtedy nie widać tego nigdzie');
   }
 
   /* 7. Dotyk. Cele mniejsze niż ~32 px trudno trafić palcem; wytyczne mówią
      o 44 px, ale przyciski pomocnicze w gęstym panelu bywają mniejsze
-     i to jest świadomy kompromis — pilnujemy dolnej granicy. */
+     i to jest świadomy kompromis – pilnujemy dolnej granicy. */
   console.log('7. rozmiary celów dotykowych');
   const male = await pg.evaluate(() => {
     const out = [];

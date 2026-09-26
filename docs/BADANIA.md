@@ -1,10 +1,10 @@
-# 🔬 Cosmos — protokoły badawcze
+# 🔬 Cosmos – protokoły badawcze
 
 Sześć eksperymentów z **mierzalnym wynikiem**. Każdy ma gotowe narzędzie w repo,
-jasny protokół i kryterium sukcesu. To nie są zabawy — to sposób, żeby wiedzieć,
+jasny protokół i kryterium sukcesu. To nie są zabawy – to sposób, żeby wiedzieć,
 a nie zgadywać.
 
-> Zasada wspólna: **zapisz wynik**. Wrzuć raport do bazy wiedzy Cosmosa —
+> Zasada wspólna: **zapisz wynik**. Wrzuć raport do bazy wiedzy Cosmosa –
 > za rok będziesz wiedział, dlaczego robisz coś tak, a nie inaczej.
 
 ---
@@ -20,7 +20,7 @@ modelu 3D działki, jednego pogodnego dnia.
 **Protokół:**
 1. Zbuduj model: `python senses/photoscan.py <zdjęcia> --dense`
 2. Wybierz 5 punktów: 2 zawsze słoneczne, 2 zacienione, 1 graniczny.
-   Zapisz ich pozycję w siatce (wiersz, kolumna — z mapy PNG).
+   Zapisz ich pozycję w siatce (wiersz, kolumna – z mapy PNG).
 3. Co 2 godziny (8:00–16:00) zmierz lux w każdym punkcie. To 25 pomiarów.
 4. Zapisz CSV: `czas,wiersz,kolumna,lux`
 5. Uruchom:
@@ -30,7 +30,7 @@ modelu 3D działki, jednego pogodnego dnia.
    ```
 
 **Wynik:** procent zgodności + oszacowanie światła rozproszonego.
-**Kryterium sukcesu:** zgodność ≥ 85%. Poniżej — sprawdź orientację modelu
+**Kryterium sukcesu:** zgodność ≥ 85%. Poniżej – sprawdź orientację modelu
 (`--north`) i skalę.
 
 **Co z tym zrobisz:** jeśli w cieniu jest np. 9000 lx, to grządka „bez słońca"
@@ -55,7 +55,7 @@ i godziny rekonstrukcji.
 5. Wykres: błąd (cm) w funkcji liczby zdjęć.
 
 **Wynik:** własna krzywa jakości.
-**Kryterium sukcesu:** znajdujesz „kolano" — punkt, po którym błąd przestaje
+**Kryterium sukcesu:** znajdujesz „kolano" – punkt, po którym błąd przestaje
 maleć. To Twoja optymalna liczba zdjęć.
 
 ---
@@ -78,9 +78,9 @@ dla detekcji obiektów?
    python senses/lowlight.py measure folder-r6
    ```
 
-**Wynik:** dla każdej kamery — granica lx, poniżej której detekcja spada
+**Wynik:** dla każdej kamery – granica lx, poniżej której detekcja spada
 poniżej połowy skuteczności, plus krzywa SNR.
-**Kryterium sukcesu:** trzy różne progi — i wiesz, którego czujnika użyć o zmierzchu.
+**Kryterium sukcesu:** trzy różne progi – i wiesz, którego czujnika użyć o zmierzchu.
 
 > Metodę możesz sprawdzić bez sprzętu: `python senses/lowlight.py synth`
 > generuje serię testową z realnym szumem fotonowym.
@@ -106,7 +106,7 @@ taśmy mierniczej i kątomierza.
 
 **Wynik:** mapa dokładności Twojego zestawu.
 **Kryterium sukcesu:** błąd < 10° do 2 m przy kątach do ±45°. Przy krawędziach
-(±60° i więcej) macierz liniowa naturalnie traci rozdzielczość — to fizyka, nie usterka.
+(±60° i więcej) macierz liniowa naturalnie traci rozdzielczość – to fizyka, nie usterka.
 
 ---
 
@@ -122,7 +122,7 @@ najkrótszym locie?
    ```
 2. Wybierz obiekt referencyjny (jak w badaniu 2).
 3. Przeleć **każdy** wariant nad tym samym obiektem, tego samego dnia,
-   przy podobnym świetle (to ważne — światło wpływa na dopasowanie punktów).
+   przy podobnym świetle (to ważne – światło wpływa na dopasowanie punktów).
 4. Zbuduj modele, zmierz błąd, zapisz też czas rekonstrukcji.
 5. Wykres: błąd vs czas lotu, z zaznaczonym czasem obliczeń.
 
@@ -160,4 +160,4 @@ ma wartość praktyczną przy wyborze miejsca na taras.
 Dla każdego badania załóż jedną notatkę w bazie wiedzy Cosmosa:
 **data, warunki, sprzęt, surowe dane, wynik, wniosek**. Po kilku miesiącach
 Cosmos będzie umiał odpowiedzieć na pytanie *„jakie ustawienia lotu dawały
-najlepsze wyniki?"* — bo Ty mu to zmierzyłeś.
+najlepsze wyniki?"* – bo Ty mu to zmierzyłeś.

@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-/* Czy dane o zorzy docierają Z TEGO SERWERA — i co z nich wynika dla miejsca.
+/* Czy dane o zorzy docierają Z TEGO SERWERA – i co z nich wynika dla miejsca.
  *
  * NOAA SWPC udostępnia je publicznie i bez klucza, ale mój kontener testowy
  * ma zablokowane wyjście (403 na oba adresy), więc kształtu odpowiedzi nie
  * widziałem ani razu z pierwszej ręki. Ten skrypt jest jedynym miejscem,
- * w którym da się to rozstrzygnąć — i dlatego wypisuje KSZTAŁT odpowiedzi
+ * w którym da się to rozstrzygnąć – i dlatego wypisuje KSZTAŁT odpowiedzi
  * także wtedy, gdy wszystko działa. Inaczej czytnik odporny na kilka układów
  * naraz skutecznie zasłania odpowiedź na pytanie „a jak to wygląda naprawdę",
  * a atrapa w testach zbudowana na złym założeniu utrwala pomyłkę na lata.
  *
- *   node scripts/zorza.js               — dla zapisanej lokalizacji (albo Warszawy)
- *   node scripts/zorza.js 54.35 18.65   — dla podanych współrzędnych
+ *   node scripts/zorza.js               – dla zapisanej lokalizacji (albo Warszawy)
+ *   node scripts/zorza.js 54.35 18.65   – dla podanych współrzędnych
  *
  * WAŻNE: skrypt pyta OBA źródła OSOBNO i mówi, które padło.
  *
- * Pierwsza wersja szła przez `prognozaZorzy()`, a ta — słusznie — połyka błędy
+ * Pierwsza wersja szła przez `prognozaZorzy()`, a ta – słusznie – połyka błędy
  * i oddaje pustą prognozę, bo zorza jest dodatkiem do planu zdjęciowego i nic,
  * co jest dodatkiem, nie może wstrzymać odpowiedzi. Tyle że dla NARZĘDZIA
  * DIAGNOSTYCZNEGO ta sama cecha jest wadą: „Wpisów prognozy: 0" znaczyło naraz
@@ -27,7 +27,7 @@ const path = require('node:path');
 const { prognozaZorzy, szerokoscGeomagnetyczna, progKp, kpTeraz, kpPrognoza,
   ostatniKsztalt } = require('../lib/zorza.js');
 
-/** Zapisana lokalizacja z danych serwera — sensowniejsza domyślnie niż Warszawa. */
+/** Zapisana lokalizacja z danych serwera – sensowniejsza domyślnie niż Warszawa. */
 function zapisaneWspolrzedne() {
   const katalog = process.env.COSMOS_DATA_DIR || path.join(__dirname, '..', 'data');
   try {
@@ -35,7 +35,7 @@ function zapisaneWspolrzedne() {
     if (Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lon))) {
       return { lat: Number(d.lat), lon: Number(d.lon), skad: 'zapisana lokalizacja' };
     }
-  } catch { /* brak pliku — lecimy dalej */ }
+  } catch { /* brak pliku – lecimy dalej */ }
   if (Number(process.env.BRIEFING_LAT) && Number(process.env.BRIEFING_LON)) {
     return { lat: Number(process.env.BRIEFING_LAT), lon: Number(process.env.BRIEFING_LON), skad: 'BRIEFING_LAT/LON' };
   }
@@ -48,7 +48,7 @@ const miejsce = podane
   : zapisaneWspolrzedne();
 const { lat, lon } = miejsce;
 
-/** Co dokładnie przyszło pod tym adresem — kształt i początek treści. */
+/** Co dokładnie przyszło pod tym adresem – kształt i początek treści. */
 async function pokazSurowe(adres) {
   const w = (t) => console.log(`  ${' '.repeat(12)}   ${t}`);
   try {
@@ -67,11 +67,11 @@ async function pokazSurowe(adres) {
       w(`tablica, ${dane.length} pozycji`);
       for (const wiersz of dane.slice(0, 3)) w(JSON.stringify(wiersz).slice(0, 180));
       if (!dane.length) w('→ produkt naprawdę pusty; to stan po stronie NOAA, nie nasz błąd');
-      else w('→ pozycje są, ale nie rozpoznaliśmy w nich czasu i Kp — wklej mi te wiersze');
+      else w('→ pozycje są, ale nie rozpoznaliśmy w nich czasu i Kp – wklej mi te wiersze');
     } else {
       w(`obiekt, klucze: ${Object.keys(dane).slice(0, 8).join(', ')}`);
       w(JSON.stringify(dane).slice(0, 200));
-      w('→ spodziewaliśmy się tablicy; NOAA zmieniła kształt — wklej mi to');
+      w('→ spodziewaliśmy się tablicy; NOAA zmieniła kształt – wklej mi to');
     }
   } catch (e) {
     w(`nie udało się pobrać treści do podejrzenia: ${e.message}`);
@@ -88,14 +88,14 @@ async function zrodlo(nazwa, adres, wywolaj) {
     if (!ile) {
       console.log(`  ${nazwa.padEnd(12)} ⚠ odpowiedziało (${ms} ms), ale nie dało ani jednej wartości`);
       /* Pokazujemy SUROWĄ odpowiedź od razu. Poprzednia wersja odsyłała do
-         `curl`-a — i to była praca zrzucona na człowieka za coś, co skrypt
+         `curl`-a – i to była praca zrzucona na człowieka za coś, co skrypt
          ma pod ręką. Bez treści nie da się odróżnić „NOAA zmieniła układ
          kolumn" od „produkt naprawdę pusty", a to są dwie różne naprawy. */
       await pokazSurowe(adres);
       return null;
     }
     /* Kształt podajemy TAKŻE gdy się udało. Czytnik rozpoznaje pola i przez
-       to przełknie trzy różne układy naraz — ale wtedy nikt się nie dowie,
+       to przełknie trzy różne układy naraz – ale wtedy nikt się nie dowie,
        który z nich NOAA naprawdę oddaje, a atrapa w testach zbudowana na złym
        założeniu utrwaliłaby pomyłkę na lata. */
     const ksztalt = ostatniKsztalt(adres);
@@ -112,7 +112,7 @@ async function zrodlo(nazwa, adres, wywolaj) {
 (async () => {
   console.log(`Miejsce: ${lat}, ${lon} (${miejsce.skad})`);
   console.log(`Szerokość geomagnetyczna (dipol): ${szerokoscGeomagnetyczna(lat, lon)}°`);
-  console.log(`Próg Kp — łuna nad północą: ${progKp(szerokoscGeomagnetyczna(lat, lon), 4)}`
+  console.log(`Próg Kp – łuna nad północą: ${progKp(szerokoscGeomagnetyczna(lat, lon), 4)}`
     + ` · nad głową: ${progKp(szerokoscGeomagnetyczna(lat, lon), 0)}\n`);
 
   console.log('Źródła NOAA SWPC:');
@@ -126,24 +126,24 @@ async function zrodlo(nazwa, adres, wywolaj) {
 
   const z = await prognozaZorzy(lat, lon);
   if (!z) {
-    console.log('✗ Żadne ze źródeł nie odpowiedziało — zorzy w planie zdjęciowym nie będzie.');
+    console.log('✗ Żadne ze źródeł nie odpowiedziało – zorzy w planie zdjęciowym nie będzie.');
     console.log('  To DODATEK: plan działa bez niej, tylko bez tego jednego pola.');
     process.exit(1);
   }
 
-  console.log(`Kp teraz: ${z.kpTeraz ?? '—'}${z.kpTerazKiedy ? ` (${z.kpTerazKiedy})` : ''}`);
-  console.log(`Szczyt prognozy: ${z.szczyt ? `Kp ${z.szczyt.kp} o ${z.szczyt.kiedy}` : '—'}`);
+  console.log(`Kp teraz: ${z.kpTeraz ?? '–'}${z.kpTerazKiedy ? ` (${z.kpTerazKiedy})` : ''}`);
+  console.log(`Szczyt prognozy: ${z.szczyt ? `Kp ${z.szczyt.kp} o ${z.szczyt.kiedy}` : '–'}`);
   console.log(`Wpisów prognozy: ${z.prognoza.length}`);
   for (const p of z.prognoza.slice(0, 6)) console.log(`  ${p.kiedy}  Kp ${p.kp}`);
 
   console.log(`\nWERDYKT: ${z.szansa}`);
-  /* Werdykt bez połowy danych jest słabszy, niż wygląda — i trzeba to
+  /* Werdykt bez połowy danych jest słabszy, niż wygląda – i trzeba to
      powiedzieć, zamiast pozwolić mu udawać pełną odpowiedź. */
   if (teraz && !prognoza) {
-    console.log('⚠ Werdykt opiera się WYŁĄCZNIE na bieżącym Kp — prognozy nie ma, więc');
+    console.log('⚠ Werdykt opiera się WYŁĄCZNIE na bieżącym Kp – prognozy nie ma, więc');
     console.log('  „brak" znaczy tu „nie ma zorzy TERAZ", a nie „nie będzie dziś w nocy".');
   } else if (!teraz && prognoza) {
-    console.log('⚠ Werdykt opiera się wyłącznie na prognozie — bieżącego Kp nie ma.');
+    console.log('⚠ Werdykt opiera się wyłącznie na prognozie – bieżącego Kp nie ma.');
   }
   console.log(`\n${z.uwaga}`);
 })();

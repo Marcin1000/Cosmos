@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cosmos Senses — usługa percepcji (zmysły Cosmosa).
+Cosmos Senses – usługa percepcji (zmysły Cosmosa).
 
 Każdy zmysł jest OPCJONALNY: usługa startuje z tym, co masz zainstalowane,
 a /health mówi Cosmosowi, które zmysły są dostępne.
@@ -43,7 +43,7 @@ async def any_error_as_json(request: Request, exc: Exception):
 
     Domyślnie Starlette oddaje przy wyjątku zwykły tekst „Internal Server
     Error”. Przeglądarka próbuje czytać go jako JSON i pokazuje użytkownikowi
-    „Unexpected token 'I' … is not valid JSON” — komunikat, z którego nie
+    „Unexpected token 'I' … is not valid JSON” – komunikat, z którego nie
     wynika absolutnie nic. Tutaj oddajemy typ i treść wyjątku, żeby w Cosmosie
     było widać prawdziwą przyczynę, a pełny ślad zostaje w oknie usługi.
     """
@@ -66,7 +66,7 @@ CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False,
         "dokumenty": False}
 
 # Kinect 360 przez oficjalne SDK (tylko Windows). Obraz z niego nie jest widoczny
-# dla przeglądarki ani OpenCV — nie jest kamerą UVC — więc klatki muszą iść
+# dla przeglądarki ani OpenCV – nie jest kamerą UVC – więc klatki muszą iść
 # do Cosmosa tędy, przez HTTP.
 try:
     import kinect_win
@@ -110,7 +110,7 @@ try:
 except ImportError:
     pass
 
-# BirdNET — gatunek ptaka z nagrania. Dla kogoś, kto fotografuje żurawie,
+# BirdNET – gatunek ptaka z nagrania. Dla kogoś, kto fotografuje żurawie,
 # to nie ciekawostka: usłyszeć ptaka można znacznie dalej, niż go zobaczyć,
 # a wiedza „to derkacz, siedzi w tej łące" decyduje, gdzie postawić statyw.
 try:
@@ -147,11 +147,11 @@ def get_whisper():
 def whisper_to_cpu():
     """Przełącz Whispera na procesor i zwróć nowy model.
 
-    Samo utworzenie modelu z device="auto" udaje się nawet bez bibliotek CUDA —
+    Samo utworzenie modelu z device="auto" udaje się nawet bez bibliotek CUDA –
     CTranslate2 sięga po nie dopiero przy pierwszym przeliczeniu. Dlatego
     zabezpieczenie przy ładowaniu nic nie dawało: proces wywracał się w środku
     transkrypcji na „Library cublas64_12.dll is not found”. Ten przełącznik
-    wołamy właśnie wtedy — raz, i zostajemy na procesorze do restartu usługi.
+    wołamy właśnie wtedy – raz, i zostajemy na procesorze do restartu usługi.
     """
     global _whisper_model
     _whisper_model = _load_whisper("cpu")
@@ -175,7 +175,7 @@ def get_piper():
 
 
 def piper_wav(voice, text: str) -> bytes:
-    """Zsyntezuj mowę do gotowego pliku WAV — niezależnie od wersji Pipera.
+    """Zsyntezuj mowę do gotowego pliku WAV – niezależnie od wersji Pipera.
 
     Piper zmienił API. Do 1.2 `synthesize(text, wav_file)` zapisywał wprost do
     otwartego pliku wave. Od 1.3 `synthesize(text)` zwraca GENERATOR kawałków
@@ -285,7 +285,7 @@ def _extract_docling(name: str, data: bytes, ext: str):
 
     NIGDY nie rzuca. Cztery gałęzie niżej (pypdf, python-docx, openpyxl,
     python-pptx) są sprawdzone i mają działać dalej, gdy mocniejszy czytnik
-    zawiedzie na konkretnym pliku — bo to jest DODATEK, a nie zamiennik.
+    zawiedzie na konkretnym pliku – bo to jest DODATEK, a nie zamiennik.
     """
     if not CAPS_CZYTNIK:
         return None
@@ -357,7 +357,7 @@ async def stt(request: Request):
         tmp = f.name
     lang = os.environ.get("WHISPER_LANG") or None
     try:
-        # `transcribe` zwraca leniwy generator — lista wymusza przeliczenie
+        # `transcribe` zwraca leniwy generator – lista wymusza przeliczenie
         # TERAZ, wewnątrz try. Inaczej błąd CUDA wypadłby dopiero przy
         # składaniu tekstu, poza zasięgiem tego zabezpieczenia.
         try:
@@ -377,11 +377,11 @@ async def stt(request: Request):
 
 @app.post("/ptak")
 async def ptak(request: Request):
-    """Nagranie (wav/mp3/flac) w body -> {"gatunki": [{...}]}  — BirdNET.
+    """Nagranie (wav/mp3/flac) w body -> {"gatunki": [{...}]}  – BirdNET.
 
     MIEJSCE I DATA SĄ TU ISTOTNE, nie ozdobne. BirdNET zawęża listę do
     gatunków, które w danym tygodniu faktycznie występują pod danymi
-    współrzędnymi — bez tego czajka z Biebrzy potrafi wyjść jako gatunek
+    współrzędnymi – bez tego czajka z Biebrzy potrafi wyjść jako gatunek
     z Ameryki Południowej o podobnym głosie. Współrzędne przychodzą z
     Cosmosa (te same, których używa plan zdjęciowy); bez nich analiza i tak
     się wykona, tylko szerszym sitem.
@@ -439,7 +439,7 @@ async def ptak(request: Request):
             for d in rec.detections
         ]
         # Ten sam ptak śpiewa zwykle w kilku oknach po 3 s. Zwracamy jedno
-        # wystąpienie na gatunek — to, w którym był najpewniejszy.
+        # wystąpienie na gatunek – to, w którym był najpewniejszy.
         najlepsze = {}
         for g in gatunki:
             klucz = g["lacinska"] or g["nazwa"]
@@ -479,10 +479,10 @@ async def tts(request: Request):
 # ROZPOZNAWANIE NIE MOŻE STAĆ NA PĘTLI ZDARZEŃ.
 #
 # Rozpoznawanie treści całego archiwum wysyła tu kilkanaście zdjęć naraz.
-# Przy `async def` cała ta praca — dekodowanie base64 i sama detekcja —
+# Przy `async def` cała ta praca – dekodowanie base64 i sama detekcja –
 # wykonuje się NA PĘTLI ZDARZEŃ uvicorna, więc żądania nie tylko ustawiają się
 # w kolejce (to akurat w porządku, karta jest jedna), ale blokują też
-# `/health`. Cosmos odpytuje `/health`, żeby wiedzieć, czy zmysły żyją — i
+# `/health`. Cosmos odpytuje `/health`, żeby wiedzieć, czy zmysły żyją – i
 # w środku wielogodzinnego przebiegu dostawałby ciszę, po czym uznawał komputer
 # domowy za wyłączony i przechodził na rozpoznawanie z przeglądarki.
 #
@@ -490,7 +490,7 @@ async def tts(request: Request):
 # `/health` odpowiada od razu. Ciało żądania FastAPI parsuje ZA NAS (stąd
 # `payload: dict = Body(...)`), bo w funkcji bez `async` nie ma jak zaczekać na
 # `request.json()`. Sama detekcja nadal idzie pojedynczo, bo model jest jeden
-# i nie jest bezpieczny wielowątkowo — stąd zamek. Przy 220 ms na zdjęcie
+# i nie jest bezpieczny wielowątkowo – stąd zamek. Przy 220 ms na zdjęcie
 # i 8 s czekania na miniaturę kolejka przed kartą nie jest wąskim gardłem.
 YOLO_ZAMEK = threading.Lock()
 
@@ -556,15 +556,15 @@ async def extract(request: Request):
     # NAJPIERW MOCNIEJSZY CZYTNIK, jeśli jest zainstalowany.
     #
     # Z trendów: firecrawl/anydoc (97 formatów → Markdown) i doc7. Oba są
-    # lepsze od czterech gałęzi niżej, ale anydoc to Rust z wiązaniami Node —
+    # lepsze od czterech gałęzi niżej, ale anydoc to Rust z wiązaniami Node –
     # w rdzeniu Cosmosa złamałby zasadę zera zależności. Tutaj, w Pythonie,
     # wolno mieć prawdziwe biblioteki, więc bierzemy odpowiedniki z tego
     # samego świata: docling (IBM) albo markitdown (Microsoft).
     #
     # Różnica jest realna i widać ją na dwóch rzeczach, na których pypdf
     # przegrywa zawsze:
-    #   • SKANY — docling ma OCR, pypdf oddaje pustą stronę bez słowa;
-    #   • UKŁAD — tabela w PDF-ie to dla pypdf ciąg luźnych liczb, a dla
+    #   • SKANY – docling ma OCR, pypdf oddaje pustą stronę bez słowa;
+    #   • UKŁAD – tabela w PDF-ie to dla pypdf ciąg luźnych liczb, a dla
     #     doclinga tabela Markdown, którą model faktycznie przeczyta.
     #
     # Rozłożenie na kolumny w umowie działa tak samo: pypdf skleja dwie
@@ -614,7 +614,7 @@ async def extract(request: Request):
         return {"text": text[:200000]}
     except ImportError as e:
         return JSONResponse(
-            {"error": f"Brak biblioteki do formatu .{ext} — pip install {e.name}"},
+            {"error": f"Brak biblioteki do formatu .{ext} – pip install {e.name}"},
             status_code=501,
         )
     except Exception as e:
@@ -623,14 +623,14 @@ async def extract(request: Request):
 
 @app.post("/upscale")
 async def upscale(request: Request):
-    """{"image": dataURL, "scale": 4} -> {"image": dataURL} — powiększanie Real-ESRGAN.
+    """{"image": dataURL, "scale": 4} -> {"image": dataURL} – powiększanie Real-ESRGAN.
     Opcjonalne: pip install realesrgan basicsr  (wymaga GPU dla sensownej szybkości)."""
     try:
         from realesrgan import RealESRGANer  # noqa: F401
         from basicsr.archs.rrdbnet_arch import RRDBNet
     except ImportError:
         return JSONResponse(
-            {"error": "Upscale niedostępny — pip install realesrgan basicsr (senses/README.md)."},
+            {"error": "Upscale niedostępny – pip install realesrgan basicsr (senses/README.md)."},
             status_code=501,
         )
     import cv2
@@ -649,7 +649,7 @@ async def upscale(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Kinect 360 — klatki po HTTP
+# Kinect 360 – klatki po HTTP
 # ---------------------------------------------------------------------------
 #
 # Przeglądarka nie widzi Kinecta (nie jest kamerą UVC), więc podgląd w Cosmosie
@@ -661,7 +661,7 @@ _kinect_err = ""
 
 
 def get_kinect():
-    """Jedna instancja czujnika na cały proces — Kinect nie znosi dwóch naraz."""
+    """Jedna instancja czujnika na cały proces – Kinect nie znosi dwóch naraz."""
     global _kinect, _kinect_err
     if _kinect is None:
         import kinect_win
@@ -695,7 +695,7 @@ async def kinect_status():
 def _render(k, stream: str):
     """Klatka gotowa do zakodowania: obraz BGR albo pokolorowana mapa głębi.
 
-    Głębia to milimetry — dla oka mapujemy zasięg 0,5–4 m na paletę. Zera, czyli
+    Głębia to milimetry – dla oka mapujemy zasięg 0,5–4 m na paletę. Zera, czyli
     „nie wiem" (cień podczerwieni, szkło, poza zasięgiem), zostają czarne, żeby
     nie udawały pomiaru, którego nie ma.
     """
@@ -720,7 +720,7 @@ async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70)
     Pojedyncze klatki przez /kinect/frame znaczą jedno żądanie HTTP na klatkę.
     Przy drodze telefon → VPS → Tailscale → komputer domowy sam obieg zjada
     ćwierć sekundy, więc podgląd klatkuje niezależnie od tego, jak szybki jest
-    czujnik. Tutaj połączenie jest jedno, a klatki lecą w nim jedna za drugą —
+    czujnik. Tutaj połączenie jest jedno, a klatki lecą w nim jedna za drugą –
     przeglądarka odtwarza to natywnie w zwykłym <img>.
     """
     try:
@@ -743,7 +743,7 @@ async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70)
             try:
                 img = _render(k, stream)
             except Exception:
-                break                       # czujnik zniknął — zamknij strumień
+                break                       # czujnik zniknął – zamknij strumień
             if img is not None:
                 jpg = _to_jpeg(img, q)
                 yield (b"--frame\r\nContent-Type: image/jpeg\r\n"
@@ -778,7 +778,7 @@ async def kinect_frame(stream: str = "color"):
         return JSONResponse({"error": "Podgląd wymaga: pip install opencv-python"},
                             status_code=501)
     except Exception as e:
-        # Czujnik mógł zostać odłączony — następne żądanie spróbuje otworzyć od nowa.
+        # Czujnik mógł zostać odłączony – następne żądanie spróbuje otworzyć od nowa.
         _kinect_err = str(e)
         try:
             k.close()
@@ -804,5 +804,5 @@ async def embed(request: Request):
 if __name__ == "__main__":
     port = int(os.environ.get("SENSES_PORT", 7060))
     active = ", ".join(k for k, v in CAPS.items() if v) or "brak (zainstaluj zależności)"
-    print(f"\n  ✦ Cosmos Senses — port {port}\n  → aktywne zmysły: {active}\n")
+    print(f"\n  ✦ Cosmos Senses – port {port}\n  → aktywne zmysły: {active}\n")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")

@@ -16,7 +16,7 @@ class FakeModel:
     def __init__(self, device): self.device = device
     def transcribe(self, path, language=None, vad_filter=False):
         if self.device != "cpu":
-            # generator, więc błąd wypada dopiero przy iteracji — dokładnie jak
+            # generator, więc błąd wypada dopiero przy iteracji – dokładnie jak
             # w faster-whisper; to dlatego stare zabezpieczenie nie działało
             def gen():
                 raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
@@ -60,5 +60,5 @@ for msg, want in [("Invalid audio format", False), ("cuDNN library not found", T
     if got != want: fail.append(f"zla klasyfikacja {msg!r}: {got}")
 print(f"  4. rozpoznawanie błędów CUDA vs zwykłych: {'OK' if not any('klasyfik' in f for f in fail) else 'BŁĄD'}")
 
-print("\nBŁĘDY: " + "; ".join(fail) if fail else "\nWHISPER — PRZEJŚCIE NA PROCESOR OK")
+print("\nBŁĘDY: " + "; ".join(fail) if fail else "\nWHISPER – PRZEJŚCIE NA PROCESOR OK")
 sys.exit(1 if fail else 0)

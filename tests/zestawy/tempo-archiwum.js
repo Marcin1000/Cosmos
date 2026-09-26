@@ -4,14 +4,14 @@
    dużej liczbie plików chyba potrwa parę dni. Strasznie wolno to idzie."
    Licznik szedł 71 → 96 uzupełnionych, przy 55 tysiącach w kolejce.
 
-   Zmierzone przyczyny — obie zaskakujące, obie NIE tam, gdzie się ich szukało:
+   Zmierzone przyczyny – obie zaskakujące, obie NIE tam, gdzie się ich szukało:
 
      1. `writeFileSync` na indeksie 97,8 MB trwał 5,2 s i BLOKOWAŁ pętlę
         zdarzeń. Zapis był odkładany o sekundę, więc przy dociąganiu serwer
-        stał dłużej, niż pracował — i nie obsługiwał w tym czasie niczego.
+        stał dłużej, niż pracował – i nie obsługiwał w tym czasie niczego.
      2. 70 z 98 MB tego pliku to były adresy miniatur z OneDrive: po 1,2 kB
         podpisanego adresu na plik, przepisywane przy każdym zapisie. Nikt ich
-        nie czyta — przeglądarka bierze podgląd z `/api/archive/thumb`, bo te
+        nie czyta – przeglądarka bierze podgląd z `/api/archive/thumb`, bo te
         adresy i tak wygasają po godzinie.
 
    Czego NIE było przyczyną, choć wyglądało: `indexOf` w `dodaj()`. Wygląda na
@@ -47,14 +47,14 @@ const zPamieci = JSON.stringify(archiwum.szukaj({ zrodlo: 'onedrive' }));
 const naPlik = Buffer.byteLength(zPamieci) / N;
 console.log(`1. bajtów indeksu na plik: ${Math.round(naPlik)}`);
 if (/1drv\.com/.test(zPamieci)) {
-  fail.push('adresy miniatur wróciły do indeksu — 1,2 kB na plik za coś, czego nikt nie czyta');
+  fail.push('adresy miniatur wróciły do indeksu – 1,2 kB na plik za coś, czego nikt nie czyta');
 }
-if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — indeks znowu puchnie`);
+if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo – indeks znowu puchnie`);
 
 (async () => {
   // --- 2. Zapis nie blokuje pętli zdarzeń ---------------------------------
   /* Sam czas zapisu to nie wszystko. Pytanie brzmi: czy w tym czasie serwer
-     może cokolwiek obsłużyć. Liczymy tyknięcia zegara — przy zapisie
+     może cokolwiek obsłużyć. Liczymy tyknięcia zegara – przy zapisie
      synchronicznym nie ma ani jednego. */
   let tykniecia = 0;
   const zegar = setInterval(() => { tykniecia++; }, 5);
@@ -66,12 +66,12 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   console.log(`2. zapis ${(rozmiar / 1048576).toFixed(1)} MB trwał ${trwal} ms, `
     + `pętla zdarzeń tyknęła ${tykniecia} razy`);
   if (trwal > 40 && tykniecia === 0) {
-    fail.push('zapis blokuje pętlę zdarzeń — w tym czasie serwer nie obsługuje żądań');
+    fail.push('zapis blokuje pętlę zdarzeń – w tym czasie serwer nie obsługuje żądań');
   }
 
   // --- 3. Dociąganie EXIF-u idzie RÓWNOLEGLE ------------------------------
   /* Atrapa OneDrive z opóźnieniem 50 ms na plik. Sekwencyjnie 60 plików = 3 s;
-     przy sześciu naraz — około pół sekundy. Mierzymy też szczyt jednoczesnych
+     przy sześciu naraz – około pół sekundy. Mierzymy też szczyt jednoczesnych
      żądań, bo sam czas dałoby się poprawić przypadkiem. */
   let teraz = 0;
   let szczyt = 0;
@@ -101,13 +101,13 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   const czas = Date.now() - t;
   console.log(`3. 60 plików po 50 ms: ${czas} ms, szczyt równoległych żądań: ${szczyt}`);
   console.log(`   wynik: uzupełnione ${res.dane && res.dane.uzupelnione}, zostało ${res.dane && res.dane.zostalo}`);
-  if (szczyt < 2) fail.push('dociąganie idzie plik po pliku — opóźnienie łącza sumuje się 56 tysięcy razy');
-  if (czas > 1500) fail.push(`60 plików po 50 ms zajęło ${czas} ms — to tempo sekwencyjne`);
+  if (szczyt < 2) fail.push('dociąganie idzie plik po pliku – opóźnienie łącza sumuje się 56 tysięcy razy');
+  if (czas > 1500) fail.push(`60 plików po 50 ms zajęło ${czas} ms – to tempo sekwencyjne`);
   if (!res.dane || res.dane.uzupelnione !== 60) {
-    fail.push(`uzupełniono ${res.dane && res.dane.uzupelnione} z 60 — równoległość gubi pliki`);
+    fail.push(`uzupełniono ${res.dane && res.dane.uzupelnione} z 60 – równoległość gubi pliki`);
   }
 
-  /* Kolejka MUSI maleć — inaczej pętla paczek w przeglądarce kręci się bez
+  /* Kolejka MUSI maleć – inaczej pętla paczek w przeglądarce kręci się bez
      końca. To już raz się zdarzyło, przy plikach bez obiektywu. */
   if (!res.dane || res.dane.zostalo !== N - 60) {
     fail.push(`w kolejce zostało ${res.dane && res.dane.zostalo}, spodziewane ${N - 60}`);
@@ -118,7 +118,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
 
      Punkty 1-3 budują archiwum od zera, przez `dodaj()`. Tam `miniatura` już
      nie powstaje, więc ścieżka „wczytaj stary plik i posprzątaj" nie była
-     wykonywana ANI RAZU — mimo że to jedyna droga, którą przechodzi każda
+     wykonywana ANI RAZU – mimo że to jedyna droga, którą przechodzi każda
      istniejąca instalacja. Serwer wywracał się przy starcie z ReferenceError
      (sprzątanie stało nad definicjami, w martwej strefie `let`), a bateria
      świeciła na zielono.
@@ -143,18 +143,18 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   }
   console.log(`4. wczytanie indeksu ze starszej wersji: ${wyjatek || 'bez wyjątku'}`);
   if (wyjatek) {
-    fail.push(`wczytanie starego indeksu wywraca moduł (${wyjatek}) — serwer nie wstanie po aktualizacji`);
+    fail.push(`wczytanie starego indeksu wywraca moduł (${wyjatek}) – serwer nie wstanie po aktualizacji`);
   } else {
     const ile = stary.ile();
     const zostalyAdresy = JSON.stringify(stary.szukaj({ zrodlo: 'onedrive' })).includes('1drv.com');
     console.log(`   wpisów po wczytaniu: ${ile}, adresy miniatur usunięte: ${!zostalyAdresy}`);
-    if (ile !== 2) fail.push(`po wczytaniu starego indeksu jest ${ile} wpisów zamiast 2 — migracja gubi dane`);
-    if (zostalyAdresy) fail.push('adresy miniatur zostały w starym indeksie — nie chudnie po aktualizacji');
+    if (ile !== 2) fail.push(`po wczytaniu starego indeksu jest ${ile} wpisów zamiast 2 – migracja gubi dane`);
+    if (zostalyAdresy) fail.push('adresy miniatur zostały w starym indeksie – nie chudnie po aktualizacji');
 
     /* Posprzątany indeks ma też TRAFIĆ NA DYSK, inaczej sprzątamy przy każdym
        starcie. Czekamy NA WARUNEK, nie odmierzoną chwilę: pierwsza wersja
        spała 3600 ms przy odstępie zapisu 3000 ms i przechodziła sama, a padała
-       pod obciążeniem całej baterii — czyli mierzyła zajętość maszyny, nie
+       pod obciążeniem całej baterii – czyli mierzyła zajętość maszyny, nie
        zachowanie kodu. Sto prób co 100 ms to dziesięć sekund zapasu i ta sama
        informacja przy usterce. */
     const plikStarego = path.join(staryKatalog, 'archiwum.json');
@@ -166,7 +166,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     }
     console.log(`   plik na dysku bez adresów: ${!naDysku.includes('1drv.com')}`);
     if (naDysku.includes('1drv.com')) {
-      fail.push('posprzątany indeks nie został zapisany — czyszczenie powtórzy się przy każdym starcie');
+      fail.push('posprzątany indeks nie został zapisany – czyszczenie powtórzy się przy każdym starcie');
     }
   }
   fs.rmSync(staryKatalog, { recursive: true, force: true });
@@ -174,7 +174,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   /* --- 5. Dławienie (429) to prośba o zwolnienie, nie awaria --------------
      Marcin, po włączeniu sześciu równoległych żądań: „Przerwane: kolejka nie
      maleje (50963 do zrobienia). Powód: Graph 429". Cała paczka przepadała,
-     bo 429 leciało jako zwykły błąd — a Microsoft prosił tylko o zwolnienie
+     bo 429 leciało jako zwykły błąd – a Microsoft prosił tylko o zwolnienie
      i podał w nagłówku, na ile.
 
      Stawiamy prawdziwy serwer HTTP udający Graph: pierwsze żądania odbija
@@ -206,7 +206,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     JSON.stringify({ refresh_token: 'y', access_token: '', wygasa: 0, od: Date.now() }));
   /* Adresy Microsoftu moduł czyta przy wczytaniu (ONEDRIVE_GRAPH_URL,
      ONEDRIVE_TOKEN_URL). Dawniej zestaw podmieniał je regexpem w TEKŚCIE
-     modułu — i padł, gdy ta linijka zmieniła brzmienie, choć działała. */
+     modułu – i padł, gdy ta linijka zmieniła brzmienie, choć działała. */
   const onedriveNa = (adres) => {
     process.env.ONEDRIVE_GRAPH_URL = adres;
     process.env.ONEDRIVE_TOKEN_URL = `${adres}/oauth2/token`;
@@ -229,31 +229,31 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   console.log(`5. odbić 429: ${odbite}, przepuszczonych: ${przepuszczone}, `
     + `czekano ${czekano} ms, błąd: ${bladDlawienia || 'brak'}`);
   if (bladDlawienia) {
-    fail.push(`429 kończy się błędem (${bladDlawienia}) zamiast odczekaniem — paczka przepada`);
+    fail.push(`429 kończy się błędem (${bladDlawienia}) zamiast odczekaniem – paczka przepada`);
   }
-  if (!przepuszczone) fail.push('po dławieniu nie doszło ani jedno żądanie — nie ma ponowienia');
-  if (czekano < 900) fail.push(`odczekano ${czekano} ms mimo Retry-After: 1 — nagłówek jest ignorowany`);
+  if (!przepuszczone) fail.push('po dławieniu nie doszło ani jedno żądanie – nie ma ponowienia');
+  if (czekano < 900) fail.push(`odczekano ${czekano} ms mimo Retry-After: 1 – nagłówek jest ignorowany`);
   if (typeof od.zdlawienia !== 'function' || od.zdlawienia() < 1) {
-    fail.push('dławienie nie jest liczone — panel nie ma jak o nim powiedzieć');
+    fail.push('dławienie nie jest liczone – panel nie ma jak o nim powiedzieć');
   }
   /* Kara MUSI się liczyć osobno od etapu, w którym wypadła. Bez tego panel
      pokazał Marcinowi „adres 20415 ms" i wyglądało to na zamulony Microsoft,
-     a było naszą własną karą za zbyt szybkie pytanie — czyli sygnałem do
+     a było naszą własną karą za zbyt szybkie pytanie – czyli sygnałem do
      obniżenia równoległości, a nie do szukania winy po drugiej stronie. */
   const przeczekane = typeof od.czekano === 'function' ? od.czekano() : -1;
   console.log(`   z tego przestój na karze: ${przeczekane} ms`);
   if (przeczekane < 900) {
-    fail.push(`przestój na karze policzony jako ${przeczekane} ms — wlicza się w czas etapu i pomiar kłamie`);
+    fail.push(`przestój na karze policzony jako ${przeczekane} ms – wlicza się w czas etapu i pomiar kłamie`);
   }
   if (przeczekane > czekano) {
-    fail.push('przestój na karze większy niż całe żądanie — licznik liczy coś innego');
+    fail.push('przestój na karze większy niż całe żądanie – licznik liczy coś innego');
   }
   /* --- 6. Plik, którego NIGDY nie da się przeczytać, nie blokuje kolejki ---
      Marcin: „Przerwane: kolejka nie maleje (4 do zrobienia). Powód: Graph 416".
      416 („Requested Range Not Satisfiable") dostajemy dla plików PUSTYCH:
      prosimy o bajty 0-N, a w pliku nie ma ani jednego. Cztery puste `.SRT`
      zatrzymały całe zadanie, bo wpis nigdy nie dostawał znacznika
-     „sprawdzony" i wracał w każdej paczce. To samo dotyczy 404 i 410 —
+     „sprawdzony" i wracał w każdej paczce. To samo dotyczy 404 i 410 –
      pliku skasowanego między indeksowaniem a odczytem.
 
      Ponawianie tu NIE POMAGA: te odpowiedzi znaczą „nigdy", nie „później". */
@@ -286,11 +286,11 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   console.log(`6. pusty .SRT (416) → ${wyniki.srt}, skasowane zdjęcie (404) → ${wyniki.exif}`
     + `${wyniki.blad ? `, błąd: ${wyniki.blad}` : ''} · ${czas416} ms`);
   if (wyniki.blad) {
-    fail.push(`416/404 kończy się błędem (${wyniki.blad}) — cztery puste pliki zatrzymają całą kolejkę`);
+    fail.push(`416/404 kończy się błędem (${wyniki.blad}) – cztery puste pliki zatrzymają całą kolejkę`);
   }
   if (wyniki.srt !== '""') fail.push(`pusty .SRT oddał ${wyniki.srt} zamiast pustego tekstu`);
   if (wyniki.exif !== 'null') fail.push(`skasowane zdjęcie oddało ${wyniki.exif} zamiast null`);
-  // Ponawianie „nigdy" byłoby czekaniem na darmo — 4 próby po 5 s to 35 sekund.
+  // Ponawianie „nigdy" byłoby czekaniem na darmo – 4 próby po 5 s to 35 sekund.
   if (czas416 > 3000) fail.push(`odczekano ${czas416} ms na odpowiedzi, które znaczą „nigdy"`);
   beznadziejne.close();
   fs.rmSync(katalogOd2, { recursive: true, force: true });
@@ -300,12 +300,12 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
 
   /* --- 6b. Rozpoznawanie treści też idzie równolegle ---------------------
      Marcin, po uruchomieniu: „schodzi po 30 w ciągu około 36 sekund", przy
-     55 206 w kolejce — osiemnaście godzin. Każde zdjęcie to TRZY kolejki po
+     55 206 w kolejce – osiemnaście godzin. Każde zdjęcie to TRZY kolejki po
      sieci: adres miniatury z Graph, pobranie miniatury, wysyłka do YOLO na
      komputer domowy. Sekwencyjnie sumują się wszystkie trzy.
 
      Równolegle mniej niż przy EXIF-ie, bo na końcu stoi jedna karta graficzna
-     — ale pobieranie następnej miniatury ma się dziać w tle rozpoznawania
+     – ale pobieranie następnej miniatury ma się dziać w tle rozpoznawania
      poprzedniej i to jest cały zysk. */
   let terazYolo = 0;
   let szczytYolo = 0;
@@ -333,21 +333,21 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     { method: 'POST', url: '/api/archive/vision' }, resY, '/api/archive/vision');
   console.log(`6b. rozpoznawanie: szczyt równoległych żądań ${szczytYolo}, ${Date.now() - tY} ms`);
   if (szczytYolo < 2) {
-    fail.push('rozpoznawanie treści idzie zdjęcie po zdjęciu — trzy kolejki po sieci sumują się 55 tysięcy razy');
+    fail.push('rozpoznawanie treści idzie zdjęcie po zdjęciu – trzy kolejki po sieci sumują się 55 tysięcy razy');
   }
   /* Pliki, których nie udało się przerobić, NIE mogą zostać oznaczone jako
-     obejrzane — inaczej awaria sieci cicho wykreśla je z kolejki na zawsze.
+     obejrzane – inaczej awaria sieci cicho wykreśla je z kolejki na zawsze.
      Tu wszystkie padają (adres 127.0.0.1:1 nie istnieje), więc kolejka
      ma zostać nietknięta. */
   console.log(`    po samych błędach zostało: ${resY.dane && resY.dane.zostalo}`);
   if (resY.dane && resY.dane.opisane) {
-    fail.push('opisano zdjęcia mimo braku zmysłów — wynik jest zmyślony');
+    fail.push('opisano zdjęcia mimo braku zmysłów – wynik jest zmyślony');
   }
 
   /* --- 7. Panel MUSI umieć powiedzieć, czy praca się skończyła -----------
      Po wielogodzinnym dociąganiu panel pokazywał wyłącznie „W archiwum:
      59 421 plików". Żeby dowiedzieć się, czy zostało coś do zrobienia, trzeba
-     było kliknąć przycisk — czyli uruchomić zadanie po to, by się przekonać,
+     było kliknąć przycisk – czyli uruchomić zadanie po to, by się przekonać,
      że nie ma go po co uruchamiać. */
   const p7 = archiwum.postep();
   console.log(`7. postęp: ${p7.zDanymi} z ${p7.zdjec} zdjęć ma dane, zostało ${p7.zostaloZdjec}`);
@@ -362,17 +362,17 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      (99 kB) · YOLO 220 ms". Dziewięćdziesiąt procent czasu to czekanie na
      miniaturę z Microsoftu, przy karcie graficznej stojącej na 18%. Powód:
      dla RAW-a Graph MUSI wygenerować podgląd u siebie, bo w pliku nie ma
-     gotowej miniatury w rozmiarze „large" — dla JPG oddaje plik z półki
+     gotowej miniatury w rozmiarze „large" – dla JPG oddaje plik z półki
      (w tej samej paczce: 451 ms przy 74 kB).
 
      PIERWSZA WERSJA TEGO PAROWANIA ZNALAZŁA U MARCINA ZERO PAR, bo grupowała
-     po ścieżce bez rozszerzenia — a on trzyma pliki inaczej. Jego słowami:
+     po ścieżce bez rozszerzenia – a on trzyma pliki inaczej. Jego słowami:
      „nie raz robiłem tak, że rozdzielałem jpg i raw w dwóch folderach albo
      jpg trafiały do podfolderu z jpg w folderze zawierającym pliki RAW",
      do tego RAW-y to CR3, CR2, format Nikona i Samsunga.
 
      Dlatego kluczem jest NAZWA PLIKU I SEKUNDA ZDJĘCIA. Ten zestaw odtwarza
-     wszystkie cztery układy naraz — i dwie pułapki, w które taki klucz może
+     wszystkie cztery układy naraz – i dwie pułapki, w które taki klucz może
      wpaść: serię zdjęć w tej samej sekundzie (różne kadry, nie wolno sklejać)
      i przewinięty licznik aparatu (ta sama nazwa, inny wyjazd). */
   const katalogPar = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-pary-'));
@@ -386,24 +386,24 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     zdj('A-raw', '/Mazury 2026/3B9A4860.CR3', '2026-06-21T10:00:00'),
     zdj('A-jpg', '/Mazury 2026/3B9A4860.JPG', '2026-06-21T10:00:00'),
     /* B. Rozdzielone na dwa osobne foldery, RAW Nikona. Data zapisana raz ze
-       spacją, raz z „T" — bo Graph oddaje jeden format, a EXIF drugi, i po
+       spacją, raz z „T" – bo Graph oddaje jeden format, a EXIF drugi, i po
        dociągnięciu danych z plików w indeksie leżą oba. */
     zdj('B-raw', '/RAW Nikon/DSC_1000.NEF', '2025-08-14 19:30:12'),
     zdj('B-jpg', '/JPG Nikon/DSC_1000.JPG', '2025-08-14T19:30:12'),
     // C. JPG w podfolderze „jpg" wewnątrz folderu z RAW-ami, CR2.
     zdj('C-raw', '/Wesele Kasi/IMG_2001.CR2', '2024-09-07T14:05:33'),
     zdj('C-jpg', '/Wesele Kasi/jpg/IMG_2001.JPG', '2024-09-07T14:05:33'),
-    // D. Sam RAW, format Samsunga — bliźniaka nie ma i mieć nie będzie.
+    // D. Sam RAW, format Samsunga – bliźniaka nie ma i mieć nie będzie.
     zdj('D-raw', '/Telefon/SAM_9001.SRW', '2023-05-01T08:00:00'),
     /* E. PUŁAPKA: seria z Canona, dwa różne kadry w tej samej sekundzie.
        Sama data by je skleiła i drugie zdjęcie dostałoby cudze etykiety. */
     zdj('E-1', '/Seria/3B9A5000.CR3', '2026-07-02T11:11:11'),
     zdj('E-2', '/Seria/3B9A5001.CR3', '2026-07-02T11:11:11'),
     /* F. PUŁAPKA: licznik w aparacie się przewinął. Ta sama nazwa pliku,
-       dwa różne wyjazdy — sama nazwa by je skleiła. */
+       dwa różne wyjazdy – sama nazwa by je skleiła. */
     zdj('F-1', '/Wyjazd 2019/DSC_0001.JPG', '2019-04-11T07:00:00'),
     zdj('F-2', '/Wyjazd 2022/DSC_0001.JPG', '2022-04-11T07:00:00'),
-    /* G. Bliźniak obejrzany PRZED wprowadzeniem parowania — u Marcina takich
+    /* G. Bliźniak obejrzany PRZED wprowadzeniem parowania – u Marcina takich
        jest kilkanaście tysięcy. Etykiety mają się przepisać za darmo. */
     zdj('G-raw', '/Stare/9999.CR3', '2020-01-01T12:00:00'),
     zdj('G-jpg', '/Stare/9999.JPG', '2020-01-01T12:00:00',
@@ -455,35 +455,35 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
      policzmy uczciwie: A, B, C, D, E-1, E-2, F-1, F-2 = osiem) plus G za
      darmo z obejrzanego bliźniaka. */
   if (pytano.length !== 8) {
-    fail.push(`o miniaturę pytano ${pytano.length} razy zamiast 8 — grupowanie kadrów nie działa`);
+    fail.push(`o miniaturę pytano ${pytano.length} razy zamiast 8 – grupowanie kadrów nie działa`);
   }
-  // Z każdej pary ma iść JPG, nigdy RAW — to jest cała oszczędność.
+  // Z każdej pary ma iść JPG, nigdy RAW – to jest cała oszczędność.
   for (const rawZPary of ['3B9A4860.CR3', 'DSC_1000.NEF', 'IMG_2001.CR2', '9999.CR3']) {
     if (pytano.includes(rawZPary)) {
-      fail.push(`pytano o ${rawZPary}, choć obok leży JPG — to 8 s zamiast pół sekundy`);
+      fail.push(`pytano o ${rawZPary}, choć obok leży JPG – to 8 s zamiast pół sekundy`);
     }
   }
   for (const jpgZPary of ['3B9A4860.JPG', 'DSC_1000.JPG', 'IMG_2001.JPG']) {
-    if (!pytano.includes(jpgZPary)) fail.push(`nie zapytano o ${jpgZPary} — kadr wypadł z paczki`);
+    if (!pytano.includes(jpgZPary)) fail.push(`nie zapytano o ${jpgZPary} – kadr wypadł z paczki`);
   }
-  // Pułapki: seria w tej samej sekundzie i przewinięty licznik — osobne kadry.
+  // Pułapki: seria w tej samej sekundzie i przewinięty licznik – osobne kadry.
   if (!(pytano.includes('3B9A5000.CR3') && pytano.includes('3B9A5001.CR3'))) {
-    fail.push('seria z tej samej sekundy została sklejona — drugi kadr dostał cudze etykiety');
+    fail.push('seria z tej samej sekundy została sklejona – drugi kadr dostał cudze etykiety');
   }
   if (pytano.filter((x) => x === 'DSC_0001.JPG').length !== 2) {
     fail.push('dwa zdjęcia o tej samej nazwie z różnych lat zostały sklejone w jeden kadr');
   }
   if (d8.sprawdzone !== 12) fail.push(`oznaczono ${d8.sprawdzone} z 12 nieobejrzanych plików`);
   if (d8.zParowania !== 4) {
-    fail.push(`zParowania=${d8.zParowania} zamiast 4 (A, B, C i darmowe G) — panel nie pokaże zysku`);
+    fail.push(`zParowania=${d8.zParowania} zamiast 4 (A, B, C i darmowe G) – panel nie pokaże zysku`);
   }
-  if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 — kadry wracają w kółko`);
+  if (d8.zostalo !== 0) fail.push(`w kolejce zostało ${d8.zostalo} zamiast 0 – kadry wracają w kółko`);
   /* Licznik szczytu rozpoznań: bez niego nie da się odróżnić „karta wyrabia"
      od „karta jest wąskim gardłem, a my dokładamy robotników na darmo". */
   console.log(`   szczyt jednoczesnych rozpoznań: ${d8.szczytYolo}, przestój na karze ${d8.czekanieS} s`);
-  if (!(d8.szczytYolo >= 1)) fail.push('szczyt rozpoznań nie jest liczony — panel nie pokaże, gdzie jest sufit');
+  if (!(d8.szczytYolo >= 1)) fail.push('szczyt rozpoznań nie jest liczony – panel nie pokaże, gdzie jest sufit');
   if (d8.szczytYolo > d8.rownolegle) {
-    fail.push(`szczyt rozpoznań ${d8.szczytYolo} przy puli ${d8.rownolegle} — licznik liczy coś innego`);
+    fail.push(`szczyt rozpoznań ${d8.szczytYolo} przy puli ${d8.rownolegle} – licznik liczy coś innego`);
   }
   const poId8 = new Map(archPary.szukaj({ zrodlo: 'onedrive' }).map((w) => [w.id, w]));
   const et = (id) => (poId8.get(`onedrive:${id}`) || {}).obiekty || [];
@@ -493,9 +493,9 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   }
   /* G to inny sprawdzian niż reszta: etykiety mają przyjść Z BLIŹNIAKA
      („dog"), a nie z atrapy YOLO („boat"). Gdyby przyszło „boat", znaczyłoby
-     to, że i tak zapytaliśmy — czyli darmowa ścieżka nie zadziałała. */
+     to, że i tak zapytaliśmy – czyli darmowa ścieżka nie zadziałała. */
   if (!et('G-raw').includes('dog') || et('G-raw').includes('boat')) {
-    fail.push(`G-raw ma [${et('G-raw')}] zamiast [dog] — etykiety nie przeszły z obejrzanego bliźniaka`);
+    fail.push(`G-raw ma [${et('G-raw')}] zamiast [dog] – etykiety nie przeszły z obejrzanego bliźniaka`);
   }
 
   /* --- 8b. Podgląd RAW-a też idzie przez JPG-owego bliźniaka --------------
@@ -509,7 +509,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     resT, '/api/archive/thumb');
   console.log(`8b. podgląd NEF-a z osobnego folderu → pytano o ${pytano.join(', ') || 'nic'}`);
   if (pytano.length !== 1 || pytano[0] !== 'DSC_1000.JPG') {
-    fail.push(`podgląd RAW-a pyta o ${pytano.join(', ')} zamiast o DSC_1000.JPG — 8 s na kafelek`);
+    fail.push(`podgląd RAW-a pyta o ${pytano.join(', ')} zamiast o DSC_1000.JPG – 8 s na kafelek`);
   }
   /* Plik BEZ bliźniaka ma iść po sobie samym, a nie zniknąć po drodze. */
   pytano.length = 0;
@@ -520,7 +520,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   if (pytano[0] !== 'SAM_9001.SRW') {
     fail.push(`RAW bez bliźniaka poszedł po ${pytano.join(', ')} zamiast po sobie`);
   }
-  /* --- 8c. Dociągnięcie EXIF-u zmienia datę — indeks kadrów MUSI to zauważyć
+  /* --- 8c. Dociągnięcie EXIF-u zmienia datę – indeks kadrów MUSI to zauważyć
      Do RAW-ów Graph nie czyta EXIF-u i wpisuje datę WGRANIA pliku; dopiero
      „Dociągnij dane z plików" podmienia ją na datę zrobienia zdjęcia. Gdyby
      indeks rodzeństwa tego nie zauważał (liczba wpisów się nie zmienia!),
@@ -533,7 +533,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     return pytano.join(', ');
   };
   archPary.dodaj([zdj('H-raw', '/Nowe/7777.CR3', '2026-08-10T09:00:00')]);
-  /* Zanim EXIF poprawi datę, RAW ma datę WGRANIA — a JPG akurat tę samą co
+  /* Zanim EXIF poprawi datę, RAW ma datę WGRANIA – a JPG akurat tę samą co
      zupełnie inne zdjęcie (`H-inny`). Tak wygląda archiwum przed dociągnięciem
      danych i tak powstaje fałszywa para, którą trzeba potem rozpiąć. */
   archPary.dodaj([zdj('H-jpg', '/Nowe/jpg/7777.JPG', '2026-01-01T00:00:00')]);
@@ -547,27 +547,27 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   console.log(`8c. RAW przed dociągnięciem daty: ${przedExifem} → po: ${poExifie}`);
   console.log(`    kadr obok, sklejony starą datą: ${falszywaPara} → po: ${poRozpieciu}`);
   if (przedExifem !== '7777.CR3') {
-    fail.push(`przy różnych datach sparowano mimo wszystko (${przedExifem}) — klucz ignoruje sekundę`);
+    fail.push(`przy różnych datach sparowano mimo wszystko (${przedExifem}) – klucz ignoruje sekundę`);
   }
   if (poExifie !== '7777.JPG') {
-    fail.push('po zrównaniu dat nadal pytamy o RAW — indeks kadrów nie widzi nowej daty');
+    fail.push('po zrównaniu dat nadal pytamy o RAW – indeks kadrów nie widzi nowej daty');
   }
   /* To jest sprawdzian sprzątania po starym kluczu. Gdy przy zmianie daty
      zostawilibyśmy identyfikator w poprzednim koszyku, `H-inny` dalej miałby
-     „bliźniaka", którego już nie ma — i brałby podgląd cudzego zdjęcia. */
+     „bliźniaka", którego już nie ma – i brałby podgląd cudzego zdjęcia. */
   if (poRozpieciu !== '7777.PNG') {
-    fail.push(`po rozpięciu pary sąsiad bierze podgląd z ${poRozpieciu} — stary klucz nie posprzątany`);
+    fail.push(`po rozpięciu pary sąsiad bierze podgląd z ${poRozpieciu} – stary klucz nie posprzątany`);
   }
   serwerMini.close();
   fs.rmSync(katalogPar, { recursive: true, force: true });
 
   /* --- 8d. Pula schodzi sama, gdy Graph prosi o zwolnienie ---------------
      Po podniesieniu do szesnastu tempo u Marcina SPADŁO do 0,73 zdjęcia na
-     sekundę — poniżej stanu sprzed wszystkich poprawek. Panel pokazał
+     sekundę – poniżej stanu sprzed wszystkich poprawek. Panel pokazał
      dlaczego: „Graph prosił o zwolnienie 4× · przestój na karze 890 s",
      przy paczce z przewagą RAW-ów (111 RAW-ów na 9 JPG-ów).
 
-     Właściwa liczba robotników nie jest stała — zależy od tego, na jaki
+     Właściwa liczba robotników nie jest stała – zależy od tego, na jaki
      fragment archiwum akurat trafi paczka. Do tego przerwa po 429 jest
      wspólna, więc po jej końcu wszyscy ruszali w tej samej milisekundzie
      i od razu zbierali kolejne 429: stado biegnące na tę samą ścianę.
@@ -597,7 +597,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     archiwum: archDlaw,
     onedrive: {
       polaczony: () => true,
-      // Co drugie żądanie „kosztuje" dławienie — tak jak Graph przy RAW-ach.
+      // Co drugie żądanie „kosztuje" dławienie – tak jak Graph przy RAW-ach.
       graf: async () => {
         if (dlawSie && ++zapytan % 2 === 0) dlawienD++;
         await new Promise((r) => setTimeout(r, 20));
@@ -621,13 +621,13 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     + `oznaczono ${d8d.sprawdzone} z 40`);
   if (!(d8d.dolPuli < d8d.rownolegle)) {
     fail.push(`pula została na ${d8d.dolPuli} mimo ${d8d.zdlawien} dławień `
-      + '— po karze całe stado rusza naraz i zbiera kolejną');
+      + '– po karze całe stado rusza naraz i zbiera kolejną');
   }
-  if (d8d.dolPuli < 2) fail.push(`pula zeszła do ${d8d.dolPuli} — poniżej dwóch praca staje`);
+  if (d8d.dolPuli < 2) fail.push(`pula zeszła do ${d8d.dolPuli} – poniżej dwóch praca staje`);
   /* Schodzenie NIE MOŻE gubić plików: dławienie to prośba o zwolnienie,
      nie powód, żeby cokolwiek pominąć. */
   if (d8d.sprawdzone !== 40) {
-    fail.push(`oznaczono ${d8d.sprawdzone} z 40 — zwalnianie puli gubi pliki`);
+    fail.push(`oznaczono ${d8d.sprawdzone} z 40 – zwalnianie puli gubi pliki`);
   }
 
   /* --- 8e. Nauka MUSI przeżyć paczkę ------------------------------------
@@ -645,7 +645,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   archDlaw.dodaj(Array.from({ length: 20 }, (_, i) => zdj(
     `e${i}`, `/Mazury 2026/3B9A8${String(i).padStart(3, '0')}.CR3`,
     `2026-07-1${i % 9}T0${i % 10}:00:00`)));
-  // Atrapa PRZESTAJE dławić — mimo to pula nie może od razu wrócić na pełny
+  // Atrapa PRZESTAJE dławić – mimo to pula nie może od razu wrócić na pełny
   // gaz, bo powrót jest rozłożony w czasie, nie liczony w udanych żądaniach.
   dlawSie = false;
   const resE = {};
@@ -657,22 +657,22 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     + `oznaczono ${d8e.sprawdzone} z 20`);
   if (d8e.dolPuli >= d8e.rownolegle) {
     fail.push(`druga paczka wystartowała od pełnej puli (${d8e.dolPuli}) `
-      + '— nauka nie przeżywa paczki i tempo leci falami');
+      + '– nauka nie przeżywa paczki i tempo leci falami');
   }
   if (d8e.sprawdzone !== 20) {
-    fail.push(`oznaczono ${d8e.sprawdzone} z 20 w drugiej paczce — pamięć puli gubi pliki`);
+    fail.push(`oznaczono ${d8e.sprawdzone} z 20 w drugiej paczce – pamięć puli gubi pliki`);
   }
   fs.rmSync(katalogDlaw, { recursive: true, force: true });
 
   /* --- 8f. Regulacja MA ZBIEGAĆ do poziomu, którego Graph nie odrzuca -----
      Pamięć między paczkami nie wystarczyła. Marcin: „około 4 minut przestoju
      pomiędzy falami", a panel: `pula 16→4`, `przestój na karze 248 s`.
-     Powód: po dławieniu pula wracała do PUŁAPU Z `.env` — czyli tam, gdzie
+     Powód: po dławieniu pula wracała do PUŁAPU Z `.env` – czyli tam, gdzie
      już raz dostała po łapach. Regulacja bez pamięci o ścianie kręci się
      w kółko: rozpęd, kara, rozpęd, kara.
 
      Kara jest podana przez Microsoft w `Retry-After` i nie ma jak jej
-     skrócić. Jedyne wyjście to jej NIE WYWOŁYWAĆ — czyli znaleźć poziom,
+     skrócić. Jedyne wyjście to jej NIE WYWOŁYWAĆ – czyli znaleźć poziom,
      przy którym Graph milczy, i tam zostać.
 
      Atrapa dławi dokładnie wtedy, gdy naraz leci więcej niż sześć żądań. */
@@ -714,7 +714,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     wspolrzedneMiejsca: async () => null,
   });
 
-  // Powrót do ściany ma tu iść szybko, żeby zestaw nie trwał minutami —
+  // Powrót do ściany ma tu iść szybko, żeby zestaw nie trwał minutami –
   // sprawdzamy KIERUNEK zbieżności, nie zegar.
   process.env.YOLO_WZROST_MS = '10';
   let ostatniS = {};
@@ -738,37 +738,37 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   /* Ściana ma wylądować PRZY limicie atrapy, niekoniecznie co do jednego:
      regulacja uczy się z tego, przy jakim poziomie dostała, więc zatrzymuje
      się o krok wyżej, jeśli tego kroku już nigdy nie dotknęła. Sprawdzamy
-     rzecz właściwą — że zeszła DALEKO poniżej pułapu z `.env` i wylądowała
+     rzecz właściwą – że zeszła DALEKO poniżej pułapu z `.env` i wylądowała
      w okolicy prawdziwego limitu, zamiast wracać na 16. */
   if (!(ostatniS.sufitPuli <= PRZYJMUJE + 1)) {
     fail.push(`ściana została na ${ostatniS.sufitPuli} przy limicie ${PRZYJMUJE} `
-      + '— regulacja wraca tam, gdzie już dostała, i tempo leci falami');
+      + '– regulacja wraca tam, gdzie już dostała, i tempo leci falami');
   }
   if (dlawienNaKoniec) {
     fail.push(`w trzech ostatnich paczkach nadal ${dlawienNaKoniec} dławień `
-      + '— regulacja nie zbiega do poziomu, który Graph przyjmuje');
+      + '– regulacja nie zbiega do poziomu, który Graph przyjmuje');
   }
   if (ostatniS.zostalo !== 0) {
-    fail.push(`w kolejce zostało ${ostatniS.zostalo} — zbieganie do ściany gubi pliki`);
+    fail.push(`w kolejce zostało ${ostatniS.zostalo} – zbieganie do ściany gubi pliki`);
   }
   fs.rmSync(katalogSciana, { recursive: true, force: true });
 
   /* --- 9. Zapis indeksu nie może zjadać pętli zdarzeń w trakcie pracy -----
      To jest usterka, którą wykryła arytmetyka, a nie komunikat błędu.
      U Marcina, przy dwunastu robotnikach i zmierzonych 6,1 s na żądanie,
-     powinno wychodzić 1,95 żądania na sekundę. Wychodziło 1,07 — czterdzieści
+     powinno wychodzić 1,95 żądania na sekundę. Wychodziło 1,07 – czterdzieści
      pięć procent czasu ginęło POZA mierzonymi etapami.
 
      Powód: zapis jest asynchroniczny, ale `JSON.stringify` już nie. Na jego
      archiwum (57 728 wpisów, 28 MB) stringify trwa 497 ms, a cały zapis
      zamraża pętlę zdarzeń na ~650 ms. Przy stałym odstępie trzech sekund
-     serwer zamierał co trzecią sekundę na dwie trzecie sekundy — i wtedy
+     serwer zamierał co trzecią sekundę na dwie trzecie sekundy – i wtedy
      dwanaście pobrań stało w miejscu, a stopery tykały dalej, więc pomiar
      `pobranie` sam się zawyżał.
 
      Tu ustawiamy odstęp podłogowy na 50 ms i mielimy przez trzy sekundy.
      Ze stałym odstępem to znaczy zapis goniący zapis; z odstępem dobranym
-     do kosztu — najwyżej jeden. Liczymy tyknięcia zegara, bo tylko one mówią,
+     do kosztu – najwyżej jeden. Liczymy tyknięcia zegara, bo tylko one mówią,
      czy serwer w tym czasie mógł cokolwiek obsłużyć. */
   process.env.COSMOS_ARCHIWUM_ZAPIS_MS = '50';
   const katalogZapis = fs.mkdtempSync(path.join(os.tmpdir(), 'tempo-zapis-'));
@@ -777,7 +777,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   await archZapis.zapisz();            // pierwszy zapis podaje koszt kolejnym
   /* Zanim zaczniemy mierzyć, wszystko ma być CICHO. Wsypanie dwudziestu
      tysięcy wpisów zaplanowało zapis, który bez tego wpadał w środek pomiaru
-     — raz w okno odniesienia, raz w okno właściwe, i wynik skakał między
+     – raz w okno odniesienia, raz w okno właściwe, i wynik skakał między
      1% a 35% bez żadnej zmiany w kodzie. Czekamy, aż plik przestanie się
      zmieniać: to jest warunek „nie ma zaległych zapisów", a nie zgadywanka
      o długości odstępu. */
@@ -792,7 +792,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
   /* Liczba tyknięć MUSI mieć punkt odniesienia zmierzony tu i teraz, a nie
      wyliczony z okna i kroku. Pierwsza wersja porównywała do teoretycznych
      600 tyknięć i pod obciążeniem całej baterii pokazywała „32% zablokowane"
-     przy zdrowym kodzie — mierzyła zajętość maszyny, nie zachowanie zapisu.
+     przy zdrowym kodzie – mierzyła zajętość maszyny, nie zachowanie zapisu.
      Najpierw więc ten sam przebieg BEZ archiwum, potem z archiwum; liczy się
      różnica, a obciążenie skraca się po obu stronach. */
   const przemiel = async (naKrok) => {
@@ -817,7 +817,7 @@ if (naPlik > 700) fail.push(`${Math.round(naPlik)} B na wpis to za dużo — ind
     + `(${tyk9} tyknięć wobec ${tykBaza} bez archiwum)`);
   if (zablokowane > 25) {
     fail.push(`zapis indeksu zamraża serwer na ${zablokowane}% czasu pracy `
-      + '— pobrania stoją, a stopery tykają dalej');
+      + '– pobrania stoją, a stopery tykają dalej');
   }
   fs.rmSync(katalogZapis, { recursive: true, force: true });
   delete process.env.COSMOS_ARCHIWUM_ZAPIS_MS;

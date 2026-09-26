@@ -1,4 +1,4 @@
-# Cosmos — strona produktowa jest publiczna, aplikacja i API nie są do indeksowania.
+# Cosmos – strona produktowa jest publiczna, aplikacja i API nie są do indeksowania.
 User-agent: *
 Allow: /$
 Allow: /strona/

@@ -1,8 +1,8 @@
 /* Czy przerwany zapis może zniszczyć dane?
 
    `writeFileSync` NIE JEST niepodzielny: najpierw obcina plik do zera, potem
-   dopisuje treść. Przerwanie między jednym a drugim — restart usługi w złym
-   momencie, zanik zasilania VPS-a, brak miejsca na dysku — zostawia plik
+   dopisuje treść. Przerwanie między jednym a drugim – restart usługi w złym
+   momencie, zanik zasilania VPS-a, brak miejsca na dysku – zostawia plik
    pusty albo urwany w połowie.
 
    Przy `archiwum.json` zauważyłem to od razu i zrobiłem tam zapis przez plik
@@ -12,7 +12,7 @@
 
    Prawdziwego zaniku zasilania nie wywołamy, więc awarię MODELUJEMY: „proces
    zginął po obcięciu pliku, a przed dopisaniem treści". Zestaw pokazuje obie
-   strony obok siebie — przy zapisie wprost dane w tym momencie już nie
+   strony obok siebie – przy zapisie wprost dane w tym momencie już nie
    istnieją, przy zapisie przez plik tymczasowy leżą nietknięte, bo obcinany
    jest plik tymczasowy, a `rename` w obrębie katalogu jest niepodzielny.
 
@@ -33,7 +33,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
      Modelujemy awarię wprost, bo prawdziwego zaniku zasilania nie wywołamy:
      „proces zginął po obcięciu pliku, a przed dopisaniem treści". Dla
      `writeFileSync` to jest moment, w którym dane już nie istnieją. Dla zapisu
-     przez plik tymczasowy taki moment nie istnieje w ogóle — obcinany jest
+     przez plik tymczasowy taki moment nie istnieje w ogóle – obcinany jest
      PLIK TYMCZASOWY, a prawdziwy leży nietknięty aż do `rename`. */
   {
     const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-zapis-'));
@@ -43,13 +43,13 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     const naiwny = path.join(kat, 'naiwny.json');
     fs.writeFileSync(naiwny, STARE);
     try {
-      fs.writeFileSync(naiwny, '');        // obcięcie — pierwszy krok writeFileSync
+      fs.writeFileSync(naiwny, '');        // obcięcie – pierwszy krok writeFileSync
       throw new Error('tu ginie proces');  // …i drugi krok już nie następuje
     } catch { /* modelowana awaria */ }
     const poNaiwnym = fs.readFileSync(naiwny, 'utf8');
     console.log(`1a. zapis wprost, awaria w połowie → zostało ${poNaiwnym.length} B `
       + `z ${STARE.length} B`);
-    if (poNaiwnym.length) fail.push('model awarii jest zły — zapis wprost powinien zniszczyć plik');
+    if (poNaiwnym.length) fail.push('model awarii jest zły – zapis wprost powinien zniszczyć plik');
 
     // b) to samo przy zapisie przez plik tymczasowy
     const bezpieczny = path.join(kat, 'bezpieczny.json');
@@ -72,7 +72,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     console.log(`2. 2 MB zapisane w całości, pozostałości .tmp: ${smieci.length}`);
     if (smieci.length) fail.push(`zostały pliki tymczasowe: ${smieci.join(', ')}`);
 
-    /* Uprawnienia ustawiamy NA PLIKU TYMCZASOWYM, nie po podmianie — token
+    /* Uprawnienia ustawiamy NA PLIKU TYMCZASOWYM, nie po podmianie – token
        OneDrive zapisany najpierw jawnie byłby przez chwilę do odczytania
        przez każdego na maszynie. Krótkie okno to wciąż okno. */
     const tajny = path.join(kat, 'tajne.json');
@@ -81,7 +81,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     console.log(`3. tryb dostępu pliku z poświadczeniami: ${tryb.toString(8)}`);
     if (tryb & 0o077) fail.push(`plik z tokenem czytelny dla innych (${tryb.toString(8)})`);
 
-    /* Resztka po przerwanym zapisie ma SWÓJ tryb — `mode` działa tylko przy
+    /* Resztka po przerwanym zapisie ma SWÓJ tryb – `mode` działa tylko przy
        zakładaniu pliku. Gdyby zapis ją otworzył zamiast założyć plik od
        nowa, token dostałby 0644 po poprzednim, nieudanym przebiegu. */
     fs.writeFileSync(`${tajny}.tmp`, 'resztka', { mode: 0o644 });
@@ -91,7 +91,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     console.log(`3b. ten sam plik po resztce .tmp z trybem 644: ${trybPoResztce.toString(8)}`);
     if (trybPoResztce & 0o077) fail.push(`resztka .tmp przeniosła swój tryb na plik z tokenem (${trybPoResztce.toString(8)})`);
 
-    /* Pełny dysk w połowie zapisu: `.tmp` zostawał i zjadał resztę miejsca —
+    /* Pełny dysk w połowie zapisu: `.tmp` zostawał i zjadał resztę miejsca –
        przy dużym indeksie bazy wiedzy padały potem drobne zapisy INNYCH osób.
        Pełny dysk modelujemy podmianą writeSync na błąd ENOSPC po pierwszym kawałku. */
     const indeks = path.join(kat, 'index.json');
@@ -116,7 +116,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
   /* ---- 1c. Uszkodzony plik nie daje po cichu pustego stanu ----
      Dawniej każdy moduł czytał `try { JSON.parse } catch { return [] }`.
      Ucięty plik dawał pusty stan bez słowa, a PIERWSZY zapis nadpisywał go
-     pustą listą — tak ginęły konta członków, pamięć i indeks rozmów.
+     pustą listą – tak ginęły konta członków, pamięć i indeks rozmów.
      Teraz: kopia uszkodzonego pliku obok, przywrócenie z `.bak`, a przy
      kontach serwer woli nie wstać, niż wstać bez nich. */
   {
@@ -127,7 +127,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     const brak = czytajJson(plik, ['domyślna']);
     if (JSON.stringify(brak) !== '["domyślna"]') fail.push('brak pliku nie dał wartości domyślnej');
 
-    // a) uszkodzony, bez kopii — wartość domyślna, ALE ucięta treść zachowana obok
+    // a) uszkodzony, bez kopii – wartość domyślna, ALE ucięta treść zachowana obok
     const UCIETY = '[{"id":"a","text":"Fotografuje Canonem R6 II"},{"id":"b","te';
     fs.writeFileSync(plik, UCIETY);
     const a = czytajJson(plik, []);
@@ -144,7 +144,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     console.log(`6b. po dwóch zapisach .bak trzyma: ${bak[0]?.id}`);
     if (bak[0]?.id !== 'v1') fail.push(`.bak nie trzyma poprzedniej wersji (${JSON.stringify(bak)})`);
 
-    // c) uszkodzony plik z .bak — dane wracają, i to NA DYSKU
+    // c) uszkodzony plik z .bak – dane wracają, i to NA DYSKU
     fs.writeFileSync(plik, '{"ucięte');
     const c = czytajJson(plik, []);
     console.log(`6c. ucięty plik z .bak → ${JSON.stringify(c)}`);
@@ -152,7 +152,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     let naDysku = null;
     try { naDysku = JSON.parse(fs.readFileSync(plik, 'utf8')); } catch { /* dalej uszkodzony */ }
     if (naDysku?.[0]?.id !== 'v1') {
-      fail.push('plik na dysku został uszkodzony — następny zapis odłożyłby śmieci jako .bak');
+      fail.push('plik na dysku został uszkodzony – następny zapis odłożyłby śmieci jako .bak');
     }
 
     // d) pusty plik to też uszkodzenie, nie „pusta lista"
@@ -161,7 +161,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     czytajJson(pusty, []);
     if (!fs.readdirSync(kat).some((f) => f.startsWith('pusty.json.uszkodzony-'))) fail.push('pusty plik przeszedł bez śladu');
 
-    // e) krytyczny (konta) bez kopii — wyjątek zamiast pustej listy
+    // e) krytyczny (konta) bez kopii – wyjątek zamiast pustej listy
     const konta = path.join(kat, 'uzytkownicy.json');
     fs.writeFileSync(konta, '[{"id":"wlasciciel","login":"marcin"},{"id":"u');
     let rzucil = false;
@@ -204,7 +204,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
   }
   console.log('4. rozmowa, indeks rozmów i sprzęt: zapisane i parsowalne');
 
-  /* 4b. DWA URZĄDZENIA. Zapis z nieaktualnej kopii nadpisywał całą rozmowę —
+  /* 4b. DWA URZĄDZENIA. Zapis z nieaktualnej kopii nadpisywał całą rozmowę –
      telefon kasował wiadomości napisane w międzyczasie na komputerze. Zapis
      mówi teraz, na której wersji się opiera; nowszej serwer nie nadpisze. */
   const put = async (tresc) => {
@@ -261,7 +261,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
     fs.writeFileSync(path.join(kat, 'konta', 'uzytkownicy.json'), '[{"id":"wlasciciel","login":"marcin"},{"id":"u');
     const start = spawnSync('node', ['server.js'], { cwd: KORZEN, encoding: 'utf8', timeout: 20000,
       env: { ...bazaEnv, PORT: '3491', COSMOS_DATA_DIR: kat } });
-    /* Serwer, który WSTAŁ, kończy się dopiero sygnałem po limicie czasu — a na
+    /* Serwer, który WSTAŁ, kończy się dopiero sygnałem po limicie czasu – a na
        SIGTERM odpowiada porządnym wyjściem z kodem 0. Odmowa startu to kod ≠ 0. */
     const wstal = start.status === null || start.status === 0;
     console.log(`7. serwer z uszkodzonym plikiem kont: ${wstal ? 'WSTAŁ (ŹLE)' : `odmówił startu (kod ${start.status})`}`);
@@ -298,7 +298,7 @@ const { zapiszAtomowo, czytajJson } = require('../../lib/rdzen.js');
      Transkrypcja żyła tylko w pamięci procesu: po restarcie pozycja zostawała
      „przepisuje się w tle", bez tekstu, na zawsze. Przy pierwszym zajrzeniu
      do bazy wiedzy rusza od nowa (tu zmysłów nie ma, więc kończy się pustym
-     tekstem — ważne, że się KOŃCZY), a po dwóch przerwanych próbach
+     tekstem – ważne, że się KOŃCZY), a po dwóch przerwanych próbach
      przestaje udawać, że trwa. */
   {
     const kat = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cosmos-transkrypcja-'));

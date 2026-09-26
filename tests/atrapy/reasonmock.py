@@ -1,4 +1,4 @@
-"""Atrapa modelu ROZUMUJĄCEGO — odtwarza zachowania z ekranów Marcina.
+"""Atrapa modelu ROZUMUJĄCEGO – odtwarza zachowania z ekranów Marcina.
 
 Tryby wybierane treścią ostatniej wiadomości użytkownika:
   „pusto”   → cały budżet idzie w reasoning_content, content zostaje pusty
@@ -54,7 +54,7 @@ class H(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
 
         if "pusto" in user:
-            # cały budżet w myśleniu — dokładnie to dawało „(pusta odpowiedź modelu)”
+            # cały budżet w myśleniu – dokładnie to dawało „(pusta odpowiedź modelu)”
             send([sse(delta(reasoning_content="Zastanawiam się nad ceną butów. ")),
                   sse(delta(reasoning_content="Musiałbym sprawdzić w sklepach. ")),
                   sse(delta(reasoning_content="Brakuje mi danych o modelu."))])

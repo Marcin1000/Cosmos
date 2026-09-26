@@ -1,4 +1,4 @@
-"""Atrapa modelu, która zapisuje otrzymane instrukcje — do sprawdzenia języka."""
+"""Atrapa modelu, która zapisuje otrzymane instrukcje – do sprawdzenia języka."""
 import http.server, json
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"

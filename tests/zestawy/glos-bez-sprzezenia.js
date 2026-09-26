@@ -6,17 +6,17 @@
    „HejHejHej kosmosHej kosmos Co widzisz".
 
    Mechanizm: rozpoznawacz jest CIĄGŁY, więc kiedy Cosmos mówi, dalej
-   transkrybuje — tyle że wyniki ignorujemy (`voiceDeaf`). Zostają jednak
+   transkrybuje – tyle że wyniki ignorujemy (`voiceDeaf`). Zostają jednak
    w `e.results`, a gałąź słowa budzącego czytała trzy OSTATNIE wyniki
    niezależnie od tego, czy były już widziane. Po skończonej wypowiedzi
    Cosmos odczytywał więc własne zdanie jako nowe polecenie.
 
-   Testujemy to na sztucznym zdarzeniu `onresult` — prawdziwego mikrofonu
+   Testujemy to na sztucznym zdarzeniu `onresult` – prawdziwego mikrofonu
    w przeglądarce testowej nie ma, a i tak chodzi o logikę, nie o akustykę. */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -94,7 +94,7 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
     voiceRec.__ostatniaDlugosc = wTrakcie.results.length;
     window.__onresult(wTrakcie);      // mikrofon słyszy własny głos Cosmosa
 
-    // Wypowiedź skończona — wracamy do nasłuchu.
+    // Wypowiedź skończona – wracamy do nasłuchu.
     startQueryListening();
     voiceState = 'wake';
     // Rozpoznawacz dosyła to samo, co już nagrał (typowe opóźnienie).
@@ -136,14 +136,14 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
   }));
   console.log(`5. porównanie zdań: identyczne=${pary.identyczne}, różne=${pary.rozne}, krótkie=${pary.krotkie}`);
   if (!pary.identyczne) fail.push('nie rozpoznaje identycznego zdania');
-  if (pary.rozne) fail.push('uznaje różne zdania za echo — blokowałby normalne pytania');
+  if (pary.rozne) fail.push('uznaje różne zdania za echo – blokowałby normalne pytania');
   if (pary.krotkie) fail.push('blokuje krótkie odpowiedzi w rodzaju „tak"');
 
   /* 6. Druga strona tego samego medalu. Znacznik zużycia to INDEKS, a indeks
      nie jest stałym punktem odniesienia: rozpoznawacz potrafi zacząć numerować
      od zera bez `onend` (Chrome po dłuższej ciszy, Android po każdej domkniętej
      wypowiedzi). Pierwsza wersja zapory tego nie przewidywała i pytanie zadane
-     zaraz po słowie budzącym wypadało poniżej znacznika — transkrypcja pusta,
+     zaraz po słowie budzącym wypadało poniżej znacznika – transkrypcja pusta,
      cisza nie miała czego wysłać. Zapora ma tłumić echo, nie własne pytania. */
   const poRestarcie = await pg.evaluate(() => {
     window.__zadane = [];
@@ -156,7 +156,7 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
     window.__onresult(budzenie);
     const stanPoBudzeniu = voiceState;
 
-    // Nowa lista, znów od indeksu 0 — dla kodu wygląda jak „nic nowego".
+    // Nowa lista, znów od indeksu 0 – dla kodu wygląda jak „nic nowego".
     const pytanie = window.__zdarzenie(['policz zdjęcia z czerwca'], 0);
     window.__onresult(pytanie);
     return { stanPoBudzeniu, transkrypcja: el.voiceTranscript.textContent, uslyszane: voiceHeard };
@@ -165,7 +165,7 @@ const ZDARZENIE = `(function (zdania, odIndeksu) {
     + `transkrypcja=„${poRestarcie.transkrypcja}"`);
   if (poRestarcie.stanPoBudzeniu !== 'listening') fail.push('słowo budzące nie przełączyło w słuchanie');
   if (!/czerwca/.test(poRestarcie.uslyszane)) {
-    fail.push('pytanie po restarcie numeracji przepadło — znacznik zużycia połknął świeży wynik');
+    fail.push('pytanie po restarcie numeracji przepadło – znacznik zużycia połknął świeży wynik');
   }
 
   /* 7. …a przy okazji słowo budzące nie może wsiąknąć w treść pytania. */

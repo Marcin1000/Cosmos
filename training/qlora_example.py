@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Cosmos — przykładowy fine-tuning QLoRA na Twoich rozmowach.
+Cosmos – przykładowy fine-tuning QLoRA na Twoich rozmowach.
 
-To NIE jest część serwera Cosmosa — to osobny, opcjonalny skrypt, który
+To NIE jest część serwera Cosmosa – to osobny, opcjonalny skrypt, który
 dotrenowuje mały model (LoRA/QLoRA) na zbiorze wyeksportowanym z Cosmosa
 (Ustawienia → Dane treningowe → „Eksport JSONL (chat)").
 
@@ -11,7 +11,7 @@ zainstalowany (najszybciej, najmniej VRAM), a w innym wypadku podpowiada, jak
 zainstalować. Wynik: adapter LoRA + opcjonalny eksport do GGUF pod Ollama,
 którego wpinasz w Cosmosie jako profil „Lokalnie".
 
-Instalacja (Linux/WSL z CUDA — zalecane):
+Instalacja (Linux/WSL z CUDA – zalecane):
     pip install "unsloth[cu121] @ git+https://github.com/unslothai/unsloth.git"
     #  (alternatywa bez Unsloth: pip install transformers peft trl bitsandbytes datasets accelerate)
 
@@ -20,7 +20,7 @@ Użycie:
         --model unsloth/Qwen2.5-7B-Instruct-bnb-4bit --epochs 2
 
 Po treningu (eksport do Ollamy):
-    # skrypt zapisze GGUF w ./cosmos-model-gguf/ — potem:
+    # skrypt zapisze GGUF w ./cosmos-model-gguf/ – potem:
     ollama create cosmos-ft -f ./cosmos-model-gguf/Modelfile
     # w .env Cosmosa:  LOCAL_MODEL=cosmos-ft
 """
@@ -82,7 +82,7 @@ def main():
     )
     tokenizer = get_chat_template(tokenizer, chat_template="chatml")
 
-    # 2) doczep adaptery LoRA (uczą się tylko one — reszta zamrożona)
+    # 2) doczep adaptery LoRA (uczą się tylko one – reszta zamrożona)
     model = FastLanguageModel.get_peft_model(
         model, r=16, lora_alpha=16, lora_dropout=0,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",

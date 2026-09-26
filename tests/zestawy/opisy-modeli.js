@@ -20,7 +20,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     return { hidden: b.hidden, text: b.innerText.replace(/\s+/g, ' ').trim() };
   });
 
-  // 1. domyślny model z .env — opis widoczny od razu
+  // 1. domyślny model z .env – opis widoczny od razu
   let s = await read();
   console.log(`1. domyślny (.env): ${s.hidden ? 'UKRYTY' : s.text.slice(0, 80)}`);
   if (s.hidden) fail.push('brak opisu dla modelu domyślnego');
@@ -31,28 +31,28 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
     return read();
   };
 
-  // 2. flagowiec — ostrzeżenie o szybkości
+  // 2. flagowiec – ostrzeżenie o szybkości
   s = await setModel('nvidia/nemotron-3-ultra-550b-a55b');
   console.log(`2. ultra-550b: ${s.text.slice(0, 90)}`);
   if (s.hidden || !/Ultra/.test(s.text)) fail.push('ultra bez opisu');
   if (!/⚠/.test(s.text)) fail.push('ultra bez ostrzeżenia o szybkości');
 
-  // 3. model wizyjny — znacznik „widzi obrazy"
+  // 3. model wizyjny – znacznik „widzi obrazy"
   s = await setModel('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
   console.log(`3. omni: ${s.text.slice(0, 90)}`);
   if (!/widzi obrazy/.test(s.text)) fail.push('omni bez znacznika wizji');
 
-  // 4. model spoza katalogu z czytelną nazwą — opis oznaczony jako domysł
+  // 4. model spoza katalogu z czytelną nazwą – opis oznaczony jako domysł
   s = await setModel('meta/llama-3.3-70b-instruct');
   console.log(`4. llama-instruct: ${s.text.slice(0, 90)}`);
   if (!/spoza katalogu/.test(s.text)) fail.push('nieznany model bez adnotacji o domyśle');
 
-  // 5. całkiem nieznany — ramka znika, zamiast zmyślać
+  // 5. całkiem nieznany – ramka znika, zamiast zmyślać
   s = await setModel('zupelnie-nieznany-xyz');
   console.log(`5. nieznany: ${s.hidden ? 'ramka ukryta (poprawnie)' : 'WIDOCZNA: ' + s.text}`);
   if (!s.hidden) fail.push('nieznany model pokazuje opis');
 
-  // 6. embeddingi — ostrzeżenie, żeby nie wybierać do czatu
+  // 6. embeddingi – ostrzeżenie, żeby nie wybierać do czatu
   s = await setModel('nvidia/llama-nemotron-embed-1b-v2');
   console.log(`6. embed: ${s.text.slice(0, 90)}`);
   if (!/Nie wybieraj/.test(s.text)) fail.push('model embeddingów bez ostrzeżenia');

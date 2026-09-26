@@ -1,4 +1,4 @@
-// Atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
+// Atrapy stron stoją na 127.0.0.1 – jawnie zaufane (lib/pobieranie.js blokuje sieć prywatną).
 process.env.POBIERANIE_ZAUFANE = '127.0.0.1,localhost';
 // Cała ścieżka /api/search na podstawionej wyszukiwarce: reklamy odpadają,
 // zostają prawdziwe wyniki, treść stron się dokleja.
@@ -7,11 +7,11 @@ const KORZEN = require('node:path').resolve(__dirname, '..', '..');
 
 const page = (t) => `<html><body><h1>${t}</h1><p>Temperatura teraz: 7&deg;C.</p></body></html>`;
 const ddg = `<html><body>
- <a class="result__a" href="//duckduckgo.com/y.js?ad_domain=booking.com&amp;click_metadata=x">Booking — REKLAMA</a>
+ <a class="result__a" href="//duckduckgo.com/y.js?ad_domain=booking.com&amp;click_metadata=x">Booking – REKLAMA</a>
  <a class="result__snippet" href="#">Rezerwuj tanio</a>
  <a class="result__a" href="//duckduckgo.com/l/?uddg=http%3A%2F%2F127.0.0.1%3A7094%2Fimgw&amp;rut=1">IMGW Warszawa</a>
  <a class="result__snippet" href="#">Serwis pogodowy IMGW</a>
- <a class="result__a" href="//duckduckgo.com/y.js?ad_domain=itaka.pl">Itaka — REKLAMA</a>
+ <a class="result__a" href="//duckduckgo.com/y.js?ad_domain=itaka.pl">Itaka – REKLAMA</a>
  <a class="result__snippet" href="#">Wycieczki</a>
  <a class="result__a" href="http://127.0.0.1:7094/radar">Radary24</a>
  <a class="result__snippet" href="#">Radar temperatury</a>

@@ -3,13 +3,13 @@
  * Po co: tryb głosowy bez piszczenia mikrofonu działał tylko z Whisperem
  * w zmysłach. Bez komputera domowego telefon wracał do Web Speech API, a Android
  * kwituje dźwiękiem każdy start i koniec rozpoznawania. Teraz serwer ma dokąd
- * wysłać nagranie — i to musi być prawda w każdym z tych przypadków:
+ * wysłać nagranie – i to musi być prawda w każdym z tych przypadków:
  *
  *   1. zmysły wyłączone + klucz OpenAI → rozpoznanie idzie do OpenAI, z językiem
  *      i podpowiedzią pisowni „Cosmos"; /api/config zgłasza sttChmura,
  *   2. nasłuch otoczenia (`tryb=nasluch`) NIGDY nie trafia do chmury,
  *   3. czytanie: ElevenLabs pierwsze (szybki model rozmowy), przy jego awarii
- *      OpenAI — a przy braku wszystkiego 502, żeby przeglądarka wzięła głos
+ *      OpenAI – a przy braku wszystkiego 502, żeby przeglądarka wzięła głos
  *      systemowy,
  *   4. gość bez prawa do OpenAI i Studia nie dostaje płatnego głosu właściciela,
  *   5. zmysły z Whisperem mają pierwszeństwo przed chmurą (lokalnie, za darmo),
@@ -136,7 +136,7 @@ const atrapa = http.createServer((req, res) => {
 
   // --- 5. zmysły mają pierwszeństwo
   zmyslyZywe = true;
-  // pamięć stanu zmysłów trwa 30 s — nowy obiekt, żeby zobaczyć świeży stan
+  // pamięć stanu zmysłów trwa 30 s – nowy obiekt, żeby zobaczyć świeży stan
   const glos2 = utworz({ SENSES_URL: `${A}/zm`, silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO, env: {} });
   const serwer2 = http.createServer((req, res) => glos2.handleStt(req, res));
   await new Promise((rr) => serwer2.listen(0, '127.0.0.1', rr));
@@ -146,7 +146,7 @@ const atrapa = http.createServer((req, res) => {
   ok(r.status === 200 && d.zrodlo === 'zmysly' && d.text === 'z Whispera', `zmysły żyją → lokalny Whisper, także dla nasłuchu (${d.zrodlo})`);
   ok(!wywolania.some((w) => w.url.startsWith('/oa/')), 'przy żywych zmysłach nic nie poszło do chmury');
   /* Gość bez przyznanego „lokalnego GPU" nie zajmuje Whispera na komputerze
-     właściciela — nawet gdy zmysły żyją. Z przyznaniem — tak. */
+     właściciela – nawet gdy zmysły żyją. Z przyznaniem – tak. */
   ktoTeraz = gosc;
   wywolania.length = 0;
   r = await fetch(`http://127.0.0.1:${serwer2.address().port}/api/stt?jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });

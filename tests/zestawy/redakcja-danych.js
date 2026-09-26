@@ -1,4 +1,4 @@
-// scrubSecrets jest zadeklarowana NIŻEJ niż miejsce wywołania — sprawdźmy,
+// scrubSecrets jest zadeklarowana NIŻEJ niż miejsce wywołania – sprawdźmy,
 // że hoisting faktycznie działa, zamiast zakładać.
 const http = require('http');
 const KORZEN = require('node:path').resolve(__dirname, '..', '..');

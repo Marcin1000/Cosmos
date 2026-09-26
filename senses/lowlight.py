@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Cosmos LowLight — gdzie jest granica widzenia Twoich kamer.
+Cosmos LowLight – gdzie jest granica widzenia Twoich kamer.
 
 Eksperyment: przy jakim natężeniu światła detekcja obiektów przestaje działać?
-Odpowiedź jest inna dla webcama, dla Canona R6 II i dla podczerwieni Kinecta —
+Odpowiedź jest inna dla webcama, dla Canona R6 II i dla podczerwieni Kinecta –
 a od niej zależy, którego czujnika użyć o której porze.
 
-  measure — puść YOLO na serię zdjęć o znanym natężeniu światła → krzywa skuteczności
-  synth   — wygeneruj serię testową (przyciemnianie + szum), żeby sprawdzić metodę
-  selftest— sprawdź samą metodę bez zdjęć i bez YOLO
+  measure – puść YOLO na serię zdjęć o znanym natężeniu światła → krzywa skuteczności
+  synth   – wygeneruj serię testową (przyciemnianie + szum), żeby sprawdzić metodę
+  selftest– sprawdź samą metodę bez zdjęć i bez YOLO
 
 Wejście dla `measure`: folder ze zdjęciami + plik CSV `nazwa,lux`
 (albo lux zapisany w nazwie pliku, np. `scena_120lx.jpg`).
 
 Zależności: numpy; opcjonalnie ultralytics (YOLO) i opencv-python.
-Bez YOLO moduł nadal policzy jasność i szum — czyli fizykę obrazu.
+Bez YOLO moduł nadal policzy jasność i szum – czyli fizykę obrazu.
 """
 from __future__ import annotations
 
@@ -30,14 +30,14 @@ def _dep_error(pakiety: str) -> str:
     """Komunikat o brakującej zależności.
 
     Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
-    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    nigdy nie jest brak pakietu – tylko nieaktywowane środowisko. Sama rada
     „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
     """
     msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
     venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if os.path.isdir(venv) and not in_venv:
-        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany – "
                "tylko nie w tym Pythonie.\n\n"
                "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
                "  Windows:      .venv\\Scripts\\activate\n"
@@ -78,7 +78,7 @@ def lux_from_name(name: str) -> float | None:
 
 
 def image_stats(arr: np.ndarray) -> dict:
-    """Jasność i szum — to, co realnie decyduje o wykrywalności."""
+    """Jasność i szum – to, co realnie decyduje o wykrywalności."""
     g = arr.mean(axis=2) if arr.ndim == 3 else arr
     mean = float(g.mean())
     # szum: odchylenie różnic sąsiednich pikseli (odporne na treść obrazu)
@@ -160,8 +160,8 @@ def cmd_measure(args) -> None:
                         pass
 
     model = load_yolo(args.model)
-    print(f"\n✦ Cosmos LowLight — {folder}  ({len(images)} zdjęć)")
-    print(f"  YOLO: {'załadowane (' + args.model + ')' if model else 'niedostępne — liczę samą fizykę obrazu'}\n")
+    print(f"\n✦ Cosmos LowLight – {folder}  ({len(images)} zdjęć)")
+    print(f"  YOLO: {'załadowane (' + args.model + ')' if model else 'niedostępne – liczę samą fizykę obrazu'}\n")
     print(f"  {'zdjęcie':<28} {'lux':>9} {'jasność':>8} {'SNR dB':>7} {'wykryć':>7}")
     print(f"  {'-'*28} {'-'*9} {'-'*8} {'-'*7} {'-'*7}")
 
@@ -169,14 +169,14 @@ def cmd_measure(args) -> None:
     for p in images:
         arr = load_image(p)
         if arr is None:
-            print(f"  {p.name:<28} {'—':>9} (nie mogę wczytać — zainstaluj opencv-python)")
+            print(f"  {p.name:<28} {'–':>9} (nie mogę wczytać – zainstaluj opencv-python)")
             continue
         st = image_stats(arr)
         lux = lux_map.get(p.name, lux_from_name(p.name))
         n = detect_count(p, model)
         rows.append((lux, st, n))
-        print(f"  {p.name:<28} {lux if lux is not None else '—':>9} "
-              f"{st['jasnosc']:>8} {st['snr_db']:>7} {n if n >= 0 else '—':>7}")
+        print(f"  {p.name:<28} {lux if lux is not None else '–':>9} "
+              f"{st['jasnosc']:>8} {st['snr_db']:>7} {n if n >= 0 else '–':>7}")
 
     known = [(l, s, n) for l, s, n in rows if l is not None and n >= 0]
     if len(known) >= 3:
@@ -190,7 +190,7 @@ def cmd_measure(args) -> None:
         print(f"\n  Najwięcej wykryć: {best} obiektów")
         if limit is not None:
             print(f"  Granica użyteczności (≥50% wykryć): około {limit} lx")
-            print("  Poniżej tej wartości ta kamera przestaje być wiarygodna —")
+            print("  Poniżej tej wartości ta kamera przestaje być wiarygodna –")
             print("  przełącz się na czulszy aparat albo na podczerwień Kinecta.")
         send_event(f"badanie granicy widzenia: użyteczne do ~{limit} lx")
     elif rows:
@@ -208,7 +208,7 @@ def cmd_synth(args) -> None:
     scene = (60 + 40 * np.sin(xx / 18.0) + 30 * np.cos(yy / 14.0)).astype(np.float64)
     scene[80:170, 110:210] = 200.0                       # jasny „obiekt" w kadrze
 
-    print(f"\n✦ Cosmos LowLight — generuję serię testową w {out}")
+    print(f"\n✦ Cosmos LowLight – generuję serię testową w {out}")
     for lux in [float(x) for x in args.levels.split(",")]:
         gain = min(1.0, lux / 500.0)                     # 500 lx = pełna ekspozycja
         img = scene * gain
@@ -239,7 +239,7 @@ def write_png(path: Path, rgb: np.ndarray) -> None:
 
 
 def cmd_selftest(_args) -> None:
-    print("\n✦ Cosmos LowLight — samotest\n")
+    print("\n✦ Cosmos LowLight – samotest\n")
     ok = True
     rng = np.random.default_rng(1)
     base = np.full((100, 100, 3), 120, dtype=np.float64)
@@ -258,13 +258,13 @@ def cmd_selftest(_args) -> None:
     print(f"  2. SNR: zaszumiony {sn['snr_db']} dB < czysty {sc['snr_db']} dB")
     ok &= sn["snr_db"] < sc["snr_db"]
 
-    # 3) Pomiar szumu zgodny z zadanym (jeden kanał — bez uśredniania RGB)
+    # 3) Pomiar szumu zgodny z zadanym (jeden kanał – bez uśredniania RGB)
     flat = np.clip(np.full((200, 200), 128.0) + rng.normal(0, 10, (200, 200)), 0, 255).astype(np.uint8)
     est = image_stats(flat)["szum"]
     print(f"  3. Zmierzony szum (mono): {est:.2f} (zadano 10.0)")
     ok &= abs(est - 10.0) / 10.0 < 0.15
 
-    # 3b) Na obrazie RGB mierzymy szum LUMINANCJI — z niezależnych kanałów
+    # 3b) Na obrazie RGB mierzymy szum LUMINANCJI – z niezależnych kanałów
     #     wychodzi ~sigma/sqrt(3); to poprawna fizyka, nie błąd pomiaru.
     rgb3 = np.clip(np.full((200, 200, 3), 128.0) + rng.normal(0, 10, (200, 200, 3)), 0, 255).astype(np.uint8)
     est3 = image_stats(rgb3)["szum"]

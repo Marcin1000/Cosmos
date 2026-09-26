@@ -1,16 +1,16 @@
-/* Archiwum bez zamrożeń — paczka 5000 plików nie stawia serwera wszystkim.
+/* Archiwum bez zamrożeń – paczka 5000 plików nie stawia serwera wszystkim.
 
    Zespół IT zmierzył: POST /api/archive/add z 5000 wpisami liczył się jednym
    ciągiem ~1,9 s (pozycja Słońca i tematy na każdy plik). Przez ten czas
-   serwer nie odpowiadał nikomu — stały strumienie czatu wszystkich osób.
+   serwer nie odpowiadał nikomu – stały strumienie czatu wszystkich osób.
    A trasa jest dla każdego zaproszonego, bez limitu żądań.
 
    Co musi być prawdą:
      1. W trakcie wgrywania 5000 wpisów serwer odpowiada innym żądaniom:
         najdłuższa odpowiedź na lekkie pytanie < 400 ms (było ~2000 ms).
      2. Wynik ten sam co dawniej: 5000 dodanych, ponowne wgranie = 5000
-        odświeżonych (nie dubli) — i też bez zamrożenia.
-     3. Druga paczka tej samej osoby w trakcie pierwszej dostaje 429 —
+        odświeżonych (nie dubli) – i też bez zamrożenia.
+     3. Druga paczka tej samej osoby w trakcie pierwszej dostaje 429 –
         pętla takich żądań nie zajmie całego procesora.
      4. Wpisy są potem w archiwum (wyszukiwanie je widzi). */
 const { serwerCosmosa, czekajNa, zabij } = require('../pomoc');
@@ -62,7 +62,7 @@ async function zPomiarem(wpisy) {
 (async () => {
   const srv = serwerCosmosa(PORT, { EMBED_PROVIDER: 'off', SENSES_URL: 'http://127.0.0.1:9' });
   if (!await czekajNa(ADRES)) { zabij(srv); throw new Error('serwer testowy nie wstał'); }
-  // rozgrzewka — pierwsze żądanie ładuje moduły i archiwum osoby
+  // rozgrzewka – pierwsze żądanie ładuje moduły i archiwum osoby
   await fetch(`${ADRES}/api/archive/add`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wpisy: paczka(10, 90000) }) });
 
   const pierwsza = paczka(5000);

@@ -1,6 +1,6 @@
 /* Nić rozmowy: każda odpowiedź nosi znak silnika, który ją napisał.
  *
- * To jest obietnica ze strony produktowej („Jedna rozmowa. Każdy model.") —
+ * To jest obietnica ze strony produktowej („Jedna rozmowa. Każdy model.") –
  * po wejściu do aplikacji ma być widać, który silnik odpowiadał, także po
  * przełączeniu w połowie wątku i po przeładowaniu strony. Sprawdzamy:
  *   1. odpowiedź w trakcie pisania ma już kolor i podpis wybranego silnika,
@@ -8,7 +8,7 @@
  *      zostaje przy swoim (nić zmienia kolor, nie przemalowuje historii),
  *   3. znak jest zapisany w rozmowie na dysku, więc przeżywa przeładowanie,
  *   4. <html data-silnik> idzie za wybraną zakładką (kolor pola i kropki modelu),
- *   5. przełączenie zakładki W TRAKCIE odpowiedzi nie przepisuje jej podpisu —
+ *   5. przełączenie zakładki W TRAKCIE odpowiedzi nie przepisuje jej podpisu –
  *      odpowiedź pisana przez lokalny GPU zostaje przy nim (dawniej po
  *      zmianie zakładki podpisywała się silnikiem, który jej nie napisał). */
 const fs = require('fs');
@@ -42,7 +42,7 @@ const { srodowisko, przegladarka, katalogOsoby } = require('../pomoc');
   await p.click('.endpoint-tab[data-endpoint="cloud"]');
   ok(await p.evaluate(() => document.documentElement.dataset.silnik) === 'cloud', '<html data-silnik> = cloud po wybraniu NVIDIA');
   await zapytaj('Pierwsze pytanie');
-  /* Drugi silnik: lokalny GPU — atrapa odpowiada za chmurę i lokalny,
+  /* Drugi silnik: lokalny GPU – atrapa odpowiada za chmurę i lokalny,
      a Claude'a i OpenAI nie udaje (tam przyszedłby błąd 404). Środowisko
      „pelne" ma skonfigurowany model lokalny. */
   await p.click('.endpoint-tab[data-endpoint="local"]');

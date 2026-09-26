@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-Cosmos Terrain — analiza terenu z chmury punktów (dron + fotogrametria).
+Cosmos Terrain – analiza terenu z chmury punktów (dron + fotogrametria).
 
 Bierze model 3D zbudowany przez `photoscan.py` (COLMAP, plik .ply) i liczy
-rzeczy, które da się policzyć **deterministycznie** — bez AI, bez internetu:
+rzeczy, które da się policzyć **deterministycznie** – bez AI, bez internetu:
 
-  sun      — nasłonecznienie: ile godzin bezpośredniego słońca dostaje każdy
+  sun      – nasłonecznienie: ile godzin bezpośredniego słońca dostaje każdy
              metr kwadratowy w danym dniu (mapa PNG + statystyki)
-  shadow   — cień o konkretnej godzinie (np. „15 czerwca o 17:30")
-  view     — analiza widoku (viewshed): co widać z danego punktu i wysokości
-  volume   — objętość i wysokości (pryzma materiału, wysokość drzewa/budynku)
-  compare  — porównanie dwóch skanów w czasie (co przybyło / ubyło)
+  shadow   – cień o konkretnej godzinie (np. „15 czerwca o 17:30")
+  view     – analiza widoku (viewshed): co widać z danego punktu i wysokości
+  volume   – objętość i wysokości (pryzma materiału, wysokość drzewa/budynku)
+  compare  – porównanie dwóch skanów w czasie (co przybyło / ubyło)
 
-WAŻNE — układ współrzędnych:
+WAŻNE – układ współrzędnych:
   COLMAP bez georeferencji daje układ **umowny** (nie metry, nie północ).
   Żeby wyniki były prawdziwe, model musi być w ENU: X=wschód, Y=północ,
   Z=góra, w metrach. Najprościej: uruchom `photoscan.py --geo`, który wyrówna
   model po GPS-ie ze zdjęć z drona. Albo podaj ręcznie --scale i --north.
 
 Zależności: tylko numpy (jest już w senses/requirements.txt).
-Zapis PNG robimy sami (zlib) — bez matplotlib i bez PIL.
+Zapis PNG robimy sami (zlib) – bez matplotlib i bez PIL.
 """
 from __future__ import annotations
 
@@ -37,14 +37,14 @@ def _dep_error(pakiety: str) -> str:
     """Komunikat o brakującej zależności.
 
     Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
-    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    nigdy nie jest brak pakietu – tylko nieaktywowane środowisko. Sama rada
     „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
     """
     msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
     venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if os.path.isdir(venv) and not in_venv:
-        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany – "
                "tylko nie w tym Pythonie.\n\n"
                "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
                "  Windows:      .venv\\Scripts\\activate\n"
@@ -70,7 +70,7 @@ def _auth() -> dict:
 
 
 def send_event(summary: str) -> None:
-    """Zgłoś wynik do Cosmosa (opcjonalnie — brak serwera nic nie psuje)."""
+    """Zgłoś wynik do Cosmosa (opcjonalnie – brak serwera nic nie psuje)."""
     try:
         import requests
         requests.post(f"{COSMOS_URL}/api/events", headers=_auth(),
@@ -80,7 +80,7 @@ def send_event(summary: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pozycja słońca — algorytm NOAA (czysta astronomia, offline)
+# Pozycja słońca – algorytm NOAA (czysta astronomia, offline)
 # ---------------------------------------------------------------------------
 
 def julian_day(dt: datetime) -> float:
@@ -160,7 +160,7 @@ def solar_position(lat: float, lon: float, dt: datetime) -> tuple[float, float]:
 
 
 # ---------------------------------------------------------------------------
-# Wczytywanie chmury punktów (.ply — ascii i binary_little_endian)
+# Wczytywanie chmury punktów (.ply – ascii i binary_little_endian)
 # ---------------------------------------------------------------------------
 
 _PLY_T = {"float": "f4", "float32": "f4", "double": "f8", "float64": "f8",
@@ -232,7 +232,7 @@ def transform_points(pts: np.ndarray, scale: float, north_deg: float,
 
 
 # ---------------------------------------------------------------------------
-# Model powierzchni (DSM) — siatka wysokości
+# Model powierzchni (DSM) – siatka wysokości
 # ---------------------------------------------------------------------------
 
 class DSM:
@@ -253,7 +253,7 @@ class DSM:
         w = max(1, int(math.ceil((x1 - x0) / cell)))
         h = max(1, int(math.ceil((y1 - y0) / cell)))
         if w * h > 4_000_000:
-            raise ValueError(f"Siatka {w}x{h} za duża — zwiększ --cell.")
+            raise ValueError(f"Siatka {w}x{h} za duża – zwiększ --cell.")
 
         col = np.clip(((x - x0) / cell).astype(np.int64), 0, w - 1)
         row = np.clip(((y1 - y) / cell).astype(np.int64), 0, h - 1)
@@ -389,8 +389,8 @@ def insolation(dsm: DSM, lat: float, lon: float, day: datetime,
     meta = {
         "dzien": day.strftime("%Y-%m-%d"),
         "dlugosc_dnia_h": round(samples * frac, 2),
-        "wschod_utc": first_sun.strftime("%H:%M") if first_sun else "—",
-        "zachod_utc": last_sun.strftime("%H:%M") if last_sun else "—",
+        "wschod_utc": first_sun.strftime("%H:%M") if first_sun else "–",
+        "zachod_utc": last_sun.strftime("%H:%M") if last_sun else "–",
         "maks_wysokosc_slonca_deg": round(peak, 1),
         "srednio_godzin_slonca": round(float(hours.mean()), 2),
         "maks_godzin_slonca": round(float(hours.max()), 2),
@@ -495,7 +495,7 @@ def build_dsm(args) -> DSM:
 
 
 def cmd_sun(args) -> None:
-    print(f"\n✦ Cosmos Terrain — nasłonecznienie ({args.date})")
+    print(f"\n✦ Cosmos Terrain – nasłonecznienie ({args.date})")
     dsm = build_dsm(args)
     day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     hours, meta = insolation(dsm, args.lat, args.lon, day, args.step, args.max_dist)
@@ -523,9 +523,9 @@ def cmd_sun(args) -> None:
 def cmd_shadow(args) -> None:
     when = datetime.strptime(args.time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
     az, el = solar_position(args.lat, args.lon, when)
-    print(f"\n✦ Cosmos Terrain — cień: {args.time} UTC")
+    print(f"\n✦ Cosmos Terrain – cień: {args.time} UTC")
     print(f"  Słońce: azymut {az:.1f}°, wysokość {el:.1f}°"
-          + ("  (poniżej horyzontu — całość w cieniu)" if el <= 0 else ""))
+          + ("  (poniżej horyzontu – całość w cieniu)" if el <= 0 else ""))
     dsm = build_dsm(args)
     lit = sun_lit(dsm, az, el, args.max_dist)
     out = Path(args.out or Path(args.cloud).with_name("naslonecznienie"))
@@ -540,7 +540,7 @@ def cmd_shadow(args) -> None:
 
 
 def cmd_view(args) -> None:
-    print("\n✦ Cosmos Terrain — analiza widoku")
+    print("\n✦ Cosmos Terrain – analiza widoku")
     dsm = build_dsm(args)
     h, w = dsm.shape
     row = h // 2 if args.row is None else args.row
@@ -562,7 +562,7 @@ def cmd_validate(args) -> None:
     Plik CSV: czas,wiersz,kolumna,lux   (czas jako 'RRRR-MM-DD GG:MM' UTC albo 'GG:MM')
     Nagłówek opcjonalny. To jest eksperyment, który zamienia ładną mapę w dowód.
     """
-    print("\n✦ Cosmos Terrain — walidacja modelu czujnikiem światła")
+    print("\n✦ Cosmos Terrain – walidacja modelu czujnikiem światła")
     rows = []
     for raw in Path(args.readings).read_text(encoding="utf-8").splitlines():
         raw = raw.strip()
@@ -610,7 +610,7 @@ def cmd_validate(args) -> None:
             print(f"  Średnie światło w słońcu:   {direct:.0f} lx")
             print(f"  Udział rozproszonego:       {share:.0f}% wartości pełnego słońca")
             print("\n  Wniosek: model liczy TYLKO światło bezpośrednie. Miejsca oznaczone jako")
-            print(f"  zacienione i tak dostają około {diffuse:.0f} lx — przy planowaniu ogrodu czy")
+            print(f"  zacienione i tak dostają około {diffuse:.0f} lx – przy planowaniu ogrodu czy")
             print("  paneli warto to doliczyć.")
     print("\n  Rozbieżności (model ≠ pomiar):")
     wrong = [d for d in detail if d[4] != d[5]]
@@ -618,7 +618,7 @@ def cmd_validate(args) -> None:
         print(f"    {t}  ({r},{c})  {lux:>7.0f} lx  model={'słońce' if p else 'cień'}, "
               f"pomiar={'słońce' if m else 'cień'}")
     if not wrong:
-        print("    brak — model zgadza się z rzeczywistością we wszystkich punktach")
+        print("    brak – model zgadza się z rzeczywistością we wszystkich punktach")
     send_event(f"walidacja nasłonecznienia: zgodność {acc:.0f}% na {n} pomiarach")
 
 
@@ -644,7 +644,7 @@ def wind_shelter(dsm: DSM, wind_from: float, max_dist: float = 100.0) -> np.ndar
 
 def cmd_comfort(args) -> None:
     """Gdzie będzie przyjemnie: nasłonecznienie + osłona od wiatru, bez kamery termalnej."""
-    print(f"\n✦ Cosmos Terrain — komfort ({args.season}, wiatr z {args.wind}°)")
+    print(f"\n✦ Cosmos Terrain – komfort ({args.season}, wiatr z {args.wind}°)")
     dsm = build_dsm(args)
     day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     hours, meta = insolation(dsm, args.lat, args.lon, day, args.step, args.max_dist)
@@ -671,13 +671,13 @@ def cmd_comfort(args) -> None:
           f"(słońce {float(hours[best]):.1f} h, osłona {float(shelter[best]):.2f})")
     print(f"  Powierzchnia dobra (≥0,7): {float((score >= 0.7).mean()) * 100:.1f}%")
     print(f"\n  ✓ Mapy: {out}")
-    print("  Zwaliduj zwykłym termometrem — postaw go w miejscu najlepszym i najgorszym.")
+    print("  Zwaliduj zwykłym termometrem – postaw go w miejscu najlepszym i najgorszym.")
     send_event(f"analiza komfortu ({args.season}): najlepsze miejsce ma "
                f"{float(hours[best]):.1f} h słońca i osłonę {float(shelter[best]):.2f}")
 
 
 def cmd_volume(args) -> None:
-    print("\n✦ Cosmos Terrain — objętość i wysokości")
+    print("\n✦ Cosmos Terrain – objętość i wysokości")
     dsm = build_dsm(args)
     base = args.base if args.base is not None else float(np.percentile(dsm.grid, 5))
     above = np.clip(dsm.grid - base, 0, None)
@@ -693,7 +693,7 @@ def cmd_volume(args) -> None:
 
 
 def cmd_compare(args) -> None:
-    print("\n✦ Cosmos Terrain — porównanie skanów w czasie")
+    print("\n✦ Cosmos Terrain – porównanie skanów w czasie")
     a_pts = transform_points(load_ply(Path(args.cloud)), args.scale, args.north, args.up)
     b_pts = transform_points(load_ply(Path(args.cloud_b)), args.scale, args.north, args.up)
     a = DSM.from_points(a_pts, args.cell)
@@ -721,11 +721,11 @@ def cmd_compare(args) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Samotest — sprawdza astronomię i kierunek cienia (bez plików)
+# Samotest – sprawdza astronomię i kierunek cienia (bez plików)
 # ---------------------------------------------------------------------------
 
 def cmd_selftest(_args) -> None:
-    print("\n✦ Cosmos Terrain — samotest\n")
+    print("\n✦ Cosmos Terrain – samotest\n")
     ok = True
 
     # 1) Południe słoneczne w Warszawie w przesileniu letnim
@@ -813,7 +813,7 @@ def cmd_selftest(_args) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Cosmos Terrain — nasłonecznienie, cień, widok, objętość, zmiany.")
+        description="Cosmos Terrain – nasłonecznienie, cień, widok, objętość, zmiany.")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def common(p, cloud=True):

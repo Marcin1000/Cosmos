@@ -1,17 +1,17 @@
 /* ============================================================
    Konta w przeglądarce: zaproszenie, Twoje konto, Dostęp
 
-   Trzy ekrany, jedna zasada: wszystko, co przyszło od INNEJ osoby — imię,
-   login — trafia na ekran przez `textContent`, nigdy przez `innerHTML`.
+   Trzy ekrany, jedna zasada: wszystko, co przyszło od INNEJ osoby – imię,
+   login – trafia na ekran przez `textContent`, nigdy przez `innerHTML`.
    Panel Dostęp pokazuje właścicielowi imiona wpisane przez zaproszonych.
    Gość, który jako imię podałby `<img src=x onerror=…>`, przy `innerHTML`
-   wykonałby kod w sesji WŁAŚCICIELA — z jego uprawnieniami.
+   wykonałby kod w sesji WŁAŚCICIELA – z jego uprawnieniami.
 
    Wzorzec dwustronny: ten sam plik działa w przeglądarce i w `require()`
-   z testu (patrz CLAUDE.md, „Front-end — bez budowania").
+   z testu (patrz CLAUDE.md, „Front-end – bez budowania").
    ============================================================ */
 
-/** zmienJezyk — przełącza PL↔EN i odświeża teksty (formularz zaproszenia). */
+/** zmienJezyk – przełącza PL↔EN i odświeża teksty (formularz zaproszenia). */
 function utworzKonta({ $, t, zmienJezyk }) {
   let ja = null;
   let kontaSerwera = null;
@@ -28,7 +28,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
   }
 
   /* Rola decyduje o tym, co widać. Ukrywanie w interfejsie to wygoda, nie
-     zabezpieczenie — serwer i tak odmawia (TYLKO_WLASCICIEL w server.js).
+     zabezpieczenie – serwer i tak odmawia (TYLKO_WLASCICIEL w server.js).
      Ale przycisk, który zawsze kończy się „tylko dla właściciela", to zły
      interfejs. */
   function zastosujRole(u) {
@@ -38,7 +38,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
   }
 
   /* Kopie rozmów do pracy bez sieci należą do KONKRETNEJ osoby. Na wspólnym
-     telefonie — Marcin się wylogowuje, loguje się ktoś z rodziny — stara kopia
+     telefonie – Marcin się wylogowuje, loguje się ktoś z rodziny – stara kopia
      pokazałaby się nowej osobie przy pierwszym zaniku sieci. Dlatego
      przeglądarka pamięta, czyja jest kopia, i czyści ją przy zmianie osoby
      i przy wylogowaniu. Ustawienia urządzenia (język, mikrofon) zostają. */
@@ -84,10 +84,10 @@ function utworzKonta({ $, t, zmienJezyk }) {
     nakladka.style.display = '';
     let opis = () => {};
     /* Język odgadnięty z przeglądarki może być zły (telefon służbowy po
-       angielsku) — jeden klik na przełączenie, bez szukania ustawień. */
+       angielsku) – jeden klik na przełączenie, bez szukania ustawień. */
     const przelacz = $('invite-lang');
     if (przelacz && zmienJezyk) przelacz.addEventListener('click', () => { zmienJezyk(); opis(); });
-    // Token w nagłówku, nie w adresie — adresy lądują w logach po drodze.
+    // Token w nagłówku, nie w adresie – adresy lądują w logach po drodze.
     const r = await zadaj('/api/zaproszenie', { naglowki: { 'X-Cosmos-Zaproszenie': token } });
     if (!r.ok) {
       $('invite-sub').textContent = r.json.error || t('inv.expired');
@@ -156,19 +156,19 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('konto-nazwa-widok').textContent = u.nazwa || u.login;
     $('konto-login').textContent = u.login;
     $('konto-rola').textContent = u.rola === 'wlasciciel' ? t('acc.roleOwner') : t('acc.roleMember');
-    // Zajęte miejsce — przy limicie z limitem, żeby pełny dysk nie był niespodzianką.
+    // Zajęte miejsce – przy limicie z limitem, żeby pełny dysk nie był niespodzianką.
     const m = r.json.miejsce;
     $('konto-miejsce').textContent = m ? ` · ${m.limit
       ? t('acc.diskOf', { zajete: rozmiar(m.zajete), limit: rozmiar(m.limit) })
       : t('acc.disk', { zajete: rozmiar(m.zajete) })}` : '';
     $('konto-nazwa').value = u.nazwa || '';
     /* Tryb domowy: nie ma logowania, więc nie ma czego wylogować ani zmieniać.
-       Zmiana hasła zostaje — to właśnie nią właściciel włącza logowanie. */
+       Zmiana hasła zostaje – to właśnie nią właściciel włącza logowanie. */
     $('konto-wyloguj').hidden = !r.json.logowanie;
     $('konto-wyloguj-wszedzie').hidden = !r.json.logowanie;
     $('konto-haslo-stare').hidden = !u.maHaslo;
     // Pole modelu tylko dla silnika, którego ta osoba może użyć (klucz serwera,
-    // przyznany albo własny) — inne pole prowadziłoby do „Pobierz listę” bez szans.
+    // przyznany albo własny) – inne pole prowadziłoby do „Pobierz listę” bez szans.
     const ma = (nazwa) => (r.json.silniki || []).some((s) => s.nazwa === nazwa);
     document.body.classList.toggle('bez-lokalnego', !ma('local'));
     document.body.classList.toggle('bez-openai', !ma('openai'));
@@ -185,7 +185,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     pole.value = '';
     komunikat(r.json.klucze[nazwa] ? t('acc.keySaved') : t('acc.keyRemoved'));
     await odswiezKonto();
-    // Zakładki silników zależą od kluczy — przeładuj konfigurację.
+    // Zakładki silników zależą od kluczy – przeładuj konfigurację.
     if (typeof window !== 'undefined' && typeof window.loadServerConfig === 'function') window.loadServerConfig();
   }
 
@@ -242,7 +242,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = Boolean(u.silniki && u.silniki[nazwa]);
-      // Silnik, którego serwer nie ma, nie da się przyznać — nie udawajmy, że się da.
+      // Silnik, którego serwer nie ma, nie da się przyznać – nie udawajmy, że się da.
       box.disabled = !serwer[nazwa];
       if (!serwer[nazwa]) et.title = t('acc.engMissing');
       box.addEventListener('change', async () => {
@@ -300,7 +300,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('dostep-bez-hasla').hidden = r.json.logowanie;
     $('dostep-zapros').disabled = !r.json.logowanie;
     /* Wolne miejsce na dysku VPS-a. Pełny dysk to „nic się nie zapisze"
-       dla wszystkich naraz — lepiej zobaczyć to tu niż po fakcie. */
+       dla wszystkich naraz – lepiej zobaczyć to tu niż po fakcie. */
     const d = r.json.dysk;
     const dysk = $('dostep-dysk');
     if (d && d.calosc) {
@@ -322,7 +322,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('dostep-link-pole').value = link;
     $('dostep-link').hidden = false;
     // „Wyślij…" otwiera arkusz udostępniania telefonu (WhatsApp, SMS). Na
-    // komputerze go zwykle nie ma — wtedy przycisk znika, zostaje „Kopiuj".
+    // komputerze go zwykle nie ma – wtedy przycisk znika, zostaje „Kopiuj".
     $('dostep-udostepnij').hidden = !(typeof navigator !== 'undefined' && navigator.share);
     $('dostep-nazwa').value = '';
     odswiezDostep();
@@ -370,7 +370,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('dostep-udostepnij').addEventListener('click', async () => {
       try {
         await navigator.share({ title: 'Cosmos', text: t('acc.shareText'), url: $('dostep-link-pole').value });
-      } catch { /* anulowane — nic się nie stało */ }
+      } catch { /* anulowane – nic się nie stało */ }
     });
   }
 

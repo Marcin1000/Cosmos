@@ -48,7 +48,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const ratio = big.stageW / big.stageH;
   console.log(`   scena ${big.stageW}×${big.stageH} (${ratio.toFixed(2)}:1), zapamiętane=${big.saved}, `
     + `poza ekranem: prawo=${big.offRight} góra=${big.offTop} dół=${big.stageBottom > big.vh}`);
-  if (Math.abs(ratio - 4 / 3) > 0.02) fail.push(`scena nie 4:3 (${ratio.toFixed(2)}) — czarne pasy`);
+  if (Math.abs(ratio - 4 / 3) > 0.02) fail.push(`scena nie 4:3 (${ratio.toFixed(2)}) – czarne pasy`);
   if (small.exp) fail.push('panel startuje powiększony');
   if (!big.exp) fail.push('klasa expanded nie doszła');
   if (big.w <= small.w + 100) fail.push('panel się nie powiększył');

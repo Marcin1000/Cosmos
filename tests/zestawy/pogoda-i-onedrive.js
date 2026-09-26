@@ -2,7 +2,7 @@
    źródło archiwum.
 
    Prognoza ma znaczenie, bo pozycja Słońca mówi tylko, ile światła BYŁOBY
-   przy czystym niebie. Chmury zabierają dwie i pół działki, deszcz cztery —
+   przy czystym niebie. Chmury zabierają dwie i pół działki, deszcz cztery –
    bez tego panel proponowałby f/11 w środku ulewy.
 
    Przy OneDrive najwięcej uwagi idzie na to, czego NIE wolno: tokeny i sekret
@@ -112,10 +112,10 @@ const PORT = 7118;
   if (!od.skonfigurowany()) fail.push('nie widzi własnej konfiguracji');
   if (od.polaczony()) fail.push('twierdzi, że połączony bez tokenu');
 
-  // 6. adres logowania zawiera to, co musi — i `offline_access`
+  // 6. adres logowania zawiera to, co musi – i `offline_access`
   const url = od.adresLogowania('abc123');
   console.log(`6. adres logowania: ${url.slice(0, 78)}…`);
-  if (!url.includes('offline_access')) fail.push('brak offline_access — token wygasłby po godzinie');
+  if (!url.includes('offline_access')) fail.push('brak offline_access – token wygasłby po godzinie');
   if (!url.includes('state=abc123')) fail.push('brak parametru state (ochrona przed podrzuceniem kodu)');
   if (!url.includes('response_type=code')) fail.push('zły typ odpowiedzi OAuth');
 
@@ -149,7 +149,7 @@ const PORT = 7118;
     fail.push('/api/config ujawnia sekret OneDrive');
   }
 
-  // 11. indeksowanie bez połączenia — odmowa, nie wywrotka
+  // 11. indeksowanie bez połączenia – odmowa, nie wywrotka
   const bezPolaczenia = await fetch(`${env.adres}/api/onedrive/index`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
@@ -170,7 +170,7 @@ const PORT = 7118;
   if (!plan.pogoda) fail.push('plan nie sięgnął po prognozę');
   if (plan.zachmurzenie !== 'pochmurno') fail.push(`plan wziął ${plan.zachmurzenie} zamiast prognozy`);
 
-  // 13. wybór ręczny wygrywa z prognozą — stoisz na miejscu i widzisz niebo
+  // 13. wybór ręczny wygrywa z prognozą – stoisz na miejscu i widzisz niebo
   const reczny = await (await fetch(`${env.adres}/api/plan`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 25, zachmurzenie: 'bezchmurnie' }),

@@ -1,8 +1,8 @@
-/* Limit miejsca i pełny dysk — zapis, który się nie udał, nie odpowiada „ok".
+/* Limit miejsca i pełny dysk – zapis, który się nie udał, nie odpowiada „ok".
 
    Zespół IT zapchał dane testowego serwera do zera i zobaczył, że pamięć,
    profil, sprzęt i baza wiedzy odpowiadają `{ ok: true }`, choć na dysku nic
-   się nie zmieniło — a po restarcie wszystko „zapisane" od zapełnienia znika.
+   się nie zmieniło – a po restarcie wszystko „zapisane" od zapełnienia znika.
    Do tego nic nie pilnowało, ile miejsca zajmuje jedna osoba: zaproszony gość
    mógł zapchać VPS-a plikami w bazie wiedzy wszystkim naraz.
 
@@ -14,7 +14,7 @@
         3. rozmowa, która przekroczyłaby limit, dostaje 507; mała zmiana
            przechodzi (liczy się przyrost, nie całość),
         4. usunięcie pliku zwalnia miejsce od razu.
-     B. Prawdziwy pełny dysk (tmpfs zapchany do zera — tylko root na Linuksie,
+     B. Prawdziwy pełny dysk (tmpfs zapchany do zera – tylko root na Linuksie,
         gdzie indziej jawnie pominięte):
         5. profil, pamięć, notatka i sprzęt dostają 507, a nie „ok",
         6. to, czego nie zapisano, nie udaje zapisanego (GET pokazuje stan dysku),
@@ -99,7 +99,7 @@ const plik = (kb, nazwa) => ({ name: nazwa, mime: 'application/octet-stream', da
     }
   } catch { /* brak uprawnień */ }
   if (!zamontowany) {
-    console.log('⚠ Nie da się zamontować tmpfs (potrzebny root na Linuksie) — pomijam część z pełnym dyskiem.');
+    console.log('⚠ Nie da się zamontować tmpfs (potrzebny root na Linuksie) – pomijam część z pełnym dyskiem.');
   } else {
     const PORT = 3494;
     const srv = serwerCosmosa(PORT, { ...ENV, COSMOS_LIMIT_MB_WLASCICIELA: '', COSMOS_DATA_DIR: mnt });
@@ -113,7 +113,7 @@ const plik = (kb, nazwa) => ({ name: nazwa, mime: 'application/octet-stream', da
       const zapchaj = path.join(mnt, 'zapchaj.bin');
       const fd = fs.openSync(zapchaj, 'w');
       const kawalek = Buffer.alloc(64 * 1024);
-      try { for (;;) fs.writeSync(fd, kawalek); } catch { /* ENOSPC — o to chodziło */ }
+      try { for (;;) fs.writeSync(fd, kawalek); } catch { /* ENOSPC – o to chodziło */ }
       try { for (;;) fs.writeSync(fd, Buffer.alloc(512)); } catch { /* do ostatniego bloku */ }
       fs.closeSync(fd);
 

@@ -8,17 +8,17 @@
  *
  *  a 429 („zwolnij") zapalało się DOKŁADNIE w paczkach z przewagą RAW-ów.
  *  Czyli dławi się nie nasze łącze, tylko generowanie podglądów po stronie
- *  Microsoftu — i dlatego dokładanie robotników pogarszało sprawę zamiast
+ *  Microsoftu – i dlatego dokładanie robotników pogarszało sprawę zamiast
  *  poprawiać. Przy szesnastu pobranie RAW-a rosło do 14 s, przy czterech
  *  zostawało na 11,5 s. Tempo spadło do 0,38 zdjęcia na sekundę, czyli
  *  poniżej stanu sprzed wszystkich poprawek.
  *
- *  Aparat zapisuje gotowy podgląd WEWNĄTRZ pliku RAW — to z niego korzysta
+ *  Aparat zapisuje gotowy podgląd WEWNĄTRZ pliku RAW – to z niego korzysta
  *  ekranik z tyłu korpusu. Graph obsługuje `Range`, więc da się go wyjąć.
  *
  *  Czego ten zestaw pilnuje. Pliki składamy tu bajt po bajcie, bo prawdziwego
  *  CR3 w repozytorium nie ma i mieć nie będzie. To znaczy, że sprawdzamy
- *  ZNAJOMOŚĆ FORMATU, nie zgodność z konkretnym egzemplarzem — i dlatego
+ *  ZNAJOMOŚĆ FORMATU, nie zgodność z konkretnym egzemplarzem – i dlatego
  *  najważniejszy punkt jest ostatni: przy pliku, którego nie rozumiemy,
  *  czytnik ma powiedzieć „nie wiem", a rozpoznawanie wrócić do miniatury
  *  z Graph. Bez tego warunku nie warto było tego pisać.
@@ -68,7 +68,7 @@ const plikCr2 = tiff([
 const plan1 = raw.zaplanuj(plikCr2);
 console.log(`1. CR2 (paski IFD0): plan ${plan1 ? `od ${plan1.od}, ${plan1.ile} B` : 'BRAK'}`);
 if (!plan1 || plan1.od !== 4096 || plan1.ile !== podgladCr2.length) {
-  fail.push('podgląd w paskach IFD0 nieodnaleziony — dla CR2 zostaje renderowanie po stronie Microsoftu');
+  fail.push('podgląd w paskach IFD0 nieodnaleziony – dla CR2 zostaje renderowanie po stronie Microsoftu');
 } else {
   const jpeg = raw.wyjmijJpeg(plikCr2.subarray(plan1.od, plan1.od + plan1.ile), plan1);
   console.log(`   wyjęty JPEG: ${jpeg ? `${jpeg.length} B` : 'BRAK'}`);
@@ -84,13 +84,13 @@ const plikNef = tiff([
 const plan2 = raw.zaplanuj(plikNef);
 console.log(`2. NEF (JPEGInterchangeFormat): plan ${plan2 ? `${plan2.ile} B` : 'BRAK'}`);
 if (!plan2 || plan2.ile !== podgladNef.length) {
-  fail.push('para JPEGInterchangeFormat nieobsłużona — NEF i część DNG zostają na starej drodze');
+  fail.push('para JPEGInterchangeFormat nieobsłużona – NEF i część DNG zostają na starej drodze');
 }
 
 /* --- 3. Bierzemy WIĘKSZY podgląd, nie pierwszy z brzegu ----------------- */
 /* Każdy RAW ma miniaturkę 160×120 obok właściwego podglądu. Wzięcie
    pierwszego z brzegu znaczyłoby, że YOLO dostaje obrazek, na którym nie ma
-   czego rozpoznawać — a wynik byłby zapisany w indeksie na stałe. */
+   czego rozpoznawać – a wynik byłby zapisany w indeksie na stałe. */
 const duzy = jpegNaNic(300000, 0x33);
 const plikDwa = (() => {
   const p = tiff([
@@ -108,13 +108,13 @@ const plikDwa = (() => {
 const plan3 = raw.zaplanuj(plikDwa);
 console.log(`3. dwa podglądy w pliku: wybrano ${plan3 ? `${plan3.ile} B` : 'BRAK'} (większy ma ${duzy.length})`);
 if (!plan3 || plan3.ile !== duzy.length) {
-  fail.push(`wybrano podgląd ${plan3 && plan3.ile} B zamiast ${duzy.length} — YOLO dostanie miniaturkę`);
+  fail.push(`wybrano podgląd ${plan3 && plan3.ile} B zamiast ${duzy.length} – YOLO dostanie miniaturkę`);
 }
 
 /* --- 4. Wielopaskowy zapis to DANE RAW, nie podgląd --------------------- */
 /* Kompresja 7 z wieloma paskami znaczy „właściwy obraz pocięty na kafelki".
    Pobranie pierwszego kafelka dałoby kawałek nieodwracalnej mozaiki, a nie
-   obrazek — i to jest dokładnie ten rodzaj pomyłki, który przechodzi przez
+   obrazek – i to jest dokładnie ten rodzaj pomyłki, który przechodzi przez
    testy na atrapie i wychodzi dopiero na prawdziwym pliku. */
 const wielePaskow = (() => {
   const naglowek = Buffer.alloc(8);
@@ -128,7 +128,7 @@ const wielePaskow = (() => {
     const o = 2 + i * 12;
     ifd.writeUInt16LE(tag, o);
     ifd.writeUInt16LE(typ, o + 2);
-    // Cztery paski, nie jeden — wartości leżą pod adresem.
+    // Cztery paski, nie jeden – wartości leżą pod adresem.
     ifd.writeUInt32LE(tag === 0x0103 ? 1 : 4, o + 4);
     if (typ === 3) ifd.writeUInt16LE(wartosc, o + 8); else ifd.writeUInt32LE(2048, o + 8);
   });
@@ -140,7 +140,7 @@ const wielePaskow = (() => {
 })();
 const plan4 = raw.zaplanuj(wielePaskow);
 console.log(`4. wielopaskowy RAW: plan ${plan4 ? `od ${plan4.od}, ${plan4.ile} B` : 'BRAK (dobrze)'}`);
-if (plan4) fail.push('wielopaskowe dane RAW wzięte za podgląd — do YOLO poleci kawałek mozaiki');
+if (plan4) fail.push('wielopaskowe dane RAW wzięte za podgląd – do YOLO poleci kawałek mozaiki');
 
 /* --- 5. CR3: pudełko PRVW wewnątrz moov --------------------------------- */
 function pudelko(nazwa, tresc) {
@@ -160,7 +160,7 @@ function pudelkoUuid(tresc) {
 const podgladCr3 = jpegNaNic(240000, 0x55);
 const thumbCr3 = jpegNaNic(9000, 0x66);
 /* Nagłówek PRVW ma przed JPEG-iem kilkanaście bajtów pól, których układu
-   nie odliczamy na sztywno — czytnik ma znaleźć znacznik początku obrazka
+   nie odliczamy na sztywno – czytnik ma znaleźć znacznik początku obrazka
    w granicach pudełka. Dlatego tu też wstawiamy „śmieci" przed obrazkiem. */
 const prvw = pudelko('PRVW', Buffer.concat([Buffer.alloc(16, 0), podgladCr3]));
 const thmb = pudelko('THMB', Buffer.concat([Buffer.alloc(16, 0), thumbCr3]));
@@ -174,20 +174,20 @@ const plikCr3 = Buffer.concat([
 const plan5 = raw.zaplanuj(plikCr3);
 console.log(`5. CR3: plan ${plan5 ? `od ${plan5.od}, ${plan5.ile} B, wytnij=${plan5.wytnij}` : 'BRAK'}`);
 if (!plan5 || !plan5.wytnij) {
-  fail.push('moov w CR3 nieodnaleziony — 6786 plików CR3 zostaje na renderowaniu przez Microsoft');
+  fail.push('moov w CR3 nieodnaleziony – 6786 plików CR3 zostaje na renderowaniu przez Microsoft');
 } else {
   const jpeg5 = raw.wyjmijJpeg(plikCr3.subarray(plan5.od, plan5.od + plan5.ile), plan5);
   console.log(`   wyjęty JPEG: ${jpeg5 ? `${jpeg5.length} B` : 'BRAK'} (PRVW ma ${podgladCr3.length}, THMB ${thumbCr3.length})`);
   if (!jpeg5) {
     fail.push('z moov nie udało się wyjąć JPEG-a');
   } else if (jpeg5.length !== podgladCr3.length) {
-    fail.push(`z CR3 wyjęto ${jpeg5.length} B zamiast ${podgladCr3.length} — to miniaturka THMB, nie podgląd PRVW`);
+    fail.push(`z CR3 wyjęto ${jpeg5.length} B zamiast ${podgladCr3.length} – to miniaturka THMB, nie podgląd PRVW`);
   }
 }
 
 /* --- 6. NIE ROZUMIEM = mówię „nie wiem" --------------------------------- */
 /* Najważniejszy punkt zestawu. Czytnik składany na atrapach NA PEWNO trafi
-   u Marcina na plik, którego nie przewidziałem — format Samsunga, obcięty
+   u Marcina na plik, którego nie przewidziałem – format Samsunga, obcięty
    plik z uszkodzonej karty, TIFF z tagami w innej kolejności. Wtedy ma
    oddać `null`, a nie zgadywać: rozpoznawanie wróci wtedy do miniatury
    z Graph, czyli do stanu sprzed tej zmiany. */
@@ -210,7 +210,7 @@ for (const [opis, b] of nieznane) {
 console.log(`6. plików, których nie rozumiemy: ${nieznane.length}, z tego zgadniętych: ${zgadnieta.length}`);
 for (const z of zgadnieta) console.log(`   ${z}`);
 if (zgadnieta.length) {
-  fail.push(`czytnik zgaduje przy nieznanym pliku (${zgadnieta.length}) — zamiast wrócić do miniatury z Graph`);
+  fail.push(`czytnik zgaduje przy nieznanym pliku (${zgadnieta.length}) – zamiast wrócić do miniatury z Graph`);
 }
 
 /* --- 7. Wyjmowanie też nie może wywracać ani przepuszczać śmieci -------- */
@@ -228,7 +228,7 @@ for (const [opis, b] of smieci) {
 console.log(`7. śmieci przepuszczonych jako obrazek: ${przepuszczone.length}`);
 for (const z of przepuszczone) console.log(`   ${z}`);
 if (przepuszczone.length) {
-  fail.push('wyjmowanie przepuszcza coś, co nie jest obrazkiem — YOLO dostanie śmieci i zapisze wynik na stałe');
+  fail.push('wyjmowanie przepuszcza coś, co nie jest obrazkiem – YOLO dostanie śmieci i zapisze wynik na stałe');
 }
 
 /* --- 8. CAŁA DROGA: rozpoznawanie bierze podgląd z pliku, a gdy się nie da,
@@ -266,7 +266,7 @@ if (przepuszczone.length) {
   await new Promise((r) => serwer.listen(0, r));
   const port = serwer.address().port;
 
-  // Plik „dziwny" to sam nagłówek TIFF bez podglądu — czytnik ma odpaść.
+  // Plik „dziwny" to sam nagłówek TIFF bez podglądu – czytnik ma odpaść.
   const pliki = {
     cr3: plikCr3,
     cr2: plikCr2,
@@ -304,18 +304,18 @@ if (przepuszczone.length) {
   const zPliku = (d.czasy && d.czasy.zPliku || 0) + (d.czasyRaw && d.czasyRaw.zPliku || 0);
   console.log(`8. trzy pliki: żądań zakresowych ${zakresow}, `
     + `podglądów z pliku ${zPliku}, o miniaturę pytano ${pytanoOMiniature.length}× `
-    + `(${pytanoOMiniature.join(', ') || '—'})`);
+    + `(${pytanoOMiniature.join(', ') || '–'})`);
   console.log(`   opisane ${d.opisane}, zostało ${d.zostalo}`);
   if (zPliku !== 2) {
-    fail.push(`podglądów z pliku ${zPliku} zamiast 2 — CR3 i CR2 dalej czekają na render Microsoftu`);
+    fail.push(`podglądów z pliku ${zPliku} zamiast 2 – CR3 i CR2 dalej czekają na render Microsoftu`);
   }
   if (pytanoOMiniature.length !== 1 || !pytanoOMiniature.includes('dziwny')) {
-    fail.push(`o miniaturę pytano dla [${pytanoOMiniature}] — spodziewane tylko dla pliku bez podglądu`);
+    fail.push(`o miniaturę pytano dla [${pytanoOMiniature}] – spodziewane tylko dla pliku bez podglądu`);
   }
   /* Najważniejsze: plik, którego czytnik nie rozumie, MUSI zostać opisany
      starą drogą. Inaczej nowa ścieżka nie przyspiesza, tylko gubi zdjęcia. */
   if (d.opisane !== 3 || d.zostalo !== 0) {
-    fail.push(`opisano ${d.opisane} z 3, zostało ${d.zostalo} — powrót do miniatury nie działa`);
+    fail.push(`opisano ${d.opisane} z 3, zostało ${d.zostalo} – powrót do miniatury nie działa`);
   }
   fs.rmSync(kat, { recursive: true, force: true });
 

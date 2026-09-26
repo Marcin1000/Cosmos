@@ -1,15 +1,15 @@
 /* „Pokaż zdjęcia, które wykonałem rano i wieczorem w Krakowie."
 
-   Marcin zapytał wprost, czy to zadziała — i odpowiedź brzmiała „nie", z pięciu
+   Marcin zapytał wprost, czy to zadziała – i odpowiedź brzmiała „nie", z pięciu
    niezależnych powodów. Ten zestaw pilnuje każdego z nich osobno, bo każdy
    mógł zawieść sam:
 
      1. PORA DNIA nie istniała. Filtr światła ma „złotą godzinę", ale rano
-        i wieczorem to ta sama wartość — prośby nie dało się wyrazić.
+        i wieczorem to ta sama wartość – prośby nie dało się wyrazić.
      2. MIEJSCE po nazwie nie działało: indeks trzyma współrzędne, nie nazwy,
         więc „w Krakowie" nie miało się o co zaczepić.
      3. TEMAT („ptaki", „ślub", „góry") nie był nigdzie zapisany.
-     4. MINIATURY z OneDrive wygasają — zapisane przy indeksowaniu byłyby
+     4. MINIATURY z OneDrive wygasają – zapisane przy indeksowaniu byłyby
         martwe w chwili pytania.
      5. Archiwum w ogóle nie POKAZYWAŁO zdjęć, tylko o nich pisało.
 
@@ -86,7 +86,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
 
   const nieznane = await szukaj({ miejsce: 'Wólka Zmyślona Nieistniejąca' });
   console.log(`4. nieznane miejsce → przyznaje się: ${Boolean(nieznane.miejsceNieznane)}`);
-  if (!nieznane.miejsceNieznane) fail.push('nieznana nazwa miejsca przemilczana — wynik wygląda na kompletny');
+  if (!nieznane.miejsceNieznane) fail.push('nieznana nazwa miejsca przemilczana – wynik wygląda na kompletny');
 
   const ptaki = await szukaj({ temat: 'ptaki-w-locie,slub' });
   console.log(`5. temat=ptaki-w-locie,slub → ${ptaki.znaleziono}: ${nazwy(ptaki)}`);
@@ -105,11 +105,11 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   const zlyId = await fetch(`${env.adres}/api/archive/thumb?id=cokolwiek`);
   if (zlyId.status !== 400) fail.push('trasa miniatur nie sprawdza identyfikatora');
 
-  /* ---- 3b. CO WIDAĆ na zdjęciu — to, co daje Immich, bez stosu Immicha ----
+  /* ---- 3b. CO WIDAĆ na zdjęciu – to, co daje Immich, bez stosu Immicha ----
      Zdjęcie z OneDrive nie ma o sobie żadnej informacji o treści: Graph oddaje
      datę, aparat i GPS. Kategorie zgadujemy z nazw folderów, więc „Wesele Kasi"
      działa, a „IMG_4471.JPG" nie mówi nic. Wykryte obiekty muszą tę lukę
-     domykać — i muszą wpadać do kategorii SAME, bez drugiego przejścia. */
+     domykać – i muszą wpadać do kategorii SAME, bez drugiego przejścia. */
   await fetch(`${env.adres}/api/archive/add`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -123,7 +123,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   const psy = await szukaj({ temat: 'zwierzeta-domowe' });
   console.log(`7b. „IMG_4471.JPG" + obiekt „dog" → temat: ${nazwy(psy) || 'BRAK'}`);
   if (!/IMG_4471/.test(nazwy(psy))) {
-    fail.push('obiekty z YOLO nie trafiły do kategorii — „pokaż zdjęcia z psem" nie zadziała');
+    fail.push('obiekty z YOLO nie trafiły do kategorii – „pokaż zdjęcia z psem" nie zadziała');
   }
 
   /* ---- 3c. Telemetria klipów i dane lotu ze zdjęć ----
@@ -154,7 +154,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
       + `${klip.lot.dystansM} m, światło: ${klip.swiatlo}` : 'BRAK'}`);
   if (!klip || !klip.lot) fail.push('podsumowanie lotu nie przetrwało zapisu do indeksu');
   /* SEDNO: klip z GPS-em i czasem dostaje porę światła tak samo jak zdjęcie.
-     To jest cała wartość telemetrii — „pokaż ujęcia znad jeziora o zachodzie"
+     To jest cała wartość telemetrii – „pokaż ujęcia znad jeziora o zachodzie"
      przestaje dotyczyć wyłącznie fotografii. */
   if (klip && !klip.swiatlo) fail.push('klip nie dostał pory światła mimo GPS-u i czasu');
 
@@ -162,7 +162,7 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   console.log(`7e. wieczorne o zmierzchu, w tym wideo: `
     + `${(zLotu.wyniki || []).filter((w) => w.typ === 'wideo').length} klipów`);
   if (!(zLotu.wyniki || []).some((w) => w.typ === 'wideo')) {
-    fail.push('klip nie wpadł do filtra pory dnia — telemetria nie dotarła do liczenia Słońca');
+    fail.push('klip nie wpadł do filtra pory dnia – telemetria nie dotarła do liczenia Słońca');
   }
 
   const zDronem = (await szukaj({ typ: 'zdjecie' })).wyniki
@@ -196,16 +196,16 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
   console.log(`8. góry: ${gory} · portret: ${portret} · ptaki: ${ptakiN.czas} ${ptakiN.przyslona} ISO ${ptakiN.iso}`);
   // Krajobraz przy f/22 to dyfrakcja, portret przy f/11 to zero oddzielenia tła.
   if (!/f\/(8|11)$/.test(gory.split(' ')[1])) fail.push(`krajobraz dostał ${gory.split(' ')[1]}, a ma być f/8-f/11`);
-  if (Number(portret.split(' ')[1].replace('f/', '')) > 2.8) fail.push(`portret dostał ${portret.split(' ')[1]} — brak oddzielenia od tła`);
-  if (Number(String(ptakiN.czas).replace('1/', '')) < 1600) fail.push(`ptaki w locie dostały ${ptakiN.czas} — za długo`);
+  if (Number(portret.split(' ')[1].replace('f/', '')) > 2.8) fail.push(`portret dostał ${portret.split(' ')[1]} – brak oddzielenia od tła`);
+  if (Number(String(ptakiN.czas).replace('1/', '')) < 1600) fail.push(`ptaki w locie dostały ${ptakiN.czas} – za długo`);
   if (!ptakiN.powody.some((x) => /AF-C|śledzenie/i.test(x))) fail.push('brak rady praktycznej do tematu');
 
-  /* Nierozpoznany temat NIE jest błędem — lista jest otwarta z założenia. */
+  /* Nierozpoznany temat NIE jest błędem – lista jest otwarta z założenia. */
   const dziwny = dobierz(dzien, { tryb: 'zdjecie', temat: 'pociągi towarowe', obiektyw: '24-70 f/2.8' });
   console.log(`9. temat spoza listy → ${dziwny.czas} ${dziwny.przyslona} ISO ${dziwny.iso}`);
   if (!dziwny.iso) fail.push('nieznany temat wywraca dobór');
   if (!dziwny.powody.some((x) => /nie mam w słowniku/i.test(x))) {
-    fail.push('nieznany temat przemilczany — użytkownik nie wie, że Cosmos zgadywał');
+    fail.push('nieznany temat przemilczany – użytkownik nie wie, że Cosmos zgadywał');
   }
 
   /* ---- 5. Dowolny sprzęt ---- */
@@ -226,10 +226,10 @@ const { pozycjaSlonca, poraDnia } = require('../../lib/slonce.js');
      porady były zawyżone o ponad siedem działek. */
   const noc = dobierz(evZeSlonca(-18), { tryb: 'zdjecie', temat: 'mleczna droga', obiektyw: '24-70 f/2.8', ogniskowa: 24 });
   console.log(`11. gwiazdy 24 mm → ${noc.czas} ${noc.przyslona} ISO ${noc.iso}`);
-  if (!/\bs$/.test(noc.czas)) fail.push(`nocna ekspozycja podana jako ${noc.czas} — powinna być w sekundach`);
+  if (!/\bs$/.test(noc.czas)) fail.push(`nocna ekspozycja podana jako ${noc.czas} – powinna być w sekundach`);
   const sekundy = Number(String(noc.czas).replace(' s', ''));
   if (!(sekundy >= 10 && sekundy <= 25)) fail.push(`${noc.czas} przy 24 mm łamie regułę 500 albo jest bez sensu`);
-  if (noc.iso < 1600) fail.push(`ISO ${noc.iso} na gwiazdy jest za niskie — EV nocy znów zawyżone`);
+  if (noc.iso < 1600) fail.push(`ISO ${noc.iso} na gwiazdy jest za niskie – EV nocy znów zawyżone`);
 
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEMATY I ARCHIWUM OK');

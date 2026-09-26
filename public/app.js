@@ -1,5 +1,5 @@
 /* ============================================================
-   COSMOS — logika interfejsu
+   COSMOS – logika interfejsu
    ============================================================ */
 
 'use strict';
@@ -40,7 +40,7 @@ let abortController = null;
 let isGenerating = false;
 let pendingImages = []; // dataURL-e załączników czekających na wysłanie
 // Dokumenty czekające na wysłanie: { name, chars, text, truncated }. Trzymamy
-// gotowy TEKST, nie plik — treść wyciąga serwer, zaraz po wybraniu pliku.
+// gotowy TEKST, nie plik – treść wyciąga serwer, zaraz po wybraniu pliku.
 let pendingDocs = [];
 let senses = { online: false, caps: {} }; // stan usługi percepcji (Python)
 // Serwer nieosiągalny: interfejs pochodzi z pamięci podręcznej, więc wygląda
@@ -152,12 +152,12 @@ function loadJson(key, fallback) {
   }
 }
 
-// Zapis aktywnej rozmowy na serwer (data/conversations/) — wspólny dla
+// Zapis aktywnej rozmowy na serwer (data/conversations/) – wspólny dla
 // wszystkich urządzeń. Zapis serwerowy jest debounce'owany; kopia w
 // localStorage służy tylko jako podgląd offline, gdy serwer jest niedostępny.
 let convSaveTimer = null;
 
-/* Zapis z opóźnieniem — do pisania w płótnie. Zapisywanie przy każdym
+/* Zapis z opóźnieniem – do pisania w płótnie. Zapisywanie przy każdym
    naciśnięciu klawisza słałoby na serwer kilkanaście żądań na sekundę. */
 let zapisZaChwile = null;
 function saveConversationsSoon(ms = 800) {
@@ -165,7 +165,7 @@ function saveConversationsSoon(ms = 800) {
   zapisZaChwile = setTimeout(() => { zapisZaChwile = null; saveConversations(); }, ms);
 }
 
-/** @param {boolean} natychmiast — pomiń 400 ms zwłoki i wyślij zapis od razu.
+/** @param {boolean} natychmiast – pomiń 400 ms zwłoki i wyślij zapis od razu.
  *
  *  Zwłoka jest dobra przy pisaniu (jeden zapis zamiast dziesięciu), ale zła
  *  przed startem generowania: gdy karta zamknie się w tej ćwierci sekundy,
@@ -184,7 +184,7 @@ function saveConversations(natychmiast = false) {
     title: activeConversation.title,
     createdAt: activeConversation.createdAt,
     updatedAt: activeConversation.updatedAt,
-    // Pinezka zostaje — nowa wiadomość w przypiętej rozmowie ją zdejmowała do odświeżenia strony.
+    // Pinezka zostaje – nowa wiadomość w przypiętej rozmowie ją zdejmowała do odświeżenia strony.
     pinned: Boolean((i >= 0 && conversations[i].pinned) || activeConversation.pinned),
   };
   if (i >= 0) conversations[i] = meta; else conversations.unshift(meta);
@@ -202,7 +202,7 @@ function saveConversations(natychmiast = false) {
 }
 
 /* DWA URZĄDZENIA, JEDNA ROZMOWA. Zapis wysyłał cały dokument, a serwer go
-   nadpisywał — telefon z nieaktualną kopią kasował wiadomości napisane
+   nadpisywał – telefon z nieaktualną kopią kasował wiadomości napisane
    w międzyczasie na komputerze. Teraz zapis mówi, na której wersji się opiera
    (`bazaUpdatedAt`); gdy serwer ma nowszą, odpowiada 409 z nią, a my scalamy
    i zapisujemy jeszcze raz. Zapisy jednej rozmowy idą po kolei, więc własne
@@ -221,7 +221,7 @@ function zapiszNaSerwerze(id, conv, proba = 0) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...conv, ...(baza ? { bazaUpdatedAt: baza } : {}) }),
       });
-    } catch { return; /* offline — zostaje kopia w localStorage */ }
+    } catch { return; /* offline – zostaje kopia w localStorage */ }
     const d = await readJsonSafe(r).catch(() => ({}));
     if (r.ok && d.meta) { wersjaNaSerwerze.set(id, d.meta.updatedAt); return; }
     if (r.status === 409 && d.rozmowa && proba < 2) {
@@ -275,7 +275,7 @@ function epConfig(name = endpoint) {
   return serverConfig.endpoints[name] || {};
 }
 
-/* Model wybrany w Ustawieniach dla danego silnika — po jednym polu na silnik.
+/* Model wybrany w Ustawieniach dla danego silnika – po jednym polu na silnik.
    Dawniej tylko NVIDIA i lokalny miały swoje pole, więc na OpenAI i Claude
    zostawał na zawsze model z .env i nie było jak go zmienić z aplikacji. */
 const SILNIKI_Z_MODELEM = ['cloud', 'local', 'openai', 'claude'];
@@ -289,7 +289,7 @@ function currentModel() {
 }
 
 /* Treść wiadomości i mini-renderer Markdown mieszkają w `public/tekst.js`
-   — patrz nagłówek tamtego pliku. Wchodzi string, wychodzi string, więc
+   – patrz nagłówek tamtego pliku. Wchodzi string, wychodzi string, więc
    dają się sprawdzić bez przeglądarki. */
 const {
   escapeHtml, msgText, msgImages, msgPhotos, msgDalej, msgDocs, msgRun,
@@ -365,7 +365,7 @@ async function togglePin(id, pinned) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pinned }),
     });
-  } catch { /* offline — indeks lokalny już zaktualizowany */ }
+  } catch { /* offline – indeks lokalny już zaktualizowany */ }
 }
 
 async function renameConversation(id, current) {
@@ -406,7 +406,7 @@ function imagesHtml(images) {
 let archiwumOdpytywanie = null;
 
 /** Pokaż stan archiwum i przyciski pasujące do tego stanu.
- *  Panel buduje się od zera przy każdym odświeżeniu — stanów jest pięć
+ *  Panel buduje się od zera przy każdym odświeżeniu – stanów jest pięć
  *  (nieskonfigurowany, niepołączony, połączony, indeksuje, błąd), a doklejanie
  *  i chowanie przycisków przy każdym z nich to prosta droga do panelu,
  *  w którym „Przerwij" zostaje po zakończonym indeksowaniu. */
@@ -458,7 +458,7 @@ async function odswiezArchiwum() {
   } else {
     /* Sam licznik plików nie mówi, czy uzupełnianie się skończyło. Po kilku
        godzinach dociągania jedyną drogą było kliknięcie przycisku jeszcze raz
-       i zobaczenie zera — czyli uruchomienie zadania, żeby dowiedzieć się,
+       i zobaczenie zera – czyli uruchomienie zadania, żeby dowiedzieć się,
        że nie ma go po co uruchamiać. */
     const pst = d.postep;
     stanEl.textContent = d.wArchiwum
@@ -477,7 +477,7 @@ async function odswiezArchiwum() {
       const r = await fetch('/api/onedrive/login');
       const w = await readJsonSafe(r);
       if (w.url) window.open(w.url, '_blank', 'noopener');
-      // Logowanie kończy się w innej karcie — sprawdzamy stan po powrocie.
+      // Logowanie kończy się w innej karcie – sprawdzamy stan po powrocie.
       setTimeout(odswiezArchiwum, 4000);
     });
     return;
@@ -489,7 +489,7 @@ async function odswiezArchiwum() {
     }).catch(() => {});
     odswiezArchiwum();
   });
-  /* Dwa uzupełnienia indeksu, każde jedno żądanie NA PLIK — dlatego osobno
+  /* Dwa uzupełnienia indeksu, każde jedno żądanie NA PLIK – dlatego osobno
      od indeksowania i dlatego paczkami. Do tej pory dało się je uruchomić
      wyłącznie ręcznie curlem, co znaczy: nikt ich nigdy nie uruchomił. */
   if (d.wArchiwum) {
@@ -504,12 +504,12 @@ async function odswiezArchiwum() {
     /* Paczka po 200, nie po 50. Robotników jest kilkanaście i biorą z jednej
        kolejki, więc na końcu paczki część z nich stoi bezczynnie, czekając na
        ostatnie sztuki. Przy pięćdziesięciu plikach ten ogon to kilkanaście
-       procent czasu; przy dwustu — kilka. Przy okazji rzadziej płacimy za
+       procent czasu; przy dwustu – kilka. Przy okazji rzadziej płacimy za
        zbudowanie kolejki po stronie serwera. */
     przycisk(t('arch.vision'), (e) => uzupelniajPaczkami({
       przycisk: e.currentTarget, adres: '/api/archive/vision', ile: 200,
       /* Rozbicie na etapy w widocznym miejscu. „1,63 s na zdjęcie" nie mówi,
-         co poprawić — te same 1,63 s mogą być wolnym łączem do Microsoftu,
+         co poprawić – te same 1,63 s mogą być wolnym łączem do Microsoftu,
          wolnym łączem do domu albo zatkanym YOLO. RAW osobno od JPG-a, bo
          średnia z obu nie rozstrzyga, czy drogie są RAW-y, czy wszystko. */
       etykieta: (w) => t('arch.visionProgress', { ile: w.opisane, zostalo: w.zostalo })
@@ -530,7 +530,7 @@ async function odswiezArchiwum() {
     przycisk(t('arch.tele'), (e) => uzupelniajPaczkami({
       przycisk: e.currentTarget, adres: '/api/archive/telemetry', ile: 100,
       etykieta: (w) => t('arch.teleProgress', { ile: w.odczytane, zostalo: w.zostalo }),
-      /* „Odczytano z 0 klipów" nie mówi NIC o przyczynie — a przyczyny są trzy
+      /* „Odczytano z 0 klipów" nie mówi NIC o przyczynie – a przyczyny są trzy
          i wymagają różnych reakcji: pliki puste, zwykłe napisy zamiast
          telemetrii, albo wariant formatu, którego nie znamy. Dlatego przy
          zerowym wyniku pokazujemy próbkę odrzuconego pliku. */
@@ -547,7 +547,7 @@ async function odswiezArchiwum() {
   });
 
   /* KASOWANIE MATERIAŁU JAKO OSOBNA DECYZJA.
-     Wcześniej robiło to odłączenie konta — jednym kliknięciem, przy okazji
+     Wcześniej robiło to odłączenie konta – jednym kliknięciem, przy okazji
      czegoś zupełnie innego. Teraz odłączenie tylko rozłącza, a usunięcie
      wpisów trzeba wybrać świadomie i potwierdzić ostrzeżeniem mówiącym
      wprost, czego nie da się odzyskać. */
@@ -577,7 +577,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
   let suma = 0;
   let poprzednioZostalo = Infinity;
   let bezPostepu = 0;
-  let ostatni = null;          // ostatnia odpowiedź serwera — do komunikatu końcowego
+  let ostatni = null;          // ostatnia odpowiedź serwera – do komunikatu końcowego
   try {
     for (;;) {
       const r = await fetch(adres, {
@@ -590,16 +590,16 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
       if (!r.ok) { stanEl.textContent = w.error || `HTTP ${r.status}`; return; }
       suma += Number(w.uzupelnione || w.opisane || w.odczytane || 0);
       stanEl.textContent = etykieta(w);
-      // `sprawdzone === 0` znaczy „nie ma już czego brać" — bez tego warunku
+      // `sprawdzone === 0` znaczy „nie ma już czego brać" – bez tego warunku
       // pusta kolejka kręciłaby pętlę w nieskończoność.
       if (paczkiPrzerwane || !w.sprawdzone || !w.zostalo) break;
-      /* KOLEJKA MUSI MALEĆ. Gdy każdy plik w paczce kończy się błędem — token
-         OneDrive wygasł, zmysły padły w połowie — nic nie ubywa, a warunki
+      /* KOLEJKA MUSI MALEĆ. Gdy każdy plik w paczce kończy się błędem – token
+         OneDrive wygasł, zmysły padły w połowie – nic nie ubywa, a warunki
          wyżej są dalej spełnione. To była pętla bez końca waląca w serwer
          co sekundę. Brak postępu kończy zadanie z komunikatem, nie po cichu. */
       if (Number(w.zostalo) >= poprzednioZostalo) {
         /* …ale DŁAWIENIE to nie awaria. Microsoft odpowiada 429 i prosi
-           o zwolnienie; poddanie się w tym miejscu było błędem — Marcin
+           o zwolnienie; poddanie się w tym miejscu było błędem – Marcin
            zobaczył „Przerwane: kolejka nie maleje. Powód: Graph 429" i musiał
            zaczynać od nowa. Odczekujemy i próbujemy dalej, coraz rzadziej.
            Dopiero gdy pięć podejść z rzędu nic nie da, uznajemy, że stoimy. */
@@ -615,7 +615,7 @@ async function uzupelniajPaczkami({ przycisk, adres, ile, etykieta, koniec }) {
           continue;
         }
         stanEl.textContent = t('arch.batchStuck', {
-          zostalo: w.zostalo, powod: (w.bledy || [])[0] || '—',
+          zostalo: w.zostalo, powod: (w.bledy || [])[0] || '–',
         });
         return;
       }
@@ -662,7 +662,7 @@ $('canvas-text').addEventListener('input', () => {
 /** Zastosuj poprawki w formacie SZUKAJ/ZAMIEŃ.
  *
  *  Model podaje fragment do znalezienia i jego nową wersję zamiast całego
- *  dokumentu. Fragment MUSI występować dokładnie raz — gdy trafia w dwa
+ *  dokumentu. Fragment MUSI występować dokładnie raz – gdy trafia w dwa
  *  miejsca, nie wiadomo, które miał na myśli, i cicha podmiana pierwszego
  *  z brzegu potrafi zepsuć tekst tak, że nikt tego nie zauważy.
  */
@@ -710,7 +710,7 @@ function odswiezMiarePlotna() {
 const PORCJA_ARCHIWUM = 24;
 
 /* Budowniczowie widoku (siatki, panele, podglądy) mieszkają
-   w `public/widoki.js` — patrz nagłówek tamtego pliku. Tutaj zostaje
+   w `public/widoki.js` – patrz nagłówek tamtego pliku. Tutaj zostaje
    samo podpięcie ich do stanu aplikacji. */
 const {
   runPanel, photosGrid, stopkaArchiwum, naKafelek,
@@ -721,7 +721,7 @@ const {
 });
 
 /* Nić rozmowy: każda odpowiedź pamięta, który silnik ją napisał, i nosi jego
-   kolor — dokładnie tak, jak pokazuje to strona produktowa. */
+   kolor – dokładnie tak, jak pokazuje to strona produktowa. */
 function nazwaSilnika(klucz) {
   return klucz === 'cloud' ? 'NVIDIA' : klucz === 'local' ? t('silnik.local')
     : klucz === 'claude' ? 'Claude' : klucz === 'openai' ? 'OpenAI' : '';
@@ -804,7 +804,7 @@ function messageElement(m, idx = -1) {
   if (isError) {
     body.textContent = text;
     msg.appendChild(body);
-    // Błąd na końcu rozmowy — jedno kliknięcie zamiast przepisywania pytania.
+    // Błąd na końcu rozmowy – jedno kliknięcie zamiast przepisywania pytania.
     const conv = activeConv();
     if (idx >= 0 && conv && idx === conv.messages.length - 1) {
       const ponow = document.createElement('button');
@@ -827,10 +827,10 @@ function messageElement(m, idx = -1) {
     return msg;
   }
 
-  /* Tok myślenia zapisany przy wiadomości — zwinięty, żeby nie przykrywał
+  /* Tok myślenia zapisany przy wiadomości – zwinięty, żeby nie przykrywał
      odpowiedzi, ale dostępny, gdy chce się zobaczyć, czym model się zajmował.
      Wyjątek: gdy myślenie to WSZYSTKO, co przyszło (`samoMyslenie`), zwinięcie
-     zostawia wiadomość złożoną z samego ostrzeżenia. Wtedy panel jest otwarty —
+     zostawia wiadomość złożoną z samego ostrzeżenia. Wtedy panel jest otwarty –
      jest jedyną treścią, jaką mamy, więc nie ma czego przykrywać. */
   body.innerHTML = (m.think
     ? `<details class="think-block"${m.samoMyslenie ? ' open' : ''}>`
@@ -877,7 +877,7 @@ function messageElement(m, idx = -1) {
   const podpis = !isError && podpisSilnika(m.silnik, m.model);
   if (podpis) col.appendChild(podpis);
   /* Przyciski tylko pod OSTATNIĄ wypowiedzią tury. Pasek postępu („Szukam…")
-     i kroki pośrednie to nie odpowiedź — pięć „Regeneruj" pod jedną
+     i kroki pośrednie to nie odpowiedź – pięć „Regeneruj" pod jedną
      odpowiedzią i „Zapamiętaj" przy „Przeszukuję archiwum…" to szum. */
   const nastepna = idx >= 0 ? activeConv()?.messages[idx + 1] : null;
   const srodekTury = m.status || (nastepna && (nastepna.role === 'assistant'
@@ -927,7 +927,7 @@ function messageActions(text, { copy, role, idx = -1 }) {
     actions.appendChild(remBtn);
   }
 
-  // Regeneruj — dla wiadomości asystenta (usuwa ją i generuje na nowo)
+  // Regeneruj – dla wiadomości asystenta (usuwa ją i generuje na nowo)
   if (role === 'assistant' && idx >= 0) {
     const regen = document.createElement('button');
     regen.className = 'msg-action-btn';
@@ -936,7 +936,7 @@ function messageActions(text, { copy, role, idx = -1 }) {
     actions.appendChild(regen);
   }
 
-  // Edytuj — dla wiadomości użytkownika (wczytuje do pola, obcina dalej)
+  // Edytuj – dla wiadomości użytkownika (wczytuje do pola, obcina dalej)
   if (role === 'user' && idx >= 0) {
     const edit = document.createElement('button');
     edit.className = 'msg-action-btn';
@@ -994,7 +994,7 @@ async function runAction(m, msgEl) {
 function regenerateFrom(idx) {
   const conv = activeConv();
   if (!conv || isGenerating) return;
-  // Usuń tę odpowiedź i wszystko po niej; pod błędem — całą turę po pytaniu (protokol.js).
+  // Usuń tę odpowiedź i wszystko po niej; pod błędem – całą turę po pytaniu (protokol.js).
   conv.messages = conv.messages.slice(0, granicaPonowienia(conv.messages, idx));
   saveConversations();
   renderMessages();
@@ -1013,7 +1013,7 @@ function editFrom(idx) {
   const images = msgImages(m);
   /* Historię tniemy dopiero przy WYSŁANIU poprawionej wiadomości. Cięcie
      przy samym kliknięciu „Edytuj" kasowało dalszą rozmowę od razu i na
-     serwerze — kto się rozmyślił, tracił wszystko bez ostrzeżenia. */
+     serwerze – kto się rozmyślił, tracił wszystko bez ostrzeżenia. */
   edycjaOd = { convId: conv.id, idx };
   pendingImages = images.length ? [...images] : pendingImages;
   renderAttachments();
@@ -1025,9 +1025,9 @@ function editFrom(idx) {
 
 function renderMessages({ przewin = true } = {}) {
   const conv = activeConv();
-  // Kto czyta wyżej, zostaje tam po przebudowie — bez tego innerHTML = '' ustawiał widok na samą górę.
+  // Kto czyta wyżej, zostaje tam po przebudowie – bez tego innerHTML = '' ustawiał widok na samą górę.
   const byloScroll = el.chatScroll.scrollTop;
-  // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć —
+  // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć –
   // inaczej przy nowej rozmowie zostaje na ekranie cudzy dokument.
   pokazPlotno(conv);
   el.messages.innerHTML = '';
@@ -1051,7 +1051,7 @@ function renderMessages({ przewin = true } = {}) {
    o tym JEGO ruchy, nie odległość od dołu liczona po fakcie: gdy odpowiedź
    rośnie szybciej, niż da się przewinąć, odległość myli się w jedną stronę
    i widok zostaje w tyle na zawsze. W górę widok może pojechać tylko ręką
-   człowieka — program przewija wyłącznie w dół — więc ruch w górę wyłącza
+   człowieka – program przewija wyłącznie w dół – więc ruch w górę wyłącza
    jazdę, a powrót na sam dół ją włącza. */
 let sledzeDol = true;
 let ostatniScrollTop = 0;
@@ -1079,7 +1079,7 @@ el.chatScroll.addEventListener('wheel', (e) => { if (e.deltaY < 0) sledzeDol = f
 // Operacje na rozmowach
 // ----------------------------------------------------------------
 
-// Na wąskich ekranach panel boczny to nakładka — zwiń go po akcji nawigacyjnej.
+// Na wąskich ekranach panel boczny to nakładka – zwiń go po akcji nawigacyjnej.
 function collapseSidebarOnMobile() {
   if (window.innerWidth <= 720) {
     el.sidebar.classList.add('collapsed');
@@ -1101,7 +1101,7 @@ function newConversation() {
 
 /* Rozmowy zapisane, zanim ruch narzędzia dostał flagę `search`, wciąż mają
    w środku dymek z pytaniem, którego nikt nie zadał. Poprawka w kodzie ich nie
-   naprawi — siedzą już na dysku. Domykamy je przy wczytaniu; to zmiana tylko
+   naprawi – siedzą już na dysku. Domykamy je przy wczytaniu; to zmiana tylko
    w wyglądzie, treść dalej idzie do modelu tak samo. */
 const PREFIKSY_NARZEDZI = [
   'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum',
@@ -1122,7 +1122,7 @@ function naprawStareRuchyNarzedzi(conv) {
   return conv;
 }
 
-/* Ostatnio otwarta rozmowa — żeby zwykłe odświeżenie strony nie wyrzucało
+/* Ostatnio otwarta rozmowa – żeby zwykłe odświeżenie strony nie wyrzucało
    na ekran powitalny. Tylko na chwilę (pół godziny): kto wraca następnego
    dnia, zaczyna od czystej karty. Klucz `cosmos.conv.…` czyści konta.js przy
    zmianie osoby, więc nikt nie zobaczy cudzej rozmowy. */
@@ -1150,7 +1150,7 @@ async function selectConversation(id) {
   zapamietajOstatnia(id);
   renderSidebar();
   collapseSidebarOnMobile();
-  /* Od razu kopia z przeglądarki, jeśli jest — bez pustego ekranu i skoku
+  /* Od razu kopia z przeglądarki, jeśli jest – bez pustego ekranu i skoku
      układu, gdy dojdzie wersja z serwera (na telefonie CLS do 1,17). */
   const kopia = naprawStareRuchyNarzedzi(loadJson('cosmos.conv.' + id, null));
   if (kopia) {
@@ -1165,10 +1165,10 @@ async function selectConversation(id) {
     const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error();
     zSerwera = naprawStareRuchyNarzedzi(await res.json());
-  } catch { /* offline — zostaje kopia */ }
+  } catch { /* offline – zostaje kopia */ }
   /* Człowiek mógł w tym czasie stuknąć inną rozmowę. Bez tego sprawdzenia
      panel podświetlał B, na ekranie stała A, a następna wiadomość zapisywała
-     się w A — najwolniejsza odpowiedź wygrywała wyścig. */
+     się w A – najwolniejsza odpowiedź wygrywała wyścig. */
   if (activeId !== id) return;
   if (!zSerwera) {
     if (!kopia) { activeConversation = null; renderMessages(); }
@@ -1254,7 +1254,7 @@ async function migrateLegacyConversations() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...conv, updatedAt: conv.updatedAt || conv.createdAt || Date.now() }),
       });
-    } catch { /* pominąć — serwer offline, spróbujemy następnym razem */ }
+    } catch { /* pominąć – serwer offline, spróbujemy następnym razem */ }
   }
   if (legacy.length) {
     try {
@@ -1344,7 +1344,7 @@ function renderAttachments() {
 
    Serwer sam przełącza się na model wizyjny, ale tylko jeśli jest ustawiony
    (NEMOTRON_VISION_MODEL / LOCAL_VISION_MODEL). Bez niego zdjęcie poleci do
-   modelu, który go nie zobaczy, a odpowiedź będzie zmyślona — lepiej powiedzieć
+   modelu, który go nie zobaczy, a odpowiedź będzie zmyślona – lepiej powiedzieć
    o tym przed wysłaniem niż tłumaczyć potem, skąd wzięła się bzdura. */
 function renderBlindModelWarning() {
   const old = $('blind-model-warn');
@@ -1392,7 +1392,7 @@ el.fileInput.addEventListener('change', async () => {
 
    Wysyłanie klipu na serwer odpada z arytmetyki: minuta z R6 II to 300-500 MB.
    Przez Tailscale z telefonu to kilka minut czekania, a potem dokładnie te same
-   klatki, które przeglądarka potrafi wyjąć sama — <video> + <canvas> to
+   klatki, które przeglądarka potrafi wyjąć sama – <video> + <canvas> to
    dekoder sprzętowy, który i tak siedzi w każdym urządzeniu. Zero zależności,
    zero wysyłki, zero ffmpega na VPS-ie i działa przy wyłączonych zmysłach.
 
@@ -1406,14 +1406,14 @@ const WIDEO_SEEK_MS = 8000;
  * To nie jest pytanie akademickie akurat przy tym sprzęcie. Canon R6 II
  * nagrywa 4K w H.265/HEVC, a Chrome na Windowsie dekoduje HEVC tylko wtedy,
  * gdy system ma rozszerzenie od Microsoftu. Bez niego `<video>` po prostu
- * odmawia — i bez tego sprawdzenia dostajesz komunikat „ta przeglądarka nie
+ * odmawia – i bez tego sprawdzenia dostajesz komunikat „ta przeglądarka nie
  * zna tego kodowania", z którego nie wynika ANI co jest nie tak, ani co
  * z tym zrobić. A rada jest bardzo konkretna: nagrywaj proxy w H.264 albo
  * doinstaluj rozszerzenie HEVC.
  */
 function kodekZnany(file) {
   const v = document.createElement('video');
-  if (!v.canPlayType) return true;                 // nie wiadomo — próbujemy
+  if (!v.canPlayType) return true;                 // nie wiadomo – próbujemy
   if (v.canPlayType(file.type || '')) return true; // przeglądarka mówi „tak"
   return !/hevc|h\.?265|x265/i.test(file.type || '');
 }
@@ -1436,14 +1436,14 @@ async function klatkiZWideo(file, ile) {
       setTimeout(() => zle(nieczytelne()), WIDEO_SEEK_MS);
     });
 
-    /* Długość bywa nieznana — pliki nagrywane strumieniowo (webm z przeglądarki,
+    /* Długość bywa nieznana – pliki nagrywane strumieniowo (webm z przeglądarki,
        przerwany transfer) nie mają jej w nagłówku i `duration` to Infinity.
        Materiał z aparatu i drona zawsze ją ma, ale klip nagrany telefonem przez
-       stronę WWW — niekoniecznie.
+       stronę WWW – niekoniecznie.
 
        Ratunek jest znany i tani: przewinięcie na absurdalnie odległy moment
        zmusza przeglądarkę do przejrzenia pliku do końca, po czym `duration`
-       nagle jest znane. Brzmi jak sztuczka, bo jest sztuczką — ale różnica
+       nagle jest znane. Brzmi jak sztuczka, bo jest sztuczką – ale różnica
        między jedną klatką a czterema jest realna. */
     if (!Number.isFinite(v.duration) || v.duration <= 0) {
       await new Promise((ok) => {
@@ -1538,7 +1538,7 @@ async function wczytajDokument(file) {
     if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
     Object.assign(wpis, { chars: d.chars, text: d.text, truncated: d.truncated, loading: false });
   } catch (err) {
-    // Plik, którego nie da się odczytać, znika z listy — ale z powodem.
+    // Plik, którego nie da się odczytać, znika z listy – ale z powodem.
     pendingDocs.splice(pendingDocs.indexOf(wpis), 1);
     alert(t('doc.failed', { name: file.name, msg: err.message }));
   }
@@ -1576,7 +1576,7 @@ function toApiMessages(conv) {
   if (conv.canvas && conv.canvas.text) {
     api.push({
       role: 'system',
-      content: `PŁÓTNO — dokument otwarty obok rozmowy, tytuł „${conv.canvas.title}". `
+      content: `PŁÓTNO – dokument otwarty obok rozmowy, tytuł „${conv.canvas.title}". `
         + 'To jest jego AKTUALNA treść (użytkownik mógł ją edytować ręcznie):\n'
         + '--- POCZĄTEK PŁÓTNA ---\n' + conv.canvas.text + '\n--- KONIEC PŁÓTNA ---',
     });
@@ -1593,7 +1593,7 @@ function toApiMessages(conv) {
     if (m.role === 'user' && !m.search) { granica = i; break; }
   }
   conv.messages.forEach((m, i) => {
-    // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura — serwer przy małym
+    // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura – serwer przy małym
     // oknie modelu lokalnego wyrzuca tylko wiadomości sprzed niej.
     if (i === granica) api.turaOd = api.length;
     if (m.error || m.role === 'action' || m.status) return;
@@ -1603,7 +1603,7 @@ function toApiMessages(conv) {
       text = `(tu użytkownik pokazał zdjęcie${msgImages(m).length > 1 ? 'a' : ''})` + (text ? `\n${text}` : '');
     }
     if (m.search && i < granica) {
-      text = `(wcześniejszy wynik narzędzia: ${m.searchQuery || 'dane'} — już wykorzystany w odpowiedzi)`;
+      text = `(wcześniejszy wynik narzędzia: ${m.searchQuery || 'dane'} – już wykorzystany w odpowiedzi)`;
     }
     // Dokumenty doklejamy dopiero tutaj: w rozmowie widać kafelek z nazwą,
     // a model dostaje pełną treść z wyraźną ramką, żeby wiedział, co jest
@@ -1620,7 +1620,7 @@ function toApiMessages(conv) {
       api.push({ role: m.role, content: parts });
     } else {
       // obrazy w wiadomościach asystenta (np. wygenerowane w Studiu)
-      // nie wracają do API — wysyłamy sam tekst. Pustej wypowiedzi nie
+      // nie wracają do API – wysyłamy sam tekst. Pustej wypowiedzi nie
       // wysyłamy wcale: część dostawców (Claude) ją odrzuca.
       if (!String(text || '').trim()) return;
       api.push({ role: m.role, content: text });
@@ -1636,13 +1636,13 @@ function toApiMessages(conv) {
    w głowie, albo przerywać generowanie.
 
    Teraz wiadomość wysłana w trakcie ODCZEKUJE i idzie sama, gdy Cosmos
-   skończy. Kolejka jest widoczna nad polem i da się z niej wyjąć wpis —
+   skończy. Kolejka jest widoczna nad polem i da się z niej wyjąć wpis –
    „wyślę to za chwilę" musi być odwracalne, bo w połowie odpowiedzi często
    okazuje się, że pytanie było niepotrzebne. */
 let kolejka = [];
 
 /* Kolejka i niewysłany szkic przeżywają odświeżenie i ubicie aplikacji
-   w tle (Android robi to bez pytania) — dawniej ginęły. Klucze pod
+   w tle (Android robi to bez pytania) – dawniej ginęły. Klucze pod
    `cosmos.conv.`, więc znikają przy zmianie osoby (konta.js). */
 const KLUCZ_KOLEJKI = 'cosmos.conv.kolejka';
 const KLUCZ_SZKICU = 'cosmos.conv.szkic';
@@ -1650,12 +1650,12 @@ function zapamietajKolejke() {
   try {
     if (kolejka.length) localStorage.setItem(KLUCZ_KOLEJKI, JSON.stringify(kolejka));
     else localStorage.removeItem(KLUCZ_KOLEJKI);
-  } catch { /* za duża (zdjęcia) albo bez pamięci — zostaje w tej karcie */ }
+  } catch { /* za duża (zdjęcia) albo bez pamięci – zostaje w tej karcie */ }
 }
 
 /* Pozycja kolejki należy do rozmowy, w której ją wpisano. Dawniej po
    przełączeniu się na inną rozmowę pytanie szło tam, gdzie człowiek akurat
-   był — do zupełnie innego wątku (zespół IT, płynność, runda 4). Pozycje
+   był – do zupełnie innego wątku (zespół IT, płynność, runda 4). Pozycje
    bez rozmowy (zapisane przed tą zmianą) idą jak dawniej. */
 const wTejRozmowie = (poz) => !poz.convId || poz.convId === activeId;
 
@@ -1672,7 +1672,7 @@ function renderKolejka() {
     el2.className = 'queue-item';
     const txt = document.createElement('span');
     txt.className = 'queue-text';
-    // `poz.images` to LICZBA załączników, nie tablica — samo zdjęcie bez
+    // `poz.images` to LICZBA załączników, nie tablica – samo zdjęcie bez
     // podpisu musi się w kolejce czymś przedstawić, inaczej widać samo „…".
     txt.textContent = poz.text || (poz.images ? t('queue.image') : '…');
     const usun = document.createElement('button');
@@ -1686,7 +1686,7 @@ function renderKolejka() {
   }
 }
 
-/** Po zakończeniu generowania — wyślij następną z kolejki. */
+/** Po zakończeniu generowania – wyślij następną z kolejki. */
 async function ruszKolejke() {
   if (isGenerating) return;
   const i = kolejka.findIndex(wTejRozmowie);
@@ -1695,11 +1695,11 @@ async function ruszKolejke() {
   renderKolejka();
   const conv = ensureConversation(poz.text || '');
   conv.messages.push({ role: 'user', content: poz.content });
-  saveConversations(true);          // patrz sendMessage — zaraz rusza generowanie
+  saveConversations(true);          // patrz sendMessage – zaraz rusza generowanie
   renderSidebar();
   renderMessages();
   await runGeneration(conv);
-  // Kolejka bywa dłuższa niż jedna pozycja — po tej odpowiedzi bierzemy następną.
+  // Kolejka bywa dłuższa niż jedna pozycja – po tej odpowiedzi bierzemy następną.
   ruszKolejke();
 }
 
@@ -1708,7 +1708,7 @@ async function sendMessage() {
   const gotowe = pendingDocs.filter((d) => !d.loading);
   if (!text && !pendingImages.length && !gotowe.length) return;
 
-  /* Cosmos jeszcze mówi — bierzemy wiadomość do kolejki zamiast ją zgubić.
+  /* Cosmos jeszcze mówi – bierzemy wiadomość do kolejki zamiast ją zgubić.
      Pole czyścimy tak samo jak przy zwykłym wysłaniu, żeby nie było
      wątpliwości, czy wiadomość „poszła". */
   if (isGenerating) {
@@ -1750,7 +1750,7 @@ async function sendMessage() {
   pendingDocs = [];
   renderAttachments();
   // Bez zwłoki: za chwilę ruszy generowanie, które ma prawo przeżyć zamknięcie
-  // karty — a serwer dopisze odpowiedź tylko do rozmowy, która już istnieje.
+  // karty – a serwer dopisze odpowiedź tylko do rozmowy, która już istnieje.
   saveConversations(true);
 
   el.input.value = '';
@@ -1761,7 +1761,7 @@ async function sendMessage() {
   await runGeneration(conv);
 }
 
-// jedno przejście streamingu — zwraca zebrany tekst odpowiedzi
+// jedno przejście streamingu – zwraca zebrany tekst odpowiedzi
 /* ============ BIEG: ODPOWIEDŹ ŻYJE NA SERWERZE ============
    Marcin: „Jak wychodzę ze strony lub aplikacji (…) wszystko jest przerywane
    i jest napisane że connection error. Chciałbym żeby to działało też w tle."
@@ -1772,7 +1772,7 @@ async function sendMessage() {
    zgaszeniu ekranu albo odświeżeniu strony wraca dokładnie w to miejsce.
 
    Nie ma tu ponawiania zapytania do modelu. Wracamy do TEJ SAMEJ odpowiedzi,
-   nie prosimy o nową — druga odpowiedź na to samo pytanie kosztuje tokeny
+   nie prosimy o nową – druga odpowiedź na to samo pytanie kosztuje tokeny
    i bywa inna niż ta, którą użytkownik zdążył zobaczyć. */
 const BIEG_KLUCZ = 'cosmos.bieg';
 const BIEG_PROB = 6;
@@ -1790,7 +1790,7 @@ function zapamietajBieg(b) {
   try {
     if (b) localStorage.setItem(BIEG_KLUCZ, JSON.stringify(b));
     else localStorage.removeItem(BIEG_KLUCZ);
-  } catch { /* tryb prywatny — trudno, zostaje wznowienie w tej samej karcie */ }
+  } catch { /* tryb prywatny – trudno, zostaje wznowienie w tej samej karcie */ }
 }
 
 const pauza = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1803,7 +1803,7 @@ function potwierdzOdbior(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ bieg: id }),
     keepalive: true,      // ma dolecieć nawet gdy karta zamyka się w tej sekundzie
-  }).catch(() => { /* nie doleciało — serwer zapisze sam, czyli bezpiecznie */ });
+  }).catch(() => { /* nie doleciało – serwer zapisze sam, czyli bezpiecznie */ });
 }
 
 async function streamOnce(conv, opcje = {}) {
@@ -1833,11 +1833,11 @@ async function streamOnce(conv, opcje = {}) {
 
   // Modele rozumujące (Nemotron 3, gpt-oss, R1) wysyłają tok myślenia w osobnym
   // polu `reasoning_content`. Bez tego ekran stoi pusty przez cały czas myślenia,
-  // a gdy budżet tokenów skończy się w trakcie — zostaje pusta odpowiedź.
+  // a gdy budżet tokenów skończy się w trakcie – zostaje pusta odpowiedź.
   // Pokazujemy myślenie na żywo, zwinięte, żeby było widać, że coś się dzieje.
   // Model rozumujący potrafi milczeć kilkadziesiąt sekund, a pusty dymek
   // z migającym kursorem wygląda jak zawieszenie. Licznik pokazuje, że praca
-  // trwa — i ile już trwa.
+  // trwa – i ile już trwa.
   const started = Date.now();
   let waitNote = '';
   const waitTimer = setInterval(() => {
@@ -1850,7 +1850,7 @@ async function streamOnce(conv, opcje = {}) {
   /* Malowanie przebudowuje całą odpowiedź, więc kosztuje tym więcej, im jest
      dłuższa. Na telefonie długa odpowiedź zajmowała 78% wątku głównego,
      a pisanie w polu szło 3× wolniej. Odstęp między malowaniami rośnie z ich
-     kosztem — wątek ma zawsze co najmniej tyle wolnego, ile zjadło malowanie. */
+     kosztem – wątek ma zawsze co najmniej tyle wolnego, ile zjadło malowanie. */
   let czasMalowania = 0;
   let ostatnieMalowanie = 0;
   const paint = () => {
@@ -1858,7 +1858,7 @@ async function streamOnce(conv, opcje = {}) {
     const t0 = performance.now();
     /* Myślenie z `<think>` w treści idzie do panelu myślenia, a znaczniki
        i ich urwane początki nie migają na ekranie w trakcie pisania. Panel
-       myślenia jest zwinięty — rozumowanie bywa po angielsku i pełne
+       myślenia jest zwinięty – rozumowanie bywa po angielsku i pełne
        deliberacji; kto chce, rozwinie. */
     const { think: thinkWTresci } = rozdzielMyslenie(acc);
     const widok = widokWToku(acc);
@@ -1869,7 +1869,7 @@ async function streamOnce(conv, opcje = {}) {
         + `<pre>${escapeHtml(calyThink)}</pre></details>`
       : '';
     body.innerHTML = head + `<div class="strumien-tresc">${renderMarkdown(widok)}</div>` + waitNote;
-    /* Kursor na końcu OSTATNIEGO zdania, nie w osobnej linii pod tekstem —
+    /* Kursor na końcu OSTATNIEGO zdania, nie w osobnej linii pod tekstem –
        jak na stronie produktowej. Szukamy ostatniego bloku tekstu (akapit,
        punkt listy, nagłówek); bloki kodu zostawiamy w spokoju. */
     const tresc = body.querySelector('.strumien-tresc');
@@ -1893,7 +1893,7 @@ async function streamOnce(conv, opcje = {}) {
   };
 
   /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
-     bieg. W obu razach numer znamy PRZED wysłaniem żądania — inaczej zerwanie
+     bieg. W obu razach numer znamy PRZED wysłaniem żądania – inaczej zerwanie
      połączenia w pierwszej sekundzie zostawiłoby odpowiedź bez adresu. */
   lastFinish = '';
   const podpiecie = Boolean(opcje.bieg);
@@ -1911,7 +1911,7 @@ async function streamOnce(conv, opcje = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           endpoint: ep,
-          // `dodatkowe` to dopisek na jedną turę, poza historią rozmowy —
+          // `dodatkowe` to dopisek na jedną turę, poza historią rozmowy –
           // służy dokańczaniu odpowiedzi uciętej limitem długości.
           messages: [...doModelu, ...(opcje.dodatkowe || [])],
           turaOd: doModelu.turaOd,
@@ -1920,7 +1920,7 @@ async function streamOnce(conv, opcje = {}) {
           max_tokens: settings.maxTokens,
           kbSelected: [...kbSelected],
           useSearch: settings.offline ? false : undefined,
-          // odpowiedź będzie czytana na głos — model ma mówić, nie pisać
+          // odpowiedź będzie czytana na głos – model ma mówić, nie pisać
           trybGlosowy: voiceMode || undefined,
           bieg: biegId,
           rozmowa: conv.id,
@@ -1939,12 +1939,12 @@ async function streamOnce(conv, opcje = {}) {
     }
 
     // Serwer mógł skierować zdjęcie do modelu wizyjnego. Podmiana za plecami
-    // użytkownika byłaby nieuczciwa — mówimy, kto naprawdę odpowiedział.
+    // użytkownika byłaby nieuczciwa – mówimy, kto naprawdę odpowiedział.
     const swapped = res.headers.get('X-Cosmos-Model-Swapped-From');
     const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
     // Na silniku przyznanym przez właściciela członek dostaje model z jego listy.
     const spozaListy = res.headers.get('X-Cosmos-Model-Spoza-Listy');
-    // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu — mówimy ile,
+    // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu – mówimy ile,
     // a gdy nie zmieściła się nawet bieżąca tura, że jej najdłuższa część jest skrócona.
     const [okno, przyciete, skrocone] = String(res.headers.get('X-Cosmos-Okno') || '').split(';').map(Number);
     lastModelNote = [
@@ -1960,7 +1960,7 @@ async function streamOnce(conv, opcje = {}) {
     let bladBiegu = '';
     let proby = 0;
 
-    /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer — po nim wracamy
+    /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer – po nim wracamy
        we właściwe miejsce, więc wznowienie nie powtarza połowy zdania ani jej
        nie gubi. */
     const zjedzZdarzenie = (event) => {
@@ -1981,7 +1981,7 @@ async function streamOnce(conv, opcje = {}) {
           continue;
         }
         /* Serwer nie pamięta początku tej odpowiedzi (bufor urwany limitem).
-           Mówimy o tym wprost — pokazanie samego dalszego ciągu wyglądałoby
+           Mówimy o tym wprost – pokazanie samego dalszego ciągu wyglądałoby
            jak odpowiedź, która zaczyna się w połowie zdania. */
         if (typ === 'luka') { acc += t('bieg.luka') + '\n\n'; schedulePaint(); continue; }
         try {
@@ -1989,7 +1989,7 @@ async function streamOnce(conv, opcje = {}) {
           const d = json.choices?.[0]?.delta || {};
           /* Powód zakończenia. „length" znaczy: model NIE skończył zdania,
              tylko wyczerpał budżet tokenów. Przez długi czas nikt tego nie
-             czytał i odpowiedź urywała się w pół adresu — Marcin dostał plan
+             czytał i odpowiedź urywała się w pół adresu – Marcin dostał plan
              Majorki kończący się na „…wynajem-samochodu". */
           const powod = json.choices?.[0]?.finish_reason;
           if (powod) lastFinish = powod;
@@ -2004,11 +2004,11 @@ async function streamOnce(conv, opcje = {}) {
             acc += delta;
             schedulePaint();
           }
-        } catch { /* niepełny fragment — pomijamy */ }
+        } catch { /* niepełny fragment – pomijamy */ }
       }
     };
 
-    /* Pętla przeżywania. Zerwane połączenie NIE jest tu błędem — jest
+    /* Pętla przeżywania. Zerwane połączenie NIE jest tu błędem – jest
        normalnym stanem telefonu, który zgasił ekran. Wracamy do biegu od
        ostatniego numeru; poddajemy się dopiero, gdy serwer przestaje o nim
        wiedzieć albo gdy nie da się wrócić po kilku próbach. */
@@ -2036,7 +2036,7 @@ async function streamOnce(conv, opcje = {}) {
       // Strumień się skończył, a serwer nie powiedział „koniec”. Wracamy.
       if (++proby > BIEG_PROB) {
         if (rozlaczone) throw new Error(t('bieg.zerwane'));
-        break;                       // serwer bez biegów — kończymy po staremu
+        break;                       // serwer bez biegów – kończymy po staremu
       }
       await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
       const od = (biegBiezacy?.ostatnie ?? -1) + 1;
@@ -2046,11 +2046,11 @@ async function streamOnce(conv, opcje = {}) {
           { signal: abortController.signal });
       } catch (err) {
         if (abortController.signal.aborted) throw err;
-        continue;                    // sieci nadal nie ma — próbujemy dalej
+        continue;                    // sieci nadal nie ma – próbujemy dalej
       }
       /* 404 = serwer już nie pamięta tego biegu. Przy podpięciu po odświeżeniu
          to zwykły koniec (odpowiedź wylądowała w rozmowie), przy zerwaniu
-         w locie — utrata. W obu razach nie ma czego dalej czytać. */
+         w locie – utrata. W obu razach nie ma czego dalej czytać. */
       if (!wrot.ok) break;
       res = wrot;
     }
@@ -2059,15 +2059,15 @@ async function streamOnce(conv, opcje = {}) {
     /* „Mam tę odpowiedź." Bez tego serwer po dwudziestu sekundach dopisze ją
        do rozmowy jeszcze raz, bo z jego strony wygląda to jak odpowiedź, po
        którą nikt nie przyszedł. Zgadywanie po tym, czy gniazdo było otwarte,
-       już próbowaliśmy — myliło się w obie strony. */
+       już próbowaliśmy – myliło się w obie strony. */
     potwierdzOdbior(biegId);
     if (bladBiegu) {
-      // Napisany już fragment idzie razem z błędem — wyżej trafi do rozmowy.
+      // Napisany już fragment idzie razem z błędem – wyżej trafi do rozmowy.
       const e = new Error(bladBiegu);
       e.partial = rozdzielMyslenie(acc).tresc;
       throw e;
     }
-    // `<think>` w treści to myślenie, nie odpowiedź — i nie wolno z niego
+    // `<think>` w treści to myślenie, nie odpowiedź – i nie wolno z niego
     // wyławiać znaczników narzędzi.
     {
       const r = rozdzielMyslenie(acc);
@@ -2100,7 +2100,7 @@ async function streamOnce(conv, opcje = {}) {
 }
 
 /* Powrót do odpowiedzi, która powstawała, gdy strona była zamknięta.
-   Wywoływane raz, przy starcie. Nie pyta o nic modelu — podpina się do tego,
+   Wywoływane raz, przy starcie. Nie pyta o nic modelu – podpina się do tego,
    co serwer już policzył albo właśnie liczy. */
 async function wznowBieg() {
   let zapis = null;
@@ -2112,11 +2112,11 @@ async function wznowBieg() {
     const r = await fetch('/api/chat/biegi');
     if (!r.ok) return;
     dane = await r.json();
-  } catch { return; }                 // serwer offline — wznowienie poczeka
+  } catch { return; }                 // serwer offline – wznowienie poczeka
 
   const b = (dane.biegi || []).find((x) => x.id === zapis.id);
   /* Bieg skończył się, gdy nas nie było, a serwer zapisał już odpowiedź do
-     rozmowy sam (lib/biegi.js) — nie ma czego dociągać. Skończony, ale jeszcze
+     rozmowy sam (lib/biegi.js) – nie ma czego dociągać. Skończony, ale jeszcze
      NIE zapisany (powrót do 20 s po końcu): podpinamy się i odbieramy całość.
      Dawniej na ekranie zostawało wtedy samo pytanie (zespół IT, runda 4). */
   if (!b || (!b.trwa && b.zapisany)) {
@@ -2127,7 +2127,7 @@ async function wznowBieg() {
 
   const conv = zapis.convId && activeId === zapis.convId ? activeConversation : null;
   if (!conv) {
-    // Rozmowa z biegiem nie jest tą otwartą — przełączamy się na nią.
+    // Rozmowa z biegiem nie jest tą otwartą – przełączamy się na nią.
     if (!zapis.convId) { zapamietajBieg(null); return; }
     await selectConversation(zapis.convId);
     if (!activeConversation) { zapamietajBieg(null); return; }
@@ -2135,7 +2135,7 @@ async function wznowBieg() {
   const cel = activeConversation;
   if (!cel) { zapamietajBieg(null); return; }
   /* Od zera, nie od zapamiętanego numeru. Po przeładowaniu ekran jest pusty,
-     więc potrzebujemy CAŁEJ odpowiedzi — wznowienie od połowy pokazałoby
+     więc potrzebujemy CAŁEJ odpowiedzi – wznowienie od połowy pokazałoby
      wypowiedź zaczynającą się w środku zdania. Numer w zapisie służy tylko
      wznowieniu bez przeładowania (zerwane Wi-Fi), gdzie początek już jest
      narysowany, i tam siedzi w pamięci, nie w localStorage. */
@@ -2153,7 +2153,7 @@ let lastFinish = '';
  *
  *  Marcin: „Wydaje mi się, że odpowiedź na końcu jest urwana. Nie chciałbym
  *  żeby odpowiedzi były urwane." Plan Majorki kończył się w połowie adresu
- *  źródła — model wyczerpał `max_tokens` na środku zdania, a Cosmos pokazywał
+ *  źródła – model wyczerpał `max_tokens` na środku zdania, a Cosmos pokazywał
  *  ten kikut jak gotową odpowiedź.
  *
  *  Nie pytamy o odpowiedź od nowa: to kosztuje drugie tyle tokenów i daje
@@ -2171,7 +2171,7 @@ async function dokoncz(conv, tekst) {
       dodatkowe: [
         { role: 'assistant', content: pelny },
         { role: 'user', content: 'Twoja odpowiedź urwała się, bo skończył się '
-          + 'budżet długości — nie dlatego, że skończyłeś. Kontynuuj DOKŁADNIE '
+          + 'budżet długości – nie dlatego, że skończyłeś. Kontynuuj DOKŁADNIE '
           + 'od miejsca, w którym przerwałeś: bez powtarzania napisanego, bez '
           + 'wstępu, bez przepraszania. Jeśli urwało się w połowie słowa albo '
           + 'adresu, dokończ to słowo. Doprowadź odpowiedź do końca.' },
@@ -2179,13 +2179,13 @@ async function dokoncz(conv, tekst) {
     });
     if (!ciag.trim()) break;
     // Bez spacji: ciąg dalszy potrafi zacząć się w środku wyrazu. A często
-    // zaczyna od powtórzenia ostatnich słów — tę zakładkę zdejmujemy.
+    // zaczyna od powtórzenia ostatnich słów – tę zakładkę zdejmujemy.
     pelny = doklejBezZakladki(pelny, ciag);
   }
   return pelny;
 }
 
-// Tok myślenia z ostatniej tury — awaryjne źródło treści, gdy `content` był pusty.
+// Tok myślenia z ostatniej tury – awaryjne źródło treści, gdy `content` był pusty.
 let lastReasoning = '';
 // Tok myślenia towarzyszący normalnej odpowiedzi. Trzymamy go przy wiadomości,
 // żeby nie znikał po przerysowaniu listy, ale NIE wraca do modelu:
@@ -2203,7 +2203,7 @@ async function webSearch(query) {
       return t('search.none', { q: query });
     }
     // Treść strony (gdy serwer zdążył ją pobrać) jest tym, z czego model
-    // faktycznie wyczyta odpowiedź — zajawka to zwykle sam opis serwisu.
+    // faktycznie wyczyta odpowiedź – zajawka to zwykle sam opis serwisu.
     const lines = data.results.map((r, i) =>
       `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
       + (r.text ? `\n   TREŚĆ STRONY:\n   ${r.text.replace(/\n/g, '\n   ')}` : ''));
@@ -2215,7 +2215,7 @@ async function webSearch(query) {
 
 /* Znaczniki modelu i wynik archiwum → kontekst: `public/protokol.js`.
    Czysty tekst, bez DOM-u i bez stanu, więc daje się sprawdzić w Node
-   — patrz nagłówek tamtego pliku. */
+   – patrz nagłówek tamtego pliku. */
 const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
@@ -2223,13 +2223,13 @@ const {
   scalRozmowy, granicaPonowienia, jednostkiNaGlos,
 } = utworzProtokol();
 
-/* Wynik narzędzia wraca do modelu jako wiadomość użytkownika — bo tak wygląda
-   protokół rozmowy — ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
+/* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
+   protokół rozmowy – ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
    jedno od drugiego na ekranie, to flaga `search`: z nią mamy zwijany blok
    „Przeszukuję…", bez niej zwykły dymek z pytaniem, którego nikt nie zadał.
    Zapomniano jej raz i wyglądało to jak rozmowa wznawiająca się sama.
    Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
-// Które narzędzie właśnie pracuje — żeby wynik archiwum nie był podpisany „Wyniki wyszukiwania".
+// Które narzędzie właśnie pracuje – żeby wynik archiwum nie był podpisany „Wyniki wyszukiwania".
 let narzedzieTeraz = '';
 function dodajWynikNarzedzia(conv, tresc, etykieta) {
   conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta, narzedzie: narzedzieTeraz || undefined });
@@ -2237,7 +2237,7 @@ function dodajWynikNarzedzia(conv, tresc, etykieta) {
   renderMessages();
 }
 
-/* Rejestr narzędzi. Budowany RAZ, przy wczytaniu skryptu — zależności są
+/* Rejestr narzędzi. Budowany RAZ, przy wczytaniu skryptu – zależności są
    stałe, a lista musi być ta sama dla każdej tury. Wszystko, co narzędzia
    potrafią, siedzi w `public/narzedzia.js`; tutaj zostaje sama pętla. */
 const NARZEDZIA = utworzNarzedzia({
@@ -2278,11 +2278,11 @@ const NARZEDZIA = utworzNarzedzia({
   },
 });
 
-/** Domknij turę odpowiedzią modelu — JEDNO miejsce dla wszystkich narzędzi.
+/** Domknij turę odpowiedzią modelu – JEDNO miejsce dla wszystkich narzędzi.
  *
  *  Ta logika była wcześniej przepisana trzy razy: przy wyczerpaniu limitu
  *  wyszukiwań, przy wyczerpaniu limitu zdjęć i na końcu pętli. Dwie kopie
- *  ustawiały `samoMyslenie`, trzecia nie — więc model rozumujący, któremu
+ *  ustawiały `samoMyslenie`, trzecia nie – więc model rozumujący, któremu
  *  budżet tokenów poszedł w całości na myślenie, po zdjęciach pokazywał
  *  surowe rozumowanie zamiast komunikatu. Nikt tego nie zgłosił, bo trzeba
  *  trafić w rzadki zbieg okoliczności; kopiowanie kodu samo w sobie
@@ -2292,17 +2292,17 @@ const NARZEDZIA = utworzNarzedzia({
  *  @param {string} surowe treść od modelu (może być urwana)
  *  @returns {string} tekst do wypowiedzenia głosem albo pusty
  */
-/* JEDNO WEJŚCIE NA TEKST MODELU — i jedna zapora przed powtórką.
+/* JEDNO WEJŚCIE NA TEKST MODELU – i jedna zapora przed powtórką.
 
    Marcin dostał w jednej turze TRZY kopie planu Majorki. Model po każdym
    wyniku narzędzia przepisywał całość od nowa, a każda runda to osobna
    wiadomość w rozmowie. Instrukcja „dopisz tylko to, czego jeszcze nie
-   napisałeś" pomaga, ale nie jest gwarancją — model bywa uparty, a użytkownik
+   napisałeś" pomaga, ale nie jest gwarancją – model bywa uparty, a użytkownik
    ogląda skutek.
 
    Dlatego przepisana odpowiedź nie ląduje obok poprzedniej, tylko JĄ
    ZASTĘPUJE. Nowa wersja jest z definicji pełniejsza (model zna już wynik
-   narzędzia), więc podmiana niczego nie gubi — a rozmowa zostaje czytelna.
+   narzędzia), więc podmiana niczego nie gubi – a rozmowa zostaje czytelna.
    Szukamy tylko wśród wypowiedzi z BIEŻĄCEJ tury: powtórzenie planu sprzed
    pół godziny jest odpowiedzią na nowe pytanie i ma prawo zostać. */
 function wstawTekstModelu(conv, tresc, odKtorej = 0) {
@@ -2322,18 +2322,18 @@ function wstawTekstModelu(conv, tresc, odKtorej = 0) {
 }
 
 async function domknijOdpowiedz(conv, surowe) {
-  // Urwane w pół zdania to nie jest gotowa odpowiedź — dokańczamy.
+  // Urwane w pół zdania to nie jest gotowa odpowiedź – dokańczamy.
   const pelne = await dokoncz(conv, surowe);
   /* Akcję szukamy w SUROWYM tekście: `stripSearchMarker` czyści też [AKCJA:],
-     więc po nim karta do zatwierdzenia nie pojawiała się nigdy — model pisał
+     więc po nim karta do zatwierdzenia nie pojawiała się nigdy – model pisał
      „zapamiętam", a nic się nie działo. */
   const akcja = pelne.match(ACTION_RE);
   const tresc = stripSearchMarker(pelne);
   /* Pusta treść przy modelu rozumującym znaczy „budżet tokenów poszedł
      w całości na myślenie". Kiedyś wyrzucaliśmy wtedy surowy tok myślenia
-     jako odpowiedź — gorsze niż nic: rozumowanie jest po angielsku, urwane
+     jako odpowiedź – gorsze niż nic: rozumowanie jest po angielsku, urwane
      i pokazuje deliberację, której użytkownik widzieć nie powinien. */
-  /* Pusto, ale tura już coś pokazała (zdjęcia, wstęp przed narzędziem) —
+  /* Pusto, ale tura już coś pokazała (zdjęcia, wstęp przed narzędziem) –
      sami każemy modelowi „napisz domknięcie albo nic", więc „nic" jest
      poprawne i nie zasługuje na dopisek „(pusta odpowiedź modelu)". */
   if (!tresc && !akcja) {
@@ -2354,7 +2354,7 @@ async function domknijOdpowiedz(conv, surowe) {
   const budzetPoCichu = !tresc && !lastReasoning && lastFinish === 'length';
   const finalText = samoMyslenie ? t('budgetSpentOnThinking')
     : budzetPoCichu ? t('budgetSpentSilently') : (tresc || t('emptyReply'));
-  // Dostawca uciął odpowiedź filtrem treści — wygląda jak zwykła, więc mówimy to wprost.
+  // Dostawca uciął odpowiedź filtrem treści – wygląda jak zwykła, więc mówimy to wprost.
   if (lastFinish === 'content_filter') lastModelNote = [lastModelNote, t('model.filtr')].filter(Boolean).join(' ');
 
   if (akcja) {
@@ -2380,12 +2380,12 @@ async function runGeneration(conv, podpiecie = null) {
 
   const MAX_SEARCHES = 3;
   /* Pamięć jednej tury. Model potrafi wywołać trzy razy DOKŁADNIE ten sam
-     filtr i trzy razy dostać to samo zero — widać to było w rozmowie
+     filtr i trzy razy dostać to samo zero – widać to było w rozmowie
      o Mazurach, gdzie „Przeszukuję Twoje archiwum…" pojawiło się kilka razy
      pod rząd bez zmiany parametrów. Limit głębokości tego nie łapie, bo
      formalnie to różne kroki. To samo dotyczy zdjęć. */
   const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false, grafikiOdlozone: new Set() };
-  // Od której wiadomości zaczyna się ta tura — dalej nie szuka zapora powtórek.
+  // Od której wiadomości zaczyna się ta tura – dalej nie szuka zapora powtórek.
   conv.__turaOd = conv.messages.length;
   znakTury = {
     silnik: endpoint, model: currentModel() || '',
@@ -2410,12 +2410,12 @@ async function runGeneration(conv, podpiecie = null) {
       }
 
       if (!uzyte) {
-        /* Model napisał gotową odpowiedź bez odłożonych zdjęć — dokładamy je
+        /* Model napisał gotową odpowiedź bez odłożonych zdjęć – dokładamy je
            sami pod nią, zamiast je zgubić. */
         const zapomniane = [...stan.grafikiOdlozone].filter((q) => !stan.grafiki.has(bezOgonkowKlient(q)));
         if (zapomniane.length && !ostatnia) {
-          /* Znaczniki stawiamy sami — pod akapitami, które mówią o danym
-             miejscu — i puszczamy przez narzędzie zdjęć. Ono odtwarza układ:
+          /* Znaczniki stawiamy sami – pod akapitami, które mówią o danym
+             miejscu – i puszczamy przez narzędzie zdjęć. Ono odtwarza układ:
              kawałek odpowiedzi, siatka pod nim, kolejny kawałek. */
           narzedzieTeraz = 'grafiki';
           const zZnacznikami = wstawZnacznikiZdjec(stripSearchMarker(acc), zapomniane.slice(0, 10));
@@ -2423,7 +2423,7 @@ async function runGeneration(conv, podpiecie = null) {
           const przed = conv.messages.length;
           await g.wykonaj({ acc: zZnacznikami, dop: g.dopasuj(zZnacznikami), conv, depth, ostatnia, przed: '', stan });
           stan.grafikiOdlozone.clear();
-          // Zdjęć nie znaleziono — narzędzie nie wstawiło tekstu. Odpowiedź musi się pokazać i tak.
+          // Zdjęć nie znaleziono – narzędzie nie wstawiło tekstu. Odpowiedź musi się pokazać i tak.
           const tekstJest = conv.messages.slice(przed).some((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status);
           finalText = tekstJest ? stripSearchMarker(acc) : await domknijOdpowiedz(conv, acc);
           break;
@@ -2433,15 +2433,15 @@ async function runGeneration(conv, podpiecie = null) {
       }
 
       /* Limit rund wyczerpany, a model wciąż sięga po narzędzie. Zamiast
-         pokazać użytkownikowi surowy znacznik — a tak działo się kiedyś —
+         pokazać użytkownikowi surowy znacznik – a tak działo się kiedyś –
          mówimy modelowi, że ma dokończyć tekstem, i domykamy turę tą samą
          drogą co zawsze. */
       if (ostatnia && !uzyte.zawszeDozwolone) {
-        /* Każde narzędzie dostaje komunikat o limicie — także archiwum, plan
+        /* Każde narzędzie dostaje komunikat o limicie – także archiwum, plan
            i kod. Bez niego tura kończyła się samą zapowiedzią („Teraz jeszcze
            Twoje archiwum.") i ciszą. */
         const limit = uzyte.gdyLimit ? uzyte.gdyLimit(dop) : {
-          tresc: 'LIMIT NARZĘDZI W TEJ TURZE WYCZERPANY — nie używaj już żadnych znaczników. '
+          tresc: 'LIMIT NARZĘDZI W TEJ TURZE WYCZERPANY – nie używaj już żadnych znaczników. '
             + 'Dokończ teraz odpowiedź tekstem na podstawie tego, co już masz, a jeśli '
             + 'czegoś nie zdążyłeś sprawdzić, powiedz to jednym zdaniem.',
           etykieta: uzyte.nazwa,
@@ -2453,26 +2453,26 @@ async function runGeneration(conv, podpiecie = null) {
         break;
       }
 
-      /* DWA NARZĘDZIA W JEDNEJ ODPOWIEDZI — a wolno było tylko jedno.
+      /* DWA NARZĘDZIA W JEDNEJ ODPOWIEDZI – a wolno było tylko jedno.
          Marcin poprosił o plan Majorki „ze zdjęciami i grafikami". Model
          napisał plan, a pod nim [PLAN: …] ORAZ sześć [GRAFIKA: …]. Kaskada
-         brała pierwsze pasujące narzędzie z listy — czyli plan — a wszystkie
+         brała pierwsze pasujące narzędzie z listy – czyli plan – a wszystkie
          pozostałe znaczniki czyściła z tekstu i wyrzucała. Prośba o zdjęcia
          znikała bez śladu. Model, dostawszy dane planu, pisał całość od nowa
          (znowu ze znacznikami), plan znowu wygrywał, zdjęcia znowu przepadały
-         — i tak aż do wyczerpania rund. Efekt: trzy kopie planu na ekranie
+         – i tak aż do wyczerpania rund. Efekt: trzy kopie planu na ekranie
          i ani jednego zdjęcia.
 
          Zdjęcia dokładamy więc po narzędziu, które wygrało. Wtedy to ONE
          odtwarzają układ tekstu (kawałek planu, siatka pod nim), więc
-         zwycięzcy odbieramy emisję tekstu — inaczej plan stałby na ekranie
+         zwycięzcy odbieramy emisję tekstu – inaczej plan stałby na ekranie
          dwa razy. */
       const grafikiTez = uzyte.nazwa !== 'grafiki'
         ? NARZEDZIA.find((n) => n.nazwa === 'grafiki')
         : null;
       const dopGrafiki = grafikiTez && grafikiTez.dopasuj(acc);
       const przedTekst = stripSearchMarker(acc.replace(dop[0], ''));
-      // Szkic przy odłożonych zdjęciach nie idzie na ekran — patrz niżej.
+      // Szkic przy odłożonych zdjęciach nie idzie na ekran – patrz niżej.
       const przedDoPokazania = dopGrafiki ? '' : przedTekst;
 
       narzedzieTeraz = uzyte.nazwa;
@@ -2482,7 +2482,7 @@ async function runGeneration(conv, podpiecie = null) {
         conv,
         depth,
         ostatnia,
-        // Tekst modelu sprzed znacznika — WSZYSTKIE znaczniki wyczyszczone.
+        // Tekst modelu sprzed znacznika – WSZYSTKIE znaczniki wyczyszczone.
         przed: przedDoPokazania,
         stan,
       });
@@ -2495,7 +2495,7 @@ async function runGeneration(conv, podpiecie = null) {
       /* Zdjęcia ODKŁADAMY do gotowej odpowiedzi. Rozłożone pod szkicem
          sprzed danych dawały dwa sprzeczne plany na ekranie: szkic z „6:40"
          pocięty zdjęciami i właściwy plan z „6:52" pod spodem. Model dostaje
-         prośbę, żeby postawił znaczniki zdjęć pod punktami gotowej wersji —
+         prośbę, żeby postawił znaczniki zdjęć pod punktami gotowej wersji –
          a gdy zapomni, dokładamy je sami na końcu tury. */
       if (dopGrafiki) {
         const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
@@ -2505,7 +2505,7 @@ async function runGeneration(conv, podpiecie = null) {
         narzedzieTeraz = 'grafiki';
         dodajWynikNarzedzia(conv,
           'ZDJĘCIA JESZCZE NIE POKAZANE. Napisz teraz gotową odpowiedź na podstawie danych powyżej '
-          + 'i postaw [GRAFIKA: …] pod właściwymi punktami — tak jak w szkicu, ale w ostatecznej wersji. '
+          + 'i postaw [GRAFIKA: …] pod właściwymi punktami – tak jak w szkicu, ale w ostatecznej wersji. '
           + 'Nie powtarzaj szkicu.',
           t('chat.photosQuery'));
       }
@@ -2513,7 +2513,7 @@ async function runGeneration(conv, podpiecie = null) {
   } catch (err) {
     if (err.name === 'AbortError') {
       /* Przerwana odpowiedź też przechodzi przez czyszczenie znaczników.
-         To jedyna droga, którą tekst z modelu trafiał na ekran surowy —
+         To jedyna droga, którą tekst z modelu trafiał na ekran surowy –
          a przerywa się najczęściej wtedy, gdy coś trwa za długo, czyli
          dokładnie w trakcie sięgania po narzędzie. */
       const czesc = stripSearchMarker(err.partial);
@@ -2523,7 +2523,7 @@ async function runGeneration(conv, podpiecie = null) {
       }
     } else {
       /* Błąd w połowie odpowiedzi (dostawca przeciążony, zerwane połączenie):
-         napisany fragment zostaje, a pod nim — co się stało. Dawniej znikał
+         napisany fragment zostaje, a pod nim – co się stało. Dawniej znikał
          razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
       const czesc = stripSearchMarker(err.partial || '');
       if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
@@ -2537,28 +2537,28 @@ async function runGeneration(conv, podpiecie = null) {
     znakTury = null;
     setGeneratingUI(false);
     /* Zapis bez zwłoki. Przeglądarka właśnie potwierdziła serwerowi, że ma
-       odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie —
+       odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie –
        te 400 ms zwłoki byłyby jedynym momentem, w którym gotowa odpowiedź
        nie istnieje nigdzie poza pamięcią karty. */
     saveConversations(true);
     /* Koniec odpowiedzi nie ściąga na dół kogoś, kto przewinął do początku,
-       żeby czytać — tak było: 5600 px lotu w dół w chwili zakończenia. */
+       żeby czytać – tak było: 5600 px lotu w dół w chwili zakończenia. */
     renderMessages({ przewin: sledzeDol });
     if (voiceMode) {
       if (finalText) {
         el.voiceAnswer.textContent = stripForSpeech(finalText);
         setVoiceState('speaking');
-        // Zapamiętujemy, CO powiedzieliśmy — askVoice odrzuci to, gdyby
+        // Zapamiętujemy, CO powiedzieliśmy – askVoice odrzuci to, gdyby
         // wróciło jako „pytanie" z mikrofonu.
         voiceOstatniaOdpowiedz = stripForSpeech(finalText);
         await speakText(finalText);
       }
-      if (voiceMode) startQueryListening(); // rozmowa trwa — pytanie uzupełniające bez wake word
+      if (voiceMode) startQueryListening(); // rozmowa trwa – pytanie uzupełniające bez wake word
     } else {
       if (settings.speak && finalText) speakText(finalText);
       el.input.focus();
       /* Kolejka rusza dopiero TU, po `isGenerating = false` i po odmalowaniu
-         ekranu. W trybie głosowym jej nie ruszamy — tam rozmowa idzie
+         ekranu. W trybie głosowym jej nie ruszamy – tam rozmowa idzie
          mikrofonem i dorzucanie pisanych wiadomości mieszałoby dwa kanały. */
       ruszKolejke();
     }
@@ -2591,12 +2591,12 @@ function setGeneratingUI(generating) {
 /** Pokaż „dopracuj prompt", gdy jest co dopracowywać.
  *
  * Przy krótkich wiadomościach („dzięki", „tak") przepisywanie nie ma sensu,
- * a przycisk tylko zaśmieca pole — stąd próg długości.
+ * a przycisk tylko zaśmieca pole – stąd próg długości.
  */
 function updatePolishButton() {
   const btn = $('polish-btn');
   if (!btn) return;
-  // Po dopracowaniu przycisk to „przywróć moją wersję" — nie może zniknąć
+  // Po dopracowaniu przycisk to „przywróć moją wersję" – nie może zniknąć
   // tylko dlatego, że model oddał krótszy tekst.
   btn.hidden = isGenerating || (!polishPrevious && el.input.value.trim().length < 25);
 }
@@ -2608,7 +2608,7 @@ async function polishPrompt() {
   const raw = el.input.value.trim();
   if (!raw || btn.disabled) return;
 
-  // Drugie kliknięcie po dopracowaniu przywraca oryginał — nikt nie chce
+  // Drugie kliknięcie po dopracowaniu przywraca oryginał – nikt nie chce
   // stracić własnych słów przez jedno kliknięcie.
   if (polishPrevious && raw !== polishPrevious) {
     el.input.value = polishPrevious;
@@ -2644,7 +2644,7 @@ async function polishPrompt() {
 
 function updateSendButton() {
   const empty = el.input.value.trim() === '' && pendingImages.length === 0;
-  /* `isGenerating` NIE blokuje już wysyłania — wiadomość idzie do kolejki.
+  /* `isGenerating` NIE blokuje już wysyłania – wiadomość idzie do kolejki.
      Sam przycisk i tak jest w tym czasie schowany na rzecz „zatrzymaj"
      (patrz `setGeneratingUI`), ale Enter w polu działa dalej i to jest sedno:
      myśl, która przyszła w trakcie odpowiedzi, ma się dać zapisać od razu. */
@@ -2708,18 +2708,18 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
 });
 
 // ----------------------------------------------------------------
-// Zmysły: mowa (TTS) — Piper przez senses, fallback: głos systemowy
+// Zmysły: mowa (TTS) – Piper przez senses, fallback: głos systemowy
 // ----------------------------------------------------------------
 
-/** Tekst do czytania na głos — to, co brzmi jak mowa, a nie jak Markdown.
+/** Tekst do czytania na głos – to, co brzmi jak mowa, a nie jak Markdown.
  *  Lektor czytał dotąd adresy stron znak po znaku, nazwy emoji, rozsypane
- *  tabele („Przysłona Czas ISO — — —") i urywał w pół zdania na 1200 znaku. */
+ *  tabele („Przysłona Czas ISO – – –") i urywał w pół zdania na 1200 znaku. */
 function stripForSpeech(text) {
   let t = String(text || '');
   if (typeof rozdzielMyslenie === 'function') t = rozdzielMyslenie(t).tresc;   // <think> się nie czyta
   if (typeof stripSearchMarker === 'function') t = stripSearchMarker(t);   // wszystkie znaczniki narzędzi
   t = t
-    // Sekcja źródeł to linki dla oka — lektor czytał je po kolei, adres po adresie.
+    // Sekcja źródeł to linki dla oka – lektor czytał je po kolei, adres po adresie.
     .replace(/\n[ \t]*(?:\*\*)?(?:Źródła|Zrodla|Sources)(?:\*\*)?:?[ \t]*\n[\s\S]*$/i, '')
     .replace(/【[^】]*】/g, '')                                  // przypisy w stylu 【1†L1-L4】
     .replace(/\[\d+(?:[,–-]\s*\d+)*\](?!\()/g, '')              // przypisy [1], [2–3]
@@ -2734,7 +2734,7 @@ function stripForSpeech(text) {
     .replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]+/gm, '')           // punktory list
     .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
     .replace(/[*_#>|~]/g, '');
-  /* Nagłówek, punkt listy i wiersz tabeli to osobne myśli — bez kropki lektor
+  /* Nagłówek, punkt listy i wiersz tabeli to osobne myśli – bez kropki lektor
      czytał „Plan Świt o 6:41" jednym tchem. Każda linia bez znaku końca
      dostaje kropkę, dopiero potem sklejamy białe znaki. */
   t = t.split(/\n+/).map((l) => l.trim()).filter(Boolean)
@@ -2746,7 +2746,7 @@ function stripForSpeech(text) {
   // „20 °C” → „20 stopni Celsjusza”; lektor czytał „degrisy” (public/protokol.js).
   t = jednostkiNaGlos(t, getLang());
   /* Czytamy porcjami (porcjeGlosu), więc długość nie jest problemem techniczną
-     — ale pięciominutowego monologu nikt nie słucha. Ucinamy na końcu zdania
+     – ale pięciominutowego monologu nikt nie słucha. Ucinamy na końcu zdania
      i MÓWIMY, że reszta jest na ekranie; dawniej cięcie było bez słowa. */
   const LIMIT_CZYTANIA = 2400;
   if (t.length > LIMIT_CZYTANIA) {
@@ -2760,13 +2760,13 @@ function stripForSpeech(text) {
 
 let currentAudio = null;
 
-// Zwraca Promise kończącą się wraz z końcem mówienia —
+// Zwraca Promise kończącą się wraz z końcem mówienia –
 // tryb głosowy czeka, zanim znów zacznie słuchać (brak sprzężenia).
 /** Odczytaj odpowiedź jako JSON, nie wywracając się na tym, co JSON-em nie jest.
  *
  * Gdy usługa zmysłów rzuci wyjątkiem, serwer potrafi oddać zwykły tekst
  * „Internal Server Error”. `res.json()` mówił wtedy „Unexpected token 'I' …
- * is not valid JSON” — komunikat, z którego użytkownik nie dowiaduje się
+ * is not valid JSON” – komunikat, z którego użytkownik nie dowiaduje się
  * niczego o prawdziwej przyczynie. Tutaj oddajemy treść odpowiedzi.
  */
 async function readJsonSafe(res) {
@@ -2775,13 +2775,13 @@ async function readJsonSafe(res) {
     return JSON.parse(body);
   } catch {
     /* Strona błędu Cloudflare'a (502 przy restarcie, 524 po 100 s ciszy) albo
-       innego pośrednika to HTML — na ekranie lądował jako „HTTP 502 — <!DOCTYPE
+       innego pośrednika to HTML – na ekranie lądował jako „HTTP 502 – <!DOCTYPE
        html>…". Człowiekowi mówimy, co się stało. */
     if (/^\s*</.test(body) || [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527].includes(res.status)) {
       return { error: t(res.status === 524 ? 'err.bramkaCzas' : 'err.bramka', { status: res.status }) };
     }
     const short = body.trim().slice(0, 200) || `HTTP ${res.status}`;
-    return { error: `HTTP ${res.status} — ${short}` };
+    return { error: `HTTP ${res.status} – ${short}` };
   }
 }
 
@@ -2790,8 +2790,8 @@ function ttsSerwera() {
   return Boolean((senses.online && senses.caps.piper) || serverConfig.glos?.ttsChmura);
 }
 
-/** Porcje do czytania głosem z serwera. Pierwsza krótka — żeby Cosmos zaczął
- *  mówić po ułamku sekundy, a nie po wygenerowaniu całej odpowiedzi — kolejne
+/** Porcje do czytania głosem z serwera. Pierwsza krótka – żeby Cosmos zaczął
+ *  mówić po ułamku sekundy, a nie po wygenerowaniu całej odpowiedzi – kolejne
  *  dłuższe, bo tam czas generowania chowa się pod czytaniem poprzedniej. */
 function porcjeGlosu(tekst) {
   const zdania = splitForSpeech(tekst, 220);
@@ -2806,7 +2806,7 @@ function porcjeGlosu(tekst) {
   return porcje;
 }
 
-/** Zagraj nagranie i poczekaj na koniec — także gdy ktoś je przerwie.
+/** Zagraj nagranie i poczekaj na koniec – także gdy ktoś je przerwie.
  *  Bez `onpause` przerwane czytanie zostawiało wiszącą obietnicę, a tryb
  *  głosowy czekał na koniec wypowiedzi, która już nigdy się nie skończy. */
 function grajNagranie(blob) {
@@ -2832,7 +2832,7 @@ async function speakText(text) {
   // 1. Głos z serwera: ElevenLabs / OpenAI / Piper (kolejność ustawia serwer).
   if (ttsSerwera()) {
     const porcje = porcjeGlosu(clean);
-    /* Przerwanie ma działać też wtedy, gdy nagranie jeszcze się pobiera —
+    /* Przerwanie ma działać też wtedy, gdy nagranie jeszcze się pobiera –
        dotknięcie kuli w „MÓWIĘ…" nie może czekać na odpowiedź serwera. */
     const przerwij = new AbortController();
     ttsPrzerwij = przerwij;
@@ -2848,7 +2848,7 @@ async function speakText(text) {
       let blob;
       try { blob = await nastepna; } catch { break; }
       if (speakSerial !== mine) return;
-      // Następną porcję pobieramy, zanim ta się skończy — bez przerw między zdaniami.
+      // Następną porcję pobieramy, zanim ta się skończy – bez przerw między zdaniami.
       if (i + 1 < porcje.length) { nastepna = pobierz(porcje[i + 1]); nastepna.catch(() => {}); }
       await grajNagranie(blob);
       zagrane++;
@@ -2856,7 +2856,7 @@ async function speakText(text) {
     }
     if (speakSerial !== mine) return;   // przerwane w trakcie pobierania: bez głosu zastępczego
     if (zagrane === porcje.length) return;
-    if (zagrane > 0) return;          // urwało się w połowie — nie czytamy od nowa innym głosem
+    if (zagrane > 0) return;          // urwało się w połowie – nie czytamy od nowa innym głosem
   }
 
   // 2. Głos systemowy przeglądarki
@@ -2877,13 +2877,13 @@ async function speakText(text) {
   }
 }
 
-// Znacznik trwającej wypowiedzi — po przerwaniu kolejne kawałki mają nie ruszyć.
+// Znacznik trwającej wypowiedzi – po przerwaniu kolejne kawałki mają nie ruszyć.
 let speakSerial = null;
 
 /** Potnij tekst na kawałki mieszczące się w jednej wypowiedzi.
  *
  * Chrome przerywa `speechSynthesis` po kilkunastu sekundach i reszta zdania
- * przepada — dlatego czytanie na głos urywało się w połowie. Tniemy po
+ * przepada – dlatego czytanie na głos urywało się w połowie. Tniemy po
  * granicach zdań, a bardzo długie zdania po przecinkach i spacjach, żeby nigdy
  * nie rozerwać słowa.
  */
@@ -2923,7 +2923,7 @@ el.ttsToggle.addEventListener('click', () => {
 });
 
 // ----------------------------------------------------------------
-// Zmysły: słuch (STT) — Whisper przez senses, fallback: przeglądarka
+// Zmysły: słuch (STT) – Whisper przez senses, fallback: przeglądarka
 // ----------------------------------------------------------------
 
 // ----------------------------------------------------------------
@@ -2933,7 +2933,7 @@ el.ttsToggle.addEventListener('click', () => {
 // Przeglądarki udostępniają navigator.mediaDevices TYLKO w „bezpiecznym
 // kontekście": po HTTPS albo na localhost. Przy wejściu po zwykłym HTTP na
 // adres IP (typowe dla serwera na VPS w sieci Tailscale) całe API jest
-// `undefined` — nie zablokowane, tylko nieobecne. Bez tego sprawdzenia
+// `undefined` – nie zablokowane, tylko nieobecne. Bez tego sprawdzenia
 // użytkownik dostaje „Cannot read properties of undefined", co niczego
 // nie tłumaczy.
 
@@ -2958,7 +2958,7 @@ function setRecordingUI(on) {
 /** Ograniczenia audio z uwzględnieniem wybranego mikrofonu.
  *
  * Domyślny mikrofon systemu rzadko jest tym, którego chcemy: przy Kinekcie
- * to zwykle wbudowany mikrofon laptopa, a przy słuchawkach — dopiero co
+ * to zwykle wbudowany mikrofon laptopa, a przy słuchawkach – dopiero co
  * podłączone urządzenie. Wybór zapamiętujemy, bo zmienia się rzadko.
  */
 function audioConstraints() {
@@ -2971,7 +2971,7 @@ async function startWhisperRecording() {
   try {
     stream = await getMedia(audioConstraints());
   } catch (err) {
-    // Zapamiętany mikrofon mógł zostać odłączony — spróbuj domyślnego.
+    // Zapamiętany mikrofon mógł zostać odłączony – spróbuj domyślnego.
     if (localStorage.getItem('cosmos.micId')) {
       localStorage.removeItem('cosmos.micId');
       stream = await getMedia({ audio: true });
@@ -3017,8 +3017,8 @@ function startBrowserRecognition() {
     alert(t('dictNoStt'));
     return;
   }
-  // Chrome kończy sesję rozpoznawania sam — po pauzie w mówieniu i najpóźniej
-  // po ~60 s — mimo `continuous = true`. Wcześniej gasiliśmy wtedy nagrywanie
+  // Chrome kończy sesję rozpoznawania sam – po pauzie w mówieniu i najpóźniej
+  // po ~60 s – mimo `continuous = true`. Wcześniej gasiliśmy wtedy nagrywanie
   // i dyktowanie urywało się w połowie zdania. Teraz wznawiamy je tak długo,
   // aż użytkownik sam kliknie „stop”.
   dictationWanted = true;
@@ -3054,7 +3054,7 @@ function startBrowserRecognition() {
       }, 250);
     };
 
-    // „no-speech" i „aborted" to normalny koniec cyklu — onend wznowi nasłuch.
+    // „no-speech" i „aborted" to normalny koniec cyklu – onend wznowi nasłuch.
     // Realny błąd (brak zgody, brak sieci) kończy dyktowanie.
     rec.onerror = (e) => {
       if (e.error === 'no-speech' || e.error === 'aborted') return;
@@ -3098,7 +3098,7 @@ el.micBtn.addEventListener('click', async () => {
 });
 
 // ----------------------------------------------------------------
-// Zmysły: wzrok — zdjęcie z kamery (webcam / Kinect RGB)
+// Zmysły: wzrok – zdjęcie z kamery (webcam / Kinect RGB)
 // ----------------------------------------------------------------
 
 /** Która kamera telefonu: „user" = przednia, „environment" = tylna.
@@ -3106,15 +3106,15 @@ el.micBtn.addEventListener('click', async () => {
 let cameraFacing = localStorage.getItem('cosmos.cameraFacing') || 'environment';
 
 function videoConstraints(facing) {
-  // `ideal`, nie `exact` — na laptopie z jedną kamerą `exact` po prostu rzuca
+  // `ideal`, nie `exact` – na laptopie z jedną kamerą `exact` po prostu rzuca
   // błędem, a przy pierwszym otwarciu chcemy dostać tę jedyną, jaka jest.
   return { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: facing } } };
 }
 
-/** Weź strumień z konkretnego obiektywu — do PRZEŁĄCZANIA, nie do otwierania.
+/** Weź strumień z konkretnego obiektywu – do PRZEŁĄCZANIA, nie do otwierania.
  *
  * Przy `ideal` przeglądarka ma prawo prośbę zignorować i oddać kamerę, która
- * już działa — i właśnie dlatego przełącznik przód/tył nic nie robił. Do zmiany
+ * już działa – i właśnie dlatego przełącznik przód/tył nic nie robił. Do zmiany
  * obiektywu trzeba `exact`. Gdyby telefon nie znał `facingMode` (zdarza się przy
  * kamerach zewnętrznych i na desktopie), wybieramy kolejne urządzenie z listy.
  */
@@ -3127,7 +3127,7 @@ async function getMediaFacing(facing) {
     const devs = (await navigator.mediaDevices.enumerateDevices())
       .filter((d) => d.kind === 'videoinput');
     if (devs.length < 2) throw err;
-    // po etykiecie, a gdy jej brak (bez zgody) — po prostu następne urządzenie
+    // po etykiecie, a gdy jej brak (bez zgody) – po prostu następne urządzenie
     const wantBack = facing === 'environment';
     const byLabel = devs.find((d) => {
       const l = (d.label || '').toLowerCase();
@@ -3143,7 +3143,7 @@ async function getMediaFacing(facing) {
 
 let currentCameraId = '';
 
-/** Czy urządzenie ma więcej niż jedną kamerę — tylko wtedy przełącznik ma sens. */
+/** Czy urządzenie ma więcej niż jedną kamerę – tylko wtedy przełącznik ma sens. */
 async function hasMultipleCameras() {
   if (!mediaApiAvailable() || !navigator.mediaDevices.enumerateDevices) return false;
   try {
@@ -3168,9 +3168,9 @@ async function openCamera() {
 /** Przełącz obiektyw. NAJPIERW zwolnij stary strumień.
  *
  * Telefon obsługuje jeden obiektyw naraz. Próba otwarcia drugiego, gdy pierwszy
- * jeszcze pracuje, kończy się „Could not start video source" — i dokładnie
+ * jeszcze pracuje, kończy się „Could not start video source" – i dokładnie
  * dlatego przełącznik nie działał. Kolejność jest więc odwrotna niż podpowiada
- * ostrożność: zamykamy, otwieramy, a gdy nowy obiektyw zawiedzie — wracamy do
+ * ostrożność: zamykamy, otwieramy, a gdy nowy obiektyw zawiedzie – wracamy do
  * poprzedniego, żeby nie zostawić czarnego okna.
  */
 async function swapStream(current, next, apply) {
@@ -3214,7 +3214,7 @@ function closeCamera() {
 
 $('img-viewer-close').addEventListener('click', closeImageViewer);
 $('img-viewer-download').addEventListener('click', downloadViewedImage);
-// kliknięcie w tło zamyka; kliknięcie w sam obraz albo pasek — nie
+// kliknięcie w tło zamyka; kliknięcie w sam obraz albo pasek – nie
 $('img-viewer').addEventListener('click', (e) => {
   if (e.target === $('img-viewer')) closeImageViewer();
 });
@@ -3262,14 +3262,14 @@ async function saveShotToGallery(dataUrl) {
         data: dataUrl.split(',')[1],
       }),
     });
-  } catch { /* brak sieci — zdjęcie i tak jest w rozmowie */ }
+  } catch { /* brak sieci – zdjęcie i tak jest w rozmowie */ }
 }
 
 // ----------------------------------------------------------------
-// STUDIO — obraz (OpenAI) · dźwięk (ElevenLabs) · wideo (Seedance)
+// STUDIO – obraz (OpenAI) · dźwięk (ElevenLabs) · wideo (Seedance)
 // ----------------------------------------------------------------
 
-/** Pusty stan: ikona, zdanie i — gdy jest dokąd iść — przycisk.
+/** Pusty stan: ikona, zdanie i – gdy jest dokąd iść – przycisk.
  *  Sam szary tekst wyglądał jak błąd ładowania, a nie jak „jeszcze nic tu nie ma". */
 function pustyStan(ikona, tekst, przycisk = '') {
   return `<div class="pusty-stan"><span class="ik ${ikona}" aria-hidden="true"></span>`
@@ -3280,7 +3280,7 @@ function pustyStan(ikona, tekst, przycisk = '') {
 
 /* Płatne generowanie: drugie kliknięcie w trakcie było drugim płatnym
    żądaniem u dostawcy (zmierzone: dwa kliknięcia = dwa generowania, także
-   wideo — najdroższe). Przycisk jest zajęty, dopóki żądanie trwa. */
+   wideo – najdroższe). Przycisk jest zajęty, dopóki żądanie trwa. */
 function jedenNaRaz(fn) {
   return async function (...argumenty) {
     if (this.disabled || this.getAttribute('aria-busy') === 'true') return undefined;
@@ -3293,22 +3293,22 @@ function jedenNaRaz(fn) {
   };
 }
 
-/* Widok Studia (obraz, storyboard, edycja, dźwięk, wideo) — public/studio-widok.js. */
+/* Widok Studia (obraz, storyboard, edycja, dźwięk, wideo) – public/studio-widok.js. */
 const { openStudio, zadanieStudia } = utworzStudioWidok({
   $, el, t, escapeHtml, readJsonSafe, loadJson, jedenNaRaz, czekajNaZadanie,
 });
 
 // ----------------------------------------------------------------
-// KAMERA NA ŻYWO — podgląd + detekcja YOLO + zdarzenia percepcji
+// KAMERA NA ŻYWO – podgląd + detekcja YOLO + zdarzenia percepcji
 // ----------------------------------------------------------------
-/* Kamera na żywo: podgląd, detekcja, sylwetka — public/kamera.js. */
+/* Kamera na żywo: podgląd, detekcja, sylwetka – public/kamera.js. */
 const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie } = utworzKamere({
   settings: () => settings, senses: () => senses, cameraFacing: () => cameraFacing, odswiezPlan: () => odswiezPlan,
   $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
 });
 
 /* Plan zdjęciowy, karty ujęć i misja drona mieszkają w `public/plener.js`
-   — patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
+   – patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
    więc musi stać dokładnie tu, gdzie stał przeniesiony kod. */
 /* Konta: zaproszenie, Twoje konto, Dostęp (public/konta.js). */
 const konta_ = utworzKonta({ $, t, zmienJezyk: () => setLang(getLang() === 'pl' ? 'en' : 'pl') });
@@ -3319,7 +3319,7 @@ const { odswiezPlan, zamknijPlener } = utworzPlener({
 });
 
 // ----------------------------------------------------------------
-// OŚ CZASU — Digital Time Machine
+// OŚ CZASU – Digital Time Machine
 // ----------------------------------------------------------------
 
 async function openTimeline() {
@@ -3340,7 +3340,7 @@ async function openTimeline() {
     row.innerHTML =
       (s.imageId ? `<img src="/api/kb/raw?id=${encodeURIComponent(s.imageId)}" loading="lazy">` : '') +
       `<div class="tl-body"><span class="tl-time">${escapeHtml(when)}</span>` +
-      `<span class="tl-objects">${s.objects?.length ? escapeHtml(s.objects.join(', ')) : '—'}</span>` +
+      `<span class="tl-objects">${s.objects?.length ? escapeHtml(s.objects.join(', ')) : '–'}</span>` +
       (change.length ? `<span class="tl-change">${change.join(' · ')}</span>` : '') + `</div>` +
       `<button class="tl-del" data-del="${escapeHtml(s.id)}">✕</button>`;
     list.appendChild(row);
@@ -3355,7 +3355,7 @@ $('timeline-close').addEventListener('click', () => { $('timeline-modal').style.
 $('timeline-modal').addEventListener('click', (e) => { if (e.target === $('timeline-modal')) $('timeline-modal').style.display = 'none'; });
 
 // ----------------------------------------------------------------
-// GALERIA — przegląd wygenerowanych mediów (z bazy wiedzy)
+// GALERIA – przegląd wygenerowanych mediów (z bazy wiedzy)
 // ----------------------------------------------------------------
 
 let galleryFilter = 'all';
@@ -3395,7 +3395,7 @@ async function renderGallery() {
     else if (k === 'video') media = `<video src="${url}" controls preload="metadata"></video>`;
     else media = `<div class="gallery-audio ik ik-dzwiek" aria-hidden="true"></div><audio src="${url}" controls></audio>`;
 
-    // Widać, który obraz jest w tej chwili pierwszą klatką — bez tego jedynym
+    // Widać, który obraz jest w tej chwili pierwszą klatką – bez tego jedynym
     // potwierdzeniem był ✓ znikający po sekundzie.
     const isFrame = localStorage.getItem('cosmos.videoFrame') === it.id;
     const frameBtn = k === 'image'
@@ -3420,7 +3420,7 @@ async function renderGallery() {
   }));
   grid.querySelectorAll('[data-frame]').forEach((b) => b.addEventListener('click', () => {
     localStorage.setItem('cosmos.videoFrame', b.dataset.frame);
-    renderGallery();          // odśwież oznaczenia — widać, który obraz jest wybrany
+    renderGallery();          // odśwież oznaczenia – widać, który obraz jest wybrany
     galleryNote(t('gallery.frameSet'));
   }));
   grid.querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', async () => {
@@ -3439,7 +3439,7 @@ async function renderGallery() {
   }));
 }
 
-/** Krótki komunikat w nagłówku Galerii — potwierdzenie, które nie znika po chwili. */
+/** Krótki komunikat w nagłówku Galerii – potwierdzenie, które nie znika po chwili. */
 function galleryNote(text) {
   const n = $('gallery-note');
   if (!n) return;
@@ -3461,7 +3461,7 @@ $('gallery-filters').addEventListener('click', (e) => {
 });
 
 // ----------------------------------------------------------------
-// BAZA WIEDZY — pliki, linki, notatki głosowe
+// BAZA WIEDZY – pliki, linki, notatki głosowe
 // ----------------------------------------------------------------
 
 const KB_MAX_FILE = 50 * 1024 * 1024; // 50 MB na plik
@@ -3577,7 +3577,7 @@ async function loadKbList() {
   }
 }
 
-// Wysyłka pliku do bazy wiedzy i podgląd obrazu dla modelu — public/wysylka.js.
+// Wysyłka pliku do bazy wiedzy i podgląd obrazu dla modelu – public/wysylka.js.
 const { wyslijPlikDoBazy, przygotujPodglad, podgladDlaPozycji } = utworzWysylke({ t });
 
 async function kbUploadFiles(files) {
@@ -3593,7 +3593,7 @@ async function kbUploadFiles(files) {
     kbSetStatus(t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: 0 }));
     try {
       const d = await wyslijPlikDoBazy(file, (czesc) => {
-        // Wysłane w całości — dalej serwer czyta tekst (albo przepisuje nagranie w tle).
+        // Wysłane w całości – dalej serwer czyta tekst (albo przepisuje nagranie w tle).
         kbSetStatus(czesc >= 1 ? przetwarzam
           : t('kb.uploading', { i: i + 1, n: list.length, name: file.name, proc: Math.floor(czesc * 100) }));
       });
@@ -3742,11 +3742,11 @@ el.kbDrop.addEventListener('drop', (e) => {
 });
 
 // ----------------------------------------------------------------
-// ASYSTENT GŁOSOWY — „Hej, Kosmos” (jak Asystent Google)
+// ASYSTENT GŁOSOWY – „Hej, Kosmos” (jak Asystent Google)
 // Wake word i rozmowa: Web Speech API (Chrome/Edge, także Android).
 // ----------------------------------------------------------------
 
-/* Bez `\b` po nazwie — i to jest poprawka po zrzucie Marcina.
+/* Bez `\b` po nazwie – i to jest poprawka po zrzucie Marcina.
    Przy sklejonych rozpoznaniach („Hej kosmosHej kosmos co widzisz") granica
    słowa po „kosmos" nie istniała, bo zaraz za nim stała litera. Wzorzec nie
    pasował do PIERWSZEGO wystąpienia i słowo budzące wjeżdżało w treść
@@ -3754,7 +3754,7 @@ el.kbDrop.addEventListener('drop', (e) => {
    i tak mieć przed nazwą „hej"/„ok". */
 const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
 
-/* Czyste przekształcenia tekstu mowy — `public/mowa.js`. Tam mieszka też
+/* Czyste przekształcenia tekstu mowy – `public/mowa.js`. Tam mieszka też
    `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
 const {
   doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie,
@@ -3778,7 +3778,7 @@ function setVoiceState(state) {
     speaking: t('voice.speaking'),
     push: t('voice.push'),
   }[state] || '';
-  // W trybie „naciśnij" kula jest przyciskiem — musi to być widać i czuć.
+  // W trybie „naciśnij" kula jest przyciskiem – musi to być widać i czuć.
   el.voiceOrb.style.cursor = 'pointer';
   /* Podpowiedź mówi, co działa TERAZ. Dawniej stopka zawsze obiecywała
      „Hej, Cosmos budzi asystenta", także w trybie rozmowy, w którym słowa
@@ -3799,7 +3799,7 @@ function ustawPodstan(podstan) {
     : podstan === 'rozpoznaje' ? 'voice.recognizing' : 'voice.listening');
 }
 
-/* Poziom głosu na kuli i słupkach — raz na klatkę, nie 47 razy na sekundę. */
+/* Poziom głosu na kuli i słupkach – raz na klatkę, nie 47 razy na sekundę. */
 let poziomRamka = 0;
 let poziomTeraz = 0;
 function pokazPoziom(p) {
@@ -3844,11 +3844,11 @@ function poRozpoznaniu() {
    Marcin: „cały czas ten mikrofon się włącza i odłącza wraz z tym irytującym
    dźwiękiem przyłączania i odłączania".
 
-   To nie jest usterka Cosmosa — to Android. Chrome na telefonie nie obsługuje
+   To nie jest usterka Cosmosa – to Android. Chrome na telefonie nie obsługuje
    `continuous`: kończy sesję rozpoznawania po każdej wypowiedzi i po każdej
    ciszy, a każde uruchomienie i zamknięcie mikrofonu system kwituje
    dźwiękiem. Nasłuch słowa budzącego wymaga ciągłego słuchania, więc
-   wznawiamy — i tak w kółko, co kilka sekund, także wtedy, gdy w pokoju
+   wznawiamy – i tak w kółko, co kilka sekund, także wtedy, gdy w pokoju
    nikogo nie ma.
 
    Nie da się tego wyłączyć od strony strony internetowej. Da się natomiast
@@ -3862,7 +3862,7 @@ function poRozpoznaniu() {
 const WZNOWIEN_ZANIM_PRZYCISK = 12;
 let wznowienJalowych = 0;
 
-/** Rozpoznanie się udało — nasłuch ciągły w tej przeglądarce działa. */
+/** Rozpoznanie się udało – nasłuch ciągły w tej przeglądarce działa. */
 function nasluchDziala() {
   wznowienJalowych = 0;
 }
@@ -3873,7 +3873,7 @@ function nasluchNaPrzycisk() {
   /* Zapamiętane na stałe dla TEJ przeglądarki. Bez tego Marcin przy każdym
      wejściu w tryb głosowy słuchałby dwunastu piśnięć od nowa, zanim Cosmos
      ponownie dojdzie do tego samego wniosku. Zapis kasuje się sam, gdy
-     pojawi się własny strumień z Whisperem — wtedy ciągły nasłuch działa
+     pojawi się własny strumień z Whisperem – wtedy ciągły nasłuch działa
      i nie ma czego omijać. */
   try { localStorage.setItem('cosmos.nasluchPrzycisk', '1'); } catch { /* tryb prywatny */ }
   if (voiceRec) { try { voiceRec.abort(); } catch { /* już zamknięty */ } }
@@ -3882,7 +3882,7 @@ function nasluchNaPrzycisk() {
   el.voiceTranscript.textContent = '';
 }
 
-/** Jedna sesja rozpoznawania pod palcem — bez wznawiania w kółko. */
+/** Jedna sesja rozpoznawania pod palcem – bez wznawiania w kółko. */
 function nasluchRaz() {
   if (!voiceMode) return;
   wznowienJalowych = 0;
@@ -3894,7 +3894,7 @@ function nasluchRaz() {
 }
 
 // Jeden kontekst audio na całą stronę. Tworzenie i zamykanie go przy każdym
-// sygnale przełączało wyjście dźwięku w Androidzie — słychać to było jako
+// sygnale przełączało wyjście dźwięku w Androidzie – słychać to było jako
 // ciągłe „podłączanie i odłączanie” sprzętu w trakcie nasłuchu.
 let audioCtx = null;
 
@@ -3913,7 +3913,7 @@ function chime(freq = 880) {
   } catch { /* dźwięk to tylko ozdoba */ }
 }
 
-/** Zatrzymaj rozpoznawanie na dobre — tylko przy wyjściu z trybu głosowego. */
+/** Zatrzymaj rozpoznawanie na dobre – tylko przy wyjściu z trybu głosowego. */
 function stopVoiceRecognizers() {
   clearTimeout(voiceSilence);
   clearTimeout(nasluchCisza);
@@ -3934,7 +3934,7 @@ function stopVoiceRecognizers() {
 
 async function enterVoiceMode() {
   // Dwa silniki, dwa różne wymagania. Brak Web Speech API nie przekreśla
-  // trybu głosowego, jeśli działa własny nasłuch z Whisperem — a to właśnie
+  // trybu głosowego, jeśli działa własny nasłuch z Whisperem – a to właśnie
   // przypadek Firefoksa i Safari, gdzie rozpoznawania mowy po prostu nie ma.
   if (!getSR() && !nasluchMozliwy()) {
     alert(t('voice.noSupport'));
@@ -3954,25 +3954,25 @@ async function enterVoiceMode() {
   silnikSesji = null;
   silnikSesji = silnikNasluchu();
 
-  // UWAGA — nie wolno tu trzymać własnego strumienia z mikrofonu.
+  // UWAGA – nie wolno tu trzymać własnego strumienia z mikrofonu.
   // Próbowałem tak wyciszyć sygnały podłączania sprzętu na Androidzie, ale
   // rozpoznawanie mowy korzysta z tego samego mikrofonu na wyłączność: przy
   // zajętym wejściu przestawało cokolwiek słyszeć, łącznie z „Hej, Kosmos”.
   // Działające rozpoznawanie jest ważniejsze niż cichszy telefon.
 
   // Kamera NIE włącza się sama. Wcześniej tak było i na telefonie podgląd
-  // zasłaniał pół ekranu przy każdym nasłuchu — a wizji potrzeba tylko przy
+  // zasłaniał pół ekranu przy każdym nasłuchu – a wizji potrzeba tylko przy
   // pytaniach w rodzaju „co trzymam w ręku”. Teraz to świadome kliknięcie.
   if (localStorage.getItem('cosmos.voiceCam') === '1') await startVoiceCamera();
   updateVoiceCamButton();
 
-  /* Ta przeglądarka już raz pokazała, że nie utrzymuje ciągłego nasłuchu —
+  /* Ta przeglądarka już raz pokazała, że nie utrzymuje ciągłego nasłuchu –
      nie każemy jej dowodzić tego drugi raz kosztem kolejnych kilkunastu
      piśnięć mikrofonu. Whisper przez własny strumień piszczeć nie musi,
      więc gdy jest dostępny, zapis przestaje obowiązywać i znika. */
   if (silnikNasluchu() === 'whisper') {
     try { localStorage.removeItem('cosmos.nasluchPrzycisk'); } catch { /* tryb prywatny */ }
-    // Ktoś właśnie otworzył tryb głosowy — chce mówić, więc od razu słuchamy.
+    // Ktoś właśnie otworzył tryb głosowy – chce mówić, więc od razu słuchamy.
     if (trybRozmowy()) { startQueryListening(); return; }
   } else if (localStorage.getItem('cosmos.nasluchPrzycisk') === '1' || /Android/i.test(navigator.userAgent)) {
     /* Web Speech API na Androidzie piszczy przy każdym starcie i końcu sesji,
@@ -4026,7 +4026,7 @@ $('voice-cam-btn').addEventListener('click', async () => {
   updateVoiceCamButton();
 });
 
-/* ---- „Kto to śpiewa?" — BirdNET z nakładki głosowej -------------------
+/* ---- „Kto to śpiewa?" – BirdNET z nakładki głosowej -------------------
    Ptaka słychać dużo dalej, niż go widać, i to słuch decyduje, gdzie postawić
    statyw. Nagranie idzie bez „ulepszaczy" dźwięku i w pełnej częstotliwości:
    redukcja szumu w telefonie wycina dokładnie te ciche, wysokie tony, które
@@ -4046,7 +4046,7 @@ async function rozpoznajPtaka() {
     el.voiceAnswer.textContent = t('voice.birdNoSenses');
     return;
   }
-  // Mikrofon jest zajęty przez nasłuch ciągły — zwalniamy go na czas nagrania
+  // Mikrofon jest zajęty przez nasłuch ciągły – zwalniamy go na czas nagrania
   // i wracamy do nasłuchu potem. Dwa strumienie z tego samego wejścia bywają
   // odrzucane, a na telefonie dają cichsze, gorsze nagranie.
   ptakTrwa = true;
@@ -4084,7 +4084,7 @@ async function rozpoznajPtaka() {
       await speakText(t('voice.birdNone'));
     } else {
       const opis = lista
-        .map((g) => `${g.nazwa || g.lacinska} — ${Math.round((g.pewnosc || 0) * 100)}%`)
+        .map((g) => `${g.nazwa || g.lacinska} – ${Math.round((g.pewnosc || 0) * 100)}%`)
         .join(' · ');
       el.voiceAnswer.textContent = opis;
       setVoiceState('speaking');
@@ -4123,12 +4123,12 @@ function exitVoiceMode() {
  *
  * Wcześniej nasłuch słowa budzącego i nasłuch pytania to były dwa osobne
  * obiekty, tworzone i niszczone przy każdym przejściu stanu. Każde takie
- * przejęcie mikrofonu Android sygnalizuje dźwiękiem — stąd „ciągłe podłączanie
+ * przejęcie mikrofonu Android sygnalizuje dźwiękiem – stąd „ciągłe podłączanie
  * i odłączanie". Teraz rozpoznawacz żyje od wejścia w tryb głosowy do wyjścia,
  * a zmienia się tylko to, jak interpretujemy wynik. Mikrofon jest przejmowany
  * raz, nie przy każdym zdaniu.
  *
- * Gdy Cosmos myśli albo mówi, wyników nie czytamy (`voiceDeaf`) — inaczej
+ * Gdy Cosmos myśli albo mówi, wyników nie czytamy (`voiceDeaf`) – inaczej
  * usłyszałby własny głos i odpowiadał sam sobie. Rozpoznawacz zostaje wtedy
  * uruchomiony, ale głuchy, bo zatrzymanie go zwolniłoby mikrofon i wróciłby
  * dźwięk przy ponownym starcie.
@@ -4138,7 +4138,7 @@ let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
 let voiceHeard = '';          // złożone zdanie w trybie pytania
 /* Komunikat (błąd rozpoznawania, mikrofon wyciszony) stoi w tym samym polu co
    usłyszane słowa. Dotknięcie kuli w trakcie słuchania brało treść pola jako
-   pytanie — i model odpowiadał na „Nie udało się rozpoznać mowy: …".
+   pytanie – i model odpowiadał na „Nie udało się rozpoznać mowy: …".
    Zapamiętujemy więc, co było komunikatem. */
 function komunikatGlosu(tekst) {
   el.voiceTranscript.classList.remove('podglad');
@@ -4153,16 +4153,16 @@ function usłyszaneWPolu() {
 }
 /* Silnik rozpoznawania ustalony RAZ na sesję głosową. Liczony przy każdym
    przejściu stanu potrafił zmienić zdanie w połowie (chwilowy brak zmysłów
-   w /api/status) — i działały dwa nasłuchy naraz. */
+   w /api/status) – i działały dwa nasłuchy naraz. */
 let silnikSesji = null;
 /* Serwer trzy razy z rzędu nie rozpoznał mowy. To stan TEJ sesji, nie wybór
-   użytkownika — dawniej trafiał na stałe do Ustawień i po naprawie serwera
+   użytkownika – dawniej trafiał na stałe do Ustawień i po naprawie serwera
    Cosmos dalej piszczał Web Speech API. */
 let sttSerweraPadl = false;
 let voiceSilence = null;      // odliczanie ciszy po pytaniu
 /* Znacznik „to już przerobiliśmy”. Samo `voiceDeaf` nie wystarczało i to była
    przyczyna sprzężenia: rozpoznawacz jest CIĄGŁY, więc kiedy Cosmos mówi,
-   dalej transkrybuje — tyle że my wyniki ignorujemy. Zostają jednak w
+   dalej transkrybuje – tyle że my wyniki ignorujemy. Zostają jednak w
    `e.results`, a gałąź słowa budzącego czytała trzy OSTATNIE wyniki niezależnie
    od tego, czy były już widziane. Po skończonej wypowiedzi Cosmos odczytywał
    więc własne zdanie jako nowe polecenie i odpowiadał sam sobie w kółko.
@@ -4170,16 +4170,16 @@ let voiceSilence = null;      // odliczanie ciszy po pytaniu
    zużyte.
 
    Sam indeks to jednak za mało, bo NIE JEST STAŁYM PUNKTEM ODNIESIENIA.
-   Rozpoznawacz potrafi zacząć numerować od zera bez `onend` — Chrome robi tak
+   Rozpoznawacz potrafi zacząć numerować od zera bez `onend` – Chrome robi tak
    po dłuższej ciszy, a na Androidzie po każdej domkniętej wypowiedzi. Znacznik
    zostawał wtedy w górze, świeże wyniki wypadały poniżej niego i pytanie
    znikało bez śladu: transkrypcja pusta, cisza nie miała czego wysłać.
    Dlatego obok indeksu trzymamy ODCISK ostatniego zużytego wyniku. Jeśli lista
-   nie urosła ponad znacznik, a tego wyniku już w niej nie ma — numeracja
+   nie urosła ponad znacznik, a tego wyniku już w niej nie ma – numeracja
    ruszyła od nowa i znacznik trzeba wyzerować. */
 let voiceZuzyteDo = 0;
 let voiceOdcisk = '';
-// Co Cosmos ostatnio powiedział — druga zapora przed pętlą.
+// Co Cosmos ostatnio powiedział – druga zapora przed pętlą.
 let voiceOstatniaOdpowiedz = '';
 
 /* ---- DRUGI SILNIK NASŁUCHU: własny strumień + Whisper ----------------
@@ -4188,7 +4188,7 @@ let voiceOstatniaOdpowiedz = '';
    wyciszyć ani zatrzymać bez zwolnienia mikrofonu. `public/nasluch.js`
    rozwiązuje to u źródła: mikrofon otwarty raz na całą sesję, wypowiedzi
    wycinane z sygnału po energii, tekst z Whispera. Wtedy „głuchy" znaczy
-   naprawdę głuchy — próbki lecą do kosza i nie ma czego rozpoznać.
+   naprawdę głuchy – próbki lecą do kosza i nie ma czego rozpoznać.
 
    Wymaga włączonych zmysłów, więc to WYBÓR, nie zamiennik. Przy wyłączonym
    komputerze domowym Cosmos wraca do Web Speech API bez pytania. */
@@ -4199,7 +4199,7 @@ const NASLUCH_CISZA_MS = 12000;
 /* ---- GDZIE ROZPOZNAĆ MOWĘ -------------------------------------------
    Serwer ma łańcuch źródeł (lib/glos.js): Whisper w zmysłach, własny serwer
    rozpoznawania, OpenAI. Aplikacja pyta więc nie „czy działają zmysły", tylko
-   „czy serwer w ogóle rozpozna mowę" — a lokalność sprawdza osobno, bo od niej
+   „czy serwer w ogóle rozpozna mowę" – a lokalność sprawdza osobno, bo od niej
    zależy, czy wolno słuchać otoczenia w oczekiwaniu na „Hej, Cosmos". */
 function sttLokalne() {
   return Boolean((senses.online && senses.caps.whisper) || serverConfig.glos?.sttLokalnyWlasny);
@@ -4213,7 +4213,7 @@ function adresStt(tryb = 'pytanie') {
 }
 /** Tryb rozmowy: mowę rozpoznaje tylko chmura, więc bez nasłuchu otoczenia.
  *  Cosmos słucha od razu po otwarciu trybu głosowego i po każdej odpowiedzi,
- *  a po chwili ciszy czeka na dotknięcie kuli — tak jak asystenci w telefonach.
+ *  a po chwili ciszy czeka na dotknięcie kuli – tak jak asystenci w telefonach.
  *  Web Speech API (i jego piszczenie na Androidzie) nie jest wtedy potrzebne. */
 function trybRozmowy() {
   return silnikNasluchu() === 'whisper' && !sttLokalne();
@@ -4244,7 +4244,7 @@ function nasluchOgraniczenia() {
 }
 
 /* Ile razy pod rząd Whisper może zawieść, zanim wrócimy do przeglądarki.
-   Jeden błąd to przypadek — GPU zajęte innym zadaniem, chwilowa dziura
+   Jeden błąd to przypadek – GPU zajęte innym zadaniem, chwilowa dziura
    w Tailscale. Trzy pod rząd znaczą, że zmysłów po prostu nie ma, a wtedy
    trwanie przy Whisperze to skazanie trybu głosowego na milczenie. */
 const NASLUCH_PROG_AWARII = 3;
@@ -4256,12 +4256,12 @@ function startNasluchWlasny() {
     adres: () => adresStt(voiceState === 'wake' ? 'nasluch' : 'pytanie'),
     onWypowiedz: (tekst) => { nasluchAwarie = 0; wypowiedzZNasluchu(tekst); },
     onBlad: (err) => {
-      // Awaria transkrypcji nie kończy trybu głosowego — następna wypowiedź
+      // Awaria transkrypcji nie kończy trybu głosowego – następna wypowiedź
       // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
       komunikatGlosu(t('voice.sttErr', { msg: err.message }));
       if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
       /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
-         DZIAŁA — a Cosmos, który w kółko powtarza ten sam błąd, jest po
+         DZIAŁA – a Cosmos, który w kółko powtarza ten sam błąd, jest po
          prostu zepsuty. Zmiana jest jawna: człowiek musi wiedzieć, czemu
          nagle zmieniło się zachowanie. */
       nasluchAwarie = 0;
@@ -4269,7 +4269,7 @@ function startNasluchWlasny() {
       silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
       komunikatGlosu(t('voice.sttFallback'));
-      /* Na Androidzie ciągłe Web Speech to piszczenie co kilka sekund —
+      /* Na Androidzie ciągłe Web Speech to piszczenie co kilka sekund –
          lepiej kula pod palcem: jedno dotknięcie, jedna sesja. */
       if (voiceMode) {
         if (/Android/i.test(navigator.userAgent)) setVoiceState('push');
@@ -4288,7 +4288,7 @@ function startNasluchWlasny() {
   nasluch.gluchy(voiceDeaf);
   nasluch.start(nasluchOgraniczenia()).catch(async (err) => {
     nasluch = null;
-    /* Zapamiętany mikrofon mógł zostać odłączony — tak samo jak przy
+    /* Zapamiętany mikrofon mógł zostać odłączony – tak samo jak przy
        dyktowaniu, spróbuj domyślnego, zanim ogłosisz porażkę. */
     if (localStorage.getItem('cosmos.micId')) {
       localStorage.removeItem('cosmos.micId');
@@ -4306,12 +4306,12 @@ function startNasluchWlasny() {
    próbki, a ekran dalej pokazuje „SŁUCHAM…". Marcin mówi do telefonu i nie
    ma pojęcia, dlaczego nic się nie dzieje. `nasluch.js` wykrywa ten stan
    z trzech stron (stan kontekstu, zdarzenia ścieżki, licznik od ostatniej
-   ramki) — tutaj jest odpowiedź na pytanie, co dalej.
+   ramki) – tutaj jest odpowiedź na pytanie, co dalej.
 
    Najpierw PRÓBUJEMY ODZYSKAĆ, bo dwie z trzech przyczyn (uśpiony dźwięk po
    wygaszeniu ekranu, mikrofon oddany na czas rozmowy telefonicznej) mijają
    same i wystarczy wziąć wejście od nowa. Dopiero gdy to nie pomoże, mówimy
-   wprost — jedna próba, nie pętla wznowień co dwie sekundy. */
+   wprost – jedna próba, nie pętla wznowień co dwie sekundy. */
 let odzyskiwanieMikrofonu = null;
 
 function zaradzGluchocie(powod) {
@@ -4334,7 +4334,7 @@ function zaradzGluchocie(powod) {
 }
 
 /** Gotowa wypowiedź z Whispera. W odróżnieniu od Web Speech API nie ma tu
- *  wyników cząstkowych ani odliczania ciszy — VAD już zdecydował, że zdanie
+ *  wyników cząstkowych ani odliczania ciszy – VAD już zdecydował, że zdanie
  *  się skończyło. */
 function wypowiedzZNasluchu(tekst) {
   if (!voiceMode || voiceDeaf) return;
@@ -4423,7 +4423,7 @@ function startVoiceRecognizer() {
     // Zanim cokolwiek odczytamy: czy to jeszcze ta sama numeracja?
     if (wynikiOdNowa(e.results)) oznaczZuzyte(e.results, 0);
     if (voiceDeaf) {
-      // Głuchy nie znaczy „nie słyszy" — znaczy „nie reaguje". Wszystko, co
+      // Głuchy nie znaczy „nie słyszy" – znaczy „nie reaguje". Wszystko, co
       // wpadło w tym czasie (czyli głos samego Cosmosa), znika z rozważań.
       oznaczZuzyte(e.results, e.results.length);
       return;
@@ -4457,7 +4457,7 @@ function startVoiceRecognizer() {
     for (let i = Math.max(e.resultIndex, voiceZuzyteDo); i < e.results.length; i++) {
       const r = e.results[i];
       /* SCALAMY, NIE DOKLEJAMY.
-         Chrome na Androidzie nie obsługuje `continuous` — kończy sesję po
+         Chrome na Androidzie nie obsługuje `continuous` – kończy sesję po
          każdej wypowiedzi i po każdej ciszy. Wznowiona sesja rozpoznaje od
          nowa audio, które częściowo już słyszeliśmy, więc gołe `+=` dawało
          „Jakiejakiejakie sąjakie są największe…". `doklejRozpoznane` widzi
@@ -4478,8 +4478,8 @@ function startVoiceRecognizer() {
     voiceSilence = setTimeout(() => {
       if (!voiceMode || voiceState !== 'listening') return;
       /* Ostatnia zapora przed „HejHejHej kosmos Co widzisz": gdyby słowo
-         budzące zdążyło wpaść do pytania — obojętne, czy przez opóźnione
-         rozpoznanie, czy przez restart numeracji — tu i tak wypada. */
+         budzące zdążyło wpaść do pytania – obojętne, czy przez opóźnione
+         rozpoznanie, czy przez restart numeracji – tu i tak wypada. */
       const text = bezSlowaBudzacego(voiceHeard);
       voiceHeard = '';
       if (text) askVoice(text);
@@ -4487,13 +4487,13 @@ function startVoiceRecognizer() {
     }, 1400);
   };
 
-  // Chrome i tak utnie sesję po ~60 s — wznawiamy ten sam obiekt.
+  // Chrome i tak utnie sesję po ~60 s – wznawiamy ten sam obiekt.
   rec.onend = () => {
     voiceRec = null;
     // Nowa sesja zaczyna liczyć wyniki od zera, więc znacznik też musi.
     oznaczZuzyte(null, 0);
     if (!voiceMode) return;
-    /* Sesja, która skończyła się bez ani jednego wyniku, była jałowa —
+    /* Sesja, która skończyła się bez ani jednego wyniku, była jałowa –
        czyli mikrofon piszczał po nic. Patrz komentarz przy
        WZNOWIEN_ZANIM_PRZYCISK. */
     if (!rec.__ostatniaDlugosc) wznowienJalowych++;
@@ -4509,7 +4509,7 @@ function startVoiceRecognizer() {
       if (voiceMode) setVoiceState('push');
       return;
     }
-    /* „no-speech" i „aborted" to normalny bieg rzeczy — onend wznowi */
+    /* „no-speech" i „aborted" to normalny bieg rzeczy – onend wznowi */
   };
 
   try { rec.start(); } catch { /* już wystartował */ }
@@ -4521,7 +4521,7 @@ function backToWake() {
   clearTimeout(nasluchCisza);
   voiceHeard = '';
   if (trybRozmowy()) {
-    /* Bez lokalnego Whispera nie słuchamy otoczenia — mikrofon się zamyka
+    /* Bez lokalnego Whispera nie słuchamy otoczenia – mikrofon się zamyka
        (bez żadnego dźwięku: to zwykły strumień audio, nie rozpoznawanie
        przeglądarki), a kula czeka na dotknięcie. */
     if (nasluch) { nasluch.stop(); nasluch = null; }
@@ -4545,7 +4545,7 @@ function askVoice(text) {
   /* Druga zapora przed sprzężeniem. Znacznik zużycia załatwia typowy
      przypadek, ale rozpoznawanie bywa opóźnione i zdanie Cosmosa potrafi
      domknąć się już po odmilczeniu. Jeśli „pytanie" jest tym, co przed chwilą
-     sam powiedział — nie odpowiadamy na własne słowa. */
+     sam powiedział – nie odpowiadamy na własne słowa. */
   if (voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
     backToWake();
     return;
@@ -4555,13 +4555,13 @@ function askVoice(text) {
 }
 
 
-// Nazwy używane w pozostałej części pliku — zostawiamy je jako cienkie przejścia,
+// Nazwy używane w pozostałej części pliku – zostawiamy je jako cienkie przejścia,
 // żeby nie rozsypać wywołań rozsianych po trybie głosowym.
 function startWakeListening() { backToWake(); }
 function startQueryListening() {
   if (!voiceMode) return;
   voiceHeard = '';
-  // Wracamy do słuchania dopiero teraz — wszystko sprzed tej chwili to był
+  // Wracamy do słuchania dopiero teraz – wszystko sprzed tej chwili to był
   // głos Cosmosa albo cisza, i nie może wrócić jako pytanie.
   if (voiceRec && voiceRec.__ostatniaDlugosc) {
     oznaczZuzyte(voiceRec.__ostatnieWyniki, voiceRec.__ostatniaDlugosc);
@@ -4592,7 +4592,7 @@ async function handleVoiceQuery(text) {
   el.voiceTranscript.classList.remove('podglad');
   el.voiceTranscript.textContent = text;
   /* Pytanie głosowe w trakcie pisanej odpowiedzi uruchamiało drugą generację
-     obok pierwszej — obie lądowały w rozmowie na krzyż i obie były czytane. */
+     obok pierwszej – obie lądowały w rozmowie na krzyż i obie były czytane. */
   if (isGenerating) {
     stopGeneration();
     for (let i = 0; i < 50 && isGenerating; i++) await pauza(100);
@@ -4658,11 +4658,11 @@ el.voiceClose.addEventListener('click', exitVoiceMode);
 
 /* Kula jest przyciskiem ZAWSZE, nie tylko po przejściu na „naciśnij".
    Nawet gdy nasłuch działa, czekanie na słowo budzące bywa wolniejsze niż
-   dotknięcie ekranu — a w trybie „naciśnij" to jedyna droga do zadania
+   dotknięcie ekranu – a w trybie „naciśnij" to jedyna droga do zadania
    pytania. Kolejne dotknięcie w trakcie słuchania kończy wypowiedź. */
 el.voiceOrb.addEventListener('click', () => {
   if (!voiceMode) return;
-  /* Dotknięcie w trakcie odpowiedzi przerywa ją i od razu słucha — jak
+  /* Dotknięcie w trakcie odpowiedzi przerywa ją i od razu słucha – jak
      w asystentach w telefonie. Dawniej kula była wtedy martwa i trzeba było
      wysłuchać całej odpowiedzi, żeby coś poprawić. Koniec czytania sam
      przełącza na słuchanie (runGeneration → startQueryListening). */
@@ -4693,7 +4693,7 @@ el.voiceOrb.addEventListener('click', () => {
 // posprzątać: zwolnić kamerę, zatrzymać detekcję, zapisać stan.
 // Kolejność od wierzchu: to, co otwiera się na innych, jest wyżej.
 const overlays = [
-  // podgląd obrazu jest na samym wierzchu — otwiera się z galerii i z rozmowy
+  // podgląd obrazu jest na samym wierzchu – otwiera się z galerii i z rozmowy
   { id: 'img-viewer', close: closeImageViewer },
   { open: () => voiceMode, close: exitVoiceMode },
   { id: 'camera-modal', close: closeCamera },
@@ -4721,7 +4721,7 @@ document.addEventListener('keydown', (e) => {
 
 /* ---- KARTY USTAWIEŃ -------------------------------------------------------
    Ustawienia to ~20 bloków w jednej kolumnie. Karty u góry PRZEWIJAJĄ do grupy
-   i podświetlają tę, w której jesteś — nic nie jest chowane, więc każde pole
+   i podświetlają tę, w której jesteś – nic nie jest chowane, więc każde pole
    zostaje tam, gdzie było (i tak samo dostępne z klawiatury czy z testu).
    Karta bez widocznego bloku (np. „Dom" u zaproszonej osoby) znika. */
 {
@@ -4736,10 +4736,10 @@ document.addEventListener('keydown', (e) => {
     for (const k of karty) k.hidden = !widoczne(k.dataset.cel).length;
     const pasek = cialo.querySelector('.set-karty');
     const odGory = cialo.getBoundingClientRect().top + (pasek ? pasek.offsetHeight : 0) + 24;
-    /* Świeci grupa bloku, który czytasz — najniższego z tych, które minęły
+    /* Świeci grupa bloku, który czytasz – najniższego z tych, które minęły
        pasek. Grupy są w HTML-u przeplecione (głos między silnikami, pierwszy
        blok „Dane" przed „Domem"), więc dawne „ostatnia karta, której pierwszy
-       blok minął górę" po kliknięciu „Dom" zapalało „Dane" — Dom nie świecił
+       blok minął górę" po kliknięciu „Dom" zapalało „Dane" – Dom nie świecił
        nigdy. */
     let biezaca = karty.find((k) => !k.hidden)?.dataset.cel;
     let najnizej = -Infinity;
@@ -4770,7 +4770,7 @@ document.addEventListener('keydown', (e) => {
    Z klawiatury nakładki były nieużywalne: fokus nie wchodził do środka,
    Tab uciekał do rozmowy pod spodem (15–29 razy na 30), a po Escape nie
    wracał na przycisk, którym nakładkę otwarto. Zamiast łatać każdą z osobna:
-   obserwujemy, która jest na wierzchu — reszta strony dostaje `inert`,
+   obserwujemy, która jest na wierzchu – reszta strony dostaje `inert`,
    fokus wchodzi do środka, a po zamknięciu wraca tam, skąd przyszedł. */
 {
   const elementy = ['img-viewer', 'voice-overlay', 'camera-modal', 'live-panel', 'gallery-modal',
@@ -4825,13 +4825,13 @@ el.expandBtn.addEventListener('click', () => {
   el.sidebar.classList.remove('collapsed');
   document.querySelector('.app').classList.remove('sidebar-hidden');
 });
-// na telefonie panel przykrywa czat — dotknięcie przyciemnionego tła go zamyka
+// na telefonie panel przykrywa czat – dotknięcie przyciemnionego tła go zamyka
 $('sidebar-scrim').addEventListener('click', closeSidebar);
 $('offline-retry').addEventListener('click', retryConnection);
-// powrót sieci (np. Wi-Fi/Tailscale) — sprawdź od razu, nie czekaj 30 s
+// powrót sieci (np. Wi-Fi/Tailscale) – sprawdź od razu, nie czekaj 30 s
 window.addEventListener('online', retryConnection);
 
-// wyszukiwarka rozmów — po tytule (natychmiast) i po treści (z serwera)
+// wyszukiwarka rozmów – po tytule (natychmiast) i po treści (z serwera)
 let convContentMatchIds = new Set();
 let convSearchTimer = null;
 $('conv-search').addEventListener('input', (e) => {
@@ -4846,7 +4846,7 @@ $('conv-search').addEventListener('input', (e) => {
       const d = await res.json();
       convContentMatchIds = new Set((d.results || []).map((r) => r.id));
       renderSidebar();
-    } catch { /* offline — zostaje filtr po tytule */ }
+    } catch { /* offline – zostaje filtr po tytule */ }
   }, 300);
 });
 
@@ -4862,7 +4862,7 @@ function exportConversation() {
     /* WIADOMOŚĆ BEZ TREŚCI NIE MA CO ROBIĆ W ZAPISIE.
      *
      *  Siatka miniatur to wiadomość z pustym tekstem i listą zdjęć. Eksport
-     *  wypisywał dla niej sam nagłówek „**Cosmos:**" i pustą linię — a zdjęć
+     *  wypisywał dla niej sam nagłówek „**Cosmos:**" i pustą linię – a zdjęć
      *  nie wspominał w ogóle. W przysłanych przez Marcina zapisach widać
      *  przez to puste dymki w miejscach, gdzie w rozmowie były zdjęcia:
      *  zapis wyglądał gorzej niż sama rozmowa i sugerował, że Cosmos
@@ -4899,7 +4899,7 @@ $('summarize-btn').addEventListener('click', async () => {
     .map((m) => `${m.role === 'user' ? t('exportYou') : 'Cosmos'}: ${msgText(m)}`).join('\n');
   const btn = $('summarize-btn');
   btn.disabled = true;
-  /* Pasek „streszczam…" W ROZMOWIE — dawniej nic nie mówiło, że coś trwa.
+  /* Pasek „streszczam…" W ROZMOWIE – dawniej nic nie mówiło, że coś trwa.
      I zapis do TEJ rozmowy, nawet gdy człowiek w międzyczasie przeszedł do
      innej: saveConversations zapisuje aktywną, więc streszczenie przepadało. */
   const pasek = { role: 'assistant', content: t('sum.working'), status: true };
@@ -4942,12 +4942,12 @@ function updateTokenEstimate() {
 // skróty klawiszowe
 document.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && e.key.toLowerCase() === 'k') {           // Ctrl/Cmd+K — szukaj rozmów
+  if (mod && e.key.toLowerCase() === 'k') {           // Ctrl/Cmd+K – szukaj rozmów
     e.preventDefault();
     if (el.sidebar.classList.contains('collapsed')) el.expandBtn.click();
     $('conv-search').focus();
     $('conv-search').select();
-  } else if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { // Ctrl/Cmd+Shift+O — nowa rozmowa
+  } else if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { // Ctrl/Cmd+Shift+O – nowa rozmowa
     e.preventDefault();
     newConversation();
   }
@@ -4964,7 +4964,7 @@ function applyTheme(theme) {
     .forEach((m) => m.setAttribute('content', dark ? '#111214' : '#F6F5F1'));
 }
 
-/* Bez zapisanego wyboru motyw idzie za systemem — tak jak strona produktowa.
+/* Bez zapisanego wyboru motyw idzie za systemem – tak jak strona produktowa.
    Ten sam wybór robi już skrypt w <head>, żeby nie mignęło złe tło. */
 function motywDomyslny() {
   try {
@@ -5002,7 +5002,7 @@ const ENDPOINT_TABS = {
 };
 
 /* Zakładki rysujemy od razu, z listy zapamiętanej przy poprzedniej wizycie,
-   a po /api/config — z prawdziwej. Pusty przełącznik rósł po konfiguracji
+   a po /api/config – z prawdziwej. Pusty przełącznik rósł po konfiguracji
    i cały czat skakał o 13,4 px (CLS 0,087 z samego tego skoku). */
 function buildEndpointTabs(zPamieci = null) {
   el.endpointSwitch.innerHTML = '';
@@ -5077,7 +5077,7 @@ async function loadStats() {
     $('stats-info').innerHTML =
       `${t('stats.conv')}: ${s.conversations} · ${t('stats.mem')}: ${s.memories} · ` +
       `${t('stats.kb')}: ${s.kbItems} (${mb} MB)`;
-  } catch { $('stats-info').textContent = '—'; }
+  } catch { $('stats-info').textContent = '–'; }
 }
 
 async function loadMemoryList() {
@@ -5124,10 +5124,10 @@ function renderConfigInfo() {
   const l = epConfig('local');
   el.configInfo.innerHTML =
     `<strong>${t('set.cfgTitle')}</strong><br>` +
-    `${t('cfg.cloud')}  ${escapeHtml(c.baseUrl || '—')}<br>` +
-    `  ${t('cfg.model')} ${escapeHtml(c.model || '—')}${c.visionModel ? ` · ${t('cfg.vision')} ${escapeHtml(c.visionModel)}` : ''}<br>` +
+    `${t('cfg.cloud')}  ${escapeHtml(c.baseUrl || '–')}<br>` +
+    `  ${t('cfg.model')} ${escapeHtml(c.model || '–')}${c.visionModel ? ` · ${t('cfg.vision')} ${escapeHtml(c.visionModel)}` : ''}<br>` +
     `  ${t('cfg.apiKey')} ${c.hasApiKey ? t('set.cfgKeySet') : t('set.cfgKeyMissing')}<br>` +
-    `${t('cfg.local')}  ${escapeHtml(l.baseUrl || '—')}<br>` +
+    `${t('cfg.local')}  ${escapeHtml(l.baseUrl || '–')}<br>` +
     `  ${t('cfg.model')} ${escapeHtml(l.model || t('set.cfgModelMissing'))}`;
 }
 
@@ -5155,7 +5155,7 @@ el.settingsSave.addEventListener('click', () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ profile: $('set-profile').value }),
   }).catch(() => {});
-  // lokalizacja tak samo — używa jej też wyszukiwanie, nie tylko rozmowa
+  // lokalizacja tak samo – używa jej też wyszukiwanie, nie tylko rozmowa
   fetch('/api/location', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ location: $('set-location').value }),
@@ -5166,7 +5166,7 @@ el.settingsSave.addEventListener('click', () => {
 
 /* Wykrycie lokalizacji: przeglądarka daje współrzędne, serwer zamienia je na
    nazwę. Współrzędne nie opuszczają Cosmosa inaczej niż przez ten jeden
-   zapytanie — i tylko po kliknięciu, nigdy samo z siebie. */
+   zapytanie – i tylko po kliknięciu, nigdy samo z siebie. */
 $('set-location-detect').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const pole = $('set-location');
@@ -5189,7 +5189,7 @@ $('set-location-detect').addEventListener('click', async (e) => {
     if (d.location) pole.value = d.location;
     else pole.placeholder = d.error || t('set.locationFailed');
   } catch (err) {
-    // Odmowa zgody to nie awaria — użytkownik zawsze może wpisać ręcznie.
+    // Odmowa zgody to nie awaria – użytkownik zawsze może wpisać ręcznie.
     pole.placeholder = err && err.code === 1 ? t('set.locationDenied') : t('set.locationFailed');
   } finally {
     btn.disabled = false;
@@ -5197,7 +5197,7 @@ $('set-location-detect').addEventListener('click', async (e) => {
   }
 });
 
-// kopia zapasowa — pobieranie i przywracanie
+// kopia zapasowa – pobieranie i przywracanie
 $('backup-download').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = '/api/backup';
@@ -5305,8 +5305,8 @@ async function loadTrainEnv() {
     // pokaż sekcję „Dotrenuj" tylko, gdy da się to zrobić lokalnie (Python + skrypt)
     $('train-run').style.display = (e.python && e.script) ? '' : 'none';
     const parts = [];
-    parts.push(`Python: ${e.python ? '✓' : '—'}`);
-    parts.push(`Ollama: ${e.ollama ? '✓' : '—'}`);
+    parts.push(`Python: ${e.python ? '✓' : '–'}`);
+    parts.push(`Ollama: ${e.ollama ? '✓' : '–'}`);
     parts.push(t('train.envExamples', { n: e.examples }));
     if (!e.python) parts.push(t('train.needPython'));
     $('train-env').textContent = parts.join(' · ');
@@ -5416,7 +5416,7 @@ function renderModelInfo(boxEl, id) {
 
 /** Wypełnij listę mikrofonów.
  *
- * Nazwy urządzeń przeglądarka ujawnia dopiero po przyznaniu dostępu do audio —
+ * Nazwy urządzeń przeglądarka ujawnia dopiero po przyznaniu dostępu do audio –
  * wcześniej lista jest pusta albo bezimienna. Dlatego przy pierwszym otwarciu
  * prosimy o zgodę i od razu ją zwalniamy.
  */
@@ -5447,7 +5447,7 @@ async function loadMicList() {
 
 /** Sprawdź model NA ŻYWO: czy działa na tym koncie i czy czyta obrazy.
  *
- * Lista z `/v1/models` wypisuje wszystko, co dostawca hostuje — nie to, do czego
+ * Lista z `/v1/models` wypisuje wszystko, co dostawca hostuje – nie to, do czego
  * Twój klucz ma dostęp. Katalog opisów też tylko zgaduje po nazwie. Jedyna
  * pewna odpowiedź to spróbować, więc serwer wysyła najtańsze możliwe żądanie.
  */
@@ -5500,11 +5500,11 @@ async function checkModelField(epName) {
   }
 }
 
-// Ostatni raport ze „Sprawdź wszystkie" — do skopiowania.
+// Ostatni raport ze „Sprawdź wszystkie" – do skopiowania.
 let lastCheckReport = '';
 
 /** Sprawdź po kolei całą pobraną listę i oznacz pozycje w wybieraku.
- *  Po kolei, nie równolegle — inaczej dostawca odrzuci nas za nadmiar żądań. */
+ *  Po kolei, nie równolegle – inaczej dostawca odrzuci nas za nadmiar żądań. */
 async function checkAllModels(epName) {
   const sel = $(`model-select-${epName}`);
   const box = $(`model-info-${epName}`);
@@ -5522,7 +5522,7 @@ async function checkAllModels(epName) {
     let r;
     try { r = await checkOneModel(epName, o.value); } catch { r = { rozmowa: false }; }
     // Pięć stanów, nie dwa: „nie zdążył odpowiedzieć" i „to nie jest model do
-    // rozmowy" to nie to samo, co „nie masz dostępu" — mieszanie ich kazałoby
+    // rozmowy" to nie to samo, co „nie masz dostępu" – mieszanie ich kazałoby
     // odpuścić modele, które działają.
     const mark = r.rozmowa ? (r.obrazy ? '👁' : '✓')
       : r.inneZadanie ? '⚙' : r.niepewne ? '⏳' : '✗';
@@ -5531,7 +5531,7 @@ async function checkAllModels(epName) {
     if (r.rozmowa) (r.obrazy ? wzrok : rozmowa).push(o.value);
     else if (r.inneZadanie) inne.push(o.value);
     else if (r.niepewne) niepewne.push(o.value);
-    else brak.push(`${o.value} — ${r.blad || '—'}`);
+    else brak.push(`${o.value} – ${r.blad || '–'}`);
     // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
     // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
     // zaczęłyby się nawarstwiać.
@@ -5544,7 +5544,7 @@ async function checkAllModels(epName) {
   const grupa = (tytul, lista) => [
     '',
     `=== ${tytul} (${lista.length}) ===`,
-    ...(lista.length ? lista.map((m) => `  ${m}`) : ['  —']),
+    ...(lista.length ? lista.map((m) => `  ${m}`) : ['  –']),
   ];
   lastCheckReport = [
     `${t('set.checkReportEngine')}: ${epName}`,
@@ -5603,7 +5603,7 @@ async function fetchModelsInto(epName, selectEl, btn) {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const models = (data.data || []).map((m) => m.id).sort();
     if (!models.length) throw new Error(t('set.noModels'));
-    // Znane modele na górę i z etykietą — inaczej wybiera się z listy
+    // Znane modele na górę i z etykietą – inaczej wybiera się z listy
     // kilkudziesięciu identyfikatorów, nie wiedząc, czym się różnią.
     const described = [];
     const rest = [];
@@ -5629,8 +5629,8 @@ async function fetchModelsInto(epName, selectEl, btn) {
       const short = m.split('/').pop();
       let label;
       if (!named) label = narrow ? short : m;
-      else if (!narrow) label = `${m} — ${info.nazwa}`;
-      // Gdy nazwa się powtarza, i tak nic nie rozróżnia — pokazujemy wtedy sam
+      else if (!narrow) label = `${m} – ${info.nazwa}`;
+      // Gdy nazwa się powtarza, i tak nic nie rozróżnia – pokazujemy wtedy sam
       // identyfikator (bez prefiksu dostawcy), bo to on jest tu informacją.
       else label = nameCount[info.nazwa] > 1 ? short : info.nazwa;
       return `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
@@ -5677,7 +5677,7 @@ for (const ep of SILNIKI_Z_MODELEM) {
     if (sel.value) pole.value = sel.value;
     refreshModelInfoBoxes();
   });
-  // Także przy wpisywaniu z ręki — opis ma nadążać za tym, co widać w polu.
+  // Także przy wpisywaniu z ręki – opis ma nadążać za tym, co widać w polu.
   pole.addEventListener('input', refreshModelInfoBoxes);
 }
 $('set-mic').addEventListener('change', (e) => {
@@ -5693,7 +5693,7 @@ $('set-stt').addEventListener('change', (e) => {
    dźwięku i Cosmos po cichu wraca do przeglądarki. Milcząca zmiana zachowania
    to dokładnie ten rodzaj rzeczy, po której człowiek myśli, że coś zepsuł. */
 /* Mój sprzęt. Do tej pory dało się go ustawić wyłącznie przez `/api/gear`
-   curlem — czyli w praktyce wcale, a plan zdjęciowy liczył dla domyślnego
+   curlem – czyli w praktyce wcale, a plan zdjęciowy liczył dla domyślnego
    korpusu i nie wiedział nic o dronie. */
 async function wczytajSprzet() {
   try {
@@ -5701,25 +5701,25 @@ async function wczytajSprzet() {
     $('gear-body').value = d.korpus || '';
     $('gear-lenses').value = d.obiektywy || '';
     $('gear-extras').value = d.dodatki || '';
-  } catch { /* offline — pola zostają puste, zapis i tak zadziała później */ }
+  } catch { /* offline – pola zostają puste, zapis i tak zadziała później */ }
 }
 
-/* Zapis pod przyciskiem, nie przy pisaniu — poprawka po obejrzeniu własnej
+/* Zapis pod przyciskiem, nie przy pisaniu – poprawka po obejrzeniu własnej
    roboty na zrzucie ekranu.
 
    Pierwsza wersja zapisywała sprzęt na bieżąco, z opóźnieniem. Działało, ale
    stworzyło w jednym oknie dwa różne modele zapisu: „Korpus", „Obiektywy"
    i „Reszta sprzętu" zapisywały się same, a stojące tuż obok „Profil"
-   i „Lokalizacja" — dopiero po kliknięciu. Pola tekstowe zachowujące się
+   i „Lokalizacja" – dopiero po kliknięciu. Pola tekstowe zachowujące się
    inaczej niż sąsiednie pola tekstowe to nie wygoda, tylko zagadka.
 
    Po przeniesieniu sprzętu do Pleneru zostaje ta sama zasada, tylko własny
-   przycisk: „Zapisz sprzęt". `/api/gear` i tak zawsze było osobną trasą —
+   przycisk: „Zapisz sprzęt". `/api/gear` i tak zawsze było osobną trasą –
    doklejenie go do przycisku Ustawień było wyłącznie skutkiem tego, że pola
    przypadkiem tam stały. */
 /* Błąd LECI DALEJ, nie jest połykany. Dopóki zapis wisiał pod przyciskiem
    Ustawień razem z profilem i lokalizacją, ciche `catch` było spójne z resztą.
-   Teraz sprzęt ma własny przycisk i własne potwierdzenie „Zapisane." — a to
+   Teraz sprzęt ma własny przycisk i własne potwierdzenie „Zapisane." – a to
    potwierdzenie po nieudanym żądaniu byłoby zwykłym kłamstwem. */
 async function zapiszSprzet() {
   const r = await fetch('/api/gear', {
@@ -5753,7 +5753,7 @@ $('polish-btn').addEventListener('click', polishPrompt);
 // ----------------------------------------------------------------
 
 /* Stan silników z ostatniego /api/status. Kropka przy nazwie modelu miała
-   kolor silnika nawet przy „Chmura NVIDIA — brak klucza" w panelu stanu —
+   kolor silnika nawet przy „Chmura NVIDIA – brak klucza" w panelu stanu –
    dwa sprzeczne sygnały. Teraz gaśnie, gdy silnik jest niedostępny. */
 var stanSilnikow = {};   // var: updateModelBadge bywa wołane przed tą linią (start aplikacji)
 
@@ -5789,7 +5789,7 @@ async function retryConnection() {
   if (btn) { btn.disabled = false; btn.textContent = t('offline.retry'); }
 }
 
-/* Pierwsze /api/config i /api/status — od nich zależy, którym silnikiem
+/* Pierwsze /api/config i /api/status – od nich zależy, którym silnikiem
    rozpoznawać mowę. Tryb głosowy otwarty wcześniej czeka na tę obietnicę. */
 let gotowyStatus = null;
 let gotowyConfig = null;
@@ -5823,7 +5823,7 @@ async function refreshStatusWlasciwe() {
     if (senses.online) {
       /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
          (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i
-         „dokumenty (docling)" to dwie różne jakości odczytu — z tym drugim
+         „dokumenty (docling)" to dwie różne jakości odczytu – z tym drugim
          Cosmos czyta skany i tabele, z pierwszym nie. */
       const active = Object.entries(senses.caps).filter(([, v]) => v)
         .map(([k, v]) => (typeof v === 'string' ? `${k} (${v})` : k));
@@ -5834,9 +5834,9 @@ async function refreshStatusWlasciwe() {
       el.statusSenses.title = t('stat.sensesRun');
     }
   } catch {
-    setStatusRow(el.statusCloud, false, '—');
-    setStatusRow(el.statusLocal, false, '—');
-    setStatusRow(el.statusSenses, false, '—');
+    setStatusRow(el.statusCloud, false, '–');
+    setStatusRow(el.statusLocal, false, '–');
+    setStatusRow(el.statusSenses, false, '–');
     setServerReachable(false);
   }
 }
@@ -5851,7 +5851,7 @@ async function loadServerConfigWlasciwe() {
     serverConfig = await res.json();
     setServerReachable(true);
   } catch {
-    // interfejs działa dalej z pamięci podręcznej — pasek u góry mówi o awarii
+    // interfejs działa dalej z pamięci podręcznej – pasek u góry mówi o awarii
     setServerReachable(false);
   }
   buildEndpointTabs();
@@ -5863,11 +5863,11 @@ async function loadServerConfigWlasciwe() {
 // PWA
 // ----------------------------------------------------------------
 
-// Service worker i pasek „Jest nowa wersja” — public/pwa.js.
+// Service worker i pasek „Jest nowa wersja” – public/pwa.js.
 uruchomPwa({ t });
 
 // ----------------------------------------------------------------
-// Logowanie (gdy serwer wymaga hasła — np. na VPS)
+// Logowanie (gdy serwer wymaga hasła – np. na VPS)
 // ----------------------------------------------------------------
 
 async function checkAuth() {
@@ -5879,7 +5879,7 @@ async function checkAuth() {
     konta_.pilnujWlascicielaPamieci(d.uzytkownik);
     return d.required && !d.authed ? false : true;
   } catch {
-    return true; // serwer nieosiągalny — nie blokuj UI (offline)
+    return true; // serwer nieosiągalny – nie blokuj UI (offline)
   }
 }
 
@@ -5918,7 +5918,7 @@ function showLogin() {
 
 async function boot() {
   applyI18n();
-  /* Link z zaproszeniem ma pierwszeństwo przed wszystkim innym — także przed
+  /* Link z zaproszeniem ma pierwszeństwo przed wszystkim innym – także przed
      sesją. Ktoś, kto dostał zaproszenie na urządzeniu, na którym jest już
      zalogowany właściciel, ma założyć SWOJE konto, a nie trafić na cudze. */
   const zaproszenie = konta_.tokenZaproszenia();
@@ -5941,8 +5941,8 @@ function startApp() {
   el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
   updateKbBadge();
   /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
-     powstawała w tle — wznowienie musi mieć do czego wrócić. */
-  // Szkic i kolejka sprzed odświeżenia — kolejka rusza, gdy nic się nie liczy.
+     powstawała w tle – wznowienie musi mieć do czego wrócić. */
+  // Szkic i kolejka sprzed odświeżenia – kolejka rusza, gdy nic się nie liczy.
   try {
     const szkic = localStorage.getItem(KLUCZ_SZKICU);
     if (szkic && !el.input.value) { el.input.value = szkic; autosizeInput(); updateSendButton(); }
@@ -5963,25 +5963,25 @@ function startApp() {
   pollDueRoutines();
   setInterval(pollDueRoutines, 60000);
   el.input.focus();
-  /* Dopiero teraz panel boczny na telefonie może się pokazać — do tej chwili
+  /* Dopiero teraz panel boczny na telefonie może się pokazać – do tej chwili
      CSS trzyma go schowanego (.app:not(.gotowa)). Bez tego przy każdym
      starcie migał otwarty z przyciemnieniem przez ~0,4 s. */
   document.querySelector('.app').classList.add('gotowa');
 }
 
 // ----------------------------------------------------------------
-// NAUKA — rozpoznawanie (przez zmysły), procedury, rutyny: public/nauka-widok.js
+// NAUKA – rozpoznawanie (przez zmysły), procedury, rutyny: public/nauka-widok.js
 // ----------------------------------------------------------------
 const { loadAutomationStatus, closeLearn, loadProcedures, runProcedure, scheduleControls, updateLearnBadge, pollDueRoutines } = utworzNaukeWidok({
   $, escapeHtml, readJsonSafe, getMedia,
 });
 
 // ----------------------------------------------------------------
-// Strumień zdarzeń percepcji — kanał od serwera do okna
+// Strumień zdarzeń percepcji – kanał od serwera do okna
 //
 // Dotąd przeglądarka tylko WYSYŁAŁA zdarzenia i nigdy nie dowiadywała się,
 // że coś się stało. „Hej, Kosmos" wykryte przez senses/wake_listener.py na
-// domowym komputerze umierało w logu serwera — telefon w kieszeni nic o tym
+// domowym komputerze umierało w logu serwera – telefon w kieszeni nic o tym
 // nie wiedział. Teraz nasłuchujemy.
 // ----------------------------------------------------------------
 
@@ -5995,7 +5995,7 @@ function pokazZdarzenie(z) {
   const pasek = $('event-flash');
   if (!pasek) return;
   // Nieznany typ zdarzenia (np. z własnego skryptu w senses/) nie ma
-  // tłumaczenia — pokazujemy wtedy surową nazwę zamiast „undefined".
+  // tłumaczenia – pokazujemy wtedy surową nazwę zamiast „undefined".
   const etykieta = maKlucz('event.' + z.type) ? t('event.' + z.type) : z.type;
   pasek.textContent = `${etykieta}: ${z.summary}`;
   pasek.hidden = false;
@@ -6012,12 +6012,12 @@ async function obsluzZdarzenie(z) {
     try { await enterVoiceMode(); } catch { /* brak zgody na mikrofon */ }
     return;
   }
-  /* Reszta tylko mignięciem — to kontekst, nie polecenie.
+  /* Reszta tylko mignięciem – to kontekst, nie polecenie.
    *
    *  ALE NIE TO, CO I TAK WIDAĆ. Dymek istnieje po to, żeby przy ZAMKNIĘTYM
    *  podglądzie dowiedzieć się, że Cosmos kogoś zobaczył. Przy otwartym
    *  podglądzie ta sama treść stoi już pod obrazem, i to na stałe zamiast
-   *  na sześć sekund — więc dymek tylko powtarzał ją drugi raz nad panelem.
+   *  na sześć sekund – więc dymek tylko powtarzał ją drugi raz nad panelem.
    *  Marcin zapytał wprost, czy tak miało być; nie miało.
    *
    *  Czujniki, urządzenia i rutyny lecą dalej: ich w podglądzie nie widać. */
@@ -6026,7 +6026,7 @@ async function obsluzZdarzenie(z) {
   if (['kamera', 'czujnik', 'sylwetka', 'urządzenie', 'rutyna'].includes(z.type)) pokazZdarzenie(z);
 }
 
-// Przełącznik w Ustawieniach — czytany przy otwarciu okna i zapisywany od razu.
+// Przełącznik w Ustawieniach – czytany przy otwarciu okna i zapisywany od razu.
 const wakeCheckbox = $('set-wake-remote');
 if (wakeCheckbox) {
   wakeCheckbox.checked = wakeZdalny();
@@ -6040,7 +6040,7 @@ function sluchajZdarzen() {
   try { strumienZdarzen = new EventSource('/api/events/stream'); }
   catch { return; }
 
-  /* Udane połączenie zeruje zwłokę. Dawniej robiło to dopiero zdarzenie —
+  /* Udane połączenie zeruje zwłokę. Dawniej robiło to dopiero zdarzenie –
      po serii restartów kanał, który już działał, wznawiał się potem co minutę. */
   strumienZdarzen.onopen = () => { zwlokaWznowienia = 1000; };
   strumienZdarzen.addEventListener('zdarzenie', (e) => {
@@ -6049,7 +6049,7 @@ function sluchajZdarzen() {
   });
 
   strumienZdarzen.onerror = () => {
-    // Serwer padł albo sieć znikła. Wznawiamy z rosnącą zwłoką — bez tego
+    // Serwer padł albo sieć znikła. Wznawiamy z rosnącą zwłoką – bez tego
     // telefon poza zasięgiem dobija serwer setkami prób na minutę.
     strumienZdarzen.close();
     strumienZdarzen = null;

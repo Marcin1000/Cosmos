@@ -1,4 +1,4 @@
-"""Atrapa endpointu zgodnego z OpenAI — do sprawdzenia ścieżki /api/polish."""
+"""Atrapa endpointu zgodnego z OpenAI – do sprawdzenia ścieżki /api/polish."""
 import http.server, json
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -11,7 +11,7 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def do_GET(self):
-        # realistyczne, DŁUGIE identyfikatory — o nie rozbijała się lista na telefonie
+        # realistyczne, DŁUGIE identyfikatory – o nie rozbijała się lista na telefonie
         ids = ["nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
                "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
                "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",

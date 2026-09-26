@@ -1,4 +1,4 @@
-/* Konta, zaproszenia i sesje — czyli czy do Cosmosa na publicznej domenie
+/* Konta, zaproszenia i sesje – czyli czy do Cosmosa na publicznej domenie
    wejdzie tylko ten, kogo Marcin zaprosił.
 
    Do września 2026 Cosmos miał jedno hasło i anonimowe sesje w pamięci.
@@ -7,19 +7,19 @@
    restart, a formularz logowania nie może pozwalać zgadywać w nieskończoność.
 
    Każdy punkt sprawdza zachowanie przez HTTP, na prawdziwym serwerze:
-     1. bez sesji — 401 na danych, a nie „puste dane",
+     1. bez sesji – 401 na danych, a nie „puste dane",
      2. stary ekran logowania (samo hasło) nadal wpuszcza właściciela,
-     3. zaproszenie działa RAZ; drugi klik w ten sam link — 410,
+     3. zaproszenie działa RAZ; drugi klik w ten sam link – 410,
      4. sesja przeżywa restart serwera (wcześniej restart wylogowywał wszystkich),
      5. zmiana hasła wylogowuje POZOSTAŁE urządzenia, a to bieżące zostaje,
      6. usunięte konto traci sesję natychmiast, a jego dane nie znikają,
-     7. pięć pomyłek z jednego adresu blokuje ten adres — nawet poprawne hasło,
+     7. pięć pomyłek z jednego adresu blokuje ten adres – nawet poprawne hasło,
         ale inny adres wchodzi bez przeszkód,
      8. żądanie z ciastkiem i obcym nagłówkiem Origin jest odrzucane,
-     9. „Wyloguj wszędzie" działa — przycisk wysyła POST BEZ treści, a serwer
+     9. „Wyloguj wszędzie" działa – przycisk wysyła POST BEZ treści, a serwer
         brał to za zły JSON i przez miesiące odpowiadał 400,
     10. członek na silniku przyznanym przez właściciela dostaje model z jego
-        listy i sufit max_tokens — nie „o1-pro na 100 tys. tokenów" na cudzy koszt;
+        listy i sufit max_tokens – nie „o1-pro na 100 tys. tokenów" na cudzy koszt;
         sufit wygrywa też z podbiciem limitu dla modeli myślących,
     11. zmysły (domowe GPU właściciela) i adres domu tylko ze zgodą; manifest
         zdolności i stan silników członka mówią tylko o JEGO silnikach, bez
@@ -42,7 +42,7 @@ const HASLO = 'haslo-wlasciciela-2026';
 const fail = [];
 const ok = (warunek, opis) => { console.log(`${warunek ? 'ok ' : 'ŹLE'} ${opis}`); if (!warunek) fail.push(opis); };
 
-/* Klient z ciastkiem. `ip` wkładamy w CF-Connecting-IP — serwer ufa temu
+/* Klient z ciastkiem. `ip` wkładamy w CF-Connecting-IP – serwer ufa temu
    nagłówkowi tylko z pętli zwrotnej, czyli dokładnie tak, jak za Cloudflare
    Tunnel. Dzięki temu da się sprawdzić blokadę „z dwóch różnych adresów". */
 function klient(ip = '10.0.0.1') {
@@ -68,8 +68,8 @@ function klient(ip = '10.0.0.1') {
   };
 }
 
-/* Atrapa dostawcy modeli i obrazków. Zapisuje, O CO serwer poprosił — model
-   i max_tokens — bo tylko to mówi, na co poszły pieniądze właściciela. */
+/* Atrapa dostawcy modeli i obrazków. Zapisuje, O CO serwer poprosił – model
+   i max_tokens – bo tylko to mówi, na co poszły pieniądze właściciela. */
 const zadaniaModelu = [];
 const atrapa = http.createServer((req, res) => {
   let b = '';
@@ -110,7 +110,7 @@ const atrapa = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end('{"data":[]}');
     }
-    // Zmysły właściciela — ŻYWE, bo tylko wtedy widać, komu je udostępniamy.
+    // Zmysły właściciela – ŻYWE, bo tylko wtedy widać, komu je udostępniamy.
     if (req.url === '/zmysly/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end('{"ok":true,"caps":{"detect":true}}');
@@ -122,7 +122,7 @@ const atrapa = http.createServer((req, res) => {
     res.writeHead(404); res.end();
   });
 });
-let ZMYSLY = '';                               // adres zmysłów na atrapie — znany po starcie
+let ZMYSLY = '';                               // adres zmysłów na atrapie – znany po starcie
 const EKSPORT = '/tmp/cosmos-eksport-wlasciciela';
 let envAtrapy = {};
 
@@ -169,7 +169,7 @@ async function postaw(dataDir) {
   ok(zle.kod === 401, `złe hasło → ${zle.kod}`);
   const log = await marcin.zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
   ok(log.kod === 200 && log.json.uzytkownik && log.json.uzytkownik.rola === 'wlasciciel',
-    'samo hasło (bez loginu) loguje właściciela — stary ekran i skrypty działają dalej');
+    'samo hasło (bez loginu) loguje właściciela – stary ekran i skrypty działają dalej');
   ok(log.json.uzytkownik && log.json.uzytkownik.login === 'marcin', 'login właściciela pochodzi z COSMOS_LOGIN');
   const log2 = await klient('10.0.0.3').zadaj('/api/login', { metoda: 'POST', dane: { login: 'Marcin', password: HASLO } });
   ok(log2.kod === 200, 'login wpisany wielką literą też pasuje');
@@ -187,7 +187,7 @@ async function postaw(dataDir) {
   const krotkie = await ania.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token, login: 'ania', haslo: '123' } });
   ok(krotkie.kod === 400, 'za krótkie hasło odrzucone');
   const zajety = await ania.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token, login: 'marcin', haslo: 'haslo-ani-12345' } });
-  ok(zajety.kod === 409, 'zajęty login odrzucony — i zaproszenie po tym NIE przepada');
+  ok(zajety.kod === 409, 'zajęty login odrzucony – i zaproszenie po tym NIE przepada');
   const przyj = await ania.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token, login: 'ania', haslo: 'haslo-ani-12345' } });
   ok(przyj.kod === 200 && przyj.json.uzytkownik.rola === 'czlonek' && Boolean(ania.ciastko),
     'przyjęcie zaproszenia zakłada konto członka i od razu loguje');
@@ -220,7 +220,7 @@ async function postaw(dataDir) {
   const aniaTelefon = klient('10.0.0.6');
   await aniaTelefon.zadaj('/api/login', { metoda: 'POST', dane: { login: 'ania', password: 'haslo-ani-12345' } });
   const zleStare = await ania.zadaj('/api/konto/haslo', { metoda: 'POST', dane: { stare: 'zle', nowe: 'nowe-haslo-ani-1' } });
-  ok(zleStare.kod === 403, 'zmiana hasła bez poprawnego starego — odmowa');
+  ok(zleStare.kod === 403, 'zmiana hasła bez poprawnego starego – odmowa');
   const zmiana = await ania.zadaj('/api/konto/haslo', { metoda: 'POST', dane: { stare: 'haslo-ani-12345', nowe: 'nowe-haslo-ani-1' } });
   ok(zmiana.kod === 200 && zmiana.json.wylogowano >= 1, `zmiana hasła wylogowała ${zmiana.json.wylogowano} inne urządzenie(a)`);
   ok((await ania.zadaj('/api/konto')).kod === 200, 'urządzenie, na którym zmieniono hasło, zostaje zalogowane');
@@ -228,11 +228,11 @@ async function postaw(dataDir) {
   const stareHaslo = await klient('10.0.0.7').zadaj('/api/login', { metoda: 'POST', dane: { login: 'ania', password: 'haslo-ani-12345' } });
   ok(stareHaslo.kod === 401, 'stare hasło już nie działa');
 
-  // --- 9. „Wyloguj wszędzie" — dokładnie tak, jak wysyła go przycisk ------------
+  // --- 9. „Wyloguj wszędzie" – dokładnie tak, jak wysyła go przycisk ------------
   const aniaTablet = klient('10.0.0.8');
   await aniaTablet.zadaj('/api/login', { metoda: 'POST', dane: { login: 'ania', password: 'nowe-haslo-ani-1' } });
   /* Otwarty strumień zdarzeń na „zgubionym" tablecie. Wylogowanie odrzucało
-     tylko NOWE żądania — otwarte połączenie żyło dalej i tablet widział nazwy
+     tylko NOWE żądania – otwarte połączenie żyło dalej i tablet widział nazwy
      plików, notatki i prompty aż do zerwania sieci. */
   const strumienTabletu = { tekst: '', zamkniety: false };
   const przerwijStrumien = new AbortController();
@@ -253,12 +253,12 @@ async function postaw(dataDir) {
   await ania.zadaj('/api/events', { metoda: 'POST', dane: { type: 'test', summary: 'PO-WYLOGOWANIU-WSZEDZIE' } });
   await new Promise((r) => setTimeout(r, 300));
   ok(!strumienTabletu.tekst.includes('PO-WYLOGOWANIU-WSZEDZIE') && strumienTabletu.zamkniety,
-    'otwarty strumień tabletu zerwany — zdarzenie po wylogowaniu do niego nie dociera');
+    'otwarty strumień tabletu zerwany – zdarzenie po wylogowaniu do niego nie dociera');
   przerwijStrumien.abort();
   ok((await ania.zadaj('/api/konto')).kod === 200, 'urządzenie, z którego kliknięto, zostaje zalogowane');
   const zepsuty = await fetch(`${ADRES}/api/konto`, { method: 'PUT', body: '{nazwa:',
     headers: { 'Content-Type': 'application/json', Cookie: ania.ciastko } });
-  ok(zepsuty.status === 400, 'zepsuty JSON nadal jest błędem — tolerujemy tylko PUSTE żądanie');
+  ok(zepsuty.status === 400, 'zepsuty JSON nadal jest błędem – tolerujemy tylko PUSTE żądanie');
 
   // --- 10. Silnik przyznany: model z listy właściciela, sufit max_tokens --------
   const idAniTu = przyj.json.uzytkownik.id;
@@ -284,7 +284,7 @@ async function postaw(dataDir) {
   ok(cw.zadanie.model === 'o1-pro' && !cw.spozaListy && tokeny(cw.zadanie) === 100000,
     `właściciel wybiera dowolny model i długość (${cw.zadanie.model}, ${tokeny(cw.zadanie)})`);
   /* Model myślący z listy właściciela: Cosmos podbija im limit do 16 000 (myślenie
-     liczy się do limitu) — i to podbicie przebijało sufit członka. */
+     liczy się do limitu) – i to podbicie przebijało sufit członka. */
   const myslacy = await czat(ania, { endpoint: 'openai', model: 'gpt-5-mini', max_tokens: 2048 });
   ok(myslacy.zadanie.model === 'gpt-5-mini' && tokeny(myslacy.zadanie) <= 8192,
     `model myślący członka: sufit wygrywa z podbiciem limitu (${tokeny(myslacy.zadanie)})`);
@@ -302,7 +302,7 @@ async function postaw(dataDir) {
   const stW = await marcin.zadaj('/api/status');
   ok(stW.json.senses && stW.json.senses.online === true, 'właściciel widzi swoje zmysły jako działające');
   ok(stAni.json.senses && stAni.json.senses.online === false,
-    'członek nie widzi ich jako dostępnych — przeglądarka nie skieruje do nich mowy ani kamery');
+    'członek nie widzi ich jako dostępnych – przeglądarka nie skieruje do nich mowy ani kamery');
   const cfgAni = await ania.zadaj('/api/config');
   const cfgW = await marcin.zadaj('/api/config');
   ok(!cfgAni.json.senses.baseUrl && cfgAni.json.studio.exportDir === null,
@@ -329,7 +329,7 @@ async function postaw(dataDir) {
     'OneDrive: identyfikator logowania Ani nie działa w callbacku właściciela');
   ok(!/Nieprawidłowy albo przeterminowany/.test(await callback(ania)),
     'OneDrive: ten sam identyfikator przechodzi u osoby, która zaczęła logowanie (kontrola)');
-  /* Wideo Studia: rejestr zadań jest wspólny, klucz Seedance — właściciela.
+  /* Wideo Studia: rejestr zadań jest wspólny, klucz Seedance – właściciela.
      Członek ze Studiem, znając numer zadania (np. ze zrzutu ekranu), dostawał
      cudze wideo z promptem do swojej bazy wiedzy. */
   await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { openai: true, studio: true } } });
@@ -372,9 +372,9 @@ async function postaw(dataDir) {
   }
   const zablok = await napastnik.zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
   ok(zablok.kod === 429 && /\d+ min/.test(zablok.json.error || ''),
-    `po 5 pomyłkach adres zablokowany — nawet z poprawnym hasłem (${zablok.kod}: ${zablok.json.error})`);
+    `po 5 pomyłkach adres zablokowany – nawet z poprawnym hasłem (${zablok.kod}: ${zablok.json.error})`);
   const zInnego = await klient('198.51.100.7').zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
-  ok(zInnego.kod === 200, 'z innego adresu właściciel wchodzi bez przeszkód — blokada nie zamyka wszystkich');
+  ok(zInnego.kod === 200, 'z innego adresu właściciel wchodzi bez przeszkód – blokada nie zamyka wszystkich');
 
   // --- 8. Obce pochodzenie ------------------------------------------------------
   /* fetch nie pozwala podmienić nagłówka Host, więc idziemy przez http.request.
@@ -389,7 +389,7 @@ async function postaw(dataDir) {
   ok((await surowe('https://cosmosai.live')) === 200, 'ten sam Origin co Host → przechodzi');
 
   // --- 12. Logowanie z cudzej strony („login CSRF") -----------------------------
-  /* Cudza strona wysyła formularz z SWOIM loginem i hasłem — przeglądarka ofiary
+  /* Cudza strona wysyła formularz z SWOIM loginem i hasłem – przeglądarka ofiary
      zostaje zalogowana na obce konto i jej rozmowy trafiają do napastnika. */
   const logowanieZ = (origin) => new Promise((gotowe) => {
     const r = http.request({ host: '127.0.0.1', port: PORT, path: '/api/login', method: 'POST',
@@ -419,7 +419,7 @@ async function postaw(dataDir) {
   const png = await miniatura('obraz.png');
   ok(png.status === 200 && png.headers.get('x-content-type-options') === 'nosniff'
     && /sandbox/.test(png.headers.get('content-security-policy') || ''),
-  `miniatura PNG przechodzi — z nosniff i sandbox (${png.status})`);
+  `miniatura PNG przechodzi – z nosniff i sandbox (${png.status})`);
   const przekierowana = await miniatura('przekieruj');
   ok(przekierowana.status !== 200 && przekierowana.status >= 400,
     `przekierowanie poza listę hostów nie przechodzi (SSRF do sieci serwera) → ${przekierowana.status}`);

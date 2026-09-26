@@ -1,8 +1,8 @@
 /* Pliki statyczne (server.js, serveStatic): pamięć podręczna, kompresja, zepsute adresy.
  *   1. „no-cache" + ETag → drugie pobranie to 304 bez treści (było: zawsze całe 120 kB),
- *   2. kompresja br/gzip dla tekstu, gdy przeglądarka o nią prosi — i treść po
+ *   2. kompresja br/gzip dla tekstu, gdy przeglądarka o nią prosi – i treść po
  *      rozpakowaniu jest ta sama,
- *   3. „/%E0" i „/%00" to 400, nie 500 (z pełną ścieżką instalacji); ścieżka poza public/ — 403 albo 404, nigdy plik,
+ *   3. „/%E0" i „/%00" to 400, nie 500 (z pełną ścieżką instalacji); ścieżka poza public/ – 403 albo 404, nigdy plik,
  *   4. robots.txt i sitemap.xml z właściwym typem. */
 const zlib = require('node:zlib');
 const { serwerCosmosa, czekajNa, zabij } = require('../pomoc');
@@ -12,7 +12,7 @@ const S = `http://127.0.0.1:${PORT}`;
 const problemy = [];
 const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) problemy.push(opis); };
 const http = require('node:http');
-// fetch sam rozpakowuje — tu chcemy widzieć surowe bajty i nagłówki
+// fetch sam rozpakowuje – tu chcemy widzieć surowe bajty i nagłówki
 const pobierz = (sciezka, naglowki = {}) => new Promise((ok_, zle) => {
   http.get(`${S}${sciezka}`, { headers: naglowki }, (r) => {
     const k = []; r.on('data', (c) => k.push(c)); r.on('end', () => ok_({ status: r.statusCode, h: r.headers, cialo: Buffer.concat(k) }));
@@ -37,7 +37,7 @@ const pobierz = (sciezka, naglowki = {}) => new Promise((ok_, zle) => {
   ok(!png.h['content-encoding'], 'obrazów nie kompresujemy');
 
   ok((await pobierz('/%E0')).status === 400, 'zepsuty adres → 400');
-  // Bajt zerowy wywracał odczyt pliku, a 500 oddawało pełną ścieżkę instalacji — bez logowania.
+  // Bajt zerowy wywracał odczyt pliku, a 500 oddawało pełną ścieżkę instalacji – bez logowania.
   const nul = await pobierz('/%00');
   ok(nul.status === 400 && !/\/(home|opt|srv)\//.test(nul.cialo.toString()), `bajt zerowy w adresie → ${nul.status}, bez ścieżek serwera`);
   const poza = await pobierz('/..%2F..%2Fpackage.json');

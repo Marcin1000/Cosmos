@@ -1,4 +1,4 @@
-/* Archiwum materiału — drugi wyróżnik Cosmosa.
+/* Archiwum materiału – drugi wyróżnik Cosmosa.
 
    ChatGPT nie ma plików Marcina i nigdy nie będzie ich miał, bo nikt nie
    wrzuci dwóch terabajtów do okna czatu. Tu indeks mieszka na VPS-ie, więc
@@ -8,7 +8,7 @@
    Najciekawsze i najłatwiejsze do zepsucia jest filtrowanie po PORZE
    ŚWIATŁA: liczonej z pozycji Słońca nad miejscem zdjęcia, nie zgadywanej
    z godziny w nazwie pliku. Dlatego sprawdzamy je na zdjęciach o znanych
-   porach — południe musi wyjść jako ostre światło, a 20:40 w czerwcu jako
+   porach – południe musi wyjść jako ostre światło, a 20:40 w czerwcu jako
    złota godzina. */
 const { srodowisko } = require('../pomoc');
 
@@ -30,10 +30,10 @@ const MATERIAL = [
     przyslona: 4, iso: 1600, ...WARSZAWA },
   { id: 'a5', nazwa: 'IMG_005.jpg', typ: 'zdjecie', kiedy: '2026-06-14T23:30:00',
     aparat: 'Canon EOS R6m2', ogniskowa: 35, przyslona: 1.4, iso: 6400, ...WARSZAWA },
-  // Zdjęcie z zupełnie innego miejsca — do sprawdzania promienia.
+  // Zdjęcie z zupełnie innego miejsca – do sprawdzania promienia.
   { id: 'a6', nazwa: 'IMG_006.jpg', typ: 'zdjecie', kiedy: '2026-07-01T12:00:00',
     aparat: 'Canon EOS R6m2', ogniskowa: 50, lat: 54.352, lon: 18.6466 },
-  // Bez daty i GPS — takich plików w archiwum jest zawsze sporo.
+  // Bez daty i GPS – takich plików w archiwum jest zawsze sporo.
   { id: 'a7', nazwa: 'skan.jpg', typ: 'zdjecie' },
 ];
 
@@ -61,7 +61,7 @@ const MATERIAL = [
   console.log(`2. powtórka: dodanych ${r.dodanych}, odświeżonych ${r.odswiezonych}, razem ${r.razem}`);
   if (r.dodanych !== 0 || r.razem !== 7) fail.push('powtórne indeksowanie zduplikowało wpisy');
 
-  /* 3. Pora światła — sedno tego wyróżnika. 20:40 czasu lokalnego w czerwcu
+  /* 3. Pora światła – sedno tego wyróżnika. 20:40 czasu lokalnego w czerwcu
      pod Warszawą to złota godzina, 13:00 to ostre światło, 23:30 to noc.
      Gdyby przeliczanie strefy było zepsute, wszystkie trzy byłyby przesunięte. */
   const zlota = await szukaj({ swiatlo: 'złota godzina' });
@@ -82,7 +82,7 @@ const MATERIAL = [
   if (wideo.znaleziono !== 1) fail.push('zły filtr po typie');
   if (ogn.znaleziono !== 3) fail.push(`50 mm dało ${ogn.znaleziono}, oczekiwano 3`);
 
-  // 5. dopasowanie fragmentem — „R6" ma znaleźć „Canon EOS R6m2"
+  // 5. dopasowanie fragmentem – „R6" ma znaleźć „Canon EOS R6m2"
   const r6 = await szukaj({ aparat: 'R6' });
   console.log(`5. aparat „R6": ${r6.znaleziono}`);
   if (r6.znaleziono !== 5) fail.push(`„R6" dało ${r6.znaleziono}, oczekiwano 5`);
@@ -94,19 +94,19 @@ const MATERIAL = [
   if (wysokieIso.znaleziono !== 2) fail.push(`ISO ≥1600 dało ${wysokieIso.znaleziono}, oczekiwano 2`);
   if (szerokie.znaleziono !== 3) fail.push(`24–35 mm dało ${szerokie.znaleziono}, oczekiwano 3`);
 
-  /* 7. Promień od punktu — „mam coś z tego miejsca". Gdańsk (a6) leży
+  /* 7. Promień od punktu – „mam coś z tego miejsca". Gdańsk (a6) leży
      260 km od Piaseczna i nie może wpaść w promień 5 km. */
   const tutaj = await szukaj({ ...WARSZAWA, promienKm: 5 });
   console.log(`7. w promieniu 5 km od Piaseczna: ${tutaj.znaleziono}`);
   if (tutaj.znaleziono !== 5) fail.push(`promień dał ${tutaj.znaleziono}, oczekiwano 5`);
   if (tutaj.wyniki.some((w) => w.id === 'a6')) fail.push('Gdańsk wpadł w promień 5 km od Piaseczna');
 
-  // 8. zestawienia — na tym opierają się pytania „ile" i „najczęściej"
+  // 8. zestawienia – na tym opierają się pytania „ile" i „najczęściej"
   const poOgn = await staty({ pole: 'ogniskowa' });
   console.log(`8. wg ogniskowej: ${poOgn.grupy.map((g) => `${g.wartosc}mm×${g.ile}`).join(', ')}`
     + ` · z danymi ${poOgn.zDanymi}/${poOgn.razem}`);
   /* Pokrycie danych musi jechać razem z liczbami. „6 zdjęć 50 mm w tym roku"
-     brzmi jak fakt, a bywa rozmiarem luki w metadanych — model bez tej
+     brzmi jak fakt, a bywa rozmiarem luki w metadanych – model bez tej
      liczby nie ma jak się zorientować. */
   if (typeof poOgn.zDanymi !== 'number' || typeof poOgn.bezDanych !== 'number') {
     fail.push('zestawienie nie podaje pokrycia danych');
@@ -119,11 +119,11 @@ const MATERIAL = [
   console.log(`   wg roku: ${poRoku.grupy.map((g) => `${g.wartosc}×${g.ile}`).join(', ')}`);
   if (!poRoku.grupy.find((g) => g.wartosc === '2026' && g.ile === 5)) fail.push('złe zestawienie po roku');
 
-  // 9. zestawienie z filtrem — „ile 50 mm W TYM ROKU", nie w ogóle
+  // 9. zestawienie z filtrem – „ile 50 mm W TYM ROKU", nie w ogóle
   const poObiektywie = await staty({ pole: 'obiektyw', rok: 2026 });
   console.log(`9. obiektywy w 2026: ${poObiektywie.grupy.map((g) => `${g.wartosc}×${g.ile}`).join(', ')}`);
   if (poObiektywie.grupy.some((g) => g.wartosc.includes('24-70'))) {
-    fail.push('filtr roku nie zadziałał w zestawieniu — wszedł obiektyw z 2025');
+    fail.push('filtr roku nie zadziałał w zestawieniu – wszedł obiektyw z 2025');
   }
 
   // 10. pliki bez danych nie mogą znikać ani udawać, że mają datę
@@ -139,7 +139,7 @@ const MATERIAL = [
   if (suma.wpisow !== 7 || suma.zGps !== 6) fail.push('złe podsumowanie');
   if (!suma.zrodla.includes('onedrive') || !suma.zrodla.includes('dysk')) fail.push('zgubił źródła');
 
-  // 12. usuwanie po źródle — przy przeindeksowaniu OneDrive od zera
+  // 12. usuwanie po źródle – przy przeindeksowaniu OneDrive od zera
   const usuniete = await (await fetch(`${env.adres}/api/archive/source?zrodlo=onedrive`, { method: 'DELETE' })).json();
   const po = await staty();
   console.log(`12. usunięto z OneDrive: ${usuniete.usunieto}, zostało ${po.wpisow}`);
@@ -154,7 +154,7 @@ const MATERIAL = [
   if (zle.status !== 400) fail.push('przyjął wpisy, które nie są tablicą');
   if (!zlePole.error) fail.push('grupowanie po nieznanym polu nie zgłasza błędu');
 
-  // 14. model wie o narzędziu — dopiero gdy archiwum NIE jest puste
+  // 14. model wie o narzędziu – dopiero gdy archiwum NIE jest puste
   const prompt = await (await fetch(`${env.adres}/api/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint: 'cloud', model: 'nvidia/nemotron-3-super-120b-a12b', messages: [{ role: 'user', content: 'x' }] }),

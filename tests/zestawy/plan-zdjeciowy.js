@@ -1,4 +1,4 @@
-/* Asystent planu zdjęciowego — wyróżnik Cosmosa.
+/* Asystent planu zdjęciowego – wyróżnik Cosmosa.
    ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani jaki masz
    sprzęt, więc na „jakie ustawienia" odpowiada ogólnikami. Tutaj są liczby.
 
@@ -12,13 +12,13 @@ const { evZeSlonca, dobierz, orientacja, evZPomiaru } = require('../../lib/ekspo
 // Piaseczno, mazowieckie
 const LAT = 52.2297;
 const LON = 21.0122;
-const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }) : '—');
+const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }) : '–');
 
 (async () => {
   const fail = [];
 
   /* 1. Wschód i zachód w przesilenie letnie. Wartości astronomiczne dla tej
-     szerokości to ok. 4:15 i 21:00 czasu lokalnego. Tolerancja 5 minut —
+     szerokości to ok. 4:15 i 21:00 czasu lokalnego. Tolerancja 5 minut –
      dokładniej nie potrzebujemy, mniej dokładnie byłoby już zgadywaniem. */
   const lato = swiatloDnia(new Date('2026-06-21T12:00:00Z'), LAT, LON);
   const minuty = (d) => Number(hhmm(d).split(':')[0]) * 60 + Number(hhmm(d).split(':')[1]);
@@ -26,7 +26,7 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   if (Math.abs(minuty(lato.wschod) - (4 * 60 + 15)) > 5) fail.push('zły wschód w przesilenie letnie');
   if (Math.abs(minuty(lato.zachod) - (21 * 60 + 0)) > 5) fail.push('zły zachód w przesilenie letnie');
 
-  // 2. zima musi być wyraźnie krótsza — łapie pomylony znak deklinacji
+  // 2. zima musi być wyraźnie krótsza – łapie pomylony znak deklinacji
   const zima = swiatloDnia(new Date('2026-12-21T12:00:00Z'), LAT, LON);
   const dlugosc = (s) => (s.zachod - s.wschod) / 3600000;
   console.log(`2. długość dnia: lato ${dlugosc(lato).toFixed(1)} h, zima ${dlugosc(zima).toFixed(1)} h`);
@@ -46,18 +46,18 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   if (zlota.faza !== 'złota godzina') fail.push('nie rozpoznał złotej godziny');
 
   /* 5. Reguła „słoneczne 16": w pełnym słońcu poprawna ekspozycja to f/16
-     przy czasie 1/ISO. To jest fakt spoza naszego kodu — jeśli nasz EV się
+     przy czasie 1/ISO. To jest fakt spoza naszego kodu – jeśli nasz EV się
      z nim nie zgadza, wszystkie nastawy będą przesunięte. */
   const evPelneSlonce = evZeSlonca(60, 'bezchmurnie');
   console.log(`5. EV w pełnym słońcu: ${evPelneSlonce.toFixed(1)} (reguła 16 mówi ~15)`);
   if (Math.abs(evPelneSlonce - 15) > 0.8) fail.push('EV pełnego słońca odbiega od reguły „słoneczne 16"');
 
-  /* 6. Wideo: czas ZAWSZE z reguły 180°, niezależnie od światła — i DOKŁADNIE
+  /* 6. Wideo: czas ZAWSZE z reguły 180°, niezależnie od światła – i DOKŁADNIE
      1/(2×klatki), bez zaokrąglania do drabinki zdjęciowej.
 
      Ten test do niedawna sam wymuszał błąd: oczekiwał 1/60 przy 25 kl./s
      i 1/125 przy 50, bo tyle dawało zaokrąglenie do klasycznych czasów
-     aparatu. Tyle że 1/60 przy 25 kl./s to kąt 150°, a nie 180 — i, co gorsze
+     aparatu. Tyle że 1/60 przy 25 kl./s to kąt 150°, a nie 180 – i, co gorsze
      pod polską siecią 50 Hz, to czas, przy którym świetlówki i LED-y dają
      przewijające się pasy. W trybie filmowym aparat oferuje 1/50 i 1/100,
      więc nie ma czego zaokrąglać. Wykrył to zestaw `plener`, sprawdzający
@@ -66,7 +66,7 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
     const r = dobierz(evZeSlonca(40), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki });
     if (r.czas !== oczekiwany) fail.push(`wideo ${klatki} kl./s dało ${r.czas}, oczekiwano ${oczekiwany}`);
   }
-  // 1/60 przy 60 kl./s nie jest wielokrotnością 1/100 — ma paść ostrzeżenie o migotaniu.
+  // 1/60 przy 60 kl./s nie jest wielokrotnością 1/100 – ma paść ostrzeżenie o migotaniu.
   const swietlowki = dobierz(evZeSlonca(40), { sprzet: 'canon-r6ii', tryb: 'wideo', klatki: 60 });
   console.log(`6a. wideo 60 kl./s → ${swietlowki.czas}, ostrzeżenie o 50 Hz: `
     + `${swietlowki.powody.some((p) => /50 Hz/.test(p))}`);
@@ -92,7 +92,7 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   if (poludnie.roznicaEV <= 0) fail.push('nie wykrył prześwietlenia w pełnym słońcu');
   if (!poludnie.powody.some((p) => /ND/.test(p))) fail.push('nie zaproponował filtra ND');
   if (poludnie.powody.some((p) => /statyw|jaśniejszy obiektyw/.test(p))) {
-    fail.push('przy prześwietleniu radzi statyw — znak różnicy znowu odwrócony');
+    fail.push('przy prześwietleniu radzi statyw – znak różnicy znowu odwrócony');
   }
 
   // 8. po ciemku odwrotnie: brakuje światła, ND byłby bez sensu
@@ -100,7 +100,7 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   console.log(`8. noc, zdjęcie → ${noc.czas} ${noc.przyslona} ISO ${noc.iso}, różnica ${noc.roznicaEV} EV`);
   if (noc.powody.some((p) => /ND/.test(p))) fail.push('po ciemku proponuje filtr ND');
 
-  // 9. orientacja kadru — o to prosił Marcin wprost
+  // 9. orientacja kadru – o to prosił Marcin wprost
   const pion = orientacja(1080, 1920);
   const poziom = orientacja(1920, 1080);
   console.log(`9. kadr: ${pion.uklad} ${pion.proporcje} / ${poziom.uklad} ${poziom.proporcje}`);

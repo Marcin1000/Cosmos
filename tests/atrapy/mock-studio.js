@@ -1,8 +1,8 @@
 // Atrapy: OpenAI Images + ElevenLabs + Seedance (Ark) na porcie 9095
 //
 // Słowa w prompcie / tekście sterują atrapą (zestaw studio-w-tle):
-//   POWOLI — odpowiedź po POWOLI_MS (dłużej, niż serwer czeka przed 202),
-//   BLAD   — generator odpowiada 500 z opisem błędu.
+//   POWOLI – odpowiedź po POWOLI_MS (dłużej, niż serwer czeka przed 202),
+//   BLAD   – generator odpowiada 500 z opisem błędu.
 const http = require('node:http');
 const POWOLI_MS = Number(process.env.POWOLI_MS) || 1500;
 let wideoPowoli = false;

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/obrazy/banner-en-ciemny.jpg">
-    <img src="docs/obrazy/banner-en.jpg" alt="Cosmos — one thread, every engine: NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation" width="880">
+    <img src="docs/obrazy/banner-en.jpg" alt="Cosmos – one thread, every engine: NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation" width="880">
   </picture>
 </p>
 
@@ -22,7 +22,7 @@ Cosmos is a personal AI environment that runs the same conversation across a
 local GPU and three cloud providers, and switches between them mid-thread. It
 started as a question I could not answer by reading: **what actually breaks when
 you put a multimodal model behind a real interface, on real hardware, with real
-data?** Not a demo — something used daily, from a phone, over a home network.
+data?** Not a demo – something used daily, from a phone, over a home network.
 
 The answer turned out to be *almost everything, and rarely the model*. Streams
 die when a phone screen locks. Vision models silently drop images they cannot
@@ -44,7 +44,7 @@ this repository is the shape those problems left behind.
 Four layers, one rule between them: **each layer only receives what it needs to
 do its job.** The tool cascade never sees application state. The view builders
 never see the conversation. The Node core never imports a Python sensor. This is
-not style — it is what makes the boundaries testable, because a module that
+not style – it is what makes the boundaries testable, because a module that
 cannot reach something cannot quietly start depending on it.
 
 | Layer | What lives there | Lines |
@@ -61,7 +61,7 @@ cannot reach something cannot quietly start depending on it.
 The switch between local and cloud is the one design decision everything else
 follows from. Five reasons, in the order they actually matter:
 
-**Privacy.** The photo archive indexes personal files — family, home, locations.
+**Privacy.** The photo archive indexes personal files – family, home, locations.
 Those queries run against a local index and, when a vision model is needed, a
 local vision model. Nothing about them has to leave the house.
 
@@ -79,13 +79,13 @@ use from a train.
 vision, long context and speech each have a different winner this month, and the
 switch is one click because the answer keeps changing.
 
-The interesting part is not that both exist — it is that they share one
+The interesting part is not that both exist – it is that they share one
 conversation, one tool cascade, and one set of guarantees. Switching providers
 mid-thread must not lose the thread.
 
 Sharing a thread means respecting each side's limits instead of pretending they
 are the same. A home Ollama holds 4 096 tokens by default and silently drops the
-oldest messages when a prompt overflows — in one measured search cascade it
+oldest messages when a prompt overflows – in one measured search cascade it
 dropped the user's actual question. So the local path gets a budget: a shorter
 tool description when the window is small, oldest turns trimmed openly (with a
 note under the reply), and a reply limit that fits what is left. A sleeping home
@@ -101,7 +101,7 @@ These are the parts I would actually defend in a review.
 **Zero runtime dependencies in the Node core.** 31 000 lines of production JavaScript,
 `node server.js`, nothing to build. Deployment to a VPS is `git clone`. There is
 no dependency tree to audit and nothing that breaks overnight. Python sensors are
-the deliberate exception — nobody should write an object detector from scratch —
+the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
 **Tests measure behaviour, never source text.** 120 suites plus 9 Python
@@ -112,14 +112,14 @@ calls the thing it checks, and each new one is verified to **fail against the
 old, broken code** before it is committed.
 
 **The audit checks whether it is lying to itself.** `scripts/audyt.js` runs 15
-static sections — route coverage, translation parity, dead identifiers, secret
+static sections – route coverage, translation parity, dead identifiers, secret
 leakage, boot smoke test. Section 0 audits the auditor: does it still read every
 script the page loads, and do its own patterns still match anything? A regex that
 silently stops matching returns an empty list, and an empty list reads exactly
 like "all clear". That has happened three times; it is now a hard failure.
 
 **Plain JSON files, but a damaged one never becomes empty state.** There is no
-database — at this scale it would add a dependency and nothing else. The price is
+database – at this scale it would add a dependency and nothing else. The price is
 that a file cut short by a power loss used to parse as "nothing" and be
 overwritten with an empty list on the next save; that is how member accounts
 vanished in a measured run. Now a damaged file is set aside as
@@ -136,16 +136,16 @@ keeps working and the API bill keeps running. Streaming answers send a heartbeat
 every 25 s; image generation that runs past ~75 s answers `202` with a job id,
 and the page polls `/api/zadania` until the result lands in the knowledge base.
 Files travel to the knowledge base as a raw request body with upload progress,
-not as base64 inside JSON — the old way froze a phone for almost five seconds on
+not as base64 inside JSON – the old way froze a phone for almost five seconds on
 a 45 MB recording, because the encoding ran on the main thread. A camera photo
 selected in the knowledge base used to ride along with every message as ~16 MB of
-base64 — over Claude's 5 MB image limit. The server has no image decoder and
+base64 – over Claude's 5 MB image limit. The server has no image decoder and
 stays dependency-free, so the browser makes a 1568 px preview at upload time and
 the model gets that; the original stays untouched.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
-a genuine limitation for outside readers — the reasoning is dense and it is all
+a genuine limitation for outside readers – the reasoning is dense and it is all
 in the wrong language for most of you.
 
 ---
@@ -163,9 +163,9 @@ answered a question. The interesting column is the last one.
 | **Camera & Kinect** | Does a live frame improve the answer, or just the demo? | Sensor process, depth stream, object detection. Mostly yes for "what am I holding", mostly no for anything requiring memory. |
 | **Voice mode** | Wake word and continuous listening in a browser | Chrome on Android does not honour `continuous`. It restarts after every utterance and re-recognises audio it already heard, so naïve accumulation produces the same sentence eight times, concatenated. |
 | **Canon over Wi-Fi** | Can it write settings back to the camera? | CCAPI integration. A camera that sleeps its Wi-Fi after a few minutes will happily report `online` for another thirty seconds. |
-| **Drone missions** | Waypoint missions as a file the aircraft accepts | WPML/KMZ writer using Node's own `zlib`. Never flown — stated plainly rather than implied. |
+| **Drone missions** | Waypoint missions as a file the aircraft accepts | WPML/KMZ writer using Node's own `zlib`. Never flown – stated plainly rather than implied. |
 | **QLoRA fine-tuning** | Is a personal fine-tune worth it over a good prompt? | Dataset export and a training loop. Verdict so far: no, and the prompt work generalises better. |
-| **Sharing it** | Can a single-person app host invited people without rewriting every function? | A request-scoped user context (`AsyncLocalStorage`) that follows every `await` into background work. Data access without an established user **throws** instead of falling back to a default — a silent default would show one person's data to another, and nothing would look broken. Invitation links, per-person engine grants, owner-only server capabilities. |
+| **Sharing it** | Can a single-person app host invited people without rewriting every function? | A request-scoped user context (`AsyncLocalStorage`) that follows every `await` into background work. Data access without an established user **throws** instead of falling back to a default – a silent default would show one person's data to another, and nothing would look broken. Invitation links, per-person engine grants, owner-only server capabilities. |
 
 ---
 
@@ -179,7 +179,7 @@ answered a question. The interesting column is the last one.
 </p>
 
 One thread, two engines: NVIDIA’s cloud computes the plan, Claude answers the
-follow-up — and each reply keeps the colour and signature of the engine that
+follow-up – and each reply keeps the colour and signature of the engine that
 wrote it. Tool results, reasoning traces and search interstitials collapse to a
 single quiet line; an answer with fourteen of them should still read as an answer.
 
@@ -191,9 +191,9 @@ single quiet line; an answer with fourteen of them should still read as an answe
 </tr>
 <tr>
 <td><b>Shoot planner.</b> The Sun’s real path for the place and the minute,
-and settings that fit the lenses you own — computed, not described.</td>
+and settings that fit the lenses you own – computed, not described.</td>
 <td><b>On the phone.</b> Installed as an app. The first answer came from
-NVIDIA’s cloud, the next from the home GPU — each keeps its engine’s thread.</td>
+NVIDIA’s cloud, the next from the home GPU – each keeps its engine’s thread.</td>
 <td><b>Voice mode.</b> Live transcript, spoken answer, push-to-talk when the
 browser cannot hold a continuous session.</td>
 </tr>
@@ -209,7 +209,7 @@ so, the human gets every file.
 
 > Screenshots are captured from the real interface by
 > [`scripts/zrzuty-readme.js`](scripts/zrzuty-readme.js) against the test
-> environment — real rendering, mock model and mock data. Personal content
+> environment – real rendering, mock model and mock data. Personal content
 > stays out of a public repository. The banner, the architecture diagram and
 > the social graphics in [`docs/grafiki/`](docs/grafiki/) are rendered from the
 > same fonts, colours and mark as the app by
@@ -234,8 +234,8 @@ npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
 
-Optional pieces — Python sensors, Tailscale access from outside the house,
-installing as a phone app — are covered in the setup guide below.
+Optional pieces – Python sensors, Tailscale access from outside the house,
+installing as a phone app – are covered in the setup guide below.
 
 ---
 
@@ -246,8 +246,8 @@ installing as a phone app — are covered in the setup guide below.
 </p>
 
 `/` serves a product page for [cosmosai.live](https://cosmosai.live); Cosmos
-itself lives at `/app`. The page is written in Polish and English separately —
-two sets of sentences, not one translated into the other — and the switch is
+itself lives at `/app`. The page is written in Polish and English separately –
+two sets of sentences, not one translated into the other – and the switch is
 shared with the app. Four decisions worth stating:
 
 - **No build and no dependencies here either.** Hand-written HTML, CSS and one
@@ -273,18 +273,18 @@ shared with the app. Four decisions worth stating:
 
 ```
 server.js            router, configuration, capability manifest
-lib/                 47 domain modules — one concern each, injected, no cycles
+lib/                 47 domain modules – one concern each, injected, no cycles
 public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
-mcp/                 MCP bridge — exposes Cosmos tools to other agents
+mcp/                 MCP bridge – exposes Cosmos tools to other agents
 tests/               120 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 
 Dependencies point one way: the core knows nothing about the domains. Where a
 domain needs another (Studio writing to the knowledge base), the server injects
-it once at startup — cross-imports would create a cycle and one side would see
+it once at startup – cross-imports would create a cycle and one side would see
 an empty object.
 
 ---
@@ -300,13 +300,13 @@ an empty object.
 | [`tests/README.md`](tests/README.md) | how the test environments work |
 
 The deep documentation is in Polish. It is a working log rather than a product
-manual, and translating it would cost more than it would return — but the code
+manual, and translating it would cost more than it would return – but the code
 structure, the tests and this page should be enough to judge the engineering.
 
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE.md). Read the code, run it at home, change it,
-share it — for personal use, study, research, hobby projects, schools, charities and
+share it – for personal use, study, research, hobby projects, schools, charities and
 public institutions. Selling it, running it as a paid service or using it inside a
 company needs a separate agreement; open an issue on GitHub to ask.
 

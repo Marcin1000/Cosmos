@@ -1,4 +1,4 @@
-/* Plener — foto i wideo jako jedno okno.
+/* Plener – foto i wideo jako jedno okno.
 
    Ten zestaw nie sprawdza „czy panel się otwiera". Sprawdza jedną rzecz,
    dla której panel w ogóle powstał: czy KAŻDA funkcja foto/wideo ma teraz
@@ -7,7 +7,7 @@
    Do tej pory było tak: sprzęt i archiwum w Ustawieniach, plan zdjęciowy
    w podpanelu podglądu kamery (czyli niedostępny bez włączonej kamery),
    aparat po Wi-Fi jako wiersz w tamtym podpanelu, a misja KMZ i karty ujęć
-   — NIGDZIE. Te dwie dało się uruchomić wyłącznie żądaniem HTTP albo przez
+   – NIGDZIE. Te dwie dało się uruchomić wyłącznie żądaniem HTTP albo przez
    model, który sam zdecydował się użyć narzędzia. Funkcja, o której nie
    sposób się dowiedzieć, jest w praktyce funkcją, której nie ma, a bateria
    testów tego nie łapała: trasy odpowiadały, więc wszystko „działało".
@@ -16,9 +16,9 @@
 
      1. czy sprzęt zapisuje się i wraca (a nie tylko wygląda na zapisany),
      2. czy plan liczy się BEZ KAMERY, dla nazwy miejsca i wybranej godziny
-        — to jest ta nowa zdolność, nie samo przeniesienie pola,
+        – to jest ta nowa zdolność, nie samo przeniesienie pola,
      3. czy karty ujęć docierają do ekranu z liczbami i z powodem pominięcia,
-     4. czy misja daje PRAWDZIWY plik — sprawdzony cudzą implementacją,
+     4. czy misja daje PRAWDZIWY plik – sprawdzony cudzą implementacją,
         nie naszym własnym czytnikiem.
 
    Piąte sprawdzenie jest przeciwne w duchu: czy przeprowadzka niczego nie
@@ -44,7 +44,7 @@ if (!maPrzegladarke()) {
   pg.on('pageerror', (e) => bledy.push(e.message));
   /* ZAPISANA LOKALIZACJA jest tu warunkiem koniecznym, nie ozdobą.
      Bez niej pierwsze, automatyczne przeliczenie planu przy otwarciu panelu
-     kończy się błędem „nie znam współrzędnych" i pola misji zostają puste —
+     kończy się błędem „nie znam współrzędnych" i pola misji zostają puste –
      a wtedy sprawdzenie z punktu 4 przechodzi nawet na zepsutym kodzie.
      Usterka, którą Marcin zobaczył na zrzucie ekranu, ujawnia się WYŁĄCZNIE
      wtedy, gdy jest zapisane miejsce inne niż to wpisane w planie. */
@@ -66,11 +66,11 @@ if (!maPrzegladarke()) {
   if (!otwarte) fail.push('Plener się nie otworzył');
 
   /* ---- 1. Sprzęt: zapis i powrót ----
-     Sprawdzamy przez `/api/gear`, a nie przez zawartość pól — pole pokazuje
+     Sprawdzamy przez `/api/gear`, a nie przez zawartość pól – pole pokazuje
      to, co samo w siebie wpisaliśmy, i potwierdziłoby zapis, którego nie ma. */
   await pg.fill('#gear-body', 'Canon R6 Mark II');
   await pg.fill('#gear-lenses', '24-105 f/4, 70-200 f/4, 50 f/1.8');
-  // Celowo BEZ drona — w kroku 3 sprawdzamy, że go dopisanie coś zmienia.
+  // Celowo BEZ drona – w kroku 3 sprawdzamy, że go dopisanie coś zmienia.
   await pg.fill('#gear-extras', 'Ronin-S, statyw');
   await pg.click('#gear-save');
   await pg.waitForTimeout(900);
@@ -88,7 +88,7 @@ if (!maPrzegladarke()) {
      Potwierdzenie „Zapisane." po odrzuconym żądaniu jest gorsze niż brak
      potwierdzenia: człowiek wychodzi przekonany, że sprzęt jest wpisany,
      a plan dalej liczy dla domyślnego korpusu. Blokujemy trasę w przeglądarce
-     — serwer zostaje nietknięty, więc reszta zestawu działa normalnie. */
+     – serwer zostaje nietknięty, więc reszta zestawu działa normalnie. */
   await pg.route('**/api/gear', (trasa) => (trasa.request().method() === 'PUT'
     ? trasa.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"atrapa"}' })
     : trasa.continue()));
@@ -132,16 +132,16 @@ if (!maPrzegladarke()) {
 
   if (!/1\/\d+/.test(dzien.nastawy)) fail.push(`plan nie podał czasu naświetlania: „${dzien.nastawy}"`);
   if (!/ISO/.test(dzien.nastawy)) fail.push('plan nie podał ISO');
-  // 25 kl./s przy regule 180° to 1/50 — wideo musi dać inne liczby niż zdjęcie.
+  // 25 kl./s przy regule 180° to 1/50 – wideo musi dać inne liczby niż zdjęcie.
   if (!/1\/50/.test(dzien.nastawy)) fail.push(`przy 25 kl./s reguła 180° daje 1/50, jest „${dzien.nastawy}"`);
   /* Sedno: dwie RÓŻNE godziny mają dać dwa różne stany światła. Gdyby pole
      „kiedy" nie docierało do serwera, oba przebiegi policzyłyby „teraz"
-     i wyszłyby identyczne — a taki błąd nie rzuca się w oczy na ekranie,
+     i wyszłyby identyczne – a taki błąd nie rzuca się w oczy na ekranie,
      bo obie odpowiedzi wyglądają rozsądnie. */
   const faza = (s) => (s.match(/^[^·(]+/) || [''])[0].trim();
   console.log(`   fazy: „${faza(dzien.swiatlo)}" vs „${faza(wieczor.swiatlo)}"`);
   if (faza(dzien.swiatlo) === faza(wieczor.swiatlo)) {
-    fail.push('rano i wieczorem to samo światło — podana godzina nie dotarła do serwera');
+    fail.push('rano i wieczorem to samo światło – podana godzina nie dotarła do serwera');
   }
   if (!/wysoko|dzień|południe|złot|niebiesk|zmierzch|zachod|noc/i.test(dzien.swiatlo)) {
     fail.push(`plan nie nazwał fazy światła: „${dzien.swiatlo}"`);
@@ -159,13 +159,13 @@ if (!maPrzegladarke()) {
 
   const bezDrona = await czytajUjecia();
   console.log(`3. ujęć na ekranie (bez drona): ${bezDrona.karty.length}`);
-  for (const k of bezDrona.karty.slice(0, 4)) console.log(`   • ${k.nazwa} — ${k.liczby}`);
-  if (!bezDrona.karty.length) fail.push('karty ujęć nie dotarły do ekranu — nadal są tylko w API');
+  for (const k of bezDrona.karty.slice(0, 4)) console.log(`   • ${k.nazwa} – ${k.liczby}`);
+  if (!bezDrona.karty.length) fail.push('karty ujęć nie dotarły do ekranu – nadal są tylko w API');
   // Karta bez liczb to porada, nie plan. O to całe `lib/ujecia.js` chodziło.
   const bezLiczb = bezDrona.karty.filter((k) => !/\d+\s*mm/.test(k.liczby));
   if (bezLiczb.length) fail.push(`karty bez ogniskowej: ${bezLiczb.map((k) => k.nazwa).join(', ')}`);
 
-  /* W górach bez drona ujęcia z powietrza MUSZĄ wypaść — i musi paść powód.
+  /* W górach bez drona ujęcia z powietrza MUSZĄ wypaść – i musi paść powód.
      „Nie ma na liście" i „nie masz czym" to dla planującego dzień dwie
      zupełnie różne informacje, a bez tej drugiej wygląda, jakby Cosmos
      o dronie po prostu zapomniał. */
@@ -175,7 +175,7 @@ if (!maPrzegladarke()) {
   }
 
   /* 3b. Odhaczanie. „Lista do odhaczenia" bez sposobu odhaczenia byłaby
-     obietnicą na wyrost, a postęp musi PRZEŻYĆ przeliczenie planu — w terenie
+     obietnicą na wyrost, a postęp musi PRZEŻYĆ przeliczenie planu – w terenie
      przelicza się co chwilę, bo światło idzie. */
   await pg.locator('.plener-tick').first().check();
   await pg.waitForTimeout(200);
@@ -193,7 +193,7 @@ if (!maPrzegladarke()) {
   console.log(`   po ponownym przeliczeniu planu odhaczone nadal: ${poPrzeliczeniu}`);
   if (!poPrzeliczeniu) fail.push('przeliczenie planu skasowało odhaczone ujęcia');
 
-  // Dopisanie drona ma tę listę ZMIENIĆ — inaczej filtr jest ozdobą.
+  // Dopisanie drona ma tę listę ZMIENIĆ – inaczej filtr jest ozdobą.
   await pg.fill('#gear-extras', 'DJI Mavic 3, Ronin-S, statyw');
   await pg.click('#gear-save');
   await pg.waitForTimeout(1600);
@@ -201,14 +201,14 @@ if (!maPrzegladarke()) {
   console.log(`   po dopisaniu Mavica: ${zDronem.karty.length} ujęć `
     + `(+${zDronem.karty.length - bezDrona.karty.length})`);
   if (zDronem.karty.length <= bezDrona.karty.length) {
-    fail.push('dopisanie drona nie odblokowało żadnego ujęcia — filtr sprzętowy nie działa z panelu');
+    fail.push('dopisanie drona nie odblokowało żadnego ujęcia – filtr sprzętowy nie działa z panelu');
   }
 
   /* ---- 4. Misja drona → prawdziwy plik ----
 
      NAJPIERW najgroźniejsza pułapka, którą Marcin złapał na zrzucie ekranu.
      Panel liczy plan zaraz po otwarciu, dla zapisanej lokalizacji, i wtedy
-     wypełnia pola misji. Potem człowiek wpisuje inne miejsce i przelicza —
+     wypełnia pola misji. Potem człowiek wpisuje inne miejsce i przelicza –
      a w misji zostają STARE współrzędne. Wychodzi plik lotu nad zupełnie
      innym miejscem i nic tego nie zdradza.
 
@@ -229,7 +229,7 @@ if (!maPrzegladarke()) {
     fail.push(`podpis pod współrzędnymi nie mówi, skąd są: „${misjaTeraz.skad}"`);
   }
 
-  /* Ręczny wpis musi WYGRAĆ z planem — inaczej nie da się polecieć nad
+  /* Ręczny wpis musi WYGRAĆ z planem – inaczej nie da się polecieć nad
      miejscem innym niż to, dla którego liczy się światło. I musi być
      oznaczony, żeby nie wyglądał jak wynik planu. */
   await pg.fill('#mis-lat', '53.50000');
@@ -240,7 +240,7 @@ if (!maPrzegladarke()) {
     lat: await pg.inputValue('#mis-lat'),
     skad: (await pg.textContent('#mis-skad') || '').trim(),
   };
-  console.log(`4b. po ręcznym wpisie i przeliczeniu planu: ${poRecznym.lat} — „${poRecznym.skad.slice(0, 60)}"`);
+  console.log(`4b. po ręcznym wpisie i przeliczeniu planu: ${poRecznym.lat} – „${poRecznym.skad.slice(0, 60)}"`);
   if (Number(poRecznym.lat) !== 53.5) fail.push('przeliczenie planu nadpisało ręcznie wpisane współrzędne');
   if (!/ręcznie|hand/i.test(poRecznym.skad)) fail.push('ręczny wpis nie jest oznaczony');
 
@@ -259,7 +259,7 @@ if (!maPrzegladarke()) {
 
   /* 4d. Oszacowanie nalotu MUSI zgadzać się z tym, co naprawdę wyjdzie
      w pliku. Liczba linii jest policzona w przeglądarce, a punkty generuje
-     `siatka()` na serwerze — dwa niezależne kawałki kodu, które łatwo
+     `siatka()` na serwerze – dwa niezależne kawałki kodu, które łatwo
      rozjechać przy pierwszej poprawce. Wtedy człowiek planuje lot na trzy
      minuty, a leci dwadzieścia. */
   const lot = (await pg.textContent('#mis-lot') || '').trim();
@@ -274,7 +274,7 @@ if (!maPrzegladarke()) {
   if (!/km/.test(lot) || !/min/.test(lot)) fail.push(`oszacowanie nie podaje trasy i czasu: „${lot}"`);
 
   /* Obszar nie do przelecenia na jednej baterii ma o tym POWIEDZIEĆ, zanim
-     dron stanie w polu — a nie przerwać misję w połowie. */
+     dron stanie w polu – a nie przerwać misję w połowie. */
   await pg.fill('#mis-w', '2000');
   await pg.fill('#mis-l', '2000');
   await pg.fill('#mis-odstep', '50');
@@ -338,7 +338,7 @@ print('ZIP OK, punktow: %d' % n)
      Widoczny przycisk „Ustaw w aparacie" u kogoś, kto nigdy nie włączył
      CCAPI, obiecywałby coś, czego nie ma. */
   /* Pytamy o to, co WIDAĆ, a nie o wartość właściwości `hidden`. Pierwsza
-     wersja tego sprawdzenia czytała `w.hidden` i przechodziła — a na zrzucie
+     wersja tego sprawdzenia czytała `w.hidden` i przechodziła – a na zrzucie
      ekranu wiersz stał jak gdyby nigdy nic, bo `.plan-camera { display: flex }`
      pokonuje regułę przeglądarki `[hidden] { display: none }`. Test, który
      potwierdza stan właściwości zamiast stanu ekranu, jest gorszy niż brak
@@ -353,10 +353,10 @@ print('ZIP OK, punktow: %d' % n)
   });
   console.log(`5. aparat nieskonfigurowany → hidden=${aparat.atrybut}, widoczny=${aparat.naEkranie}`);
   if (!aparat.atrybut) fail.push('wiersz aparatu nie dostał atrybutu hidden mimo braku CANON_CCAPI_URL');
-  if (aparat.naEkranie) fail.push('wiersz aparatu WIDAĆ mimo atrybutu hidden — CSS pokonuje [hidden]');
+  if (aparat.naEkranie) fail.push('wiersz aparatu WIDAĆ mimo atrybutu hidden – CSS pokonuje [hidden]');
 
   /* A skoro już o tym mowa: żaden element z `hidden` w całym oknie nie ma
-     prawa się rysować. To sprawdzenie klasowe, nie punktowe — bo błąd był
+     prawa się rysować. To sprawdzenie klasowe, nie punktowe – bo błąd był
      klasowy i wróciłby przy następnym `display: flex`. */
   const widoczneMimoHidden = await pg.evaluate(() => [...document.querySelectorAll('[hidden]')]
     .filter((e) => e.getBoundingClientRect().width > 0 && getComputedStyle(e).display !== 'none')
@@ -364,7 +364,7 @@ print('ZIP OK, punktow: %d' % n)
     .slice(0, 8));
   console.log(`   elementy z hidden, które mimo to widać: ${widoczneMimoHidden.length ? widoczneMimoHidden.join(', ') : 'brak'}`);
   if (widoczneMimoHidden.length) fail.push(`hidden nie działa na: ${widoczneMimoHidden.join(', ')}`);
-  // Podpowiedź, JAK go włączyć, ma zostać widoczna — inaczej nikt się nie dowie.
+  // Podpowiedź, JAK go włączyć, ma zostać widoczna – inaczej nikt się nie dowie.
   const podpowiedz = await pg.textContent('#pl-sec-camera .field-hint');
   if (!/CANON_CCAPI_URL/.test(podpowiedz || '')) {
     fail.push('sekcja aparatu nie mówi, co ustawić, żeby zadziałał');
@@ -390,7 +390,7 @@ print('ZIP OK, punktow: %d' % n)
   }));
   console.log(`7. Ustawienia: stare pole sprzętu ${wUstawieniach.staryKorpus ? 'ZOSTAŁO' : 'usunięte'}, `
     + `odsyłacz do Pleneru ${wUstawieniach.odsylacz ? 'jest' : 'BRAK'}`);
-  if (wUstawieniach.staryKorpus) fail.push('sprzęt jest w dwóch miejscach naraz — dwa źródła prawdy');
+  if (wUstawieniach.staryKorpus) fail.push('sprzęt jest w dwóch miejscach naraz – dwa źródła prawdy');
   if (!wUstawieniach.odsylacz) fail.push('Ustawienia nie mówią, dokąd przeniósł się sprzęt');
 
   // Odsyłacz ma DZIAŁAĆ, a nie tylko istnieć.
@@ -403,14 +403,14 @@ print('ZIP OK, punktow: %d' % n)
   console.log(`   po kliknięciu: Plener ${przeskok.plener ? 'otwarty' : 'ZAMKNIĘTY'}, `
     + `Ustawienia ${przeskok.ustawienia ? 'NADAL OTWARTE' : 'zamknięte'}`);
   if (!przeskok.plener) fail.push('odsyłacz z Ustawień nie otwiera Pleneru');
-  if (przeskok.ustawienia) fail.push('Ustawienia zostały otwarte pod Plenerem — dwa okna na sobie');
+  if (przeskok.ustawienia) fail.push('Ustawienia zostały otwarte pod Plenerem – dwa okna na sobie');
 
   /* ---- 8. Nagłówki ujęć na telefonie: nic nie wchodzi na nic ----
      Marcin, ze zrzutu z Galaxy S25: „Teksty w ujęciach wchodzą na siebie".
      Nazwa „przebitka" nachodziła na plakietkę ROZWINIĘCIE. Przyczyna była
      w CSS: pudełko nazwy miało `min-width: 0`, więc kurczyło się poniżej
      najdłuższego słowa, a słowo nie ma gdzie się złamać i wylewało się poza
-     swoje miejsce. Na 1280 px to się nie zdarza — dlatego mierzymy TU, na
+     swoje miejsce. Na 1280 px to się nie zdarza – dlatego mierzymy TU, na
      szerokości telefonu, i mierzymy GEOMETRIĘ, nie obecność klas. */
   await pg.setViewportSize({ width: 360, height: 740 });
   await pg.waitForTimeout(500);
@@ -418,7 +418,7 @@ print('ZIP OK, punktow: %d' % n)
   await pg.waitForTimeout(1500);
   const nachodzenia = await pg.evaluate(() => {
     /* Mierzymy TEKST, nie pudełka. Pierwsza wersja tego sprawdzenia brała
-       `getBoundingClientRect()` elementów i nie wykrywała niczego — bo
+       `getBoundingClientRect()` elementów i nie wykrywała niczego – bo
        usterka polegała właśnie na tym, że pudełko nazwy kurczyło się do
        22 px, a NAPIS wylewał się poza nie i malował po plakietce. Prostokąty
        pudełek się przy tym nie stykały. `Range.getClientRects()` daje

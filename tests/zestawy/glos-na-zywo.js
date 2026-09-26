@@ -1,7 +1,7 @@
 /* Tryb głosowy: widać, że Cosmos słyszy, i widać słowa w trakcie mówienia.
 
    Zgłoszenie Marcina: „jak się mówi, to na żywo mają się pojawiać słowa, a jak
-   skończę, to on to wyłapie i zacznie działać — bo tak nie wiadomo, czy to
+   skończę, to on to wyłapie i zacznie działać – bo tak nie wiadomo, czy to
    słyszy. Nie wiem, czy mam kliknąć kulę, czy od razu mówić. Mówię, ale on nic
    nie robi. Mówię kilka razy i może się uda."
 

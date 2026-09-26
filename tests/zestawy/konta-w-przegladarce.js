@@ -1,12 +1,12 @@
-/* Konta po stronie przeglądarki — trzy rzeczy, których nie widać w teście
+/* Konta po stronie przeglądarki – trzy rzeczy, których nie widać w teście
    serwera, a które decydują o prywatności na wspólnym telefonie.
 
    1. LINK Z ZAPROSZENIEM. Token siedzi we fragmencie po `#`, więc nie trafia
-      do logów serwera ani Cloudflare. Rozpoznajemy tylko dokładny kształt —
+      do logów serwera ani Cloudflare. Rozpoznajemy tylko dokładny kształt –
       przypadkowy `#zaproszenie` w adresie nie może otwierać ekranu dołączania.
 
    2. PAMIĘĆ PODRĘCZNA ROZMÓW. Przeglądarka trzyma kopie rozmów do pracy bez
-      sieci. Marcin wylogowuje się na telefonie, loguje się ktoś z rodziny —
+      sieci. Marcin wylogowuje się na telefonie, loguje się ktoś z rodziny –
       przy pierwszym zaniku sieci zobaczyłby rozmowy Marcina. Kopia musi
       znikać przy zmianie osoby, a ustawienia urządzenia (język) zostawać.
 
@@ -47,7 +47,7 @@ function magazyn(poczatek = {}) {
   ok(k.tokenZaproszenia(`#zaproszenie=${TOKEN}`) === TOKEN, 'poprawny link → token');
   ok(k.tokenZaproszenia('#zaproszenie=krotki') === '', 'za krótki token nie otwiera ekranu dołączania');
   ok(k.tokenZaproszenia(`#inne=${TOKEN}`) === '', 'inny fragment nie otwiera ekranu dołączania');
-  ok(k.tokenZaproszenia(`#zaproszenie=${TOKEN}<script>`) === '', 'znaki spoza alfabetu tokenu — odrzucone');
+  ok(k.tokenZaproszenia(`#zaproszenie=${TOKEN}<script>`) === '', 'znaki spoza alfabetu tokenu – odrzucone');
 
   // --- 2. Pamięć podręczna rozmów ---------------------------------------------
   const m = magazyn({
@@ -87,7 +87,7 @@ function magazyn(poczatek = {}) {
   const zapr = $('dostep-zaproszenia');
   const htmlGdziekolwiek = (el) => Boolean(el._html) || el.children.some(htmlGdziekolwiek);
   ok(lista.children.length === 2, `panel pokazuje obie osoby (${lista.children.length})`);
-  ok(!htmlGdziekolwiek(lista) && !htmlGdziekolwiek(zapr), 'żaden węzeł panelu Dostęp nie ma treści HTML — wszystko przez textContent');
+  ok(!htmlGdziekolwiek(lista) && !htmlGdziekolwiek(zapr), 'żaden węzeł panelu Dostęp nie ma treści HTML – wszystko przez textContent');
   ok(lista.textContent.includes(ZLE_IMIE), 'imię gościa stoi w panelu jako zwykły tekst, znak po znaku');
   ok(zapr.textContent.includes(ZLE_IMIE), 'imię z zaproszenia też jako tekst');
   const przelaczniki = lista.children[1].poKlasie('osoba-silnik');

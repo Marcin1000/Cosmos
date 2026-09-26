@@ -1,5 +1,5 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
-// Zachowanie bez navigator.mediaDevices — dokładnie jak po zwykłym HTTP na adres IP
+// Zachowanie bez navigator.mediaDevices – dokładnie jak po zwykłym HTTP na adres IP
 const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
 (async () => {
@@ -31,8 +31,8 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   console.log(`1. panel otwarty mimo braku kamery: ${s.panelOpen}`);
   console.log(`2. lista źródeł dostępna: ${s.selectorVisible}`);
   console.log(`3. komunikat: ${s.status.slice(0, 110)}`);
-  console.log(`4. okienko alert: ${alerted ? 'BYŁO — ' + alerted.slice(0, 60) : 'brak (dobrze)'}`);
-  if (!s.panelOpen) fail.push('panel się nie otworzył — nie da się wybrać Kinecta');
+  console.log(`4. okienko alert: ${alerted ? 'BYŁO – ' + alerted.slice(0, 60) : 'brak (dobrze)'}`);
+  if (!s.panelOpen) fail.push('panel się nie otworzył – nie da się wybrać Kinecta');
   if (!s.selectorVisible) fail.push('lista źródeł niedostępna');
   if (!/HTTPS|localhost|Kinect/.test(s.status)) fail.push('komunikat nie wskazuje wyjścia');
   if (alerted) fail.push('nadal wyskakuje alert zamiast komunikatu w panelu');

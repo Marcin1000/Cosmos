@@ -39,7 +39,7 @@ mock.listen(7093, async () => {
     return { shown: !!n, text: n ? n.textContent : '' };
   });
   console.log(`1. w trakcie czekania: licznik=${during.shown} „${during.text}"`);
-  if (!during.shown) fail.push('brak licznika czekania — pusty dymek jak przy zawieszeniu');
+  if (!during.shown) fail.push('brak licznika czekania – pusty dymek jak przy zawieszeniu');
   if (!/\d+\s*s/.test(during.text)) fail.push('licznik nie pokazuje sekund');
 
   await page.waitForTimeout(3000);

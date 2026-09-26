@@ -1,9 +1,9 @@
-/* Kaskada narzędzi modelu — sprawdzana ZACHOWANIEM, nie treścią pliku.
+/* Kaskada narzędzi modelu – sprawdzana ZACHOWANIEM, nie treścią pliku.
 
    Do tej pory cała kaskada siedziała w `runGeneration()`: 535 linii jednej
    funkcji czytającej kilkanaście zmiennych modułowych app.js. Nie dało się
    jej uruchomić inaczej niż w przeglądarce, z prawdziwym modelem, więc
-   sprawdzaliśmy ją regexpami po źródle — a taki test łapie usunięcie linii
+   sprawdzaliśmy ją regexpami po źródle – a taki test łapie usunięcie linii
    i nic poza tym. Marcin nazwał to wprost: „za dużo testów sprawdza tekst
    źródła, nie zachowanie".
 
@@ -11,10 +11,10 @@
    więc moduł uruchamia się w Node z atrapami i można mu zadać pytania,
    na które regexp nie odpowie:
 
-     — czy znacznik na pewno zniknie z tego, co zobaczy człowiek,
-     — czy powtórzone zapytanie zostanie odcięte,
-     — czy model dowie się, że z dziesięciu wyszukań poszło jedno,
-     — czy narzędzia kończące turę robią to, a pozostałe oddają głos dalej.
+     – czy znacznik na pewno zniknie z tego, co zobaczy człowiek,
+     – czy powtórzone zapytanie zostanie odcięte,
+     – czy model dowie się, że z dziesięciu wyszukań poszło jedno,
+     – czy narzędzia kończące turę robią to, a pozostałe oddają głos dalej.
 
    Każdy z tych punktów odpowiada usterce, która NAPRAWDĘ trafiła do Marcina.
 */
@@ -26,7 +26,7 @@ const { tenSamTekst } = utworzMowe({ WAKE_RE: /\bhej kosmos/i });
 
 const fail = [];
 
-/* Wzorce znaczników i czyszczenie — PRAWDZIWE, z public/protokol.js, tak jak
+/* Wzorce znaczników i czyszczenie – PRAWDZIWE, z public/protokol.js, tak jak
    w app.js. Dawniej test trzymał własną kopię „z ręki" i dlatego nie mógł
    zauważyć, że protokół nie rozpoznaje „【SZUKAJ：…】" z modelu Qwen. */
 const protokol = require(path.join(__dirname, '..', '..', 'public', 'protokol.js')).utworzProtokol();
@@ -75,7 +75,7 @@ function stanowisko({ odpowiedzi = {} } = {}) {
     PORCJA_ARCHIWUM: 24,
     /* PRAWDZIWA zapora przed powtórzoną odpowiedzią, nie atrapa. To ona
        zdecyduje, czy przepisany przez model plan podmieni poprzedni, czy
-       stanie obok niego jako druga kopia — a właśnie tego pilnujemy. */
+       stanie obok niego jako druga kopia – a właśnie tego pilnujemy. */
     wstawTekstModelu: (conv, tresc, odKtorej = 0) => {
       const czysty = String(tresc || '');
       if (!czysty.trim()) return null;
@@ -151,7 +151,7 @@ async function uruchom(st, nazwa, acc, stan) {
 
     /* I druga połowa tej samej usterki: model musi WIEDZIEĆ, że z trzech
        zapytań poszło jedno. Bez tego pisze odpowiedź tak, jakby miał
-       wszystkie — stąd plan Majorki z godzinami otwarcia atrakcji,
+       wszystkie – stąd plan Majorki z godzinami otwarcia atrakcji,
        których nikt nie sprawdził. */
     const doModelu = st.dziennik.doModelu.map((x) => x.tresc).join('\n');
     const maUwage = /3 wyszukań|TYLKO to jedno/.test(doModelu);
@@ -160,7 +160,7 @@ async function uruchom(st, nazwa, acc, stan) {
   }
 
   /* --- 2b. Znacznik ZE SPACJĄ albo w nawiasach pełnej szerokości ---------
-     Małe modele lokalne piszą „[ SZUKAJ: …]", Qwen — „【SZUKAJ：…】". Dotąd
+     Małe modele lokalne piszą „[ SZUKAJ: …]", Qwen – „【SZUKAJ：…】". Dotąd
      polecenie stało na ekranie, a wyszukiwanie nie ruszało. */
   {
     const st = stanowisko();
@@ -183,7 +183,7 @@ async function uruchom(st, nazwa, acc, stan) {
 
   /* --- 2c. Pasek „w toku" domyka się po narzędziu -----------------------
      „Przeszukuję archiwum…", „Generuję obraz…" i „Liczę…" zostawały
-     w rozmowie na zawsze — także nad gotową odpowiedzią i nad błędem. */
+     w rozmowie na zawsze – także nad gotową odpowiedzią i nad błędem. */
   {
     const wToku = ['chat.searchingArchive', 'chat.genImage', 'chat.running'];
     const zostaly = (st) => st.conv.messages
@@ -210,23 +210,23 @@ async function uruchom(st, nazwa, acc, stan) {
     const poDrugim = st.dziennik.adresy.length;
     console.log(`3. zapytań do archiwum po dwóch identycznych wywołaniach: ${poDrugim}`);
     if (poDrugim !== poPierwszym) {
-      fail.push('powtórzone zapytanie do archiwum poszło drugi raz — hamulec nie działa');
+      fail.push('powtórzone zapytanie do archiwum poszło drugi raz – hamulec nie działa');
     }
     const ostatnie = st.dziennik.doModelu[st.dziennik.doModelu.length - 1].tresc;
     if (!/DOKŁADNIE to samo/.test(ostatnie)) {
       fail.push('model nie dostaje informacji, że się powtórzył');
     }
-    /* Ale INNY filtr musi przejść — inaczej hamulec blokowałby pracę. */
+    /* Ale INNY filtr musi przejść – inaczej hamulec blokowałby pracę. */
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Kraków]', stan);
     if (st.dziennik.adresy.length === poDrugim) {
-      fail.push('inny filtr też został zablokowany — hamulec jest za szeroki');
+      fail.push('inny filtr też został zablokowany – hamulec jest za szeroki');
     }
   }
 
   /* --- 4. Wykluczenie folderu dociera do zapytania -----------------------
      Marcin: „kiedy piszę, że chcę zobaczyć zdjęcia oprócz jakiegoś folderu,
      to i tak wrzuca mi zdjęcia z tego folderu". Filtr `bezFolderu=` działa
-     w archiwum, ale musi jeszcze DOJŚĆ z treści znacznika do adresu —
+     w archiwum, ale musi jeszcze DOJŚĆ z treści znacznika do adresu –
      a wartość ma spację w środku, co rozbijało parsowanie. */
   {
     const st = stanowisko({ odpowiedzi: { '/api/archive/search': { znaleziono: 5, wyniki: [] } } });
@@ -242,7 +242,7 @@ async function uruchom(st, nazwa, acc, stan) {
   /* --- 4b. Siatka miniatur zapamiętuje, czym dobrać następną porcję -----
      Bez `dalej` przycisk „pokaż kolejne" nie ma czego powtórzyć i wynik
      kończy się na pierwszych 24 plikach z 311. Sprawdzamy TREŚĆ wiadomości,
-     a nie obecność pola w źródle — poprzednia wersja tego sprawdzenia była
+     a nie obecność pola w źródle – poprzednia wersja tego sprawdzenia była
      regexpem po app.js i padła przy przeniesieniu kaskady do osobnego pliku,
      mimo że pole powstawało bez zmian. */
   {
@@ -261,13 +261,13 @@ async function uruchom(st, nazwa, acc, stan) {
     console.log(`4b. siatka: ${siatka ? siatka.content.photos.length : 0} miniatur, `
       + `dalej=${d ? `pomin ${d.pomin} z ${d.razem}` : 'BRAK'}`);
     if (!siatka) fail.push('archiwum nie dołożyło siatki miniatur mimo plików z OneDrive');
-    else if (!d) fail.push('siatka nie zapamiętała zapytania — przycisk „pokaż kolejne" nie zadziała');
+    else if (!d) fail.push('siatka nie zapamiętała zapytania – przycisk „pokaż kolejne" nie zadziała');
     else {
       if (d.razem !== 311) fail.push(`dalej.razem=${d.razem}, a znaleziono 311`);
       if (d.pomin !== 2) fail.push(`dalej.pomin=${d.pomin}, a oddano 2 pliki`);
-      if (!/folder=/.test(d.q)) fail.push('dalej.q nie zawiera filtrów — kolejna porcja byłaby inna');
+      if (!/folder=/.test(d.q)) fail.push('dalej.q nie zawiera filtrów – kolejna porcja byłaby inna');
       if (/limit=|pomin=/.test(d.q)) {
-        fail.push('dalej.q zawiera limit albo pomin — stopka dokleja je sama i wyszłoby podwójnie');
+        fail.push('dalej.q zawiera limit albo pomin – stopka dokleja je sama i wyszłoby podwójnie');
       }
     }
   }
@@ -290,12 +290,12 @@ async function uruchom(st, nazwa, acc, stan) {
     const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set(), archiwumZWynikiem: false };
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026]', stan);
     const poPierwszym = st.dziennik.adresy.length;
-    // INNY filtr, ale pierwszy już coś znalazł — drugie pytanie jest zbędne.
+    // INNY filtr, ale pierwszy już coś znalazł – drugie pytanie jest zbędne.
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury 2026 typ=zdjecie]', stan);
     console.log(`4c. po udanym pierwszym: zapytań ${st.dziennik.adresy.length} `
       + `(po pierwszym było ${poPierwszym})`);
     if (st.dziennik.adresy.length !== poPierwszym) {
-      fail.push('drugie zapytanie po udanym pierwszym poszło mimo wszystko — '
+      fail.push('drugie zapytanie po udanym pierwszym poszło mimo wszystko – '
         + 'użytkownik dostanie dwie prawie identyczne odpowiedzi');
     }
     const ostatnie = st.dziennik.doModelu[st.dziennik.doModelu.length - 1].tresc;
@@ -305,7 +305,7 @@ async function uruchom(st, nazwa, acc, stan) {
   }
 
   /* --- 4d. ...ALE PO PUSTYM WYNIKU DRUGIE PYTANIE JEST SENSOWNE ---------
-     Gdy pierwszy filtr dał zero, drugi bywa właściwą reakcją — inny rok,
+     Gdy pierwszy filtr dał zero, drugi bywa właściwą reakcją – inny rok,
      `folder=` zamiast `miejsce=`. Hamulec, który blokowałby i to, zamieniłby
      jedną usterkę na drugą. */
   {
@@ -316,7 +316,7 @@ async function uruchom(st, nazwa, acc, stan) {
     await uruchom(st, 'archiwum', '[ARCHIWUM: folder=Mazury]', stan);
     console.log(`4d. po pustym pierwszym: zapytań ${st.dziennik.adresy.length}`);
     if (st.dziennik.adresy.length <= poPierwszym) {
-      fail.push('po pustym wyniku drugie zapytanie zostało zablokowane — '
+      fail.push('po pustym wyniku drugie zapytanie zostało zablokowane – '
         + 'hamulec jest za szeroki i odcina sensowną poprawkę filtra');
     }
   }
@@ -330,17 +330,17 @@ async function uruchom(st, nazwa, acc, stan) {
     if (wynikObraz.akcja !== 'koniec') fail.push('generowanie obrazu nie kończy tury');
     if (wynikSzukaj.akcja !== 'dalej') fail.push('wyszukiwanie kończy turę zamiast oddać głos modelowi');
     if (!st.poNazwie.obraz.zawszeDozwolone) {
-      fail.push('obraz nie jest oznaczony jako dozwolony w ostatniej rundzie — '
+      fail.push('obraz nie jest oznaczony jako dozwolony w ostatniej rundzie – '
         + 'model straciłby możliwość dokończenia turą kończącą');
     }
     if (st.poNazwie.szukaj.zawszeDozwolone) {
-      fail.push('wyszukiwanie jest oznaczone jako zawsze dozwolone — pętla nie miałaby końca');
+      fail.push('wyszukiwanie jest oznaczone jako zawsze dozwolone – pętla nie miałaby końca');
     }
   }
 
   /* --- 5b. Obraz, który generuje się dłużej, niż Cloudflare czeka --------
      Serwer odpowiada wtedy 202 z numerem zadania (lib/zadania.js). Znacznik
-     [OBRAZ:] w czacie ma dopytać /api/zadania i wstawić gotowy obraz — a nie
+     [OBRAZ:] w czacie ma dopytać /api/zadania i wstawić gotowy obraz – a nie
      pokazać „brak obrazu", bo pierwsza odpowiedź nie miała adresu. */
   {
     const st = stanowisko({ odpowiedzi: {
@@ -383,7 +383,7 @@ async function uruchom(st, nazwa, acc, stan) {
       PORCJA_ARCHIWUM: 24,
     /* PRAWDZIWA zapora przed powtórzoną odpowiedzią, nie atrapa. To ona
        zdecyduje, czy przepisany przez model plan podmieni poprzedni, czy
-       stanie obok niego jako druga kopia — a właśnie tego pilnujemy. */
+       stanie obok niego jako druga kopia – a właśnie tego pilnujemy. */
     wstawTekstModelu: (conv, tresc, odKtorej = 0) => {
       const czysty = String(tresc || '');
       if (!czysty.trim()) return null;
@@ -409,7 +409,7 @@ async function uruchom(st, nazwa, acc, stan) {
     } catch { rzucil = true; }
     const ostatnie = st.dziennik.doModelu[st.dziennik.doModelu.length - 1];
     console.log(`6. przy padniętej sieci narzędzie rzuciło wyjątkiem: ${rzucil}`);
-    if (rzucil) fail.push('narzędzie rzuca wyjątkiem przy błędzie sieci — zabija całą turę');
+    if (rzucil) fail.push('narzędzie rzuca wyjątkiem przy błędzie sieci – zabija całą turę');
     if (!ostatnie || !/sieć padła/.test(ostatnie.tresc)) {
       fail.push('model nie dowiaduje się o błędzie sieci');
     }
@@ -430,7 +430,7 @@ async function uruchom(st, nazwa, acc, stan) {
     /* --- 9. DWA NARZĘDZIA W JEDNEJ ODPOWIEDZI -----------------------------
      Rozmowa o Majorce, zapis przysłany przez Marcina. Model napisał plan,
      a pod nim [PLAN: …] ORAZ sześć [GRAFIKA: …]. Kaskada brała pierwsze
-     pasujące narzędzie z listy — plan — a pozostałe znaczniki czyściła
+     pasujące narzędzie z listy – plan – a pozostałe znaczniki czyściła
      i wyrzucała. Prośba o zdjęcia znikała bez śladu; Marcin: „nie wyrzuca
      żadnych zdjęć nigdzie".
 
@@ -444,13 +444,13 @@ async function uruchom(st, nazwa, acc, stan) {
       },
     });
     const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
-    const acc = 'Plan wycieczki.\n\nDzień 2 — Palma.\n[GRAFIKA: Katedra La Seu]\n'
-      + 'Dzień 6 — Es Trenc.\n[GRAFIKA: plaża Es Trenc]\n[PLAN: miejsce=Es Trenc]';
+    const acc = 'Plan wycieczki.\n\nDzień 2 – Palma.\n[GRAFIKA: Katedra La Seu]\n'
+      + 'Dzień 6 – Es Trenc.\n[GRAFIKA: plaża Es Trenc]\n[PLAN: miejsce=Es Trenc]';
 
     /* Samo narzędzie zdjęć: z tekstu ze znacznikami odtwarza układ
        (kawałek planu, siatka pod nim). W app.js zdjęcia przy innym
-       narzędziu są ODKŁADANE do gotowej odpowiedzi — szkic sprzed danych
-       nie trafia na ekran — ale rozkład pod punktami robi dokładnie to. */
+       narzędziu są ODKŁADANE do gotowej odpowiedzi – szkic sprzed danych
+       nie trafia na ekran – ale rozkład pod punktami robi dokładnie to. */
     const dopPlan = st.poNazwie.plan.dopasuj(acc);
     await st.poNazwie.plan.wykonaj({
       acc, dop: dopPlan, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,
@@ -465,7 +465,7 @@ async function uruchom(st, nazwa, acc, stan) {
     console.log(`9. plan + grafiki w jednej odpowiedzi → siatek: ${siatki.length} `
       + `(${podpisy.join(', ') || 'brak'})`);
     if (siatki.length !== 2) {
-      fail.push(`z dwóch znaczników [GRAFIKA:] powstało ${siatki.length} siatek — `
+      fail.push(`z dwóch znaczników [GRAFIKA:] powstało ${siatki.length} siatek – `
         + 'prośba o zdjęcia ginie, gdy w tej samej odpowiedzi jest inne narzędzie');
     }
 
@@ -503,7 +503,7 @@ async function uruchom(st, nazwa, acc, stan) {
     const poDrugim = st.dziennik.adresy.filter((a) => a.includes('/api/plan')).length;
     console.log(`10. obliczeń planu po dwóch identycznych prośbach: ${poDrugim}`);
     if (poDrugim !== poPierwszym) {
-      fail.push('ten sam plan liczony drugi raz — model dostanie te same dane '
+      fail.push('ten sam plan liczony drugi raz – model dostanie te same dane '
         + 'i przepisze całą odpowiedź od nowa');
     }
     const doModelu = st.dziennik.doModelu.map((x) => x.tresc).join('\n');
@@ -559,13 +559,13 @@ async function uruchom(st, nazwa, acc, stan) {
 
     /* --- 12. UKŁAD, O KTÓRY POPROSIŁ MARCIN -------------------------------
      „Chciałbym żeby działało tak, żeby od razu było: Dzień 1, Plan, Zdjęcia,
-     potem Dzień 2, Plan, Zdjęcia itd. — a nie jak jest teraz, czyli najpierw
+     potem Dzień 2, Plan, Zdjęcia itd. – a nie jak jest teraz, czyli najpierw
      opis, potem jakieś myślenie, potem zdjęcia."
 
      Trzy rzeczy naraz, wszystkie widoczne w jego zapisie:
        a) cały plan drukował się NAD przeplotem, więc stał na ekranie dwa razy,
        b) limit sześciu siatek zostawiał dni 5-8 jednym blokiem na końcu,
-       c) po wyciętym znaczniku zostawał sam punkt listy — „puste punkty".
+       c) po wyciętym znaczniku zostawał sam punkt listy – „puste punkty".
 
      Ośmiodniowy plan, każdy dzień ze swoim znacznikiem zapisanym tak, jak
      robi to model: jako punkt listy. */
@@ -581,7 +581,7 @@ async function uruchom(st, nazwa, acc, stan) {
       + `- Zwiedzanie i zdjęcia.\n`
       + `- **Ustawienia:** 24-105 mm f/4, ISO 200, 1/125 s.\n`
       + `- [GRAFIKA: ${q}]\n`).join('\n')
-      + '\n### Nastawy aparatu — podsumowanie\nTabela na końcu.';
+      + '\n### Nastawy aparatu – podsumowanie\nTabela na końcu.';
 
     const dop = st.poNazwie.grafiki.dopasuj(acc);
     await st.poNazwie.grafiki.wykonaj({
@@ -599,7 +599,7 @@ async function uruchom(st, nazwa, acc, stan) {
     const siatki = widok.filter((x) => x.typ === 'siatka');
     console.log(`   siatek: ${siatki.length} z ${dni.length} dni`);
     if (siatki.length !== dni.length) {
-      fail.push(`z ${dni.length} dni powstało ${siatki.length} siatek — reszta `
+      fail.push(`z ${dni.length} dni powstało ${siatki.length} siatek – reszta `
         + 'wylądowałaby jednym blokiem na końcu');
     }
 
@@ -610,7 +610,7 @@ async function uruchom(st, nazwa, acc, stan) {
       && (x.tekst.match(/\*\*Dzień \d/g) || []).length > 1);
     console.log(`   wiadomości z więcej niż jednym dniem: ${hurtem.length}`);
     if (hurtem.length) {
-      fail.push('cały plan stoi w jednej wiadomości obok pokrojonego — '
+      fail.push('cały plan stoi w jednej wiadomości obok pokrojonego – '
         + 'użytkownik widzi go dwa razy');
     }
 
@@ -630,7 +630,7 @@ async function uruchom(st, nazwa, acc, stan) {
     console.log(`   układ „dzień → jego zdjęcia": ${porzadek ? 'zachowany' : 'ZŁAMANY'}`);
 
     /* (c) Puste punkty. Wiadomość bez ani jednej litery i cyfry nie ma prawa
-       trafić na ekran — a właśnie takie zostawały po wyciętych znacznikach. */
+       trafić na ekran – a właśnie takie zostawały po wyciętych znacznikach. */
     const puste = widok.filter((x) => x.typ === 'tekst' && !/\p{L}|\p{N}/u.test(x.tekst));
     console.log(`   pustych wiadomości: ${puste.length}`);
     if (puste.length) fail.push(`${puste.length} pustych punktów po wyciętych znacznikach`);
@@ -650,13 +650,13 @@ async function uruchom(st, nazwa, acc, stan) {
 
   /* --- ZDJĘCIA ODŁOŻONE, A MODEL ZAPOMNIAŁ ZNACZNIKÓW -------------------
      Zdjęcia czekają na gotową odpowiedź (app.js). Gdy model napisze ją bez
-     [GRAFIKA:], Cosmos stawia znaczniki sam — pod akapitem o danym miejscu,
+     [GRAFIKA:], Cosmos stawia znaczniki sam – pod akapitem o danym miejscu,
      nie pod nagłówkiem, w którym przypadkiem pada nazwa miasta. */
   {
     const { wstawZnacznikiZdjec } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js')).utworzProtokol();
     const plan = 'Plan na sobotę w Krakowie (z policzonym światłem):\n\n'
-      + '**Rano — Wawel.** Złota godzina 6:52, katedra od strony Wisły.\n\n'
-      + '**Wieczór — Kazimierz.** Niebieska godzina, statyw przy ulicy Szerokiej.\n\nMiłego dnia.';
+      + '**Rano – Wawel.** Złota godzina 6:52, katedra od strony Wisły.\n\n'
+      + '**Wieczór – Kazimierz.** Niebieska godzina, statyw przy ulicy Szerokiej.\n\nMiłego dnia.';
     const wynik = wstawZnacznikiZdjec(plan, ['Wawel Kraków', 'Kazimierz Kraków ulica Szeroka']);
     const bloki = wynik.split('\n\n');
     const gdzie = (q) => bloki.findIndex((b) => b.includes(`[GRAFIKA: ${q}]`));

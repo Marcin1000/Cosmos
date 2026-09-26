@@ -42,9 +42,9 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await pg.waitForTimeout(2600);
   const back = await pg.textContent('#copy-check-cloud');
   console.log(`4. etykieta wraca po chwili: „${back.trim()}"`);
-  if (/Skopiowano/.test(back)) fail.push('etykieta nie wróciła — drugi raz nie wiadomo, czy zadziałało');
+  if (/Skopiowano/.test(back)) fail.push('etykieta nie wróciła – drugi raz nie wiadomo, czy zadziałało');
 
-  // 5. bez uprawnień do schowka (stary WebView na Androidzie) — droga zapasowa
+  // 5. bez uprawnień do schowka (stary WebView na Androidzie) – droga zapasowa
   const ctx2 = await br.newContext();
   const pg2 = await ctx2.newPage();
   await pg2.addInitScript(() => {
@@ -57,7 +57,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await pg2.waitForSelector('#check-all-cloud', { timeout: 15000 });
   await pg2.click('#check-all-cloud');
   await pg2.waitForSelector('#copy-check-cloud', { timeout: 60000 });
-  // strona sama ma pola tekstowe — liczy się RÓŻNICA, nie wartość bezwzględna
+  // strona sama ma pola tekstowe – liczy się RÓŻNICA, nie wartość bezwzględna
   const przed = await pg2.$$eval('textarea', (ts) => ts.length);
   await pg2.click('#copy-check-cloud');
   await pg2.waitForTimeout(600);

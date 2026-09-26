@@ -1,38 +1,38 @@
-# Cosmos Senses — zależności
+# Cosmos Senses – zależności
 # Rdzeń usługi (wymagany):
 fastapi
 uvicorn
 python-multipart
 
-# Zmysły — instaluj te, których chcesz używać (każdy jest opcjonalny):
+# Zmysły – instaluj te, których chcesz używać (każdy jest opcjonalny):
 
-# SŁUCH — rozpoznawanie mowy (Whisper); świetnie zna polski
+# SŁUCH – rozpoznawanie mowy (Whisper); świetnie zna polski
 faster-whisper
 
-# GŁOS — synteza mowy (Piper); pobierz też plik głosu .onnx, np.
+# GŁOS – synteza mowy (Piper); pobierz też plik głosu .onnx, np.
 # https://huggingface.co/rhasspy/piper-voices (pl_PL-darkman-medium)
 piper-tts
 
-# WZROK — detekcja obiektów (YOLO) + obraz
+# WZROK – detekcja obiektów (YOLO) + obraz
 ultralytics
 opencv-python
 
-# CIAŁO — sylwetka i pozy (MediaPipe)
+# CIAŁO – sylwetka i pozy (MediaPipe)
 mediapipe
 
-# PAMIĘĆ — embeddingi do pamięci długotrwałej (RAG)
+# PAMIĘĆ – embeddingi do pamięci długotrwałej (RAG)
 # bge-m3 (~2 GB, domyślny) lub lżejszy: ustaw EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 sentence-transformers
 
-# PTAKI — gatunek z nagrania (BirdNET, endpoint /ptak)
+# PTAKI – gatunek z nagrania (BirdNET, endpoint /ptak)
 # Ciężkie: ciągnie za sobą TensorFlow. Instaluj tylko, jeśli fotografujesz ptaki.
 # birdnetlib
 # librosa
 # resampy
 # tensorflow
 
-# BAZA WIEDZY — ekstrakcja tekstu z dokumentów (endpoint /extract)
-# Gdy jest docling albo markitdown, /extract używa ICH — czytają skany (OCR),
+# BAZA WIEDZY – ekstrakcja tekstu z dokumentów (endpoint /extract)
+# Gdy jest docling albo markitdown, /extract używa ICH – czytają skany (OCR),
 # zachowują tabele i układ kolumn. Bez nich zostają cztery czytniki niżej.
 # docling
 # markitdown
@@ -45,12 +45,12 @@ python-pptx
 requests
 numpy
 
-# GŁĘBIA — Kinect 360 przez libfreenect (kinect_watcher.py):
-# moduł "freenect" instaluje się razem z libfreenect — patrz senses/README.md
+# GŁĘBIA – Kinect 360 przez libfreenect (kinect_watcher.py):
+# moduł "freenect" instaluje się razem z libfreenect – patrz senses/README.md
 
-# BADANIA I SPRZĘT — nowe moduły (numpy wystarcza do większości):
-#   terrain.py, flightplan.py, pantilt.py  — bez dodatkowych zależności
-#   soundloc.py  — nasłuch na żywo wymaga: sounddevice
-#   lowlight.py  — odczyt JPG wymaga: opencv-python (PNG czyta sam)
-#   tether.py    — wymaga programu gphoto2 (nie pakietu pip)
+# BADANIA I SPRZĘT – nowe moduły (numpy wystarcza do większości):
+#   terrain.py, flightplan.py, pantilt.py  – bez dodatkowych zależności
+#   soundloc.py  – nasłuch na żywo wymaga: sounddevice
+#   lowlight.py  – odczyt JPG wymaga: opencv-python (PNG czyta sam)
+#   tether.py    – wymaga programu gphoto2 (nie pakietu pip)
 sounddevice

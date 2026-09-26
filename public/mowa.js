@@ -1,5 +1,5 @@
 /* ============================================================
-   MOWA — tekst wchodzi, tekst wychodzi
+   MOWA – tekst wchodzi, tekst wychodzi
 
    Cztery przekształcenia napisów, wszystkie w samym środku trybu głosowego
    i wszystkie do tej pory nie do sprawdzenia inaczej niż przez Chromium.
@@ -11,10 +11,10 @@
      największejakie są największe atrakcjejakie są największe atrakcje…
 
    To nie jest usterka rozpoznawania mowy. Chrome na Androidzie **nie
-   obsługuje `continuous`** — kończy sesję po każdej wypowiedzi i po każdej
+   obsługuje `continuous`** – kończy sesję po każdej wypowiedzi i po każdej
    ciszy. My ją wznawiamy, a nowa sesja zaczyna rozpoznawać od nowa audio,
    które częściowo już słyszeliśmy. Poprzedni kod robił wtedy `voiceHeard +=`
-   i skleja­ł kolejne, coraz dłuższe wersje TEGO SAMEGO zdania — bez spacji,
+   i skleja­ł kolejne, coraz dłuższe wersje TEGO SAMEGO zdania – bez spacji,
    bo sklejał gołym plusem.
 
    `doklej` rozwiązuje to raz dla wszystkich silników: nie dokleja tego, co
@@ -31,10 +31,10 @@
 function utworzMowe(z) {
   const { WAKE_RE } = z;
 
-  /** Zapis bez ozdobników — do porównywania, nigdy do pokazania.
+  /** Zapis bez ozdobników – do porównywania, nigdy do pokazania.
    *
    *  OGONKI LECĄ RAZEM Z INTERPUNKCJĄ i to nie jest drobiazg. Rozpoznawanie
-   *  mowy oddaje najpierw „pokaz", a chwilę później poprawia na „pokaż" —
+   *  mowy oddaje najpierw „pokaz", a chwilę później poprawia na „pokaż" –
    *  ta sama wypowiedź, dwa zapisy. Porównanie z ogonkami nie widziało tu
    *  żadnej zakładki i zostawiało oba słowa obok siebie. */
   const golo = (s) => String(s || '').toLowerCase()
@@ -45,7 +45,7 @@ function utworzMowe(z) {
    * Dołóż nowy kawałek rozpoznania tak, żeby nie powtórzyć tego, co już jest.
    *
    * Rozpoznawanie mowy oddaje ten sam fragment wielokrotnie, w coraz
-   * dokładniejszej postaci — a po wznowieniu sesji zaczyna od nowa od audio,
+   * dokładniejszej postaci – a po wznowieniu sesji zaczyna od nowa od audio,
    * które częściowo już słyszeliśmy. Zwykłe doklejanie daje wtedy
    * „Jakiejakiejakie sąjakie są największe…".
    *
@@ -73,7 +73,7 @@ function utworzMowe(z) {
     if (b.startsWith(a)) return swiezy;              // 1. dokładniejsza wersja
     if (a.includes(b)) return stary;                 // 2. już to mamy
 
-    // 3. Zakładka liczona w SŁOWACH, nie w znakach — inaczej „na Majorce"
+    // 3. Zakładka liczona w SŁOWACH, nie w znakach – inaczej „na Majorce"
     //    i „nam" dawałyby fałszywe trafienie na wspólnym „na".
     const slowaA = a.split(' ');
     const slowaB = b.split(' ');
@@ -88,14 +88,14 @@ function utworzMowe(z) {
     return `${stary} ${swiezy}`;                     // 4. nowe zdanie
   }
 
-  /** Uproszczona postać zdania — rozpoznawanie dopieszcza interpunkcję
+  /** Uproszczona postać zdania – rozpoznawanie dopieszcza interpunkcję
    *  i wielkość liter jeszcze po tym, jak wynik uzna za ostateczny. */
   function odciskWyniku(wyniki, indeks) {
     const r = wyniki && wyniki[indeks];
     return r && r[0] ? String(r[0].transcript).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') : '';
   }
 
-  /** Wytnij słowo budzące — wszystkie wystąpienia, nie tylko pierwsze. Przy
+  /** Wytnij słowo budzące – wszystkie wystąpienia, nie tylko pierwsze. Przy
    *  ciągłym nasłuchu „Hej Kosmos" bywa rozpoznane kilka razy pod rząd. */
   function bezSlowaBudzacego(tekst) {
     const wejscie = String(tekst);
@@ -103,7 +103,7 @@ function utworzMowe(z) {
     let out = wejscie.replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
       .replace(/\s{2,}/g, ' ').trim();
 
-    /* Sieroty po wyciętej frazie — ale TYLKO wtedy, gdy fraza naprawdę tu
+    /* Sieroty po wyciętej frazie – ale TYLKO wtedy, gdy fraza naprawdę tu
        była. Rozpoznawanie lubi rozbić „Hej Kosmos" na dwa wyniki albo skleić
        je bez spacji („Hej kosmosHej kosmos co widzisz"); wtedy granica słowa
        nie istnieje, wzorzec łapie jedno wystąpienie, a drugie zostaje
@@ -114,9 +114,9 @@ function utworzMowe(z) {
       out = out.replace(/^(?:(?:hej|hey|ok(?:ej)?|kosmos|cosmos)[\s,.!]*)+(?=\S)/i, '');
     }
     /* I na koniec interpunkcja, która została po wyciętej frazie.
-       „hej, kosmos! pokaż zdjęcia" dawało pytanie „! pokaż zdjęcia" —
+       „hej, kosmos! pokaż zdjęcia" dawało pytanie „! pokaż zdjęcia" –
        model dostawał wykrzyknik jako pierwszy znak wypowiedzi. */
-    return out.replace(/^[\s,.!?;:–—-]+/, '').trim();
+    return out.replace(/^[\s,.!?;:–\u2014-]+/, '').trim();
   }
 
   /** Czy dwa zdania to praktycznie to samo? Porównujemy zbiory słów, bo
@@ -136,7 +136,7 @@ function utworzMowe(z) {
    *
    * Marcin dostał w jednej turze TRZY kopie tego samego planu Majorki.
    * Model po każdym wyniku narzędzia pisał całość od nowa, a każda runda to
-   * osobna wiadomość — więc na ekranie rosła sterta prawie identycznych
+   * osobna wiadomość – więc na ekranie rosła sterta prawie identycznych
    * tabel. Instrukcja „nie przepisuj" pomaga, ale nie jest gwarancją;
    * to jest zapora po stronie Cosmosa.
    *
@@ -167,7 +167,7 @@ function utworzMowe(z) {
   /** Czy `nowy` to przepisana albo rozszerzona wersja `stary`? Model po
    *  wyniku narzędzia zaczyna często od tego samego wstępu („Sprawdzę jeszcze
    *  jedno." ×3, akapit o obiektywie dwa razy w dwóch kartach). `tenSamTekst`
-   *  patrzy tylko na długie teksty — ten sam wstęp łapiemy osobno. */
+   *  patrzy tylko na długie teksty – ten sam wstęp łapiemy osobno. */
   function przepisanie(stary, nowy) {
     const A = golo(stary);
     const B = golo(nowy);
@@ -179,8 +179,8 @@ function utworzMowe(z) {
   }
 
   /** Doklej dalszy ciąg odpowiedzi uciętej limitem długości. Model zaczyna
-   *  dokończenie od powtórzenia ostatnich słów — bez zdjęcia zakładki na
-   *  ekranie stało „…SzerokDzień 2 — … Szerokiej". */
+   *  dokończenie od powtórzenia ostatnich słów – bez zdjęcia zakładki na
+   *  ekranie stało „…SzerokDzień 2 – … Szerokiej". */
   function doklejBezZakladki(pelny, ciag) {
     const max = Math.min(300, pelny.length, ciag.length);
     for (let k = max; k >= 12; k--) {

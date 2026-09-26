@@ -1,14 +1,14 @@
-/* Studio w tle — generowanie nie kończy się stroną 524 za Cloudflare.
+/* Studio w tle – generowanie nie kończy się stroną 524 za Cloudflare.
 
    Cloudflare zrywa żądanie, na które serwer nie odpowie w 100 s. Studio
    generowało wszystko w jednym żądaniu: obraz gpt-image w wysokiej jakości
-   trwa minutę-dwie, cztery warianty albo storyboard — kilka minut. Człowiek
+   trwa minutę-dwie, cztery warianty albo storyboard – kilka minut. Człowiek
    dostawał 524, a serwer liczył dalej i zapisywał obraz, o którym nikt się
    nie dowiedział.
 
    Co musi być prawdą (atrapa generatora: słowo POWOLI = 1,5 s, a serwer
    czeka przed 202 tylko 0,4 s; BLAD = generator odpowiada 500):
-     1. Szybkie generowanie odpowiada jak dawniej — 200 z obrazem. Mostek MCP
+     1. Szybkie generowanie odpowiada jak dawniej – 200 z obrazem. Mostek MCP
         i znacznik [OBRAZ:] w czacie działają bez zmian.
      2. Wolne odpowiada 202 z numerem zadania ZANIM praca się skończy.
      3. Dopytywanie: „pracuje", potem „gotowe" z obrazem, który leży w bazie
@@ -16,13 +16,13 @@
      4. Błąd generatora w tle wraca jako „blad" z opisem, nie jako „gotowe".
      5. Cudze zadanie wygląda jak nieistniejące; zadanie poza żądaniem (bez
         osoby) rzuca, zamiast zgadywać, czyje jest.
-     6. Na osobę pracuje najwyżej N zadań naraz — kolejne dostaje 429.
+     6. Na osobę pracuje najwyżej N zadań naraz – kolejne dostaje 429.
      7. Pomocnik przeglądarki (czekajNaZadanie) prowadzi od 202 do wyniku,
         przeżywa chwilowy brak sieci i przekazuje błąd z tła.
      8. Storyboard, edycja i dźwięk idą tą samą drogą; pobranie gotowego
         wideo nie wisi w odpytaniu statusu.
      9. W przeglądarce: „Generuj" przy wolnym generowaniu pokazuje „Trwa
-        dłużej niż zwykle", a potem obraz — przez widok Studia (studio-widok.js). */
+        dłużej niż zwykle", a potem obraz – przez widok Studia (studio-widok.js). */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 const { utworzZadania } = require('../../lib/zadania.js');
 const { wKontekscie } = require('../../lib/kontekst.js');
@@ -32,7 +32,7 @@ const fail = [];
 const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) fail.push(opis); };
 const readJsonSafe = async (r) => {
   const tekst = await r.text();
-  try { return JSON.parse(tekst); } catch { return { error: `HTTP ${r.status} — ${tekst.slice(0, 120)}` }; }
+  try { return JSON.parse(tekst); } catch { return { error: `HTTP ${r.status} – ${tekst.slice(0, 120)}` }; }
 };
 const t = (k) => k;
 const spij = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -192,7 +192,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // --- 9. przeglądarka: przycisk „Generuj" przy wolnym generowaniu ---------
   if (!maPrzegladarke()) {
-    console.log('⚠ Brak Chromium — pomijam część z przeglądarką.');
+    console.log('⚠ Brak Chromium – pomijam część z przeglądarką.');
   } else {
     const b = await przegladarka();
     const p = await b.newPage({ viewport: { width: 1280, height: 860 } });

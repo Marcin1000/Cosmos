@@ -11,14 +11,14 @@
    Trzy rzeczy, każda z osobna wystarczająca, żeby uznać funkcję za zepsutą:
 
      1. Zamknięcie karty nie przerywa czytania od modelu. Bieg kończy się sam.
-     2. Odpowiedź, po którą nikt nie wrócił, ląduje w PLIKU ROZMOWY — inaczej
+     2. Odpowiedź, po którą nikt nie wrócił, ląduje w PLIKU ROZMOWY – inaczej
         „praca w tle" znaczy tylko tyle, że serwer grzał procesor.
      3. Powrót na stronę podpina się do trwającej odpowiedzi i dociąga ją do
         końca, zamiast pytać model drugi raz.
 
    Plus rzecz, o którą łatwo się potknąć przy takiej zmianie: przycisk Stop.
    Odkąd rozłączenie NIE przerywa generowania, przerwanie musi jawnie dolecieć
-   do serwera — inaczej Stop tylko chowa kursor, a odpowiedź i tak dopisuje się
+   do serwera – inaczej Stop tylko chowa kursor, a odpowiedź i tak dopisuje się
    do rozmowy.
 */
 const fs = require('fs');
@@ -38,7 +38,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   const b = await przegladarka();
 
   /* Rozmowa czytana wprost z dysku serwera. Odpowiedź „w tle" musi być
-     widoczna właśnie tam — to jedyne miejsce, które przeżywa zamkniętą kartę. */
+     widoczna właśnie tam – to jedyne miejsce, które przeżywa zamkniętą kartę. */
   const zPliku = (id) => {
     try {
       return JSON.parse(fs.readFileSync(path.join(katalogOsoby(env), 'conversations', `${id}.json`), 'utf8'));
@@ -66,9 +66,9 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   }));
   const zapisBiegu = stan.conv ? JSON.parse(stan.conv) : null;
   console.log(`1. generuje: ${stan.generuje}, zapamiętany bieg: ${zapisBiegu ? zapisBiegu.id.slice(0, 8) + '…' : 'BRAK'}`);
-  if (!stan.generuje) fail.push('nie zaczęło generować — reszta zestawu nie ma czego mierzyć');
+  if (!stan.generuje) fail.push('nie zaczęło generować – reszta zestawu nie ma czego mierzyć');
   if (!zapisBiegu || !zapisBiegu.id) {
-    fail.push('przeglądarka nie zapamiętała numeru biegu — nie ma po czym wrócić');
+    fail.push('przeglądarka nie zapamiętała numeru biegu – nie ma po czym wrócić');
   }
   const rozmowaId = zapisBiegu?.convId;
 
@@ -88,7 +88,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   }
   console.log(`2. odpowiedź zapisana bez udziału przeglądarki: ${wPliku ? `tak, ${wPliku.length} znaków` : 'NIE'}`);
   if (!wPliku) {
-    fail.push('odpowiedź przepadła po zamknięciu karty — serwer nie dopisał jej do rozmowy');
+    fail.push('odpowiedź przepadła po zamknięciu karty – serwer nie dopisał jej do rozmowy');
   } else if (!/powoli/i.test(wPliku)) {
     fail.push(`zapisano coś innego niż odpowiedź modelu: „${wPliku.slice(0, 60)}"`);
   }
@@ -98,11 +98,11 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   const odpowiedzi = (conv?.messages || []).filter((m) => m.role === 'assistant');
   console.log(`   odpowiedzi asystenta w rozmowie: ${odpowiedzi.length}`);
   if (odpowiedzi.length > 1) {
-    fail.push(`${odpowiedzi.length} odpowiedzi na jedno pytanie — zapis awaryjny dubluje treść`);
+    fail.push(`${odpowiedzi.length} odpowiedzi na jedno pytanie – zapis awaryjny dubluje treść`);
   }
-  // Tę akurat MA zapisać serwer — przeglądarki już nie było.
+  // Tę akurat MA zapisać serwer – przeglądarki już nie było.
   if (odpowiedzi.length && !odpowiedzi[0].bieg) {
-    fail.push('odpowiedź w pliku nie pochodzi z zapisu awaryjnego — zestaw mierzy co innego, niż myśli');
+    fail.push('odpowiedź w pliku nie pochodzi z zapisu awaryjnego – zestaw mierzy co innego, niż myśli');
   }
 
   // --- 3. Powrót na stronę widzi odpowiedź --------------------------------
@@ -132,7 +132,7 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   /* Punkt 3 sprawdzał odpowiedź już skończoną. Tu jest sytuacja trudniejsza
      i częstsza: telefon gasi ekran, strona się przeładowuje, a model jest
      w połowie zdania. Przeglądarka ma się podpiąć do TEJ SAMEJ odpowiedzi,
-     a nie zapytać modelu drugi raz — druga odpowiedź kosztuje tokeny i bywa
+     a nie zapytać modelu drugi raz – druga odpowiedź kosztuje tokeny i bywa
      inna niż ta, którą użytkownik zdążył zobaczyć. */
   await pg.evaluate(() => { const b2 = document.getElementById('new-chat-btn'); if (b2) b2.click(); });
   await pg.waitForTimeout(400);
@@ -143,11 +143,11 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
     const s = window.localStorage.getItem('cosmos.bieg');
     return s ? JSON.parse(s) : null;
   });
-  console.log(`3b. przeładowanie w trakcie; odebrane zdarzenia: ${przedPrzeladowaniem?.ostatnie ?? '—'}`);
+  console.log(`3b. przeładowanie w trakcie; odebrane zdarzenia: ${przedPrzeladowaniem?.ostatnie ?? '–'}`);
   await pg.reload({ waitUntil: 'load' });
   /* Czekamy na ODPOWIEDŹ W PLIKU, nie na zniknięcie kursora. Po przeładowaniu
      bez wznowienia kursor gaśnie od razu i zestaw zdążyłby zajrzeć do pliku
-     przed zapisem awaryjnym serwera — czyli zobaczyłby „nic" i pokazał
+     przed zapisem awaryjnym serwera – czyli zobaczyłby „nic" i pokazał
      nieprawdziwą przyczynę. Zapis awaryjny ma prawo się spóźnić i musi zdążyć,
      bo to on odróżnia jedną awarię od drugiej. */
   for (let i = 0; i < 40; i++) {
@@ -160,19 +160,19 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   const odpowiedzi3b = (poPrzeladowaniu?.messages || []).filter((m) => m.role === 'assistant');
   const tresc3b = odpowiedzi3b.map((m) => (typeof m.content === 'string' ? m.content : '')).join('');
   /* KTO zapisał tę odpowiedź. To jedyna rzecz, która odróżnia „przeglądarka
-     wróciła i dociągnęła" od „serwer zapisał sierotę, bo nikt nie wrócił" —
+     wróciła i dociągnęła" od „serwer zapisał sierotę, bo nikt nie wrócił" –
      bez tego rozróżnienia zestaw przechodziłby także wtedy, gdyby wznowienia
      w ogóle nie było. Znacznik `bieg` wstawia wyłącznie zapis awaryjny. */
   const ktoZapisal = odpowiedzi3b.some((m) => m.bieg) ? 'serwer (sierota)' : 'przeglądarka';
   console.log(`    po przeładowaniu: ${odpowiedzi3b.length} odpowiedzi, ${tresc3b.length} znaków, zapisał: ${ktoZapisal}`);
   if (odpowiedzi3b.length !== 1) {
-    fail.push(`po przeładowaniu ${odpowiedzi3b.length} odpowiedzi zamiast jednej — bieg nie został podjęty`);
+    fail.push(`po przeładowaniu ${odpowiedzi3b.length} odpowiedzi zamiast jednej – bieg nie został podjęty`);
   }
   if (ktoZapisal !== 'przeglądarka') {
-    fail.push('po przeładowaniu odpowiedź zapisał serwer awaryjnie — przeglądarka nie podpięła się do trwającego biegu');
+    fail.push('po przeładowaniu odpowiedź zapisał serwer awaryjnie – przeglądarka nie podpięła się do trwającego biegu');
   }
   /* Pełna odpowiedź atrapy ma ponad 600 znaków. Podpięcie, które dociąga tylko
-     końcówkę albo gubi początek, da wyraźnie mniej — i to jest usterka, bo
+     końcówkę albo gubi początek, da wyraźnie mniej – i to jest usterka, bo
      użytkownik zobaczy odpowiedź zaczynającą się w połowie zdania. */
   if (tresc3b.length < 600) {
     fail.push(`po przeładowaniu odpowiedź ma ${tresc3b.length} znaków zamiast pełnych ~611`);
@@ -194,11 +194,11 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
   await pg.waitForTimeout(1200);
   const poStopie = drugi?.convId ? ostatniaOdpowiedz(drugi.convId) : null;
   const dlugoscPoStopie = poStopie ? poStopie.length : 0;
-  await spij(4000);                       // gdyby serwer dalej czytał — dopisze
+  await spij(4000);                       // gdyby serwer dalej czytał – dopisze
   const pozniej = drugi?.convId ? ostatniaOdpowiedz(drugi.convId) : null;
   console.log(`4. po Stopie: ${dlugoscPoStopie} znaków, cztery sekundy później: ${pozniej ? pozniej.length : 0}`);
   if (pozniej && dlugoscPoStopie && pozniejDluzsze(pozniej, dlugoscPoStopie)) {
-    fail.push('Stop nie dotarł do serwera — odpowiedź rosła dalej po przerwaniu');
+    fail.push('Stop nie dotarł do serwera – odpowiedź rosła dalej po przerwaniu');
   }
 
   console.log(`5. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);

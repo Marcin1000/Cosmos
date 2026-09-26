@@ -1,6 +1,6 @@
 /* Formularz zaproszenia mówi językiem przeglądarki gościa.
 
-   Aplikacja startuje po polsku, dopóki ktoś nie wybierze inaczej — to dom
+   Aplikacja startuje po polsku, dopóki ktoś nie wybierze inaczej – to dom
    właściciela. Zaproszona osoba widzi Cosmosa pierwszy raz, często z telefonu
    po angielsku, i formularz „Ustaw login i hasło" po polsku był dla niej
    ścianą, a przełącznika języka nie było gdzie szukać.
@@ -24,16 +24,16 @@ const { jezykStartowy } = require(path.join(__dirname, '..', '..', 'public', 'i1
 const fail = [];
 const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) fail.push(opis); };
 
-// --- 7. czysta funkcja — bez przeglądarki ----------------------------------------
+// --- 7. czysta funkcja – bez przeglądarki ----------------------------------------
 const Z = '#zaproszenie=' + 'a'.repeat(24);
 ok(jezykStartowy(null, Z, ['en-GB', 'pl']).jezyk === 'en', 'pierwsza preferencja przeglądarki wygrywa (en-GB, pl → en)');
 ok(jezykStartowy(null, Z, ['de-DE', 'pl-PL']).jezyk === 'pl', 'język, którego nie mamy, jest pomijany (de, pl → pl)');
 ok(jezykStartowy(null, Z, ['de-DE']).jezyk === 'en', 'żadnego naszego na liście → angielski');
 ok(jezykStartowy('pl', Z, ['en-US']).jezyk === 'pl' && !jezykStartowy('pl', Z, ['en-US']).zapisz, 'zapisany wybór wygrywa i niczego nie nadpisuje');
-ok(jezykStartowy(null, '', ['en-US']).jezyk === 'pl', 'bez zaproszenia — po polsku');
+ok(jezykStartowy(null, '', ['en-US']).jezyk === 'pl', 'bez zaproszenia – po polsku');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam część przeglądarkową.');
+  console.log('⚠ Brak Chromium – pomijam część przeglądarkową.');
   process.exit(fail.length ? 1 : 0);
 }
 

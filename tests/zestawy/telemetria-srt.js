@@ -1,14 +1,14 @@
-/* Telemetria z klipów DJI — plik .SRT obok nagrania.
+/* Telemetria z klipów DJI – plik .SRT obok nagrania.
 
    Największa dziura, jaka została w archiwum: Cosmos wiedział o zdjęciach
    wszystko, a o klipach nic. Microsoft Graph oddaje dla wideo samą datę
    i rozmiar, więc „pokaż ujęcia znad jeziora o zachodzie" działało wyłącznie
    dla fotografii. Tymczasem Mavic 3 zapisuje obok każdego klipu plik
-   z telemetrią — dla każdej klatki ISO, czas, przysłonę, ogniskową, GPS
+   z telemetrią – dla każdej klatki ISO, czas, przysłonę, ogniskową, GPS
    i dwie wysokości.
 
    Zestaw sprawdza dwie rzeczy osobno:
-     1. czy CZYTAMY oba formaty poprawnie — z liczbami, które da się sprawdzić
+     1. czy CZYTAMY oba formaty poprawnie – z liczbami, które da się sprawdzić
         z zewnątrz (długość klipu ze znacznika, dystans z odległości punktów),
      2. czy śmieci NIE PRZECHODZĄ jako telemetria.
 */
@@ -60,7 +60,7 @@ ISO:100 Shutter:60 EV: 0 Fnum:2.2
   const fail = [];
 
   /* ---- 1. Czas migawki: pułapka starego formatu ----
-     `Shutter:60` NIE znaczy 60 sekund, tylko 1/60 s — DJI zapisywało tam
+     `Shutter:60` NIE znaczy 60 sekund, tylko 1/60 s – DJI zapisywało tam
      mianownik. Wzięte dosłownie dałoby minutową ekspozycję z lecącego drona. */
   const czasy = {
     '1/320.0': czasNaSekundy('1/320.0'),
@@ -88,13 +88,13 @@ ISO:100 Shutter:60 EV: 0 Fnum:2.2
   if (Math.abs(t.wysokoscMin - 20) > 0.5 || Math.abs(t.wysokoscMax - 28) > 0.5) {
     fail.push(`wysokość ${t.wysokoscMin}-${t.wysokoscMax} m, oczekiwane 20-28`);
   }
-  // Lot 10 m/s przez 4 s to około 40 m — z dokładnością do zaokrągleń GPS.
+  // Lot 10 m/s przez 4 s to około 40 m – z dokładnością do zaokrągleń GPS.
   if (Math.abs(t.dystansM - 40) > 4) fail.push(`dystans ${t.dystansM} m zamiast ~40`);
 
   /* Ślad co sekundę, nie co klatkę. Klip minutowy to 1800 klatek i wszystkie
      w indeksie byłyby marnowaniem miejsca. */
   console.log(`3. ślad lotu: ${t.slad.length} punktów ze 120 klatek`);
-  if (t.slad.length > 6) fail.push(`ślad ma ${t.slad.length} punktów — nie został przerzedzony`);
+  if (t.slad.length > 6) fail.push(`ślad ma ${t.slad.length} punktów – nie został przerzedzony`);
   if (!t.slad.length) fail.push('ślad lotu pusty');
   if (t.slad[0] && !Number.isFinite(t.slad[0].w)) fail.push('punkty śladu bez wysokości');
 
@@ -104,19 +104,19 @@ ISO:100 Shutter:60 EV: 0 Fnum:2.2
   console.log(`4. ten sam klip w 60 kl./s: ${szybki.klatek} klatek, ${szybki.sekund} s, `
     + `${szybki.klatekNaSekunde} kl./s`);
   if (Math.abs(szybki.sekund - 4) > 0.1) {
-    fail.push(`60 kl./s dało ${szybki.sekund} s zamiast 4 — długość liczona z liczby klatek`);
+    fail.push(`60 kl./s dało ${szybki.sekund} s zamiast 4 – długość liczona z liczby klatek`);
   }
   if (szybki.klatekNaSekunde !== 60) fail.push(`rozpoznano ${szybki.klatekNaSekunde} kl./s zamiast 60`);
   if (szybki.slad.length > 6) fail.push('przy 60 kl./s ślad nie został przerzedzony');
 
   /* ---- 3. Stary format i kolejność współrzędnych ----
-     GPS(lon,lat,alt) — długość PIERWSZA, odwrotnie niż podpowiada nazwa.
+     GPS(lon,lat,alt) – długość PIERWSZA, odwrotnie niż podpowiada nazwa.
      Zamiana miejscami przenosi materiał z Australii w środek Atlantyku. */
   const s = czytajSrt(STARY_SRT);
   console.log(`5. stary format → lat ${s.lat}, lon ${s.lon}, ISO ${s.iso}, `
     + `f/${s.przyslona}, czas ${s.czasS && s.czasS.toFixed(4)} s`);
-  if (!(s.lat < 0 && s.lat > -21)) fail.push(`szerokość ${s.lat} — zamienione z długością`);
-  if (!(s.lon > 148 && s.lon < 150)) fail.push(`długość ${s.lon} — zamienione z szerokością`);
+  if (!(s.lat < 0 && s.lat > -21)) fail.push(`szerokość ${s.lat} – zamienione z długością`);
+  if (!(s.lon > 148 && s.lon < 150)) fail.push(`długość ${s.lon} – zamienione z szerokością`);
   if (s.iso !== 100 || s.przyslona !== 2.2) fail.push('nastawy starego formatu odczytane źle');
   if (Math.abs(s.czasS - 1 / 60) > 1e-9) fail.push('czas ze starego formatu nie jest ułamkiem');
 
@@ -158,7 +158,7 @@ ISO:100 Shutter:60 EV: 0 Fnum:2.2
   if (!wpis.lat || !wpis.iso || !wpis.ogniskowa) fail.push('telemetria nie trafiła do wpisu');
   if (!wpis.lot || !wpis.lot.dystansM) fail.push('brak podsumowania lotu we wpisie');
 
-  // Dane, które już są, mają PIERWSZEŃSTWO — telemetria uzupełnia, nie nadpisuje.
+  // Dane, które już są, mają PIERWSZEŃSTWO – telemetria uzupełnia, nie nadpisuje.
   const zDanymi = naWpisArchiwum(
     { id: 'x', kiedy: '2020-01-01T10:00:00', lat: 50.0, lon: 20.0, iso: 100,
       przyslona: 8, ogniskowa: 50, czasS: 0.01 },

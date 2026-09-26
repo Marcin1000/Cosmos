@@ -68,14 +68,14 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (studio.value !== ITEM.id) fail.push(`pole pierwszej klatki puste (wartość „${studio.value}")`);
   if (studio.pendingAfter !== ITEM.id) fail.push('wybór skasowany po pierwszym otwarciu');
 
-  // DRUGIE otwarcie Studia — tu wcześniej wybór przepadał
+  // DRUGIE otwarcie Studia – tu wcześniej wybór przepadał
   await page.evaluate(() => { $('studio-modal').style.display = 'none'; });
   await page.waitForTimeout(200);
   await page.evaluate(() => openStudio());
   await page.waitForTimeout(1200);
   const again = await page.evaluate(() => $('studio-video-image').value);
   console.log(`4. po ponownym wejściu do Studia: „${again}"`);
-  if (again !== ITEM.id) fail.push('przy drugim otwarciu Studia wybór przepadł — to był zgłoszony błąd');
+  if (again !== ITEM.id) fail.push('przy drugim otwarciu Studia wybór przepadł – to był zgłoszony błąd');
 
   // usunięty obraz nie zostawia martwego wyboru
   await page.route('**/api/kb', (r) => r.fulfill({ status: 200, contentType: 'application/json',

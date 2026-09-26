@@ -31,13 +31,13 @@ up.listen(7091, async () => {
     return { status: r.status, d: await r.json() };
   };
 
-  // 1. z modelem wybranym w Ustawieniach — ma go użyć
+  // 1. z modelem wybranym w Ustawieniach – ma go użyć
   let a = await ask({ text: 'x'.repeat(40), endpoint: 'cloud', model: 'nvidia/nemotron-3-super-120b-a12b' });
   console.log(`1. z modelem z Ustawień → HTTP ${a.status}, użyty: ${seen[seen.length-1]}`);
   if (a.status !== 200) fail.push('nie użył wybranego modelu: ' + JSON.stringify(a.d).slice(0, 80));
   if (seen[seen.length-1] !== 'nvidia/nemotron-3-super-120b-a12b') fail.push('poszedł inny model niż wybrany');
 
-  // 2. bez modelu — awaryjnie ten z .env, a błąd ma powiedzieć KTÓRY
+  // 2. bez modelu – awaryjnie ten z .env, a błąd ma powiedzieć KTÓRY
   a = await ask({ text: 'x'.repeat(40), endpoint: 'cloud' });
   const msg = String(a.d.message || a.d.error || '');
   console.log(`2. bez modelu (spada na .env) → HTTP ${a.status}`);

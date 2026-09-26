@@ -1,13 +1,13 @@
 /* ============================================================
-   KAMERA NA ŻYWO — podgląd, detekcja YOLO, sylwetka, zdarzenia percepcji
+   KAMERA NA ŻYWO – podgląd, detekcja YOLO, sylwetka, zdarzenia percepcji
 
    Źródło: kamera przeglądarki (<video>) albo Kinect przez zmysły (<img>,
-   klatki po HTTP — Kinect nie jest kamerą UVC). Co kilka sekund klatka idzie
-   do /api/senses/detect, a zmiana sceny — do strumienia zdarzeń, z którego
+   klatki po HTTP – Kinect nie jest kamerą UVC). Co kilka sekund klatka idzie
+   do /api/senses/detect, a zmiana sceny – do strumienia zdarzeń, z którego
    czat bierze KONTEKST PERCEPCJI. Panel dopasowuje proporcję do strumienia.
 
    Wydzielone z app.js (runda 3). `settings`, `senses` i `cameraFacing` app.js
-   przypisuje na nowo, więc przychodzą jako funkcje — wartość z chwili startu
+   przypisuje na nowo, więc przychodzą jako funkcje – wartość z chwili startu
    byłaby nieaktualna.
    ============================================================ */
 function utworzKamere(z) {
@@ -69,7 +69,7 @@ function utworzKamere(z) {
       : { w: el.videoWidth, h: el.videoHeight };
     /* Skoro i tak znamy wymiary strumienia, niech scena ma JEGO proporcję.
        Wpisane na stałe 4:3 przy kamerze 16:9 dawało czarne pasy nad i pod
-       kadrem — u Marcina jedna czwarta wysokości panelu zmarnowana, i to
+       kadrem – u Marcina jedna czwarta wysokości panelu zmarnowana, i to
        wtedy, gdy panel i tak nie mieścił się na ekranie. */
     if (r.w > 0 && r.h > 0) {
       const panel = $('live-panel');
@@ -87,11 +87,11 @@ function utworzKamere(z) {
    *  Szerokość powiększonego panelu liczy się z dostępnej wysokości, więc
    *  trzeba wiedzieć, ile tej wysokości zabierają paski: nagłówek, wybór
    *  źródła, status, pudełko nastaw i przycisk migawki. Wcześniej stała tam
-   *  liczba 220 wpisana w CSS — i zestarzała się przy pierwszej nowej rzeczy
+   *  liczba 220 wpisana w CSS – i zestarzała się przy pierwszej nowej rzeczy
    *  w panelu. Zmierzone nie starzeje się nigdy.
    *
    *  Pomiar jest sprzężony: szerokość zależy od wysokości pasków, a wysokość
-   *  pasków od szerokości (status się zawija). Nie rozwiązujemy tego układu —
+   *  pasków od szerokości (status się zawija). Nie rozwiązujemy tego układu –
    *  po prostu mierzymy ponownie przy każdej zmianie, a że zmiany są rzadkie
    *  i drobne, dochodzi do swojego miejsca po jednym, najwyżej dwóch krokach.
    */
@@ -108,7 +108,7 @@ function utworzKamere(z) {
      *  Bez tego pomiar zjadał własny ogon. `.live-body` kurczy się i przewija,
      *  więc gdy panel dobijał do wysokości okna, mierzyliśmy dół JUŻ ŚCIŚNIĘTY.
      *  Wychodziło z tego, że paski są niskie, więc obrazowi wolno być duży,
-     *  więc dół musi się ścisnąć jeszcze bardziej — i układ zastygał dokładnie
+     *  więc dół musi się ścisnąć jeszcze bardziej – i układ zastygał dokładnie
      *  w tym, co Marcin opisał: „okno podglądu jest duże, a pod nim małe
      *  okienko przesuwalne. To nie wygląda dobrze i nie jest użyteczne".
      *
@@ -120,7 +120,7 @@ function utworzKamere(z) {
 
     /* Osobno to, co leży NAD obrazem: nagłówek i wybór źródła. W układzie
        dwukolumnowym (powiększony panel na szerokim ekranie) tylko te dwa paski
-       zabierają obrazowi wysokość — reszta stoi w kolumnie obok. Liczenie tam
+       zabierają obrazowi wysokość – reszta stoi w kolumnie obok. Liczenie tam
        z pełnego `--live-chrome` ścinałoby obraz o wysokość czegoś, co go już
        nie dotyka. */
     let gora = 0;
@@ -136,7 +136,7 @@ function utworzKamere(z) {
      *  trafia dostatecznie blisko, ale przy przejściu między układem
      *  jedno- i dwukolumnowym skacze wszystko naraz: dolna część przenosi się
      *  spod obrazu na bok albo z powrotem. Pierwsza runda mierzy wtedy stan
-     *  sprzed przebudowy i panel zastyga w połowie drogi — złapał to zestaw
+     *  sprzed przebudowy i panel zastyga w połowie drogi – złapał to zestaw
      *  `panel-kamery-miesci` na zwinięciu powiększonego panelu z powrotem
      *  do rogu.
      *
@@ -148,7 +148,7 @@ function utworzKamere(z) {
      *  w pół drogi: panel 1440×700 z rozwiniętymi nastawami kończył z dolną
      *  częścią wystającą o 50 px, choć miał jeszcze 111 px szerokości do
      *  oddania. Każda runda zwęża panel, przez co tekst zawija się na więcej
-     *  wierszy i paski rosną — a więc trzeba jeszcze jednej rundy. Sześć
+     *  wierszy i paski rosną – a więc trzeba jeszcze jednej rundy. Sześć
      *  wystarcza z zapasem, a kosztuje kilka klatek przy zdarzeniu, które
      *  zdarza się przy otwarciu panelu i przy zmianie rozmiaru okna. */
     if (runda < 6 && panel.style.getPropertyValue('--live-chrome') !== przed) {
@@ -158,7 +158,7 @@ function utworzKamere(z) {
   window.addEventListener('resize', dopasujPanelKamery);
 
   /* Aktualna treść paska statusu. Trzymana w zmiennej, a nie odczytywana
-     z DOM-u, bo pasek bywa UKRYTY — a wtedy `textContent` mówiłby o elemencie,
+     z DOM-u, bo pasek bywa UKRYTY – a wtedy `textContent` mówiłby o elemencie,
      którego nikt nie widzi. Dokładanie sylwetki i rozpoznanych rzeczy dopisuje
      się do tej wartości. */
   let statusKamery = '';
@@ -166,7 +166,7 @@ function utworzKamere(z) {
   /** Ustaw pasek statusu pod obrazem i to, co chowa się pod ⓘ w nagłówku.
    *
    *  PODZIAŁ JEST NA STAN I NA WYJAŚNIENIE, nie na krótkie i długie.
-   *  W pasku stoi to, co zmienia się na bieżąco i po co się na niego patrzy —
+   *  W pasku stoi to, co zmienia się na bieżąco i po co się na niego patrzy –
    *  „person po lewej", „nic nie wykryto". Wyjaśnienia w rodzaju „uruchom
    *  `python service.py` na komputerze z GPU" to instrukcja do przeczytania
    *  raz w życiu; wisząc nad podglądem zabierała jedną trzecią panelu
@@ -195,7 +195,7 @@ function utworzKamere(z) {
     dopasujPanelKamery();
   }
 
-  /** Status „nic się jeszcze nie wydarzyło" — jeden dla wszystkich miejsc,
+  /** Status „nic się jeszcze nie wydarzyło" – jeden dla wszystkich miejsc,
    *  które go potrzebują.
    *
    *  Wcześniej każde z nich pisało `'…'` z ręki, także przełącznik przód/tył.
@@ -211,7 +211,7 @@ function utworzKamere(z) {
   }
 
   /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
-   *  pojawienie się niczego nie przesuwa — o to w tej zmianie chodziło. */
+   *  pojawienie się niczego nie przesuwa – o to w tej zmianie chodziło. */
   function pokazDymekKamery(widoczny) {
     const info = $('live-info');
     const dymek = $('live-info-box');
@@ -235,17 +235,17 @@ function utworzKamere(z) {
       info.addEventListener('click', (e) => {
         e.stopPropagation();
         /* Przełączamy WŁASNY stan, a nie widoczność dymka. Pierwsza wersja
-           czytała `dymek.hidden` — i wywracała się na tym, że kliknięcie myszą
+           czytała `dymek.hidden` – i wywracała się na tym, że kliknięcie myszą
            poprzedza `mouseenter`, który dymek już pokazał. Klik odczytywał więc
            „otwarty" i natychmiast go zamykał. Na telefonie działałoby (nie ma
-           najeżdżania), na myszy nie — czyli usterka widoczna tylko na jednym
+           najeżdżania), na myszy nie – czyli usterka widoczna tylko na jednym
            z dwóch sposobów obsługi. */
         przypiety = !przypiety;
         pokazDymekKamery(przypiety);
       });
       info.addEventListener('mouseenter', () => pokazDymekKamery(true));
       info.addEventListener('mouseleave', () => { if (!przypiety) pokazDymekKamery(false); });
-      // Kliknięcie gdziekolwiek indziej zamyka — tak jak każdy inny dymek.
+      // Kliknięcie gdziekolwiek indziej zamyka – tak jak każdy inny dymek.
       document.addEventListener('click', () => {
         if (!przypiety) return;
         przypiety = false;
@@ -263,7 +263,7 @@ function utworzKamere(z) {
   /* Wymiary strumienia bywają gotowe dopiero po chwili od podłączenia, więc
      poza pomiarem przy starcie podglądu słuchamy też zdarzeń samych elementów.
      Rejestracja jest JEDNORAZOWA, przy wczytaniu skryptu, a nie przy każdym
-     otwarciu panelu — inaczej przy trzecim włączeniu kamery ten sam pomiar
+     otwarciu panelu – inaczej przy trzecim włączeniu kamery ten sam pomiar
      wisiałby na trzech nasłuchach naraz.
 
      `addEventListener`, nie `img.onload =`: pole `onload` obrazka należy do
@@ -294,7 +294,7 @@ function utworzKamere(z) {
    * natywnie w zwykłym <img>.
    *
    * Gdyby strumień padł (np. stara wersja usługi zmysłów), wracamy do
-   * pojedynczych klatek — wolniej, ale działa.
+   * pojedynczych klatek – wolniej, ale działa.
    */
   function startKinectStream() {
     const stream = liveSource === 'kinect-depth' ? 'depth' : 'color';
@@ -326,10 +326,10 @@ function utworzKamere(z) {
     const img = $('live-image');
 
     // Panel otwieramy ZAWSZE, zanim spróbujemy pobrać obraz. Inaczej przy
-    // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł — a to właśnie
+    // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł – a to właśnie
     // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
     $('live-panel').style.display = '';
-    // Plan pokazujemy tylko wtedy, gdy wiemy GDZIE — bez współrzędnych
+    // Plan pokazujemy tylko wtedy, gdy wiemy GDZIE – bez współrzędnych
     // nie ma z czego policzyć pozycji Słońca, a pusty panel myli.
     fetch('/api/location').then((r) => r.json())
       .then((d) => { $('plan-box').hidden = !(d.wspolrzedne && d.wspolrzedne.lat); })
@@ -348,7 +348,7 @@ function utworzKamere(z) {
         img.hidden = true;
         video.hidden = false;
         ustawStatusKamery(`${t('cam.err')} ${err.message}`);
-        return;                       // panel zostaje otwarty — można zmienić źródło
+        return;                       // panel zostaje otwarty – można zmienić źródło
       }
       img.hidden = true;
       video.hidden = false;
@@ -357,11 +357,11 @@ function utworzKamere(z) {
     }
     /* PROPORCJĘ SCENY USTAWIAMY OD RAZU, NIE DOPIERO PRZY ROZPOZNAWANIU.
      *
-     *  `liveMediaSize()` — jedyne miejsce, które czyta wymiary strumienia
-     *  i podaje je CSS-owi — wisiało wyłącznie w pętli `liveDetect()`.
+     *  `liveMediaSize()` – jedyne miejsce, które czyta wymiary strumienia
+     *  i podaje je CSS-owi – wisiało wyłącznie w pętli `liveDetect()`.
      *  A `liveDetect()` ma co robić tylko wtedy, gdy działają zmysły z YOLO.
      *  Przy wyłączonym komputerze domowym scena zostawała więc na domyślnym
-     *  4:3, choć telefon podaje kadr 9:16 — i cały podgląd kurczył się do
+     *  4:3, choć telefon podaje kadr 9:16 – i cały podgląd kurczył się do
      *  paska pośrodku, obłożonego czarnymi pasami z obu stron. Marcin:
      *  „na mobile to cały czas nie wygląda dobrze".
      *
@@ -385,7 +385,7 @@ function utworzKamere(z) {
     $('live-video').srcObject = null;
     $('live-panel').style.display = 'none';
     $('plan-box').hidden = true;
-    // Dymek ⓘ nie może przetrwać zamknięcia panelu — przy następnym otwarciu
+    // Dymek ⓘ nie może przetrwać zamknięcia panelu – przy następnym otwarciu
     // wisiałby otwarty nad obrazem, opisując stan sprzed kilku godzin.
     ustawStatusKamery('');
     livePrevObjects = '';
@@ -410,7 +410,7 @@ function utworzKamere(z) {
        wypełniał: pudełko było widoczne (bo lokalizacja ustawiona) i pokazywało
        w kółko myślnik. Marcin zobaczył trzy listy rozwijane i kreskę pod nimi,
        i słusznie zapytał, czy tak miało być.
-       Do policzenia ekspozycji wystarczy położenie Słońca i jasność KLATKI —
+       Do policzenia ekspozycji wystarczy położenie Słońca i jasność KLATKI –
        jedno liczy serwer, drugie przeglądarka. Karta graficzna w domu nie ma
        z tym nic wspólnego. */
     odswiezPlan()(cap);   // getter: plener powstaje w app.js po kamerze
@@ -436,7 +436,7 @@ function utworzKamere(z) {
       octx.strokeRect(x1, y1, x2 - x1, y2 - y1);
       octx.fillText(o.label, x1 + 4, Math.max(14, y1 - 4));
     }
-    // Postawę doklejamy przy KAŻDYM cyklu, nie tylko w chwili pomiaru —
+    // Postawę doklejamy przy KAŻDYM cyklu, nie tylko w chwili pomiaru –
     // inaczej następna detekcja nadpisuje status i sylwetka miga na ułamek
     // sekundy. Zmienia się wolno, więc ostatnia znana jest nadal prawdziwa.
     const ogon = livePrevPose ? ` · ${t('live.sylwetka')} ${livePrevPose}` : '';
@@ -444,7 +444,7 @@ function utworzKamere(z) {
       ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
       : t('liveNothing')) + ogon);
 
-    // zdarzenie percepcji z pozycją — tylko gdy zestaw obiektów się zmienił
+    // zdarzenie percepcji z pozycją – tylko gdy zestaw obiektów się zmienił
     const sig = objs.map((o) => o.label).sort().join(',');
     if (sig && sig !== livePrevObjects) {
       livePrevObjects = sig;
@@ -477,7 +477,7 @@ function utworzKamere(z) {
     }
 
     // Sylwetka: postawa człowieka w kadrze. Doklejona do TEJ pętli, nie do
-    // własnej — MediaPipe kosztuje, a i tak mamy już gotową klatkę. Pytamy
+    // własnej – MediaPipe kosztuje, a i tak mamy już gotową klatkę. Pytamy
     // rzadziej niż o obiekty (co ~3 s), bo postawa zmienia się wolno.
     if (senses().caps.mediapipe && objs.some((o) => o.label === 'person')
         && Date.now() - liveLastPose > 3000) {
@@ -510,7 +510,7 @@ function utworzKamere(z) {
     }
   }
 
-  // O tym, czy panel jest otwarty, decyduje jego widoczność — nie obecność
+  // O tym, czy panel jest otwarty, decyduje jego widoczność – nie obecność
   // strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.
   $('live-btn').addEventListener('click', () => {
     const open = $('live-panel').style.display !== 'none';
@@ -518,13 +518,13 @@ function utworzKamere(z) {
   });
   $('live-close').addEventListener('click', stopLive);
 
-  // Powiększenie zapamiętujemy — kto raz chce duży podgląd, zwykle chce go zawsze.
+  // Powiększenie zapamiętujemy – kto raz chce duży podgląd, zwykle chce go zawsze.
   function applyLiveExpanded() {
     const on = localStorage.getItem('cosmos.liveExpanded') === '1';
     $('live-panel').classList.toggle('expanded', on);
     $('live-expand').title = t(on ? 'live.shrink' : 'live.expand');
     // Powiększenie zmienia szerokość, ta zmienia zawijanie statusu, a to
-    // wysokość pasków — czyli dokładnie liczbę, z której liczy się szerokość.
+    // wysokość pasków – czyli dokładnie liczbę, z której liczy się szerokość.
     dopasujPanelKamery();
   }
   $('live-flip').addEventListener('click', async () => {
@@ -546,7 +546,7 @@ function utworzKamere(z) {
   $('live-source').addEventListener('change', async (e) => {
     liveSource = e.target.value;
     localStorage.setItem('cosmos.liveSource', liveSource);
-    // Przełączenie źródła to zamknięcie jednego strumienia i otwarcie drugiego —
+    // Przełączenie źródła to zamknięcie jednego strumienia i otwarcie drugiego –
     // inaczej kamera zostałaby zajęta albo Kinect odpytywany w tle.
     const wasOpen = $('live-panel').style.display !== 'none';
     stopLive();

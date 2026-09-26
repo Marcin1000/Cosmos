@@ -1,4 +1,4 @@
-/* Wektory pamięci trzymane per model — przejście między dostawcami
+/* Wektory pamięci trzymane per model – przejście między dostawcami
    embeddingów nie przelicza wszystkiego od nowa.
 
    Cosmos ma dwóch dostawców: zmysły w domu (bge-m3) i chmurę NVIDII. Wpis
@@ -10,7 +10,7 @@
    Co musi być prawdą:
      1. Po przejściu zmysły → chmura → zmysły powrót nie liczy ani jednego
         wpisu od nowa (zmysły dostają tylko pytanie).
-     2. Pierwsze pytanie po powrocie trafia WEKTOROWO — pytanie bez wspólnych
+     2. Pierwsze pytanie po powrocie trafia WEKTOROWO – pytanie bez wspólnych
         słów z faktem i tak go znajduje.
      3. Chmura też nie liczy drugi raz, gdy wróci ponownie.
      4. Stary kształt wpisu (`embedding` + `embModel`) działa i nie ginie
@@ -95,7 +95,7 @@ async function az(warunek, ms = 3000) {
 
   // --- zmysły zasypiają: chmura dolicza SWOJE, nie kasując zmysłowych ------------
   /* Każdy krok pyta innym zdaniem: to samo zdanie w ciągu kilkunastu sekund
-     bierze wektor zapamiętany przy poprzednim pytaniu (lib/pamiec.js — pamięć
+     bierze wektor zapamiętany przy poprzednim pytaniu (lib/pamiec.js – pamięć
      i baza wiedzy pytają o nie jedna po drugiej), więc nie sprawdzałoby zmiany źródła. */
   zmyslyDzialaja = false;
   await p.searchMemory('czym fotografuję w górach?');
@@ -103,7 +103,7 @@ async function az(warunek, ms = 3000) {
   ok(wszystkieMaja('senses:64'), 'wektory zmysłów zostały obok wektorów chmury');
 
   // --- zmysły wracają: nic do przeliczenia, trafienie od razu wektorem --------------
-  /* Po awarii zmysły mają minutę karencji — rozmowa idzie wtedy od razu do
+  /* Po awarii zmysły mają minutę karencji – rozmowa idzie wtedy od razu do
      chmury (lib/pamiec.js). Powrót po karencji udaje świeża instancja na tym
      samym katalogu: czyta z pliku wektory obu modeli, karencji nie zna. */
   await az(() => {
@@ -114,7 +114,7 @@ async function az(warunek, ms = 3000) {
   const przed = liczone.zmysly;
   const pytaniaPrzed = pytaniaDoZmyslow;
   const wynik = await p.searchMemory('czym fotografuję nad morzem?');
-  await czekaj(300);   // gdyby coś ruszyło w tle — niech zdąży się policzyć
+  await czekaj(300);   // gdyby coś ruszyło w tle – niech zdąży się policzyć
   ok(pytaniaDoZmyslow > pytaniaPrzed, 'pytanie po powrocie liczą zmysły');
   ok(liczone.zmysly === przed, `powrót zmysłów nie przelicza pamięci (policzono ${liczone.zmysly - przed} faktów)`);
   ok(wynik.length >= 1 && /Canon/.test(wynik[0].text), `pierwsze pytanie po powrocie trafia wektorem („${(wynik[0] || {}).text || 'nic'}")`);

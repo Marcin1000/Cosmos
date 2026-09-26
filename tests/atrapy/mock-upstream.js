@@ -31,7 +31,7 @@ function makeMock(port, name) {
         }
         /* Kolejkowanie wiadomości da się sprawdzić tylko wtedy, gdy istnieje
            „w trakcie odpowiedzi". Atrapa domyślnie kończy w kilkadziesiąt
-           milisekund — szybciej, niż test zdąży cokolwiek napisać. Słowo
+           milisekund – szybciej, niż test zdąży cokolwiek napisać. Słowo
            „powoli" w pytaniu rozciąga strumień na kilkanaście sekund. */
         const powoli = /powoli|przerwij mnie/i.test(lastText);
         /* Ścieżka „zdjęcia do planu". Trzy tury, bo tak wygląda ta rozmowa
@@ -39,7 +39,7 @@ function makeMock(port, name) {
            poprosić o TE SAME jeszcze raz → zostaje odcięty i dopiero wtedy
            przypisuje zdjęcia do planu. */
         /* Odpowiedź ucięta budżetem tokenów. Prawdziwy dostawca wysyła wtedy
-           `finish_reason: "length"` w ostatnim zdarzeniu — bez tego nie da się
+           `finish_reason: "length"` w ostatnim zdarzeniu – bez tego nie da się
            odróżnić „skończyłem" od „zabrakło mi miejsca". Drugie żądanie,
            z prośbą o kontynuację, dostaje resztę i normalne `stop`. */
         const urwij = /urwana/i.test(lastText) && !flat.includes('Kontynuuj DOKŁADNIE');
@@ -48,11 +48,11 @@ function makeMock(port, name) {
         const poZdjeciach = flat.includes('ZDJĘCIA POKAZANE UŻYTKOWNIKOWI');
         let text;
         if (urwij) {
-          text = 'Plan na tydzień. Dzień 1 — Palma. Źródła: [Przewodnik](https://przyklad.pl/majorka-atrakcje-wynajem';
+          text = 'Plan na tydzień. Dzień 1 – Palma. Źródła: [Przewodnik](https://przyklad.pl/majorka-atrakcje-wynajem';
         } else if (dokancza) {
           text = '-samochodu)\n\nGotowe.';
         } else if (juzOdcieto) {
-          text = 'Dzień 1 — Katedra La Seu, zdjęcia wyżej. Dzień 3 — plaża Es Trenc.';
+          text = 'Dzień 1 – Katedra La Seu, zdjęcia wyżej. Dzień 3 – plaża Es Trenc.';
         } else if (poZdjeciach) {
           text = 'Jeszcze raz to samo.\n\n[GRAFIKA: Katedra La Seu Palma]';
         } else if (/zdj[eę]cia miejsc/i.test(lastText)) {
@@ -60,7 +60,7 @@ function makeMock(port, name) {
         } else if (/przerwij mnie/i.test(lastText)) {
           /* Odpowiedź, którą DA SIĘ przerwać w połowie znacznika. Znacznik
              zaczyna się wcześnie, a domykający nawias stoi na samym końcu
-             długiego strumienia — więc „stop" w dowolnym momencie zostawia
+             długiego strumienia – więc „stop" w dowolnym momencie zostawia
              polecenie dla modelu bez zamknięcia. Dokładnie ta sytuacja
              wysypywała `[ARCHIWUM: …` na ekran Marcina. */
           text = 'Zaraz sprawdzę archiwum.\n[ARCHIWUM: grupuj=rok, '
@@ -71,15 +71,15 @@ function makeMock(port, name) {
             + 'Strumień leci token po tokenie i trwa na tyle długo, że kolejka ma co obsłużyć. ')
             .repeat(4);
         } else if (hasResults) {
-          text = 'To **Samsung Galaxy S24** — 6.2" AMOLED 120 Hz, Exynos 2400, aparat 50 MP, ceny od ok. 3799 zł.\n\nŹródła: gsmarena.com, samsung.com.';
+          text = 'To **Samsung Galaxy S24** – 6.2" AMOLED 120 Hz, Exynos 2400, aparat 50 MP, ceny od ok. 3799 zł.\n\nŹródła: gsmarena.com, samsung.com.';
         } else if (/jaki to telefon/i.test(lastText)) {
-          text = 'Rozpoznaję smartfon Samsunga — sprawdzę dokładny model.\n\n[SZUKAJ: Samsung Galaxy S24 specyfikacja cena]';
+          text = 'Rozpoznaję smartfon Samsunga – sprawdzę dokładny model.\n\n[SZUKAJ: Samsung Galaxy S24 specyfikacja cena]';
         } else if (/wygeneruj.*(grafik|obraz|logo)/i.test(lastText)) {
           text = 'Jasne, generuję!\n\n[OBRAZ: a majestic cosmic bear astronaut floating in a nebula, cinematic lighting]';
         } else if (/zapami[eę]taj|zapisz/i.test(lastText)) {
           text = 'Jasne.\n\n[AKCJA: zapamiętaj | Ulubiony obiektyw to 50mm f/1.8]';
         } else if (hasImage) {
-          text = `Widzę w Twojej dłoni **telefon** — ciemny smartfon z wyspą aparatów. (model: ${parsed.model})`;
+          text = `Widzę w Twojej dłoni **telefon** – ciemny smartfon z wyspą aparatów. (model: ${parsed.model})`;
         } else if (/przykład kodu|kod/i.test(lastText)) {
           text = `Proszę, z ${name}:\n\n\`\`\`python\nprint("Cześć, Kosmos")\n\`\`\`\n`;
         } else {

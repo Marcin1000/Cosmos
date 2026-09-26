@@ -2,10 +2,10 @@
    a odpowiedź opiera się na policzonej liczbie, nie na oszacowaniu.
 
    Połowa tego zestawu to GRANICE, nie funkcje. Kod pisze model, więc trzeba
-   wiedzieć — i wiedzieć w sposób sprawdzalny — czego ten kod NIE MOŻE zrobić:
+   wiedzieć – i wiedzieć w sposób sprawdzalny – czego ten kod NIE MOŻE zrobić:
    sięgnąć po pliki serwera, odpalić podproces, zobaczyć klucze API, wisieć
    w nieskończoność. To, czego nie sprawdzamy (sieć), jest opisane wprost
-   w nagłówku lib/kod.js — bo nieuczciwe byłoby nazywać to piaskownicą. */
+   w nagłówku lib/kod.js – bo nieuczciwe byłoby nazywać to piaskownicą. */
 const { srodowisko } = require('../pomoc');
 const { uruchomKod } = require('../../lib/kod.js');
 
@@ -58,7 +58,7 @@ const { uruchomKod } = require('../../lib/kod.js');
   const ile = Date.now() - t0;
   console.log(`7. pętla nieskończona → przerwana po ${ile} ms (przerwany=${r.przerwany})`);
   if (!r.przerwany) fail.push('nieskończona pętla nie została przerwana');
-  if (ile > 15000) fail.push('limit czasu nie działa — serwer wisiałby');
+  if (ile > 15000) fail.push('limit czasu nie działa – serwer wisiałby');
 
   // 8. błąd w kodzie wraca jako komunikat, nie jako wywrotka Cosmosa
   r = await uruchomKod('nieistniejacaFunkcja()');

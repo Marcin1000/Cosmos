@@ -1,7 +1,7 @@
 const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // Ostrzeżenie o obrazie wysyłanym do modelu bez wzroku
 const { spawn } = require('child_process');
-// Ostrzeżenie pojawia się TYLKO bez ustawionego modelu wizyjnego — inaczej Cosmos podmienia model sam.
+// Ostrzeżenie pojawia się TYLKO bez ustawionego modelu wizyjnego – inaczej Cosmos podmienia model sam.
 const PORT = 3070;
 let srv;
 const start = async () => {
@@ -38,7 +38,7 @@ const stop = () => { try { process.kill(-srv.pid); } catch { /* już nie żyje *
 
   // 1. model bez wzroku → ostrzeżenie
   let r = await probe('nvidia/nemotron-nano-9b-v2');
-  console.log(`1. nano-9b (bez wzroku): ${r.warn ? 'ostrzega — ' + r.text : 'BRAK OSTRZEŻENIA'}`);
+  console.log(`1. nano-9b (bez wzroku): ${r.warn ? 'ostrzega – ' + r.text : 'BRAK OSTRZEŻENIA'}`);
   if (!r.warn) fail.push('brak ostrzeżenia dla modelu bez wzroku');
 
   // 2. model wizyjny → cisza

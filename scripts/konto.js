@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Konta z wiersza poleceń — na wypadek, gdy do interfejsu nie da się wejść.
+/* Konta z wiersza poleceń – na wypadek, gdy do interfejsu nie da się wejść.
 
      node scripts/konto.js lista             kto ma konto
      node scripts/konto.js haslo <login>     nowe hasło (pyta, nie widać go w historii)
@@ -8,7 +8,7 @@
    w .env działa tylko przy pierwszym starcie, więc jego zmiana już nic nie da.
 
    SERWER MUSI BYĆ ZATRZYMANY. Cosmos trzyma listę kont w pamięci i przy
-   najbliższym zapisie (np. ktoś się zaloguje) nadpisałby plik swoją wersją —
+   najbliższym zapisie (np. ktoś się zaloguje) nadpisałby plik swoją wersją –
    nowe hasło zniknęłoby bez śladu. Dlatego skrypt sprawdza, czy serwer
    odpowiada, i odmawia, dopóki działa:
 
@@ -25,7 +25,7 @@ const [, , polecenie, login] = process.argv;
 const PORT = Number(process.env.PORT || 3000);
 
 /* Wspólny bufor wejścia. Z potoku (`printf 'a\nb\n' | …`) oba wiersze przychodzą
-   jednym kawałkiem — gdyby każde pytanie czytało osobno, drugie czekałoby
+   jednym kawałkiem – gdyby każde pytanie czytało osobno, drugie czekałoby
    w nieskończoność na dane, które już przyszły, a skrypt kończyłby się po
    cichu, bez zmiany hasła i bez słowa. */
 let bufor = '';
@@ -55,7 +55,7 @@ function zapytajUkryte(pytanie) {
       }
       oddajLinie();
     });
-    wejscie.on('end', () => { if (czekajacy.length) { console.error('\nBrak danych na wejściu — nic nie zmieniono.'); process.exit(1); } });
+    wejscie.on('end', () => { if (czekajacy.length) { console.error('\nBrak danych na wejściu – nic nie zmieniono.'); process.exit(1); } });
   }
   wejscie.resume();
   return new Promise((gotowe) => {
@@ -86,7 +86,7 @@ async function serwerDziala() {
   }
   if (polecenie === 'haslo' && login) {
     if (await serwerDziala() && !process.argv.includes('--wymus')) {
-      console.error(`Cosmos działa na porcie ${PORT}. Zatrzymaj go najpierw — inaczej nadpisze nowe hasło:\n`
+      console.error(`Cosmos działa na porcie ${PORT}. Zatrzymaj go najpierw – inaczej nadpisze nowe hasło:\n`
         + '  sudo systemctl stop cosmos\n'
         + `  node scripts/konto.js haslo ${login}\n`
         + '  sudo systemctl start cosmos');
@@ -99,7 +99,7 @@ async function serwerDziala() {
     }
     const nowe = await zapytajUkryte(`Nowe hasło dla ${u.login} (min. ${konta.MIN_HASLO} znaków): `);
     const powtorz = await zapytajUkryte('Powtórz: ');
-    if (nowe !== powtorz) { console.error('Hasła się różnią — nic nie zmieniono.'); process.exit(1); }
+    if (nowe !== powtorz) { console.error('Hasła się różnią – nic nie zmieniono.'); process.exit(1); }
     try {
       await konta.ustawHaslo(u.id, nowe);
       const ile = konta.usunSesjeUzytkownika(u.id);

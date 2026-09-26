@@ -1,7 +1,7 @@
-/* Wysyłka pliku do bazy wiedzy — telefon nie zamiera, plik dochodzi co do bajtu.
+/* Wysyłka pliku do bazy wiedzy – telefon nie zamiera, plik dochodzi co do bajtu.
 
    Plik szedł dawniej jako base64 w JSON-ie: przeglądarka czytała go
-   readAsDataURL, kopiowała napis, pakowała JSON.stringify — wszystko w wątku
+   readAsDataURL, kopiowała napis, pakowała JSON.stringify – wszystko w wątku
    głównym. Zespół zmierzył na telefonie (CPU ×4): plik 20 MB = jedno zadanie
    2,3 s, 45 MB = 4,7 s martwej strony, bez żadnego postępu. Do tego przez
    tunel szło o jedną trzecią więcej danych, a serwer parsował 60 MB JSON-a.
@@ -34,7 +34,7 @@ const skrot = (b) => crypto.createHash('sha256').update(b).digest('hex');
   // --- 1. surowe ciało bajt w bajt -----------------------------------------
   {
     const dane = crypto.randomBytes(3 * 1024 * 1024);
-    const nazwa = 'Zdjęcia z Mazur — źródła ąę.bin';
+    const nazwa = 'Zdjęcia z Mazur – źródła ąę.bin';
     const r = await fetch(`${ADRES}/api/kb/file`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream', 'X-Cosmos-Nazwa': encodeURIComponent(nazwa) },
@@ -74,7 +74,7 @@ const skrot = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
   // --- 3–5. przeglądarka na telefonie -----------------------------------------
   if (!maPrzegladarke()) {
-    console.log('⚠ Brak Chromium — pomijam część z przeglądarką.');
+    console.log('⚠ Brak Chromium – pomijam część z przeglądarką.');
   } else {
     const b = await przegladarka();
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
@@ -98,7 +98,7 @@ const skrot = (b) => crypto.createHash('sha256').update(b).digest('hex');
       window.kbSetStatus = (x) => { if (x) window.__statusy.push(x); org(x); };
     });
     /* Plik z DYSKU, nie z bufora: bufor Playwright wstrzykuje do strony
-       przez JavaScript (base64 w wątku strony) — przy CPU ×4 to 25 s zadania,
+       przez JavaScript (base64 w wątku strony) – przy CPU ×4 to 25 s zadania,
        które zmierzylibyśmy zamiast aplikacji. Ścieżkę ustawia protokół. */
     const katalog = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-wysylka-'));
     // Nazwa ASCII: polskie znaki w NAZWIE NA DYSKU potrafią nie przejść przez

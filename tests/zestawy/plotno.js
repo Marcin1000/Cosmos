@@ -1,15 +1,15 @@
-/* Płótno — dokument obok rozmowy, odpowiednik Canvas/Artifacts.
+/* Płótno – dokument obok rozmowy, odpowiednik Canvas/Artifacts.
    Dla twórcy wideo: scenariusze i opisy, czyli teksty, które się REDAGUJE,
    a nie czyta raz.
 
    Cała wartość siedzi w poprawkach fragmentami. Model przepisujący przy
    każdej zmianie trzy tysiące słów jest wolny i za każdym razem coś gubi po
-   drodze. Dlatego większość sprawdzeń dotyczy silnika SZUKAJ/ZAMIEŃ — w tym
+   drodze. Dlatego większość sprawdzeń dotyczy silnika SZUKAJ/ZAMIEŃ – w tym
    przypadków, w których MUSI odmówić. */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -30,9 +30,9 @@ if (!maPrzegladarke()) {
   const maly = await promptDla('nvidia/nemotron-mini-4b-instruct');
   console.log(`1. instrukcja płótna: duży ${/PŁÓTNO/.test(duzy) ? 'ma' : 'BRAK'}, `
     + `mały ${/PŁÓTNO/.test(maly) ? 'MA (źle)' : 'nie ma'}`);
-  if (!/NARZĘDZIE — PŁÓTNO/.test(duzy)) fail.push('duży model nie wie o płótnie');
+  if (!/NARZĘDZIE – PŁÓTNO/.test(duzy)) fail.push('duży model nie wie o płótnie');
   if (!/SZUKAJ/.test(duzy)) fail.push('brak instrukcji o poprawkach fragmentami');
-  if (/NARZĘDZIE — PŁÓTNO/.test(maly)) fail.push('mały model dostał płótno');
+  if (/NARZĘDZIE – PŁÓTNO/.test(maly)) fail.push('mały model dostał płótno');
 
   // --- silnik poprawek, sprawdzany w przeglądarce (tam żyje) ---
   const br = await przegladarka();
@@ -47,7 +47,7 @@ if (!maPrzegladarke()) {
     return { wynik, tekst: conv.canvas.text };
   }, [tekst, blok]);
 
-  // most do funkcji wewnętrznej — inaczej trzeba by ją eksportować tylko dla testu
+  // most do funkcji wewnętrznej – inaczej trzeba by ją eksportować tylko dla testu
   await pg.evaluate(() => { window.__test_zastosuj = zastosujZmianePlotna; });
 
   const SCENA = 'UJĘCIE 1\nDron wznosi się nad lasem.\n\nUJĘCIE 2\nZbliżenie na twarz.';
@@ -66,7 +66,7 @@ if (!maPrzegladarke()) {
   if (r.wynik.ile !== 2) fail.push('nie naniósł obu poprawek naraz');
 
   /* 4. Fragment występujący DWA RAZY musi zostać odrzucony. Cicha podmiana
-     pierwszego z brzegu potrafi zepsuć tekst tak, że nikt tego nie zauważy —
+     pierwszego z brzegu potrafi zepsuć tekst tak, że nikt tego nie zauważy –
      a to jest dokument, nad którym ktoś pracuje godzinami. */
   r = await zmiana('Ala ma kota.\nAla ma psa.',
     '<<<<<<< SZUKAJ\nAla\n=======\nOla\n>>>>>>> ZAMIEŃ');

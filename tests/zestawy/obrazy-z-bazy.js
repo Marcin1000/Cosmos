@@ -2,21 +2,21 @@
 
    Zdjęcie z aparatu (kilkanaście MB) zaznaczone w bazie wiedzy szło do modelu
    w całości, w KAŻDEJ wiadomości: ~20 MB base64 na żądanie, płatny przesył,
-   a u Claude'a ponad limit 5 MB na obraz — żądanie odrzucone. Serwer nie ma
+   a u Claude'a ponad limit 5 MB na obraz – żądanie odrzucone. Serwer nie ma
    dekodera obrazów, więc podgląd (≤1568 px, JPEG) robi przeglądarka.
 
    Co musi być prawdą:
      1. Duże zdjęcie wgrane przez aplikację dostaje podgląd: ≤1568 px
         i najwyżej 3,5 MB; oryginał zostaje bajt w bajt.
-     2. Model dostaje podgląd, nie oryginał — całe żądanie do modelu jest
+     2. Model dostaje podgląd, nie oryginał – całe żądanie do modelu jest
         wielokrotnie mniejsze od samego zdjęcia.
      3. Stara pozycja bez podglądu: za duża nie idzie do modelu (model dostaje
         zdanie, że jest za duża), a zaznaczenie jej w bazie wiedzy dorabia
-        podgląd — i następna wiadomość już go niesie.
+        podgląd – i następna wiadomość już go niesie.
      4. Mały obraz podglądu nie potrzebuje i idzie w oryginale.
      5. Usunięcie pozycji usuwa też podgląd z dysku.
      6. Mały obraz w formacie, którego dostawcy nie przyjmują (BMP), też dostaje
-        podgląd JPEG — a bez podglądu nie idzie do modelu w oryginale (każda
+        podgląd JPEG – a bez podglądu nie idzie do modelu w oryginale (każda
         wiadomość padała odmową 400), tylko model dostaje zdanie o formacie. */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -25,7 +25,7 @@ const http = require('node:http');
 const { serwerCosmosa, czekajNa, zabij, przegladarka, maPrzegladarke, katalogOsoby } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -60,7 +60,7 @@ const atrapa = http.createServer((req, res) => {
   });
 });
 
-/** Najprostszy poprawny BMP (24 bity, bez kompresji) — Node nie ma kodera obrazów. */
+/** Najprostszy poprawny BMP (24 bity, bez kompresji) – Node nie ma kodera obrazów. */
 function bmp(w, h) {
   const wiersz = Math.ceil((w * 3) / 4) * 4;
   const b = Buffer.alloc(54 + wiersz * h);
@@ -71,7 +71,7 @@ function bmp(w, h) {
   return b;
 }
 
-/** Wymiary JPEG-a z nagłówka SOF — bez dekodera. */
+/** Wymiary JPEG-a z nagłówka SOF – bez dekodera. */
 function wymiaryJpeg(buf) {
   let i = 2;
   while (i < buf.length) {
@@ -113,7 +113,7 @@ async function zapytajModel(kbSelected) {
   await p.waitForFunction(() => typeof kbUploadFiles === 'function');
 
   /* Duże „zdjęcie z aparatu": 4000×3000, szum (JPEG się nie skompresuje),
-     jakość 0.95 — robi je przeglądarka, bo Node nie ma kodera JPEG. */
+     jakość 0.95 – robi je przeglądarka, bo Node nie ma kodera JPEG. */
   const zrobZdjecie = (nazwa, w, h) => p.evaluate(async ({ nazwa, w, h }) => {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
@@ -183,7 +183,7 @@ async function zapytajModel(kbSelected) {
   const maly = (await lista()).find((x) => x.name === 'maly.jpg');
   const z4 = await zapytajModel([maly && maly.id]);
   ok(maly && !maly.podglad && z4.obrazy.length === 1, 'mały obraz idzie w oryginale, bez podglądu');
-  // Galeria na telefonie pobierała przy każdym otwarciu wszystko od nowa (89 MB) — plik o danym id się nie zmienia.
+  // Galeria na telefonie pobierała przy każdym otwarciu wszystko od nowa (89 MB) – plik o danym id się nie zmienia.
   const surowy = await fetch(`${ADRES}/api/kb/raw?id=${encodeURIComponent(maly ? maly.id : '')}`);
   ok(/immutable/.test(surowy.headers.get('cache-control') || '') && /private/.test(surowy.headers.get('cache-control') || '')
     && Number(surowy.headers.get('content-length')) > 0, `plik z bazy ma pamięć podręczną i długość (${surowy.headers.get('cache-control')})`);
@@ -203,7 +203,7 @@ async function zapytajModel(kbSelected) {
   const staryBmp = await (await fetch(`${ADRES}/api/kb/file`, { method: 'POST', headers: { 'Content-Type': 'image/bmp', 'X-Cosmos-Nazwa': 'szkic.bmp' }, body: bmp(32, 32) })).json();
   const z7 = await zapytajModel([staryBmp.item && staryBmp.item.id]);
   ok(z7.obrazy.length === 0 && /szkic\.bmp/.test(z7.systemowe) && /JPEG albo PNG/.test(z7.systemowe),
-    'BMP bez podglądu nie idzie do modelu w oryginale — model wie, że to kwestia formatu');
+    'BMP bez podglądu nie idzie do modelu w oryginale – model wie, że to kwestia formatu');
 
   // --- 5. usunięcie sprząta podgląd ------------------------------------------------
   await fetch(`${ADRES}/api/kb?id=${encodeURIComponent(duze ? duze.id : '')}`, { method: 'DELETE' });

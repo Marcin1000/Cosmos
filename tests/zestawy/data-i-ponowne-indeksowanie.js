@@ -4,17 +4,17 @@
    zdjęcia od MOMENTU WGRANIA pliku do chmury.
 
    1. PORZĄDEK. Marcin: „Nie idzie od najnowszych zdjęć, bo pokazuje zdjęcia
-      gór z 2022 roku." Sortowanie było poprawne — kłamała data. Microsoft
+      gór z 2022 roku." Sortowanie było poprawne – kłamała data. Microsoft
       Graph wypełnia `photo.takenDateTime` dla JPEG-ów, ale dla RAW-ów Canona
       (CR2/CR3) już nie, a wtedy braliśmy `createdDateTime`, czyli chwilę
       wgrania. Zdjęcie zrobione w 2022 i wgrane w 2026 uczciwie lądowało na
       szczycie listy „od najnowszych".
 
    2. PRACA DO KOSZA. `dodaj()` podmieniało znany wpis w CAŁOŚCI. Dla nowego
-      pliku poprawne, dla znanego — katastrofalne: jedno kliknięcie
+      pliku poprawne, dla znanego – katastrofalne: jedno kliknięcie
       „indeksuj OneDrive" po dograniu nowej sesji kasowało `obejrzane`,
       `obiekty`, `obiektyw`, dane lotu i poprawione daty. Czyli 55 tysięcy
-      plików przemielonych rozpoznawaniem treści i osobny przebieg po EXIF —
+      plików przemielonych rozpoznawaniem treści i osobny przebieg po EXIF –
       do powtórzenia, bez jednego ostrzeżenia, przy indeksowaniu, które
       wygląda na udane, bo liczba plików się zgadza.
 
@@ -32,7 +32,7 @@ const fail = [];
 
 /* --- 1. DATA Z NAZWY PLIKU ------------------------------------------------
    Aparaty numerują (`IMG_4821.CR3`) i tam nie ma czego szukać, ale telefony
-   i OneDrive datują — a to właśnie te pliki mają najczęściej bezużyteczną
+   i OneDrive datują – a to właśnie te pliki mają najczęściej bezużyteczną
    datę systemową. Sprawdzamy też, czego funkcja NIE ma prawa uznać za datę:
    wpis z fałszywą datą jest gorszy niż wpis bez daty, bo wchodzi do
    sortowania i do filtra `rok=`. */
@@ -63,7 +63,7 @@ const katalog = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-reindeks-'));
 const a = utworz(katalog);
 
 // Tak wygląda RAW z Canona prosto z listowania Grapha: bez aparatu, bez ISO,
-// z datą WGRANIA i bez obiektywu — Graph nie czyta CR3.
+// z datą WGRANIA i bez obiektywu – Graph nie czyta CR3.
 const zListowania = {
   id: 'onedrive:c1', zrodlo: 'onedrive', typ: 'zdjecie',
   nazwa: '3B9A4703.CR3', sciezka: '/Zdjęcia/Góry 2022/3B9A4703.CR3',
@@ -89,7 +89,7 @@ const przed = a.szukaj({})[0];
 console.log(`2. po obu przebiegach: kiedy=${przed.kiedy}, aparat=${przed.aparat}, `
   + `obiektyw=${przed.obiektyw}, obejrzane=${przed.obejrzane}, obiekty=${przed.obiekty.length}`);
 
-// I TERAZ to samo listowanie z Grapha jeszcze raz — Marcin dograł nową sesję.
+// I TERAZ to samo listowanie z Grapha jeszcze raz – Marcin dograł nową sesję.
 a.dodaj([zListowania]);
 const po = a.szukaj({})[0];
 console.log(`   po ponownym listowaniu: kiedy=${po.kiedy}, aparat=${po.aparat}, `
@@ -97,13 +97,13 @@ console.log(`   po ponownym listowaniu: kiedy=${po.kiedy}, aparat=${po.aparat}, 
   + `exifCzytany=${po.exifCzytany}`);
 
 if (po.kiedy !== '2022-08-14T15:30:12') {
-  fail.push(`ponowne indeksowanie cofnęło datę na ${po.kiedy} — data wgrania nadpisała EXIF`);
+  fail.push(`ponowne indeksowanie cofnęło datę na ${po.kiedy} – data wgrania nadpisała EXIF`);
 }
 if (po.aparat !== 'Canon EOS R6m2') fail.push('ponowne indeksowanie skasowało aparat');
 if (!po.obiektyw) fail.push('ponowne indeksowanie skasowało obiektyw');
-if (!po.obejrzane) fail.push('ponowne indeksowanie skasowało `obejrzane` — YOLO pójdzie od nowa');
+if (!po.obejrzane) fail.push('ponowne indeksowanie skasowało `obejrzane` – YOLO pójdzie od nowa');
 if (po.obiekty.length !== 2) fail.push('ponowne indeksowanie skasowało wykryte obiekty');
-if (!po.exifCzytany) fail.push('ponowne indeksowanie skasowało `exifCzytany` — EXIF pójdzie od nowa');
+if (!po.exifCzytany) fail.push('ponowne indeksowanie skasowało `exifCzytany` – EXIF pójdzie od nowa');
 if (po.iso !== 400 || po.lat === null) fail.push('ponowne indeksowanie skasowało ISO albo GPS');
 
 /* Pola WYLICZANE muszą iść za składnikami. Zdjęcie odzyskuje datę i GPS,
@@ -149,12 +149,12 @@ a4.dodaj([{ id: 'g', zrodlo: 'onedrive', typ: 'zdjecie', nazwa: '3B9A4703.CR3',
 const kolejnosc2 = a4.szukaj({}).map((w) => w.id).join(',');
 console.log(`   po ponownym listowaniu: ${kolejnosc2}`);
 if (kolejnosc2 !== 's,m,g') {
-  fail.push(`po ponownym listowaniu porządek to ${kolejnosc2} — data wgrania wypchnęła stare zdjęcie na górę`);
+  fail.push(`po ponownym listowaniu porządek to ${kolejnosc2} – data wgrania wypchnęła stare zdjęcie na górę`);
 }
 /* --- 5. WPISY SPRZED WPROWADZENIA `dataZrodlo` ----------------------------
    Archiwum Marcina liczy 55 tysięcy wpisów zapisanych ZANIM to pole powstało.
    Przebieg po EXIF naprawił im daty, ale nie zostawił po sobie śladu
-   w `dataZrodlo` — więc gdyby ranga liczyła się wyłącznie z tego pola, wyszłyby
+   w `dataZrodlo` – więc gdyby ranga liczyła się wyłącznie z tego pola, wyszłyby
    z zerem i pierwsze ponowne indeksowanie cofnęłoby im daty na wgranie.
    Dokładnie tym plikom, którym najbardziej zależy. `exifCzytany` mówi o nich
    to samo i tu sprawdzamy, że jest czytane. */

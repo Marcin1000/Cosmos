@@ -1,15 +1,15 @@
 /* ============================================================
-   TEKST — treść wiadomości i mini-renderer Markdown
+   TEKST – treść wiadomości i mini-renderer Markdown
 
    Najczystsza część `app.js`: same przekształcenia tekstu. Nic tu nie sięga
-   po DOM, stan aplikacji ani sieć — wchodzi string, wychodzi string.
+   po DOM, stan aplikacji ani sieć – wchodzi string, wychodzi string.
 
    Wydzielone z dwóch powodów. Pierwszy to rozmiar `app.js`. Drugi ważniejszy:
    te funkcje decydują o BEZPIECZEŃSTWIE tego, co model wpisze w rozmowę.
    `escapeHtml`, filtr adresów w `renderInline` i `autoLink` są jedyną barierą
    między odpowiedzią modelu a `innerHTML`. Dopóki mieszkały w pliku, którego
    nie da się wczytać poza przeglądarką, sprawdzało je kilka testów
-   przeglądarkowych — wolnych i sprawdzających przy okazji wygląd.
+   przeglądarkowych – wolnych i sprawdzających przy okazji wygląd.
    Teraz da się je wywołać w Node i przepuścić przez nie listę prób wstrzyknięcia
    w ułamku sekundy.
    ============================================================ */
@@ -37,7 +37,7 @@ function utworzTekst(z) {
   function msgImages(m) {
     return typeof m.content === 'string' ? [] : (m.content?.images || []);
   }
-  // Zdjęcia znalezione w internecie — inna rzecz niż `images` (te są wgrane
+  // Zdjęcia znalezione w internecie – inna rzecz niż `images` (te są wgrane
   // albo wygenerowane). Mają źródło, więc dają się kliknąć i sprawdzić.
   function msgPhotos(m) {
     return typeof m.content === 'string' ? [] : (m.content?.photos || []);
@@ -58,7 +58,7 @@ function utworzTekst(z) {
     return typeof m.content === 'string' ? null : (m.content?.run || null);
   }
 
-  /** Wszystkie załączniki tej rozmowy — program dostaje je jako pliki obok
+  /** Wszystkie załączniki tej rozmowy – program dostaje je jako pliki obok
    *  siebie, więc „policz sumę z tego arkusza" działa bez przeklejania danych. */
   function zebranyMaterial(conv) {
     const pliki = [];
@@ -76,7 +76,7 @@ function utworzTekst(z) {
 
   /** Zamień gołe adresy w tekście na klikalne odnośniki.
    *
-   * Model podaje źródła raz jako `[tekst](adres)`, a raz jako sam adres w zdaniu —
+   * Model podaje źródła raz jako `[tekst](adres)`, a raz jako sam adres w zdaniu –
    * i ta druga postać zostawała martwym tekstem, którego nie dało się kliknąć.
    * Pracujemy na HTML-u po `renderInline`, więc omijamy to, co już jest wewnątrz
    * `<a>` i `<code>`: inaczej podlinkowalibyśmy adres w atrybucie href.

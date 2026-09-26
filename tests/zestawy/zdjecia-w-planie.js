@@ -3,7 +3,7 @@
    Marcin poprosił o plan tygodniowej wycieczki na Majorkę, a potem „ze
    zdjęciami proszę". Dostał osiem zdjęć jednej katedry, komunikat
    „🖼️ Szukam zdjęć: Katedra La Seu Palma de Mallorca…" wiszący POD gotowymi
-   zdjęciami — i ciszę. Pozostałe sześć dni planu nie doczekało się niczego,
+   zdjęciami – i ciszę. Pozostałe sześć dni planu nie doczekało się niczego,
    a zdjęcia nie zostały przypisane do żadnego przystanku.
 
    Trzy osobne usterki, trzy osobne sprawdzenia:
@@ -12,7 +12,7 @@
         gotowymi zdjęciami to informacja nieprawdziwa.
      2. Po pokazaniu zdjęć głos wraca do MODELU. Wcześniej pętla kończyła się
         tutaj (`break`) i model nie miał już jak powiedzieć, co to za miejsca.
-     3. Powtórzona prośba o te same zdjęcia zostaje odcięta — inaczej model
+     3. Powtórzona prośba o te same zdjęcia zostaje odcięta – inaczej model
         potrafi zjeść wszystkie rundy na jednej katedrze.
 
    Czwarta rzecz, z tej samej rozmowy: źródła. Model wypisywał „【1†L1-L4】",
@@ -38,7 +38,7 @@ if (!maPrzegladarke()) {
   await pg.fill('#input', 'pokaż zdjęcia miejsc z planu');
   await pg.press('#input', 'Enter');
 
-  // Trzy tury modelu plus dwa wyszukiwania — dajemy na to spokojnie czasu.
+  // Trzy tury modelu plus dwa wyszukiwania – dajemy na to spokojnie czasu.
   for (let i = 0; i < 60; i++) {
     await pg.waitForTimeout(500);
     const trwa = await pg.evaluate(() => document.getElementById('stop-btn').style.display !== 'none');
@@ -57,18 +57,18 @@ if (!maPrzegladarke()) {
   const wiszace = ekran.teksty.filter((x) => /Szukam zdjęć/i.test(x));
   console.log(`1. komunikatów „Szukam zdjęć…" na ekranie: ${wiszace.length}`);
   if (wiszace.length) {
-    fail.push('„Szukam zdjęć…" wisi po znalezieniu zdjęć — komunikat o trwającej czynności się nie domyka');
+    fail.push('„Szukam zdjęć…" wisi po znalezieniu zdjęć – komunikat o trwającej czynności się nie domyka');
   }
-  /* Czego zdjęcia dotyczą — MUSI być widać. Kiedyś mówił o tym jeden zbiorczy
+  /* Czego zdjęcia dotyczą – MUSI być widać. Kiedyś mówił o tym jeden zbiorczy
      komunikat („🖼️ Zdjęcia: Katedra La Seu, Es Trenc") nad wszystkimi siatkami
      naraz. Zniknął razem z galerią na końcu odpowiedzi: teraz każda siatka
      stoi pod swoim punktem planu i ma WŁASNY podpis. Gwarancja jest ta sama,
-     nośnik inny — więc i sprawdzenie musi patrzeć na nośnik, który istnieje. */
+     nośnik inny – więc i sprawdzenie musi patrzeć na nośnik, który istnieje. */
   const podpisy = await pg.evaluate(() => [...document.querySelectorAll('.msg-assistant')]
     .filter((m) => m.querySelector('.photo-grid, .msg-photos'))
     .map((m) => (m.textContent || '').trim().slice(0, 60))
     .filter(Boolean));
-  console.log(`   podpisów nad siatkami: ${podpisy.length} — ${podpisy.join(' | ') || 'BRAK'}`);
+  console.log(`   podpisów nad siatkami: ${podpisy.length} – ${podpisy.join(' | ') || 'BRAK'}`);
   if (!podpisy.length) fail.push('po znalezieniu zdjęć nie ma żadnej informacji, czego dotyczą');
 
   /* ---- 2. Zdjęcia są, i to obu miejsc ---- */
@@ -77,7 +77,7 @@ if (!maPrzegladarke()) {
   const oba = ['Katedra La Seu', 'Es Trenc'].filter((m) => ekran.teksty.some((x) => x.includes(m)));
   console.log(`   miejsca wymienione na ekranie: ${oba.join(', ') || 'żadne'}`);
   if (oba.length < 2) {
-    fail.push(`z dwóch miejsc w prośbie na ekranie jest ${oba.length} — model dostał zdjęcia jednego`);
+    fail.push(`z dwóch miejsc w prośbie na ekranie jest ${oba.length} – model dostał zdjęcia jednego`);
   }
 
   /* ---- 3. Model DOKOŃCZYŁ odpowiedź po zdjęciach ----
@@ -86,17 +86,17 @@ if (!maPrzegladarke()) {
   const ostatni = ekran.teksty[ekran.teksty.length - 1] || '';
   console.log(`3. ostatnia wypowiedź Cosmosa: „${ostatni.slice(0, 80)}"`);
   if (!/Dzień 1/.test(ostatni)) {
-    fail.push('po pokazaniu zdjęć model nie dostał głosu — zdjęcia zostały bez przypisania do planu');
+    fail.push('po pokazaniu zdjęć model nie dostał głosu – zdjęcia zostały bez przypisania do planu');
   }
 
   /* ---- 4. Powtórka odcięta: jeden zestaw zdjęć katedry, nie dwa ---- */
   const katedra = ekran.teksty.filter((x) => x.trim() === 'Katedra La Seu Palma').length;
   console.log(`4. zestawów zdjęć tej samej katedry: ${katedra}`);
-  if (katedra > 1) fail.push('te same zdjęcia pokazane dwa razy — odcinanie powtórek nie działa');
+  if (katedra > 1) fail.push('te same zdjęcia pokazane dwa razy – odcinanie powtórek nie działa');
 
   /* ---- 5. Ruchy narzędzi siedzą w zwijanym bloku ----
      Wynik narzędzia z rolą `user` bez flagi `search` rysuje się jako pytanie,
-     którego nikt nie zadał — to była osobna usterka i nie chcemy jej z powrotem. */
+     którego nikt nie zadał – to była osobna usterka i nie chcemy jej z powrotem. */
   const udajacePytania = await pg.evaluate(() =>
     [...document.querySelectorAll('.msg-user .msg-content')]
       .map((e) => e.textContent.trim())
@@ -107,7 +107,7 @@ if (!maPrzegladarke()) {
   /* ---- 6. Kliknięcie w zdjęcie otwiera podgląd, a nie obcą stronę ----
      Marcin: „lepiej by było gdybym mógł je kliknąć żeby się rozwinęły
      w większym ekranie z wyższą rozdzielczością i wtedy z możliwością
-     przejścia do źródła — bo teraz jak klikam na zdjęcie to automatycznie
+     przejścia do źródła – bo teraz jak klikam na zdjęcie to automatycznie
      przechodzę do linka z tym zdjęciem w kolejnej zakładce". */
   const kartPrzed = pg.context().pages().length;
   await pg.click('.photo-tile');
@@ -147,7 +147,7 @@ if (!maPrzegladarke()) {
   if (poEscape) fail.push('Escape nie zamyka podglądu zdjęcia');
 
   /* Instrukcje w promptcie (format źródeł, „jednym znacznikiem") sprawdza
-     zestaw `szukanie-grafik` — tam stoi atrapa oddająca wiadomości systemowe
+     zestaw `szukanie-grafik` – tam stoi atrapa oddająca wiadomości systemowe
      jako treść, czyli jedyne miejsce, w którym widać, co model naprawdę
      dostaje. Tutaj mamy atrapę udającą model, nie echo. */
 

@@ -1,8 +1,8 @@
 /**
- * Cosmos — aplikacja desktopowa (Electron)
+ * Cosmos – aplikacja desktopowa (Electron)
  *
  * Uruchamia wbudowany serwer Cosmos i otwiera UI w natywnym oknie.
- *   npm install          (jednorazowo — pobiera Electrona)
+ *   npm install          (jednorazowo – pobiera Electrona)
  *   npm run desktop      (uruchamia aplikację okienkową)
  *   npm run dist         (buduje instalator .exe dla Windows)
  */

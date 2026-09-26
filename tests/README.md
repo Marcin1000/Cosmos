@@ -14,7 +14,7 @@ drukuje ostatnie kilkanaście linii jego wyjścia.
 
 Przez długi czas testy dzieliły jeden serwer na porcie 3000 i połowa „awarii”
 brała się z tego, że akurat wstał z inną konfiguracją niż potrzebna. To nie jest
-teoria — tak padały:
+teoria – tak padały:
 
 | Zestaw | Czego wymaga | Co się działo bez tego |
 |---|---|---|
@@ -24,7 +24,7 @@ teoria — tak padały:
 | `panel-boczny` | istniejących rozmów | pusta lista nie ma czego przewijać |
 
 Bateria, która przy każdym przebiegu podaje fałszywe alarmy, przestaje cokolwiek
-znaczyć. Dlatego wiedza o wymaganiach siedzi teraz w **jednym** miejscu —
+znaczyć. Dlatego wiedza o wymaganiach siedzi teraz w **jednym** miejscu –
 w tabeli `SRODOWISKA` w `pomoc.js`.
 
 ## Jak napisać nowy zestaw
@@ -56,50 +56,50 @@ Dostępne środowiska (`pomoc.js` → `SRODOWISKA`):
 | `rozumujacy` | strumień z `reasoning_content`, pętla wyszukiwania |
 | `katalogModeli` | lista modeli, z których większość konto odrzuca |
 | `tempo` | modele o różnej płynności, w tym jeden kapryśny i jeden rozumujący |
-| `kontekst` | atrapa oddaje wiadomości systemowe jako treść — widać, co model dostaje |
+| `kontekst` | atrapa oddaje wiadomości systemowe jako treść – widać, co model dostaje |
 | `grafiki` | wyszukiwanie grafik, geokodowanie, SWPC (zorza) |
-| `aparat` | Canon po CCAPI + geokodowanie — droga „policz plan → wyślij do aparatu” |
-| `zmysly` | Kinect, mowa, wykrywanie — bez modelu |
-| `tlo` | praca w tle — jak `pelne`, ale z krótkim `COSMOS_BIEG_SIEROTA_MS` |
+| `aparat` | Canon po CCAPI + geokodowanie – droga „policz plan → wyślij do aparatu” |
+| `zmysly` | Kinect, mowa, wykrywanie – bez modelu |
+| `tlo` | praca w tle – jak `pelne`, ale z krótkim `COSMOS_BIEG_SIEROTA_MS` |
 | `grafikiWRozmowie` | model proszący o grafiki **i** źródła, które je oddają |
-| `studio` | Studio z atrapą generatorów (obraz, dźwięk, wideo) i czekaniem 0,4 s przed 202 — zadania w tle |
+| `studio` | Studio z atrapą generatorów (obraz, dźwięk, wideo) i czekaniem 0,4 s przed 202 – zadania w tle |
 | `goly` | sam serwer, żadnych atrap |
 
 ### Umowy z atrapą `mock-upstream`
 
-Słowo w pytaniu zmienia zachowanie atrapy — to jedyny sposób, żeby zestaw
+Słowo w pytaniu zmienia zachowanie atrapy – to jedyny sposób, żeby zestaw
 ustawił sytuację, której inaczej nie da się wywołać:
 
 | Słowo w pytaniu | Co robi atrapa |
 |---|---|
-| `powoli` | rozciąga strumień na kilkanaście sekund — bez tego nie istnieje „w trakcie odpowiedzi” i nie ma czego kolejkować |
-| `jaki to telefon` | oddaje `[SZUKAJ: …]` — uruchamia pętlę wyszukiwania |
+| `powoli` | rozciąga strumień na kilkanaście sekund – bez tego nie istnieje „w trakcie odpowiedzi” i nie ma czego kolejkować |
+| `jaki to telefon` | oddaje `[SZUKAJ: …]` – uruchamia pętlę wyszukiwania |
 | `wygeneruj grafikę` | oddaje `[OBRAZ: …]` |
 | `zapamiętaj` | oddaje `[AKCJA: zapamiętaj \| …]` |
-| `zdjęcia miejsc` | oddaje `[GRAFIKA: A; B]`, potem próbuje powtórzyć to samo, a po odcięciu dopisuje tekst — trzy tury, tak jak w prawdziwej rozmowie |
+| `zdjęcia miejsc` | oddaje `[GRAFIKA: A; B]`, potem próbuje powtórzyć to samo, a po odcięciu dopisuje tekst – trzy tury, tak jak w prawdziwej rozmowie |
 | `urwana` | kończy strumień w połowie adresu z `finish_reason: "length"`, a na prośbę o kontynuację oddaje resztę |
-| `przerwij mnie` | strumień, w którym `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu — po naciśnięciu „stop” w dowolnym momencie zostaje znacznik bez zamknięcia |
+| `przerwij mnie` | strumień, w którym `[ARCHIWUM: …` zaczyna się wcześnie, a domykający nawias stoi na końcu – po naciśnięciu „stop” w dowolnym momencie zostaje znacznik bez zamknięcia |
 
 ### Umowy z atrapą `mock-studio`
 
 | Słowo w prompcie lub tekście | Co robi atrapa |
 |---|---|
-| `POWOLI` | odpowiada po 1,5 s — dłużej, niż serwer w środowisku `studio` czeka przed 202; przy wideo spowalnia też pobranie gotowego filmu |
+| `POWOLI` | odpowiada po 1,5 s – dłużej, niż serwer w środowisku `studio` czeka przed 202; przy wideo spowalnia też pobranie gotowego filmu |
 | `BLAD` | generator odpowiada 500 z opisem błędu |
 
-Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) —
+Zestaw, który potrzebuje czegoś innego, stawia serwer sam (`serwerCosmosa`) –
 tak robią `sprawdzanie-modeli` i `redakcja-danych`.
 
 ## Czekanie na stronę: `load`, nigdy `networkidle`
 
 Cosmos trzyma otwarty strumień zdarzeń (`/api/events/stream`). To połączenie
 z definicji nie kończy się nigdy, więc `waitUntil: 'networkidle'` nie ma na co
-czekać — Playwright widzi jedno żądanie w locie bez końca i wywala się po
+czekać – Playwright widzi jedno żądanie w locie bez końca i wywala się po
 trzydziestu sekundach.
 
 Przez długi czas te zestawy przechodziły przypadkiem: strumień bywał chwilowo
 zerwany akurat w oknie pomiaru. Gdy przestał, **34 zestawy przeglądarkowe padły
-naraz** — wszystkie z tym samym „Timeout 30000ms exceeded, waiting until
+naraz** – wszystkie z tym samym „Timeout 30000ms exceeded, waiting until
 networkidle", i wszystkie na kodzie, którego nikt nie ruszał.
 
 Wszędzie jest więc `waitUntil: 'load'`, a na to, co ma się wydarzyć później,

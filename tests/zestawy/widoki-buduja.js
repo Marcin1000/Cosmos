@@ -1,11 +1,11 @@
-/* Budowniczowie widoku — sprawdzani wywołaniem, nie regexpem.
+/* Budowniczowie widoku – sprawdzani wywołaniem, nie regexpem.
 
    PIĘĆ RAZY w jednej sesji test szukający frazy w `public/app.js` padł przy
    przeprowadzce kodu, mimo że funkcja działała bez zmian. Marcin nazwał ten
    problem wprost: „za dużo testów sprawdza tekst źródła, nie zachowanie".
 
    Za każdym piątym razem kusiło, żeby po prostu przestawić regexp na nowy
-   plik. To jednak nie naprawia niczego — tylko przesuwa moment, w którym
+   plik. To jednak nie naprawia niczego – tylko przesuwa moment, w którym
    test znowu skłamie. Prawdziwą przeszkodą było to, że budowniczych DOM-u
    nie dało się uruchomić poza przeglądarką.
 
@@ -13,10 +13,10 @@
    (`tests/atrapy/maly-dom.js`). Z nią te funkcje da się wywołać w Node
    i zapytać o rzeczy, na które regexp nie odpowie:
 
-     — czy stopka pokazuje właściwy licznik i przycisk,
-     — czy kliknięcie dobiera KOLEJNĄ porcję, a nie tę samą,
-     — czy dobrane kafelki dopisują się do istniejącej siatki,
-     — czy panel wyniku programu pokazuje też to, co poszło źle.
+     – czy stopka pokazuje właściwy licznik i przycisk,
+     – czy kliknięcie dobiera KOLEJNĄ porcję, a nie tę samą,
+     – czy dobrane kafelki dopisują się do istniejącej siatki,
+     – czy panel wyniku programu pokazuje też to, co poszło źle.
 
    Zestaw trwa ułamek sekundy i nie potrzebuje Chromium.
 */
@@ -26,7 +26,7 @@ const { zainstalujDom } = require(path.join(__dirname, '..', 'atrapy', 'maly-dom
 const fail = [];
 const dom = zainstalujDom();
 
-// Wczytujemy DOPIERO po zainstalowaniu atrapy — moduł sięga po `window`.
+// Wczytujemy DOPIERO po zainstalowaniu atrapy – moduł sięga po `window`.
 const { utworzWidoki } = require(path.join(__dirname, '..', '..', 'public', 'widoki.js'));
 
 /** Świeży zestaw budowniczych z atrapami zależności. */
@@ -100,7 +100,7 @@ function stanowisko({ odpowiedz = {} } = {}) {
         dalej: { q: 'folder=Mazury+2026', pomin: 2, razem: 311 },
       },
     };
-    /* Siatka + stopka pod nią, tak jak układa je rozmowa — stopka szuka
+    /* Siatka + stopka pod nią, tak jak układa je rozmowa – stopka szuka
        siatki przez `previousElementSibling`, więc kolejność ma znaczenie. */
     const rodzic = dom.dokument.createElement('div');
     const siatka = widoki.photosGrid(m.content.photos);
@@ -114,12 +114,12 @@ function stanowisko({ odpowiedz = {} } = {}) {
     const adres = dziennik.adresy[0] || '';
     console.log(`3. dobranie: ${adres}`);
     if (!/pomin=2/.test(adres)) fail.push(`adres nie niesie miejsca zatrzymania: ${adres}`);
-    if (!/folder=Mazury/.test(adres)) fail.push('adres zgubił filtry — kolejna porcja byłaby inna');
+    if (!/folder=Mazury/.test(adres)) fail.push('adres zgubił filtry – kolejna porcja byłaby inna');
 
     console.log(`   kafelków po dobraniu: ${m.content.photos.length}, `
       + `pomin: ${m.content.dalej.pomin}`);
     /* Z trzech oddanych plików kafelki dostają tylko dwa z OneDrive, ale
-       `pomin` przesuwa się o CAŁĄ stronę — inaczej pliki z dysku wracałyby
+       `pomin` przesuwa się o CAŁĄ stronę – inaczej pliki z dysku wracałyby
        w kółko i przycisk kręciłby się w miejscu. */
     if (m.content.photos.length !== 4) {
       fail.push(`po dobraniu jest ${m.content.photos.length} kafelków zamiast 4`);
@@ -132,11 +132,11 @@ function stanowisko({ odpowiedz = {} } = {}) {
     console.log(`   kafelków w siatce: ${siatka.children.length}, `
       + `przerysowań rozmowy: ${dziennik.odmalowania}`);
     if (siatka.children.length !== 4) {
-      fail.push(`siatka ma ${siatka.children.length} kafelków zamiast 4 — `
+      fail.push(`siatka ma ${siatka.children.length} kafelków zamiast 4 – `
         + 'dobrane nie zostały dopisane');
     }
     if (dziennik.odmalowania) {
-      fail.push('dobranie porcji przerysowuje całą rozmowę — to wyrzuca użytkownika '
+      fail.push('dobranie porcji przerysowuje całą rozmowę – to wyrzuca użytkownika '
         + 'spod siatki, którą właśnie ogląda');
     }
   }
@@ -166,7 +166,7 @@ function stanowisko({ odpowiedz = {} } = {}) {
   }
 
   /* --- 6. Panel wyniku programu pokazuje TAKŻE błędy --------------------
-     Program, który się wywrócił, jest częstszy niż ten, który policzył —
+     Program, który się wywrócił, jest częstszy niż ten, który policzył –
      a panel pokazujący tylko `stdout` zostawiałby wtedy pustą ramkę. */
   {
     const { widoki } = stanowisko();

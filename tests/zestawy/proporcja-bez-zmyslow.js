@@ -1,29 +1,29 @@
 /* Podgląd ma znać proporcję kadru TAKŻE przy wyłączonym komputerze domowym.
 
    Marcin, ze zrzutów z telefonu: „na mobile to cały czas nie wygląda dobrze".
-   Na obu zrzutach widać ten sam obraz — wąski pasek pośrodku, obłożony
+   Na obu zrzutach widać ten sam obraz – wąski pasek pośrodku, obłożony
    czarnymi pasami z lewej i z prawej, zajmującymi więcej miejsca niż sam kadr.
 
    Przyczyna nie była w układzie, tylko w tym, KTO ustawia proporcję sceny.
-   `liveMediaSize()` — jedyne miejsce, które czyta wymiary strumienia i podaje
-   je CSS-owi jako `--live-ar` — wisiało wyłącznie w pętli `liveDetect()`.
+   `liveMediaSize()` – jedyne miejsce, które czyta wymiary strumienia i podaje
+   je CSS-owi jako `--live-ar` – wisiało wyłącznie w pętli `liveDetect()`.
    A `liveDetect()` ma co robić dopiero wtedy, gdy działają zmysły z YOLO.
    Status na zrzucie mówił to wprost: „Podgląd działa, ale bez rozpoznawania
    obiektów. Rozpoznawanie liczy komputer z GPU, nie telefon."
 
    Czyli: przy wyłączonym komputerze domowym scena zostawała na domyślnym 4:3,
-   choć telefon podaje 9:16. Sam podgląd działał — tylko wyglądał źle.
+   choć telefon podaje 9:16. Sam podgląd działał – tylko wyglądał źle.
 
    Zestaw `panel-kamery-miesci` tego nie łapał i nie mógł: sam PODSTAWIA
    `--live-ar` przed pomiarem, żeby sprawdzić układ przy kadrze pionowym.
    Sprawdzał więc, co układ robi z podaną proporcją, a nigdy tego, czy
    aplikacja w ogóle ją sobie ustawia. Stąd osobny zestaw i osobne środowisko
-   — BEZ zmysłów, bo o to tu właśnie chodzi.
+   – BEZ zmysłów, bo o to tu właśnie chodzi.
 */
 const { srodowisko, przegladarka, maPrzegladarke, KATALOG_ZRZUTOW } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -74,7 +74,7 @@ if (!maPrzegladarke()) {
 
     const mediaProporcja = r.mediaH ? r.mediaW / r.mediaH : 0;
     /* Ile szerokości sceny zajmuje czerń. Przy `object-fit: contain` obraz
-       węższy od sceny zostawia pasy po bokach — i to jest liczba, na którą
+       węższy od sceny zostawia pasy po bokach – i to jest liczba, na którą
        Marcin patrzył, a nie żadna proporcja w konsoli. */
     const pasyProc = mediaProporcja && r.scenaProporcja > mediaProporcja
       ? Math.round((1 - mediaProporcja / r.scenaProporcja) * 100)
@@ -87,14 +87,14 @@ if (!maPrzegladarke()) {
       + `czarne pasy: ${pasyProc}% szerokości`);
 
     if (!r.mediaW || !r.mediaH) {
-      fail.push(`${nazwa}: atrapa kamery nie podała wymiarów — zestaw nic nie mierzy`);
+      fail.push(`${nazwa}: atrapa kamery nie podała wymiarów – zestaw nic nie mierzy`);
       await ctx.close();
       continue;
     }
     /* Sedno. Bez tego sprawdzenia zestaw przechodziłby na atrapie Chromium,
-       która akurat jest 4:3 — czyli przypadkiem taka jak wartość domyślna. */
+       która akurat jest 4:3 – czyli przypadkiem taka jak wartość domyślna. */
     if (!r.ustawione) {
-      fail.push(`${nazwa}: kod nie ustawił \`--live-arn\` — scena stoi na domyślnym 4:3 `
+      fail.push(`${nazwa}: kod nie ustawił \`--live-arn\` – scena stoi na domyślnym 4:3 `
         + 'z CSS, więc kadr pionowy dostanie czarne pasy (zmysły są wyłączone)');
     }
     if (pasyProc > 5) {
@@ -104,7 +104,7 @@ if (!maPrzegladarke()) {
     /* --- WYJAŚNIENIE POD ⓘ, A NIE NAD PODGLĄDEM ----------------------
      *
      *  Marcin: „ten tekst »Podgląd działa, ale…« wchodzi nieładnie pod
-     *  Nastawy" — a potem: „to ⓘ umieśćmy gdzieś w rogu po prostu.
+     *  Nastawy" – a potem: „to ⓘ umieśćmy gdzieś w rogu po prostu.
      *  To nam wykluczy chyba problem."
      *
      *  Miał rację i to jest inne rozwiązanie niż lepsze mieszczenie tekstu.
@@ -140,15 +140,15 @@ if (!maPrzegladarke()) {
 
     if (przed.statusWidoczny) {
       fail.push(`${nazwa}: pasek statusu zajmuje miejsce, choć nie ma bieżącego stanu `
-        + 'do pokazania — wyjaśnienie ma być pod ⓘ');
+        + 'do pokazania – wyjaśnienie ma być pod ⓘ');
     }
     if (!przed.infoWidoczny) {
       fail.push(`${nazwa}: brak ⓘ w nagłówku, a jest co wyjaśnić `
-        + '(zmysły wyłączone) — treść stała się nieosiągalna');
+        + '(zmysły wyłączone) – treść stała się nieosiągalna');
     }
     if (przed.dymekWidoczny) fail.push(`${nazwa}: dymek ⓘ jest otwarty sam z siebie`);
 
-    // Dotknięcie ⓘ — tak, jak robi to Marcin na telefonie.
+    // Dotknięcie ⓘ – tak, jak robi to Marcin na telefonie.
     await pg.click('#live-info');
     await pg.waitForTimeout(400);
     const po = await pg.evaluate(() => {
@@ -177,11 +177,11 @@ if (!maPrzegladarke()) {
       fail.push(`${nazwa}: dymek ⓘ nie zawiera komunikatu o wyłączonym rozpoznawaniu `
         + `(jest „${po.tresc}")`);
     }
-    /* SEDNO CAŁEJ ZMIANY. Wyjaśnienie ma nie kosztować układu ani piksela —
+    /* SEDNO CAŁEJ ZMIANY. Wyjaśnienie ma nie kosztować układu ani piksela –
        dlatego dymek leży NAD treścią, a nie w kolumnie. */
     if (po.panelH !== przed.panelH) {
       fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość panelu `
-        + `${przed.panelH} → ${po.panelH} px — dymek przesuwa układ`);
+        + `${przed.panelH} → ${po.panelH} px – dymek przesuwa układ`);
     }
     if (po.scenaH !== przed.scenaH) {
       fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość obrazu `
@@ -193,7 +193,7 @@ if (!maPrzegladarke()) {
     }
     if (po.zaSzeroko > 1) {
       fail.push(`${nazwa}: dolna część jest o ${po.zaSzeroko} px szersza niż panel `
-        + '— poziomy rozjazd');
+        + '– poziomy rozjazd');
     }
 
     await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/proporcja-bez-zmyslow-${viewport.width}.png` });

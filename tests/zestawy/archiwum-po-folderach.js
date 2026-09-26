@@ -10,7 +10,7 @@
      1. FOLDER. Ścieżkę zapisywaliśmy od początku, ale filtry tekstowe jej
         nie obejmowały. Dane leżały w indeksie i były nieosiągalne.
 
-     2. RAW. Microsoft Graph czyta metadane z JPEG-ów, ale CR2/CR3 nie rusza —
+     2. RAW. Microsoft Graph czyta metadane z JPEG-ów, ale CR2/CR3 nie rusza –
         `photo` przychodzi puste. Dociąganie EXIF-u zapisywało z przeczytanego
         pliku WYŁĄCZNIE obiektyw, więc zdjęcia z R6 II zostawały bez aparatu,
         bez ISO i z datą WGRANIA zamiast daty zrobienia. W wynikach wyglądały
@@ -18,7 +18,7 @@
 
      3. PRÓBKA. Do modelu szło `JSON.stringify(...).slice(0, 12000)`, a jeden
         adres miniatury z OneDrive to 1248 znaków. Mieściło się SZEŚĆ plików,
-        z czego 71% treści to podpisane tokeny — i nigdzie nie było napisane,
+        z czego 71% treści to podpisane tokeny – i nigdzie nie było napisane,
         że to sześć z pięćdziesięciu dziewięciu tysięcy. Model dostawał
         polecenie „nie zgaduj, odpowiadaj z tych danych" i uczciwie orzekał,
         że aparatu w archiwum nie ma.
@@ -35,7 +35,7 @@ const { utworz } = require('../../lib/archiwum.js');
    i pary CR3+JPG z Canona (widoczne na zrzucie jako „3B9A4703" dwa razy). */
 function przykladoweArchiwum(a) {
   const wpisy = [];
-  // Zrzuty ekranu i zdjęcia z telefonu — najnowsze, więc na górze listy.
+  // Zrzuty ekranu i zdjęcia z telefonu – najnowsze, więc na górze listy.
   for (let i = 0; i < 30; i++) {
     wpisy.push({
       id: `onedrive:s${i}`, zrodlo: 'onedrive', typ: 'zdjecie',
@@ -46,7 +46,7 @@ function przykladoweArchiwum(a) {
       miniatura: `https://ukwest1-mediap.svc.ms/transform/thumbnail?${'t'.repeat(1200)}`,
     });
   }
-  // Canon z folderu Mazury 2026 — data WGRANIA, bez aparatu (tak daje Graph dla RAW).
+  // Canon z folderu Mazury 2026 – data WGRANIA, bez aparatu (tak daje Graph dla RAW).
   for (let i = 0; i < 12; i++) {
     wpisy.push({
       id: `onedrive:c${i}`, zrodlo: 'onedrive', typ: 'zdjecie',
@@ -74,7 +74,7 @@ function przykladoweArchiwum(a) {
    Kiedyś stało tu wycinanie tekstu z `public/app.js` między `const
    ARCH_LIMIT_ZNAKOW` a `const IMAGE_MARKER_RE` i wykonywanie go przez
    `new Function`. Działało dokładnie do chwili, w której któraś z tych dwóch
-   nazw się przesunęła — a przy okazji sprawdzało nie tę funkcję, którą
+   nazw się przesunęła – a przy okazji sprawdzało nie tę funkcję, którą
    uruchamia przeglądarka, tylko jej odtworzoną kopię. Po wydzieleniu
    `public/protokol.js` wystarczy ją zwyczajnie wczytać. */
 function zaladujNaKontekst() {
@@ -97,11 +97,11 @@ function zaladujNaKontekst() {
     fail.push('do wyniku wpadł plik spoza folderu');
   }
 
-  /* Bez wielkości liter i bez ogonków — człowiek nie pisze ścieżek dokładnie.
+  /* Bez wielkości liter i bez ogonków – człowiek nie pisze ścieżek dokładnie.
      „zdjecia mazury" ma trafić w „/Zdjęcia Mazury 2024 Dron/". */
   /* Fragment ze slashem też działa i tak ma być: „/Zdjęcia/Mazury 2026/"
      po odarciu z ogonków zawiera „zdjecia/mazury". Pierwsza wersja tego
-     sprawdzenia zakładała tu zero — i to test był w błędzie, nie kod. */
+     sprawdzenia zakładała tu zero – i to test był w błędzie, nie kod. */
   for (const [pytanie, ile] of [['mazury', 20], ['MAZURY 2024', 8],
     ['zdjecia mazury', 8], ['zdjęcia/mazury', 12], ['Z aparatu', 30]]) {
     const w = a.szukaj({ folder: pytanie }).length;
@@ -109,7 +109,7 @@ function zaladujNaKontekst() {
     if (w !== ile) fail.push(`folder „${pytanie}" dał ${w} zamiast ${ile}`);
   }
 
-  // Folder składa się z innymi filtrami — to jest cały sens.
+  // Folder składa się z innymi filtrami – to jest cały sens.
   const rok2024 = a.szukaj({ folder: 'mazury', rok: 2024 }).length;
   console.log(`2. folder=mazury + rok=2024 → ${rok2024}`);
   if (rok2024 !== 8) fail.push(`folder+rok dał ${rok2024} zamiast 8`);
@@ -121,9 +121,9 @@ function zaladujNaKontekst() {
   const widocznych = (kontekst.match(/"nazwa":/g) || []).length;
   console.log(`3. kontekst dla modelu: ${kontekst.length} znaków, ${widocznych} wpisów widocznych`);
 
-  // Miniatury to 1,2 kB podpisanego adresu na plik — nie mają prawa tam być.
+  // Miniatury to 1,2 kB podpisanego adresu na plik – nie mają prawa tam być.
   if (/ukwest1-mediap|tempauth/.test(kontekst)) {
-    fail.push('adresy miniatur poszły do modelu — zjadają cały budżet');
+    fail.push('adresy miniatur poszły do modelu – zjadają cały budżet');
   }
   /* Przed poprawką mieściło się SZEŚĆ wpisów. Poniżej piętnastu znaczy, że
      coś znów zjada kontekst. */
@@ -132,14 +132,14 @@ function zaladujNaKontekst() {
 
   /* Najważniejsze: model MUSI wiedzieć, że to próbka. Bez tego zdania
      wyciąga z trzydziestu najnowszych zrzutów ekranu wniosek o całym
-     archiwum — i robi to zgodnie z instrukcją „nie zgaduj". */
+     archiwum – i robi to zgodnie z instrukcją „nie zgaduj". */
   console.log(`   nagłówek o próbce: ${/widzisz \d+ z \d+/.test(kontekst)}`);
   if (!/widzisz \d+ z \d+/.test(kontekst)) {
-    fail.push('brak informacji, że to próbka — model uogólni z kilkudziesięciu najnowszych plików');
+    fail.push('brak informacji, że to próbka – model uogólni z kilkudziesięciu najnowszych plików');
   }
   if (!/PRÓBKA/.test(kontekst)) fail.push('brak ostrzeżenia przed wnioskowaniem o tym, czego NIE MA');
 
-  // JSON nie może być ucięty w połowie — model dostawał składniowo zepsuty dokument.
+  // JSON nie może być ucięty w połowie – model dostawał składniowo zepsuty dokument.
   const jsonOd = kontekst.indexOf('{');
   let poprawny = true;
   try { JSON.parse(kontekst.slice(jsonOd)); } catch { poprawny = false; }
@@ -164,17 +164,17 @@ function zaladujNaKontekst() {
     ['iso', 400], ['ogniskowa', 35]]) {
     if (po[pole] !== oczekiwane) fail.push(`po dociągnięciu EXIF-u ${pole}=${po[pole]}, oczekiwano ${oczekiwane}`);
   }
-  if (!po.exifCzytany) fail.push('brak znacznika `exifCzytany` — plik wróci do kolejki w nieskończoność');
+  if (!po.exifCzytany) fail.push('brak znacznika `exifCzytany` – plik wróci do kolejki w nieskończoność');
   // Data z pliku ma przestawić wpis do właściwego miesiąca.
   if (!a.szukaj({ folder: 'Mazury 2026', miesiac: '06' }).length) {
-    fail.push('data z EXIF-u nie trafiła do indeksu — zdjęcie zostało pod datą wgrania');
+    fail.push('data z EXIF-u nie trafiła do indeksu – zdjęcie zostało pod datą wgrania');
   }
   // I dać się znaleźć po aparacie, o co Marcin pytał wprost.
   if (!a.szukaj({ aparat: 'R6' }).length) fail.push('zdjęcie z Canona nie znajduje się po `aparat=R6`');
 
   /* ---- 5. Znacznik `exifCzytany` przeżywa zapis i odczyt ----
      Zapis jest opóźniony o sekundę (`zapiszWkrotce`), więc wymuszamy go
-     wprost — inaczej sprawdzalibyśmy wyścig z debounce'em, a nie trwałość.
+     wprost – inaczej sprawdzalibyśmy wyścig z debounce'em, a nie trwałość.
      `zapisz()` jest ASYNCHRONICZNY (blokujący zatrzymywał serwer na 5 s przy
      dużym indeksie), więc trzeba na niego poczekać. */
   await a.zapisz();
@@ -182,13 +182,13 @@ function zaladujNaKontekst() {
   const poWczytaniu = b.szukaj({ folder: 'Mazury 2026' }).find((w) => w.id === przed.id);
   console.log(`5. po ponownym wczytaniu z dysku: exifCzytany=${poWczytaniu && poWczytaniu.exifCzytany}`);
   if (!poWczytaniu || !poWczytaniu.exifCzytany) {
-    fail.push('`exifCzytany` nie przeżywa zapisu — kolejka zacznie się od nowa po restarcie');
+    fail.push('`exifCzytany` nie przeżywa zapisu – kolejka zacznie się od nowa po restarcie');
   }
 
   /* --- 6. WYKLUCZENIE FOLDERU -------------------------------------------
      Marcin: „Zdjęcia najnowsze z wyłączeniem folderu Mazury 2026 i tak
      pokazuje zdjęcia z tego folderu." Filtrów było dwadzieścia i ani jednego
-     ODEJMUJĄCEGO — model układał zapytanie bez wykluczenia i pisał
+     ODEJMUJĄCEGO – model układał zapytanie bez wykluczenia i pisał
      w odpowiedzi, że folder pominął. Bywało to prawdą przez przypadek,
      gdy najnowsze pliki i tak leżały gdzie indziej. */
   const wszystkie = b.szukaj({});
@@ -200,11 +200,11 @@ function zaladujNaKontekst() {
     fail.push(`po wykluczeniu „Mazury 2026" zostało ${zostalyMazury} plików z tego folderu`);
   }
   if (bezMazur.length >= wszystkie.length) {
-    fail.push('wykluczenie folderu niczego nie odjęło — filtr jest ignorowany');
+    fail.push('wykluczenie folderu niczego nie odjęło – filtr jest ignorowany');
   }
   // Wykluczenie NIE MOŻE zjeść wszystkiego: reszta archiwum ma zostać.
   if (!bezMazur.length) fail.push('wykluczenie folderu usunęło całe archiwum');
-  // Kilka nazw naraz — „oprócz Mazur i zrzutów ekranu" to jedno pytanie.
+  // Kilka nazw naraz – „oprócz Mazur i zrzutów ekranu" to jedno pytanie.
   const bezDwoch = b.szukaj({ bezFolderu: 'Mazury 2026, Z aparatu' });
   console.log(`   dwa wykluczenia naraz: ${bezDwoch.length} plików`);
   if (bezDwoch.length >= bezMazur.length) fail.push('drugie wykluczenie po przecinku nie działa');
@@ -212,7 +212,7 @@ function zaladujNaKontekst() {
   /* --- 7. APARAT DOPASOWANY PO SŁOWACH -----------------------------------
      Marcin, patrząc na OneDrive: „mój canon to tak naprawdę u niego
      EOS R6 Mark II". EXIF zapisuje „Canon EOS R6m2", OneDrive pokazuje
-     „EOS R6 Mark II" — a dopasowanie całą frazą znaczyło, że naturalne
+     „EOS R6 Mark II" – a dopasowanie całą frazą znaczyło, że naturalne
      „aparat=Canon R6" nie trafia w NIC, bo taki ciąg nie występuje nigdzie. */
   const kat7 = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-aparat-'));
   const a7 = utworz(kat7);

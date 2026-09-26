@@ -2,12 +2,12 @@
 
    Marcin podał swoje szkła w rozmowie: 24-105 f/4, 70-200 f/4, 50 f/1.8.
    Nie ma powodu, żeby wpisywał je przy każdym pytaniu, ani żeby model je
-   zgadywał — to są dane DLA NARZĘDZIA, nie tekst dla modelu, więc mieszkają
+   zgadywał – to są dane DLA NARZĘDZIA, nie tekst dla modelu, więc mieszkają
    osobno od profilu.
 
    Sprawdzamy dwie rzeczy, bo obie mogą zawieść niezależnie: że zapis jest
    używany, gdy w pytaniu nie padło żadne szkło, ORAZ że szkło podane wprost
-   zawsze wygrywa — sprzęt bywa pożyczony, a jedno zdanie w czacie jest
+   zawsze wygrywa – sprzęt bywa pożyczony, a jedno zdanie w czacie jest
    świeższe niż ustawienie sprzed miesiąca. */
 const { srodowisko } = require('../pomoc');
 (async () => {
@@ -22,7 +22,7 @@ const { srodowisko } = require('../pomoc');
   console.log('2. odczyt →', JSON.stringify(get));
   if (get.obiektywy !== '24-105 f/4, 70-200 f/4, 50 f/1.8') fail.push('zestaw nie został zapisany');
 
-  // plan BEZ podania obiektywu — ma wziąć zapisany zestaw
+  // plan BEZ podania obiektywu – ma wziąć zapisany zestaw
   const r = await (await fetch(`${env.adres}/api/plan`, { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ lat: 50.06, lon: 19.94, kiedy: '2026-06-21T10:00', tryb: 'zdjecie', temat: 'mecz' }) })).json();
@@ -42,7 +42,7 @@ const { srodowisko } = require('../pomoc');
      Pole „Korpus" w Plenerze to pole tekstowe, więc Marcin wpisze tam
      „Canon R6 Mark II", a nie klucz `canon-r6ii`. Do niedawna kończyło się
      to komunikatem „Nie mam tego w katalogu" o aparacie, który stoi
-     w katalogu pierwszy — i cichą utratą działki stabilizacji oraz drugiego
+     w katalogu pierwszy – i cichą utratą działki stabilizacji oraz drugiego
      zakresu wzmocnienia (ISO 800), czyli dokładnie tych liczb, dla których
      wpis katalogowy istnieje. */
   const { rozpoznajSprzet } = require('../../lib/ekspozycja.js');
@@ -53,7 +53,7 @@ const { srodowisko } = require('../pomoc');
     ['canon-r6ii', 'Canon R6 Mark II', false],
     ['DJI Mavic 3', 'DJI Mavic 3', false],
     ['Mavic 3 Pro', 'DJI Mavic 3', false],
-    // Mini 3 ma matrycę 1/1.3", nie 4/3 — nie wolno mu podstawić Mavica 3.
+    // Mini 3 ma matrycę 1/1.3", nie 4/3 – nie wolno mu podstawić Mavica 3.
     ['DJI Mini 3', null, true],
     // R6 pierwszej generacji to inny aparat i ma zostać zgadywany.
     ['Canon R6', null, true],
@@ -67,7 +67,7 @@ const { srodowisko } = require('../pomoc');
   console.log(`5. rozpoznanie korpusu z pola tekstowego: ${zapisy.length - zle.length}/${zapisy.length}`);
   if (zle.length) fail.push('źle rozpoznany sprzęt: ' + zle.join('; '));
 
-  // Ta sama droga przez HTTP — pole z Pleneru leci prosto do `/api/plan`.
+  // Ta sama droga przez HTTP – pole z Pleneru leci prosto do `/api/plan`.
   await fetch(`${env.adres}/api/gear`, { method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ korpus: 'Canon R6 Mark II', obiektywy: '24-105 f/4' }) });
@@ -80,8 +80,8 @@ const { srodowisko } = require('../pomoc');
 
   /* --- 7. SPRZĘT MA DOCIERAĆ TAKŻE DO MODELU ----------------------------
      Do tej pory znało go wyłącznie narzędzie planu. Model, pisząc nastawy
-     z własnej wiedzy — a robi tak przy każdym „jak to ustawić", które nie
-     uruchamia narzędzia — nie wiedział, co użytkownik ma w torbie.
+     z własnej wiedzy – a robi tak przy każdym „jak to ustawić", które nie
+     uruchamia narzędzia – nie wiedział, co użytkownik ma w torbie.
 
      Marcin dostał w planie na Majorkę „f/2.8" przy pięciu różnych ujęciach,
      mając wyłącznie f/4 i jeden stały f/1.8. Rada, której nie da się
@@ -89,7 +89,7 @@ const { srodowisko } = require('../pomoc');
      się dopiero na miejscu.
 
      Atrapa tego środowiska oddaje w treści odpowiedzi to, co dostała
-     w wiadomościach systemowych — więc czytamy dokładnie to, co widzi model. */
+     w wiadomościach systemowych – więc czytamy dokładnie to, co widzi model. */
   await fetch(`${env.adres}/api/gear`, { method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -111,10 +111,10 @@ const { srodowisko } = require('../pomoc');
     + `obiektywy ${maSzkla ? 'są' : 'BRAK'}, dodatki ${maDodatki ? 'są' : 'BRAK'}, `
     + `zasada o przysłonie ${maZasade ? 'jest' : 'BRAK'}`);
   if (!maKorpus) fail.push('model nie dostaje korpusu użytkownika');
-  if (!maSzkla) fail.push('model nie dostaje listy obiektywów — będzie zgadywał przysłonę');
-  if (!maDodatki) fail.push('model nie dostaje dodatków (dron, gimbal) — zaproponuje ujęcia bez sprzętu');
+  if (!maSzkla) fail.push('model nie dostaje listy obiektywów – będzie zgadywał przysłonę');
+  if (!maDodatki) fail.push('model nie dostaje dodatków (dron, gimbal) – zaproponuje ujęcia bez sprzętu');
   if (!maZasade) {
-    fail.push('prompt podaje sprzęt, ale nie mówi, że nastawy mają się w nim mieścić — '
+    fail.push('prompt podaje sprzęt, ale nie mówi, że nastawy mają się w nim mieścić – '
       + 'sama lista nie powstrzymała modelu przed „f/2.8" przy obiektywach f/4');
   }
 

@@ -1,4 +1,4 @@
-/* Start aplikacji i jej aktualizacja — bez skoków układu i bez zasłaniania.
+/* Start aplikacji i jej aktualizacja – bez skoków układu i bez zasłaniania.
 
    A. SKOK UKŁADU PRZY STARCIE. Zakładki silników budują się dopiero po
    sprawdzeniu sesji, a pusty pasek (10×10) rozpychał potem cały pasek górny:
@@ -7,12 +7,12 @@
    runda 4). Miejsce na zakładki jest teraz zarezerwowane od pierwszej klatki,
    a czcionka ładowana z wyprzedzeniem. Co musi być prawdą: przy trzech
    kolejnych startach (z /api/config opóźnionym o 400 ms, jak przez tunel)
-   suma przesunięć układu zostaje poniżej 0,02 — na 1440 i na 390 z CPU ×4.
+   suma przesunięć układu zostaje poniżej 0,02 – na 1440 i na 390 z CPU ×4.
 
    B. PASEK „JEST NOWA WERSJA". Po każdym wdrożeniu (nowa wersja pamięci podręcznej PWA) aplikacja otwarta
    w tle pokazuje pasek z „Odśwież". Stał na dole, dokładnie tam, gdzie pole
    wiadomości: na telefonie zasłaniał wpisywany tekst i przyciski między
-   aparatem a „Wyślij", na komputerze — dolną połowę pola. Bez zamknięcia,
+   aparatem a „Wyślij", na komputerze – dolną połowę pola. Bez zamknięcia,
    więc wisiał do przeładowania (zespół IT, płynność, runda 4).
 
    Co musi być prawdą, na telefonie (390) i komputerze (1440):
@@ -23,7 +23,7 @@
 const { serwerCosmosa, czekajNa, zabij, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -62,7 +62,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
       const max = ls.reduce((m, x) => (x.v > m.v ? x : m), { v: 0, z: '' });
       if (max.v > 0.005) najgorsze = `${max.v.toFixed(3)} ${max.z}`;
     }
-    ok(Math.max(...sumy) < PROG_CLS, `${nazwa}: przesunięcia układu przy starcie ${sumy.map((x) => x.toFixed(3)).join(' / ')} (próg ${PROG_CLS})${najgorsze ? ` — największe: ${najgorsze}` : ''}`);
+    ok(Math.max(...sumy) < PROG_CLS, `${nazwa}: przesunięcia układu przy starcie ${sumy.map((x) => x.toFixed(3)).join(' / ')} (próg ${PROG_CLS})${najgorsze ? ` – największe: ${najgorsze}` : ''}`);
     await ctx.close();
   }
 
@@ -76,7 +76,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
     await p.reload({ waitUntil: 'load' });
     await p.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15000 });
     await p.waitForSelector('.app.gotowa', { timeout: 15000 }).catch(() => {});
-    // Nowa wersja przejęła stronę — tak, jak po wdrożeniu z podniesionym CACHE.
+    // Nowa wersja przejęła stronę – tak, jak po wdrożeniu z podniesionym CACHE.
     await p.evaluate(() => { window.__bezPrzeladowania = true; navigator.serviceWorker.dispatchEvent(new Event('controllerchange')); });
     const jest = await p.waitForSelector('#nowa-wersja', { timeout: 5000 }).then(() => true).catch(() => false);
     ok(jest, `${nazwa}: po zmianie wersji pojawia się pasek`);

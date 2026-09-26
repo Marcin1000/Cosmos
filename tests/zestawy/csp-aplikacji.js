@@ -1,7 +1,7 @@
-/* CSP aplikacji — druga linia obrony przed skryptem obcej osoby.
+/* CSP aplikacji – druga linia obrony przed skryptem obcej osoby.
 
    W DOM Cosmosa trafiają rzeczy od innych ludzi (imiona w panelu Dostęp)
-   i od modeli (Markdown odpowiedzi). Pilnują tego textContent i escape — ale
+   i od modeli (Markdown odpowiedzi). Pilnują tego textContent i escape – ale
    jedna pomyłka w szablonie to skrypt obcej osoby w sesji właściciela,
    z pełnym dostępem do /api/*. Nagłówek Content-Security-Policy ma sprawić,
    że nawet wtedy przeglądarka takiego skryptu nie uruchomi.
@@ -9,16 +9,16 @@
    Co musi być prawdą:
      1. /app ma nagłówek CSP; strona produktowa pod „/" go nie dostaje
         (ma własne skrypty inline i własne potrzeby).
-     2. Wstrzyknięty do DOM-u `<img onerror=…>` i `<script>` NIE wykonują się —
+     2. Wstrzyknięty do DOM-u `<img onerror=…>` i `<script>` NIE wykonują się –
         tak wyglądałby błąd w szablonie wykorzystany przez obcą osobę.
-     3. Skrypt inline z index.html (motyw przed malowaniem) działa — jego skrót
+     3. Skrypt inline z index.html (motyw przed malowaniem) działa – jego skrót
         serwer liczy z pliku, więc edycja nie psuje polityki po cichu.
      4. Aplikacja pod CSP działa: start i otwarcie paneli bez ani jednego
         naruszenia polityki i bez błędów JavaScript. */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
 if (!maPrzegladarke()) {
-  console.log('⚠ Brak Chromium — pomijam zestaw przeglądarkowy.');
+  console.log('⚠ Brak Chromium – pomijam zestaw przeglądarkowy.');
   process.exit(0);
 }
 
@@ -54,7 +54,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   const motyw = await p.evaluate(() => document.documentElement.dataset.theme || '');
   ok(motyw === 'dark' || motyw === 'light', `skrypt inline z index.html działa (motyw: ${motyw})`);
 
-  // Otwórz panele tak, jak człowiek — każdy ładuje swoje rzeczy.
+  // Otwórz panele tak, jak człowiek – każdy ładuje swoje rzeczy.
   for (const [przycisk, zamknij] of [['#settings-btn', '#settings-close'], ['#studio-btn', '#studio-close'],
     ['#kb-btn', '#kb-close'], ['#gallery-btn', '#gallery-close'], ['#plener-btn', '#plener-close']]) {
     const jest = await p.$(przycisk);
@@ -83,7 +83,7 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   ok(!xss.c, 'wstrzyknięty <script> nie wykonuje się');
 
   const naruszenia = await p.evaluate(() => window.__naruszenia);
-  // Nasze trzy próby są naruszeniami z definicji (skrypt inline) — innych być nie może.
+  // Nasze trzy próby są naruszeniami z definicji (skrypt inline) – innych być nie może.
   const wlasne = naruszenia.filter((n) => !/^script-src(-elem|-attr)? ← inline/.test(n));
   ok(naruszenia.length >= 2, `przeglądarka zgłosiła zablokowane próby (${naruszenia.length})`);
   ok(wlasne.length === 0, `aplikacja pod CSP bez naruszeń poza wstrzykniętymi (${wlasne.slice(0, 3).join(' | ') || 'brak'})`);

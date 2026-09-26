@@ -1,4 +1,4 @@
-// Pełny audyt Cosmosa — statyczny. Każda kontrola mówi, co sprawdza i co znalazła.
+// Pełny audyt Cosmosa – statyczny. Każda kontrola mówi, co sprawdza i co znalazła.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -38,7 +38,7 @@ const envEx = rd('.env.example');
    wynik wyglądał jak pomiar i za każdym razem był zmyśleniem.
 
    Wspólna przyczyna: audyt miał WYLICZANKĘ plików, a projekt się zmieniał.
-   Poprawka polega na tym, żeby wyliczanki nie było — i żeby narzędzie samo
+   Poprawka polega na tym, żeby wyliczanki nie było – i żeby narzędzie samo
    sprawdzało, czy niczego nie przegapiło. Trzy pytania:
 
      1. czy czytam każdy skrypt, który wczytuje strona,
@@ -46,7 +46,7 @@ const envEx = rd('.env.example');
      3. czy moje wzorce w ogóle jeszcze cokolwiek znajdują.
 
    Trzecie jest najbardziej podstępne: regexp, który po zmianie zapisu
-   przestaje pasować, nie zgłasza błędu — po prostu zwraca pustą listę,
+   przestaje pasować, nie zgłasza błędu – po prostu zwraca pustą listę,
    a pusta lista czyta się jak „wszystko w porządku". */
 sekcja('Audyt o samym sobie');
 const skryptyHtml = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
@@ -57,7 +57,7 @@ nieczytane.length
   : ok(`audyt czyta wszystkie ${skryptyHtml.length} skryptów wczytywanych przez stronę`);
 
 const sw = rd('public/sw.js');
-/* Drugie pytanie — „czy każdy skrypt jest w pamięci podręcznej PWA" — zadaje
+/* Drugie pytanie – „czy każdy skrypt jest w pamięci podręcznej PWA" – zadaje
    sekcja 8, bo tam sprawdzane są przy okazji arkusze stylów i ikony. */
 
 // ---------------------------------------------------------------- 1 składnia
@@ -104,7 +104,7 @@ const wszystkie = new Set([...pl, ...en]);
    Po wydzieleniu `public/narzedzia.js` klucze używane przez narzędzia
    (chat.searching, chat.archiveQuery, canvas.*) przestały być widziane
    i audyt zgłosił 45 „martwych" kluczy zamiast 19. Człowiek, który by je
-   skasował, wyciąłby połowę komunikatów kaskady narzędzi — a fałszywy alarm
+   skasował, wyciąłby połowę komunikatów kaskady narzędzi – a fałszywy alarm
    w audycie jest gorszy niż brak kontroli, bo wygląda na wynik pomiaru.
    To już drugi raz, gdy ta lista skłamała: poprzednio przez regexp nieznający
    `data-i18n-html`. Czytamy więc katalog, a nie wyliczankę plików. */
@@ -116,7 +116,7 @@ const uzyteApp = [...new Set([...skryptyKlienta.matchAll(/\bt\('([^']+)'/g)].map
    Regexp bez `-html` i bez `data-prompt-key` podawał jako martwe pięć kluczy,
    które są w interfejsie używane: `kb.hint`, `learn.procIntro` i podpowiedzi
    startowe `sug1p`–`sug4p`. Lista „bez użycia" ma wartość tylko wtedy, gdy da
-   się na jej podstawie coś skasować — a skasowanie tych pięciu zabrałoby
+   się na jej podstawie coś skasować – a skasowanie tych pięciu zabrałoby
    objaśnienia z bazy wiedzy, z nauki procedur i treść czterech przycisków
    startowych. Fałszywy alarm w audycie jest gorszy niż brak kontroli, bo
    wygląda na wynik pomiaru. */
@@ -132,13 +132,13 @@ braki.length ? zle('klucze bez tłumaczenia: ' + braki.join(', ')) : ok(`wszystk
    `t('event.' + z.type)` ożywia wszystkie `event.*`. Bez tego wyjątku audyt
    podaje je jako martwe, człowiek je kasuje, a w interfejsie pojawia się goły
    `event.rutyna` zamiast napisu. Lista „bez użycia" ma sens tylko wtedy, gdy
-   da się jej ufać na tyle, żeby coś z niej usunąć — inaczej jest szumem,
+   da się jej ufać na tyle, żeby coś z niej usunąć – inaczej jest szumem,
    w którym ginie prawdziwa robota do zrobienia. */
 /* Klucz budowany z danych ma DWA zapisy i trzeba znać oba:
-     t('event.' + z.type)          — sklejanie
-     t(`model.tools.${poziom}`)    — wstawka w odwrotnych apostrofach
+     t('event.' + z.type)          – sklejanie
+     t(`model.tools.${poziom}`)    – wstawka w odwrotnych apostrofach
    Wersja znająca tylko pierwszy podawała jako martwe `model.tools.zwiezly`
-   i `model.tools.rozmowa` — dwa napisy, które w interfejsie widać za każdym
+   i `model.tools.rozmowa` – dwa napisy, które w interfejsie widać za każdym
    razem, gdy wybrany model ma ograniczony zestaw narzędzi. To TRZECI raz,
    gdy ta sama lista skłamała w ten sam sposób: audyt zna jeden zapis,
    a kod używa dwóch. */
@@ -152,10 +152,10 @@ const nieuzyte = [...wszystkie].filter((k) => !uzyteApp.includes(k) && !uzyteHtm
 nieuzyte.length ? hmm(`klucze bez użycia (${nieuzyte.length}): ${nieuzyte.slice(0, 8).join(', ')}${nieuzyte.length > 8 ? '…' : ''}`)
   : ok('brak osieroconych tłumaczeń');
 
-/* Placeholder, który nikt nie podstawił — i to jest błąd, który WIDAĆ.
+/* Placeholder, który nikt nie podstawił – i to jest błąd, który WIDAĆ.
    Znalazłem go dopiero na zrzucie ekranu: w trybie głosowym wyświetlało się
    dosłownie „Brak dostępu do mikrofonu: {msg}". Nie łapie tego ani parytet
-   tłumaczeń, ani sprawdzenie brakujących kluczy — tekst jest, klucz jest,
+   tłumaczeń, ani sprawdzenie brakujących kluczy – tekst jest, klucz jest,
    po prostu nikt nie przekazał danych. Jedna instancja na 80 kluczy z
    placeholderem, ale klasa realna i tania do pilnowania.
 
@@ -176,7 +176,7 @@ gole.length
 // ---------------------------------------------------------------- 3 DOM
 sekcja('Zgodność kodu z HTML-em');
 const maId = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-/* Znowu WSZYSTKIE skrypty klienta, nie sam `app.js` — z tego samego powodu,
+/* Znowu WSZYSTKIE skrypty klienta, nie sam `app.js` – z tego samego powodu,
    co przy kluczach i18n. Element tworzony w `widoki.js`, a szukany przez
    `$()` w `app.js`, po podziale wyglądałby na sierotę. */
 const tworzone = new Set([
@@ -198,7 +198,7 @@ otw === zam ? ok(`znaczniki się domykają (${otw})`) : zle(`rozjazd znaczników
 
 // ---------------------------------------------------------------- 4 API
 sekcja('Trasy serwera');
-/* Tras szukamy w server.js ORAZ we wszystkich modułach — i to jest poprawka
+/* Tras szukamy w server.js ORAZ we wszystkich modułach – i to jest poprawka
    po realnej luce, którą sam wprowadziłem.
 
    Do Partii 34 wszystkie trasy siedziały w server.js i skanowanie jednego
@@ -207,7 +207,7 @@ sekcja('Trasy serwera');
    52, a sprawdzenie „każda trasa opisana w dokumentacji" przechodziło dla
    nieopisanych, bo ich nie widziało. Narzędzie do wykrywania usterek, które
    po podziale pliku samo przestaje patrzeć na przeniesiony kod, jest gorsze
-   niż jego brak — dokładnie ta sama zasada, co przy zajętym porcie 3499.
+   niż jego brak – dokładnie ta sama zasada, co przy zajętym porcie 3499.
 
    Moduły używają dwóch nazw dla ścieżki (`p` w jednych, `pathname` w innych),
    więc łapiemy obie. */
@@ -218,20 +218,20 @@ const trasy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname) === '(\/[^']*)'
 const prefiksy = [...new Set([...kodTras.matchAll(/\b(?:p|pathname)\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
 /* Wywołania liczone ze WSZYSTKICH skryptów klienta. `narzedzia.js` sięga po
    `/api/archive/search`, `/api/run`, `/api/images`, a `widoki.js` po
-   `/api/archive/thumb` — gdyby audyt czytał sam `app.js`, przestałby pilnować,
+   `/api/archive/thumb` – gdyby audyt czytał sam `app.js`, przestałby pilnować,
    czy te trasy w ogóle istnieją. */
 const wolane = [...new Set([...(skryptyKlienta + html).matchAll(/['"`](\/api\/[a-zA-Z0-9\/_-]+)/g)].map((m) => m[1]))];
 const sieroty = wolane.filter((c) => !trasy.includes(c) && !prefiksy.some((p) => c.startsWith(p))
   && !trasy.some((r) => c.startsWith(r + '/')));
 sieroty.length ? zle('klient woła nieistniejące trasy: ' + sieroty.join(', '))
   : ok(`${wolane.length} wywołań klienta ma pokrycie w ${trasy.length} trasach`);
-/* Dokumentacja opisuje rodziny tras skrótami — `/api/studio/*` na osiem tras
+/* Dokumentacja opisuje rodziny tras skrótami – `/api/studio/*` na osiem tras
    Studia i `/api/procedures/record/{start,stop,status}` na trzy. To jest dobry
    zapis dla człowieka i nie chcę go rozbijać na jedenaście wierszy tabeli
    tylko po to, żeby dopasować się do `includes()`. Rozwijamy więc skróty tutaj,
    zamiast psuć dokumentację pod narzędzie. */
 /* Oba README. Wizytówka po angielsku jest krótka i celowo nie zawiera
-   pełnego spisu tras — ten mieszka w wersji polskiej. Czytanie samego
+   pełnego spisu tras – ten mieszka w wersji polskiej. Czytanie samego
    `README.md` kazało audytowi uznać wszystkie 98 tras za nieudokumentowane. */
 const dokTrasy = (readme + readmePl + start)
   .replace(/`([^`]*)\{([^}]+)\}([^`]*)`/g,
@@ -243,10 +243,10 @@ nieudok.length ? zle('trasy nieopisane w dokumentacji: ' + nieudok.join(', ')) :
 
 // ---------------------------------------------------------------- 5 .env
 sekcja('Zmienne środowiskowe');
-/* Po podziale na moduły większość `process.env` przeniosła się do lib/ —
+/* Po podziale na moduły większość `process.env` przeniosła się do lib/ –
    skanowanie samego server.js kazało audytowi uznać 24 poprawne zmienne za
    martwe. Czytamy CAŁY kod serwerowy. */
-/* `automation/` też jest kodem serwera — tam mieszka uruchamianie procedur
+/* `automation/` też jest kodem serwera – tam mieszka uruchamianie procedur
    Playwrightem i to ono czyta `PLAYWRIGHT_EXECUTABLE_PATH`. Bez tego katalogu
    audyt podawał tę zmienną jako martwy wpis w `.env.example`. */
 const kod = server + rd('senses/service.py')
@@ -258,7 +258,7 @@ const uzyteEnv = [...new Set([
   ...[...kod.matchAll(/os\.environ\.get\("([A-Z0-9_]+)"/g)].map((m) => m[1]),
 ])].sort();
 const wPrzykladzie = new Set([...envEx.matchAll(/^#?\s*([A-Z0-9_]+)=/gm)].map((m) => m[1]));
-// Zmysły chodzą na innej maszynie niż serwer i mają własną konfigurację —
+// Zmysły chodzą na innej maszynie niż serwer i mają własną konfigurację –
 // ich zmienne opisuje senses/README.md, nie .env.example serwera.
 const dokZmyslow = rd('senses/README.md');
 const brakEnv = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && !dokZmyslow.includes(v));
@@ -266,7 +266,7 @@ const tylkoZmysly = uzyteEnv.filter((v) => !wPrzykladzie.has(v) && dokZmyslow.in
 brakEnv.length ? zle('nigdzie nieopisane: ' + brakEnv.join(', '))
   : ok(`${uzyteEnv.length} zmiennych, wszystkie opisane (${tylkoZmysly.length} w senses/README.md)`);
 /* Zmienne budowane z nazwy sekretu (`COSMOS_SECRET_<NAZWA>`) nie występują
-   w kodzie dosłownie — i tak ma być, bo nazwę wymyśla użytkownik. Wpis
+   w kodzie dosłownie – i tak ma być, bo nazwę wymyśla użytkownik. Wpis
    `COSMOS_SECRET_BANK_PW` w przykładzie jest wzorem do naśladowania,
    a nie martwym kodem. */
 const prefiksyEnv = [...new Set([...kod.matchAll(/process\.env\[\s*[`'"]([A-Z0-9_]+_)/g)].map((m) => m[1]))];
@@ -275,13 +275,13 @@ const zbedne = [...wPrzykladzie].filter((v) => !uzyteEnv.includes(v) && !kod.inc
 zbedne.length ? hmm('w .env.example, nieużywane wprost: ' + zbedne.join(', ')) : ok('brak martwych wpisów w .env.example');
 
 // ---------------------------------------------------------------- 6 dokumentacja
-sekcja('Dokumentacja — odwołania do plików');
+sekcja('Dokumentacja – odwołania do plików');
 const doki = { 'README.md': readme, 'docs/START-TUTAJ.md': start, 'docs/ROADMAP.md': roadmap };
 const zleSciezki = [];
 for (const [f, tekst] of Object.entries(doki)) {
   for (const m of tekst.matchAll(/\b((?:senses|docs|public|scripts|automation|training|mcp)\/[A-Za-z0-9_.\/-]+\.[a-z]{2,4})/g)) {
     // „public/caddy/stable/gpg.key" to kawałek adresu https://dl.cloudsmith.io/…,
-    // nie ścieżka w repozytorium — patrzymy, co stoi tuż przed dopasowaniem.
+    // nie ścieżka w repozytorium – patrzymy, co stoi tuż przed dopasowaniem.
     const przed = tekst.slice(Math.max(0, m.index - 40), m.index);
     if (/https?:\/\/\S*$/.test(przed)) continue;
     if (!ist(m[1])) zleSciezki.push(`${f} → ${m[1]}`);
@@ -325,13 +325,13 @@ for (const [f, tekst] of Object.entries(doki)) {
 ok('skrypty z dokumentacji istnieją i są wykonywalne');
 
 /* Liczby w dokumentacji starzeją się po cichu. „38 zestawów" stało w README
-   i w tests/README.md jeszcze wtedy, gdy było ich sześćdziesiąt sześć —
+   i w tests/README.md jeszcze wtedy, gdy było ich sześćdziesiąt sześć –
    nikt tego nie zauważył, bo nieaktualna liczba wygląda dokładnie tak samo
    jak aktualna. Audyt liczy zestawy sam i porównuje.
 
    Nie każda liczba przy słowie „zestaw" jest jednak liczbą CAŁEJ baterii.
    „34 zestawy przeglądarkowe padły naraz" mówi o podzbiorze i ma prawo się
-   nie zgadzać — to opis awarii, nie deklaracja rozmiaru. Dlatego pomijamy
+   nie zgadzać – to opis awarii, nie deklaracja rozmiaru. Dlatego pomijamy
    liczby doprecyzowane przymiotnikiem: zawężają zbiór, więc nie da się ich
    porównać z zawartością katalogu. Bez tego audyt zgłaszał usterkę
    za każdym razem, gdy dokumentacja opisywała konkretną awarię. */
@@ -350,7 +350,7 @@ for (const [f, tekst] of Object.entries({
      („<span>94</span><dd>zestawy testów…"), więc czytamy ją bez znaczników. */
   'public/strona/index.html': rd('public/strona/index.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
 })) {
-  /* Po polsku i po angielsku — angielskie „90 suites" i „99 behaviour test
+  /* Po polsku i po angielsku – angielskie „90 suites" i „99 behaviour test
      suites" w bannerze przetrwały kilka zmian niezauważone, bo audyt czytał
      tylko polskie „zestawów". Liczba w adresie odznaki też jest liczbą. */
   for (const m of tekst.matchAll(/(\d+)\s+(?:zestaw(?:ów|y|)|(?:behaviour\s+)?(?:test\s+)?suites)|(?:test%20suites|zestawy%20test%C3%B3w)-(\d+)-/g)) {
@@ -363,7 +363,7 @@ zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
   : ok(`liczba zestawów w dokumentacji zgadza się z katalogiem (${ileZestawow})`);
 
 /* Obrazy w README. Grafiki marki i zrzuty wymieniamy całymi zestawami
-   (runda 4: banner.svg → banner-*.png) — wskazanie pliku, którego nie ma,
+   (runda 4: banner.svg → banner-*.png) – wskazanie pliku, którego nie ma,
    daje na GitHubie pustą ramkę na samej górze wizytówki. */
 const brakObrazow = [];
 for (const f of ['README.md', 'README.pl.md']) {
@@ -397,7 +397,7 @@ const norm = (p) => '/' + p.replace(/^\//, '').split('?')[0];
 const nieWCache = [...skryptyHtml, ...style].filter((s) => !s.startsWith('http')
   && !zasoby.map(norm).includes(norm(s)));
 /* To NIE jest uwaga do rozważenia, tylko usterka. Cosmos jest aplikacją
-   instalowaną (PWA) i ma działać bez sieci — skrypt spoza pamięci podręcznej
+   instalowaną (PWA) i ma działać bez sieci – skrypt spoza pamięci podręcznej
    znaczy biały ekran w terenie, czyli dokładnie tam, gdzie Marcin go używa.
    Przy każdym nowym module klienta łatwo o to zapomnieć: plik dopisuje się
    do `index.html`, a do `sw.js` już nie. */
@@ -411,7 +411,7 @@ try { execSync('git check-ignore -q .env', { cwd: R }); ok('.env poza repozytori
 catch { zle('.env NIE jest ignorowany'); }
 /* Ukośnik na końcu jest tu KONIECZNY. Wzorzec `data/` w .gitignore dotyczy
    katalogów, a `git check-ignore data` bez ukośnika nie wie, czy pyta o plik,
-   czy o katalog — i gdy katalogu akurat nie ma na dysku (świeży klon, po
+   czy o katalog – i gdy katalogu akurat nie ma na dysku (świeży klon, po
    sprzątaniu), odpowiada „nie ignorowane". Audyt zgłaszał wtedy wyciek danych
    użytkownika, którego nie było, a jego wynik zależał od tego, czy ktoś
    wcześniej uruchomił serwer. */
@@ -428,14 +428,14 @@ const cfg = server.slice(server.indexOf('function handleConfig'), server.indexOf
 const serwerIModuly = [server, ...fs.readdirSync(path.join(R, 'lib')).filter((f) => f.endsWith('.js')).map((f) => rd(`lib/${f}`))].join('\n');
 const scrubUzyte = (serwerIModuly.match(/scrubSecrets\(/g) || []).length;
 scrubUzyte >= 4 ? ok(`redakcja danych konta w ${scrubUzyte - 1} miejscach`) : zle('redakcja danych konta niekompletna');
-/* Bramka logowania — strukturalnie, nie po brzmieniu.
+/* Bramka logowania – strukturalnie, nie po brzmieniu.
    Od kont (wrzesień 2026) router wygląda tak: kilka tras PUBLICZNYCH,
    potem `if (!u) return … 401`, potem `wKontekscie(u, () => trasyApi(…))`.
    Sprawdzamy trzy rzeczy, bo każda z osobna może się rozjechać:
-     — przed bramką stoją WYŁĄCZNIE trasy z listy publicznych (nowa trasa
+     – przed bramką stoją WYŁĄCZNIE trasy z listy publicznych (nowa trasa
        dopisana nad bramką byłaby dostępna bez logowania),
-     — bramka stoi przed wejściem do trasyApi,
-     — trasyApi jest wołane w jednym miejscu (drugie wywołanie mogłoby
+     – bramka stoi przed wejściem do trasyApi,
+     – trasyApi jest wołane w jednym miejscu (drugie wywołanie mogłoby
        ominąć bramkę). */
 {
   const PUBLICZNE = ['/api/auth', '/api/login', '/api/logout', '/api/zaproszenie'];
@@ -449,10 +449,10 @@ scrubUzyte >= 4 ? ok(`redakcja danych konta w ${scrubUzyte - 1} miejscach`) : zl
   if (start < 0 || bramka < 0 || wejscie < 0) zle('brak globalnej bramki logowania na /api/');
   else if (bramka > wejscie) zle('bramka logowania stoi ZA wejściem do tras chronionych');
   else if (obce.length) zle(`trasy nad bramką logowania (dostępne bez hasła): ${obce.join(', ')}`);
-  else if (wywolan !== 1) zle(`trasyApi wołane ${wywolan} razy — każde wywołanie poza routerem omija bramkę`);
+  else if (wywolan !== 1) zle(`trasyApi wołane ${wywolan} razy – każde wywołanie poza routerem omija bramkę`);
   else ok(`każda trasa /api/ za logowaniem poza ${PUBLICZNE.length} publicznymi`);
 }
-// Liczenie wystąpień kłamie — limit bywa w obiekcie opcji kilka linii wyżej.
+// Liczenie wystąpień kłamie – limit bywa w obiekcie opcji kilka linii wyżej.
 // Patrzymy w okno wokół każdego wywołania.
 const linie = server.split('\n');
 const bezLimitu = [];
@@ -472,11 +472,11 @@ const POMIAR_WZROK = ['nvidia/llama-3.1-nemotron-nano-vl-8b-v1', 'nvidia/nemotro
   'nvidia/nemotron-nano-12b-v2-vl', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.2-11b-vision-instruct',
   'meta/llama-3.2-90b-vision-instruct', 'nvidia/ising-calibration-1.5-31b',
   'thinkingmachines/inkling'];
-/* openai/gpt-oss-20b przeszedł kiedyś sondę z obrazkiem 1×1 — ale sonda mówi
+/* openai/gpt-oss-20b przeszedł kiedyś sondę z obrazkiem 1×1 – ale sonda mówi
    tylko, że dostawca PRZYJĄŁ żądanie z obrazem, nie że model go widzi. To model
    tekstowy (karta modelu OpenAI); zespół IT pokazał, że dostawca po prostu
    pomija obraz. Z cechą „wizja" zdjęcia leciały do modelu, który ich nie
-   widzi — bez niej idą do ustawionego modelu wizyjnego. */
+   widzi – bez niej idą do ustawionego modelu wizyjnego. */
 const POMIAR_TEKST = ['nvidia/nemotron-3-nano-30b-a3b', 'nvidia/nemotron-3-super-120b-a12b',
   'nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/nemotron-mini-4b-instruct', 'nvidia/nvidia-nemotron-nano-9b-v2',
   'meta/llama-3.1-8b-instruct', 'meta/llama-3.2-1b-instruct', 'minimaxai/minimax-m3',
@@ -506,7 +506,7 @@ falszywe.length ? zle('działający model wzięty za nie-do-rozmowy: ' + falszyw
 sekcja('Spójność wersji i konfiguracji');
 const pkg = JSON.parse(rd('package.json'));
 console.log(`    package.json: ${pkg.name} ${pkg.version}, zależności: ${Object.keys(pkg.dependencies || {}).length}`);
-Object.keys(pkg.dependencies || {}).length === 0 ? ok('zero zależności produkcyjnych — tak jak zakładaliśmy')
+Object.keys(pkg.dependencies || {}).length === 0 ? ok('zero zależności produkcyjnych – tak jak zakładaliśmy')
   : hmm('pojawiły się zależności: ' + Object.keys(pkg.dependencies).join(', '));
 const wersjeWDok = [...new Set([...(readme + start).matchAll(/cosmos-v(\d+)/g)].map((m) => m[1]))];
 wersjeWDok.length && !wersjeWDok.includes(wersja)
@@ -529,17 +529,17 @@ let liniiLib = 0;
 for (const m of moduly) liniiLib += rd(`lib/${m}`).split('\n').length;
 console.log(`    server.js ${liniiSerwer} linii + ${moduly.length} modułów (${liniiLib} linii)`);
 /* Próg idzie w dół za podziałem (runda 3: rozmowy i baza wiedzy do lib/,
-   2646 → 1971; runda 4: czat do lib/czat.js, 2026 → 1392) — inaczej
+   2646 → 1971; runda 4: czat do lib/czat.js, 2026 → 1392) – inaczej
    odzyskane linie odrosłyby po cichu. */
 liniiSerwer < 1500 ? ok('serwer poniżej 1500 linii')
-  : hmm(`server.js ma ${liniiSerwer} linii — czas na kolejny podział`);
+  : hmm(`server.js ma ${liniiSerwer} linii – czas na kolejny podział`);
 
-/* KLIENT TEŻ MA PRÓG — i to on jest teraz największym plikiem.
+/* KLIENT TEŻ MA PRÓG – i to on jest teraz największym plikiem.
    Audyt marudził wyłącznie na server.js, więc app.js rósł niezauważony
    do 7834 linii, czyli trzykrotności serwera. Marcin zwrócił na to uwagę
    sam: „audyt marudzi na server.js, a to app.js jest gorsze i nikt go
    nie pilnuje". Próg jest wysoki, bo warstwa interfejsu z natury jest
-   największa — ale ma w ogóle istnieć, żeby wzrost był widoczny. */
+   największa – ale ma w ogóle istnieć, żeby wzrost był widoczny. */
 const plikiKlienta = fs.readdirSync(path.join(R, 'public')).filter((f) => f.endsWith('.js'));
 const liniiApp = rd('public/app.js').split('\n').length;
 const liniiKlient = plikiKlienta.reduce((n, f) => n + rd(`public/${f}`).split('\n').length, 0);
@@ -547,14 +547,14 @@ console.log(`    public/app.js ${liniiApp} linii + ${plikiKlienta.length - 1} mo
   + `(${liniiKlient - liniiApp} linii)`);
 // Runda 3: kamera i Nauka do osobnych plików, 6972 → ~5930.
 liniiApp < 6100 ? ok('klient poniżej 6100 linii')
-  : hmm(`public/app.js ma ${liniiApp} linii — największy plik projektu, `
+  : hmm(`public/app.js ma ${liniiApp} linii – największy plik projektu, `
     + 'wart wydzielenia kolejnego modułu');
-// Żaden identyfikator z modułu nie może być używany bez importu — inaczej
+// Żaden identyfikator z modułu nie może być używany bez importu – inaczej
 // serwer wywala się dopiero przy starcie, a nie przy sprawdzeniu.
 const glowa = server.slice(0, server.indexOf('// ----', 2500));
 /* Z treści usuwamy NAPISY i komentarze, zanim poszukamy w niej symboli.
    Bez tego sprawdzenie zgłaszało nieistniejące usterki: `poraDnia` widziało
-   w treści promptu opisującego parametry narzędzia, a `TEMATY` — w polskim
+   w treści promptu opisującego parametry narzędzia, a `TEMATY` – w polskim
    zdaniu „OSTATNIE TEMATY ROZMÓW". Fałszywy alarm w narzędziu do wykrywania
    usterek kosztuje tyle samo czasu co prawdziwy, a uczy go ignorować. */
 const bezNapisow = (kod) => kod
@@ -565,7 +565,7 @@ const bezNapisow = (kod) => kod
   .replace(/`(?:\\.|[^`\\])*`/g, '``');
 const ogon = bezNapisow(server.slice(glowa.length));
 /* Moduł wciągnięty CAŁY, pod jedną nazwą (`const canon = require('./lib/canon.js')`),
-   jest importem tak samo dobrym jak rozpisany po klamrach — a bywa lepszym,
+   jest importem tak samo dobrym jak rozpisany po klamrach – a bywa lepszym,
    gdy nazwy są ogólne: `canon.skonfigurowany()` i `onedrive.skonfigurowany()`
    czyta się jednoznacznie, a dwa gołe `skonfigurowany` już nie. Kontrola tego
    nie rozumiała i kazała psuć nazwy pod narzędzie, zamiast odwrotnie. */
@@ -587,16 +587,16 @@ bezImportu.length ? zle('używane bez importu: ' + bezImportu.join(', '))
 
 /* Nazwy WOŁANE w module, a nigdzie w nim niezdefiniowane.
 
-   `node --check` tego nie widzi — składnia jest poprawna, a trasa wywala się
+   `node --check` tego nie widzi – składnia jest poprawna, a trasa wywala się
    dopiero przy wywołaniu. Przy podziale server.js takich usterek było sześć
    pod rząd, a osobno wyszła siódma: `tsName` wołane w nauka.js, a definiowane
    w studio.js i nigdzie niewstrzykiwane.
 
    DEFINICJE zbieramy z SUROWEGO źródła, bez wycinania napisów. Pierwsza wersja
-   najpierw usuwała napisy i komentarze — i rozjeżdżała się na literałach
+   najpierw usuwała napisy i komentarze – i rozjeżdżała się na literałach
    wyrażeń regularnych z cudzysłowem w środku (`/vqd=["']([^"']+)/`), połykając
    pół pliku razem z definicjami. Skutek: dziesięć nieistniejących usterek.
-   Czytanie surowego źródła bywa zbyt hojne, ale myli się w BEZPIECZNĄ stronę —
+   Czytanie surowego źródła bywa zbyt hojne, ale myli się w BEZPIECZNĄ stronę –
    najwyżej przeoczy usterkę, nigdy nie zgłosi zdrowego kodu. */
 const GLOBALE_NODE = new Set(['require', 'module', 'exports', 'process', 'console', 'Buffer',
   '__dirname', '__filename', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
@@ -616,18 +616,18 @@ const SLOWA_JS = new Set(['const', 'let', 'var', 'function', 'async', 'await', '
 const wolneNazwy = [];
 /** Zostaw sam KOD: bez komentarzy i bez treści napisów.
  *
- *  Zwykłe wyrażenie regularne tu nie wystarcza i to nie jest przesada —
+ *  Zwykłe wyrażenie regularne tu nie wystarcza i to nie jest przesada –
  *  pierwsza wersja rozjeżdżała się na literale `/vqd=["\']([^"\']+)/`,
  *  brała cudzysłów w środku wzorca za początek napisu i połykała pół pliku
  *  razem z definicjami funkcji. Druga wersja zostawiała napisy i tonęła
  *  w polskiej prozie („wyświetlenie (patrz niżej)" wygląda jak wywołanie).
  *  Mały automat stanowy rozróżnia napis od wzorca i kosztuje trzydzieści
- *  linijek — mniej niż jeden fałszywy alarm w środku nocy.
+ *  linijek – mniej niż jeden fałszywy alarm w środku nocy.
  */
 function samKod(src) {
   let out = '';
   let i = 0;
-  let poprzedni = '';           // ostatni znaczący znak — decyduje, czy `/` to wzorzec
+  let poprzedni = '';           // ostatni znaczący znak – decyduje, czy `/` to wzorzec
   while (i < src.length) {
     const c = src[i];
     const d = src[i + 1];
@@ -662,13 +662,13 @@ for (const m of moduly) {
   for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
-  /* Definicje METOD — `constructor(co) {` w klasie, `has(_, prop) {` w pośredniku
+  /* Definicje METOD – `constructor(co) {` w klasie, `has(_, prop) {` w pośredniku
      (lib/kontekst.js). Wyglądają jak wywołanie, bo nazwa stoi przed nawiasem,
      ale po nawiasie jest klamra ciała, a nie średnik czy operator. Bez tego
      każda klasa i każdy Proxy w lib/ dawały „wołane bez definicji". */
   for (const x of src.matchAll(/^\s*(?:async\s+|static\s+|get\s+|set\s+)*([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{/gm)) zdef.add(x[1]);
   /* Wszystko, co stoi wewnątrz nawiasów klamrowych albo okrągłych, traktujemy
-     jak potencjalny parametr lub destrukturyzację. Hojnie — patrz wyżej. */
+     jak potencjalny parametr lub destrukturyzację. Hojnie – patrz wyżej. */
   /* Parametry funkcji czytamy z wersji BEZ zagnieżdżonych klamer, inaczej
      `indeksuj(naPaczke, { folder, limit })` nie oddaje pierwszego parametru:
      wzorzec urywa się na klamrze i `naPaczke` wygląda na niezdefiniowane. */
@@ -685,7 +685,7 @@ for (const m of moduly) {
       if (/^[A-Za-z_$][\w$]*$/.test(n)) zdef.add(n);
     }
   }
-  /* Interesują nas WYWOŁANIA — tam fałszywych trafień jest najmniej, bo pola
+  /* Interesują nas WYWOŁANIA – tam fałszywych trafień jest najmniej, bo pola
      obiektów i zmienne pętli nie są wołane jak funkcje. */
   for (const x of src.matchAll(/(?<![.\w$'"`])([A-Za-z_$][\w$]{2,})\s*\(/g)) {
     const n = x[1];
@@ -695,7 +695,7 @@ for (const m of moduly) {
 const wolneUnik = [...new Set(wolneNazwy)];
 wolneUnik.length ? zle('w modułach wołane nazwy bez definicji: ' + wolneUnik.join(', '))
   : ok('każda nazwa wołana w modułach ma definicję');
-// Tablice podmieniane w module nie mogą wychodzić jako tablice — serwer
+// Tablice podmieniane w module nie mogą wychodzić jako tablice – serwer
 // dostałby kopię wiązania i po pierwszym usunięciu widziałby stary stan.
 const pulapki = [];
 for (const m of moduly) {
@@ -703,7 +703,7 @@ for (const m of moduly) {
   const eks = (src.match(/module\.exports = \{([\s\S]*?)\}/) || ['', ''])[1];
   for (const mm of src.matchAll(/^\s*([a-zA-Z_$][\w$]*) = \1\.filter\(/gm)) {
     // Liczy się TYLKO skrócona własność (`lessons,`), a nie wystąpienie
-    // wewnątrz funkcji odczytującej (`wzorce: () => lessons`) — ta druga
+    // wewnątrz funkcji odczytującej (`wzorce: () => lessons`) – ta druga
     // postać jest właśnie poprawką, nie pułapką.
     if (new RegExp(`(^|[{,])\\s*${mm[1]}\\s*[,}]`).test(eks)) pulapki.push(`${m}:${mm[1]}`);
   }
@@ -714,7 +714,7 @@ pulapki.length ? zle('podmieniane tablice wystawione wprost (kopia wiązania): '
 // ------------------------------------------------------- 12b rozruch próbny
 sekcja('Rozruch próbny');
 /* Statyczna analiza nie wyłapie odwołania do symbolu, który po podziale na
-   moduły przestał istnieć — próbowałem regexem i przepuścił `events.length`.
+   moduły przestał istnieć – próbowałem regexem i przepuścił `events.length`.
    Jedyna pewna metoda to uruchomić serwer i zapukać we wszystkie trasy.
    Trwa kilka sekund i wyklucza całą tę klasę błędów. */
 const { execFileSync, spawn: spawnProc } = require('child_process');
@@ -739,13 +739,13 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
   /* Zanim cokolwiek uruchomimy: port MUSI być wolny.
      To nie jest ostrożność na wyrost, tylko poprawka po realnej wpadce. Audyt
      zostawiał po sobie serwer (samo `kill(-pid)` czasem nie wystarczało), więc
-     przy następnym uruchomieniu nowy proces padał na EADDRINUSE — a audyt
+     przy następnym uruchomieniu nowy proces padał na EADDRINUSE – a audyt
      i tak meldował „✓ serwer wstaje", bo pukał w STARY serwer z poprzedniego
      przebiegu. Czyli sprawdzał nie ten kod, co trzeba, i o niczym nie mówił.
      Narzędzie do wykrywania usterek, które samo może po cichu skłamać, jest
      gorsze niż jego brak. */
   if (await portZajety(PORT_PROBY)) {
-    zle(`port ${PORT_PROBY} jest zajęty — rozruch próbny pukałby w cudzy serwer. `
+    zle(`port ${PORT_PROBY} jest zajęty – rozruch próbny pukałby w cudzy serwer. `
       + `Zamknij go (np. pkill -f "node server.js") i powtórz audyt.`);
     podsumuj();
     return;
@@ -755,10 +755,10 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
 
      Powód jest konkretny i wyszedł dopiero na serwerze Marcina. Serwer próbny
      czyta `.env` z repozytorium, więc na maszynie z ustawionym COSMOS_PASSWORD
-     wszystkie trasy oddawały 401 — a pukanie po nich sprawdzało wtedy dokładnie
+     wszystkie trasy oddawały 401 – a pukanie po nich sprawdzało wtedy dokładnie
      nic. Audyt meldował „✓ 63 trasy bez wywrotki", bo 401 to nie 500, i tym
      samym przepuściłby dowolną wywrotkę w kodzie za bramką. Jednocześnie
-     strumień zdarzeń dostawał to samo 401 i szedł do PROBLEMÓW — czyli audyt
+     strumień zdarzeń dostawał to samo 401 i szedł do PROBLEMÓW – czyli audyt
      naraz krzyczał o poprawnym zachowaniu i milczał o niesprawdzonym kodzie.
      Gorszej kombinacji nie ma.
 
@@ -780,7 +780,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
   proba.stdout.on('data', (d) => { logRozruchu += d; });
   proba.stderr.on('data', (d) => { logRozruchu += d; });
 
-  /** Ubij serwer NA PEWNO — grupę i sam proces, aż port zwolniony. */
+  /** Ubij serwer NA PEWNO – grupę i sam proces, aż port zwolniony. */
   async function ubijProbny() {
     for (const sygnal of ['SIGTERM', 'SIGKILL']) {
       try { process.kill(-proba.pid, sygnal); } catch { /* grupa już nie żyje */ }
@@ -812,7 +812,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
     const bezLogowania = await fetch(adres + '/api/status', { signal: AbortSignal.timeout(5000) })
       .then((r) => r.status).catch((e) => e.message);
     if (bezLogowania !== 401) {
-      zle(`przy ustawionym haśle /api/status oddaje ${bezLogowania} zamiast 401 — bramka nie działa`);
+      zle(`przy ustawionym haśle /api/status oddaje ${bezLogowania} zamiast 401 – bramka nie działa`);
     }
     const zleHaslo = await fetch(adres + '/api/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -835,12 +835,12 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
     }
     const naglowki = ciastko ? { Cookie: ciastko } : {};
 
-    // GET-y bez skutków ubocznych — pukamy we wszystko, co się da
+    // GET-y bez skutków ubocznych – pukamy we wszystko, co się da
     const doSprawdzenia = trasy.filter((t) => t.startsWith('/api/')
       && !/login|logout|chat|polish|stream|studio|record|train|run/.test(t));
     const padly = [];
     const niedostepne = [];
-    /* 401 tu znaczy, że audyt zgubił własną sesję — a wtedy CAŁE pukanie po
+    /* 401 tu znaczy, że audyt zgubił własną sesję – a wtedy CAŁE pukanie po
        trasach nic nie sprawdza. Musi być usterką, nigdy cichym „przeszło". */
     const odbite = [];
     /* Trasy, które bez parametru kończą się na walidacji i nigdy nie dochodzą
@@ -856,7 +856,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
       try {
         const r = await fetch(adres + t + (PARAMETRY[t] || ''),
           { headers: naglowki, signal: AbortSignal.timeout(12000) });
-        // 502 znaczy „usługa poniżej nie odpowiada" — w środowisku audytu nie
+        // 502 znaczy „usługa poniżej nie odpowiada" – w środowisku audytu nie
         // ma ani modelu, ani zmysłów, więc to poprawna odpowiedź, nie usterka.
         // 500 to już nasza wywrotka i takich szukamy (tak wyszło `rutyny is
         // not defined` po podziale na moduły).
@@ -864,7 +864,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
         else if (r.status === 401) odbite.push(t.replace('/api/', ''));
         else if (r.status === 502) niedostepne.push(t.replace('/api/', ''));
         else if (r.status === 200) {
-          /* Błąd w kodzie potrafi wyjść jako HTTP 200 z komunikatem w treści —
+          /* Błąd w kodzie potrafi wyjść jako HTTP 200 z komunikatem w treści –
              tak przeszedł `addEvent is not defined` w wyszukiwaniu, opisany
              na dodatek jako „sprawdź połączenie z internetem". */
           const tresc = (await r.text()).slice(0, 2000);
@@ -876,13 +876,13 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
       } catch (e) { padly.push(`${t} → ${e.message}`); }
     }
     if (odbite.length) {
-      zle(`audyt stracił sesję — ${odbite.length} tras oddało 401 (${odbite.slice(0, 5).join(', ')}`
+      zle(`audyt stracił sesję – ${odbite.length} tras oddało 401 (${odbite.slice(0, 5).join(', ')}`
         + `${odbite.length > 5 ? ', …' : ''}). Rozruch próbny NIC nie sprawdził.`);
     }
     padly.length ? zle('trasy wywracają się (HTTP 500): ' + padly.join(', '))
       : (!odbite.length && ok(`${doSprawdzenia.length} tras bez wywrotki`
         + (niedostepne.length ? ` (${niedostepne.join(', ')} → 502: brak usługi, spodziewane)` : '')));
-    // strumień zdarzeń osobno — nie kończy się sam
+    // strumień zdarzeń osobno – nie kończy się sam
     try {
       const r = await fetch(adres + '/api/events/stream',
         { headers: naglowki, signal: AbortSignal.timeout(3000) });
@@ -897,7 +897,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
   }
   // Sprzątanie musi się UDAĆ, inaczej następny audyt bada nie ten serwer.
   if (!(await ubijProbny())) {
-    zle(`nie udało się zamknąć serwera próbnego na porcie ${PORT_PROBY} — `
+    zle(`nie udało się zamknąć serwera próbnego na porcie ${PORT_PROBY} – `
       + 'następny audyt sprawdziłby jego, a nie świeży kod');
   }
   fs.rmSync(tmpDane, { recursive: true, force: true });
@@ -915,13 +915,26 @@ smieci.length ? hmm('znaczniki do dokończenia: ' + smieci.join(', ')) : ok('bra
 const debugi = (skryptyKlienta.match(/console\.log\(/g) || []).length;
 debugi ? hmm(`console.log w skryptach klienta: ${debugi}`) : ok('brak wydruków diagnostycznych w kliencie');
 
+/* Długi myślnik (U+2014) nie wraca do repozytorium. Marcin: „w repo i wszędzie
+   musimy usunąć długie myślniki". Zamiast niego półpauza (–); kod, który
+   rozpoznaje długi myślnik w cudzym tekście (model, strony), pisze go jako
+   `\u2014`. Wyjątek: oficjalny tekst licencji i plik blokady npm. */
+const DLUGI = String.fromCharCode(0x2014);
+const zMyslnikiem = execSync('git ls-files', { cwd: R }).toString().split('\n')
+  .filter((f) => f && !/\.(png|jpe?g|webp|gif|ico|woff2?|ttf|mp3|wav|pdf|zip|kmz)$/i.test(f)
+    && !/^(LICENSE\.md|package-lock\.json)$/.test(f))
+  .filter((f) => { try { return fs.readFileSync(path.join(R, f), 'utf8').includes(DLUGI); } catch { return false; } });
+zMyslnikiem.length
+  ? zle(`długi myślnik w ${zMyslnikiem.length} plikach (zamień na półpauzę –, w wyrażeniach regularnych \\u2014): ${zMyslnikiem.slice(0, 8).join(', ')}`)
+  : ok('brak długich myślników w repozytorium');
+
 /* ---------------------------------------------------------- czujniki wzorców
-   Regexp, który po zmianie zapisu przestaje pasować, nie zgłasza błędu —
+   Regexp, który po zmianie zapisu przestaje pasować, nie zgłasza błędu –
    oddaje pustą listę, a pusta lista czyta się jak „wszystko w porządku".
    Tak właśnie audyt skłamał o trasach: po podziale `server.js` widział ich
    45 zamiast 52 i cieszył się, że wszystkie są opisane w dokumentacji.
 
-   Progi są UMYŚLNIE niskie — to nie jest limit na rozwój projektu, tylko
+   Progi są UMYŚLNIE niskie – to nie jest limit na rozwój projektu, tylko
    sygnał „wzorzec przestał cokolwiek znajdować". Jeśli któraś liczba spadnie
    poniżej, znaczy to, że zmienił się zapis w kodzie, a nie że ubyło funkcji. */
 const czujniki = [
@@ -935,8 +948,8 @@ const czujniki = [
 const oslepla = czujniki.filter(([, ile, prog]) => ile < prog);
 oslepla.length
   ? zle('wzorzec audytu przestał znajdować: '
-    + oslepla.map(([co, ile, prog]) => `${co} — ${ile} (spodziewane ≥${prog})`).join('; ')
-    + '. To nie jest usterka Cosmosa, tylko audytu — popraw wzorzec, zanim uwierzysz w resztę wyniku')
+    + oslepla.map(([co, ile, prog]) => `${co} – ${ile} (spodziewane ≥${prog})`).join('; ')
+    + '. To nie jest usterka Cosmosa, tylko audytu – popraw wzorzec, zanim uwierzysz w resztę wyniku')
   : ok('wszystkie wzorce audytu wciąż coś znajdują ('
     + czujniki.map(([co, ile]) => `${co}: ${ile}`).join(', ') + ')');
 const nieczyste = execSync('git status --porcelain', { cwd: R }).toString().trim();

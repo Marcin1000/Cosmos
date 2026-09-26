@@ -1,5 +1,5 @@
 /* ============================================================
-   BUDOWNICZOWIE WIDOKU — dane wchodzą, element DOM wychodzi
+   BUDOWNICZOWIE WIDOKU – dane wchodzą, element DOM wychodzi
 
    Wydzielone z `app.js`, który przy 7697 liniach był największym plikiem
    projektu i miejscem, gdzie mieszkało wszystko naraz: stan, zapisy,
@@ -11,7 +11,7 @@
    Wszystko, co czyta albo zmienia stan rozmowy, zostaje w `app.js`.
 
    Dzięki temu granica jest sprawdzalna, a nie umowna: gdyby któraś z tych
-   funkcji zaczęła sięgać po `conv` albo `settings`, nie miałaby skąd —
+   funkcji zaczęła sięgać po `conv` albo `settings`, nie miałaby skąd –
    moduł ich nie dostaje.
    ============================================================ */
 
@@ -67,7 +67,7 @@ function utworzWidoki(z) {
     for (const plik of run.wyniki || []) {
       if (/\.svg$/i.test(plik.name)) {
         /* SVG wstawiamy jako obrazek z data-URI, nie przez innerHTML. Program
-           pisze model, więc jego wyjście jest treścią niezaufaną — wstrzyknięte
+           pisze model, więc jego wyjście jest treścią niezaufaną – wstrzyknięte
            do DOM-u wykonałoby skrypt w kontekście Cosmosa. W <img> nie wykona. */
         const img = document.createElement('img');
         img.className = 'run-svg';
@@ -91,7 +91,7 @@ function utworzWidoki(z) {
    *  Miniatury lecą przez `/api/search/thumb`, a nie prosto z cudzego CDN-u:
    *  telefon nie łączy się wtedy z obcym hostem przy każdym wyniku, a zdjęcia
    *  działają też wtedy, gdy sieć ten CDN blokuje. Każdy kafelek prowadzi do
-   *  strony źródłowej — zdjęcie z internetu bez źródła jest bezwartościowe.
+   *  strony źródłowej – zdjęcie z internetu bez źródła jest bezwartościowe.
    */
   function photosGrid(photos) {
     const wrap = document.createElement('div');
@@ -104,7 +104,7 @@ function utworzWidoki(z) {
       a.rel = 'noopener noreferrer';
       a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
       const img = document.createElement('img');
-      /* Adres własny (np. z archiwum) bierzemy wprost — proxy miniatur jest
+      /* Adres własny (np. z archiwum) bierzemy wprost – proxy miniatur jest
          od CUDZYCH hostów i tylko by tu przeszkadzało. */
       const wlasny = /^\//.test(p.thumb || '');
       img.src = wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
@@ -118,7 +118,7 @@ function utworzWidoki(z) {
          stronę i nie dawało nawet obejrzeć zdjęcia.
 
          `href` zostaje prawdziwy, więc środkowy przycisk myszy, Ctrl+klik
-         i „otwórz w nowej karcie" dalej prowadzą do źródła — odbieranie tego
+         i „otwórz w nowej karcie" dalej prowadzą do źródła – odbieranie tego
          byłoby zamianą jednego ograniczenia na drugie. */
       a.addEventListener('click', (e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -146,7 +146,7 @@ function utworzWidoki(z) {
       img.addEventListener('error', () => {
         if (!probowanoWprost && /^https:\/\//i.test(p.thumb || '')) {
           // Proxy odmówiło (nieznany host, przekroczony czas). Przeglądarka
-          // może pobrać obrazek sama — dla niej to zwykły zewnętrzny zasób.
+          // może pobrać obrazek sama – dla niej to zwykły zewnętrzny zasób.
           probowanoWprost = true;
           img.src = p.thumb;
           return;
@@ -161,7 +161,7 @@ function utworzWidoki(z) {
 
       const cap = document.createElement('span');
       cap.className = 'photo-cap';
-      // Skąd zdjęcie i na jakiej licencji — dla kogoś, kto montuje film, to nie
+      // Skąd zdjęcie i na jakiej licencji – dla kogoś, kto montuje film, to nie
       // ozdobnik, tylko odpowiedź na pytanie „czy wolno mi tego użyć".
       let skad = p.zrodlo || '';
       if (!skad) { try { skad = new URL(p.source).hostname.replace(/^www\./, ''); } catch { skad = ''; } }
@@ -180,7 +180,7 @@ function utworzWidoki(z) {
    *
    *  Marcin: „chciałbym móc przejrzeć wszystkie zdjęcia z wyszukania, a nie
    *  mieć informację typu »pokazałem Ci 20, ale jest 311«". Model tego nie
-   *  załatwi — on dostaje próbkę tekstową i ma rację, że jej nie przekracza.
+   *  załatwi – on dostaje próbkę tekstową i ma rację, że jej nie przekracza.
    *  Przeglądanie całości to zadanie dla przeglądarki, nie dla rozmowy.
    */
   function stopkaArchiwum(m) {
@@ -195,7 +195,7 @@ function utworzWidoki(z) {
     licznik.textContent = t('arch.counter', { n: pokazane, z: d.razem });
     pasek.appendChild(licznik);
 
-    if (d.pomin >= d.razem) return pasek;   // wszystko już na ekranie — sam licznik
+    if (d.pomin >= d.razem) return pasek;   // wszystko już na ekranie – sam licznik
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -223,7 +223,7 @@ function utworzWidoki(z) {
         /* DOPISUJEMY KAFELKI, ZAMIAST PRZERYSOWAĆ CAŁĄ ROZMOWĘ.
            `renderMessages()` kończy się wymuszonym zjazdem na sam dół, więc
            każde kliknięcie „pokaż kolejne" wyrzucałoby Marcina spod siatki,
-           którą właśnie ogląda — a im dłużej by przeglądał, tym dalej od niej.
+           którą właśnie ogląda – a im dłużej by przeglądał, tym dalej od niej.
            Przy przeglądaniu trzystu zdjęć to jest różnica między narzędziem
            a udręką. */
         const siatka = pasek.previousElementSibling;
@@ -232,7 +232,7 @@ function utworzWidoki(z) {
           while (swieze.firstChild) siatka.appendChild(swieze.firstChild);
           pasek.replaceWith(stopkaArchiwum(m));
         } else {
-          // Siatki nie ma tam, gdzie się jej spodziewamy — wtedy lepiej
+          // Siatki nie ma tam, gdzie się jej spodziewamy – wtedy lepiej
           // przerysować i stracić pozycję, niż nie pokazać dobranych zdjęć.
           renderMessages();
         }
@@ -246,7 +246,7 @@ function utworzWidoki(z) {
   }
 
   /** Wpis z archiwum → kafelek siatki. Jedno miejsce, bo używa tego i pierwsza
-   *  porcja, i każda dobrana potem — rozjechanie się tych dwóch dawałoby
+   *  porcja, i każda dobrana potem – rozjechanie się tych dwóch dawałoby
    *  kafelki bez podpisów w połowie siatki. */
   function naKafelek(w) {
     const adres = `/api/archive/thumb?id=${encodeURIComponent(w.id)}`;
@@ -263,9 +263,9 @@ function utworzWidoki(z) {
   /** Podgląd obrazu na pełnym ekranie, z pobieraniem.
    *
    * Miniatura w rozmowie ma kilkaset pikseli, a wygenerowana grafika bywa
-   * kilka razy większa — bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
+   * kilka razy większa – bez tego okna nie dało się jej ani obejrzeć, ani zapisać.
    */
-  /** Podgląd tekstu załącznika — bez biblioteki, bez zapisu, tylko do wglądu.
+  /** Podgląd tekstu załącznika – bez biblioteki, bez zapisu, tylko do wglądu.
    *  Buduje się na żądanie i znika po zamknięciu: to okno pomocnicze, nie stan. */
   function openTextViewer(nazwa, tekst) {
     const tlo = document.createElement('div');
@@ -297,10 +297,10 @@ function utworzWidoki(z) {
   /** Podgląd na pełnym ekranie.
    *
    *  @param {string} src   adres obrazu w najlepszej dostępnej rozdzielczości
-   *  @param {object} opcje `zapas` — czym podmienić, gdy `src` się nie wczyta
+   *  @param {object} opcje `zapas` – czym podmienić, gdy `src` się nie wczyta
    *                        (pełny plik bywa na hoście, który odmawia);
-   *                        `zrodlo` — strona, z której zdjęcie pochodzi;
-   *                        `tytul`, `opis` — podpis pod obrazem
+   *                        `zrodlo` – strona, z której zdjęcie pochodzi;
+   *                        `tytul`, `opis` – podpis pod obrazem
    */
   function openImageViewer(src, opcje = {}) {
     const box = $('img-viewer');
@@ -308,7 +308,7 @@ function utworzWidoki(z) {
     const zrodlo = $('img-viewer-source');
     const podpis = $('img-viewer-caption');
 
-    /* Pełny plik idzie z obcego hosta i czasem nie dojedzie — wtedy zamiast
+    /* Pełny plik idzie z obcego hosta i czasem nie dojedzie – wtedy zamiast
        pustego czarnego ekranu pokazujemy to, co już było widać w siatce. */
     img.onerror = null;
     if (opcje.zapas && opcje.zapas !== src) {
@@ -345,20 +345,20 @@ function utworzWidoki(z) {
 
   let imageViewerSrc = '';
 
-  /** Zapisz oglądany obraz na dysk — działa i dla dataURL, i dla adresu z serwera. */
+  /** Zapisz oglądany obraz na dysk – działa i dla dataURL, i dla adresu z serwera. */
   async function downloadViewedImage() {
     if (!imageViewerSrc) return;
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     let href = imageViewerSrc;
     let revoke = '';
     if (!href.startsWith('data:')) {
-      // Obraz z bazy wiedzy leci przez /api/kb/raw — `download` zadziała tylko
+      // Obraz z bazy wiedzy leci przez /api/kb/raw – `download` zadziała tylko
       // na tym samym pochodzeniu, więc pobieramy go i zapisujemy z pamięci.
       try {
         const blob = await (await fetch(imageViewerSrc)).blob();
         href = URL.createObjectURL(blob);
         revoke = href;
-      } catch { /* zostaw oryginalny adres — przeglądarka otworzy go w karcie */ }
+      } catch { /* zostaw oryginalny adres – przeglądarka otworzy go w karcie */ }
     }
     const a = document.createElement('a');
     a.href = href;

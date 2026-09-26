@@ -6,8 +6,8 @@
     /* Stary link z zaproszeniem (/#zaproszenie=…) prowadzi od razu do aplikacji.
        Stoi przed wszystkim innym, żeby zaproszony nie zobaczył mignięcia strony. */
     if (/^#zaproszenie=/.test(location.hash)) location.replace('/app' + location.hash);
-    /* Język: najpierw adres (/?lang=en — osobny adres dla wyszukiwarek),
-       potem wybór zapisany wcześniej, a bez obu — polski. Języka przeglądarki
+    /* Język: najpierw adres (/?lang=en – osobny adres dla wyszukiwarek),
+       potem wybór zapisany wcześniej, a bez obu – polski. Języka przeglądarki
        nie zgadujemy: robot z lokalizacją en-US indeksowałby wtedy angielską
        treść pod polskim adresem. Angielski chowa stronę do chwili podmiany
        tekstów, żeby nie mignęła po polsku; styl niżej odsłania ją sam po 1,5 s,
@@ -23,8 +23,8 @@
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Cosmos — jedna rozmowa, każdy model</title>
-  <meta name="description" content="Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat — liczy.">
+  <title>Cosmos – jedna rozmowa, każdy model</title>
+  <meta name="description" content="Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat – liczy.">
   <meta name="theme-color" content="#F6F5F1" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
@@ -32,12 +32,12 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Cosmos">
   <meta property="og:url" content="https://cosmosai.live/">
-  <meta property="og:title" content="Cosmos — jedna rozmowa, każdy model">
+  <meta property="og:title" content="Cosmos – jedna rozmowa, każdy model">
   <meta property="og:description" content="Osobisty, hybrydowy system AI. Jedna rozmowa przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI.">
   <meta property="og:image" content="https://cosmosai.live/strona/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Znak Cosmosa i napis: jedna rozmowa, każdy model — chmura NVIDIA, lokalny GPU, Claude i OpenAI">
+  <meta property="og:image:alt" content="Znak Cosmosa i napis: jedna rozmowa, każdy model – chmura NVIDIA, lokalny GPU, Claude i OpenAI">
   <meta property="og:locale" content="pl_PL">
   <meta property="og:locale:alternate" content="en_GB">
   <meta name="twitter:card" content="summary_large_image">
@@ -57,7 +57,7 @@
 <body>
   <a class="pomin" href="#tresc" data-t="pomin">Przejdź do treści</a>
 
-  <!-- Znak: planeta z pierścieniem z czterech łuków — po jednym na silnik. -->
+  <!-- Znak: planeta z pierścieniem z czterech łuków – po jednym na silnik. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <clipPath id="przod-pierscienia" clipPathUnits="userSpaceOnUse"><rect x="0" y="20" width="40" height="20"/></clipPath>
@@ -137,14 +137,14 @@
               <!-- Duch: cała rozmowa, niewidoczna, rezerwuje wysokość karty od pierwszej klatki. -->
               <div class="czat-duch" id="czat-duch" aria-hidden="true" data-jezyk="pl">
                 <div class="wiad-ty">Jutro świt w&nbsp;górach. Jakie nastawy przy 24–105 f/4?</div>
-                <div class="odp" style="--k:var(--k-nvidia)"><div class="odp-silnik">NVIDIA Nemotron</div><div class="odp-tekst">Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz — f/4 to Twoje maksimum.</div></div>
-                <div class="odp" style="--k:var(--k-local)"><div class="odp-silnik">Lokalny GPU</div><div class="odp-tekst">W&nbsp;archiwum masz 212 zdjęć z&nbsp;tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie — nic nie wyszło z&nbsp;komputera.</div></div>
-                <div class="odp" style="--k:var(--k-claude)"><div class="odp-silnik">Claude</div><div class="odp-tekst">Kadr: kamienie na pierwszym planie, horyzont w&nbsp;górnej tercji. O&nbsp;7:00 f/8, 1/60 s, ISO 100 — mieści się w&nbsp;Twoim sprzęcie.</div></div>
+                <div class="odp" style="--k:var(--k-nvidia)"><div class="odp-silnik">NVIDIA Nemotron</div><div class="odp-tekst">Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz – f/4 to Twoje maksimum.</div></div>
+                <div class="odp" style="--k:var(--k-local)"><div class="odp-silnik">Lokalny GPU</div><div class="odp-tekst">W&nbsp;archiwum masz 212 zdjęć z&nbsp;tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie – nic nie wyszło z&nbsp;komputera.</div></div>
+                <div class="odp" style="--k:var(--k-claude)"><div class="odp-silnik">Claude</div><div class="odp-tekst">Kadr: kamienie na pierwszym planie, horyzont w&nbsp;górnej tercji. O&nbsp;7:00 f/8, 1/60 s, ISO 100 – mieści się w&nbsp;Twoim sprzęcie.</div></div>
                 <div class="odp" style="--k:var(--k-openai)"><div class="odp-silnik">OpenAI</div><div class="odp-tekst">Zapisać to jako plan na jutro? Nic nie trafi do pamięci bez Twojej zgody.</div></div>
               </div>
               <div class="czat-zywy" id="czat-zywy" data-jezyk="pl">
                 <div class="wiad-ty">Jutro świt w&nbsp;górach. Jakie nastawy przy 24–105 f/4?</div>
-                <div class="odp" style="--k:var(--k-nvidia)"><div class="odp-silnik">NVIDIA Nemotron</div><div class="odp-tekst">Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz — f/4 to Twoje maksimum.</div></div>
+                <div class="odp" style="--k:var(--k-nvidia)"><div class="odp-silnik">NVIDIA Nemotron</div><div class="odp-tekst">Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz – f/4 to Twoje maksimum.</div></div>
               </div>
             </div>
             <div class="przelacznik" role="group" aria-label="Zmień silnik w połowie rozmowy" data-t-aria="czat.przelacznik">
@@ -155,7 +155,7 @@
               <button type="button" data-silnik="openai" style="--k:var(--k-openai)"><i></i>OpenAI</button>
             </div>
           </div>
-          <p class="scena-podpis" data-t="czat.podpis">Kliknij silnik — następna odpowiedź przyjdzie z&nbsp;niego, w&nbsp;tym samym wątku.</p>
+          <p class="scena-podpis" data-t="czat.podpis">Kliknij silnik – następna odpowiedź przyjdzie z&nbsp;niego, w&nbsp;tym samym wątku.</p>
         </div>
       </div>
 
@@ -227,14 +227,14 @@
             <div class="ikona" style="--k:var(--k-local)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
             <span class="nr">01</span>
             <h3 data-t="hyb.1.h">Prywatność</h3>
-            <p data-t="hyb.1.p">Archiwum zdjęć to prywatne pliki: dom, bliscy, miejsca. Takie pytania obsługuje lokalny indeks i&nbsp;lokalny model wizyjny — nic nie musi wychodzić z&nbsp;domu.</p>
+            <p data-t="hyb.1.p">Archiwum zdjęć to prywatne pliki: dom, bliscy, miejsca. Takie pytania obsługuje lokalny indeks i&nbsp;lokalny model wizyjny – nic nie musi wychodzić z&nbsp;domu.</p>
           </article>
 
           <article class="karta" data-pokaz style="--d:2">
             <div class="ikona" style="--k:var(--k-nvidia)"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></div>
             <span class="nr">02</span>
             <h3 data-t="hyb.2.h">Koszt</h3>
-            <p data-t="hyb.2.p">Masowa praca lokalnie nie ma licznika. Zindeksowanie kilkudziesięciu tysięcy zdjęć przez chmurowe API to rachunek; na własnej karcie — jeden wieczór.</p>
+            <p data-t="hyb.2.p">Masowa praca lokalnie nie ma licznika. Zindeksowanie kilkudziesięciu tysięcy zdjęć przez chmurowe API to rachunek; na własnej karcie – jeden wieczór.</p>
           </article>
 
           <article class="karta" data-pokaz style="--d:1">
@@ -255,7 +255,7 @@
             <div class="ikona" style="--k:var(--k-openai)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11l-3-3M20 17H9l3 3"/><circle cx="18" cy="7" r="2"/><circle cx="6" cy="17" r="2"/></svg></div>
             <span class="nr">05</span>
             <h3 data-t="hyb.5.h">Wybór modelu</h3>
-            <p data-t="hyb.5.p">Żaden dostawca nie wygrywa we wszystkim. Rozumowanie, wzrok, długi kontekst i&nbsp;mowa mają w&nbsp;tym miesiącu różnych zwycięzców — dlatego zmiana to jedno kliknięcie.</p>
+            <p data-t="hyb.5.p">Żaden dostawca nie wygrywa we wszystkim. Rozumowanie, wzrok, długi kontekst i&nbsp;mowa mają w&nbsp;tym miesiącu różnych zwycięzców – dlatego zmiana to jedno kliknięcie.</p>
           </article>
         </div>
       </div>
@@ -267,7 +267,7 @@
         <header class="sekcja-glowa plener-tekst" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-claude)"></span><span data-t="pl.et">Plan zdjęciowy</span></p>
           <h2 class="h-duzy" data-t="pl.h">Nie zgaduje. Liczy.</h2>
-          <p class="lead" data-t="pl.lead">Zamiast opisywać światło, Cosmos je liczy: pozycję Słońca z&nbsp;efemeryd, prognozę godzina po godzinie i&nbsp;ekspozycję. Nastawy mieszczą się w&nbsp;sprzęcie, który naprawdę masz — rada „f/2.8” dla kogoś z&nbsp;obiektywem f/4 jest gorsza niż żadna.</p>
+          <p class="lead" data-t="pl.lead">Zamiast opisywać światło, Cosmos je liczy: pozycję Słońca z&nbsp;efemeryd, prognozę godzina po godzinie i&nbsp;ekspozycję. Nastawy mieszczą się w&nbsp;sprzęcie, który naprawdę masz – rada „f/2.8” dla kogoś z&nbsp;obiektywem f/4 jest gorsza niż żadna.</p>
           <ul class="lista-cech">
             <li data-t="pl.c1">Efemerydy Słońca: wschód, zachód, złota i&nbsp;niebieska godzina</li>
             <li data-t="pl.c2">Pogoda i&nbsp;zachmurzenie godzina po godzinie</li>
@@ -305,7 +305,7 @@
               <div class="nastawy mono" id="p-nastawy"><b>f/8</b><b id="p-czas-naswietlania">1/8 s</b><b>ISO 100</b></div>
               <div class="sprzet">
                 <span class="chip chip-ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>24–105 f/4</span>
-                <span class="chip chip-nie"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span data-t="pl.poza">f/2.8 — poza zestawem</span></span>
+                <span class="chip chip-nie"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span data-t="pl.poza">f/2.8 – poza zestawem</span></span>
               </div>
             </div>
           </div>
@@ -330,7 +330,7 @@
                 <span class="wsp" style="--s:.92" data-t="pam.w1">Wrzesień: Morskie Oko o&nbsp;świcie, mgła do 7:20</span>
                 <span class="wsp" style="--s:.18" data-t="pam.w2">Lubi kawę bez cukru</span>
                 <span class="wsp" style="--s:.71" data-t="pam.w3">Ulubione kadry: odbicie gór w&nbsp;wodzie</span>
-                <span class="wsp" style="--s:.12" data-t="pam.w4">Faktura za hosting — marzec</span>
+                <span class="wsp" style="--s:.12" data-t="pam.w4">Faktura za hosting – marzec</span>
                 <span class="wsp" style="--s:.84" data-t="pam.w5">Plan: jeziora tatrzańskie jesienią</span>
                 <span class="wsp" style="--s:.09" data-t="pam.w6">Numer rejestracyjny drona</span>
               </div>
@@ -343,7 +343,7 @@
           <article class="karta" data-pokaz style="--d:1">
             <div class="ikona" style="--k:var(--k-claude)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M8 12l3 3 9-9"/></svg></div>
             <h3 data-t="pam.k2.h">Nic bez Twojej zgody</h3>
-            <p data-t="pam.k2.p">Zapamiętanie, notatka, nowa procedura — każda taka akcja czeka na zatwierdzenie człowieka.</p>
+            <p data-t="pam.k2.p">Zapamiętanie, notatka, nowa procedura – każda taka akcja czeka na zatwierdzenie człowieka.</p>
           </article>
           <article class="karta" data-pokaz style="--d:2">
             <div class="ikona" style="--k:var(--k-local)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/></svg></div>
@@ -353,7 +353,7 @@
           <article class="karta" data-pokaz style="--d:3">
             <div class="ikona" style="--k:var(--k-nvidia)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h6l2-5 3 10 2-5h3"/></svg></div>
             <h3 data-t="pam.k4.h">Działa też bez dodatkowych usług</h3>
-            <p data-t="pam.k4.p">Gdy usługa embeddingów nie odpowiada, przywoływanie przechodzi na słowa kluczowe — i&nbsp;działa dalej.</p>
+            <p data-t="pam.k4.p">Gdy usługa embeddingów nie odpowiada, przywoływanie przechodzi na słowa kluczowe – i&nbsp;działa dalej.</p>
           </article>
         </div>
       </div>
@@ -393,7 +393,7 @@
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-openai)"></span><span data-t="ciag.et">Ciągłość</span></p>
           <h2 data-t="ciag.h">Odpowiedź czeka, nawet gdy ekran gaśnie.</h2>
-          <p class="lead" data-t="ciag.lead">Odpowiedź powstaje na serwerze, a&nbsp;przeglądarka tylko się do niej podłącza. Zgaszony ekran, tunel, przejście z&nbsp;Wi-Fi na LTE — po powrocie dostajesz ten sam strumień, od miejsca, w&nbsp;którym się urwał.</p>
+          <p class="lead" data-t="ciag.lead">Odpowiedź powstaje na serwerze, a&nbsp;przeglądarka tylko się do niej podłącza. Zgaszony ekran, tunel, przejście z&nbsp;Wi-Fi na LTE – po powrocie dostajesz ten sam strumień, od miejsca, w&nbsp;którym się urwał.</p>
         </header>
         <div class="ciag-scena" data-pokaz data-gra aria-hidden="true">
           <div class="telefon">
@@ -413,9 +413,9 @@
             <div class="serwer-pasek"><i></i></div>
             <ol class="serwer-log mono">
               <li data-t="ciag.l1">strumień: klient podłączony</li>
-              <li data-t="ciag.l2">klient zniknął — piszę dalej</li>
+              <li data-t="ciag.l2">klient zniknął – piszę dalej</li>
               <li data-t="ciag.l3">odpowiedź zapisana w&nbsp;rozmowie</li>
-              <li data-t="ciag.l4">klient wrócił — dołącza do tej samej odpowiedzi</li>
+              <li data-t="ciag.l4">klient wrócił – dołącza do tej samej odpowiedzi</li>
             </ol>
           </div>
         </div>
@@ -428,10 +428,10 @@
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-local)"></span><span data-t="pryw.et">Prywatność i&nbsp;konta</span></p>
           <h2 data-t="pryw.h">Dostęp na zaproszenie.</h2>
-          <p class="lead" data-t="pryw.lead">Konta zakłada administrator instancji. Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy. Panel administratora pokazuje listę kont, ostatnie wizyty i&nbsp;liczbę wiadomości — treści nie pokazuje, bo aplikacja mu jej nie udostępnia. Dane leżą na serwerze, na którym działa Cosmos. Rozmowę z&nbsp;silnikiem w&nbsp;chmurze widzi też dostawca tego silnika; przy modelu lokalnym nic nie wychodzi z&nbsp;domu.</p>
+          <p class="lead" data-t="pryw.lead">Konta zakłada administrator instancji. Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy. Panel administratora pokazuje listę kont, ostatnie wizyty i&nbsp;liczbę wiadomości – treści nie pokazuje, bo aplikacja mu jej nie udostępnia. Dane leżą na serwerze, na którym działa Cosmos. Rozmowę z&nbsp;silnikiem w&nbsp;chmurze widzi też dostawca tego silnika; przy modelu lokalnym nic nie wychodzi z&nbsp;domu.</p>
           <ul class="lista-cech">
-            <li data-t="pryw.c1">Silniki przyznaje administrator — albo dodajesz własny klucz API, a&nbsp;koszty idą na Twój rachunek u&nbsp;dostawcy</li>
-            <li data-t="pryw.c2">Hasła przechowywane jako skróty scrypt, sesje — wyłącznie jako skróty</li>
+            <li data-t="pryw.c1">Silniki przyznaje administrator – albo dodajesz własny klucz API, a&nbsp;koszty idą na Twój rachunek u&nbsp;dostawcy</li>
+            <li data-t="pryw.c2">Hasła przechowywane jako skróty scrypt, sesje – wyłącznie jako skróty</li>
             <li data-t="pryw.c3">Kod bez ustalonej osoby zgłasza błąd, zamiast pokazać cudze dane</li>
           </ul>
         </header>
@@ -444,9 +444,9 @@
             <table class="mono">
               <thead><tr><th data-t="pryw.kolKonto">konto</th><th data-t="pryw.kolWizyta">ostatnio</th><th data-t="pryw.kolWiad">wiad.</th><th data-t="pryw.kolTresc">treść</th></tr></thead>
               <tbody>
-                <tr><td>A</td><td data-t="pryw.dzis">dziś</td><td>128</td><td class="brak">—</td></tr>
-                <tr><td>K</td><td data-t="pryw.wczoraj">wczoraj</td><td>41</td><td class="brak">—</td></tr>
-                <tr><td>T</td><td>3 d</td><td>9</td><td class="brak">—</td></tr>
+                <tr><td>A</td><td data-t="pryw.dzis">dziś</td><td>128</td><td class="brak">–</td></tr>
+                <tr><td>K</td><td data-t="pryw.wczoraj">wczoraj</td><td>41</td><td class="brak">–</td></tr>
+                <tr><td>T</td><td>3 d</td><td>9</td><td class="brak">–</td></tr>
               </tbody>
             </table>
           </div>
@@ -485,7 +485,7 @@
           <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f1.h">zależności w&nbsp;rdzeniu</h3><p data-t="pm.f1.p"><code>node server.js</code> i&nbsp;gotowe. Nie ma czego budować ani drzewa pakietów, które przestanie działać w&nbsp;nocy.</p></article>
           <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">120</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
           <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">15</span><h3 data-t="pm.f3.h">sekcji audytu</h3><p data-t="pm.f3.p">Audyt sprawdza też sam siebie: wzorzec, który przestał cokolwiek łapać, jest błędem, a&nbsp;nie ciszą.</p></article>
-          <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi — grafiki trafiają pod gotowe punkty planu.</p></article>
+          <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi – grafiki trafiają pod gotowe punkty planu.</p></article>
         </div>
       </div>
     </section>
@@ -497,7 +497,7 @@
           <div class="cta-zorza" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <svg class="znak cta-znak" aria-hidden="true"><use href="#znak"/></svg>
           <h2 data-t="cta.h">Masz zaproszenie? Twój Cosmos już czeka.</h2>
-          <p data-t="cta.p">Otwórz link z&nbsp;zaproszenia — login i&nbsp;hasło ustawisz w&nbsp;minutę. Masz już konto? Zaloguj się. Nie masz zaproszenia? Postaw własny Cosmos — kod jest otwarty.</p>
+          <p data-t="cta.p">Otwórz link z&nbsp;zaproszenia – login i&nbsp;hasło ustawisz w&nbsp;minutę. Masz już konto? Zaloguj się. Nie masz zaproszenia? Postaw własny Cosmos – kod jest otwarty.</p>
           <div class="hero-cta">
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
             <a class="btn btn-jasny btn-duzy magnes" href="https://github.com/Marcin1000/Cosmos#readme" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" class="gh"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span data-t="cta.kod">Postaw własny Cosmos</span></a>

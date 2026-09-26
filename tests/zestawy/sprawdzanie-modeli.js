@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc');
 // „Sprawdź model": czy Cosmos umie sam ustalić, które modele naprawdę działają
-// na tym koncie — i które z nich czytają obrazy.
+// na tym koncie – i które z nich czytają obrazy.
 const http = require('http');
 const { spawn } = require('child_process');
 
@@ -21,10 +21,10 @@ const up = http.createServer((req, res) => {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: msg } }));
     };
-    /* Silnik lokalny idzie bez klucza (LOCAL_API_KEY pusty) — wtedy atrapa
+    /* Silnik lokalny idzie bez klucza (LOCAL_API_KEY pusty) – wtedy atrapa
        mówi jak prawdziwy serwer lokalny: Ollama („try pulling it first")
        albo vLLM („does not exist"). Rada „ollama pull" ma paść tylko przy
-       Ollamie — przy vLLM byłaby fałszywym tropem. */
+       Ollamie – przy vLLM byłaby fałszywym tropem. */
     const lokalny = !req.headers.authorization;
     if (lokalny && j.model === 'vllm/nie-ma-takiego') {
       return bad(404, 'The model `vllm/nie-ma-takiego` does not exist.');
@@ -72,14 +72,14 @@ up.listen(7101, async () => {
   console.log(`2. model wizyjny  → rozmowa=${a.body.rozmowa} obrazy=${a.body.obrazy}`);
   if (a.body.rozmowa !== true || a.body.obrazy !== true) fail.push('nie rozpoznał modelu wizyjnego');
 
-  // 3. model, którego konto nie ma — i to jest właśnie sedno całej funkcji
+  // 3. model, którego konto nie ma – i to jest właśnie sedno całej funkcji
   const przed = seen.length;
   a = await check(3021, 'meta/zablokowany');
   console.log(`3. model spoza konta → rozmowa=${a.body.rozmowa}`);
   console.log(`   powód: ${a.body.blad}`);
   if (a.body.rozmowa !== false) fail.push('nie wykrył braku dostępu');
   if (!/Not found for account/.test(a.body.blad || '')) fail.push('zgubił komunikat dostawcy');
-  if (seen.length - przed !== 1) fail.push('próbował wzroku mimo braku dostępu — marnuje limit');
+  if (seen.length - przed !== 1) fail.push('próbował wzroku mimo braku dostępu – marnuje limit');
 
   // 4. sonda ma być najtańsza z możliwych
   const drogie = seen.filter((s) => s.max_tokens !== 1 || s.stream !== false);
@@ -145,7 +145,7 @@ up.listen(7101, async () => {
   const dbl = await pg.$$eval('#model-select-cloud option', (os) =>
     os.filter((o) => /^[✗✓👁][\s\uD800-\uDFFF]*[✗✓👁]/u.test(o.textContent)
       || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/.test(o.textContent)).length);
-  console.log(`8. drugi przebieg — podwojone znaczki: ${dbl}`);
+  console.log(`8. drugi przebieg – podwojone znaczki: ${dbl}`);
   if (dbl) fail.push('znaczki się mnożą przy ponownym sprawdzeniu');
 
   if (errs.length) fail.push('błędy JS: ' + errs.join(' | '));

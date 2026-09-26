@@ -8,14 +8,14 @@
    1. MIKROFON JEST PRZEJMOWANY I ZWALNIANY przez przeglądarkę, a Android
       sygnalizuje to dźwiękiem. Stąd „ciągłe podłączanie i odłączanie".
    2. ROZPOZNAWANIE NIE DA SIĘ WYCISZYĆ. Kiedy Cosmos mówi, transkrybuje
-      dalej — jego własny głos wraca jako pytanie i robi się pętla. Łataliśmy
+      dalej – jego własny głos wraca jako pytanie i robi się pętla. Łataliśmy
       to znacznikami zużycia i odciskami wyników; działa, ale to obchodzenie
       cudzego automatu, a nie panowanie nad nim.
    3. NUMERACJA WYNIKÓW POTRAFI RUSZYĆ OD ZERA bez żadnego zdarzenia.
 
    Tutaj mikrofon otwieramy RAZ i trzymamy przez całą sesję głosową. Nic go
    nie przejmuje, więc nie ma dźwięków. Kiedy Cosmos mówi, po prostu wyrzucamy
-   próbki do kosza (`gluchy`) — nie ma czego rozpoznać, więc nie ma pętli.
+   próbki do kosza (`gluchy`) – nie ma czego rozpoznać, więc nie ma pętli.
    Wypowiedzi wycinamy sami, mierząc energię sygnału, i wysyłamy do Whispera
    przez `/api/stt`.
 
@@ -23,14 +23,14 @@
    tego, co da się zrobić bez ani jednej zewnętrznej biblioteki: detekcja mowy
    po energii sygnału z ruchomym progiem szumu tła. Silero jest mądrzejsze
    (sieć neuronowa odróżnia mowę od trzaśnięcia drzwiami), ale wymaga ONNX
-   w przeglądarce albo usługi zmysłów — a to już nie jest „bez zależności".
+   w przeglądarce albo usługi zmysłów – a to już nie jest „bez zależności".
    Gdy zmysły są włączone, sam Whisper i tak przepuszcza nagranie przez własny
    VAD (`vad_filter=True`), więc fałszywy wyzwalacz kończy się pustym tekstem,
    nie bzdurą.
 
    WYMAGA WHISPERA W ZMYSŁACH. Przy wyłączonym komputerze domowym nie ma
    dokąd wysłać dźwięku i tryb głosowy wraca do Web Speech API. Dlatego to
-   jest WYBÓR silnika, a nie zamiennik — patrz „Nasłuch" w Ustawieniach.
+   jest WYBÓR silnika, a nie zamiennik – patrz „Nasłuch" w Ustawieniach.
    ============================================================ */
 
 (function (global) {
@@ -38,7 +38,7 @@
 
   /* Po tylu milisekundach bez ani jednej ramki uznajemy, że wejście umarło.
      Ramka przy 48 kHz i buforze 1024 to 21 ms, więc 2,5 s to ponad sto
-     przegapionych — na pewno awaria, a nie chwilowe zadyszanie procesora. */
+     przegapionych – na pewno awaria, a nie chwilowe zadyszanie procesora. */
   const CISZA_ALARM_MS = 2500;
 
   const DOMYSLNE = {
@@ -47,7 +47,7 @@
     czestotliwosc: 16000,
     ramka: 1024,
     // Ile dźwięku SPRZED wykrycia mowy dokleić. Bez tego ginie pierwsza
-    // głoska — próg przekracza dopiero samogłoska, a „Kosmos" zaczyna się
+    // głoska – próg przekracza dopiero samogłoska, a „Kosmos" zaczyna się
     // od cichego „k".
     przedbiegMs: 320,
     // Cisza kończąca wypowiedź. 700 ms to naturalna pauza między zdaniami
@@ -55,7 +55,7 @@
     ciszaMs: 700,
     // Krótsze wycinki to zwykle kaszlnięcie albo stuknięcie w biurko.
     minMowyMs: 350,
-    // Twardy limit — inaczej ciągły hałas rósłby w nieskończoność w pamięci.
+    // Twardy limit – inaczej ciągły hałas rósłby w nieskończoność w pamięci.
     maxMowyMs: 15000,
     // Ile ramek pod rząd musi przekroczyć próg, żeby uznać to za mowę.
     ramekNaStart: 3,
@@ -79,7 +79,7 @@
    *  Uśrednianie okna, nie wybieranie co n-tej próbki. Wybieranie jest
    *  szybsze i daje ALIASING: przy 48→16 kHz wszystko powyżej 8 kHz wraca
    *  do pasma jako świst. Uśrednianie działa jak prosty filtr dolnoprzepustowy
-   *  — to nie jest porządny resampler, ale dla mowy różnica jest słyszalna
+   *  – to nie jest porządny resampler, ale dla mowy różnica jest słyszalna
    *  na korzyść uśredniania i kosztuje jedno dodanie na próbkę.
    */
   function przeprobkuj(probki, zrodlowa, docelowa) {
@@ -165,7 +165,7 @@
     let zebrane = [];             // Float32Array[] bieżącej wypowiedzi
     let zebranychProbek = 0;
     /* Ile z zebranego to NAPRAWDĘ dźwięk. Liczone osobno, bo w `zebrane`
-       siedzi też przedbieg i ogon ciszy domykający wypowiedź — razem ponad
+       siedzi też przedbieg i ogon ciszy domykający wypowiedź – razem ponad
        sekunda. Gdyby minimalną długość mierzyć całą paczką, to stuknięcie
        w biurko (0,1 s) wychodziłoby na „wypowiedź długą na 1,2 s" i lądowało
        u Whispera. Test `nasluch-wlasny` (6a) właśnie na to wpadł. */
@@ -190,7 +190,7 @@
       przedbiegProbek = 0;
     }
 
-    /* Pokolenie startu. `getUserMedia` trwa — a w tym czasie ktoś może
+    /* Pokolenie startu. `getUserMedia` trwa – a w tym czasie ktoś może
        zamknąć tryb głosowy albo kliknąć kulę drugi raz. Bez tego licznika
        `start()` po powrocie i tak otwierał strumień, którego nikt już nie
        zatrzymywał: mikrofon zostawał włączony po zamknięciu trybu (dwa szybkie
@@ -215,20 +215,20 @@
       if (moje !== pokolenie) { stop(); return false; }
       zrodlo = ctx.createMediaStreamSource(strumien);
 
-      /* ScriptProcessorNode, nie AudioWorklet — świadomie.
+      /* ScriptProcessorNode, nie AudioWorklet – świadomie.
          Worklet jest nowszy i nie blokuje wątku głównego, ale wymaga
          OSOBNEGO PLIKU MODUŁU ładowanego przez addModule(). To znaczy: kolejny
          wpis w service workerze, kolejna rzecz do przegapienia przy
          odświeżaniu pamięci podręcznej i kolejny powód, żeby tryb głosowy
          przestał działać po wdrożeniu. Liczenie energii z ramki 1024 próbek
-         to kilka tysięcy operacji zmiennoprzecinkowych ~47 razy na sekundę —
+         to kilka tysięcy operacji zmiennoprzecinkowych ~47 razy na sekundę –
          wątku głównego to nie ruszy. „Przestarzały" nie znaczy „usunięty". */
       procesor = ctx.createScriptProcessor(o.ramka, 1, 1);
       procesor.onaudioprocess = (e) => ramka(e.inputBuffer.getChannelData(0));
 
       /* Procesor musi mieć DOKĄD wysyłać dźwięk, inaczej część przeglądarek
          w ogóle go nie uruchamia. Wysyłamy więc do wyjścia przez wzmocnienie
-         zero — bo puszczenie mikrofonu na głośnik to sprzężenie w najbardziej
+         zero – bo puszczenie mikrofonu na głośnik to sprzężenie w najbardziej
          dosłownym, akustycznym sensie. */
       cisza = ctx.createGain();
       cisza.gain.value = 0;
@@ -243,16 +243,16 @@
          się nie dzieje. Trzy realne drogi do tego stanu, wszystkie na
          telefonie:
 
-           1. WYGASZONY EKRAN — Android usypia AudioContext. Wraca sam po
+           1. WYGASZONY EKRAN – Android usypia AudioContext. Wraca sam po
               odblokowaniu, ale tylko jeśli ktoś go obudzi.
            2. POŁĄCZENIE PRZYCHODZĄCE albo inna aplikacja przejmująca
-              mikrofon — ścieżka dostaje `mute`, a czasem `ended`.
-           3. ODŁĄCZONE SŁUCHAWKI — ścieżka kończy się na dobre i nie
+              mikrofon – ścieżka dostaje `mute`, a czasem `ended`.
+           3. ODŁĄCZONE SŁUCHAWKI – ścieżka kończy się na dobre i nie
               wróci; trzeba wziąć mikrofon od nowa.
 
          Żadna z nich nie rzuca wyjątkiem. Dlatego pilnujemy tego z trzech
-         stron naraz: stanu kontekstu, zdarzeń ścieżki i — bo tamte dwa
-         potrafią milczeć — licznika czasu od ostatniej ramki. */
+         stron naraz: stanu kontekstu, zdarzeń ścieżki i – bo tamte dwa
+         potrafią milczeć – licznika czasu od ostatniej ramki. */
       ctx.onstatechange = () => {
         if (!dziala || !ctx) return;
         if (ctx.state === 'running') return;
@@ -314,7 +314,7 @@
     function ramka(dane) {
       if (!dziala) return;
       ostatniaRamka = Date.now();
-      // Dźwięk wrócił — kolejna awaria ma znów dojść do interfejsu.
+      // Dźwięk wrócił – kolejna awaria ma znów dojść do interfejsu.
       cisząZgloszona = false;
 
       let suma = 0;
@@ -419,7 +419,7 @@
     }
 
     /* Szum tła: SZYBKO w dół, WOLNO w górę.
-       Odwrotna asymetria byłaby katastrofą — jeden przejeżdżający samochód
+       Odwrotna asymetria byłaby katastrofą – jeden przejeżdżający samochód
        podniósłby próg i Cosmos ogłuchłby na kilka minut. Tak dobrany filtr
        schodzi do prawdziwej ciszy w ułamku sekundy, a rośnie w ciągu minut,
        więc dostosowuje się do pokoju, a nie do pojedynczego hałasu. */
@@ -443,7 +443,7 @@
       zebrane = [];
       zebranychProbek = 0;
       wypowiedz++;
-      // Miarą jest DŹWIĘK, nie długość paczki — patrz komentarz przy ramekDzwieku.
+      // Miarą jest DŹWIĘK, nie długość paczki – patrz komentarz przy ramekDzwieku.
       if ((glosnych * o.ramka / naSekunde) * 1000 < o.minMowyMs) { onMowa(false, false); return; }   // kaszlnięcie
       onMowa(false, true);
       wyslij(sklej(kawalki, probek, naSekunde));
@@ -453,7 +453,7 @@
       rozpoznawanych++;
       try {
         /* Adres podaje aplikacja: język rozmowy i to, czy to nasłuch słowa
-           budzącego (tylko lokalny Whisper — otoczenia nie wysyłamy do chmury),
+           budzącego (tylko lokalny Whisper – otoczenia nie wysyłamy do chmury),
            czy pytanie, które ktoś świadomie zadaje. */
         const res = await fetch(typeof o.adres === 'function' ? o.adres() : '/api/stt', {
           method: 'POST',

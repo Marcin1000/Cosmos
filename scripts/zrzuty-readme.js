@@ -1,25 +1,25 @@
-/* Zrzuty do README i grafik marki — z prawdziwego interfejsu.
+/* Zrzuty do README i grafik marki – z prawdziwego interfejsu.
  *
  * Nie są to atrapy obrazków ani makiety: to Chromium otwierające prawdziwego
  * Cosmosa, z prawdziwym CSS-em i prawdziwym renderowaniem. Model i dane są
- * testowe i tak ma być — repozytorium jest publiczne, a prywatne archiwum
+ * testowe i tak ma być – repozytorium jest publiczne, a prywatne archiwum
  * Marcina (57 tysięcy zdjęć z rodziną) nie ma tam czego szukać.
  *
  *   NODE_PATH=/opt/node22/lib/node_modules node scripts/zrzuty-readme.js
  *
- * (Playwright bywa zainstalowany globalnie — stąd NODE_PATH.)
+ * (Playwright bywa zainstalowany globalnie – stąd NODE_PATH.)
  *
  * Od rebrandingu („Jeden wątek”) aplikacja mieszka pod /app, a pod / stoi
- * strona produktowa — dawna wersja skryptu fotografowała więc stronę zamiast
+ * strona produktowa – dawna wersja skryptu fotografowała więc stronę zamiast
  * aplikacji. Zrzuty są w jasnym motywie (tak wygląda marka), telefon i tryb
  * głosowy w ciemnym, żeby było widać oba. Rozmowa i telefon powstają po
  * angielsku (README.md) i po polsku (README.pl.md, grafiki na LinkedIn).
  *
  * Serwer stawiamy sami, na własnym porcie. Atrapy modelu i zmysłów
- * pożyczamy, jeśli już działają (np. dla zespołu agentów) — wtedy ich nie
+ * pożyczamy, jeśli już działają (np. dla zespołu agentów) – wtedy ich nie
  * ruszamy; jeśli nie, stawiamy je i sprzątamy po sobie.
  *
- * Wynik: `docs/obrazy/*.png`. Zrzuty są w repozytorium celowo — bez nich
+ * Wynik: `docs/obrazy/*.png`. Zrzuty są w repozytorium celowo – bez nich
  * README na GitHubie pokazuje puste ramki.
  */
 const fs = require('node:fs');
@@ -28,7 +28,7 @@ const path = require('node:path');
 const { przegladarka, maPrzegladarke, serwerCosmosa, czekajNa, zabij, atrapaNode, atrapaPy } = require('../tests/pomoc');
 
 const KATALOG = path.join(__dirname, '..', 'docs', 'obrazy');
-// Port poza zakresami baterii (34xx) i ról zespołów (36xx–38xx) — zrzuty mogą iść obok nich.
+// Port poza zakresami baterii (34xx) i ról zespołów (36xx–38xx) – zrzuty mogą iść obok nich.
 const PORT = 3941;
 const ADRES = `http://127.0.0.1:${PORT}`;
 const PULPIT = { width: 1440, height: 900 };
@@ -40,7 +40,7 @@ const czyNasluchuje = (port) => new Promise((ok) => {
   s.once('error', () => ok(false));
 });
 
-/** Poczekaj, aż układ przestanie się zmieniać — inaczej łapiemy pół animacji. */
+/** Poczekaj, aż układ przestanie się zmieniać – inaczej łapiemy pół animacji. */
 async function ustabilizuj(pg, ms = 700) {
   await pg.waitForTimeout(ms);
   await pg.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -48,7 +48,7 @@ async function ustabilizuj(pg, ms = 700) {
 
 /* Teksty scen w obu językach. Treść jest kontrolowana (prawdziwy renderer,
    prawdziwy CSS, nasze zdania), bo atrapa modelu odpowiada po polsku
-   i zdaniami testowymi — na zrzucie wyglądałoby to jak niedokończona robota. */
+   i zdaniami testowymi – na zrzucie wyglądałoby to jak niedokończona robota. */
 const TEKSTY = {
   en: {
     rozmowy: ['Golden hour at Morskie Oko', 'Which lens for the cliffs?', 'Drone mission over the lake', 'Count clips shot at 50 mm'],
@@ -61,57 +61,57 @@ const TEKSTY = {
       + '| Shutter | `1/250 s` | sharp handheld at 105 mm |\n'
       + '| Aperture | `f/5.6` | the ridge and the lake both in focus |\n'
       + '| ISO | `200` | base ISO plus one stop of headroom |\n\n'
-      + 'Computed for your **RF 24-105 f/4** — f/4 is the fastest aperture you own, '
+      + 'Computed for your **RF 24-105 f/4** – f/4 is the fastest aperture you own, '
       + 'so f/2.8 is not an option here.',
     pytanie2: 'Would you shoot the reflection at f/8 instead?',
-    claude: 'Yes — for the reflection, **f/8 at 1/125 s, ISO 400**. You give up one stop of speed, '
+    claude: 'Yes – for the reflection, **f/8 at 1/125 s, ISO 400**. You give up one stop of speed, '
       + 'which is fine at 24 mm, and the far shore stays sharp in the water.\n\n'
       + 'The lake is usually calm until about **07:15**; after that, the wind breaks the reflection.',
-    telefonPyt0: 'Sunset at Rysy tomorrow — when?',
+    telefonPyt0: 'Sunset at Rysy tomorrow – when?',
     telefon0: '**18:21**, with golden hour from about **17:45**. Clear sky is forecast until 20:00.',
     telefonPyt: 'Which lens for the cliffs at sunset?',
-    telefon: 'The **RF 70-200 f/4** — it lets you stay back from the edge and still fill the frame with rock.\n\n'
+    telefon: 'The **RF 70-200 f/4** – it lets you stay back from the edge and still fill the frame with rock.\n\n'
       + 'At 200 mm you will want `1/250 s` or shorter; the wind up there is enough to blur a handheld '
       + 'frame at `1/125 s`.\n\nThe 24-105 works too, but you will be standing much closer to the drop.',
     glosPyt: 'what are the best spots for sunrise here',
     glos: 'The eastern cliffs catch first light about twenty minutes before the Sun clears the horizon.',
     archPyt: 'Show the newest shots from the lake',
-    archOdp: 'The newest **10 of 311** from the lake — most of them from the two sunrise sessions, shot at 24–105 mm.',
+    archOdp: 'The newest **10 of 311** from the lake – most of them from the two sunrise sessions, shot at 24–105 mm.',
     miejsce: 'Morskie Oko',
   },
   pl: {
     rozmowy: ['Złota godzina nad Morskim Okiem', 'Który obiektyw na klify?', 'Misja drona nad jeziorem', 'Ile klipów na 50 mm?'],
     pytanie: 'Złota godzina nad Morskim Okiem w sobotę. Jakie nastawy i ile mam naprawdę czasu?',
     mysl: 'Miejsce jest podane wprost, więc wygrywa z zapisaną lokalizacją domu. O 06:55 Słońce jest '
-      + '3,4° nad horyzontem i wschodzi zza grani. Najjaśniejsze szkło na 24-105 to f/4 — nic jaśniejszego.',
+      + '3,4° nad horyzontem i wschodzi zza grani. Najjaśniejsze szkło na 24-105 to f/4 – nic jaśniejszego.',
     nvidia: '**Złota godzina zaczyna się o 06:47** i daje około **45 minut** niskiego, ciepłego światła, '
       + 'zanim Słońce wyjdzie zza grani.\n\n'
       + '| | Nastawa | Dlaczego |\n|---|---|---|\n'
       + '| Czas | `1/250 s` | ostro z ręki na 105 mm |\n'
       + '| Przysłona | `f/5.6` | grań i jezioro jednocześnie ostre |\n'
       + '| ISO | `200` | natywne ISO plus jeden stopień zapasu |\n\n'
-      + 'Policzone dla Twojego **RF 24-105 f/4** — f/4 to najjaśniejsza przysłona, jaką masz, '
+      + 'Policzone dla Twojego **RF 24-105 f/4** – f/4 to najjaśniejsza przysłona, jaką masz, '
       + 'więc f/2.8 nie wchodzi w grę.',
-    pytanie2: 'A odbicie w wodzie — lepiej na f/8?',
-    claude: 'Tak — na odbicie **f/8, 1/125 s, ISO 400**. Tracisz jeden stopień czasu, co przy 24 mm '
+    pytanie2: 'A odbicie w wodzie – lepiej na f/8?',
+    claude: 'Tak – na odbicie **f/8, 1/125 s, ISO 400**. Tracisz jeden stopień czasu, co przy 24 mm '
       + 'nie przeszkadza, a drugi brzeg zostaje ostry także w wodzie.\n\n'
       + 'Jezioro jest zwykle gładkie mniej więcej do **7:15**; potem wiatr rozbija odbicie.',
-    telefonPyt0: 'Zachód na Rysach jutro — o której?',
+    telefonPyt0: 'Zachód na Rysach jutro – o której?',
     telefon0: '**18:21**, złota godzina od około **17:45**. Prognoza: bezchmurnie do 20:00.',
     telefonPyt: 'Który obiektyw na klify o zachodzie?',
-    telefon: '**RF 70-200 f/4** — możesz stanąć dalej od krawędzi i dalej wypełnić kadr skałą.\n\n'
+    telefon: '**RF 70-200 f/4** – możesz stanąć dalej od krawędzi i dalej wypełnić kadr skałą.\n\n'
       + 'Na 200 mm trzymaj `1/250 s` albo krócej; wiatr na górze wystarczy, żeby rozmazać kadr '
       + 'z ręki przy `1/125 s`.\n\n24-105 też da radę, ale staniesz dużo bliżej przepaści.',
     glosPyt: 'gdzie tu najlepiej złapać wschód słońca',
     glos: 'Wschodnie klify łapią pierwsze światło jakieś dwadzieścia minut, zanim Słońce wyjdzie nad horyzont.',
     archPyt: 'Pokaż najnowsze zdjęcia znad jeziora',
-    archOdp: 'Najnowsze **10 z 311** znad jeziora — większość z dwóch porannych sesji, na 24–105 mm.',
+    archOdp: 'Najnowsze **10 z 311** znad jeziora – większość z dwóch porannych sesji, na 24–105 mm.',
     miejsce: 'Morskie Oko',
   },
 };
 
 /** Nowa karta z wybranym językiem i motywem, bez pierwszego uruchomienia. */
-/* Pulpit w skali 1,25 (1800 px szerokości — README pokazuje go na 900 px,
+/* Pulpit w skali 1,25 (1800 px szerokości – README pokazuje go na 900 px,
    więc ekran retina dostaje dwa piksele na punkt), telefon w 2 (trafia też do
    grafik, w ramce do 520 px). Strefa czasowa Polski: bez niej przeglądarka
    i serwer liczyły w UTC i „06:55" w Planie było w Polsce 08:55. */
@@ -138,7 +138,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
 
 (async () => {
   if (!maPrzegladarke()) {
-    console.error('Brak Chromium — zrzutów nie da się zrobić.');
+    console.error('Brak Chromium – zrzutów nie da się zrobić.');
     process.exit(1);
   }
   fs.mkdirSync(KATALOG, { recursive: true });
@@ -163,12 +163,12 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
     await pg.screenshot({ path: plik, ...opcje });
     const kb = Math.round(fs.statSync(plik).size / 1024);
     zrobione.push(`${nazwa}.${rozszerzenie} (${kb} KB)`);
-    console.log(`  ✓ ${nazwa}.${rozszerzenie} — ${kb} KB`);
+    console.log(`  ✓ ${nazwa}.${rozszerzenie} – ${kb} KB`);
   };
 
   /* --- 1. ROZMOWA: jeden wątek, dwa silniki ---------------------------------
      Pierwszy zrzut w README pokazuje tezę projektu: odpowiedź chmury NVIDIA,
-     potem pytanie do Claude'a w TEJ SAMEJ rozmowie — każda odpowiedź z nicią
+     potem pytanie do Claude'a w TEJ SAMEJ rozmowie – każda odpowiedź z nicią
      i podpisem w kolorze swojego silnika. */
   /* Jasna i ciemna: README pokazuje ciemną, gdy czytelnik ma ciemny motyw
      GitHuba (<picture>), a ciemne grafiki na LinkedIn dostają ciemne okno. */
@@ -190,7 +190,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
       renderMessages();
     }, T);
     await ustabilizuj(pg, 900);
-    // Od pierwszego pytania — inaczej u góry kadru wisi dolny brzeg ciemnego dymka.
+    // Od pierwszego pytania – inaczej u góry kadru wisi dolny brzeg ciemnego dymka.
     await pg.evaluate(() => { document.getElementById('chat-scroll').scrollTop = 0; });
     await ustabilizuj(pg, 400);
     await zapisz(pg, `rozmowa-${jezyk}${motyw === 'dark' ? '-ciemny' : ''}`);
@@ -233,7 +233,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
       document.getElementById('voice-orb').className = 'voice-orb listening';
     }, T);
     await ustabilizuj(pg);
-    // JPEG: poświata kuli to gładki gradient — PNG ważył 0,9 MB.
+    // JPEG: poświata kuli to gładki gradient – PNG ważył 0,9 MB.
     await zapisz(pg, `glos-${jezyk}`, { type: 'jpeg', quality: 90 }, 'jpg');
     await ctx.close();
   }
@@ -254,7 +254,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
     await pg.selectOption('#fp-gear', 'canon-r6ii').catch(() => {});
     await pg.selectOption('#fp-mode', 'zdjecie').catch(() => {});
     await pg.selectOption('#fp-sky', 'bezchmurnie').catch(() => {});
-    // Sobota o świcie — najbliższa sobota, 06:55 czasu lokalnego serwera testowego.
+    // Sobota o świcie – najbliższa sobota, 06:55 czasu lokalnego serwera testowego.
     await pg.evaluate(() => {
       const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); d.setHours(6, 55, 0, 0);
       const pad = (n) => String(n).padStart(2, '0');
@@ -266,7 +266,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
     await ustabilizuj(pg, 1200);
     /* Tylko sekcja planu, do dołu karty nieba: sprzęt i aparat po Wi-Fi to
        formularze, nie obraz działania. Zdania z uzasadnieniem nastaw są na
-       razie tylko po polsku (lib/ekspozycja.js) — do tłumaczenia w następnej
+       razie tylko po polsku (lib/ekspozycja.js) – do tłumaczenia w następnej
        rundzie; na angielskim zrzucie wyglądałyby jak błąd. */
     await pg.evaluate(() => document.getElementById('fp-niebo').closest('.plener-section').scrollIntoView({ block: 'start' }));
     await ustabilizuj(pg, 300);
@@ -287,7 +287,7 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
   {
     console.log('5. archiwum');
     /* Pejzaże jak kadry z jednej sesji nad jeziorem: niebo, słońce z poświatą,
-       dwa plany gór i odbicie w wodzie. Rysunek, nie zdjęcie — prywatne
+       dwa plany gór i odbicie w wodzie. Rysunek, nie zdjęcie – prywatne
        zdjęcia nie trafiają do publicznego repozytorium. */
     const pejzaze = [
       ['#2B3A67', '#F6B98A', '#FFD9A8', '#39405E', '#1E2440', 0.30],
@@ -346,13 +346,13 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
     for (const a of atrapy) fs.unlinkSync(a.plik);
   }
 
-  /* --- 6. STRONA PRODUKTOWA — pierwszy ekran ------------------------------ */
+  /* --- 6. STRONA PRODUKTOWA – pierwszy ekran ------------------------------ */
   for (const jezyk of ['en', 'pl']) {
     console.log(`6. strona produktowa (${jezyk})`);
     const ctx = await br.newContext({ viewport: PULPIT, deviceScaleFactor: 1.25, serviceWorkers: 'block', colorScheme: 'light', timezoneId: 'Europe/Warsaw' });
     const pg = await ctx.newPage();
     await pg.goto(`${ADRES}/${jezyk === 'en' ? '?lang=en' : ''}`, { waitUntil: 'load' });
-    // Animacja wejścia słów i rozmowa pokazowa — dajemy im dojść do końca.
+    // Animacja wejścia słów i rozmowa pokazowa – dajemy im dojść do końca.
     await ustabilizuj(pg, 5200);
     // JPEG: miękkie plamy koloru w tle strony dawały PNG po 2 MB.
     await zapisz(pg, `strona-${jezyk}`, { type: 'jpeg', quality: 88 }, 'jpg');
@@ -362,6 +362,6 @@ async function karta(br, { viewport, jezyk, motyw, isMobile = false, dpr = isMob
   await br.close();
   zabij(srv);
   nasze.forEach(zabij);
-  console.log(`\nGotowe — ${zrobione.length} zrzutów w docs/obrazy/`);
+  console.log(`\nGotowe – ${zrobione.length} zrzutów w docs/obrazy/`);
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

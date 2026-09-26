@@ -1,15 +1,15 @@
-# ✦ Cosmos Senses — zmysły Cosmosa
+# ✦ Cosmos Senses – zmysły Cosmosa
 
 Usługa percepcji w Pythonie. Daje Cosmosowi **słuch** (Whisper), **głos** (Piper),
 **wzrok** (YOLO) i **pamięć semantyczną** (bge-m3). Wszystko działa lokalnie
-na Twoim GPU — bez wysyłania dźwięku i obrazu do chmury.
+na Twoim GPU – bez wysyłania dźwięku i obrazu do chmury.
 
 > Ten plik to **pełna dokumentacja** zmysłów. Jeśli instalujesz Cosmosa od zera, prostszy
 > przewodnik krok po kroku znajdziesz w **[../docs/START-TUTAJ.md](../docs/START-TUTAJ.md)**
-> — CZĘŚĆ 5. Oba pliki opisują ten sam moduł; tutaj jest więcej szczegółów i wszystkie
+> – CZĘŚĆ 5. Oba pliki opisują ten sam moduł; tutaj jest więcej szczegółów i wszystkie
 > narzędzia sprzętowe.
 
-## Co działa, a co nie — stan na dziś
+## Co działa, a co nie – stan na dziś
 
 Nie każdy moduł w tym folderze jest wpięty w interfejs Cosmosa. Poniższa tabela mówi
 wprost, czego się spodziewać, żeby nie tracić czasu na instalowanie czegoś, co nie
@@ -17,29 +17,29 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 
 | Moduł / zmysł | Stan | Uwaga |
 |---|---|---|
-| Słuch — `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości; przy braku bibliotek CUDA sam przechodzi na procesor |
-| Głos — `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej; obsługiwane API Pipera ≤1.2 i 1.3+ |
-| Wzrok — `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
-| Pamięć — `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
-| Dokumenty — `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy. Z `docling` albo `markitdown` czyta też SKANY (OCR) i zachowuje tabele oraz kolumny — bez nich pypdf oddaje ciąg luźnych liczb |
-| Powiększanie — `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
-| Ptaki — `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer — bez nich BirdNET szuka wśród gatunków całego świata |
-| Sylwetka — `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
-| `watcher.py` — ciągła percepcja | ✅ działa | webcam, telefon, aparat — albo Kinect przez `CAMERA_SOURCE=kinect` |
-| `wake_listener.py` — słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
-| `kinect_watcher.py` — głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
-| `kinect_win.py` — szkielet, RGB, głębia, silnik | ✅ działa | Windows; **cała funkcjonalność Kinecta 360** |
-| `soundloc.py` — słuch przestrzenny | ✅ działa | macierz 4 mikrofonów Kinecta — patrz niżej |
+| Słuch – `/stt` (Whisper) | ✅ działa | przycisk mikrofonu w polu wiadomości; przy braku bibliotek CUDA sam przechodzi na procesor |
+| Głos – `/tts` (Piper) | ✅ działa | wymaga pobrania pliku głosu, patrz niżej; obsługiwane API Pipera ≤1.2 i 1.3+ |
+| Wzrok – `/detect` (YOLO) | ✅ działa | przycisk kamery i podgląd na żywo |
+| Pamięć – `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
+| Dokumenty – `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy. Z `docling` albo `markitdown` czyta też SKANY (OCR) i zachowuje tabele oraz kolumny – bez nich pypdf oddaje ciąg luźnych liczb |
+| Powiększanie – `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
+| Ptaki – `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer – bez nich BirdNET szuka wśród gatunków całego świata |
+| Sylwetka – `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
+| `watcher.py` – ciągła percepcja | ✅ działa | webcam, telefon, aparat – albo Kinect przez `CAMERA_SOURCE=kinect` |
+| `wake_listener.py` – słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
+| `kinect_watcher.py` – głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
+| `kinect_win.py` – szkielet, RGB, głębia, silnik | ✅ działa | Windows; **cała funkcjonalność Kinecta 360** |
+| `soundloc.py` – słuch przestrzenny | ✅ działa | macierz 4 mikrofonów Kinecta – patrz niżej |
 | `photoscan.py`, `terrain.py`, `lowlight.py`, `pantilt.py`, `tether.py` | ✅ narzędzia z wiersza poleceń | uruchamiane ręcznie, nie z interfejsu; wyniki zgłaszają do czatu jako zdarzenia |
-| `flightplan.py` — plan lotu drona | ✅ narzędzie z wiersza poleceń | jako jedyne **nie zgłasza zdarzeń** do Cosmosa — wypisuje plan i pliki na dysk |
+| `flightplan.py` – plan lotu drona | ✅ narzędzie z wiersza poleceń | jako jedyne **nie zgłasza zdarzeń** do Cosmosa – wypisuje plan i pliki na dysk |
 
-Moduły oznaczone ⚠️ opisane są szczegółowo w swoich sekcjach — razem z tym,
+Moduły oznaczone ⚠️ opisane są szczegółowo w swoich sekcjach – razem z tym,
 czego dokładnie im brakuje.
 
-**Gdzie to uruchomić?** Tam, gdzie masz kamerę, mikrofon i GPU — czyli na komputerze
+**Gdzie to uruchomić?** Tam, gdzie masz kamerę, mikrofon i GPU – czyli na komputerze
 domowym. Serwer Cosmosa może stać gdzie indziej (np. na VPS); wtedy w jego pliku `.env`
 ustaw `SENSES_URL=http://<adres-Tailscale-komputera>:7060`. Gdy komputer jest wyłączony,
-Cosmos działa dalej — po prostu bez lokalnej percepcji.
+Cosmos działa dalej – po prostu bez lokalnej percepcji.
 
 ## Szybki start
 
@@ -48,26 +48,26 @@ cd /d C:\Cosmos\senses
 python -m venv .venv
 .venv\Scripts\activate
 ```
-(Linux/macOS: `cd senses` i `source .venv/bin/activate`. Na Windowsie **nie pomijaj `/d`** —
+(Linux/macOS: `cd senses` i `source .venv/bin/activate`. Na Windowsie **nie pomijaj `/d`** –
 samo `cd` nie przełącza dysku i po cichu zostawia Cię tam, gdzie byłeś.)
 
-Dalej masz dwie drogi. **Wszystkie zmysły naraz** — najprościej, ~3 GB zależności:
+Dalej masz dwie drogi. **Wszystkie zmysły naraz** – najprościej, ~3 GB zależności:
 
 ```bash
 pip install -r requirements.txt
 ```
 
 (To pokrywa słuch, głos, wzrok, sylwetkę, pamięć, dokumenty i obserwatory. Dodatki
-opisane niżej — słowo aktywujące, `/upscale`, głębia z Kinecta — mają własne komendy,
+opisane niżej – słowo aktywujące, `/upscale`, głębia z Kinecta – mają własne komendy,
 bo są rzadziej potrzebne albo wymagają czegoś spoza `pip`.)
 
 Albo **wybiórczo**, tylko te zmysły, których chcesz (każdy jest niezależny):
 
 ```bash
-pip install fastapi uvicorn python-multipart          # rdzeń — WYMAGANY
+pip install fastapi uvicorn python-multipart          # rdzeń – WYMAGANY
 pip install faster-whisper                            # + słuch (rozpoznawanie mowy)
 #   uwaga: na GPU wymaga bibliotek CUDA 12 (cuBLAS + cuDNN). Bez nich usługa
-#   sama przechodzi na procesor — wolniej, ale bez błędu. Możesz też wymusić
+#   sama przechodzi na procesor – wolniej, ale bez błędu. Możesz też wymusić
 #   procesor od razu:  set WHISPER_DEVICE=cpu
 pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
@@ -95,7 +95,7 @@ pip install piper-tts
 ```
 
 Potrzebne są **dwa pliki**: model `.onnx` (~60 MB) i jego opis `.onnx.json` (kilka kB).
-Piper szuka opisu obok modelu, po nazwie modelu z doklejonym `.json` — dlatego
+Piper szuka opisu obok modelu, po nazwie modelu z doklejonym `.json` – dlatego
 **podwójne rozszerzenie musi zostać**. Zapisany jako `pl_PL-darkman-medium.json`
 (bez `.onnx` w środku) nie zostanie znaleziony.
 
@@ -108,7 +108,7 @@ curl -L -o voices\pl_PL-darkman-medium.onnx https://huggingface.co/rhasspy/piper
 curl -L -o voices\pl_PL-darkman-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/darkman/medium/pl_PL-darkman-medium.onnx.json
 ```
 
-Sprawdź `dir voices` — `.onnx` ma ważyć kilkadziesiąt MB. Jeśli ma kilka kB, pobrała się
+Sprawdź `dir voices` – `.onnx` ma ważyć kilkadziesiąt MB. Jeśli ma kilka kB, pobrała się
 strona błędu; wejdź wtedy na https://huggingface.co/rhasspy/piper-voices/tree/main/pl/pl_PL
 i pobierz pliki ręcznie. Struktura katalogów to `język / lokalizacja / głos / jakość`,
 a w `pl_PL` znajdziesz też inne polskie głosy do wyboru.
@@ -120,15 +120,15 @@ set PIPER_VOICE=C:\Cosmos\senses\voices\pl_PL-darkman-medium.onnx
 python service.py
 ```
 
-> ⚠️ `set` działa **tylko w tym oknie** — po jego zamknięciu głos znika. Aby ustawić
+> ⚠️ `set` działa **tylko w tym oknie** – po jego zamknięciu głos znika. Aby ustawić
 > na stałe: *Start → „zmienne środowiskowe" → Zmienne środowiskowe → Nowa*, nazwa
 > `PIPER_VOICE`, wartość jak wyżej. Potem uruchom `service.py` w **nowym** oknie `cmd`;
 > stare nie zna nowej zmiennej. (Linux/macOS: `export PIPER_VOICE=...`.)
 
 Sukces poznasz po liście przy starcie: `→ aktywne zmysły: whisper, piper, ...`.
-Zmienna musi być ustawiona **przed** startem usługi — jest sprawdzana raz, przy imporcie.
+Zmienna musi być ustawiona **przed** startem usługi – jest sprawdzana raz, przy imporcie.
 
-Bez Pipera Cosmos i tak mówi — używa wtedy głosu systemowego przeglądarki.
+Bez Pipera Cosmos i tak mówi – używa wtedy głosu systemowego przeglądarki.
 
 ## Ciągła percepcja (obserwator kamery)
 
@@ -137,20 +137,20 @@ python watcher.py
 ```
 
 Obserwuje kamerę, wykrywa obiekty i wysyła do Cosmosa **tylko zmiany**
-(„w kadrze pojawiło się: person”). Cosmos dokleja je do kontekstu rozmowy —
+(„w kadrze pojawiło się: person”). Cosmos dokleja je do kontekstu rozmowy –
 możesz zapytać „co się zmieniło w pokoju?” i model odpowie na podstawie
 prawdziwych obserwacji.
 
 | Zmienna | Znaczenie |
 |---|---|
 | `COSMOS_URL` | adres serwera; **na VPS to nie jest `localhost`** |
-| `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera — bez niego `/api/events` zwraca 401 |
+| `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera – bez niego `/api/events` zwraca 401 |
 | `CAMERA_SOURCE` | `auto` (zwykła kamera) albo `kinect` (Kinect 360 przez SDK 1.8) |
 | `CAMERA_INDEX` | numer kamery przy `CAMERA_SOURCE=auto`, domyślnie `0` |
 | `WATCH_INTERVAL` | sekundy między analizami, domyślnie `5` |
 
 Obserwator działa na komputerze z kamerą, a serwer może stać gdzie indziej.
-Wtedy trzeba mu podać jedno i drugie — adres i token:
+Wtedy trzeba mu podać jedno i drugie – adres i token:
 
 ```bat
 set COSMOS_URL=http://100.101.102.103:3000
@@ -161,13 +161,13 @@ python watcher.py
 To samo dotyczy `kinect_watcher.py`, `wake_listener.py` i pozostałych skryptów
 zgłaszających zdarzenia. Bez tokena zdarzenia po cichu nie dolatują.
 
-> ⚠️ **„Nie mogę otworzyć kamery 0" / „Camera index out of range"** — pod tym numerem
+> ⚠️ **„Nie mogę otworzyć kamery 0" / „Camera index out of range"** – pod tym numerem
 > nie ma kamery. Sprawdź, co widzi system:
 > ```python
 > python -c "import cv2; print([i for i in range(6) if cv2.VideoCapture(i).isOpened()])"
 > ```
 > Jeśli lista jest pusta, komputer nie ma żadnej kamery dostępnej dla OpenCV.
-> **Masz Kinecta? Ustaw `CAMERA_SOURCE=kinect`** — nie jest kamerą UVC, więc na liście
+> **Masz Kinecta? Ustaw `CAMERA_SOURCE=kinect`** – nie jest kamerą UVC, więc na liście
 > się nie pojawi, ale jego obraz RGB czytamy prosto z SDK (patrz sekcja o Kinekcie).
 > Inne opcje: webcam, telefon jako kamera (Iriun, DroidCam), aparat przez
 > *Canon EOS Webcam Utility*. Numer z listy podajesz w `CAMERA_INDEX`.
@@ -181,34 +181,34 @@ pip install sentence-transformers
 Domyślny model to **bge-m3** (~2 GB, bardzo dobre wielojęzyczne wyniki).
 Lżejsza alternatywa (~120 MB): `set EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2`.
 
-Bez tego zmysłu pamięć w Cosmosie nadal działa — serwer ma dwa stopnie zapasowe:
+Bez tego zmysłu pamięć w Cosmosie nadal działa – serwer ma dwa stopnie zapasowe:
 najpierw **embeddingi z chmury NVIDII**, a gdy i tych nie ma (brak klucza albo
-`EMBED_PROVIDER=senses`) — wyszukiwanie po słowach kluczowych. Kolejność ustawia
+`EMBED_PROVIDER=senses`) – wyszukiwanie po słowach kluczowych. Kolejność ustawia
 `EMBED_PROVIDER` w `.env` serwera; szczegóły w sekcji „Embeddingi" w
 [README projektu](../README.md).
 
 > ⚠️ Wektory z różnych modeli są nieporównywalne. Cosmos oznacza każdy wpis nazwą modelu
 > i po zmianie (np. gdy raz liczyły się lokalnie, a raz w chmurze) przelicza je sam przy
-> najbliższym pytaniu. Nic nie musisz robić — pierwsze zapytania bywają wolniejsze.
+> najbliższym pytaniu. Nic nie musisz robić – pierwsze zapytania bywają wolniejsze.
 
-## Kinect 360 — wszystkie cztery czujniki
+## Kinect 360 – wszystkie cztery czujniki
 
 Kinect ma **kamerę RGB, czujnik głębi, cztery mikrofony i silnik pochylenia**.
-Na Windowsie z zainstalowanym **Kinect for Windows SDK 1.8** działa to wszystko —
+Na Windowsie z zainstalowanym **Kinect for Windows SDK 1.8** działa to wszystko –
 bez libfreenect, bez Zadiga, bez kompilatora.
 
 | Czujnik | Czym się to obsługuje | Windows (SDK 1.8) | Linux (libfreenect) |
 |---|---|---|---|
-| Głębia — obecność, ruch, dystans | `kinect_watcher.py` | ✅ | ✅ |
-| **Szkielet — 20 stawów, postawa, gesty** | `kinect_win.py skeleton` | ✅ | ❌ libfreenect tego nie ma |
+| Głębia – obecność, ruch, dystans | `kinect_watcher.py` | ✅ | ✅ |
+| **Szkielet – 20 stawów, postawa, gesty** | `kinect_win.py skeleton` | ✅ | ❌ libfreenect tego nie ma |
 | Kamera RGB dla YOLO | `watcher.py` z `CAMERA_SOURCE=kinect` | ✅ | ⚠️ wymaga mostka |
-| 4 mikrofony — kierunek dźwięku | `soundloc.py` | ✅ | ✅ |
+| 4 mikrofony – kierunek dźwięku | `soundloc.py` | ✅ | ✅ |
 | Silnik pochylenia | `kinect_win.py tilt` | ✅ | ✅ |
 
 ### Skąd się to bierze
 
 SDK 1.8 instaluje `Kinect10.dll` z **płaskim API w C** (funkcje `Nui*`). Moduł
-`kinect_win.py` woła je przez `ctypes` — nie trzeba ani C#, ani C++. To ważne,
+`kinect_win.py` woła je przez `ctypes` – nie trzeba ani C#, ani C++. To ważne,
 bo daje dostęp do **śledzenia szkieletu**, którego libfreenect nie oferuje
 w ogóle: 20 stawów, z których liczymy postawę (stoi/siedzi), gesty
 (ręka podniesiona, ręce rozłożone), pozycję w kadrze i odległość.
@@ -231,7 +231,7 @@ python kinect_watcher.py
 
 Sterownik wybiera się sam: na Windowsie SDK 1.8, na Linuksie libfreenect.
 Wymusisz go zmienną `KINECT_BACKEND` (`win` albo `freenect`). Na Windowsie
-skrypt dorzuca zdarzenia o sylwetce — wyłączysz je przez `KINECT_SKELETON=0`.
+skrypt dorzuca zdarzenia o sylwetce – wyłączysz je przez `KINECT_SKELETON=0`.
 
 Wysyła do Cosmosa: obecność w zasięgu, początek i koniec ruchu, dystans
 najbliższego obiektu oraz opis postawy („stoi, na wprost, 2,3 m, ręka prawa
@@ -240,13 +240,13 @@ podniesiona").
 ### Podgląd z Kinecta w interfejsie Cosmosa
 
 Panel „Kamera na żywo" ma listę wyboru źródła: **Kamera przeglądarki**,
-**Kinect — obraz**, **Kinect — głębia**. Dwie ostatnie pozycje biorą obraz
+**Kinect – obraz**, **Kinect – głębia**. Dwie ostatnie pozycje biorą obraz
 przez `GET /kinect/stream`, bo przeglądarka Kinecta nie widzi (nie jest kamerą UVC)
 i `getUserMedia` nigdy go nie zwróci.
 
 Strumień idzie w **MJPEG**: jedno połączenie HTTP, którym płyną kolejne klatki.
 Wcześniejsza wersja pobierała każdą klatkę osobnym zapytaniem i to właśnie stąd
-brało się klatkowanie — na każdą klatkę przypadał pełny cykl żądanie–odpowiedź.
+brało się klatkowanie – na każdą klatkę przypadał pełny cykl żądanie–odpowiedź.
 Domyślnie 15 kl./s przy jakości 70; oba parametry można zmienić w adresie.
 Gdy strumień nie zadziała (stary serwer pośredniczący, proxy bez obsługi
 `multipart/x-mixed-replace`), podgląd sam wraca do pojedynczych klatek
@@ -256,7 +256,7 @@ Przycisk **powiększenia** w nagłówku panelu przenosi podgląd na środek ekra
 i rozciąga go do rozmiaru, jaki mieści się w oknie. Wybór jest zapamiętywany.
 
 Głębia jest kolorowana: zasięg 0,5–4 m rozłożony na paletę, a miejsca bez pomiaru
-(cień podczerwieni, szkło, poza zasięgiem) zostają **czarne** — żeby nie udawały
+(cień podczerwieni, szkło, poza zasięgiem) zostają **czarne** – żeby nie udawały
 odczytu, którego nie ma.
 
 Detekcja YOLO działa na obu źródłach tak samo, więc Cosmos rozpoznaje obiekty
@@ -265,7 +265,7 @@ z czujnikiem; przy serwerze na VPS potrzebny jest `SENSES_URL` (patrz wyżej).
 
 ### Kinect jako kamera dla YOLO
 
-Kinect **nie jest kamerą UVC** — OpenCV nigdy go nie zobaczy i `CAMERA_INDEX`
+Kinect **nie jest kamerą UVC** – OpenCV nigdy go nie zobaczy i `CAMERA_INDEX`
 tu nie pomoże. Obraz RGB bierzemy z SDK:
 
 ```bat
@@ -283,8 +283,8 @@ nie sięgnie pod zły adres:
 
 | Funkcja | Kto alokuje strukturę | Typ argumentu |
 |---|---|---|
-| `NuiImageStreamGetNextFrame` | **SDK** — zwraca adres swojej klatki | `NUI_IMAGE_FRAME **` |
-| `NuiSkeletonGetNextFrame` | **my** — SDK tylko wypełnia | `NUI_SKELETON_FRAME *` |
+| `NuiImageStreamGetNextFrame` | **SDK** – zwraca adres swojej klatki | `NUI_IMAGE_FRAME **` |
+| `NuiSkeletonGetNextFrame` | **my** – SDK tylko wypełnia | `NUI_SKELETON_FRAME *` |
 
 Podanie pojedynczego wskaźnika tam, gdzie API chce podwójnego, kończy się tym,
 że sterownik zapisuje 8 bajtów w nasz bufor, reszta zostaje wyzerowana, a przy
@@ -292,14 +292,14 @@ Podanie pojedynczego wskaźnika tam, gdzie API chce podwójnego, kończy się ty
 
 ### Zanim zadzwonisz po pomoc
 
-- **Kinect 360 musi mieć własny zasilacz.** Sam kabel USB nie wystarcza — bez
+- **Kinect 360 musi mieć własny zasilacz.** Sam kabel USB nie wystarcza – bez
   zasilania SDK zwraca `E_NUI_NOTPOWERED`, a dioda nie zapala się na zielono.
 - **Python musi mieć tę samą bitowość co SDK** (64-bit do 64-bit), inaczej
   `Kinect10.dll` się nie załaduje.
-- **Kinect Studio to nie tester czujnika** — służy do nagrywania strumieni z już
+- **Kinect Studio to nie tester czujnika** – służy do nagrywania strumieni z już
   działającej aplikacji i sam z siebie zawsze pokaże „Disconnected". Do sprawdzenia
   sprzętu użyj `python kinect_win.py info` albo Kinect Explorer z Developer Toolkit.
-- **Nie mieszaj sterowników.** SDK 1.8 i libfreenect wykluczają się nawzajem —
+- **Nie mieszaj sterowników.** SDK 1.8 i libfreenect wykluczają się nawzajem –
   instalacja jednego odbiera dostęp drugiemu. Na Windowsie zostań przy SDK.
 
 > ✅ **Sprawdzone na sprzęcie** (Kinect 360 + SDK 1.8 + Windows 11, Python 64-bit):
@@ -311,7 +311,7 @@ Podanie pojedynczego wskaźnika tam, gdzie API chce podwójnego, kończy się ty
 > `python kinect_win.py selftest` → `info` → `dump`. Ostatnie polecenie wypisuje
 > surowy bufor klatki i samo wskazuje wskaźnik na teksturę.
 
-## Fotogrametria — Cosmos PhotoScan
+## Fotogrametria – Cosmos PhotoScan
 
 ```bash
 python photoscan.py C:\zdjecia\zamek           # analiza jakości + model 3D
@@ -320,25 +320,25 @@ python photoscan.py C:\zdjecia\zamek --dense   # + gęsta chmura punktów (.ply)
 
 Cosmos ocenia zestaw zdjęć (liczba, ostrość, ekspozycja) i radzi, co dokręcić,
 a jeśli w PATH jest **COLMAP** (https://colmap.github.io, wersja CUDA dla RTX),
-buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie —
+buduje model automatycznie. Wynik zgłaszany jest do Cosmosa jako zdarzenie –
 możesz zapytać w czacie „jak poszedł skan?".
 
 
-## Słowo aktywujące — nasłuch w tle
+## Słowo aktywujące – nasłuch w tle
 
 `wake_listener.py` nasłuchuje mikrofonu **nawet przy zamkniętej przeglądarce** i po
 wykryciu słowa aktywującego wysyła zdarzenie do Cosmosa.
 
-> ⚠️ **Moduł niedokończony — przeczytaj, zanim go uruchomisz.** Dziś zdarzenie `wake`
+> ⚠️ **Moduł niedokończony – przeczytaj, zanim go uruchomisz.** Dziś zdarzenie `wake`
 > trafia wyłącznie do kontekstu percepcji (model dowie się przy następnej rozmowie,
 > że o danej godzinie padło słowo aktywujące). **Nie otwiera trybu głosowego, nie
-> zaczyna rozmowy i nic nie mówi** — brakuje kanału z serwera do przeglądarki, który
+> zaczyna rozmowy i nic nie mówi** – brakuje kanału z serwera do przeglądarki, który
 > by to uruchomił. Do rozmowy głosowej używaj trybu w przeglądarce (ikona fal
 > dźwiękowych); działa po polsku, tyle że wymaga otwartej karty.
 >
 > Drugie ograniczenie: **openWakeWord nie ma polskiego „Hej Kosmos"**. Gotowe modele
 > są angielskie (domyślnie `hey_jarvis`), więc budzisz się słowem po angielsku.
-> Polski model trzeba wytrenować samodzielnie — openWakeWord daje do tego notatnik
+> Polski model trzeba wytrenować samodzielnie – openWakeWord daje do tego notatnik
 > w Google Colab.
 
 ```bash
@@ -347,12 +347,12 @@ python -c "import openwakeword.utils; openwakeword.utils.download_models()"   # 
 python wake_listener.py
 ```
 
-Pobranie modeli jest osobnym krokiem — bez niego pierwsze uruchomienie kończy się
+Pobranie modeli jest osobnym krokiem – bez niego pierwsze uruchomienie kończy się
 błędem. Mikrofon widziany przez Pythona sprawdzisz przez
-`python -c "import sounddevice; print(sounddevice.query_devices())"` — szukasz pozycji
+`python -c "import sounddevice; print(sounddevice.query_devices())"` – szukasz pozycji
 z niezerowym wejściem. Model zmienisz zmienną `WAKE_MODEL`.
 
-## Analiza terenu — Cosmos Terrain
+## Analiza terenu – Cosmos Terrain
 
 `terrain.py` zamienia model 3D z PhotoScana w pomiary (tylko numpy, zapis PNG własny):
 
@@ -370,7 +370,7 @@ python terrain.py validate model.ply pomiary.csv --lat .. --lon ..
 Wyniki mają sens **tylko dla modelu w metrach i zorientowanego na północ** (ENU).
 Dla chmur bez georeferencji użyj `--scale`, `--north`, `--up`.
 
-## Słuch przestrzenny — macierz mikrofonów Kinecta
+## Słuch przestrzenny – macierz mikrofonów Kinecta
 
 **To jedyne zastosowanie Kinecta 360 na Windowsie, które działa bez budowania
 sterowników.** Kinect for Windows SDK instaluje sterownik audio, dzięki któremu
@@ -378,9 +378,9 @@ macierz czterech mikrofonów widoczna jest jako **zwykłe 4-kanałowe wejście a
 Nie potrzeba do tego libfreenect ani niczego kompilować.
 
 `soundloc.py` liczy z niej kierunek źródła dźwięku (GCC-PHAT + TDOA, z ograniczeniem
-pasma i nadpróbkowaniem korelacji — bez tego przy kilkucentymetrowych odstępach
+pasma i nadpróbkowaniem korelacji – bez tego przy kilkucentymetrowych odstępach
 mikrofonów wynik jest bezużyteczny). Cosmos dostaje zdarzenia typu
-„dźwięk po lewej (−35°)" — działa **w ciemności i poza kadrem kamery**.
+„dźwięk po lewej (−35°)" – działa **w ciemności i poza kadrem kamery**.
 
 ```bash
 pip install sounddevice
@@ -390,7 +390,7 @@ python soundloc.py --listen --device "Kinect"
 python soundloc.py --wav nagranie.wav # analiza gotowego nagrania 4-kanałowego
 ```
 
-`--list-devices` oznacza wejścia o czterech i więcej kanałach — Kinect pokaże się jako
+`--list-devices` oznacza wejścia o czterech i więcej kanałach – Kinect pokaże się jako
 „Microphone Array (Kinect USB Audio)" albo podobnie. Do `--device` podajesz numer
 z listy albo fragment nazwy. Bez tej opcji moduł użyje domyślnego mikrofonu systemu,
 który zwykle ma jeden kanał i kierunku nie policzy.
@@ -402,7 +402,7 @@ który zwykle ma jeden kanał i kierunku nie policzy.
 | `--min-conf` | minimalna pewność wyniku, żeby zgłosić zdarzenie |
 | `--window` | długość okna analizy w sekundach, domyślnie `0.5` |
 
-## Planer lotu — Cosmos FlightPlan
+## Planer lotu – Cosmos FlightPlan
 
 `flightplan.py` liczy parametry przelotu z optyki (bez zależności):
 
@@ -412,7 +412,7 @@ python flightplan.py target --gsd 2.0        # jaka wysokość dla 2 cm/px
 python flightplan.py matrix                  # macierz eksperymentu
 ```
 
-## Granica widzenia — Cosmos LowLight
+## Granica widzenia – Cosmos LowLight
 
 `lowlight.py` mierzy, przy jakim świetle detekcja przestaje działać:
 
@@ -421,7 +421,7 @@ python lowlight.py synth -o test             # seria testowa z szumem fotonowym
 python lowlight.py measure folder --csv lux.csv
 ```
 
-## Głowica pan/tilt — Ronin-S i inne
+## Głowica pan/tilt – Ronin-S i inne
 
 `pantilt.py` generuje wzorce ruchu i wysyła je do sterownika:
 
@@ -431,12 +431,12 @@ python pantilt.py gigapano --span-h 180 --span-v 60 --fov-h 30 --fov-v 20
 python pantilt.py scan --tilts -15,0,15      # skan wnętrza do fotogrametrii
 ```
 
-Backendy: `sim` (podgląd, domyślny — nic nie instalujesz), `serial` (własny sterownik,
-np. Arduino/ESP — wymaga `pip install pyserial`), `ronin` — **wymaga oficjalnego SDK DJI**,
+Backendy: `sim` (podgląd, domyślny – nic nie instalujesz), `serial` (własny sterownik,
+np. Arduino/ESP – wymaga `pip install pyserial`), `ronin` – **wymaga oficjalnego SDK DJI**,
 którego nie wolno dołączyć do repozytorium; wzorce ruchu i punkt wejścia (`Head.goto`)
 są gotowe do podpięcia.
 
-## Sterowanie aparatem — Cosmos Tether
+## Sterowanie aparatem – Cosmos Tether
 
 `tether.py` steruje Canonem R6 II (i innymi) przez gPhoto2:
 
@@ -456,25 +456,25 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 
 | Endpoint | Wejście | Wyjście |
 |---|---|---|
-| `GET /health` | — | które zmysły są aktywne |
+| `GET /health` | – | które zmysły są aktywne |
 | `POST /stt` | audio (webm/wav/ogg/mp3) | `{text, language}` |
 | `POST /tts` | `{text}` | audio WAV |
 | `POST /detect` | `{image: dataURL}` | `{objects[], summary}` |
 | `POST /pose` | `{image: dataURL}` | `{present, summary}` |
-| `POST /extract` | `{name: "plik.pdf", data: base64}` | `{text}` — PDF/DOCX/XLSX/PPTX do bazy wiedzy |
-| `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` — Real-ESRGAN |
+| `POST /extract` | `{name: "plik.pdf", data: base64}` | `{text}` – PDF/DOCX/XLSX/PPTX do bazy wiedzy |
+| `POST /upscale` | `{image: dataURL, scale: 4}` | `{image: dataURL}` – Real-ESRGAN |
 | `POST /embed` | `{texts: [...]}` | `{vectors: [[...]]}` |
-| `GET /kinect/status` | — | czy czujnik jest dostępny |
+| `GET /kinect/status` | – | czy czujnik jest dostępny |
 | `GET /kinect/frame` | `?stream=color\|depth` | pojedyncza klatka JPEG |
-| `GET /kinect/stream` | `?stream=color\|depth&fps=15&quality=70` | strumień MJPEG — tego używa podgląd w Cosmosie |
+| `GET /kinect/stream` | `?stream=color\|depth&fps=15&quality=70` | strumień MJPEG – tego używa podgląd w Cosmosie |
 
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają
-czytelnym błędem, gdy brakuje pakietu danego zmysłu — usługa startuje zawsze.
+czytelnym błędem, gdy brakuje pakietu danego zmysłu – usługa startuje zawsze.
 
 ## Strojenie usługi (zmienne środowiskowe)
 
-Wszystkie są opcjonalne — bez nich działają wartości domyślne. Ustawiasz je
+Wszystkie są opcjonalne – bez nich działają wartości domyślne. Ustawiasz je
 **przed** startem `service.py`, w tym samym oknie (`set NAZWA=wartość`) albo na
 stałe w zmiennych środowiskowych Windowsa.
 
@@ -486,8 +486,8 @@ stałe w zmiennych środowiskowych Windowsa.
 | `WHISPER_LANG` | (wykrywa sam) | `pl` przyspiesza i poprawia rozpoznawanie, gdy zawsze mówisz po polsku |
 | `YOLO_MODEL` | `yolo11n.pt` | model rozpoznawania obiektów; `yolo11s.pt`/`yolo11m.pt` są dokładniejsze i wolniejsze |
 | `REALESRGAN_MODEL` | wbudowany | ścieżka do własnego modelu powiększania |
-| `PIPER_VOICE` | — | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
-| `COSMOS_RECORD_OUT` | — | folder na nagrania z `tether.py` (sterowanie aparatem) |
+| `PIPER_VOICE` | – | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
+| `COSMOS_RECORD_OUT` | – | folder na nagrania z `tether.py` (sterowanie aparatem) |
 
 ## Wydajność na RTX 3080
 

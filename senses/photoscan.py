@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Cosmos PhotoScan — fotogrametria z copilotem jakości.
+Cosmos PhotoScan – fotogrametria z copilotem jakości.
 
 Etap 1 (zawsze): analizuje zestaw zdjęć (z Canona R6 II / Mavica 3) i mówi
-po polsku, czy nadaje się na dobry model 3D — liczba ujęć, ostrość,
-ekspozycja — oraz co poprawić.
+po polsku, czy nadaje się na dobry model 3D – liczba ujęć, ostrość,
+ekspozycja – oraz co poprawić.
 
 Etap 2 (jeśli zainstalowany COLMAP): buduje model 3D automatycznie
 (rzadka chmura punktów; z flagą --dense także gęsta chmura .ply).
@@ -18,7 +18,7 @@ COLMAP: pobierz z https://colmap.github.io (wersja CUDA dla RTX 3080)
 i dodaj do PATH albo wskaż flagą --colmap "C:\\COLMAP\\colmap.bat".
 
 Wynik trafia też do Cosmosa jako zdarzenie (COSMOS_URL, domyślnie
-http://localhost:3000) — możesz potem zapytać w czacie o wynik skanu.
+http://localhost:3000) – możesz potem zapytać w czacie o wynik skanu.
 """
 
 import argparse
@@ -51,7 +51,7 @@ def send_event(summary: str) -> None:
     if not HAS_REQUESTS:
         return
     url = os.environ.get("COSMOS_URL", "http://localhost:3000").rstrip("/")
-    # Nagłówek logowania — wymagany, gdy serwer ma COSMOS_API_TOKEN (czyli na VPS).
+    # Nagłówek logowania – wymagany, gdy serwer ma COSMOS_API_TOKEN (czyli na VPS).
     token = os.environ.get("COSMOS_TOKEN", "")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
@@ -63,7 +63,7 @@ def send_event(summary: str) -> None:
 
 def analyze(folder: Path):
     images = sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_EXTS)
-    print(f"\n✦ Cosmos PhotoScan — analiza: {folder}")
+    print(f"\n✦ Cosmos PhotoScan – analiza: {folder}")
     print(f"  Zdjęć: {len(images)}")
 
     if not images:
@@ -72,11 +72,11 @@ def analyze(folder: Path):
 
     advice = []
     if len(images) < 30:
-        advice.append(f"Masz {len(images)} zdjęć — do dobrego modelu potrzeba zwykle 50–150. "
+        advice.append(f"Masz {len(images)} zdjęć – do dobrego modelu potrzeba zwykle 50–150. "
                       "Rób zdjęcia co 10–15° wokół obiektu, z 60–80% pokryciem między kadrami.")
     elif len(images) < 60:
         advice.append("Dobra liczba na prosty obiekt. Przy budynkach celuj w 100+ (dwa okrążenia: "
-                      "z poziomu i z góry — tu świetnie sprawdzi się Mavic).")
+                      "z poziomu i z góry – tu świetnie sprawdzi się Mavic).")
 
     blurry, dark, bright = [], [], []
     if HAS_CV2:
@@ -97,7 +97,7 @@ def analyze(folder: Path):
 
         if blurry:
             advice.append(f"Nieostre ({len(blurry)}): " + ", ".join(blurry[:8]) +
-                          (" …" if len(blurry) > 8 else "") + " — powtórz te ujęcia (krótszy czas migawki).")
+                          (" …" if len(blurry) > 8 else "") + " – powtórz te ujęcia (krótszy czas migawki).")
         if dark:
             advice.append(f"Zbyt ciemne ({len(dark)}): " + ", ".join(dark[:5]) +
                           (" …" if len(dark) > 5 else ""))
@@ -110,7 +110,7 @@ def analyze(folder: Path):
         advice.append("(Zainstaluj opencv-python, aby sprawdzić ostrość i ekspozycję: pip install opencv-python)")
 
     if not advice:
-        advice.append("Zestaw wygląda bardzo dobrze — można budować model.")
+        advice.append("Zestaw wygląda bardzo dobrze – można budować model.")
 
     print("\n  Copilot:")
     for a in advice:
@@ -174,14 +174,14 @@ def main() -> None:
 
     colmap = find_colmap(args.colmap)
     if not colmap:
-        print("\n  COLMAP nie znaleziony — wykonano tylko analizę jakości.")
+        print("\n  COLMAP nie znaleziony – wykonano tylko analizę jakości.")
         print("  Pobierz: https://colmap.github.io (wersja CUDA), dodaj do PATH i uruchom ponownie.")
         send_event(f"analiza zestawu zdjęć ({folder.name}): {len(images)} ujęć, "
                    f"{'nadaje się' if usable else 'wymaga poprawek'} do rekonstrukcji 3D")
         return
 
     if not usable:
-        print("\n  ⚠ Zestaw słaby — rekonstrukcja może się nie powieść. Kontynuuję mimo to…")
+        print("\n  ⚠ Zestaw słaby – rekonstrukcja może się nie powieść. Kontynuuję mimo to…")
 
     out = Path(args.output).resolve() if args.output else folder / "cosmos-scan"
     try:

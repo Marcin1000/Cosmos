@@ -7,7 +7,7 @@
    1. Funkcja w Node: odmiana (1 stopień, 2 stopnie, 5 stopni, 20,5 stopnia),
       zakresy, minus, procenty, prędkość; zwykły tekst bez zmian.
    2. W przeglądarce: tekst, który naprawdę idzie do lektora (stripForSpeech),
-      ma już słowa zamiast znaków — po polsku i po angielsku.
+      ma już słowa zamiast znaków – po polsku i po angielsku.
 */
 const path = require('node:path');
 const os = require('node:os');

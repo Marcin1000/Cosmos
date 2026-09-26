@@ -1,4 +1,4 @@
-// /api/pose istniał od dawna, ale nikt go nie wołał — MediaPipe liczył
+// /api/pose istniał od dawna, ale nikt go nie wołał – MediaPipe liczył
 // postawę w próżnię. Teraz pytanie o sylwetkę jest doklejone do pętli
 // detekcji (gotowa klatka, rzadziej niż o obiekty) i trafia do kontekstu.
 const { srodowisko, przegladarka } = require('../pomoc');
@@ -26,7 +26,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   const ileDetect = zadania.filter((u) => u.startsWith('detect')).length;
   console.log(`1. żądań detect: ${ileDetect}, pose: ${ilePose}`);
   if (!ilePose) fail.push('nigdy nie zapytał o sylwetkę');
-  if (ilePose >= ileDetect) fail.push('pyta o sylwetkę tak często jak o obiekty — miało być rzadziej');
+  if (ilePose >= ileDetect) fail.push('pyta o sylwetkę tak często jak o obiekty – miało być rzadziej');
 
   // 2. wynik widać w panelu
   const status = await pg.textContent('#live-status');
@@ -37,7 +37,7 @@ const { srodowisko, przegladarka } = require('../pomoc');
   const zdarzenia = await (await fetch(`${env.adres}/api/events`)).json();
   const sylwetki = (zdarzenia.events || []).filter((e) => e.type === 'sylwetka');
   console.log(`3. zdarzeń typu „sylwetka" u serwera: ${sylwetki.length}`
-    + (sylwetki.length ? ` — „${sylwetki[0].summary}"` : ''));
+    + (sylwetki.length ? ` – „${sylwetki[0].summary}"` : ''));
   if (!sylwetki.length) fail.push('postawa nie trafiła do kontekstu percepcji');
 
   // 4. ta sama postawa nie zasypuje dziennika w kółko

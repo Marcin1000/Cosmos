@@ -8,8 +8,8 @@
  * „Cosmos nie pokazuje zdjęć", to jest pytanie o TO, i odpowiedzi nie da się
  * udzielić z żadnego innego miejsca niż ten serwer.
  *
- *   node scripts/grafiki.js            — zapytanie domyślne
- *   node scripts/grafiki.js Kraków     — własne zapytanie
+ *   node scripts/grafiki.js            – zapytanie domyślne
+ *   node scripts/grafiki.js Kraków     – własne zapytanie
  */
 const { szukajGrafik } = require('../lib/grafiki.js');
 
@@ -22,7 +22,7 @@ const zapytanie = process.argv.slice(2).join(' ').trim() || 'Kraków Wawel';
   const ms = Date.now() - start;
 
   if (!process.env.SEARXNG_URL) {
-    console.log('· SEARXNG_URL nieustawiony — własna metawyszukiwarka pominięta.\n');
+    console.log('· SEARXNG_URL nieustawiony – własna metawyszukiwarka pominięta.\n');
   }
   console.log('Źródła:');
   for (const z of w.zrodla) {
@@ -33,7 +33,7 @@ const zapytanie = process.argv.slice(2).join(' ').trim() || 'Kraków Wawel';
   console.log(`\nPo scaleniu i odsianiu duplikatów: ${w.results.length} obrazów (${ms} ms)`);
   for (const r of w.results.slice(0, 5)) {
     console.log(`  · [${r.zrodlo}] ${r.title.slice(0, 60) || '(bez tytułu)'}`
-      + (r.licencja ? ` — ${r.licencja}` : ''));
+      + (r.licencja ? ` – ${r.licencja}` : ''));
   }
 
   const dziala = w.zrodla.filter((z) => z.ile > 0).length;
@@ -44,7 +44,7 @@ const zapytanie = process.argv.slice(2).join(' ').trim() || 'Kraków Wawel';
   } else if (dziala === w.zrodla.length) {
     console.log('✓ Wszystkie źródła działają.');
   } else {
-    console.log(`✓ Działa ${dziala} z ${w.zrodla.length} źródeł — to wystarczy, żeby zdjęcia się pokazywały.`);
+    console.log(`✓ Działa ${dziala} z ${w.zrodla.length} źródeł – to wystarczy, żeby zdjęcia się pokazywały.`);
     console.log('  Zapas jest właśnie po to. Nie trzeba nic robić.');
   }
   process.exit(w.results.length ? 0 : 1);

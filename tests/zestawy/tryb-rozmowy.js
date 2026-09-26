@@ -1,4 +1,4 @@
-/* Tryb głosowy bez piszczenia mikrofonu — sprawdzone w przeglądarce.
+/* Tryb głosowy bez piszczenia mikrofonu – sprawdzone w przeglądarce.
  *
  * Marcin: „musimy wykluczyć ten dźwięk włączania i wyłączania mikrofonu".
  * Piszczy Android przy każdym starcie i końcu Web Speech API. Gwarancja tego
@@ -12,7 +12,7 @@
  *   4. dotknięcie kuli → znowu „słucham", dalej zero SpeechRecognition,
  *   5. telefon z Androidem BEZ rozpoznawania na serwerze → od razu kula pod
  *      palcem, bez kilkunastu piśnięć, zanim Cosmos sam to odkryje,
- *   6. otwarcie trybu, ZANIM przyjdzie /api/config — dalej zero
+ *   6. otwarcie trybu, ZANIM przyjdzie /api/config – dalej zero
  *      SpeechRecognition (dawniej: 4, a po konfiguracji dwa nasłuchy naraz),
  *   7. szybkie klikanie kuli i zamknięcie trybu → mikrofon naprawdę
  *      zamknięty (dawniej zostawała żywa ścieżka audio).
@@ -28,7 +28,7 @@ const ok = (warunek, opis) => {
   if (!warunek) problemy.push(opis);
 };
 
-/* Atrapa OpenAI: lista modeli i rozpoznawanie, które zawsze oddaje pusty tekst —
+/* Atrapa OpenAI: lista modeli i rozpoznawanie, które zawsze oddaje pusty tekst –
    atrapa mikrofonu Chromium pika, a my nie chcemy, żeby piknięcie stało się
    pytaniem i zabrało tryb w „myślę". */
 const atrapa = http.createServer((req, res) => {
@@ -43,7 +43,7 @@ const atrapa = http.createServer((req, res) => {
 
 const LICZ_SR = () => {
   window.__srNowe = 0;
-  // Żywe ścieżki mikrofonu — „zamknięty" ma znaczyć zamknięty, nie ukryty.
+  // Żywe ścieżki mikrofonu – „zamknięty" ma znaczyć zamknięty, nie ukryty.
   window.__sciezki = [];
   const gum = navigator.mediaDevices && navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
   if (gum) {
@@ -84,7 +84,7 @@ const LICZ_SR = () => {
     const p = await ctx.newPage();
     await p.addInitScript(LICZ_SR);
     await p.goto(`http://127.0.0.1:${PORT_Z}/app`, { waitUntil: 'load' });
-    // `serverConfig` to `let` w skrypcie, nie własność `window` — pytamy wprost.
+    // `serverConfig` to `let` w skrypcie, nie własność `window` – pytamy wprost.
     await p.waitForFunction(() => Boolean(typeof serverConfig !== 'undefined' && serverConfig.glos), null, { timeout: 8000 }).catch(() => {});
     ok(await p.evaluate(() => Boolean(serverConfig.glos && serverConfig.glos.sttChmura)), '/api/config zgłasza rozpoznawanie w chmurze');
     await p.click('#voice-btn');

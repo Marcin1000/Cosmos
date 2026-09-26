@@ -1,26 +1,26 @@
-/* Atrapa źródeł grafik — wszystkich trzech.
+/* Atrapa źródeł grafik – wszystkich trzech.
 
    DuckDuckGo działa dwustopniowo, tak jak naprawdę: najpierw strona HTML
    z żetonem `vqd`, dopiero z nim wolno odpytać `i.js`. Atrapa pilnuje tej
-   kolejności — bez żetonu oddaje pustkę, tak jak oryginał.
+   kolejności – bez żetonu oddaje pustkę, tak jak oryginał.
 
    Commons i Openverse dostały tu kształt odpowiedzi zgodny z ich
    dokumentacją. UWAGA na uczciwość: to sprawdza, czy Cosmos POPRAWNIE CZYTA
-   taki kształt — nie dowodzi, że prawdziwe usługi dokładnie taki oddają.
+   taki kształt – nie dowodzi, że prawdziwe usługi dokładnie taki oddają.
    Tego dowodzi dopiero `node scripts/grafiki.js` puszczone na serwerze
    z prawdziwą siecią.
 
    Atrapa umie też ODMÓWIĆ: `?awaria=commons,ddg` w adresie ustawia, które
-   źródła mają paść. Bez tego nie da się sprawdzić rzeczy najważniejszej —
+   źródła mają paść. Bez tego nie da się sprawdzić rzeczy najważniejszej –
    że kiedy jedno źródło pada, zdjęcia i tak się pokazują. */
 const http = require('http');
 
 const ZETON = '4-123456789';
-// Które źródła mają udawać awarię — ustawiane przez /awaria?zrodla=...
+// Które źródła mają udawać awarię – ustawiane przez /awaria?zrodla=...
 let padnij = new Set();
 
 const OBRAZY = (q) => Array.from({ length: 8 }, (_, i) => ({
-  title: `${q} — zdjęcie ${i + 1}`,
+  title: `${q} – zdjęcie ${i + 1}`,
   thumbnail: `http://127.0.0.1:7117/iu/?u=mini${i}`,
   image: `https://przyklad.pl/${encodeURIComponent(q)}-${i}.jpg`,
   url: `https://przyklad.pl/strona/${i}`,
@@ -50,7 +50,7 @@ const OPENVERSE = (q, ile) => ({
   result_count: ile,
   results: Array.from({ length: ile }, (_, i) => ({
     id: `ov-${i}`,
-    title: `${q} — Openverse ${i + 1}`,
+    title: `${q} – Openverse ${i + 1}`,
     thumbnail: `http://127.0.0.1:7117/iu/?u=ov${i}`,
     url: `https://openverse.example/${encodeURIComponent(q)}-${i}.jpg`,
     foreign_landing_url: `https://openverse.example/strona/${i}`,
@@ -67,7 +67,7 @@ http.createServer((req, res) => {
     res.end(JSON.stringify(obiekt));
   };
 
-  // Sterowanie awariami — bez tego nie sprawdzimy zapasowych źródeł.
+  // Sterowanie awariami – bez tego nie sprawdzimy zapasowych źródeł.
   if (u.pathname === '/awaria') {
     padnij = new Set((u.searchParams.get('zrodla') || '').split(',').filter(Boolean));
     return json(200, { padaja: [...padnij] });
@@ -86,21 +86,21 @@ http.createServer((req, res) => {
     return json(200, t ? [{ lat: String(t[0]), lon: String(t[1]), display_name: t[2] }] : []);
   }
 
-  /* SearXNG — kształt odpowiedzi zgodny z jego wyjściem `format=json`.
+  /* SearXNG – kształt odpowiedzi zgodny z jego wyjściem `format=json`.
      Obsługuje obie kategorie: grafiki i strony. */
   if (u.pathname === '/searxng/search') {
     if (padnij.has('searxng')) return json(403, { error: 'atrapa: searxng wyłączony' });
     const grafiki = (u.searchParams.get('categories') || '').includes('images');
     return json(200, {
       results: Array.from({ length: 4 }, (_, i) => (grafiki ? {
-        title: `${q} — SearXNG ${i + 1}`,
+        title: `${q} – SearXNG ${i + 1}`,
         thumbnail_src: `http://127.0.0.1:7117/iu/?u=sx${i}`,
         img_src: `https://searx.example/${encodeURIComponent(q)}-${i}.jpg`,
         url: `https://searx.example/strona/${i}`,
         resolution: '1600x1200',
         source: 'example.com',
       } : {
-        title: `${q} — wynik ${i + 1}`,
+        title: `${q} – wynik ${i + 1}`,
         url: `https://przyklad.pl/${i}`,
         content: `Zajawka wyniku ${i + 1} dla zapytania ${q}.`,
       })),
@@ -108,11 +108,11 @@ http.createServer((req, res) => {
   }
 
   /* Atrapa NOAA SWPC. Dwa strumienie o RÓŻNYM kształcie i to jest sedno:
-     bieżące Kp to lista obiektów, a prognoza — lista TABLIC z wierszem
+     bieżące Kp to lista obiektów, a prognoza – lista TABLIC z wierszem
      nagłówka. Pomylenie ich to najłatwiejszy błąd przy czytaniu tego API. */
   /* Też potwierdzone na żywym API: `planetary_k_index_1m.json` to tablica
      obiektów o kluczach `time_tag, kp_index, estimated_kp, kp`. Pole `kp`
-     jest NAPISEM z literą („1P", „2M"), więc trzeba czytać `kp_index` —
+     jest NAPISEM z literą („1P", „2M"), więc trzeba czytać `kp_index` –
      i dlatego atrapa je tak oddaje. Gdyby ktoś kiedyś przestawił kolejność
      czytania na `kp`, wyjdzie z tego NaN i ten zestaw to zauważy. */
   if (u.pathname === '/swpc/kp') {
@@ -125,10 +125,10 @@ http.createServer((req, res) => {
   /* KSZTAŁT POTWIERDZONY NA ŻYWYM API (serwer Marcina, 2026-08-09):
      `noaa-planetary-k-index-forecast.json` oddaje TABLICĘ OBIEKTÓW o kluczach
      `time_tag, kp, observed, noaa_scale`, ze znacznikiem czasu w postaci ISO
-     z „T" — a nie tablicę tablic z wierszem nagłówka, jak zakładała pierwsza
+     z „T" – a nie tablicę tablic z wierszem nagłówka, jak zakładała pierwsza
      wersja tej atrapy. To nie jest kosmetyka: czytnik brał wtedy `w[0]`
      i `w[1]` z obiektu, dostawał `undefined`, i cała prognoza wychodziła
-     pusta. Atrapa i kod zgadzały się ze sobą, więc testy przechodziły —
+     pusta. Atrapa i kod zgadzały się ze sobą, więc testy przechodziły –
      i dokładnie to ukrywało usterkę aż do pierwszego uruchomienia na żywo. */
   if (u.pathname === '/swpc/prognoza') {
     if (padnij.has('swpc')) return json(503, { error: 'atrapa: SWPC wyłączony' });
@@ -140,14 +140,14 @@ http.createServer((req, res) => {
       { time_tag: zaGodzin(9), kp: 4.00, observed: 'predicted', noaa_scale: null },
     ]);
   }
-  /* Stary układ zostaje pod osobnym adresem — `zorza-ksztalty` sprawdza, że
+  /* Stary układ zostaje pod osobnym adresem – `zorza-ksztalty` sprawdza, że
      czytnik radzi sobie z obydwoma, bo NOAA już raz nas tym zaskoczyła. */
   if (u.pathname === '/swpc/prognoza-tablice') {
     const zaGodzin = (h) => new Date(Date.now() + h * 3600 * 1000)
       .toISOString().replace('T', ' ').slice(0, 19);
     return json(200, [
       ['time_tag', 'kp', 'observed', 'noaa_scale'],
-      [zaGodzin(-24), '3.00', 'observed', null],   // przeszłość — ma wypaść
+      [zaGodzin(-24), '3.00', 'observed', null],   // przeszłość – ma wypaść
       [zaGodzin(3), '5.67', 'predicted', 'G1'],
       [zaGodzin(6), '7.33', 'predicted', 'G3'],
       [zaGodzin(9), '4.00', 'predicted', null],
@@ -164,21 +164,21 @@ http.createServer((req, res) => {
     return json(200, OPENVERSE(q, 4));
   }
 
-  // krok 1 — strona z żetonem
+  // krok 1 – strona z żetonem
   if (u.pathname === '/' && u.searchParams.get('ia') === 'images') {
     if (padnij.has('ddg')) { res.writeHead(403); return res.end('blocked'); }
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(`<html><body><script>vqd="${ZETON}";</script></body></html>`);
   }
 
-  // krok 2 — właściwe wyniki, ale tylko z poprawnym żetonem
+  // krok 2 – właściwe wyniki, ale tylko z poprawnym żetonem
   if (u.pathname === '/i.js') {
     if (padnij.has('ddg')) return json(403, { results: [] });
     if (u.searchParams.get('vqd') !== ZETON) return json(403, { results: [] });
     return json(200, { results: OBRAZY(q) });
   }
 
-  // miniatura — jednopikselowy GIF, żeby proxy miało co przepuścić
+  // miniatura – jednopikselowy GIF, żeby proxy miało co przepuścić
   if (u.pathname === '/iu/') {
     const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': gif.length });

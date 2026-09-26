@@ -1,15 +1,15 @@
 /* Atrapa aparatu Canon z CCAPI.
  *
  * Odwzorowuje to, co jest w tej rozmowie istotne, i NIE UDAJE, że wie więcej:
- *   • `/ccapi` oddaje SPIS obsługiwanych ścieżek — na tym stoi cała nasza
+ *   • `/ccapi` oddaje SPIS obsługiwanych ścieżek – na tym stoi cała nasza
  *     odporność na różnice wersji, więc atrapa musi to mieć,
  *   • nastawy mają `value` ORAZ `ability` (listę dopuszczalnych wartości),
  *   • wartość spoza listy jest odrzucana z komunikatem, tak jak w aparacie.
  *
  * Sterowanie zachowaniem przez adres:
- *   /awaria?co=busy       — aparat zajęty (503), tak jak przy zapisie na kartę
- *   /awaria?co=brak-iso   — ISO znika ze spisu (tryb automatyczny)
- *   /awaria?co=off        — aparat przestaje odpowiadać (uśpione Wi-Fi)
+ *   /awaria?co=busy       – aparat zajęty (503), tak jak przy zapisie na kartę
+ *   /awaria?co=brak-iso   – ISO znika ze spisu (tryb automatyczny)
+ *   /awaria?co=off        – aparat przestaje odpowiadać (uśpione Wi-Fi)
  */
 const http = require('http');
 
@@ -41,7 +41,7 @@ function spis() {
     ver100: sciezki.map((s) => ({
       path: `/ccapi/ver100/${s}`, get: true, post: s.includes('control'), put: s.includes('settings'),
     })),
-    /* Druga wersja z tą samą trasą — sprawdzamy, że wybieramy NOWSZĄ.
+    /* Druga wersja z tą samą trasą – sprawdzamy, że wybieramy NOWSZĄ.
        Gdy aparat przestaje wystawiać nastawę, znika ona ze WSZYSTKICH wersji;
        pierwsza wersja atrapy chowała ją tylko z ver100 i przez to udawała
        sytuację, która na prawdziwym aparacie nie występuje. */

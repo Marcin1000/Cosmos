@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cosmos MCP — mostek Model Context Protocol (stdio) dla Cursora i innych
+ * Cosmos MCP – mostek Model Context Protocol (stdio) dla Cursora i innych
  * narzędzi zgodnych z MCP (Claude Desktop, Claude Code itp.).
  *
  * Dzięki niemu agent w Cursorze widzi Twojego Cosmosa: przeszukuje bazę
@@ -31,7 +31,7 @@ const authHeaders = COSMOS_TOKEN ? { Authorization: `Bearer ${COSMOS_TOKEN}` } :
 
 /* Studio odpowiada wynikiem, gdy zdąży w ~75 s. Dłuższe generowanie wraca
    jako 202 z numerem zadania (za Cloudflare dłuższe żądanie kończy się 524)
-   — wtedy dopytujemy GET /api/zadania?id=…, aż praca się skończy. */
+   – wtedy dopytujemy GET /api/zadania?id=…, aż praca się skończy. */
 async function wynikStudia(r) {
   const d = await r.json();
   if (!(r.status === 202 && d.zadanie)) {
@@ -44,7 +44,7 @@ async function wynikStudia(r) {
     let s;
     try {
       const odp = await fetch(`${COSMOS_URL}/api/zadania?id=${encodeURIComponent(d.zadanie)}`, { headers: authHeaders });
-      if (odp.status === 404) throw new Error('Cosmos nie zna już tego zadania (restart serwera?) — sprawdź bazę wiedzy.');
+      if (odp.status === 404) throw new Error('Cosmos nie zna już tego zadania (restart serwera?) – sprawdź bazę wiedzy.');
       if (!odp.ok) continue;
       s = await odp.json();
     } catch (err) {
@@ -54,7 +54,7 @@ async function wynikStudia(r) {
     if (s.stan === 'gotowe') return s.wynik;
     if (s.stan === 'blad') throw new Error(s.error || 'Generowanie nie powiodło się.');
   }
-  throw new Error('Generowanie trwa ponad 20 minut — wynik trafi do bazy wiedzy Cosmosa.');
+  throw new Error('Generowanie trwa ponad 20 minut – wynik trafi do bazy wiedzy Cosmosa.');
 }
 
 const TOOLS = [
@@ -152,7 +152,7 @@ async function callTool(name, args = {}) {
         body: JSON.stringify({ prompt: args.prompt }),
       });
       const d = await wynikStudia(r);
-      return `Wygenerowano obraz „${d.item.name}” — dostępny pod ${COSMOS_URL}${d.url}` +
+      return `Wygenerowano obraz „${d.item.name}” – dostępny pod ${COSMOS_URL}${d.url}` +
              (d.exported ? ` oraz w ${d.exported}` : '');
     }
     default:

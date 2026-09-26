@@ -1,9 +1,9 @@
-/* Aparat po Wi-Fi — cała droga z ekranu do aparatu.
+/* Aparat po Wi-Fi – cała droga z ekranu do aparatu.
 
    `aparat-canon.js` sprawdza sam moduł: odkrywanie ścieżek, odrzucanie
    wartości spoza listy, komunikaty awarii. To jest sprawdzenie o poziom
    wyżej i odpowiada na inne pytanie: czy człowiek, patrząc na Plener,
-   może DOJŚĆ do zmiany nastaw w aparacie — i czy to, co widzi na ekranie,
+   może DOJŚĆ do zmiany nastaw w aparacie – i czy to, co widzi na ekranie,
    zgadza się z tym, co aparat naprawdę ma ustawione.
 
    To jedyna funkcja Cosmosa, która pisze do cudzego sprzętu. Cicha pomyłka
@@ -35,7 +35,7 @@ const ATRAPA = 'http://127.0.0.1:7120';
   /* 1. Skonfigurowany i odpowiadający aparat MUSI być widoczny.
      Odwrotność sprawdzenia z zestawu `plener`: tam brak CANON_CCAPI_URL
      chował wiersz, tu obecny aparat ma go pokazać. Obie strony tego warunku
-     trzeba sprawdzać osobno — chowanie zawsze i pokazywanie nigdy wygląda
+     trzeba sprawdzać osobno – chowanie zawsze i pokazywanie nigdy wygląda
      w kodzie tak samo źle, a w testach różnie. */
   const wiersz = await pg.evaluate(() => {
     const w = document.getElementById('plan-camera');
@@ -49,13 +49,13 @@ const ATRAPA = 'http://127.0.0.1:7120';
   console.log(`1. wiersz aparatu widoczny: ${wiersz.widoczny} → „${wiersz.tekst}"`);
   if (!wiersz.widoczny) fail.push('skonfigurowany aparat nie pokazał się w Plenerze');
   if (!/R6/.test(wiersz.tekst)) fail.push(`wiersz nie podaje modelu aparatu: „${wiersz.tekst}"`);
-  // Atrapa startuje z ISO auto, f/4.0, 1/60 — to ma być na ekranie.
+  // Atrapa startuje z ISO auto, f/4.0, 1/60 – to ma być na ekranie.
   if (!/1\/60/.test(wiersz.tekst)) fail.push(`nastawy z aparatu nie dotarły na ekran: „${wiersz.tekst}"`);
   if (wiersz.przyciski !== 2) fail.push(`spodziewane dwa przyciski (ustaw, migawka), jest ${wiersz.przyciski}`);
 
   /* 2. „Ustaw w aparacie" ma zmienić stan ATRAPY, a nie tylko napis.
      Liczymy plan dla jasnego dnia, żeby wyszło coś innego niż to, co aparat
-     ma teraz — inaczej sprawdzenie przeszłoby także przy przycisku, który
+     ma teraz – inaczej sprawdzenie przeszłoby także przy przycisku, który
      nic nie robi. */
   await pg.fill('#fp-place', 'Kraków');
   await pg.selectOption('#fp-mode', 'zdjecie');
@@ -82,11 +82,11 @@ const ATRAPA = 'http://127.0.0.1:7120';
     fail.push(`w aparacie ISO ${po.stan.iso.value}, a policzone „${isoP}"`);
   }
   if (przyslonaP && po.stan.av.value.replace(/^f/, 'f/') !== przyslonaP) {
-    console.log(`   (przysłona: aparat ${po.stan.av.value}, plan ${przyslonaP} — `
+    console.log(`   (przysłona: aparat ${po.stan.av.value}, plan ${przyslonaP} – `
       + 'aparat mógł dobrać najbliższą ze swojej listy)');
   }
   if (czasP && po.stan.tv.value !== czasP) {
-    console.log(`   (czas: aparat ${po.stan.tv.value}, plan ${czasP} — jw.)`);
+    console.log(`   (czas: aparat ${po.stan.tv.value}, plan ${czasP} – jw.)`);
   }
 
   // 4. Po zmianie ekran ma pokazywać NOWY stan, a nie zapamiętany stary.
@@ -102,16 +102,16 @@ const ATRAPA = 'http://127.0.0.1:7120';
   if (poStrzale.wyzwolen <= przed.wyzwolen) fail.push('przycisk migawki nie wyzwolił zdjęcia');
 
   /* 6. Aparat, który przestał odpowiadać (uśpione Wi-Fi), nie może zostawić
-     przycisku obiecującego działanie. To najczęstszy stan w praktyce —
+     przycisku obiecującego działanie. To najczęstszy stan w praktyce –
      R6 II usypia Wi-Fi po kilku minutach bezczynności. */
-  /* Nie zerujemy już pamięci stanu aparatu z zewnątrz — po wydzieleniu
+  /* Nie zerujemy już pamięci stanu aparatu z zewnątrz – po wydzieleniu
      `public/plener.js` jest ona prywatna, a przypisanie do `aparatSprawdzony`
      w `page.evaluate` tworzyłoby tylko nową zmienną globalną i niczego nie
      resetowało. To dobrze: test, który musi sięgnąć do środka modułu, mierzy
      jego budowę, a nie zachowanie.
 
      Sprawdzamy więc to, co widzi Marcin. Atrapa przestaje odpowiadać, panel
-     przelicza plan — i w tym samym przebiegu ma przestać obiecywać działanie,
+     przelicza plan – i w tym samym przebiegu ma przestać obiecywać działanie,
      bez czekania na wygaśnięcie trzydziestosekundowej pamięci stanu. */
   await fetch(`${ATRAPA}/awaria?co=off`).catch(() => {});
   await pg.click('#fp-go');
@@ -131,6 +131,6 @@ const ATRAPA = 'http://127.0.0.1:7120';
 
   await b.close();
   env.koniec();
-  console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPLENER — APARAT OK');
+  console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPLENER – APARAT OK');
   process.exit(fail.length ? 1 : 0);
 })();

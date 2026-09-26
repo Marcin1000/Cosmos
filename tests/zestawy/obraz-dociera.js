@@ -19,7 +19,7 @@ up.listen(7090, async () => {
   const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3014', NVIDIA_API_KEY: 'test',
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7090/v1',
-      // model wizyjny — inaczej serwer (słusznie) odrzuci zdjęcie do ślepego modelu
+      // model wizyjny – inaczej serwer (słusznie) odrzuci zdjęcie do ślepego modelu
       NEMOTRON_MODEL: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1' } });
   await new Promise((r) => setTimeout(r, 4000));
 

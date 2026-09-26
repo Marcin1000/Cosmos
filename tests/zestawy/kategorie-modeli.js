@@ -50,8 +50,8 @@ const check = async (model) => (await fetch('http://127.0.0.1:3060/api/models/ch
 /* PORT PRZYDZIELANY PRZEZ SYSTEM, nie wpisany na sztywno.
    Ten zestaw jako jedyny otwierał gniazdo na stałym 7105 z pominięciem
    zwalniania portów, które robi `tests/pomoc.js` dla wszystkich pozostałych.
-   Wystarczyło, że poprzedni przebieg nie zdążył zamknąć gniazda — albo że
-   ktoś uruchomił ten zestaw obok baterii — i całość padała na EADDRINUSE,
+   Wystarczyło, że poprzedni przebieg nie zdążył zamknąć gniazda – albo że
+   ktoś uruchomił ten zestaw obok baterii – i całość padała na EADDRINUSE,
    co w wyniku wygląda jak usterka w kodzie, a jest zderzeniem środowisk.
    Port 0 znaczy „daj mi jakikolwiek wolny" i problem znika u źródła. */
 up.listen(0, async () => {
@@ -70,7 +70,7 @@ up.listen(0, async () => {
   if (!/ukryte/.test(a.blad)) fail.push('nie oznaczył, że coś ukryto');
   if (!/Not found for account/.test(a.blad)) fail.push('zgubił sens komunikatu dostawcy');
 
-  // 2. embeddingi: „inne przeznaczenie", nie „niedostępne" — i bez odpytywania
+  // 2. embeddingi: „inne przeznaczenie", nie „niedostępne" – i bez odpytywania
   const przed = prob;
   a = await check('nvidia/llama-nemotron-embed-1b-v2');
   console.log(`2. model embeddingów → inneZadanie=${a.inneZadanie}, rozmowa=${a.rozmowa}`);
@@ -80,7 +80,7 @@ up.listen(0, async () => {
 
   // 2b. klasyfikator bezpieczeństwa: końcówkę czatu MA i odpowie poprawnie,
   //     więc wychodził z testu jako sprawny model do rozmowy. Odpowie „safe"
-  //     na każde pytanie — sprawność jest pozorna.
+  //     na każde pytanie – sprawność jest pozorna.
   const przedStraz = prob;
   a = await check('nvidia/llama-3.1-nemoguard-8b-content-safety');
   console.log(`2b. klasyfikator → inneZadanie=${a.inneZadanie}, rozmowa=${a.rozmowa}`);

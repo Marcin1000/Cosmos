@@ -1,5 +1,5 @@
 // Hipoteza: pamięć długotrwała blokuje czat. searchMemory czeka na embedding
-// zapytania (5 s), a gdy wpisy mają wektory z innego modelu — dolicza
+// zapytania (5 s), a gdy wpisy mają wektory z innego modelu – dolicza
 // przeliczenie WSZYSTKICH z limitem 60 s. Wszystko zanim model dostanie prompt.
 const http = require('http');
 const KORZEN = require('node:path').resolve(__dirname, '..', '..');
@@ -19,7 +19,7 @@ const zmysly = http.createServer((req, res) => {
   req.on('end', () => setTimeout(() => {
     const n = (JSON.parse(b).texts || ['x']).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    // 64 wymiary — krótsze Cosmos odrzuca jako śmieci (lib/pamiec.js).
+    // 64 wymiary – krótsze Cosmos odrzuca jako śmieci (lib/pamiec.js).
     res.end(JSON.stringify({ vectors: Array.from({ length: n }, () => Array.from({ length: 64 }, (_, i) => (i < 3 ? [0.1, 0.2, 0.3][i] : 0))), model: 'atrapa-embed' }));
   }, opoznienieEmbed));
 });
@@ -45,7 +45,7 @@ const czat = async (tresc) => {
 };
 
 zmysly.listen(7112, () => model.listen(7113, async () => {
-  // pamięć z wektorami policzonymi INNYM modelem — tak jest po każdej zmianie
+  // pamięć z wektorami policzonymi INNYM modelem – tak jest po każdej zmianie
   // dostawcy embeddingów albo po przejściu chmura↔zmysły
   fs.rmSync(DANE, { recursive: true, force: true });
   fs.mkdirSync(DANE, { recursive: true });
@@ -71,13 +71,13 @@ zmysly.listen(7112, () => model.listen(7113, async () => {
   console.log(`1. pierwsza wiadomość (30 wpisów do przeliczenia): ${(a / 1000).toFixed(1)} s`);
   // Budżet 1,2 s + narzut. Kiedyś: 5 s, bo przeliczanie wektorów szło
   // w ścieżce żądania z limitem 60 s.
-  if (a > 2500) fail.push(`pierwsza wiadomość czeka ${(a / 1000).toFixed(1)} s — pamięć znów blokuje`);
+  if (a > 2500) fail.push(`pierwsza wiadomość czeka ${(a / 1000).toFixed(1)} s – pamięć znów blokuje`);
 
   const b2 = await czat('A drugie pytanie?');
   console.log(`2. druga wiadomość (bezpiecznik już zadziałał):    ${(b2 / 1000).toFixed(1)} s`);
-  if (b2 > 800) fail.push(`druga wiadomość czeka ${(b2 / 1000).toFixed(1)} s — bezpiecznik nie działa`);
+  if (b2 > 800) fail.push(`druga wiadomość czeka ${(b2 / 1000).toFixed(1)} s – bezpiecznik nie działa`);
 
-  // usługa pada zupełnie — rozmowa i tak ma ruszyć od razu
+  // usługa pada zupełnie – rozmowa i tak ma ruszyć od razu
   opoznienieEmbed = 30000;
   fs.writeFileSync(`${DANE}/memory.json`, JSON.stringify(
     Array.from({ length: 30 }, (_, i) => ({
@@ -87,7 +87,7 @@ zmysly.listen(7112, () => model.listen(7113, async () => {
   console.log(`3. gdy usługa embeddingów wisi:                    ${(c / 1000).toFixed(1)} s`);
   if (c > 800) fail.push(`przy zawieszonej usłudze czeka ${(c / 1000).toFixed(1)} s`);
 
-  // 4. mimo wszystko odpowiedź jest pełna — pamięć odpuszczona, nie zepsuta
+  // 4. mimo wszystko odpowiedź jest pełna – pamięć odpuszczona, nie zepsuta
   const r = await fetch('http://127.0.0.1:3112/api/chat', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint: 'cloud', messages: [{ role: 'user', content: 'ostatnie' }] }),

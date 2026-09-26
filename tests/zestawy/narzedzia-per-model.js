@@ -1,6 +1,6 @@
 /* Do niedawna KAŻDY model dostawał ten sam prompt systemowy: 1351 tokenów
    opisu narzędzi, zanim użytkownik napisał słowo. Także model 4-miliardowy,
-   który żadnego z nich nie umie użyć — a znacznik [SZUKAJ:] wypisałby
+   który żadnego z nich nie umie użyć – a znacznik [SZUKAJ:] wypisałby
    użytkownikowi wprost na ekran.
 
    Trzy poziomy, wszystkie mierzone tym, co model NAPRAWDĘ dostaje (atrapa
@@ -57,7 +57,7 @@ const promptDla = async (adres, model) => {
   if (sredni > duzy * 0.6) fail.push('poziom „zwięzły" prawie nic nie oszczędza');
   if (maly > duzy * 0.25) fail.push('poziom „rozmowa" prawie nic nie oszczędza');
 
-  // 4. duży model NIE MOŻE stracić żadnego narzędzia — to nie jest oszczędność,
+  // 4. duży model NIE MOŻE stracić żadnego narzędzia – to nie jest oszczędność,
   //    tylko regresja
   const pelnyTekst = p['nvidia/nemotron-3-super-120b-a12b'];
   for (const [co, wzor] of [
@@ -71,22 +71,22 @@ const promptDla = async (adres, model) => {
   }
   console.log('4. duży model zachował wszystkie narzędzia');
 
-  // 5. średni ma narzędzia, ale krótkim tekstem — nie wolno mu ich ODEBRAĆ
+  // 5. średni ma narzędzia, ale krótkim tekstem – nie wolno mu ich ODEBRAĆ
   const sredniTekst = p['nvidia/nvidia-nemotron-nano-9b-v2'];
-  console.log(`5. zwięzły — [SZUKAJ:] ${/SZUKAJ:/.test(sredniTekst) ? 'jest' : 'BRAK'}, `
+  console.log(`5. zwięzły – [SZUKAJ:] ${/SZUKAJ:/.test(sredniTekst) ? 'jest' : 'BRAK'}, `
     + `[GRAFIKA:] ${/GRAFIKA:/.test(sredniTekst) ? 'jest' : 'BRAK'}`);
   if (!/SZUKAJ:/.test(sredniTekst)) fail.push('zwięzły stracił wyszukiwanie zamiast je skrócić');
   if (!/GRAFIKA:/.test(sredniTekst)) fail.push('zwięzły stracił grafiki zamiast je skrócić');
   if (/BRAKUJE CI JEDNEJ INFORMACJI/.test(sredniTekst)) fail.push('zwięzły dostał pełny tekst');
 
-  // 6. najmniejszy nie dostaje ŻADNEGO znacznika — wypisałby go na ekran
+  // 6. najmniejszy nie dostaje ŻADNEGO znacznika – wypisałby go na ekran
   const malyTekst = p['nvidia/nemotron-mini-4b-instruct'];
-  console.log(`6. rozmowa — znaczniki: ${/\[(SZUKAJ|GRAFIKA|OBRAZ|AKCJA):/.test(malyTekst) ? 'SĄ' : 'brak'}`);
+  console.log(`6. rozmowa – znaczniki: ${/\[(SZUKAJ|GRAFIKA|OBRAZ|AKCJA):/.test(malyTekst) ? 'SĄ' : 'brak'}`);
   if (/\[(SZUKAJ|GRAFIKA|OBRAZ|AKCJA):/.test(malyTekst)) {
     fail.push('najmniejszy model dostał znaczniki, których nie użyje');
   }
 
-  // 7. ale data i miejsce zostają zawsze — to fakty, nie narzędzia
+  // 7. ale data i miejsce zostają zawsze – to fakty, nie narzędzia
   for (const [nazwa, tekst] of Object.entries(p)) {
     if (!/TERAZ JEST/.test(tekst)) fail.push(`${nazwa} nie dostał daty`);
   }

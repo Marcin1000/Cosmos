@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /*
- * Cosmos — nagrywarka procedur webowych (opcjonalna, Playwright).
+ * Cosmos – nagrywarka procedur webowych (opcjonalna, Playwright).
  *
  * Otwiera prawdziwą przeglądarkę na maszynie z serwerem; Ty wykonujesz zadanie
  * (klikasz, wpisujesz, przechodzisz między stronami), a nagrywarka zapisuje
- * SEMANTYCZNE kroki — który element, nie współrzędne — do pliku JSON, który
+ * SEMANTYCZNE kroki – który element, nie współrzędne – do pliku JSON, który
  * runner Cosmosa potrafi wiernie odtworzyć.
  *
  * Zasady bezpieczeństwa:
- *  • pola hasła NIE są zapisywane — stają się krokiem „logowanie" (auth)
+ *  • pola hasła NIE są zapisywane – stają się krokiem „logowanie" (auth)
  *    z odwołaniem {{secret:haslo}} (wartość pobiera menedżer haseł przy odtwarzaniu),
  *  • kliknięcia w przyciski typu „Zapłać/Wyślij/Potwierdź" są oznaczane jako
- *    wrażliwe (zawsze wymagają potwierdzenia — nie idą w tryb auto).
+ *    wrażliwe (zawsze wymagają potwierdzenia – nie idą w tryb auto).
  *
  * Wejście:  --url <adres startowy>   (opcjonalne)
  *           env COSMOS_RECORD_OUT = ścieżka pliku wynikowego JSON
@@ -63,8 +63,8 @@ function buildSteps(raw) {
   return merged;
 }
 
-// Funkcja wstrzykiwana do stron — liczy stabilny selektor i melduje zdarzenia.
-/* istanbul ignore next — działa w przeglądarce */
+// Funkcja wstrzykiwana do stron – liczy stabilny selektor i melduje zdarzenia.
+/* istanbul ignore next – działa w przeglądarce */
 function browserRecorder() {
   function sel(el) {
     if (!el || el.nodeType !== 1) return '';

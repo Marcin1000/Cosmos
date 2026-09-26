@@ -1,9 +1,9 @@
 /* ============================================================
-   PLENER — plan zdjęciowy, karty ujęć, misja drona
+   PLENER – plan zdjęciowy, karty ujęć, misja drona
 
    Największa jedna rzecz, jaka mieszkała w `app.js`: siedemset linii
    liczenia światła, nastaw aparatu, kart ujęć i planowania nalotu drona.
-   To jest ta część Cosmosa, której nie ma żaden asystent w chmurze —
+   To jest ta część Cosmosa, której nie ma żaden asystent w chmurze –
    ChatGPT nie wie, gdzie stoisz, która jest u Ciebie godzina ani co masz
    w plecaku.
 
@@ -13,7 +13,7 @@
    naprawdę woła reszta aplikacji: `odswiezPlan` (kaskada narzędzi, gdy
    model prosi o plan) i `zamknijPlener` (klawisz Escape).
 
-   Nasłuchy przycisków rejestrują się przy wywołaniu `utworzPlener()` —
+   Nasłuchy przycisków rejestrują się przy wywołaniu `utworzPlener()` –
    dokładnie w tym samym miejscu i momencie, w którym rejestrowały się
    wcześniej jako kod na poziomie pliku.
    ============================================================ */
@@ -44,7 +44,7 @@ function utworzPlener(z) {
   let planOstatnio = 0;
   let planZajety = false;
 
-  /** Średnia jasność kadru (0–1) — pomiar sceny, nie zgadywanka z pory dnia.
+  /** Średnia jasność kadru (0–1) – pomiar sceny, nie zgadywanka z pory dnia.
    *  Próbkujemy co dziesiąty piksel: różnica w wyniku żadna, a koszt dziesięć
    *  razy mniejszy przy klatce co sekundę. */
   function jasnoscKadru(canvas) {
@@ -61,7 +61,7 @@ function utworzPlener(z) {
     } catch { return null; }
   }
 
-  /** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów —
+  /** Odśwież plan zdjęciowy z bieżącego kadru. Rzadziej niż detekcja obiektów –
    *  światło zmienia się w minutach, nie w klatkach. */
   async function odswiezPlan(cap) {
     const box = $('plan-box');
@@ -90,17 +90,17 @@ function utworzPlener(z) {
       });
       const d = await readJsonSafe(r);
       /* `ma-wynik` decyduje, czy zwinięty pasek pokazuje tytuł, czy same
-         nastawy — patrz komentarz w style.css przy `.plan-box.ma-wynik`.
+         nastawy – patrz komentarz w style.css przy `.plan-box.ma-wynik`.
          Bez wyniku tytuł zostaje, bo sam myślnik nic nie mówi. */
       if (!r.ok) {
         box.classList.remove('ma-wynik');   // znów sam myślnik → tytuł wraca
-        $('plan-shot').textContent = '—';
+        $('plan-shot').textContent = '–';
         $('plan-light').textContent = d.error || t('plan.needLocation');
         $('plan-why').textContent = '';
         return;
       }
       pokazPlan(d);
-    } catch { /* offline — panel zostaje z poprzednim wynikiem */ } finally {
+    } catch { /* offline – panel zostaje z poprzednim wynikiem */ } finally {
       planZajety = false;
     }
   }
@@ -108,10 +108,10 @@ function utworzPlener(z) {
   /* Wypisz policzony plan. `pre` to przedrostek identyfikatorów, bo plan
      pokazuje się w DWÓCH miejscach: pod podglądem kamery (`plan-*`, liczony
      z jasności bieżącej klatki) i w Plenerze (`fp-*`, liczony dla miejsca
-     i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden —
+     i godziny, bez kamery). Treść jest ta sama, więc kod też jest jeden –
      dwie kopie tej samej funkcji rozjechałyby się przy pierwszej poprawce. */
   const jezyk = () => (typeof getLang === 'function' && getLang() === 'en' ? 'en-GB' : 'pl-PL');
-  /** „711 min" to nie jest liczba, którą czyta się w terenie — „11 h 51 min" jest. */
+  /** „711 min" to nie jest liczba, którą czyta się w terenie – „11 h 51 min" jest. */
   function ileCzasu(min) {
     const m = Math.max(0, Math.round(Number(min) || 0));
     return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
@@ -128,13 +128,13 @@ function utworzPlener(z) {
 
     const czesci = [];
     /* Układ kadru przychodził z serwera po polsku i tak też lądował na
-       ekranie — także przy interfejsie po angielsku. Tłumaczymy go tutaj,
+       ekranie – także przy interfejsie po angielsku. Tłumaczymy go tutaj,
        bo to jedyne miejsce, w którym ta wartość jest pokazywana. */
     if (d.kadr && d.kadr.uklad !== 'nieznany') {
       const uklad = t(`frame.${d.kadr.uklad}`);
       czesci.push(`${uklad.startsWith('frame.') ? d.kadr.uklad : uklad} ${d.kadr.proporcje}`);
     }
-    /* Karta nieba (Plener) sama pokazuje fazę — w linijce pod nią byłaby
+    /* Karta nieba (Plener) sama pokazuje fazę – w linijce pod nią byłaby
        powtórką. Wysokość z przecinkiem po polsku i z jednym miejscem po nim. */
     const wys = Number(d.slonce.wysokosc).toLocaleString(jezyk(), { maximumFractionDigits: 1 });
     /* „noc (−28,9°)” obok „10°C” wyglądało jak mróz (zgłoszenie Marcina).
@@ -145,7 +145,7 @@ function utworzPlener(z) {
     else czesci.push(`${t('plan.slonce')} ${wys}°`);
     // Wnętrze: nastawy liczone dla światła lamp, nie Słońca (lib/plener-trasy.js).
     if (d.wnetrze) czesci.push(t('plan.zPomiaru'));
-    // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy — przy wyborze
+    // Pogoda tylko wtedy, gdy naprawdę przyszła z prognozy – przy wyborze
     // ręcznym powtarzanie tego, co użytkownik sam ustawił, jest szumem.
     if (d.pogoda) {
       czesci.push(`${d.pogoda.opis}`
@@ -155,7 +155,7 @@ function utworzPlener(z) {
     const light = $(pre + '-light');
     light.textContent = czesci.join(' · ');
 
-    /* Ile zostało czasu — to jedyna liczba, na którą patrzy się w terenie.
+    /* Ile zostało czasu – to jedyna liczba, na którą patrzy się w terenie.
        Gdy złota godzina trwa TERAZ, mówimy to wprost zamiast pokazywać
        ujemne minuty do jej początku. */
     const zloty = d.slonce.doZlotejMin;
@@ -182,13 +182,13 @@ function utworzPlener(z) {
 
     if (pre === 'fp') rysujNiebo(d);
 
-    // Ostatnie POLICZONE nastawy — z nich bierze wartości przycisk „Ustaw w aparacie".
+    // Ostatnie POLICZONE nastawy – z nich bierze wartości przycisk „Ustaw w aparacie".
     planOstatnieUstawienia = u;
     odswiezAparat(u);
 
     /* PANEL PRZELICZAMY PO WPISANIU TREŚCI, nie tylko po rozwinięciu pudełka.
      *
-     *  Rozwinięcie nastaw woła `dopasujPanelKamery()` od razu — i to za wcześnie.
+     *  Rozwinięcie nastaw woła `dopasujPanelKamery()` od razu – i to za wcześnie.
      *  Pudełko jest wtedy jeszcze puste, bo `odswiezPlan()` dolicza światło,
      *  czas do złotej godziny i uzasadnienia dopiero po odpowiedzi z serwera.
      *  Panel wychodził więc policzony pod pudełko o kilka wierszy niższe, niż
@@ -215,12 +215,12 @@ function utworzPlener(z) {
     const pole = $('fp-when') && $('fp-when').value;
     const kiedy = pole && !Number.isNaN(new Date(pole).getTime()) ? new Date(pole) : new Date();
     const en = typeof getLang === 'function' && getLang() === 'en';
-    const godz = (x) => (x ? new Date(x).toLocaleTimeString(en ? 'en-GB' : 'pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—');
-    const liczba = (x, m = 1) => (typeof x === 'number' ? (en ? x.toFixed(m) : x.toFixed(m).replace('.', ',')).replace('-', '−') : '—');
+    const godz = (x) => (x ? new Date(x).toLocaleTimeString(en ? 'en-GB' : 'pl-PL', { hour: '2-digit', minute: '2-digit' }) : '–');
+    const liczba = (x, m = 1) => (typeof x === 'number' ? (en ? x.toFixed(m) : x.toFixed(m).replace('.', ',')).replace('-', '−') : '–');
 
     const wschod = s.wschod ? new Date(s.wschod).getTime() : null;
     const zachod = s.zachod ? new Date(s.zachod).getTime() : null;
-    let postep = 0.5;   // 0 — wschód, 1 — zachód
+    let postep = 0.5;   // 0 – wschód, 1 – zachód
     if (wschod && zachod && zachod > wschod) postep = (kiedy.getTime() - wschod) / (zachod - wschod);
     const droga = $('fp-luk');
     const dl = droga.getTotalLength();
@@ -244,12 +244,12 @@ function utworzPlener(z) {
 
     $('fp-n-czas').textContent = godz(kiedy);
     $('fp-n-wys').textContent = `${liczba(s.wysokosc)}°`;
-    $('fp-n-az').textContent = typeof s.azymut === 'number' ? `${Math.round(s.azymut)}°` : '—';
+    $('fp-n-az').textContent = typeof s.azymut === 'number' ? `${Math.round(s.azymut)}°` : '–';
     $('fp-n-wschod').textContent = godz(s.wschod);
     $('fp-n-zachod').textContent = godz(s.zachod);
-    $('fp-n-t').textContent = u.czas || '—';
-    $('fp-n-f').textContent = u.przyslona || '—';
-    $('fp-n-iso').textContent = u.iso ? `ISO ${u.iso}` : '—';
+    $('fp-n-t').textContent = u.czas || '–';
+    $('fp-n-f').textContent = u.przyslona || '–';
+    $('fp-n-iso').textContent = u.iso ? `ISO ${u.iso}` : '–';
     karta.hidden = false;
     karta.closest('.plener-section').classList.add('z-niebem');
   }
@@ -259,12 +259,12 @@ function utworzPlener(z) {
   /* ---- APARAT PO WI-FI (Canon CCAPI) ------------------------------------
      Sedno nie jest w tym, że da się zdalnie zmienić ISO. Sedno jest w tym, że
      Cosmos przestaje mówić „ustaw 1/250, f/8, ISO 200", a zaczyna mówić „masz
-     1/60, f/4, ISO 1600 — poprawiam". Do tego musi ZOBACZYĆ, co aparat ma
+     1/60, f/4, ISO 1600 – poprawiam". Do tego musi ZOBACZYĆ, co aparat ma
      naprawdę ustawione, i porównać z tym, co sam policzył dla tego światła.
 
      Wiersz pokazuje się dopiero, gdy aparat odpowiada. Martwy przycisk
      „Ustaw w aparacie" u kogoś, kto nigdy nie włączył CCAPI, byłby gorszy niż
-     jego brak — obiecywałby coś, czego nie ma. */
+     jego brak – obiecywałby coś, czego nie ma. */
   let aparatStan = null;
   let aparatSprawdzony = 0;
   const APARAT_CACHE_MS = 30000;
@@ -274,7 +274,7 @@ function utworzPlener(z) {
     if (!wiersz) return;
     /* Wiersz aparatu mieszka w Plenerze. Odpytywanie go przy zamkniętym oknie
        to dwa żądania do aparatu co osiem sekund przez cały czas otwartego
-       podglądu — do niczego, a aparat i tak zasypia po Wi-Fi. */
+       podglądu – do niczego, a aparat i tak zasypia po Wi-Fi. */
     if ($('plener-modal').style.display === 'none') return;
 
     if (Date.now() - aparatSprawdzony > APARAT_CACHE_MS) {
@@ -284,7 +284,7 @@ function utworzPlener(z) {
     }
     if (!aparatStan || !aparatStan.online) {
       // Nieskonfigurowany aparat chowamy zupełnie; skonfigurowany, ale
-      // niedostępny — pokazujemy z powodem, bo to stan do naprawienia.
+      // niedostępny – pokazujemy z powodem, bo to stan do naprawienia.
       wiersz.hidden = !(aparatStan && aparatStan.skonfigurowany);
       if (!wiersz.hidden) {
         $('plan-camera-now').textContent = String((aparatStan && aparatStan.powod) || '').slice(0, 120);
@@ -300,12 +300,12 @@ function utworzPlener(z) {
       const w = await (await fetch('/api/canon/settings')).json();
       const n = w.nastawy || {};
       const teraz = [n.czas, n.przyslona && `f/${String(n.przyslona).replace(/^f/i, '')}`,
-        n.iso && `ISO ${n.iso}`].filter(Boolean).join(' · ') || '—';
+        n.iso && `ISO ${n.iso}`].filter(Boolean).join(' · ') || '–';
       /* APARAT, KTÓRY NIE UMIE PODAĆ NASTAW, NIE PRZYJMIE ICH TEŻ.
          Stan aparatu odpytujemy najwyżej raz na trzydzieści sekund, żeby nie
-         dobijać go po Wi-Fi — ale to znaczy, że przez pół minuty po zaśnięciu
+         dobijać go po Wi-Fi – ale to znaczy, że przez pół minuty po zaśnięciu
          `online` jest jeszcze prawdą. W tym czasie panel pokazywał
-         „Canon EOS R6m2: —" i CZYNNY przycisk „Ustaw w aparacie", który mógł
+         „Canon EOS R6m2: –" i CZYNNY przycisk „Ustaw w aparacie", który mógł
          tylko zawieść. R6 II usypia Wi-Fi po kilku minutach bezczynności,
          więc to nie jest przypadek brzegowy, tylko codzienność w plenerze.
          Brak wszystkich trzech nastaw traktujemy więc jak zniknięcie aparatu
@@ -366,7 +366,7 @@ function utworzPlener(z) {
     }
   });
 
-  /* Migawka. Świadomie TYLKO pod ludzkim palcem — model tego narzędzia nie
+  /* Migawka. Świadomie TYLKO pod ludzkim palcem – model tego narzędzia nie
      dostaje. „Zrób zdjęcie, bo wygląda na dobry moment" jest dokładnie tą
      klasą decyzji, której maszyna nie powinna podejmować za człowieka
      trzymającego aparat. */
@@ -398,7 +398,7 @@ function utworzPlener(z) {
   /* Pudełko nastaw pamięta, czy je rozwinąłeś. Domyślnie zwinięte, bo panel
      kamery zajmuje na telefonie 743 z 844 px ekranu, a rozwinięte pudełko to
      ponad jedna trzecia tego panelu. Kto raz je rozwinie, ten najwyraźniej
-     chce je mieć otwarte — i nie musi tego klikać przy każdym uruchomieniu. */
+     chce je mieć otwarte – i nie musi tego klikać przy każdym uruchomieniu. */
   const PLAN_ROZWINIETE = 'cosmos.planRozwiniete';
   {
     const box = $('plan-box');
@@ -408,7 +408,7 @@ function utworzPlener(z) {
         localStorage.setItem(PLAN_ROZWINIETE, box.open ? '1' : '0');
         /* Po rozwinięciu licz od razu. Bez tego świeżo otwarte pudełko
            pokazywałoby poprzedni wynik nawet przez osiem sekund, a przy
-           wyłączonych zmysłach — myślnik do końca świata, bo pętla podglądu
+           wyłączonych zmysłach – myślnik do końca świata, bo pętla podglądu
            odświeża plan tylko z klatki. */
         if (box.open) { planOstatnio = 0; odswiezPlan(null); }
         // Paski zmieniły wysokość → panel ma się przeliczyć od razu, a nie
@@ -426,32 +426,32 @@ function utworzPlener(z) {
      sprzęt i archiwum w Ustawieniach, plan zdjęciowy w podpanelu podglądu
      kamery (czyli niedostępny bez włączonej kamery), aparat po Wi-Fi jako
      wiersz w tamtym podpanelu, ptaki w nakładce głosowej, a misja KMZ
-     i karty ujęć — nigdzie. Te dwie ostatnie dało się uruchomić wyłącznie
+     i karty ujęć – nigdzie. Te dwie ostatnie dało się uruchomić wyłącznie
      żądaniem HTTP albo przez model. To nie jest funkcja, której nie ma;
      to funkcja, o której nie sposób się dowiedzieć.
 
      Plan liczy się TU bez kamery: dla nazwy miejsca i dla wybranej godziny.
-     To jest ta różnica, na której zależy najbardziej — „co zabrać w sobotę
+     To jest ta różnica, na której zależy najbardziej – „co zabrać w sobotę
      do Krakowa na 18:30" to inne pytanie niż „co ustawić w tej chwili”. */
 
   function otworzPlener() {
     wczytajSprzet();
     odswiezArchiwum();
     $('plener-modal').style.display = '';
-    // Aparat sprawdzamy przy otwarciu, nie w tle — patrz `odswiezAparat`.
+    // Aparat sprawdzamy przy otwarciu, nie w tle – patrz `odswiezAparat`.
     aparatSprawdzony = 0;
     odswiezAparat(planOstatnieUstawienia);
     /* Plan liczymy przy KAŻDYM otwarciu, nie tylko pierwszym. Puste okno
        z przyciskiem „Policz" kazałoby klikać po to, co i tak zawsze chcemy
-       zobaczyć, a plan sprzed godziny jest już nieprawdą — Słońce się
+       zobaczyć, a plan sprzed godziny jest już nieprawdą – Słońce się
        przesunęło, a to jest cała treść tego panelu.
-       Ale tylko gdy wiadomo GDZIE — bez zapisanej lokalizacji i bez wpisanego
+       Ale tylko gdy wiadomo GDZIE – bez zapisanej lokalizacji i bez wpisanego
        miejsca serwer i tak odpowie 400, a w konsoli przy każdym otwarciu
        lądował błąd. Wtedy od razu prosimy o miejsce. */
     if ($('fp-place').value.trim()) { liczPlanPlener(); return; }
     fetch('/api/location').then((r) => r.json()).then((d) => {
       if (d.wspolrzedne && d.wspolrzedne.lat) liczPlanPlener();
-      else { $('fp-light').textContent = t('plan.needLocation'); $('fp-shot').textContent = '—'; }
+      else { $('fp-light').textContent = t('plan.needLocation'); $('fp-shot').textContent = '–'; }
     }).catch(() => liczPlanPlener());
   }
 
@@ -474,10 +474,10 @@ function utworzPlener(z) {
       await zapiszSprzet();
       stan.textContent = t('pl.gearSaved');
       setTimeout(() => { stan.textContent = ''; }, 2500);
-      // Zestaw wpływa na ujęcia i na nastawy — plan po zapisie jest nieaktualny.
+      // Zestaw wpływa na ujęcia i na nastawy – plan po zapisie jest nieaktualny.
       liczPlanPlener();
     } catch (err) {
-      // Nieudany zapis ZOSTAJE na ekranie — inaczej człowiek wychodzi
+      // Nieudany zapis ZOSTAJE na ekranie – inaczej człowiek wychodzi
       // przekonany, że sprzęt jest wpisany, a plan liczy dla domyślnego korpusu.
       stan.className = 'field-hint plener-err';
       stan.textContent = t('pl.gearErr', { msg: err.message });
@@ -493,7 +493,7 @@ function utworzPlener(z) {
   async function liczPlanPlener() {
     /* Zajęte = przelicz PO powrocie, a nie „odpuść". Zwykłe `return` znaczyło,
        że przy szybkiej zmianie dwóch list na ekranie zostaje wynik dla pierwszej
-       — i to bez żadnego znaku, że coś przepadło. */
+       – i to bez żadnego znaku, że coś przepadło. */
     if (plenerZajety) { plenerPonow = true; return; }
     plenerZajety = true;
     const przycisk = $('fp-go');
@@ -505,7 +505,7 @@ function utworzPlener(z) {
         tryb: wideo ? 'wideo' : 'zdjecie',
         klatki: trybPola === 'wideo50' ? 50 : 25,
       };
-      // Puste pola znaczą „weź to, co zapisane" — i muszą NIE trafić do żądania,
+      // Puste pola znaczą „weź to, co zapisane" – i muszą NIE trafić do żądania,
       // bo pusty napis to dla serwera podana wartość, a nie jej brak.
       if ($('fp-gear').value) dane.sprzet = $('fp-gear').value;
       if ($('fp-sky').value) dane.zachmurzenie = $('fp-sky').value;
@@ -521,9 +521,9 @@ function utworzPlener(z) {
       });
       const d = await readJsonSafe(r);
       if (!r.ok) {
-        $('fp-shot').textContent = '—';
+        $('fp-shot').textContent = '–';
         /* Komunikat serwera jest pisany DLA MODELU („SPRÓBUJ JESZCZE RAZ…")
-           i tylko po polsku — człowiekowi pokazujemy własny, przetłumaczony. */
+           i tylko po polsku – człowiekowi pokazujemy własny, przetłumaczony. */
         $('fp-light').textContent = d.miejsceNieznane ? t('plan.placeUnknown', { m: d.miejsceNieznane })
           : d.brakLokalizacji ? t('plan.needLocation') : (d.error || t('plan.needLocation'));
         $('fp-why').textContent = '';
@@ -532,14 +532,14 @@ function utworzPlener(z) {
       }
       pokazPlan(d, 'fp');
       pokazUjecia(d.ujecia);
-      // Misja dostaje współrzędne z planu — przepisywanie ich z mapy do dwóch
+      // Misja dostaje współrzędne z planu – przepisywanie ich z mapy do dwóch
       // pól to najprostszy sposób na literówkę w miejscu, w którym boli.
       /* Współrzędne misji idą za planem, chyba że wpisano je RĘCZNIE.
 
-         Pierwsza wersja uzupełniała je tylko wtedy, gdy oba pola były puste —
+         Pierwsza wersja uzupełniała je tylko wtedy, gdy oba pola były puste –
          i to była cicha, groźna usterka. Panel liczy plan zaraz po otwarciu,
          jeszcze dla zapisanej lokalizacji, więc pola wypełniały się domem.
-         Potem człowiek wpisywał „Zakopane", przeliczał plan — a w misji dalej
+         Potem człowiek wpisywał „Zakopane", przeliczał plan – a w misji dalej
          siedziały współrzędne domu, bo pola nie były już puste. Wychodził
          z tego plik lotu nad zupełnie innym miejscem i nic tego nie zdradzało.
          W narzędziu, które steruje dronem, to najgorszy możliwy rodzaj błędu. */
@@ -562,12 +562,12 @@ function utworzPlener(z) {
     $(id).addEventListener('change', liczPlanPlener);
   }
   for (const id of ['fp-place', 'fp-topic']) {
-    // Enter w polu tekstowym ma liczyć — inaczej trzeba sięgać po przycisk.
+    // Enter w polu tekstowym ma liczyć – inaczej trzeba sięgać po przycisk.
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') liczPlanPlener(); });
   }
   $('fp-when').addEventListener('change', liczPlanPlener);
 
-  /* Karty ujęć — lista pozycji do odhaczenia, z liczbami. POMINIĘTE pokazujemy
+  /* Karty ujęć – lista pozycji do odhaczenia, z liczbami. POMINIĘTE pokazujemy
      równie wyraźnie: „nie masz czym" to inna informacja niż „nie ma na liście",
      a bez niej wygląda, jakby Cosmos o dronie zapomniał. */
   /* Odhaczone ujęcia. Trzymane w przeglądarce, nie na serwerze, i to jest
@@ -582,7 +582,7 @@ function utworzPlener(z) {
   }
   function zapiszOdhaczone(temat, zbior) {
     try { localStorage.setItem(KLUCZ_ODHACZONE + temat, JSON.stringify([...zbior])); }
-    catch { /* prywatne okno albo pełny dysk — lista działa dalej, tylko bez pamięci */ }
+    catch { /* prywatne okno albo pełny dysk – lista działa dalej, tylko bez pamięci */ }
   }
 
   function pokazUjecia(u) {
@@ -590,7 +590,7 @@ function utworzPlener(z) {
     box.innerHTML = '';
     if (!u || !Array.isArray(u.ujecia) || !u.ujecia.length) return;
 
-    const temat = ($('fp-topic').value.trim() || '—').toLowerCase().slice(0, 40);
+    const temat = ($('fp-topic').value.trim() || '–').toLowerCase().slice(0, 40);
     const zrobione = odhaczone(temat);
 
     const tytul = document.createElement('div');
@@ -598,7 +598,7 @@ function utworzPlener(z) {
     const licznik = document.createElement('span');
     const odswiezLicznik = () => {
       licznik.textContent = t('pl.shots', { n: u.ujecia.length })
-        + (zrobione.size ? ` — ${t('pl.done', { n: zrobione.size })}` : '');
+        + (zrobione.size ? ` – ${t('pl.done', { n: zrobione.size })}` : '');
     };
     odswiezLicznik();
     const wyczysc = document.createElement('button');
@@ -619,7 +619,7 @@ function utworzPlener(z) {
 
       const glowa = document.createElement('div');
       glowa.className = 'plener-shot-head';
-      /* Odhaczanie jest sensem listy — „lista do odhaczenia" bez sposobu
+      /* Odhaczanie jest sensem listy – „lista do odhaczenia" bez sposobu
          odhaczenia byłaby obietnicą na wyrost. W terenie zaznacza się to
          palcem, na telefonie, więc pole leży w nagłówku karty. */
       const ptaszek = document.createElement('input');
@@ -638,7 +638,7 @@ function utworzPlener(z) {
       nazwa.textContent = s.nazwa;
       /* Rola ujęcia na wierzchu. Bez niej lista wygląda jak worek pomysłów
          i dopiero po chwili widać, że są w niej trzy otwarcia i zero zakończeń
-         — co dokładnie się zdarzyło i dopiero człowiek to wyłapał. */
+         – co dokładnie się zdarzyło i dopiero człowiek to wyłapał. */
       const rola = document.createElement('span');
       rola.className = 'plener-shot-role rola-' + (s.rola || 'rozwiniecie');
       rola.textContent = s.rolaOpis || '';
@@ -647,7 +647,7 @@ function utworzPlener(z) {
       liczby.textContent = `${s.ogniskowa} mm · ${s.sekund[0]}-${s.sekund[1]} s`;
       /* Rola i liczby jako JEDNA grupa. Osobno, w zwykłym `flex-wrap`, nazwa
          ujęcia mogła się skurczyć poniżej własnego słowa i „przebitka" wchodziła
-         na plakietkę ROZWINIĘCIE — widać to było na telefonie. Zgrupowane
+         na plakietkę ROZWINIĘCIE – widać to było na telefonie. Zgrupowane
          przenoszą się do drugiej linii razem i nazwa dostaje całą pierwszą. */
       const meta = document.createElement('span');
       meta.className = 'plener-shot-meta';
@@ -690,7 +690,7 @@ function utworzPlener(z) {
     $('mis-lon').value = Number(plenerWspolrzedne.lon).toFixed(5);
   }
 
-  /* Skąd są te współrzędne — napisane wprost pod polami. Dwie liczby same
+  /* Skąd są te współrzędne – napisane wprost pod polami. Dwie liczby same
      z siebie nie mówią, czy to Zakopane, czy dom; a różnicy nie widać, dopóki
      dron nie stoi w polu. */
   function opiszZrodloMisji() {
@@ -704,7 +704,7 @@ function utworzPlener(z) {
   }
 
   for (const id of ['mis-lat', 'mis-lon']) {
-    // Ręczny wpis wygrywa z planem — ale tylko dopóki człowiek go nie cofnie.
+    // Ręczny wpis wygrywa z planem – ale tylko dopóki człowiek go nie cofnie.
     $(id).addEventListener('input', () => {
       misjaReczna = Boolean($('mis-lat').value || $('mis-lon').value);
       opiszZrodloMisji();
@@ -718,13 +718,13 @@ function utworzPlener(z) {
     opiszZrodloMisji();
   });
 
-  /* ILE TO WŁAŚCIWIE LOTU — policzone PRZED pobraniem pliku.
+  /* ILE TO WŁAŚCIWIE LOTU – policzone PRZED pobraniem pliku.
    *
    * Pola „200 × 200, co 50 m" nie mówią nic o tym, czy to trzy minuty, czy
    * czterdzieści. A różnica jest zasadnicza: misja dłuższa niż jedna bateria
    * przerwie się w połowie, dron wróci do domu, a człowiek dowie się o tym
    * stojąc w polu. Liczba linii i długość trasy wychodzą z tych samych wzorów
-   * co `siatka()` w lib/kmz.js — zestaw `plener` porównuje jedno z drugim,
+   * co `siatka()` w lib/kmz.js – zestaw `plener` porównuje jedno z drugim,
    * żeby nie rozjechały się przy pierwszej poprawce. */
   const MAVIC_MINUT = 18;      // realny zapas na misję, z rezerwą na powrót
 
@@ -736,7 +736,7 @@ function utworzPlener(z) {
     if (!(szer > 0 && dl > 0 && odstep > 0 && predkosc > 0)) return null;
     const linii = Math.max(2, Math.ceil(szer / odstep) + 1);
     const metry = linii * dl + (linii - 1) * odstep;
-    // +15% na zakręty i rozpędzanie — dron nie leci całej trasy z prędkością zadaną.
+    // +15% na zakręty i rozpędzanie – dron nie leci całej trasy z prędkością zadaną.
     const minuty = (metry / predkosc) * 1.15 / 60;
     return { linii, punktow: linii * 2, metry, minuty };
   }
@@ -756,14 +756,14 @@ function utworzPlener(z) {
       t('pl.misTime', { min: Math.round(o.minuty) })];
     el.className = 'field-hint';
     el.textContent = czesci.join(' · ');
-    /* Dwa progi, oba twarde. 99 punktów to limit formatu WPML — powyżej plik
+    /* Dwa progi, oba twarde. 99 punktów to limit formatu WPML – powyżej plik
        i tak zostanie odrzucony, więc lepiej powiedzieć to teraz niż w polu. */
     if (o.punktow > 99) {
       el.className = 'field-hint plener-err';
-      el.textContent += ' — ' + t('pl.misTooMany');
+      el.textContent += ' – ' + t('pl.misTooMany');
     } else if (o.minuty > MAVIC_MINUT) {
       el.className = 'field-hint plener-warn';
-      el.textContent += ' — ' + t('pl.misTooLong', { min: MAVIC_MINUT });
+      el.textContent += ' – ' + t('pl.misTooLong', { min: MAVIC_MINUT });
     }
   }
 

@@ -10,7 +10,7 @@
  *   5. zerwane gniazdo → polski komunikat, nie surowe „terminated",
  *   6. „Stop" zanim dostawca odpowie → nic nie trafia do rozmowy,
  *   7. odpowiedź-sierota zapisana bez znacznika narzędzia i z silnikiem,
- *   8. przeciążenie (529) ponowione — oficjalne SDK robią to samo,
+ *   8. przeciążenie (529) ponowione – oficjalne SDK robią to samo,
  *   9. brak środków (insufficient_quota) NIE ponawiany, z podpowiedzią po polsku,
  *  10. Retry-After dłuższy niż cierpliwość → błąd od razu, bez czekania,
  *  11. błąd dostawcy w środku strumienia → nazwana przyczyna, fragment zostaje,
@@ -173,7 +173,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   w = await czat('crlf dlugo');
   const rozpietosc = w.kiedy.length > 1 ? w.kiedy[w.kiedy.length - 1] - w.kiedy[0] : 0;
   ok(w.kiedy.length >= 6 && rozpietosc > 500, `2. ramki \\r\\n płyną na bieżąco (${w.kiedy.length} kawałków w ${rozpietosc} ms)`);
-  ok(w.koniec && !w.koniec.blad, '2. ramki \\r\\n — koniec rozpoznany, bez błędu');
+  ok(w.koniec && !w.koniec.blad, '2. ramki \\r\\n – koniec rozpoznany, bez błędu');
 
   w = await czat('cisza');
   ok(w.koniec && /zamilkł/.test(w.koniec.blad || '') && w.czas < 5000, `3. cisza po nagłówkach → błąd po limicie (${w.czas} ms, ${w.koniec && w.koniec.blad})`);
@@ -199,7 +199,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   await wStop;
   await spij(2500);
   const poStopie = zPliku('rozmowastop').messages.filter((m) => m.role === 'assistant');
-  ok(st.ok === true, `6. „Stop" przed nagłówkami dostawcy — przyjęty (${JSON.stringify(st)})`);
+  ok(st.ok === true, `6. „Stop" przed nagłówkami dostawcy – przyjęty (${JSON.stringify(st)})`);
   ok(poStopie.length === 0, `6. nic nie trafiło do rozmowy po „Stop" (${poStopie.length})`);
 
   nowa('rozmowasierota');
@@ -211,7 +211,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
 
   // --- 8–10: ponawiać tylko to, co ponowienie może naprawić
   w = await czat('przeciazony');
-  ok(w.koniec && !w.koniec.blad && proby.przeciazony === 3, `8. przeciążenie (529) ponowione — ${proby.przeciazony} żądania, odpowiedź doszła`);
+  ok(w.koniec && !w.koniec.blad && proby.przeciazony === 3, `8. przeciążenie (529) ponowione – ${proby.przeciazony} żądania, odpowiedź doszła`);
   w = await czat('brakgotowki');
   ok(w.status === 429 && proby.brakgotowki === 1, `9. brak środków nie ponawiany (${proby.brakgotowki} żądanie)`);
   ok(/środki|limit wydatków/i.test(w.json && w.json.error || ''), `9. podpowiedź mówi o środkach, nie „spróbuj za chwilę" (${(w.json && w.json.error || '').slice(0, 90)}…)`);
@@ -237,7 +237,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
 
   // --- 13: zdjęcie odrzucone kodem 500, model wizyjny ustawiony
   w = await czat('zdjecie', { dodatki: { model: 'slepy-model-spoza-katalogu' },
-    tresc: [{ type: 'text', text: 'zdjecie — co tu jest?' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }] });
+    tresc: [{ type: 'text', text: 'zdjecie – co tu jest?' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }] });
   ok(w.koniec && !w.koniec.blad && decodeURIComponent(w.naglowki.get('x-cosmos-model') || '') === 'wizja-model'
     && decodeURIComponent(w.naglowki.get('x-cosmos-model-swapped-from') || '') === 'slepy-model-spoza-katalogu',
   `13. odmowa obrazu (500) → ponowienie z modelem wizyjnym, jawnie (${w.naglowki && w.naglowki.get('x-cosmos-model')})`);
@@ -247,14 +247,14 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   ok(w.koniec && !w.koniec.blad && /Przemyślana/.test(w.txt), `14. Claude myślący 2,5 s po cichu nie jest „zamilkłym" (${w.koniec && w.koniec.blad})`);
   ok(/: puls/.test(w.txt), '14. w czasie ciszy przeglądarka dostaje puls (Cloudflare nie zerwie)');
   w = await czat('myslipocichu', { dodatki: { model: 'zwykly-model' } });
-  ok(w.koniec && /zamilkł/.test(w.koniec.blad || ''), '14. zwykły model milczący tak samo długo — dalej „zamilkł" po 1,5 s');
+  ok(w.koniec && /zamilkł/.test(w.koniec.blad || ''), '14. zwykły model milczący tak samo długo – dalej „zamilkł" po 1,5 s');
 
   // --- 19: odmowa formatu obrazu
-  w = await czat('zlyformat', { tresc: [{ type: 'text', text: 'zlyformat — co tu jest?' }, { type: 'image_url', image_url: { url: 'data:image/bmp;base64,Qk0=' } }] });
+  w = await czat('zlyformat', { tresc: [{ type: 'text', text: 'zlyformat – co tu jest?' }, { type: 'image_url', image_url: { url: 'data:image/bmp;base64,Qk0=' } }] });
   ok(w.status === 400 && proby.zlyformat === 1 && /nie przyjmuje obrazu w tym formacie/.test(w.json.error || '') && !/widzi obrazy/.test(w.json.error || ''),
     `19. odmowa formatu → rada o formacie, bez zbędnej próby modelem wizyjnym (${proby.zlyformat} żądanie: ${(w.json.error || '').slice(0, 50)}…)`);
 
-  // --- 18: drugi POST z tym samym biegiem — jedno żądanie do dostawcy
+  // --- 18: drugi POST z tym samym biegiem – jedno żądanie do dostawcy
   const biegDubel = los();
   const pierwszyPost = czat('dubelbiegu', { bieg: biegDubel });
   await spij(200);
@@ -287,7 +287,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   zabij(srv3);
   czarnaDziura.close();
 
-  // --- 15: restart w trakcie odpowiedzi (musi być ostatni — zamyka serwer)
+  // --- 15: restart w trakcie odpowiedzi (musi być ostatni – zamyka serwer)
   nowa('rozmowarestart');
   const wRestart = czat('dlugo restart', { rozmowa: 'rozmowarestart', zerwijPoMs: 300 });
   await spij(450);
@@ -319,7 +319,7 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   const l1 = await czat('uspiony', { adres: S2, dodatki: { endpoint: 'local' } });
   ok(l1.status === 502 && /uśpiony|poza Tailscale/.test(l1.json.error || ''), `16. uśpiony komputer → nazwana przyczyna (${l1.czas} ms: ${(l1.json.error || '').slice(0, 60)}…)`);
   const l2 = await czat('uspiony', { adres: S2, dodatki: { endpoint: 'local' } });
-  ok(l2.status === 502 && l2.czas < 1000 && /przed chwilą/.test(l2.json.error || ''), `16. druga wiadomość bez czekania — bezpiecznik (${l2.czas} ms)`);
+  ok(l2.status === 502 && l2.czas < 1000 && /przed chwilą/.test(l2.json.error || ''), `16. druga wiadomość bez czekania – bezpiecznik (${l2.czas} ms)`);
   zabij(srv2);
 
   zabij(srv); atrapa.close();

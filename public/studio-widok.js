@@ -1,10 +1,10 @@
 /* ============================================================
-   STUDIO — widok: obraz, szablony promptów, storyboard, edycja (inpainting),
+   STUDIO – widok: obraz, szablony promptów, storyboard, edycja (inpainting),
    dźwięk i wideo
 
    Wydzielone z app.js (propozycja podziału zespołu IT: „studio-widok.js").
-   Jak reszta modułów: zależności wchodzą przez fabrykę, bo app.js — ładowany
-   jako ostatni — trzyma `$`, `el` i wspólne pomocniki. Długie generowanie
+   Jak reszta modułów: zależności wchodzą przez fabrykę, bo app.js – ładowany
+   jako ostatni – trzyma `$`, `el` i wspólne pomocniki. Długie generowanie
    wraca z serwera jako zadanie w tle (202); dopytuje je czekajNaZadanie
    z narzedzia.js.
    ============================================================ */
@@ -44,7 +44,7 @@ function utworzStudioWidok(z) {
         const box = $(`studio-sec-${sec}`);
         box.classList.toggle('disabled', !on);
         box.querySelector('.studio-off').style.display = on ? 'none' : '';
-        /* Wyszarzenie samym CSS-em zostawiało przyciski klikalne z klawiatury —
+        /* Wyszarzenie samym CSS-em zostawiało przyciski klikalne z klawiatury –
            Enter nie robił nic i nic nie mówił. Wyłączamy je naprawdę. */
         box.querySelectorAll('button, input, select, textarea').forEach((x) => { x.disabled = !on; });
       }
@@ -89,7 +89,7 @@ function utworzStudioWidok(z) {
   });
 
   /* Studio: praca dłuższa niż ~75 s wraca jako zadanie w tle (202), które
-     dopytujemy — czekajNaZadanie w narzedzia.js. Człowiek widzi, że trwa
+     dopytujemy – czekajNaZadanie w narzedzia.js. Człowiek widzi, że trwa
      dłużej niż zwykle, i wie, że wynik i tak trafi do bazy wiedzy. */
   function zadanieStudia(gdzie) {
     return {

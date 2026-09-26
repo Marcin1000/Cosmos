@@ -1,29 +1,29 @@
 #!/usr/bin/env node
 /**
- * Cosmos — serwer aplikacji AI („dyrygent orkiestry”)
+ * Cosmos – serwer aplikacji AI („dyrygent orkiestry”)
  *
  * Łączy w jeden organizm:
- *   • cloud  — chmura NVIDIA (build.nvidia.com) — rozumowanie / wizja,
- *   • local  — model na Twoim GPU (Ollama / vLLM / NIM),
- *   • senses — usługa percepcji (Python): słuch (Whisper), głos (Piper),
+ *   • cloud  – chmura NVIDIA (build.nvidia.com) – rozumowanie / wizja,
+ *   • local  – model na Twoim GPU (Ollama / vLLM / NIM),
+ *   • senses – usługa percepcji (Python): słuch (Whisper), głos (Piper),
  *              widzenie (YOLO/MediaPipe) i zdarzenia z czujników.
  *
  * Zdarzenia percepcji trafiają do kontekstu rozmowy, więc model
- * „wie”, co dzieje się wokół — jak jeden byt, nie zbiór narzędzi.
+ * „wie”, co dzieje się wokół – jak jeden byt, nie zbiór narzędzi.
  *
- * Zero zależności — wystarczy Node.js >= 18.
+ * Zero zależności – wystarczy Node.js >= 18.
  */
 
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-// Katalog modeli współdzielony z przeglądarką — jedno miejsce wiedzy o tym,
+// Katalog modeli współdzielony z przeglądarką – jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
 const { modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
-   da się obsłużyć żądania. Zależność idzie tylko w jedną stronę — rdzeń nie
+   da się obsłużyć żądania. Zależność idzie tylko w jedną stronę – rdzeń nie
    wie nic o rozmowach, zmysłach ani o Studiu. */
 const {
   PORT, HOST, PUBLIC_DIR, DATA_DIR, ENDPOINTS, STUDIO, SENSES_URL, SECRETS,
@@ -31,7 +31,7 @@ const {
   modelErrorHint, authHeaders, saveJsonFile, zapiszAtomowo, czytajJson, genId, fireflyEnabled, imageProviders, ustawStraznikaSilnikow,
 } = require('./lib/rdzen.js');
 /* Wiele osób: kontekst żądania, konta, uprawnienia do silników, stan osoby
-   i trasy kont. Zasady — w nagłówkach tych modułów; bramka logowania zostaje
+   i trasy kont. Zasady – w nagłówkach tych modułów; bramka logowania zostaje
    niżej, w routerze (audyt sprawdza ją strukturalnie). */
 const { stan, naUzytkownika, istniejacy, wKontekscie, kto, czyWlasciciel, katalogDla,
   zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
@@ -45,7 +45,7 @@ const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
   konta, silniki, kto, katalogDla, zapomnij, WLASCICIEL_ID,
   DATA_DIR, ENDPOINTS, STUDIO, imageProviders, sendJson, readJson, readBodyBuffer,
 });
-/* Czy sesja, z którą przyszło żądanie, dalej istnieje — dla połączeń, które
+/* Czy sesja, z którą przyszło żądanie, dalej istnieje – dla połączeń, które
    trwają długo (strumień zdarzeń, widz odpowiedzi): „Wyloguj wszędzie" i zmiana
    hasła mają je zerwać, a nie tylko odrzucać nowe żądania. */
 const sesjaWazna = (req) => () => Boolean(ktoPyta(req));
@@ -63,7 +63,7 @@ const archiwum_ = require('./lib/archiwum.js');
 const pamiecModul_ = require('./lib/pamiec.js');
 /* Archiwum i OneDrive KAŻDEJ OSOBY OSOBNO. Pośrednik kieruje każde
    `archiwum.coś(…)` do instancji bieżącej osoby, więc reszta pliku się nie
-   zmienia — a mimo to nikt nie przeszuka cudzych zdjęć. Dom (do pory światła
+   zmienia – a mimo to nikt nie przeszuka cudzych zdjęć. Dom (do pory światła
    dla zdjęć bez GPS-u) ustawiamy przy tworzeniu instancji, z lokalizacji tej
    samej osoby. */
 const archiwum = naUzytkownika('archiwum', (katalog) => {
@@ -90,18 +90,18 @@ const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
   startScheduler, wzorce, procedury, rutyny, dodajProcedure } = nauka_;
 const studio_ = require('./lib/studio.js');
 const { handleStudio, tsName } = studio_;
-// Praca dłuższa niż 100 s Cloudflare'a (Studio) — zadanie w tle z numerem do dopytywania.
+// Praca dłuższa niż 100 s Cloudflare'a (Studio) – zadanie w tle z numerem do dopytywania.
 const zadania_ = require('./lib/zadania.js').utworzZadania();
 // Limit miejsca na osobę i 507 zamiast „ok", gdy zapis się nie udał.
 const miejsce_ = require('./lib/miejsce.js');
 const bladZapisu = (res, err) => miejsce_.odpowiedzBledemZapisu(res, sendJson, err);
 const { llmComplete } = require('./lib/model.js');
-// Pliki statyczne (strona, aplikacja, czcionki, ikony) i CSP aplikacji — lib/statyka.js.
+// Pliki statyczne (strona, aplikacja, czcionki, ikony) i CSP aplikacji – lib/statyka.js.
 const { serveStatic } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
 
 
 // ---------------------------------------------------------------------------
-// Pamięć długotrwała (RAG) — całość w lib/pamiec.js.
+// Pamięć długotrwała (RAG) – całość w lib/pamiec.js.
 // Tutaj tylko spięcie zależności i cienkie przejścia dla reszty pliku.
 // ---------------------------------------------------------------------------
 const pamiec_ = naUzytkownika('pamiec', (katalog) => pamiecModul_.utworz({
@@ -116,38 +116,38 @@ const searchMemory = (q, limit) => pamiec_.searchMemory(q, limit);
 const memoryContextLines = (items) => pamiec_.memoryContextLines(items);
 const embedTexts = (texts, timeoutMs, inputType) => pamiec_.embedTexts(texts, timeoutMs, inputType);
 const embedStatus = (sensesHasEmbed) => pamiec_.embedStatus(sensesHasEmbed);
-// Czyste funkcje podobieństwa — z modułu, nie z instancji: potrzebne też poza żądaniem.
+// Czyste funkcje podobieństwa – z modułu, nie z instancji: potrzebne też poza żądaniem.
 const { cosine, sameModel, keywordScore } = pamiecModul_;
 
 /* Stan bieżącej osoby: indeks rozmów, profil, lokalizacja, sprzęt, baza
-   wiedzy, oś czasu — lib/stan-osoby.js. */
+   wiedzy, oś czasu – lib/stan-osoby.js. */
 const U = () => stanOsoby(BRIEFING);
-// Plan zdjęciowy, misja drona, Canon, zestaw sprzętu — lib/plener-trasy.js.
+// Plan zdjęciowy, misja drona, Canon, zestaw sprzętu – lib/plener-trasy.js.
 const plener_ = require('./lib/plener-trasy.js').utworz({ U, readJson, sendJson, addEvent, bladZapisu });
-// Pośrednik do usługi zmysłów (Python w domu właściciela) — lib/zmysly-proxy.js.
+// Pośrednik do usługi zmysłów (Python w domu właściciela) – lib/zmysly-proxy.js.
 const zmysly_ = require('./lib/zmysly-proxy.js').utworz({ U });
-// Historia rozmów: jeden plik na rozmowę + indeks — lib/rozmowy.js.
+// Historia rozmów: jeden plik na rozmowę + indeks – lib/rozmowy.js.
 const rozmowy_ = require('./lib/rozmowy.js').utworz({ U, readJson, sendJson, bladZapisu });
 const { convPath } = rozmowy_;
-// Baza wiedzy: pliki, linki, notatki, fragmenty z wektorami — lib/baza-wiedzy.js.
+// Baza wiedzy: pliki, linki, notatki, fragmenty z wektorami – lib/baza-wiedzy.js.
 const kb_ = require('./lib/baza-wiedzy.js').utworz({
   U, readJson, readBodyBuffer, sendJson, bladZapisu, addEvent, embedTexts, stripTags, czytelnyTekst, SENSES_URL,
 });
 const { kbPliki: KB_FILES, saveKb, kbAddFile, kbItemMeta, kbSearch, obrazDlaModelu, extractKbText, extOf, wymagaTranskrypcji } = kb_;
 
 /* Funkcje save* NIE rzucają (wołają je też timery, gdzie wyjątek wywróciłby
-   proces), ale ZWRACAJĄ błąd — null znaczy „zapisane". Trasa, która po zapisie
+   proces), ale ZWRACAJĄ błąd – null znaczy „zapisane". Trasa, która po zapisie
    odpowiada „ok", sprawdza wynik: pełny dysk ma dać 507, a nie `{ ok: true }`
    dla czegoś, czego po restarcie nie będzie (lib/miejsce.js). */
 const { zapiszLubBlad } = miejsce_;
 
-/* Biegi — trwające odpowiedzi modelu, które należą do serwera, a nie do karty
+/* Biegi – trwające odpowiedzi modelu, które należą do serwera, a nie do karty
    przeglądarki. Zamknięcie karty ich nie przerywa; patrz lib/biegi.js. */
 const biegi_ = require('./lib/biegi.js').utworz({
   zapiszOdpowiedz: rozmowy_.dopiszWiadomosc,
 });
 
-// Profil użytkownika — trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
+// Profil użytkownika – trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
 const PROFILE_FILE = () => path.join(U().katalog, 'profile.txt');
 function saveProfile(text) {
   const profil = String(text || '').slice(0, 4000);
@@ -156,12 +156,12 @@ function saveProfile(text) {
   return blad;
 }
 
-/* Lokalizacja domowa — osobno od profilu, bo używa jej nie tylko rozmowa,
+/* Lokalizacja domowa – osobno od profilu, bo używa jej nie tylko rozmowa,
    ale i wyszukiwanie („warsztat … w Piasecznie"). Bez niej model pyta
    „w jakim mieście jesteś?" przy każdym pytaniu o cokolwiek w okolicy. */
 const LOCATION_FILE = () => path.join(U().katalog, 'location.txt');
 /* Sama nazwa miejsca wystarczała do wyszukiwania, ale nie do liczenia pozycji
-   Słońca — złota godzina wymaga stopni, nie napisu „Piaseczno". Trzymamy
+   Słońca – złota godzina wymaga stopni, nie napisu „Piaseczno". Trzymamy
    jedno i drugie: nazwę dla modelu, współrzędne dla matematyki. */
 const WSPOLRZEDNE_FILE = () => path.join(U().katalog, 'location.json');
 
@@ -187,7 +187,7 @@ function saveLocation(text, wspolrzedne) {
   return null;
 }
 
-/* Data i godzina. Model zna świat wyłącznie do końca swojego treningu —
+/* Data i godzina. Model zna świat wyłącznie do końca swojego treningu –
    bez tej linijki na pytanie „który dziś?" zgaduje, i to nie „nie wiem",
    tylko konkretną złą datę. Strefa z ENV, bo serwer stoi w UTC. */
 const STREFA_CZASU = process.env.COSMOS_TZ || 'Europe/Warsaw';
@@ -245,7 +245,7 @@ async function handleGeokod(req, res) {
 }
 
 /* Załącznik do ROZMOWY (nie do bazy wiedzy). Cosmos wyciąga tekst i oddaje go
-   przeglądarce, która dokleja go do wiadomości — model dostaje treść umowy,
+   przeglądarce, która dokleja go do wiadomości – model dostaje treść umowy,
    a nie informację, że plik istnieje. */
 const DOKUMENT_MAX_B = Number(process.env.DOCUMENT_MAX_BYTES || 25_000_000);
 const DOKUMENT_ZNAKI = Number(process.env.DOCUMENT_MAX_CHARS || 120_000);
@@ -258,7 +258,7 @@ async function handleDokument(req, res) {
     return sendJson(res, 413, { error: `Plik większy niż ${Math.round(DOKUMENT_MAX_B / 1e6)} MB.` });
   }
   const ext = extOf(nazwa);
-  /* Przeglądarka czeka na ten tekst — całość musi się zmieścić przed limitem
+  /* Przeglądarka czeka na ten tekst – całość musi się zmieścić przed limitem
      Cloudflare (100 s), inaczej zamiast odpowiedzi przychodzi strona 524. */
   const tekst = (await extractKbText(nazwa, req.headers['content-type'] || '', buf, { czasMs: 85000 })) || '';
   if (!tekst.trim()) {
@@ -266,9 +266,9 @@ async function handleDokument(req, res) {
       name: nazwa, chars: 0, text: '',
       error: wymagaTranskrypcji(nazwa, req.headers['content-type'] || '')
         ? 'Nie udało się przepisać nagrania od ręki (zmysły wyłączone albo nagranie za długie na minutę czekania). '
-          + 'Dodaj je do bazy wiedzy — tam przepisze się w tle.'
+          + 'Dodaj je do bazy wiedzy – tam przepisze się w tle.'
         : ext === 'pdf'
-        ? 'To wygląda na skan — nie ma w nim warstwy tekstowej. Odczytanie wymaga OCR, '
+        ? 'To wygląda na skan – nie ma w nim warstwy tekstowej. Odczytanie wymaga OCR, '
           + 'czyli uruchomionej usługi zmysłów na komputerze domowym.'
         : `Nie umiem odczytać pliku .${ext}. Obsługiwane: PDF, DOCX, XLSX, PPTX, CSV i pliki tekstowe.`,
     });
@@ -284,7 +284,7 @@ async function handleDokument(req, res) {
 }
 
 /* Uruchomienie kodu napisanego przez model. Ograniczenia i to, czego one NIE
-   obejmują, opisuje nagłówek lib/kod.js — najkrócej: brak dostępu do plików
+   obejmują, opisuje nagłówek lib/kod.js – najkrócej: brak dostępu do plików
    serwera i podprocesów, zero zmiennych środowiskowych, twardy limit czasu. */
 async function handleUruchom(req, res) {
   if (!KOD_WLACZONY) return sendJson(res, 503, { error: 'Wykonywanie kodu jest wyłączone (CODE_EXEC=off).' });
@@ -316,7 +316,7 @@ async function handleOneDrive(req, res, p) {
             dodanych: U().indeksowanie.dodanych, blad: U().indeksowanie.blad, wznowione: U().indeksowanie.wznowione }
         : null,
       wArchiwum: archiwum.ile(),
-      // Ile z tego ma już dane z plików — patrz `postep()` w lib/archiwum.js.
+      // Ile z tego ma już dane z plików – patrz `postep()` w lib/archiwum.js.
       postep: archiwum.postep(),
     });
   }
@@ -329,7 +329,7 @@ async function handleOneDrive(req, res, p) {
       });
     }
     /* `state` chroni przed podrzuceniem cudzego kodu autoryzacyjnego:
-       wracający callback musi podać dokładnie tę wartość — i wrócić do TEJ
+       wracający callback musi podać dokładnie tę wartość – i wrócić do TEJ
        SAMEJ osoby. Wspólny zbiór pozwalał członkowi podsunąć właścicielowi
        link z kodem ze swojego konta Microsoft: archiwum właściciela
        indeksowało wtedy cudzy OneDrive. Losowanie kryptograficzne, nie genId(). */
@@ -381,10 +381,10 @@ async function handleOneDrive(req, res, p) {
 
   if (p === '/api/onedrive/index' && req.method === 'DELETE') {
     if (U().indeksowanie) U().indeksowanie.sygnal.przerwane = true;
-    // Człowiek przerwał świadomie — następne indeksowanie zaczyna od początku.
+    // Człowiek przerwał świadomie – następne indeksowanie zaczyna od początku.
     if (U().indeksowanie) U().indeksowanie.porzuc = true;
     /* Bez trwającego indeksowania (np. po nieudanym wznowieniu) kolejki nie
-       skasowałby nikt — „Stop" robi to wprost. */
+       skasowałby nikt – „Stop" robi to wprost. */
     if (!U().indeksowanie || !U().indeksowanie.trwa) { try { fs.unlinkSync(KOLEJKA_ONEDRIVE()); } catch { /* nie było */ } }
     return sendJson(res, 200, { przerwano: true });
   }
@@ -392,13 +392,13 @@ async function handleOneDrive(req, res, p) {
   /* ODŁĄCZENIE ŹRÓDŁA TO NIE TO SAMO CO USUNIĘCIE MATERIAŁU.
    *
    *  Stało tu `archiwum.usunZrodlo('onedrive')`, czyli odłączenie konta
-   *  kasowało CAŁY zaindeksowany materiał — u Marcina 55 tysięcy plików
+   *  kasowało CAŁY zaindeksowany materiał – u Marcina 55 tysięcy plików
    *  razem z rozpoznanymi treściami i dociągniętym EXIF-em. Wystarczyło
    *  odłączyć i podłączyć konto z powrotem (choćby po to, żeby odświeżyć
    *  poświadczenia), żeby stracić godziny pracy karty graficznej.
    *
    *  Przeczyło to zasadzie zapisanej w nagłówku `lib/archiwum.js`: indeks
-   *  jest PASYWNY i ma działać bez połączenia — „ile klipów 50 mm w tym
+   *  jest PASYWNY i ma działać bez połączenia – „ile klipów 50 mm w tym
    *  roku" ma odpowiedzieć z telefonu w terenie przy wyłączonym komputerze.
    *  Bez połączenia nie działają MINIATURY, bo podpisane adresy trzeba
    *  dociągać na bieżąco; metadane nie mają z tym nic wspólnego.
@@ -415,11 +415,11 @@ async function handleOneDrive(req, res, p) {
   return sendJson(res, 404, { error: 'Nieznana trasa OneDrive.' });
 }
 
-/* Kolejka folderów OneDrive na dysku osoby — żeby restart serwera w połowie
+/* Kolejka folderów OneDrive na dysku osoby – żeby restart serwera w połowie
    przejścia po 2 TB nie zaczynał go od korzenia. Zapis najwyżej co
    KOLEJKA_ZAPIS_MS (kolejka potrafi mieć tysiące adresów), usunięcie po
    skończeniu albo po przerwaniu przez człowieka. Błąd Graph (wygasły token,
-   brak sieci) kolejkę ZOSTAWIA — do dokończenia. */
+   brak sieci) kolejkę ZOSTAWIA – do dokończenia. */
 const KOLEJKA_ONEDRIVE = () => path.join(U().katalog, 'onedrive-kolejka.json');
 const KOLEJKA_ZAPIS_MS = Number(process.env.COSMOS_ONEDRIVE_ZAPIS_MS ?? 2000);
 
@@ -436,7 +436,7 @@ function ruszIndeksowanieOneDrive({ folder, limit, wznow }) {
   (async () => {
     try {
       const wynik = await onedrive.indeksuj(async (paczka) => {
-        // Porcjami — strona z Graph to setki plików, liczonych jednym ciągiem.
+        // Porcjami – strona z Graph to setki plików, liczonych jednym ciągiem.
         await archiwum.dodajPorcjami(paczka);
         ind.dodanych += paczka.length;
       }, {
@@ -447,7 +447,7 @@ function ruszIndeksowanieOneDrive({ folder, limit, wznow }) {
           ostatniZapis = Date.now();
           /* Najpierw archiwum, potem kolejka: kolejka nie może obiecywać
              folderów „zrobionych", których wpisów nie ma jeszcze na dysku. Stąd
-             zapis obejmujący wszystko do teraz — i kolejka tylko po udanym
+             zapis obejmujący wszystko do teraz – i kolejka tylko po udanym
              (pełny dysk: kilkukilobajtowa kolejka by się zapisała, a archiwum nie). */
           if (!(await archiwum.zapiszPoTeraz())) return;
           try { zapiszAtomowo(plik, JSON.stringify({ folder, limit, ...stanKolejki, zapisano: Date.now() })); } catch { /* następnym razem */ }
@@ -460,14 +460,14 @@ function ruszIndeksowanieOneDrive({ folder, limit, wznow }) {
       console.error('Indeksowanie OneDrive:', err.message);
     } finally {
       ind.trwa = false;
-      // `zapisz()` jest asynchroniczny — czekamy, żeby „indeksowanie
+      // `zapisz()` jest asynchroniczny – czekamy, żeby „indeksowanie
       // skończone" znaczyło też „zapisane na dysk".
       await archiwum.zapisz();
     }
   })();
 }
 
-/** Po starcie serwera: dokończ przerwane indeksowania — każdej osoby w jej imieniu. */
+/** Po starcie serwera: dokończ przerwane indeksowania – każdej osoby w jej imieniu. */
 function wznowIndeksowaniaOneDrive() {
   const zwloka = Number(process.env.COSMOS_WZNOW_ONEDRIVE_MS ?? 15000);
   setTimeout(() => {
@@ -490,8 +490,8 @@ const escapeHtmlSerwer = (s) => String(s || '').replace(/[&<>"]/g,
   (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[z]));
 
 // ---------------------------------------------------------------------------
-// SAMOŚWIADOMOŚĆ — manifest zdolności.
-//   Cosmos musi wiedzieć, czym JEST i co REALNIE potrafi w tej chwili — nie
+// SAMOŚWIADOMOŚĆ – manifest zdolności.
+//   Cosmos musi wiedzieć, czym JEST i co REALNIE potrafi w tej chwili – nie
 //   z wyuczonej formułki, tylko z żywego stanu systemu. Dzięki temu nie obiecuje
 //   rzeczy, których nie ma skonfigurowanych, i potrafi powiedzieć, jak je włączyć.
 // ---------------------------------------------------------------------------
@@ -500,8 +500,8 @@ let sensesCache = { at: 0, online: false, caps: {} };
 let sensesOdswiezanie = null;
 
 /* Odpytanie zmysłów NIE MOŻE wstrzymywać rozmowy.
-   Tak było: co minutę cache wygasał, a `capabilityManifest()` — czekający na
-   ten fetch — jest awaitowany PRZED wysłaniem pytania do modelu. Komputer
+   Tak było: co minutę cache wygasał, a `capabilityManifest()` – czekający na
+   ten fetch – jest awaitowany PRZED wysłaniem pytania do modelu. Komputer
    domowy Marcina bywa wyłączony, więc raz na minutę pierwsza wiadomość
    płaciła do 1,5 s ciszy, zanim model w ogóle dostał pytanie.
 
@@ -524,7 +524,7 @@ function sensesState() {
       }
     })();
   }
-  // Przy pierwszym w życiu zapytaniu nie ma czego oddać — wtedy czekamy,
+  // Przy pierwszym w życiu zapytaniu nie ma czego oddać – wtedy czekamy,
   // ale tylko ten jeden raz, nie co minutę.
   return sensesCache.at ? sensesCache : sensesOdswiezanie.then(() => sensesCache);
 }
@@ -534,9 +534,9 @@ function moduleExists(...parts) {
 }
 
 async function capabilityManifest() {
-  // Członek bez zgody na zmysły ich nie ma — model nie może mu ich obiecywać.
+  // Członek bez zgody na zmysły ich nie ma – model nie może mu ich obiecywać.
   const senses = silniki.zmyslyDozwolone() ? await sensesState() : { online: false, caps: {} };
-  /* Manifest idzie do kontekstu czatu tej osoby — ma mówić o JEJ możliwościach.
+  /* Manifest idzie do kontekstu czatu tej osoby – ma mówić o JEJ możliwościach.
      Członkowi obiecywał Studio i silniki, których mu nie przyznano, i oddawał
      ścieżkę eksportu z dysku serwera (zasada 8). */
   const studio = silniki.studioDozwolone();
@@ -545,24 +545,24 @@ async function capabilityManifest() {
   try { require.resolve('playwright'); playwright = true; } catch { /* brak */ }
 
   const missing = [];
-  if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA — ustaw NVIDIA_API_KEY w .env');
-  if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX — uruchom Ollamę i ustaw LOCAL_MODEL');
-  if (!senses.online) missing.push('zmysły (mowa, wzrok) — uruchom python senses/service.py');
+  if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA – ustaw NVIDIA_API_KEY w .env');
+  if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX – uruchom Ollamę i ustaw LOCAL_MODEL');
+  if (!senses.online) missing.push('zmysły (mowa, wzrok) – uruchom python senses/service.py');
   if (!embedStatus(senses.caps && senses.caps.embed).provider) {
-    missing.push('wyszukiwanie semantyczne — uruchom zmysły albo ustaw NVIDIA_API_KEY '
+    missing.push('wyszukiwanie semantyczne – uruchom zmysły albo ustaw NVIDIA_API_KEY '
       + '(embeddingi z chmury działają też przy wyłączonym komputerze domowym)');
   }
-  if (!imgs.length) missing.push('generowanie obrazów — ustaw OPENAI_API_KEY lub FIREFLY_CLIENT_ID');
-  if (!STUDIO.eleven.key) missing.push('lektor ElevenLabs — ustaw ELEVENLABS_API_KEY');
-  if (!STUDIO.seedance.key) missing.push('wideo Seedance — ustaw SEEDANCE_API_KEY');
-  if (!playwright) missing.push('nagrywanie i automatyzacja stron — npm install playwright');
-  if (!secretsEnabled()) missing.push('logowanie z menedżera haseł — ustaw SECRETS_PROVIDER');
-  if (!BRIEFING.lat || !BRIEFING.lon) missing.push('poranna odprawa (pogoda) — ustaw BRIEFING_LAT i BRIEFING_LON');
-  if (!BRIEFING.ics) missing.push('kalendarz w odprawie — ustaw CALENDAR_ICS');
-  if (!urzadzenia().length) missing.push('sterowanie urządzeniami — dodaj je w Ustawieniach → Urządzenia');
+  if (!imgs.length) missing.push('generowanie obrazów – ustaw OPENAI_API_KEY lub FIREFLY_CLIENT_ID');
+  if (!STUDIO.eleven.key) missing.push('lektor ElevenLabs – ustaw ELEVENLABS_API_KEY');
+  if (!STUDIO.seedance.key) missing.push('wideo Seedance – ustaw SEEDANCE_API_KEY');
+  if (!playwright) missing.push('nagrywanie i automatyzacja stron – npm install playwright');
+  if (!secretsEnabled()) missing.push('logowanie z menedżera haseł – ustaw SECRETS_PROVIDER');
+  if (!BRIEFING.lat || !BRIEFING.lon) missing.push('poranna odprawa (pogoda) – ustaw BRIEFING_LAT i BRIEFING_LON');
+  if (!BRIEFING.ics) missing.push('kalendarz w odprawie – ustaw CALENDAR_ICS');
+  if (!urzadzenia().length) missing.push('sterowanie urządzeniami – dodaj je w Ustawieniach → Urządzenia');
 
   return {
-    tozsamosc: 'Cosmos — osobiste, prywatne środowisko AI użytkownika. Mózgiem jest model '
+    tozsamosc: 'Cosmos – osobiste, prywatne środowisko AI użytkownika. Mózgiem jest model '
       + 'językowy (domyślnie NVIDIA Nemotron), ale Cosmos to całość: pamięć, zmysły, '
       + 'narzędzia i zdolność uczenia się. Wszystko działa na sprzęcie użytkownika '
       + 'albo na jego serwerze; dane i klucze nie należą do nikogo innego.',
@@ -583,7 +583,7 @@ async function capabilityManifest() {
     teren: { photoscan: moduleExists('senses', 'photoscan.py'),
       terrain: moduleExists('senses', 'terrain.py') },
     /* Plener. Bez tego wpisu Cosmos na pytanie „co potrafisz" nie wymieniał
-       ani misji waypointowej, ani kart ujęć — a od kiedy mają interfejs,
+       ani misji waypointowej, ani kart ujęć – a od kiedy mają interfejs,
        jest dokąd odesłać człowieka zamiast tłumaczyć trasę HTTP. */
     plener: {
       sprzet: [U().sprzet.korpus, U().sprzet.obiektywy, U().sprzet.dodatki].filter(Boolean).join(' · ') || null,
@@ -593,14 +593,14 @@ async function capabilityManifest() {
       archiwum: onedrive.skonfigurowany(),
     },
     /* Liczba rozmów, nie dokładna liczba przykładów. Dokładną liczy
-       buildTrainingDataset, czytając i parsując KAŻDĄ rozmowę — a manifest
+       buildTrainingDataset, czytając i parsując KAŻDĄ rozmowę – a manifest
        idzie do kontekstu przy każdej wiadomości: 114 ms stania serwera na
        wiadomość przy 300 rozmowach. Dokładnie liczy /api/train/env, gdy
        ktoś naprawdę otwiera trening. Trening jest tylko u właściciela. */
     trening: czyWlasciciel()
       ? { przykladyChat: U().convIndex.length, skrypt: moduleExists('training', 'qlora_example.py') }
       : null,
-    // Braki w konfiguracji serwera naprawia właściciel — członkowi to tylko szum.
+    // Braki w konfiguracji serwera naprawia właściciel – członkowi to tylko szum.
     brakujace: czyWlasciciel() ? missing : [],
   };
 }
@@ -610,19 +610,19 @@ function capabilityText(m) {
   const yes = (v) => (v ? 'tak' : 'nie');
   const z = m.zmysly;
   const lines = [
-    'KIM JESTEŚ — TWOJE REALNE MOŻLIWOŚCI (stan na teraz, nie ogólniki):',
+    'KIM JESTEŚ – TWOJE REALNE MOŻLIWOŚCI (stan na teraz, nie ogólniki):',
     m.tozsamosc,
     '',
     'Mózgi: ' + m.mozgi.map((b) => `${b.id}=${b.model}${b.gotowy ? '' : ' (niegotowy)'}`).join(', '),
-    `Zmysły: ${z.online ? 'online' : 'offline'} — mowa(Whisper)=${yes(z.whisper)}, `
+    `Zmysły: ${z.online ? 'online' : 'offline'} – mowa(Whisper)=${yes(z.whisper)}, `
       + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, `
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
     // MediaPipe bywa zainstalowany, ale żadna funkcja interfejsu go nie wywołuje.
     // Bez tego zastrzeżenia model obiecywał odczyt sylwetki, którego nie ma.
     `Sylwetka (MediaPipe): ${z.mediapipe ? 'biblioteka zainstalowana, ale ŻADNA funkcja '
-      + 'Cosmosa jej nie wywołuje — nie obiecuj odczytu sylwetki z kamery przeglądarki' : 'nie'}`,
+      + 'Cosmosa jej nie wywołuje – nie obiecuj odczytu sylwetki z kamery przeglądarki' : 'nie'}`,
     `Kinect 360: ${z.kinect
-      ? 'podłączony — masz podgląd obrazu i mapy głębi w panelu „Kamera na żywo”, '
+      ? 'podłączony – masz podgląd obrazu i mapy głębi w panelu „Kamera na żywo”, '
         + 'a z wiersza poleceń (senses/kinect_win.py) szkielet 20 stawów, postawę, gesty, '
         + 'dystans i sterowanie silnikiem pochylenia'
       : 'niepodłączony albo zmysły nie działają'}`,
@@ -637,11 +637,11 @@ function capabilityText(m) {
     `Dom: urządzenia=${m.dom.urzadzenia.join(', ') || 'brak'}, odprawa=${yes(m.dom.odprawa)}`,
     `Teren z drona: analiza nasłonecznienia/cieni/widoku/objętości=${yes(m.teren.terrain)} `
       + `(senses/terrain.py), fotogrametria=${yes(m.teren.photoscan)}`,
-    `Plener (panel boczny „Plener") — foto i wideo: plan zdjęciowy dla dowolnego miejsca `
+    `Plener (panel boczny „Plener") – foto i wideo: plan zdjęciowy dla dowolnego miejsca `
       + 'i godziny, lista ujęć do nakręcenia z ogniskowymi, misja waypointowa dla drona '
       + `do pobrania jako .kmz, aparat Canon po Wi-Fi=${yes(m.plener.aparatPoWifi)}, `
       + `archiwum materiału=${yes(m.plener.archiwum)}. Sprzęt użytkownika: `
-      + `${m.plener.sprzet || 'niepodany — poproś o uzupełnienie w Plenerze'}`,
+      + `${m.plener.sprzet || 'niepodany – poproś o uzupełnienie w Plenerze'}`,
     m.trening ? `Trening własnego modelu: rozmów do nauki≈${m.trening.przykladyChat}, skrypt QLoRA=${yes(m.trening.skrypt)}` : null,
     '',
     'JAK SIĘ UCZYSZ (za zgodą użytkownika): możesz zapamiętywać fakty, zapisywać notatki, '
@@ -705,7 +705,7 @@ async function handlePolish(req, res) {
   }
 }
 
-/** „Co jeszcze możesz dla mnie zrobić?" — propozycje szyte pod tego użytkownika. */
+/** „Co jeszcze możesz dla mnie zrobić?" – propozycje szyte pod tego użytkownika. */
 // --- Nagrywanie procedur (opcjonalny moduł Playwright) ---
 //     Całość w lib/nagrywanie.js; tutaj tylko spięcie zależności.
 const nagrywanie_ = require('./lib/nagrywanie.js').utworz({
@@ -755,11 +755,11 @@ async function handleTrainRun(req, res, pathname) {
 // ---------------------------------------------------------------------------
 
 function handleConfig(res) {
-  /* Zakładki silników to to, czego TA osoba może użyć — nie to, co ma serwer.
+  /* Zakładki silników to to, czego TA osoba może użyć – nie to, co ma serwer.
      Członek bez przyznanego Claude'a nie widzi zakładki Claude, chyba że wpisał
      własny klucz; wtedy `zrodlo: 'wlasny'` mówi, że płaci sam. */
   /* Adres lokalnego silnika i zmysłów to adres domu właściciela (Tailscale),
-     a folder eksportu — ścieżka na jego dysku. Członkowi nie są do niczego
+     a folder eksportu – ścieżka na jego dysku. Członkowi nie są do niczego
      potrzebne, więc ich nie dostaje. */
   const wlasciciel = czyWlasciciel();
   const endpoints = {};
@@ -819,7 +819,7 @@ async function handleStatus(req, res) {
     })(),
   ]);
   results.embeddings = embedStatus(results.senses?.caps?.embed);
-  /* Bez zgody na zmysły przeglądarka nie może ich zobaczyć jako „online" —
+  /* Bez zgody na zmysły przeglądarka nie może ich zobaczyć jako „online" –
      inaczej kierowałaby do nich mowę i wykrywanie, a dostawała 403. */
   if (!zmysly) results.senses = { online: false, caps: {}, tylkoWlasciciel: true };
   sendJson(res, 200, results);
@@ -843,12 +843,12 @@ async function handleEvents(req, res) {
       return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' });
     }
   }
-  // GET — ostatnie zdarzenia dla UI
+  // GET – ostatnie zdarzenia dla UI
   sendJson(res, 200, { events: recentEvents(60 * 60 * 1000, 50) });
 }
 
 // ---------------------------------------------------------------------------
-// API: czat (streaming SSE) z kontekstem percepcji — całość w lib/czat.js:
+// API: czat (streaming SSE) z kontekstem percepcji – całość w lib/czat.js:
 // składanie kontekstu, okno modelu lokalnego, wybór modelu, wysyłka, biegi.
 // ---------------------------------------------------------------------------
 const czat_ = require('./lib/czat.js').utworz({
@@ -857,11 +857,11 @@ const czat_ = require('./lib/czat.js').utworz({
 });
 const { OCZEKUJACE } = czat_;
 
-/** Sprawdź, czy model naprawdę działa NA TYM KONCIE — i czy czyta obrazy.
+/** Sprawdź, czy model naprawdę działa NA TYM KONCIE – i czy czyta obrazy.
  *
  * `/v1/models` u NVIDII wypisuje wszystko, co NVIDIA hostuje, a nie to, do czego
  * Twój klucz ma dostęp: część pozycji kończy się „Not found for account". Tego
- * nie da się przewidzieć z nazwy — trzeba spróbować. Wysyłamy więc najtańsze
+ * nie da się przewidzieć z nazwy – trzeba spróbować. Wysyłamy więc najtańsze
  * możliwe żądanie (jeden token), a przy teście wzroku dokładamy obrazek 1×1.
  * Odpowiedź 200 znaczy „działa”; treść nas nie interesuje.
  */
@@ -870,7 +870,7 @@ const PROBE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA
 /** Usuń z komunikatu dostawcy rzeczy, których nie chcemy nigdzie kopiować.
  *
  * NVIDIA wpisuje w odmowę identyfikator konta („Not found for account
- * 'LeJn…'"), a przycisk „Kopiuj wynik" wrzuca całość do schowka — łatwo
+ * 'LeJn…'"), a przycisk „Kopiuj wynik" wrzuca całość do schowka – łatwo
  * wtedy wkleić to komuś bez zastanowienia. Do zdiagnozowania problemu ten
  * ciąg nie jest potrzebny, więc go nie pokazujemy.
  */
@@ -911,7 +911,7 @@ async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
     } catch { if (detail) msg = detail.slice(0, 200); }
     return { ok: false, status: r.status, error: scrubSecrets(msg) };
   } catch (e) {
-    // Rozróżniamy „nie masz dostępu" od „nie zdążył odpowiedzieć" — to drugie
+    // Rozróżniamy „nie masz dostępu" od „nie zdążył odpowiedzieć" – to drugie
     // przy modelach ładowanych na żądanie znaczy zwykle tylko tyle, że model
     // wstawał z zimnego startu.
     const timeout = e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message);
@@ -921,7 +921,7 @@ async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
 
 /** Sonda z jedną ponowną próbą po przekroczeniu czasu.
  *  Pierwsze żądanie do modelu, którego dostawca nie trzyma rozgrzanego,
- *  potrafi trwać dłużej niż każde następne — jedna odmowa to za mało, żeby
+ *  potrafi trwać dłużej niż każde następne – jedna odmowa to za mało, żeby
  *  napisać komuś „ten model nie działa". */
 async function probeModel(ep, model, withImage, doKiedy = Date.now() + BUDZET_SPRAWDZENIA_MS) {
   const zostalo = () => doKiedy - Date.now();
@@ -941,10 +941,10 @@ async function handleModelCheck(req, res) {
 
   // Dwie grupy, jeden wniosek: nie stawiaj ich jako modelu czatu.
   //  • Embeddingi, przeszukiwanie, OCR nie mają końcówki rozmowy i zwrócą
-  //    „404 page not found" — to nie brak dostępu, tylko inne przeznaczenie,
+  //    „404 page not found" – to nie brak dostępu, tylko inne przeznaczenie,
   //    a część z nich Cosmos sam wykorzystuje (baza wiedzy).
   //  • Klasyfikatory bezpieczeństwa i tłumacze końcówkę mają i odpowiedzą
-  //    poprawnie — dlatego wychodziły z testu jako sprawne modele czatu.
+  //    poprawnie – dlatego wychodziły z testu jako sprawne modele czatu.
   //    Odpowiedzą „safe" na każde pytanie, więc sprawność jest tu pozorna.
   if (modelNotAChatPartner(model)) {
     return sendJson(res, 200, {
@@ -957,7 +957,7 @@ async function handleModelCheck(req, res) {
       podpowiedz: modelNotForChat(model)
         ? 'Ten model nie służy do rozmowy (embeddingi / przeszukiwanie / OCR). '
           + 'Nie wybieraj go jako modelu czatu.'
-        : 'Ten model odpowie, ale rozmówcą nie jest — to klasyfikator, tłumacz '
+        : 'Ten model odpowie, ale rozmówcą nie jest – to klasyfikator, tłumacz '
           + 'albo model badawczy. Do czatu wybierz Nemotrona.',
       bladObrazy: null,
     });
@@ -965,7 +965,7 @@ async function handleModelCheck(req, res) {
 
   const doKiedy = Date.now() + BUDZET_SPRAWDZENIA_MS;
   const text = await probeModel(ep, model, false, doKiedy);
-  // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa — inaczej
+  // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa – inaczej
   // zdublowalibyśmy ten sam błąd dostępu i niepotrzebnie obciążyli limit.
   const vision = text.ok ? await probeModel(ep, model, true, doKiedy) : { ok: false, skipped: true };
 
@@ -980,7 +980,7 @@ async function handleModelCheck(req, res) {
     // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
     podpowiedz: text.ok ? null
       : (text.timeout
-        ? 'Model nie odpowiedział na czas — u dostawcy wstaje z zimnego startu. '
+        ? 'Model nie odpowiedział na czas – u dostawcy wstaje z zimnego startu. '
           + 'Spróbuj go sprawdzić pojedynczo przyciskiem „Sprawdź”.'
         : modelErrorHint(data.endpoint, model, text.status, { tresc: text.error, baseUrl: ep.baseUrl }).trim()),
     bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
@@ -1046,7 +1046,7 @@ async function handleModels(req, res) {
    Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
 studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems, zadania: zadania_ });
-// Oś czasu migawek otoczenia (Digital Time Machine) — lib/os-czasu.js.
+// Oś czasu migawek otoczenia (Digital Time Machine) – lib/os-czasu.js.
 const osCzasu_ = require('./lib/os-czasu.js').utworz({
   U, readJson, sendJson, addEvent, bladZapisu, kbAddFile, kbPliki: () => KB_FILES(), saveKb, tsName,
 });
@@ -1057,7 +1057,7 @@ nauka_.polacz({
   kbUsun: (id) => { U().kbItems = U().kbItems.filter((it) => it.id !== id); saveKb(); },
 });
 
-/* Trasy archiwum materiału. Sam indeks jest PASYWNY — źródła (OneDrive, dysk
+/* Trasy archiwum materiału. Sam indeks jest PASYWNY – źródła (OneDrive, dysk
    przez zmysły) wpychają wpisy, a zapytania działają, gdy te źródła są
    offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu w terenie
    przy wyłączonym komputerze domowym. Całość tras: lib/archiwum-trasy.js. */
@@ -1068,25 +1068,25 @@ const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
 const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
 
 async function trasyApi(req, res, p) {
-  /* Restart w toku: nasłuch zostaje otwarty — statyka, wznowienie odpowiedzi,
-     zapis rozmowy działają — a nowej pracy nie zaczynamy: czytelne 503 z prośbą
+  /* Restart w toku: nasłuch zostaje otwarty – statyka, wznowienie odpowiedzi,
+     zapis rozmowy działają – a nowej pracy nie zaczynamy: czytelne 503 z prośbą
      o ponowienie. Dawniej `server.close()` na samym początku zamykania dawało
      przez ~20 s dokańczania strony 502 Cloudflare wszystkim (zespół IT, runda 4). */
   if (zamykanie && req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/'))) {
     res.setHeader('Retry-After', '5');
-    return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje — wyślij za kilka sekund.', kod: 'aktualizacja' });
+    return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje – wyślij za kilka sekund.', kod: 'aktualizacja' });
   }
   if (!czyWlasciciel() && TYLKO_WLASCICIEL.some((w) => w.test(p))) {
     return sendJson(res, 403, { error: 'Ta funkcja jest dostępna tylko dla właściciela Cosmosa.' });
   }
   if (p.startsWith('/api/studio') && !silniki.studioDozwolone()) {
-    return sendJson(res, 403, { error: 'Studio nie jest dla Ciebie włączone — poproś właściciela o dostęp.' });
+    return sendJson(res, 403, { error: 'Studio nie jest dla Ciebie włączone – poproś właściciela o dostęp.' });
   }
   /* Rozpoznawanie treści całego archiwum idzie na karcie graficznej
      właściciela i potrafi ją zająć na godziny. To ten sam zasób co „lokalny
      GPU", więc to samo uprawnienie. */
   if (p === '/api/archive/vision' && !silniki.dostep('local').ok) {
-    return sendJson(res, 403, { error: 'Rozpoznawanie treści używa komputera właściciela — poproś o dostęp do lokalnego GPU.' });
+    return sendJson(res, 403, { error: 'Rozpoznawanie treści używa komputera właściciela – poproś o dostęp do lokalnego GPU.' });
   }
   if (p === '/api/konto' || p.startsWith('/api/konto/')) return await handleKonto(req, res, p);
   if (p === '/api/konta' || p.startsWith('/api/konta/')) return await handleKonta(req, res, p);
@@ -1098,26 +1098,26 @@ async function trasyApi(req, res, p) {
   if (p === '/api/models/check' && req.method === 'POST') return await handleModelCheck(req, res);
   if (p === '/api/chat' && req.method === 'POST') return await czat_.handleChat(req, res, { wazny: sesjaWazna(req) });
   /* Powrót do trwającej odpowiedzi. `od` = numer pierwszego zdarzenia,
-     którego przeglądarka jeszcze nie ma — dzięki temu wznowienie po
+     którego przeglądarka jeszcze nie ma – dzięki temu wznowienie po
      zerwanym Wi-Fi nie powtarza połowy zdania ani jej nie gubi. */
   if (p === '/api/chat/bieg' && req.method === 'GET') {
     const q = new URL(req.url, 'http://localhost').searchParams;
     if (biegi_.podepnij(q.get('id') || '', q.get('od'), res, { wazny: sesjaWazna(req) })) return;
-    return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy — serwer jej nie pamięta.' });
+    return sendJson(res, 404, { error: 'Ta odpowiedź już się nie liczy – serwer jej nie pamięta.' });
   }
   // Co się teraz liczy. Przeglądarka pyta o to po odświeżeniu strony.
   if (p === '/api/chat/biegi' && req.method === 'GET') {
     return sendJson(res, 200, { biegi: biegi_.lista() });
   }
   /* „Mam tę odpowiedź i zapisałem ją u siebie." Dopiero to odwołuje zapis
-     awaryjny — patrz komentarz przy `potwierdz` w lib/biegi.js. */
+     awaryjny – patrz komentarz przy `potwierdz` w lib/biegi.js. */
   if (p === '/api/chat/odebrane' && req.method === 'POST') {
     let dane = {};
     try { dane = await readJson(req); } catch { /* pusty korpus też akceptujemy */ }
     return sendJson(res, 200, { ok: biegi_.potwierdz(String(dane.bieg || '')) });
   }
   /* Przerwanie musi być ŚWIADOME. Odkąd zamknięcie karty nie przerywa
-     generowania, przycisk Stop jest jedyną drogą — i musi docierać do
+     generowania, przycisk Stop jest jedyną drogą – i musi docierać do
      serwera, bo to on trzyma połączenie z modelem. */
   if (p === '/api/chat/stop' && req.method === 'POST') {
     let dane = {};
@@ -1125,7 +1125,7 @@ async function trasyApi(req, res, p) {
     const id = String(dane.bieg || '');
     const b = biegi_.daj(id);
     if (b && b.przerwij) b.przerwij();
-    // Bieg jeszcze się nie urodził — kontekst się składa albo dostawca nie odpowiedział nagłówkami.
+    // Bieg jeszcze się nie urodził – kontekst się składa albo dostawca nie odpowiedział nagłówkami.
     const czeka = !b && czat_.zatrzymajOczekujacy(`${kto().id}:${id}`);
     return sendJson(res, 200, { ok: Boolean(b || czeka) });
   }
@@ -1221,13 +1221,13 @@ async function trasyApi(req, res, p) {
     let restored = 0;
     let blad = null;
     if (Array.isArray(bundle.conversations)) {
-      // Kopia to też miejsce na dysku osoby — sprawdzane dla całości w przywroc().
+      // Kopia to też miejsce na dysku osoby – sprawdzane dla całości w przywroc().
       ({ przywrocono: restored, blad } = await rozmowy_.przywroc(bundle.conversations));
     }
     if (Array.isArray(bundle.memories)) blad = pamiec_.ustawListe(bundle.memories) || blad;
     if (typeof bundle.profile === 'string') blad = saveProfile(bundle.profile) || blad;
     if (blad) {
-      // Część weszła, część nie — człowiek ma wiedzieć, że kopia NIE jest cała.
+      // Część weszła, część nie – człowiek ma wiedzieć, że kopia NIE jest cała.
       const { kod } = miejsce_.bladDlaCzlowieka(blad);
       return sendJson(res, kod === 507 ? 507 : 500, {
         error: `Przywrócono ${restored} rozmów, ale nie wszystko się zapisało: ${miejsce_.zBleduDysku(blad).message}`, restored,
@@ -1269,14 +1269,14 @@ async function trasyApi(req, res, p) {
   if (p === '/api/zadania' && req.method === 'GET') return zadania_.obsluzStan(req, res);
   if (p === '/api/stt' && req.method === 'POST') return await glos.handleStt(req, res);
   if (p === '/api/tts' && req.method === 'POST') return await glos.handleTts(req, res);
-  // Zmysły przez pośrednika: ptak (BirdNET), wykrywanie, poza, Kinect — lib/zmysly-proxy.js.
+  // Zmysły przez pośrednika: ptak (BirdNET), wykrywanie, poza, Kinect – lib/zmysly-proxy.js.
   if (p === '/api/ptak' || p === '/api/detect' || p === '/api/pose' || p.startsWith('/api/kinect/')) {
     return await zmysly_.handleZmysly(req, res, p);
   }
   return sendJson(res, 404, { error: 'Nie ma takiej trasy.' });
 }
 
-/* HSTS tylko za HTTPS — to samo ustawienie, które każe ciastku jechać wyłącznie
+/* HSTS tylko za HTTPS – to samo ustawienie, które każe ciastku jechać wyłącznie
    szyfrowanym połączeniem. Bez niego pierwsze wejście wpisane z ręki idzie
    zwykłym HTTP i da się je przechwycić, zanim Cloudflare przekieruje. */
 const HSTS = process.env.COSMOS_COOKIE_SECURE === '1';
@@ -1293,10 +1293,10 @@ const server = http.createServer(async (req, res) => {
 
     // --- publiczne: logowanie i zaproszenia ---
     /* Też z kontrolą pochodzenia. Cudza strona mogła wysłać formularz
-       logowania z SWOIMI danymi — Twoja przeglądarka zostawała zalogowana
+       logowania z SWOIMI danymi – Twoja przeglądarka zostawała zalogowana
        na obce konto i Twoje rozmowy trafiały do niego („login CSRF"). */
     if ((p === '/api/login' || p === '/api/logout' || p === '/api/zaproszenie') && obcePochodzenie(req)) {
-      return sendJson(res, 403, { error: 'Żądanie z innej strony — odrzucone.' });
+      return sendJson(res, 403, { error: 'Żądanie z innej strony – odrzucone.' });
     }
     if (p === '/api/auth' && req.method === 'GET') {
       const u = ktoPyta(req);
@@ -1308,7 +1308,7 @@ const server = http.createServer(async (req, res) => {
 
     const u = ktoPyta(req);
     if (!u) return sendJson(res, 401, { error: 'Wymagane logowanie.' });
-    if (obcePochodzenie(req)) return sendJson(res, 403, { error: 'Żądanie z innej strony — odrzucone.' });
+    if (obcePochodzenie(req)) return sendJson(res, 403, { error: 'Żądanie z innej strony – odrzucone.' });
 
     /* Od tego miejsca wszystko dzieje się W IMIENIU tej osoby: dane, zdarzenia,
        praca w tle. Kontekst podąża za każdym `await` (lib/kontekst.js). */
@@ -1337,10 +1337,10 @@ function start(port = PORT) {
       console.log('  ✦ Cosmos');
       console.log(`  → UI:      http://localhost:${port}${HOST ? `  (nasłuch tylko na ${HOST})` : ''}`);
       console.log(`  → Chmura:  ${ENDPOINTS.cloud.baseUrl}  (model: ${ENDPOINTS.cloud.model})`);
-      console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK — ustaw NVIDIA_API_KEY w .env'}`);
+      console.log(`             klucz API: ${ENDPOINTS.cloud.apiKey ? 'ustawiony' : 'BRAK – ustaw NVIDIA_API_KEY w .env'}`);
       console.log(`  → Lokalny: ${ENDPOINTS.local.baseUrl}  (model: ${ENDPOINTS.local.model || 'nie ustawiono'})`);
       console.log(`  → Zmysły:  ${SENSES_URL}  (uruchom: python senses/service.py)`);
-      /* Liczby właściciela liczymy w JEGO imieniu — poza kontekstem nie ma
+      /* Liczby właściciela liczymy w JEGO imieniu – poza kontekstem nie ma
          czyich danych liczyć, i dobrze. */
       wKontekscie(wlasciciel, () => {
         console.log(`  → Pamięć:  ${pamiec_.ile()} wpisów`);
@@ -1356,7 +1356,7 @@ function start(port = PORT) {
         if (migracja.pominiete.length) console.log(`               pominięto (już były u celu): ${migracja.pominiete.join(', ')}`);
       }
       const ileKont = konta.wszyscy().length;
-      console.log(`  → Logowanie: ${authEnabled() ? `WŁĄCZONE — kont: ${ileKont}, login właściciela: ${wlasciciel.login}` : 'wyłączone (tryb domowy/localhost)'}`);
+      console.log(`  → Logowanie: ${authEnabled() ? `WŁĄCZONE – kont: ${ileKont}, login właściciela: ${wlasciciel.login}` : 'wyłączone (tryb domowy/localhost)'}`);
       if (!authEnabled()) {
         console.log('               ⚠  Nie wystawiaj tego serwera do internetu bez COSMOS_PASSWORD!');
       }
@@ -1378,15 +1378,15 @@ function start(port = PORT) {
 }
 
 /* Zapis indeksu PRZED zamknięciem. Zapis archiwum jest odkładany w czasie,
-   a odstęp dobiera się do jego kosztu — przy 28 MB to kilkanaście sekund.
+   a odstęp dobiera się do jego kosztu – przy 28 MB to kilkanaście sekund.
    Bez tego `systemctl restart` w środku indeksowania albo rozpoznawania
    treści wyrzucałby do kosza całą pracę od ostatniego zapisu. Timer zapisu
    jest `unref`-owany, więc sam z siebie przy wyjściu nie zdąży. */
 /* Restart w trakcie odpowiedzi kasował ją w całości: proces kończył się
    w 10 ms, bieg znikał, a rozmowa zostawała z samym pytaniem. Teraz serwer
    przestaje przyjmować nowe połączenia, daje trwającym odpowiedziom do 20 s
-   na dokończenie (systemd czeka 30 s — TimeoutStopSec), a resztę zapisuje
-   w rozmowach tak, jak ją zastał. Drugi sygnał (Ctrl+C dwa razy) — od razu. */
+   na dokończenie (systemd czeka 30 s – TimeoutStopSec), a resztę zapisuje
+   w rozmowach tak, jak ją zastał. Drugi sygnał (Ctrl+C dwa razy) – od razu. */
 const CZAS_NA_DOKONCZENIE_MS = Number(process.env.COSMOS_CZAS_NA_DOKONCZENIE_MS) || 20_000;
 let zamykanie = false;
 
@@ -1398,7 +1398,7 @@ function zamknijPorzadnie(sygnal) {
     konta.zapiszZalegle();
     const koniec = Date.now() + CZAS_NA_DOKONCZENIE_MS;
     /* Czekamy na odpowiedzi w toku, na czaty wysłane do dostawcy, który jeszcze
-       nie odpowiedział (OCZEKUJACE — dawniej ginęły bez śladu, zostawało samo
+       nie odpowiedział (OCZEKUJACE – dawniej ginęły bez śladu, zostawało samo
        pytanie), i na zadania Studia. Nasłuch zamykamy dopiero potem. */
     const wToku = () => biegi_.aktywne() + OCZEKUJACE.size + zadania_.ileWszystkich();
     const dokonczone = async () => {
@@ -1411,7 +1411,7 @@ function zamknijPorzadnie(sygnal) {
       await new Promise((r) => setTimeout(r, 100));   // niech 503 zdążą wyjść
     };
     dokonczone().then(() => {
-      /* Każda osoba ma własne archiwum i własną bazę wiedzy — zapisujemy to,
+      /* Każda osoba ma własne archiwum i własną bazę wiedzy – zapisujemy to,
          co CZEKA na zapis, w imieniu właścicieli. Instancji, której nikt nie
          wczytał, nie tworzymy (istniejacy): dawniej zamknięcie czytało cały
          indeks archiwum z dysku tylko po to, żeby go od razu zapisać. */

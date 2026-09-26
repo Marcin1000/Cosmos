@@ -3,13 +3,13 @@
  *
  *   node scripts/ikony.js
  *
- * Znak to planeta i pierścień z czterech łuków — po jednym na silnik (NVIDIA,
+ * Znak to planeta i pierścień z czterech łuków – po jednym na silnik (NVIDIA,
  * lokalny GPU, Claude, OpenAI). Kształt żyje tylko tutaj; skrypt zapisuje z niego
  * favicon strony, ikony aplikacji (SVG i PNG, zwykłe i maskable) oraz maskę dla
- * Safari. PNG renderuje Playwright — bez niego powstaną same pliki SVG.
+ * Safari. PNG renderuje Playwright – bez niego powstaną same pliki SVG.
  *
  * Pliki w public/icons/ serwer oddaje jako niezmienne (rok w pamięci przeglądarki
- * i Cloudflare). Zmieniając wygląd, zmień też nazwy plików — inaczej nikt nie
+ * i Cloudflare). Zmieniając wygląd, zmień też nazwy plików – inaczej nikt nie
  * zobaczy nowej ikony. */
 'use strict';
 
@@ -23,7 +23,7 @@ const JASNE = ['#5E9E3A', '#2F6FEB', '#C8643B', '#16171B'];   // na jasnym tle (
 const CIEMNE = ['#76B84F', '#5B8FF5', '#DE7A51', '#ECEBE6'];  // na ciemnym tle (aplikacja)
 
 /* Znak w układzie 40×40. `szczelina` to kolor obwódki planety, która oddziela
-   ją od tylnej części pierścienia — powinien być kolorem tła pod spodem. */
+   ją od tylnej części pierścienia – powinien być kolorem tła pod spodem. */
 function znak({ kolory, planeta, szczelina, grubosc = 2.4, id = 'z' }) {
   const luki = kolory.map((k, i) =>
     `<ellipse cx="20" cy="20" rx="17.5" ry="6.4" pathLength="100" stroke="${k}" stroke-dasharray="21 79" stroke-dashoffset="${-25 * i}"/>`).join('');
@@ -43,14 +43,14 @@ function ikonaAplikacji(bok, zaokraglona) {
   const k = bok / 40;
   const tlo = zaokraglona ? '<rect width="512" height="512" rx="112" fill="url(#tlo)"/>' : '<rect width="512" height="512" fill="url(#tlo)"/>';
   return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">\n'
-    + '  <!-- Wygenerowane przez scripts/ikony.js — zmieniaj tam, nie tutaj. -->\n'
+    + '  <!-- Wygenerowane przez scripts/ikony.js – zmieniaj tam, nie tutaj. -->\n'
     + `  <defs>${TLO_APLIKACJI}</defs>${tlo}${GWIAZDY}\n`
     + `  <g transform="translate(${256 - 20 * k} ${256 - 20 * k}) scale(${k})">${znak({ kolory: CIEMNE, planeta: '#ECEBE6', szczelina: '#0f111a', grubosc: 1.8 })}</g>\n`
     + '</svg>\n';
 }
 
 const FAVICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">\n'
-  + '  <!-- Wygenerowane przez scripts/ikony.js — zmieniaj tam, nie tutaj. -->\n'
+  + '  <!-- Wygenerowane przez scripts/ikony.js – zmieniaj tam, nie tutaj. -->\n'
   + '  <style>.pl { fill: #16171B; stroke: #F6F5F1; } @media (prefers-color-scheme: dark) { .pl { fill: #ECEBE6; stroke: #111214; } .o { stroke: #ECEBE6; } }</style>\n'
   + '  ' + znak({ kolory: JASNE, planeta: '#16171B', szczelina: '#F6F5F1' })
     .replace('<circle cx="20" cy="20" r="9.6" fill="#16171B" stroke="#F6F5F1"', '<circle cx="20" cy="20" r="9.6" class="pl"')
@@ -104,7 +104,7 @@ async function main() {
   await przegladarka.close();
 }
 
-/* Znak jest potrzebny też grafikom marki (scripts/grafiki-marki.js) — jedno
+/* Znak jest potrzebny też grafikom marki (scripts/grafiki-marki.js) – jedno
    źródło kształtu, więc eksport; pliki zapisujemy tylko przy uruchomieniu wprost. */
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 module.exports = { znak, JASNE, CIEMNE };

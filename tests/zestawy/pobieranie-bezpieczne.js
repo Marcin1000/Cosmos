@@ -3,13 +3,13 @@
  * Luka, którą to zamyka: `/api/kb/link` pobierał dowolny adres podany przez
  * użytkownika, a odkąd są konta, użytkownikiem bywa zaproszony gość. Mógł
  * kazać serwerowi zajrzeć do 127.0.0.1 (zmysły, SearXNG), do metadanych chmury
- * albo przez Tailscale do komputera domowego — i przeczytać wynik w swojej
+ * albo przez Tailscale do komputera domowego – i przeczytać wynik w swojej
  * bazie wiedzy. Sprawdzamy gwarancje, nie brzmienie:
- *   1. prywatne adresy (IPv4, IPv6, zmapowane, CGNAT/Tailscale) — odrzucone,
- *   2. przekierowanie z „publicznego" adresu na prywatny — odrzucone,
- *   3. właściciel (pozwolPrywatne) — przepuszczony,
+ *   1. prywatne adresy (IPv4, IPv6, zmapowane, CGNAT/Tailscale) – odrzucone,
+ *   2. przekierowanie z „publicznego" adresu na prywatny – odrzucone,
+ *   3. właściciel (pozwolPrywatne) – przepuszczony,
  *   4. limit bajtów działa, a strona w windows-1250 wychodzi z ogonkami,
- *   5. adres podany NAZWĄ HOSTA (przez DNS) w ogóle się pobiera — przez dobę
+ *   5. adres podany NAZWĄ HOSTA (przez DNS) w ogóle się pobiera – przez dobę
  *      nie pobierała się żadna strona, bo `lookup` oddawał Node 22 zły kształt
  *      odpowiedzi, a wszystkie przypadki tu szły na dosłowne 127.0.0.1,
  *   6. gniazdo otwarte dla właściciela nie obsłuży potem gościa (keep-alive). */
@@ -31,7 +31,7 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
     if (req.url === '/przekieruj') { res.writeHead(302, { Location: 'http://127.0.0.1:1/tajne' }); return res.end(); }
     if (req.url === '/przekieruj-localhost') { res.writeHead(302, { Location: `http://localhost:${srv.address().port}/` }); return res.end(); }
     if (req.url === '/saczy') {
-      // bajt co 300 ms — limit bezczynności tego nie złapie, całkowity musi
+      // bajt co 300 ms – limit bezczynności tego nie złapie, całkowity musi
       res.writeHead(200, { 'Content-Type': 'text/html' });
       const t = setInterval(() => { if (res.destroyed) return clearInterval(t); res.write('x'); }, 300);
       return;
@@ -48,13 +48,13 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
 
   let blad = null;
   try { await pobierzStrone(`${A}/`); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'gość: http://127.0.0.1 — zablokowane');
+  ok(blad instanceof ZablokowanyAdres, 'gość: http://127.0.0.1 – zablokowane');
   blad = null;
   try { await pobierzStrone('http://localhost:1/'); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'gość: localhost (przez DNS) — zablokowane w chwili łączenia');
+  ok(blad instanceof ZablokowanyAdres, 'gość: localhost (przez DNS) – zablokowane w chwili łączenia');
   blad = null;
   try { await pobierzStrone('file:///etc/passwd'); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'schemat file:// — zablokowany');
+  ok(blad instanceof ZablokowanyAdres, 'schemat file:// – zablokowany');
 
   const w = await pobierzStrone(`${A}/`, { pozwolPrywatne: true });
   ok(w.status === 200 && /tajne/.test(w.tekst), 'właściciel: adres prywatny przepuszczony');
@@ -63,16 +63,16 @@ const ok = (w, opis) => { console.log(`${w ? 'OK ' : 'ZLE'} ${opis}`); if (!w) p
   ok(h && h.status === 200 && /tajne/.test(h.tekst), `nazwa hosta przez DNS pobiera się (${h && (h.status || h.message)})`);
   blad = null;
   try { await pobierzStrone(`http://localhost:${srv.address().port}/`); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'gość zaraz po właścicielu, ten sam host — dalej zablokowany');
+  ok(blad instanceof ZablokowanyAdres, 'gość zaraz po właścicielu, ten sam host – dalej zablokowany');
   blad = null;
   try { await pobierzStrone(`http://[::ffff:127.0.0.1]:${srv.address().port}/`); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'gość: [::ffff:127.0.0.1] — zablokowane');
+  ok(blad instanceof ZablokowanyAdres, 'gość: [::ffff:127.0.0.1] – zablokowane');
   // przekierowanie z zaufanego hosta na prywatny adres, którego nikt nie wpuścił
   const zaufaneBylo = process.env.POBIERANIE_ZAUFANE;
   process.env.POBIERANIE_ZAUFANE = '127.0.0.1';
   blad = null;
   try { await pobierzStrone(`${A}/przekieruj-localhost`); } catch (e) { blad = e; }
-  ok(blad instanceof ZablokowanyAdres, 'gość: przekierowanie na prywatny adres — zablokowane');
+  ok(blad instanceof ZablokowanyAdres, 'gość: przekierowanie na prywatny adres – zablokowane');
   if (zaufaneBylo === undefined) delete process.env.POBIERANIE_ZAUFANE; else process.env.POBIERANIE_ZAUFANE = zaufaneBylo;
   blad = null;
   try { await pobierzStrone(`${A}/przekieruj`, { pozwolPrywatne: true, maksPrzekierowan: 0 }); } catch (e) { blad = e; }

@@ -3,7 +3,7 @@
 
    Każdy zestaw dostaje WŁASNY serwer na własnym porcie. To nie jest
    nadgorliwość: przez długi czas testy dzieliły jeden serwer na porcie 3000
-   i połowa „awarii" brała się z tego, że akurat wstał z inną konfiguracją —
+   i połowa „awarii" brała się z tego, że akurat wstał z inną konfiguracją –
    `blind-check` wymaga BRAKU modelu wizyjnego, `tabs-check` czterech kluczy
    API, `ui-test` atrapy oddającej bloki kodu. Bateria, która przy każdym
    przebiegu krzyczy na wilka, przestaje cokolwiek znaczyć.
@@ -21,12 +21,12 @@ const KORZEN = path.resolve(__dirname, '..');
 const ATRAPY = path.join(__dirname, 'atrapy');
 
 /* Zrzuty ekranu z testów. Poza repozytorium (jest w .gitignore), ale
-   w przewidywalnym miejscu — po nieudanym zestawie chce się na nie spojrzeć. */
+   w przewidywalnym miejscu – po nieudanym zestawie chce się na nie spojrzeć. */
 const KATALOG_ZRZUTOW = path.join(__dirname, 'zrzuty');
 fs.mkdirSync(KATALOG_ZRZUTOW, { recursive: true });
 
 /* Chromium jest w obrazie, ale wersja paczki `playwright` bywa nowsza niż
-   pobrane przeglądarki — wtedy domyślne `chromium.launch()` szuka katalogu,
+   pobrane przeglądarki – wtedy domyślne `chromium.launch()` szuka katalogu,
    którego nie ma. Wskazujemy binarkę wprost. */
 const CHROMIUM = process.env.COSMOS_CHROMIUM
   || ['/opt/pw-browsers/chromium', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome']
@@ -79,7 +79,7 @@ async function czekajNa(url, prob = 60, przerwa = 400) {
  *
  *  Odkąd każdy zestaw dostaje własny, pusty katalog, testy panelu bocznego
  *  („czy widać cztery rozmowy?", „czy da się dojechać do Zmysłów?") nie mają
- *  czego mierzyć. Wcześniej działały przypadkiem — na rozmowach nazbieranych
+ *  czego mierzyć. Wcześniej działały przypadkiem – na rozmowach nazbieranych
  *  przez poprzednie przebiegi. Teraz zasiew jest jawny i powtarzalny.
  */
 function zasiejRozmowy(dataDir, ile) {
@@ -112,7 +112,7 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   const proc = uruchom('node', ['server.js'], {
     cwd: KORZEN,
     env: { ...process.env, PORT: String(port), COSMOS_DATA_DIR: dataDir, NVIDIA_API_KEY: 'test',
-      // atrapy stron stoją na 127.0.0.1 — jawnie zaufane (lib/pobieranie.js)
+      // atrapy stron stoją na 127.0.0.1 – jawnie zaufane (lib/pobieranie.js)
       POBIERANIE_ZAUFANE: '127.0.0.1,localhost', ...env },
   });
   // Zestaw sprawdzający TRWAŁOŚĆ zapisu musi wiedzieć, gdzie ten zapis ląduje.
@@ -120,7 +120,7 @@ function serwerCosmosa(port, env = {}, rozmowy = 0) {
   return proc;
 }
 
-/* `PORT` podajemy tylko wtedy, gdy środowisko naprawdę o niego prosi —
+/* `PORT` podajemy tylko wtedy, gdy środowisko naprawdę o niego prosi –
    inaczej atrapy czytające `process.env.PORT` dostawałyby napis „undefined"
    i próbowały na nim stanąć. */
 const atrapaNode = (plik, port) => uruchom('node', [path.join(ATRAPY, plik)],
@@ -128,11 +128,11 @@ const atrapaNode = (plik, port) => uruchom('node', [path.join(ATRAPY, plik)],
 const atrapaPy = (plik) => uruchom('python3', [path.join(ATRAPY, plik)], { cwd: ATRAPY });
 
 // ---------------------------------------------------------------------------
-// Katalog środowisk — jedyne miejsce, które wie, czego wymaga który zestaw
+// Katalog środowisk – jedyne miejsce, które wie, czego wymaga który zestaw
 // ---------------------------------------------------------------------------
 
 /* Porty, na których słuchają atrapy. Muszą być znane, bo stara atrapa
-   z poprzedniego przebiegu odpowiada tak samo jak nowa — tylko starym
+   z poprzedniego przebiegu odpowiada tak samo jak nowa – tylko starym
    kodem. Zdarzyło się naprawdę: test sylwetki widział `yolo: false`,
    bo odpowiadała atrapa sprzed dopisania /detect. */
 const PORTY_ATRAP = {
@@ -164,10 +164,10 @@ const SRODOWISKA = {
       LOCAL_MODEL: 'local/nemotron-3-test',
       SENSES_URL: 'http://127.0.0.1:7060',
     },
-    // Panel boczny mierzy się na liście rozmów — pusty katalog nie ma czego pokazać.
+    // Panel boczny mierzy się na liście rozmów – pusty katalog nie ma czego pokazać.
     rozmowy: 12,
   },
-  // To samo, ale BEZ modelu wizyjnego — ostrzeżenie o obrazach pojawia się
+  // To samo, ale BEZ modelu wizyjnego – ostrzeżenie o obrazach pojawia się
   // tylko wtedy, gdy Cosmos nie ma dokąd przekierować zdjęcia.
   bezWzroku: {
     port: 3402,
@@ -179,7 +179,7 @@ const SRODOWISKA = {
       SENSES_URL: 'http://127.0.0.1:7060',
     },
   },
-  // Cztery silniki — pasek zakładek ma się przewijać, nie rozpychać strony.
+  // Cztery silniki – pasek zakładek ma się przewijać, nie rozpychać strony.
   czterySilniki: {
     port: 3403,
     atrapy: [['mock-upstream.js', null]],
@@ -205,21 +205,21 @@ const SRODOWISKA = {
     atrapy: [['mock-katalog.js', null]],
     env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7103/v1' },
   },
-  // Modele o różnej płynności, w tym jeden kapryśny i jeden rozumujący —
+  // Modele o różnej płynności, w tym jeden kapryśny i jeden rozumujący –
   // do sprawdzenia, czy pomiar płynności nie kłamie.
   tempo: {
     port: 3408,
     atrapy: [['mock-tempo.js', null]],
     env: { NEMOTRON_BASE_URL: 'http://127.0.0.1:7115/v1' },
   },
-  // Atrapa oddaje wiadomości systemowe jako treść — sprawdzamy, co model widzi.
+  // Atrapa oddaje wiadomości systemowe jako treść – sprawdzamy, co model widzi.
   kontekst: {
     port: 3409,
     atrapy: [['mock-echo-systemu.js', null]],
     env: {
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7116/v1',
       COSMOS_TZ: 'Europe/Warsaw',
-      /* Atrapa przyjmuje połączenie na /health i milczy — tak zachowuje się
+      /* Atrapa przyjmuje połączenie na /health i milczy – tak zachowuje się
          uśpiony komputer domowy. Adres nieistniejący nie nadaje się: odbija
          się od proxy w 80 ms zamiast wisieć pełne 1,5 s. */
       SENSES_URL: 'http://127.0.0.1:7116',
@@ -233,7 +233,7 @@ const SRODOWISKA = {
   grafiki: {
     port: 3410,
     // Echo systemu jest tu po to, żeby sprawdzić, czy model W OGÓLE wie
-    // o nowym narzędziu — bez tego nadal odpowiadałby „nie umiem".
+    // o nowym narzędziu – bez tego nadal odpowiadałby „nie umiem".
     /* Echo systemu na WŁASNYM porcie, nie na wspólnym 7116: to środowisko
        bywa uruchomione równolegle ze środowiskiem „kontekst", a sprzątanie
        portów przed startem zabijało wtedy cudzą, działającą atrapę. */
@@ -251,7 +251,7 @@ const SRODOWISKA = {
   },
   /* Praca w tle: odpowiedź, która przeżywa zamknięcie karty. To samo co
      `pelne`, ale z mocno skróconym czasem zapisu odpowiedzi, po którą nikt nie
-     wrócił — w produkcji to 20 s, bo warto dać przeglądarce szansę na powrót
+     wrócił – w produkcji to 20 s, bo warto dać przeglądarce szansę na powrót
      po mrugnięciu sieci. W teście czekanie 20 s na każdy przebieg to strata. */
   tlo: {
     port: 3412,
@@ -265,7 +265,7 @@ const SRODOWISKA = {
   },
   /* Zdjęcia W ROZMOWIE: model, który prosi o grafiki, i źródła, które je
      oddają. Środowisko `grafiki` ma same źródła (atrapa echa zamiast modelu),
-     a `pelne` ma model bez źródeł — drogi „model prosi → zdjęcia lądują na
+     a `pelne` ma model bez źródeł – drogi „model prosi → zdjęcia lądują na
      ekranie → model przypisuje je do planu" nie dało się dotąd przejść. */
   grafikiWRozmowie: {
     port: 3413,
@@ -278,7 +278,7 @@ const SRODOWISKA = {
       SEARXNG_URL: 'http://127.0.0.1:7117/searxng',
     },
   },
-  // Serwer bez atrap — do testów samego interfejsu (układ, Escape, motywy).
+  // Serwer bez atrap – do testów samego interfejsu (układ, Escape, motywy).
   goly: { port: 3406, atrapy: [], env: {} },
   /* Aparat Canon po CCAPI + geokodowanie. Potrzebne razem, bo drogę „policz
      plan → wyślij nastawy do aparatu" da się sprawdzić dopiero wtedy, gdy
@@ -293,14 +293,14 @@ const SRODOWISKA = {
       SWPC_KP_FORECAST_URL: 'http://127.0.0.1:7117/swpc/prognoza',
     },
   },
-  // Zmysły podłączone, model nieistotny — Kinect, mowa, wykrywanie.
+  // Zmysły podłączone, model nieistotny – Kinect, mowa, wykrywanie.
   zmysly: {
     port: 3407,
     atrapy: [['fake_senses.py', null]],
     env: { SENSES_URL: 'http://127.0.0.1:7060' },
   },
   /* Studio z atrapą generatorów (obrazy, dźwięk, wideo) i krótkim czekaniem
-     przed 202 — prompt ze słowem POWOLI trwa dłużej niż cierpliwość serwera. */
+     przed 202 – prompt ze słowem POWOLI trwa dłużej niż cierpliwość serwera. */
   studio: {
     port: 3414,
     atrapy: [['mock-upstream.js', null], ['mock-studio.js', null]],
@@ -328,7 +328,7 @@ async function zwolnijPorty(porty) {
     try {
       await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(800) });
       cos = true;
-    } catch { continue; }        // wolny albo nie mówi po HTTP — zostawiamy
+    } catch { continue; }        // wolny albo nie mówi po HTTP – zostawiamy
     try { execSync(`fuser -k ${port}/tcp 2>/dev/null`); } catch { /* brak fusera */ }
   }
   if (cos) await new Promise((r) => setTimeout(r, 700));
@@ -345,12 +345,12 @@ async function srodowisko(nazwa) {
   const adres = `http://127.0.0.1:${cfg.port}`;
 
   /* Zajęty port to najgorszy możliwy błąd w baterii: nowy serwer pada po cichu
-     na EADDRINUSE, a stary — z poprzedniego przebiegu i ze STARYM kodem —
+     na EADDRINUSE, a stary – z poprzedniego przebiegu i ze STARYM kodem –
      dalej odpowiada. Test zdaje albo pada z zupełnie nie tego powodu.
      Zdarzyło się naprawdę: nowa trasa dawała 404, choć istniała. */
   await zwolnijPorty([cfg.port]);
 
-  /* Atrapy też muszą być świeże — patrz komentarz przy PORTY_ATRAP. Gdy wpis
+  /* Atrapy też muszą być świeże – patrz komentarz przy PORTY_ATRAP. Gdy wpis
      podaje WŁASNY port, zwalniamy tylko jego: atrapa echa systemu stoi
      w dwóch środowiskach naraz i sprzątanie po nazwie pliku kazało im
      zabijać sobie nawzajem działającą atrapę. */
@@ -406,9 +406,9 @@ function wynik(tytul) {
 }
 
 /** Prywatny katalog danych jednej osoby w katalogu serwera testowego.
- *  Od kont (wrzesień 2026) nic nie leży wprost w data/ — każdy ma
+ *  Od kont (wrzesień 2026) nic nie leży wprost w data/ – każdy ma
  *  data/uzytkownicy/<id>/, a tryb domowy to konto „wlasciciel". Test, który
- *  sprawdza pliki na dysku, pyta TUTAJ, zamiast składać ścieżkę sam — przy
+ *  sprawdza pliki na dysku, pyta TUTAJ, zamiast składać ścieżkę sam – przy
  *  następnej zmianie układu poprawia się jedno miejsce. */
 function katalogOsoby(env, id = 'wlasciciel') {
   const baza = env.katalogDanych || env;

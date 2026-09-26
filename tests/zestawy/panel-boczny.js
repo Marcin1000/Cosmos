@@ -1,6 +1,6 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 // Po zmianie na JEDEN obszar przewijania stopka jest wysoka z założenia.
-// Ważne jest tylko to, czy da się do niej dojechać — o to szła skarga.
+// Ważne jest tylko to, czy da się do niej dojechać – o to szła skarga.
 (async () => {
   const env = await srodowisko('pelne');
   const ADRES = env.adres;

@@ -3,22 +3,22 @@
 
    Przejście po 2 TB to godziny i dziesiątki tysięcy zapytań do Graph.
    Restart w połowie (aktualizacja, awaria prądu) kasował kolejkę folderów
-   z pamięci — następne indeksowanie szło od nowa po tych samych folderach.
+   z pamięci – następne indeksowanie szło od nowa po tych samych folderach.
 
    Co musi być prawdą:
-     1. Serwer zabity w połowie (SIGKILL — bez porządnego zamknięcia) po
+     1. Serwer zabity w połowie (SIGKILL – bez porządnego zamknięcia) po
         starcie sam dokańcza indeksowanie: foldery już przejrzane NIE są
         pytane drugi raz, brakujące są, archiwum ma komplet.
      2. Wpisy z przejrzanych folderów przetrwały zabicie (kolejka nie obiecuje
         folderów, których wpisów nie ma na dysku).
      3. Po skończeniu kolejka znika z dysku; status mówi, że to wznowienie.
-     4. Przerwanie przez człowieka (Przerwij) kasuje kolejkę — następne
+     4. Przerwanie przez człowieka (Przerwij) kasuje kolejkę – następne
         indeksowanie zaczyna od początku, bo tak zdecydował.
      0. Na module: zapis archiwum, na który czeka kolejka, obejmuje WSZYSTKIE
         wpisy dodane przed nim (także gdy trwał starszy zapis) i mówi, czy się
-        udał — kolejka zapisuje się tylko po udanym.
+        udał – kolejka zapisuje się tylko po udanym.
      5. Folder skasowany albo przeniesiony od zapisania kolejki (404) nie
-        blokuje wznowienia na zawsze — jest pomijany; kolejka w złym kształcie
+        blokuje wznowienia na zawsze – jest pomijany; kolejka w złym kształcie
         nie wywraca pętli; „Przerwij" bez trwającego indeksowania też kasuje
         kolejkę. Dawniej jedynym wyjściem było SSH i rm. */
 const http = require('node:http');
@@ -106,7 +106,7 @@ const zabijTwardo = (p) => { try { process.kill(-p.pid, 'SIGKILL'); } catch { /*
 
   await new Promise((r) => graph.listen(PORT + 100, '127.0.0.1', r));
 
-  // Katalog danych z połączonym OneDrive (token ważny — bez logowania u Microsoftu).
+  // Katalog danych z połączonym OneDrive (token ważny – bez logowania u Microsoftu).
   const pierwszy = serwerCosmosa(PORT, ENV);
   const dane = pierwszy.katalogDanych;
   const osoba = katalogOsoby({ katalogDanych: dane });
@@ -148,7 +148,7 @@ const zabijTwardo = (p) => { try { process.kill(-p.pid, 'SIGKILL'); } catch { /*
   await fetch(`${ADRES}/api/onedrive/index`, { method: 'DELETE' });
   pusc('/me/drive/items/fa/children');
   await az(async () => !(await status()).indeksowanie.trwa);
-  ok(byla && !fs.existsSync(kolejka), 'Przerwij kasuje zapisaną kolejkę — następnym razem od początku');
+  ok(byla && !fs.existsSync(kolejka), 'Przerwij kasuje zapisaną kolejkę – następnym razem od początku');
 
   // --- 5. skasowany folder, zły kształt kolejki, Przerwij bez indeksowania ----------------
   const indeksuj = () => fetch(`${ADRES}/api/onedrive/index`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -167,7 +167,7 @@ const zabijTwardo = (p) => { try { process.kill(-p.pid, 'SIGKILL'); } catch { /*
   await az(async () => { const st = await status(); return st.indeksowanie && !st.indeksowanie.trwa; });
   const poZlym = await status();
   ok(!poZlym.indeksowanie.blad && pytania.get('/me/drive/root/children') === 1,
-    `kolejka w złym kształcie — indeksowanie od korzenia zamiast błędu w pętli (błąd: ${poZlym.indeksowanie.blad || 'brak'})`);
+    `kolejka w złym kształcie – indeksowanie od korzenia zamiast błędu w pętli (błąd: ${poZlym.indeksowanie.blad || 'brak'})`);
 
   fs.writeFileSync(kolejka, JSON.stringify({ folder: '', limit: 100000, doOdwiedzenia: ['/me/drive/items/fUSUNIETY/children?x=1'] }));
   await fetch(`${ADRES}/api/onedrive/index`, { method: 'DELETE' });

@@ -1,5 +1,5 @@
 // Pierwsza wersja pomiaru kłamała: przy dwóch przebiegach na tym samym
-// koncie wskazywała ZUPEŁNIE INNE modele jako najlepsze. Powody były trzy —
+// koncie wskazywała ZUPEŁNIE INNE modele jako najlepsze. Powody były trzy –
 // przerywanie na pierwszym błędzie, ocena bez uwzględnienia niezawodności
 // i „pusta odpowiedź" przy modelach rozumujących.
 const { execFileSync } = require('child_process');
@@ -56,14 +56,14 @@ const { srodowisko } = require('../pomoc');
   if (smieci || puste) fail.push('pasek postępu zaśmieca wynik');
 
   // 8. klasyfikator bezpieczeństwa odsyła „safe" w 0,1 s i przez to wygrywał
-  //    ranking „najlepsze do rozmowy" — a umie odpowiedzieć jednym słowem.
+  //    ranking „najlepsze do rozmowy" – a umie odpowiedzieć jednym słowem.
   const straz = wiersz('straznik/nemoguard-atrapa');
   console.log('8. ' + straz);
   if (!/nie rozmówca/.test(straz)) fail.push('klasyfikator nieoznaczony w tabeli');
   if (lista.some((l) => l.includes('straznik'))) fail.push('klasyfikator trafił na listę najlepszych do rozmowy');
   if (!/Poza rankingiem/.test(out)) fail.push('brak sekcji tłumaczącej, gdzie zniknęły modele specjalistyczne');
 
-  // 9. ranking musi iść po CAŁOŚCI odpowiedzi, nie po pierwszym znaku —
+  // 9. ranking musi iść po CAŁOŚCI odpowiedzi, nie po pierwszym znaku –
   //    inaczej model ruszający wcześniej, a kończący siedem razy później,
   //    wypada w podpowiedzi lepiej.
   const poz = (frag) => lista.findIndex((l) => l.includes(frag));

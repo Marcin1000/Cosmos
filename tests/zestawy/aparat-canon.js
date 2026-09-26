@@ -1,8 +1,8 @@
-/* Canon R6 II po Wi-Fi (CCAPI) — aparat jako urządzenie, nie temat rozmowy.
+/* Canon R6 II po Wi-Fi (CCAPI) – aparat jako urządzenie, nie temat rozmowy.
 
    Od firmware'u 1.7.0 aparat wystawia REST po HTTP. Dla Cosmosa to idealne
    dopasowanie: zero zależności, samo `fetch`. I jest to NAPRAWA, nie nowa
-   zabawka — `senses/tether.py` steruje aparatem przez gPhoto2 po kablu, a to
+   zabawka – `senses/tether.py` steruje aparatem przez gPhoto2 po kablu, a to
    na Windowsie wymaga WSL, więc w praktyce nigdy nie ruszyło.
 
    Zestaw pilnuje czterech rzeczy, z których każda jest osobnym sposobem na
@@ -10,7 +10,7 @@
 
      1. ŚCIEŻKI NIE SĄ ZASZYTE. CCAPI ma kilka wersji i każdy model wystawia
         inny podzbiór; pytamy aparat, co obsługuje, i bierzemy NAJNOWSZĄ wersję.
-     2. WARTOŚĆ SPOZA LISTY nie leci do aparatu — komunikat ma mówić, co wolno.
+     2. WARTOŚĆ SPOZA LISTY nie leci do aparatu – komunikat ma mówić, co wolno.
      3. AWARIA MÓWI, CO ZROBIĆ. „fetch failed" nie podpowiada niczego;
         uśpione Wi-Fi aparatu i serwer w innej sieci to dwie różne rzeczy.
      4. AUTOFOKUS PRZY ZDALNYM STRZALE JEST DOMYŚLNIE WYŁĄCZONY. Aparat na
@@ -38,7 +38,7 @@ const ADRES = `http://127.0.0.1:${PORT}`;
      Ten sam powód, dla którego `lib/rdzen.js` czyta konfigurację na starcie. */
   process.env.CANON_CCAPI_URL = ADRES;
   const canon = require('../../lib/canon.js');
-  /* Spis ścieżek jest buforowany na minutę — po zmianie zachowania atrapy
+  /* Spis ścieżek jest buforowany na minutę – po zmianie zachowania atrapy
      trzeba go unieważnić, inaczej test sprawdzałby stan sprzed sekundy.
      W prawdziwym użyciu robi to samo przekręcenie pokrętła w aparacie. */
   const awaria = (co) => fetch(`${ADRES}/awaria?co=${co}`).then((r) => r.json());
@@ -56,7 +56,7 @@ const ADRES = `http://127.0.0.1:${PORT}`;
     + `· ISO do wyboru: ${(w.nastawy.isoMozliwe || []).length}`);
   if (w.nastawy.przyslona !== 'f4.0' || w.nastawy.czas !== '1/60') fail.push('nastawy odczytane źle');
   if (!(w.nastawy.isoMozliwe || []).includes('800')) {
-    fail.push('brak listy dopuszczalnych wartości — nie da się sensownie zaproponować zmiany');
+    fail.push('brak listy dopuszczalnych wartości – nie da się sensownie zaproponować zmiany');
   }
 
   /* Zapis aparatu → liczby Cosmosa. Bez tego „1/250" z aparatu i 0,004 s
@@ -68,7 +68,7 @@ const ADRES = `http://127.0.0.1:${PORT}`;
   }
   const dlugi = canon.naLiczby({ czas: '4"' });
   console.log(`4. długi czas „4\\"" → ${dlugi.czasS} s`);
-  if (dlugi.czasS !== 4) fail.push(`czas 4 s odczytany jako ${dlugi.czasS} — astro byłoby nie do ustawienia`);
+  if (dlugi.czasS !== 4) fail.push(`czas 4 s odczytany jako ${dlugi.czasS} – astro byłoby nie do ustawienia`);
 
   /* ---- 3. Zmiana nastawy i odrzucenie bzdury ---- */
   const zmiana = await canon.ustaw('iso', '800');
@@ -90,12 +90,12 @@ const ADRES = `http://127.0.0.1:${PORT}`;
   console.log(`7. migawka → wyzwoleń ${przed} → ${po}, autofokus: ${strzal.af}`);
   if (po !== przed + 1) fail.push('migawka nie wyzwoliła zdjęcia');
   if (strzal.af !== false) {
-    fail.push('autofokus włączony domyślnie — seria z ręczną ostrością byłaby do wyrzucenia');
+    fail.push('autofokus włączony domyślnie – seria z ręczną ostrością byłaby do wyrzucenia');
   }
 
   /* ---- 5. Nastawa, której aparat teraz nie wystawia ----
      W trybie automatycznym część nastaw znika ze spisu. To normalny stan,
-     a nie awaria — ale musi być powiedziany, a nie przemilczany. */
+     a nie awaria – ale musi być powiedziany, a nie przemilczany. */
   await awaria('brak-iso');
   canon.zapomnij();
   const bezIso = await canon.nastawy();
@@ -104,7 +104,7 @@ const ADRES = `http://127.0.0.1:${PORT}`;
   if (bezIso.nastawy.iso !== undefined) fail.push('ISO oddane mimo braku w spisie aparatu');
   if (!bezIso.bledy || !bezIso.bledy.iso) fail.push('brak nastawy przemilczany');
   if (bezIso.nastawy.przyslona !== 'f4.0') {
-    fail.push('brak jednej nastawy zabrał pozostałe — a te były dostępne');
+    fail.push('brak jednej nastawy zabrał pozostałe – a te były dostępne');
   }
 
   /* ---- 6. Aparat zajęty i aparat uśpiony ---- */

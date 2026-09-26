@@ -1,11 +1,11 @@
-/* Karty ujęć — lista rzeczy do nakręcenia, dobrana do tematu i do SPRZĘTU.
+/* Karty ujęć – lista rzeczy do nakręcenia, dobrana do tematu i do SPRZĘTU.
 
    Pomysł z video-shotcraft (z trendów). Wartość nie jest w tym, że istnieje
-   lista ujęć — takich jest w internecie tysiąc. Jest w trzech rzeczach, które
+   lista ujęć – takich jest w internecie tysiąc. Jest w trzech rzeczach, które
    tamte listy z definicji mieć nie mogą, i każdą z nich sprawdzamy tutaj:
 
      1. że zestaw ZALEŻY OD TEMATU (wesele ≠ wyścig),
-     2. że ujęcia niewykonalne posiadanym sprzętem WYPADAJĄ, i to Z POWODEM —
+     2. że ujęcia niewykonalne posiadanym sprzętem WYPADAJĄ, i to Z POWODEM –
         bo „nie ma na liście" i „nie masz drona" to dwie różne informacje,
      3. że ogniskowa jest policzona dla SZKŁA, które Marcin naprawdę ma,
         a nie wzięta ze środka teoretycznego zakresu.
@@ -16,7 +16,7 @@ const { srodowisko } = require('../pomoc');
 const { planUjec, UJECIA, ZESTAWY, optykaDrona } = require('../../lib/ujecia.js');
 const { rozpoznajObiektywy } = require('../../lib/ekspozycja.js');
 
-// Prawdziwy zestaw Marcina — na nim liczą się wszystkie sprawdzenia niżej.
+// Prawdziwy zestaw Marcina – na nim liczą się wszystkie sprawdzenia niżej.
 const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
 
 (async () => {
@@ -50,12 +50,12 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
   console.log(`1. ślub  → ${nazwy(wesele).join(', ')}`);
   console.log(`   wyścig → ${nazwy(wyscig).join(', ')}`);
   if (JSON.stringify(nazwy(wesele)) === JSON.stringify(nazwy(wyscig))) {
-    fail.push('ślub i wyścig dostały identyczny zestaw ujęć — temat nic nie zmienia');
+    fail.push('ślub i wyścig dostały identyczny zestaw ujęć – temat nic nie zmienia');
   }
   if (!nazwy(wesele).includes('zza-ramienia')) fail.push('w zestawie na ślub brakuje ujęcia zza ramienia');
   if (!nazwy(wyscig).includes('prowadzenie')) fail.push('w zestawie na wyścig brakuje prowadzenia');
 
-  /* ---- 2. Bez drona nie ma ujęć z drona — I TRZEBA TO POWIEDZIEĆ ---- */
+  /* ---- 2. Bez drona nie ma ujęć z drona – I TRZEBA TO POWIEDZIEĆ ---- */
   const bezDrona = planUjec({ temat: 'gory', obiektywy: MOJE_SZKLA, statyw: true, gimbal: true });
   const zDronem = planUjec({ temat: 'gory', obiektywy: MOJE_SZKLA, statyw: true, gimbal: true, dron: true });
   console.log(`2. góry bez drona → ${bezDrona.ujecia.length} ujęć, pominięte: `
@@ -65,7 +65,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
     fail.push('Cosmos doradza ujęcie dronem komuś, kto drona nie ma');
   }
   if (!bezDrona.pominiete.length) {
-    fail.push('ujęcia dronowe zniknęły w ciszy — użytkownik pomyśli, że Cosmos o nich zapomniał');
+    fail.push('ujęcia dronowe zniknęły w ciszy – użytkownik pomyśli, że Cosmos o nich zapomniał');
   }
   if (!bezDrona.pominiete.some((x) => /drona/.test(x.powod))) {
     fail.push('powód pominięcia nie mówi, czego brakuje');
@@ -76,7 +76,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
 
   /* ---- 3. Ogniskowa liczona dla POSIADANEGO szkła ----
      Ujęcie ustalające ma zakres 14-35 mm. Marcin ma 24-105, więc realna
-     odpowiedź to okolice 24-35 — a NIE 24 mm wzięte ze środka 14-35, bo
+     odpowiedź to okolice 24-35 – a NIE 24 mm wzięte ze środka 14-35, bo
      środek tamtego zakresu (24) akurat by tu wyszedł przypadkiem. Sprawdzamy
      na przypadku, w którym przypadek nie ratuje: zakres 14-35 przecięty
      z 24-105 daje 24-35, czyli środek 29 lub 30. */
@@ -87,7 +87,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
     fail.push('ujęcie ustalające wypadło z zestawu na ślub');
   } else {
     if (ustal.ogniskowa < 24) {
-      fail.push(`${ustal.ogniskowa} mm — Cosmos radzi ogniskową, której żadne z Twoich szkieł nie ma`);
+      fail.push(`${ustal.ogniskowa} mm – Cosmos radzi ogniskową, której żadne z Twoich szkieł nie ma`);
     }
     if (!/24-105/.test(ustal.naSzkle || '')) fail.push(`ustalające przypisane do ${ustal.naSzkle}`);
   }
@@ -108,7 +108,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
   console.log(`5. temat bez podanego szkła → ${bezWiedzy.ujecia.length} ujęć `
     + `(pominięte: ${bezWiedzy.pominiete.length})`);
   if (bezWiedzy.ujecia.length !== ZESTAWY.gory.length) {
-    fail.push('niepodanie obiektywów obcięło listę ujęć — „nie wiem" potraktowane jak „nie mam"');
+    fail.push('niepodanie obiektywów obcięło listę ujęć – „nie wiem" potraktowane jak „nie mam"');
   }
 
   /* ---- 5. Temat spoza listy dostaje zestaw ratunkowy ---- */
@@ -134,7 +134,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
   const zdjecie = await plan({ tryb: 'zdjecie', temat: 'wesele siostry' });
   console.log(`8. [PLAN: tryb=zdjecie] → ujecia: ${JSON.stringify(zdjecie.ujecia)}`);
   if (zdjecie.ujecia !== null) {
-    fail.push('lista ujęć doklejona do planu ZDJĘCIOWEGO — tam pytanie brzmi inaczej');
+    fail.push('lista ujęć doklejona do planu ZDJĘCIOWEGO – tam pytanie brzmi inaczej');
   }
 
   // Dron podany w rozmowie musi odblokować ujęcia z góry.
@@ -151,7 +151,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
      Marcin, patrząc na gotową listę: „martwi mnie ujęcie z przelotem, gdzie
      jest wskazane 24-105 f/4, a przecież to obiektyw na moim Canonie, a nie
      w dronie Mavic 3". Liczba ogniskowej nawet się zgadzała (24 mm), bo tyle
-     wyszło z przycięcia zakresu — czyli sprawdzanie samej liczby by tego
+     wyszło z przycięcia zakresu – czyli sprawdzanie samej liczby by tego
      NIE złapało. Trzeba patrzeć, CZYM to niby nakręcić. */
   const zMavicem = planUjec({
     temat: 'gory', obiektywy: MOJE_SZKLA, dron: true, statyw: true,
@@ -177,7 +177,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
     fail.push('ujęcie naziemne dostało optykę drona');
   }
   /* Jasność ma paść RAZ. „70-200 f/4 f/4" wyszło na zrzucie ekranu, bo nazwa
-     obiektywu już ją zawiera, a kod dokleił drugą — literówka widoczna gołym
+     obiektywu już ją zawiera, a kod dokleił drugą – literówka widoczna gołym
      okiem i niewidoczna dla wszystkich ówczesnych sprawdzeń. */
   const podwojone = zMavicem.ujecia.filter((u) => /f\/[\d.]+\s+f\//.test(u.naSzkle || ''));
   console.log(`10b. opis szkła bez powtórzeń: ${!podwojone.length}`);
@@ -197,7 +197,7 @@ const MOJE_SZKLA = rozpoznajObiektywy('24-105 f/4, 70-200 f/4, 50 f/1.8');
   /* ---- 12. Każdy materiał ma się KOŃCZYĆ ----
      Druga uwaga z tej samej listy: „nie daje np. ujęć kończących, a na tej
      liście są też kilka otwarć". Zestaw na góry miał dwa otwarcia i zero
-     domknięć — materiał z takiej listy zaczyna się dwa razy i nie kończy. */
+     domknięć – materiał z takiej listy zaczyna się dwa razy i nie kończy. */
   const braki = [];
   for (const temat of Object.keys(ZESTAWY)) {
     for (const [opis, sprzet] of [

@@ -1,4 +1,4 @@
-/* Cosmos — strona produktowa: języki, rozmowa pokazowa i ruch przy przewijaniu.
+/* Cosmos – strona produktowa: języki, rozmowa pokazowa i ruch przy przewijaniu.
    Polski tekst stoi w HTML-u (tak widzą go wyszukiwarki i podgląd linku),
    angielski jest tutaj. Oba pisane osobno, nie tłumaczone zdanie w zdanie. */
 (function () {
@@ -28,13 +28,13 @@
     otworz: 'Open Cosmos',
     'hero.et': 'A personal, hybrid AI system',
     'hero.h': 'One thread. <em>Every engine.</em>',
-    'hero.lead': 'Cosmos runs one conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI. Switch engines mid-thread and nothing resets — same memory, same tools, same context.',
+    'hero.lead': 'Cosmos runs one conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI. Switch engines mid-thread and nothing resets – same memory, same tools, same context.',
     'hero.zobacz': 'See how it works',
     'hero.uwaga': 'Invitation-only. Accounts are created by the instance administrator.',
     'czat.aria': 'Example conversation: one question, four engines answering in turn within the same thread',
     'czat.status': 'one thread',
     'czat.przelacznik': 'Switch engines mid-conversation',
-    'czat.podpis': 'Pick an engine — the next reply comes from it, in the same thread.',
+    'czat.podpis': 'Pick an engine – the next reply comes from it, in the same thread.',
     'silnik.local': 'Local GPU',
     'czat.local': 'Local<span class="przel-dop"> GPU</span>',
     'liczby.zal': 'runtime dependencies in the core',
@@ -56,10 +56,10 @@
     'hyb.4.h': 'Availability',
     'hyb.4.p': 'The home GPU is off most of the day. The cloud isn’t. A system that only works while one machine is awake isn’t one you use on a train.',
     'hyb.5.h': 'Model choice',
-    'hyb.5.p': 'No single provider wins at everything. Reasoning, vision, long context and speech each have a different winner this month — so switching is one click.',
+    'hyb.5.p': 'No single provider wins at everything. Reasoning, vision, long context and speech each have a different winner this month – so switching is one click.',
     'pl.et': 'Shoot planner',
     'pl.h': 'It does the math.',
-    'pl.lead': 'Instead of describing light, Cosmos computes it: sun position from ephemerides, an hourly forecast, the exposure. Settings stay inside the kit you actually own — suggesting f/2.8 to someone with f/4 glass is worse than no suggestion at all.',
+    'pl.lead': 'Instead of describing light, Cosmos computes it: sun position from ephemerides, an hourly forecast, the exposure. Settings stay inside the kit you actually own – suggesting f/2.8 to someone with f/4 glass is worse than no suggestion at all.',
     'pl.c1': 'Sun ephemerides: sunrise, sunset, golden and blue hour',
     'pl.c2': 'Hour-by-hour weather and cloud cover',
     'pl.c3': 'Your gear on file: body, lenses, filters',
@@ -71,21 +71,21 @@
     'pl.wys': 'Sun altitude',
     'pl.azymut': 'Azimuth',
     'pl.chmury': 'Cloud cover',
-    'pl.poza': 'f/2.8 — not in your kit',
+    'pl.poza': 'f/2.8 – not in your kit',
     'pam.et': 'Memory & knowledge',
     'pam.h': 'It remembers, so you don’t repeat yourself.',
-    'pam.lead': 'Long-term memory recalls by meaning, not by keywords. The knowledge base holds your documents and images — pinned items always join the conversation, the rest are picked automatically.',
+    'pam.lead': 'Long-term memory recalls by meaning, not by keywords. The knowledge base holds your documents and images – pinned items always join the conversation, the rest are picked automatically.',
     'pam.zap': '“where was that lake with the fog?”',
     'pam.w1': 'September: Morskie Oko at dawn, fog until 7:20',
     'pam.w2': 'Takes coffee without sugar',
     'pam.w3': 'Favourite shots: mountains reflected in water',
-    'pam.w4': 'Hosting invoice — March',
+    'pam.w4': 'Hosting invoice – March',
     'pam.w5': 'Plan: Tatra lakes in autumn',
     'pam.w6': 'Drone registration number',
     'pam.k1.h': 'Recall by meaning',
     'pam.k1.p': 'bge-m3 embeddings surface memories that match the question in meaning, even when they share none of its words.',
     'pam.k2.h': 'Nothing without your approval',
-    'pam.k2.p': 'Remember, note, new procedure — every such action waits for a human to approve it.',
+    'pam.k2.p': 'Remember, note, new procedure – every such action waits for a human to approve it.',
     'pam.k3.h': 'Images stay images',
     'pam.k3.p': 'Pictures from the knowledge base reach vision models as pixels, not as someone’s caption of them.',
     'pam.k4.h': 'Works without the extra services too',
@@ -101,18 +101,18 @@
     'glos.android': 'Chrome on Android ends listening after every sentence and restarts on its own. Cosmos filters out the repeats, and when the restarts pile up it switches to push-to-talk.',
     'ciag.et': 'Continuity',
     'ciag.h': 'Lock your phone. The answer keeps going.',
-    'ciag.lead': 'Answers are generated on the server; the browser only attaches to them. Screen lock, a tunnel, Wi-Fi handing over to LTE — when you’re back, you rejoin the same stream right where it broke off.',
+    'ciag.lead': 'Answers are generated on the server; the browser only attaches to them. Screen lock, a tunnel, Wi-Fi handing over to LTE – when you’re back, you rejoin the same stream right where it broke off.',
     'ciag.pyt': 'Compare three routes for Saturday.',
     'ciag.wznowiono': 'resumed · 0 tokens lost',
     'ciag.serwer': 'server · reply a41f',
     'ciag.l1': 'stream: client attached',
-    'ciag.l2': 'client gone — still writing',
+    'ciag.l2': 'client gone – still writing',
     'ciag.l3': 'answer saved to the conversation',
-    'ciag.l4': 'client back — rejoins the same reply',
+    'ciag.l4': 'client back – rejoins the same reply',
     'pryw.et': 'Privacy & accounts',
     'pryw.h': 'Invitation-only, isolated by design.',
-    'pryw.lead': 'Accounts are created by the instance administrator. Every account has its own conversations, memory, profile and knowledge base. The admin panel shows accounts, last visits and message counts — not content, because the app doesn’t hand it over. Your data lives on the server Cosmos runs on. A conversation with a cloud engine is also seen by that engine’s provider; with a local model nothing leaves the house.',
-    'pryw.c1': 'Engines are granted by the administrator — or you add your own API key and the provider bills you directly',
+    'pryw.lead': 'Accounts are created by the instance administrator. Every account has its own conversations, memory, profile and knowledge base. The admin panel shows accounts, last visits and message counts – not content, because the app doesn’t hand it over. Your data lives on the server Cosmos runs on. A conversation with a cloud engine is also seen by that engine’s provider; with a local model nothing leaves the house.',
+    'pryw.c1': 'Engines are granted by the administrator – or you add your own API key and the provider bills you directly',
     'pryw.c2': 'Passwords stored as scrypt hashes; sessions stored only as hashes',
     'pryw.c3': 'If code can’t tell whose request it is, it fails instead of falling back to a default',
     'pryw.panel': 'admin panel',
@@ -140,9 +140,9 @@
     'pm.f3.h': 'audit sections',
     'pm.f3.p': 'The audit audits itself: a pattern that stops matching anything is an error, not silence.',
     'pm.f4.h': 'tool rounds per turn',
-    'pm.f4.p': 'A plan, the archive and photos of each spot in one reply — images land under the finished plan points.',
+    'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
     'cta.h': 'Got an invitation? Your Cosmos is ready.',
-    'cta.p': 'Open the link from your invitation and set a login and password in a minute. Already have an account? Sign in. No invitation? Run your own Cosmos — the code is open.',
+    'cta.p': 'Open the link from your invitation and set a login and password in a minute. Already have an account? Sign in. No invitation? Run your own Cosmos – the code is open.',
     'cta.kod': 'Run your own Cosmos',
     'stopka.opis': 'A personal, hybrid AI system.',
     'stopka.kod': 'Source code (non-commercial use)',
@@ -151,17 +151,17 @@
   const META = {
     pl: {
       adres: 'https://cosmosai.live/',
-      title: 'Cosmos — jedna rozmowa, każdy model',
-      opis: 'Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat — liczy.',
+      title: 'Cosmos – jedna rozmowa, każdy model',
+      opis: 'Cosmos to osobisty, hybrydowy system AI. Prowadzi jedną rozmowę przez chmurę NVIDIA, lokalny GPU, Claude i OpenAI, a zamiast opisywać świat – liczy.',
     },
     en: {
       adres: 'https://cosmosai.live/?lang=en',
-      title: 'Cosmos — one thread, every engine',
-      opis: 'Cosmos is a personal, hybrid AI system. One conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI — and instead of describing the world, it does the math.',
+      title: 'Cosmos – one thread, every engine',
+      opis: 'Cosmos is a personal, hybrid AI system. One conversation across NVIDIA’s cloud, a local GPU, Claude and OpenAI – and instead of describing the world, it does the math.',
     },
   };
 
-  /* Polski oryginał zbieramy z dokumentu, zanim cokolwiek podmienimy —
+  /* Polski oryginał zbieramy z dokumentu, zanim cokolwiek podmienimy –
      jedno źródło prawdy, bez drugiej kopii tekstów w skrypcie. */
   const PL = {};
   $$('[data-t]').forEach((el) => { if (!(el.dataset.t in PL)) PL[el.dataset.t] = el.innerHTML; });
@@ -176,7 +176,7 @@
   });
 
   /* Język: adres (/?lang=en) → zapisany wybór → polski. Języka przeglądarki nie
-     zgadujemy (robot en-US widziałby angielski pod polskim adresem) — zamiast
+     zgadujemy (robot en-US widziałby angielski pod polskim adresem) – zamiast
      tego osoba z nie-polską przeglądarką dostaje dyskretną podpowiedź. */
   const zAdresu = (/[?&]lang=(pl|en)(?:&|$)/.exec(location.search) || [])[1] || null;
   let zapisany = null;
@@ -219,7 +219,7 @@
     if (nowy === jezyk) return;
     jezyk = nowy;
     try { localStorage.setItem('cosmos.lang', jezyk); } catch (e) { /* bez zapisu */ }
-    /* Adres w pasku mówi, co widać — link skopiowany z angielskiej wersji
+    /* Adres w pasku mówi, co widać – link skopiowany z angielskiej wersji
        otworzy się po angielsku. */
     try {
       const u = new URL(location.href);
@@ -234,14 +234,14 @@
   $$('[data-jezyk]').forEach((b) => b.addEventListener('click', () => zmienJezyk(b.dataset.jezyk)));
 
   /* Język idzie za człowiekiem do aplikacji. Samo wejście pod /?lang=en nic nie
-     zapisuje, ale „Open Cosmos" kliknięte na angielskiej stronie to już wybór —
+     zapisuje, ale „Open Cosmos" kliknięte na angielskiej stronie to już wybór –
      bez tego aplikacja witała po polsku kogoś, kto przed chwilą czytał po
      angielsku (aplikacja czyta język tylko z cosmos.lang). */
   $$('.js-wejscie').forEach((a) => a.addEventListener('click', () => {
     if (zAdresu) try { localStorage.setItem('cosmos.lang', jezyk); } catch (e) { /* bez zapisu */ }
   }));
 
-  /* Podpowiedź „Read in English” — tylko gdy nikt jeszcze nie wybrał języka,
+  /* Podpowiedź „Read in English” – tylko gdy nikt jeszcze nie wybrał języka,
      adres go nie narzuca, a przeglądarka nie jest polska. */
   const podpowiedz = $('#podpowiedz-jezyka');
   function schowajPodpowiedz() { if (podpowiedz) podpowiedz.hidden = true; }
@@ -296,7 +296,7 @@
   const SILNIKI = {
     cloud: { pill: 'nemotron-3-super · cloud', kolor: '--k-nvidia', nazwa: 'NVIDIA Nemotron', nr: 0 },
     /* Archiwum przegląda lokalny model z narzędziami: nano-9b dostaje skrócony
-       prompt bez [ARCHIWUM:] (public/models.js, modelToolLevel), 30B — pełny. */
+       prompt bez [ARCHIWUM:] (public/models.js, modelToolLevel), 30B – pełny. */
     local: { pill: 'nemotron-3-nano-30b · local-gpu', kolor: '--k-local', nazwa: { pl: 'Lokalny GPU', en: 'Local GPU' }, nr: 1 },
     claude: { pill: 'claude-sonnet-5 · anthropic', kolor: '--k-claude', nazwa: 'Claude', nr: 2 },
     openai: { pill: 'gpt-4o · openai', kolor: '--k-openai', nazwa: 'OpenAI', nr: 3 },
@@ -305,23 +305,23 @@
 
   const ROZMOWA = {
     pl: {
-      /* Te same zdania stoją w index.html (duch i pierwsza odpowiedź) —
+      /* Te same zdania stoją w index.html (duch i pierwsza odpowiedź) –
          zmieniając je, zmień oba miejsca. Liczby: 2 października nad Morskim
          Okiem wg lib/slonce.js i lib/ekspozycja.js, jak w Plenerze niżej. */
       pyt: 'Jutro świt w\u00A0górach. Jakie nastawy przy 24–105 f/4?',
       kroki: [
-        'Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz — f/4 to Twoje maksimum.',
-        'W archiwum masz 212 zdjęć z\u00A0tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie — nic nie wyszło z\u00A0komputera.',
-        'Kadr: kamienie na pierwszym planie, horyzont w\u00A0górnej tercji. O\u00A07:00 f/8, 1/60 s, ISO 100 — mieści się w\u00A0Twoim sprzęcie.',
+        'Złota godzina jutro 6:40–7:22, Słońce wschodzi na azymucie 94°. Liczę pod obiektyw, który masz – f/4 to Twoje maksimum.',
+        'W archiwum masz 212 zdjęć z\u00A0tego miejsca; najlepsze kadry to październik, 6:55. Przejrzane lokalnie – nic nie wyszło z\u00A0komputera.',
+        'Kadr: kamienie na pierwszym planie, horyzont w\u00A0górnej tercji. O\u00A07:00 f/8, 1/60 s, ISO 100 – mieści się w\u00A0Twoim sprzęcie.',
         'Zapisać to jako plan na jutro? Nic nie trafi do pamięci bez Twojej zgody.',
       ],
     },
     en: {
       pyt: 'Mountains at dawn tomorrow. Settings for a 24–105 f/4?',
       kroki: [
-        'Golden hour runs 6:40–7:22, sun rising at 94°. I’m planning around the lens you own — f/4 is as wide as it goes.',
-        'Your archive has 212 frames from this spot; the best are from October at 6:55. Reviewed locally — nothing left the machine.',
-        'Frame: rocks in the foreground, horizon on the upper third. At 7:00, f/8, 1/60 s, ISO 100 — all within your kit.',
+        'Golden hour runs 6:40–7:22, sun rising at 94°. I’m planning around the lens you own – f/4 is as wide as it goes.',
+        'Your archive has 212 frames from this spot; the best are from October at 6:55. Reviewed locally – nothing left the machine.',
+        'Frame: rocks in the foreground, horizon on the upper third. At 7:00, f/8, 1/60 s, ISO 100 – all within your kit.',
         'Save this as tomorrow’s plan? Nothing goes into memory until you approve it.',
       ],
     },
@@ -379,7 +379,7 @@
     }
 
     function zbudujDucha() {
-      /* Niewidoczna, pełna rozmowa rezerwuje wysokość — karta nie skacze,
+      /* Niewidoczna, pełna rozmowa rezerwuje wysokość – karta nie skacze,
          gdy dochodzą kolejne odpowiedzi. Polska wersja stoi już w HTML-u
          (inaczej karta rosłaby dopiero po dojściu skryptu), tu dobudowujemy
          tylko inny język. */
@@ -443,7 +443,7 @@
       autoplay = true;
       zbudujDucha();
       zywy.classList.remove('znika');
-      /* Pytanie i pierwsza odpowiedź widoczne od razu — karta nie stoi pusta.
+      /* Pytanie i pierwsza odpowiedź widoczne od razu – karta nie stoi pusta.
          Gdy ten sam język już jest w HTML-u, zostawiamy węzły (bez powtórki
          animacji wejścia). */
       if (zywy.dataset.jezyk !== jezyk) {
@@ -465,7 +465,7 @@
     przyciski.forEach((b) => b.addEventListener('click', async () => {
       autoplay = false;
       clearTimeout(zegar);
-      /* Przerwana odpowiedź nie zostaje urwana w pół zdania — dopisujemy ją od razu. */
+      /* Przerwana odpowiedź nie zostaje urwana w pół zdania – dopisujemy ją od razu. */
       if (biezace) { biezace.tr.textContent = biezace.tekst; biezace = null; }
       const moje = ++pokolenie;
       zajety = true;
@@ -531,7 +531,7 @@
     });
   }
 
-  /* Scena „zgaszony ekran” gra tylko wtedy, gdy ją widać — i zaczyna od początku. */
+  /* Scena „zgaszony ekran” gra tylko wtedy, gdy ją widać – i zaczyna od początku. */
   new IntersectionObserver((wpisy) => {
     wpisy.forEach((w) => w.target.classList.toggle('gra', w.isIntersecting && !ruchOgraniczony));
   }, { threshold: 0.3 }).observe($('[data-gra]'));
@@ -560,7 +560,7 @@
   const slonce = $('#slonce');
   /* Długość łuku to 1 z definicji (pathLength="1" w index.html). Dawniej
      getTotalLength() w trakcie wykonywania skryptu wymuszał pełny układ
-     strony, zanim cokolwiek się narysowało — na telefonie ~55 ms z 500 ms
+     strony, zanim cokolwiek się narysowało – na telefonie ~55 ms z 500 ms
      pierwszego długiego zadania. */
   const dlDrogi = 1;
   droga.style.strokeDasharray = '1';
@@ -615,7 +615,7 @@
   let ostatniCzas = '';
 
   function plener(p) {
-    /* t = N² / 2^EV — czas na karcie jest policzony, nie wpisany. */
+    /* t = N² / 2^EV – czas na karcie jest policzony, nie wpisany. */
     const f = p * (TABELA.length - 1);
     const i = Math.min(TABELA.length - 2, Math.floor(f));
     const u = f - i;
@@ -659,7 +659,7 @@
   let hoverWarstwa = -1;
   let ostatniP = 0;
   function przekroj(q) {
-    /* q: przejście sekcji przez ekran (0 — wchodzi od dołu, 1 — znika u góry).
+    /* q: przejście sekcji przez ekran (0 – wchodzi od dołu, 1 – znika u góry).
        Warstwy rozsuwają się do połowy drogi, potem podświetla się jedna po
        drugiej, od krawędzi do inferencji. */
     stos.style.setProperty('--p', ogr((q - 0.1) / 0.4).toFixed(3));
@@ -696,7 +696,7 @@
     pasek.style.transform = `scaleX(${calosc > 0 ? (y / calosc).toFixed(4) : 0})`;
 
     /* nić: postęp liczony względem głównej treści; głowica jedzie transformem
-       (--pp-px), bo „top” liczony z --pp przesuwał ją w układzie — CLS. */
+       (--pp-px), bo „top” liczony z --pp przesuwał ją w układzie – CLS. */
     const pp = ogr((vh * 0.5 - rm.top) / rm.height);
     watek.style.setProperty('--pp', pp.toFixed(4));
     watek.style.setProperty('--pp-px', `${(pp * rm.height).toFixed(1)}px`);
@@ -767,7 +767,7 @@
   // Start
   // -------------------------------------------------------------------------
 
-  /* Po polsku liczby stoją w HTML-u już sformatowane — pierwszy
+  /* Po polsku liczby stoją w HTML-u już sformatowane – pierwszy
      Intl.NumberFormat (~25 ms na telefonie) powstaje dopiero, gdy liczniki
      wjadą w widok. Pierwsza klatka przewijania w requestAnimationFrame, nie
      tutaj: odczyt prostokątów w trakcie skryptu wymuszał pełny układ strony

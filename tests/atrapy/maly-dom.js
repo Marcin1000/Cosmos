@@ -3,13 +3,13 @@
    Powód istnienia tego pliku jest jeden i konkretny: PIĘĆ RAZY w jednej sesji
    test sprawdzający obecność frazy w `public/app.js` padł przy przeprowadzce
    kodu, mimo że funkcja działała bez zmian. Za każdym razem kusiło, żeby
-   przestawić regexp na nowy plik — i za każdym razem byłoby to odłożenie
+   przestawić regexp na nowy plik – i za każdym razem byłoby to odłożenie
    problemu, nie rozwiązanie.
 
    Prawdziwa przyczyna była taka, że budowniczych DOM-u nie dało się uruchomić
    poza przeglądarką, a testy przeglądarkowe są wolne i sprawdzają układ,
    nie logikę. Po wydzieleniu `public/widoki.js` brakowało już tylko atrapy
-   `document` — i to jest ona.
+   `document` – i to jest ona.
 
    ŚWIADOMIE NIEPEŁNA. Nie udaje przeglądarki i nie ma jej udawać: obsługuje
    tworzenie elementów, drzewo, klasy, atrybuty i zdarzenia. Wszystko, co
@@ -97,7 +97,7 @@ class Element {
     for (const fn of this.nasluchy[typ] || []) await fn({ preventDefault() {}, stopPropagation() {}, ...zdarzenie });
   }
 
-  /** Wszystkie elementy w poddrzewie o danej klasie — do sprawdzania wyniku. */
+  /** Wszystkie elementy w poddrzewie o danej klasie – do sprawdzania wyniku. */
   poKlasie(k) {
     const out = [];
     const chodz = (el) => {

@@ -1,4 +1,4 @@
-/* SCENARIUSZE — przewidywanie usterek, zanim zgłosi je Marcin.
+/* SCENARIUSZE – przewidywanie usterek, zanim zgłosi je Marcin.
 
    Ten zestaw powstał po dwóch zgłoszeniach z realnego użycia: „nie pokazuje
    zdjęć, które wyszukał" i „napisałem, jakich obiektywów użyję, i zgłupiał".
@@ -7,7 +7,7 @@
        NARZĘDZIE NIE MIAŁO GDZIE PRZYJĄĆ TEGO, CO POWIEDZIAŁ CZŁOWIEK,
        ALBO NIE MIAŁO CO ZROBIĆ, GDY COŚ POSZŁO NIE TAK.
 
-   Nie sprawdzamy tu więc pojedynczych funkcji — od tego są inne zestawy.
+   Nie sprawdzamy tu więc pojedynczych funkcji – od tego są inne zestawy.
    Sprawdzamy KLASY sytuacji, w których takie luki się objawiają:
 
      A. człowiek podaje coś, czego kontrakt narzędzia nie przewiduje
@@ -16,7 +16,7 @@
      D. usługa zewnętrzna odmawia
 
    Reguła wspólna dla wszystkich czterech: Cosmos ma ODPOWIEDZIEĆ i POWIEDZIEĆ,
-   czego zabrakło. Nie wolno mu ani milczeć, ani wywalić się, ani — najgorsze —
+   czego zabrakło. Nie wolno mu ani milczeć, ani wywalić się, ani – najgorsze –
    podać wyniku, który wygląda poprawnie, a jest policzony nie dla tego, o co
    pytano. Cicha nieprawda jest gorsza niż jawny błąd.
 */
@@ -40,7 +40,7 @@ const { srodowisko } = require('../pomoc');
   /* ---- A. Miejsce podane NAZWĄ, nie współrzędnymi ---------------------
      „W sobotę kręcę w Krakowie" to najzwyklejsze zdanie i do niedawna nie
      było parametru, który by je przyjął. Model musiał zgadywać współrzędne
-     z pamięci — a złota godzina policzona dla złego punktu wygląda równie
+     z pamięci – a złota godzina policzona dla złego punktu wygląda równie
      wiarygodnie jak policzona dla dobrego. */
   const wKrakowie = await plan({ miejsce: 'Kraków', tryb: 'zdjecie', kiedy: '2026-06-21T20:00' });
   console.log(`A1. miejsce=Kraków → HTTP ${wKrakowie.status}, `
@@ -66,7 +66,7 @@ const { srodowisko } = require('../pomoc');
   // …ale podmiana korpusu nie może być MILCZĄCA: sufit ISO i zapas ze
   // stabilizacji są inne, więc wynik dotyczy nie tego aparatu, o który pytano.
   if (!powodyZ(obcyKorpus).some((p) => /nie mam .* w katalogu/i.test(p))) {
-    fail.push('nieznany korpus podmieniony po cichu — odpowiedź dotyczy innego aparatu');
+    fail.push('nieznany korpus podmieniony po cichu – odpowiedź dotyczy innego aparatu');
   }
 
   const dziwneWartosci = await plan({
@@ -79,7 +79,7 @@ const { srodowisko } = require('../pomoc');
   if (dziwneWartosci.status !== 200) fail.push('bzdurne wartości wywracają narzędzie');
   if (!Number.isFinite(dziwneWartosci.d?.ustawienia?.iso)) fail.push('ISO wyszło nieliczbą');
 
-  // Ogniskowa ujemna i absurdalna — wynik musi zostać liczbą, nie NaN.
+  // Ogniskowa ujemna i absurdalna – wynik musi zostać liczbą, nie NaN.
   for (const zla of [-50, 0, 99999]) {
     const o = await plan({ lat: 50, lon: 20, tryb: 'zdjecie', ogniskowa: zla });
     if (o.status !== 200 || !Number.isFinite(o.d?.ustawienia?.iso)) {
@@ -96,7 +96,7 @@ const { srodowisko } = require('../pomoc');
   /* ---- C. Brak danych, bez których nie ma odpowiedzi ------------------
      Kluczowe: `Number(null)` to ZERO, nie NaN. Bez jawnego sprawdzenia
      Cosmos liczył światło dla punktu 0°N 0°E na Atlantyku i oddawał to jako
-     poprawną odpowiedź — czyli dokładnie „cicha nieprawda". */
+     poprawną odpowiedź – czyli dokładnie „cicha nieprawda". */
   const bezMiejsca = await plan({ tryb: 'zdjecie' });
   console.log(`C1. bez lokalizacji → HTTP ${bezMiejsca.status}, „${(bezMiejsca.d?.error || '').slice(0, 60)}"`);
   if (bezMiejsca.status !== 400) fail.push('brak lokalizacji nie został zgłoszony');
@@ -110,12 +110,12 @@ const { srodowisko } = require('../pomoc');
   const puste = await fetch(`${env.adres}/api/archive/stats?pole=ogniskowa`);
   const pusteD = await puste.json().catch(() => null);
   console.log(`C3. zestawienie z pustego archiwum → HTTP ${puste.status}, `
-    + `razem ${pusteD?.razem ?? '—'}, z danymi ${pusteD?.zDanymi ?? '—'}, `
-    + `bez danych ${pusteD?.bezDanych ?? '—'}`);
+    + `razem ${pusteD?.razem ?? '–'}, z danymi ${pusteD?.zDanymi ?? '–'}, `
+    + `bez danych ${pusteD?.bezDanych ?? '–'}`);
   if (puste.status !== 200) fail.push('puste archiwum wywraca zestawienie');
   if (pusteD && pusteD.razem === undefined) fail.push('zestawienie nie podaje, ile w ogóle jest wpisów');
 
-  // Grupowanie po polu, którego nie ma — jasna odmowa, nie cicha pustka.
+  // Grupowanie po polu, którego nie ma – jasna odmowa, nie cicha pustka.
   const zleGrupowanie = await fetch(`${env.adres}/api/archive/stats?pole=kolorSkarpetek`);
   console.log(`C4. grupowanie po nieistniejącym polu → HTTP ${zleGrupowanie.status}`);
   if (zleGrupowanie.status !== 400) fail.push('nieznane pole grupowania nie zostało odrzucone');
@@ -129,30 +129,30 @@ const { srodowisko } = require('../pomoc');
   if (zPogoda.status !== 200) fail.push('brak pogody zablokował cały plan');
   if (!zPogoda.d?.ustawienia?.czas) fail.push('brak pogody odebrał ustawienia ekspozycji');
 
-  /* ZORZA — dodatek do planu, więc obowiązuje ta sama zasada co przy pogodzie:
+  /* ZORZA – dodatek do planu, więc obowiązuje ta sama zasada co przy pogodzie:
      jej brak nie może zabrać ustawień ekspozycji. Sprawdzamy oba kierunki:
      że dane dochodzą i są policzone, ORAZ że awaria NOAA nic nie psuje. */
   const noca = await plan({ lat: 54.35, lon: 18.65, tryb: 'zdjecie', kiedy: '2026-01-15T22:00' });
   const z = noca.d?.zorza;
-  console.log(`D1b. zorza w Gdańsku nocą → Kp teraz ${z?.kpTeraz ?? '—'}, `
-    + `szczyt ${z?.szczyt?.kp ?? '—'}, próg łuny ${z?.progNadHoryzontem ?? '—'}, szansa „${z?.szansa ?? '—'}"`);
+  console.log(`D1b. zorza w Gdańsku nocą → Kp teraz ${z?.kpTeraz ?? '–'}, `
+    + `szczyt ${z?.szczyt?.kp ?? '–'}, próg łuny ${z?.progNadHoryzontem ?? '–'}, szansa „${z?.szansa ?? '–'}"`);
   if (!z) fail.push('brak pola `zorza` w planie nocnym');
   else {
     if (z.progNadHoryzontem !== 5) fail.push(`próg łuny dla Gdańska ${z.progNadHoryzontem}, oczekiwano 5`);
-    // Atrapa daje szczyt Kp 7,33 — powyżej progu 5, więc szansa MUSI być.
+    // Atrapa daje szczyt Kp 7,33 – powyżej progu 5, więc szansa MUSI być.
     if (z.szansa === 'brak') fail.push('Kp 7,3 powyżej progu 5, a Cosmos mówi „brak"');
     /* Pusta prognoza to dokładnie ten stan, który przez długi czas przechodził
        niezauważony: atrapa oddawała tablicę tablic z nagłówkiem, czytnik brał
-       kolumny po indeksie, oba zgadzały się ze sobą — a NOAA oddaje tablicę
+       kolumny po indeksie, oba zgadzały się ze sobą – a NOAA oddaje tablicę
        OBIEKTÓW i na żywo wychodziło zero wpisów. Atrapa mówi teraz tym samym
        kształtem co NOAA, więc to sprawdzenie wreszcie coś znaczy. */
-    if (!z.prognoza?.length) fail.push('prognoza Kp pusta — czytnik nie poradził sobie z kształtem z NOAA');
+    if (!z.prognoza?.length) fail.push('prognoza Kp pusta – czytnik nie poradził sobie z kształtem z NOAA');
     if (z.prognoza?.some((x) => new Date(x.kiedy.replace(' ', 'T') + 'Z') < Date.now() - 4 * 3600e3)) {
       fail.push('w prognozie została wczorajsza burza');
     }
   }
 
-  // W dzień zorzy nie pytamy w ogóle — to marnowanie sekundy na znany wynik.
+  // W dzień zorzy nie pytamy w ogóle – to marnowanie sekundy na znany wynik.
   const wDzien = await plan({ lat: 54.35, lon: 18.65, tryb: 'zdjecie', kiedy: '2026-06-21T12:00' });
   console.log(`D1c. zorza w południe → ${wDzien.d?.zorza === null ? 'pominięta (dobrze)' : 'PYTANA NIEPOTRZEBNIE'}`);
   if (wDzien.d?.zorza) fail.push('Cosmos pyta o zorzę w biały dzień');
@@ -166,18 +166,18 @@ const { srodowisko } = require('../pomoc');
   if (bezZorzy.d?.zorza) fail.push('atrapa miała paść, a zorza jest');
   await fetch('http://127.0.0.1:7117/awaria?zrodla=');
 
-  // Wyszukiwanie grafik przy wszystkich źródłach w dół — musi POWIEDZIEĆ dlaczego.
+  // Wyszukiwanie grafik przy wszystkich źródłach w dół – musi POWIEDZIEĆ dlaczego.
   await fetch('http://127.0.0.1:7117/awaria?zrodla=searxng,ddg,commons,openverse');
   const brakZrodel = await (await fetch(`${env.adres}/api/search/images?q=cokolwiek`)).json();
   console.log(`D2. wszystkie źródła grafik padły → ${brakZrodel.results.length} zdjęć, `
     + `powód: „${(brakZrodel.error || '').slice(0, 60)}"`);
   if (!brakZrodel.error) fail.push('padły wszystkie źródła, a Cosmos nie podaje powodu');
-  if (brakZrodel.results.length) fail.push('atrapa miała paść — sprawdzenie nic nie bada');
+  if (brakZrodel.results.length) fail.push('atrapa miała paść – sprawdzenie nic nie bada');
   await fetch('http://127.0.0.1:7117/awaria?zrodla=');
 
   /* ---- E. Śmieci na wejściu HTTP -------------------------------------
      Nie „ktoś nas atakuje", tylko: przeglądarka potrafi wysłać ucięte żądanie
-     przy zerwanej sieci w terenie, a model — wygenerować niepoprawny JSON. */
+     przy zerwanej sieci w terenie, a model – wygenerować niepoprawny JSON. */
   const smieci = await fetch(`${env.adres}/api/plan`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{niepoprawny',
   });
@@ -188,7 +188,7 @@ const { srodowisko } = require('../pomoc');
   console.log(`E2. puste ciało żądania → HTTP ${pustyBody.status}`);
   if (pustyBody.status >= 500) fail.push('puste ciało żądania wywraca serwer');
 
-  // Bardzo długi tekst w polu — nie może przejść dalej bez ucięcia.
+  // Bardzo długi tekst w polu – nie może przejść dalej bez ucięcia.
   const dlugi = await plan({ lat: 50, lon: 20, obiektyw: 'x'.repeat(5000) });
   console.log(`E3. 5000 znaków w polu obiektyw → HTTP ${dlugi.status}`);
   if (dlugi.status >= 500) fail.push('długi tekst wywraca serwer');

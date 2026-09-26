@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Cosmos Watcher — ciągła percepcja otoczenia.
+Cosmos Watcher – ciągła percepcja otoczenia.
 
 Obserwuje kamerę, wykrywa obiekty YOLO i wysyła do Cosmosa TYLKO ZMIANY
 (pojawiło się / zniknęło). Źródłem obrazu może być zwykła kamera przez OpenCV
-albo Kinect 360 — ten drugi nie jest kamerą UVC, więc obraz bierzemy z SDK
+albo Kinect 360 – ten drugi nie jest kamerą UVC, więc obraz bierzemy z SDK
 (CAMERA_SOURCE=kinect).
-Cosmos dokleja te zdarzenia do kontekstu rozmowy — dzięki temu Nemotron
+Cosmos dokleja te zdarzenia do kontekstu rozmowy – dzięki temu Nemotron
 „wie”, co dzieje się w pokoju, zanim o cokolwiek zapytasz.
 
 Uruchomienie (wymaga: pip install ultralytics opencv-python requests):
@@ -14,7 +14,7 @@ Uruchomienie (wymaga: pip install ultralytics opencv-python requests):
 
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
-    COSMOS_TOKEN    COSMOS_API_TOKEN serwera — wymagany, gdy Cosmos ma hasło
+    COSMOS_TOKEN    COSMOS_API_TOKEN serwera – wymagany, gdy Cosmos ma hasło
     CAMERA_SOURCE   auto (domyślnie, zwykła kamera) | kinect (Kinect 360 przez SDK 1.8)
     CAMERA_INDEX    numer kamery przy CAMERA_SOURCE=auto (domyślnie 0)
     WATCH_INTERVAL  sekundy między analizami (domyślnie 5)
@@ -62,7 +62,7 @@ class CvCamera:
                 '  python -c "import cv2; print([i for i in range(6) '
                 'if cv2.VideoCapture(i).isOpened()])"\n'
                 "Pusta lista = brak kamery dla OpenCV. Masz Kinecta? Ustaw CAMERA_SOURCE=kinect\n"
-                "— Kinect nie jest kamerą UVC, ale jego obraz RGB czyta kinect_win.py."
+                "– Kinect nie jest kamerą UVC, ale jego obraz RGB czyta kinect_win.py."
             )
         self.name = f"kamera {index}"
 
@@ -77,7 +77,7 @@ class CvCamera:
 class KinectCamera:
     """Obraz RGB z Kinecta 360 przez Kinect for Windows SDK 1.8.
 
-    Kinect nie jest kamerą UVC, więc OpenCV go nie zobaczy — ale SDK oddaje
+    Kinect nie jest kamerą UVC, więc OpenCV go nie zobaczy – ale SDK oddaje
     ten sam obraz 640×480, tylko inną drogą. Dla YOLO to bez różnicy.
     """
 
@@ -107,7 +107,7 @@ def main() -> None:
     model = YOLO(os.environ.get("YOLO_MODEL", "yolo11n.pt"))
     cam = open_camera()
 
-    print(f"✦ Cosmos Watcher — {cam.name}, analiza co {INTERVAL}s, cel: {COSMOS_URL}")
+    print(f"✦ Cosmos Watcher – {cam.name}, analiza co {INTERVAL}s, cel: {COSMOS_URL}")
     send_event("obserwator kamery uruchomiony")
 
     try:

@@ -1,22 +1,22 @@
-/* Misja waypointowa dla DJI — plik KMZ w formacie WPML.
+/* Misja waypointowa dla DJI – plik KMZ w formacie WPML.
 
    `senses/flightplan.py` liczy wysokość, pokrycie i liczbę zdjęć, ale nie
    umiał oddać tego dronowi: plan zostawał liczbą na ekranie, którą trzeba
    było ręcznie przepisać na waypointy. KMZ zamyka tę pętlę.
 
-   Ten zestaw sprawdza rzeczy, które da się rozstrzygnąć bez drona — i mówi
+   Ten zestaw sprawdza rzeczy, które da się rozstrzygnąć bez drona – i mówi
    wprost, czego nie da się:
 
      1. czy to JEST poprawny ZIP z poprawnym XML-em w środku (weryfikacja
         niezależną implementacją, nie naszą własną),
-     2. czy geometria siatki się zgadza — liczba linii i długość trasy
+     2. czy geometria siatki się zgadza – liczba linii i długość trasy
         policzone z zewnątrz,
      3. czy bzdurne parametry są odrzucane PRZED lotem, a nie na lotnisku.
 
    ⚠ Czego ten zestaw NIE dowodzi: że DJI Fly ten plik przyjmie. Struktura
    WPML jest odtworzona z dokumentacji i otwartych generatorów, ale przez
    prawdziwego drona nie przeszła. Rozstrzygnie to import i podniesienie
-   maszyny — i dopóki to nie nastąpi, nie wolno tego podawać jako pewnika.
+   maszyny – i dopóki to nie nastąpi, nie wolno tego podawać jako pewnika.
 */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -24,7 +24,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { misjaKmz, siatka } = require('../../lib/kmz.js');
 
-/** Odległość w metrach — do sprawdzenia geometrii siatki z zewnątrz. */
+/** Odległość w metrach – do sprawdzenia geometrii siatki z zewnątrz. */
 function metry(a, b) {
   const R = 6371000;
   const r = Math.PI / 180;
@@ -40,12 +40,12 @@ function metry(a, b) {
 
   /* ---- 1. Geometria siatki, sprawdzona liczbami ----
      Pas 200 m szeroki z odstępem 50 m to 5 linii (0, 50, 100, 150, 200),
-     czyli 10 punktów — po dwa końce na linię. */
+     czyli 10 punktów – po dwa końce na linię. */
   const p = siatka({ lat: 53.5, lon: 22.6, szerokoscM: 200, dlugoscM: 300, odstepM: 50 });
   console.log(`1. pas 200×300 m, odstęp 50 m → ${p.length} punktów`);
   if (p.length !== 10) fail.push(`siatka dała ${p.length} punktów zamiast 10`);
 
-  // Długość pierwszej linii musi wyjść 300 m — to sprawdza całą trygonometrię.
+  // Długość pierwszej linii musi wyjść 300 m – to sprawdza całą trygonometrię.
   const linia = metry(p[0], p[1]);
   console.log(`2. długość pierwszej linii: ${linia.toFixed(0)} m (oczekiwane 300)`);
   if (Math.abs(linia - 300) > 5) fail.push(`linia ma ${linia.toFixed(0)} m zamiast 300`);
@@ -56,15 +56,15 @@ function metry(a, b) {
   if (Math.abs(odstep - 50) > 3) fail.push(`odstęp ${odstep.toFixed(0)} m zamiast 50`);
 
   /* „Wąż": co druga linia w przeciwną stronę. Bez tego powrót na początek
-     każdej linii to przelot na pusto — przy dziesięciu liniach po 300 m
+     każdej linii to przelot na pusto – przy dziesięciu liniach po 300 m
      trzy kilometry baterii wyrzucone. */
   /* Przy kierunku 0 linie biegną wschód-zachód, więc wzdłuż nich zmienia się
      DŁUGOŚĆ, nie szerokość. Pierwsza wersja tego sprawdzenia patrzyła na `lat`
-     i zawsze widziała zero — czyli nie sprawdzała niczego. */
+     i zawsze widziała zero – czyli nie sprawdzała niczego. */
   const kierunek1 = p[1].lon - p[0].lon;
   const kierunek2 = p[3].lon - p[2].lon;
   console.log(`4. druga linia w przeciwną stronę: ${kierunek1 * kierunek2 < 0}`);
-  if (kierunek1 * kierunek2 >= 0) fail.push('linie idą w tę samą stronę — brak „węża", bateria marnowana');
+  if (kierunek1 * kierunek2 >= 0) fail.push('linie idą w tę samą stronę – brak „węża", bateria marnowana');
 
   /* Obrót siatki. Przy kierunku 90° linie mają biec z południa na północ,
      czyli różnica długości geograficznej wzdłuż linii ma zniknąć. */
@@ -75,10 +75,10 @@ function metry(a, b) {
   if (wzdluzLat < wzdluzLon) fail.push('obrót o 90° nie zmienił kierunku linii');
 
   /* ---- 2. Czy to jest prawdziwy ZIP z prawdziwym XML-em ----
-     Sprawdzamy CUDZĄ implementacją — Pythonowym `zipfile` i parserem XML.
+     Sprawdzamy CUDZĄ implementacją – Pythonowym `zipfile` i parserem XML.
      Własnym kodem dałoby się potwierdzić wyłącznie to, że umiemy odczytać
      to, co sami zapisaliśmy, a to nie jest żaden dowód. */
-  const kmz = misjaKmz(p, { wysokosc: 80, predkosc: 6, nazwa: 'Biebrza — nalot' });
+  const kmz = misjaKmz(p, { wysokosc: 80, predkosc: 6, nazwa: 'Biebrza – nalot' });
   const plik = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kmz-')), 'misja.kmz');
   fs.writeFileSync(plik, kmz);
   console.log(`6. KMZ: ${(kmz.length / 1024).toFixed(1)} kB`);
@@ -118,7 +118,7 @@ print('ZIP OK, XML OK, punktow: %d' % punktow)
   }
   console.log('8. treść misji: wysokość względna, WGS84, zdjęcia w punktach, powrót do domu');
 
-  /* Numeracja punktów MUSI być ciągła od zera — dziura jest dla aplikacji
+  /* Numeracja punktów MUSI być ciągła od zera – dziura jest dla aplikacji
      błędem pliku, nie brakiem punktu. */
   const indeksy = [...tekst.matchAll(/<wpml:index>(\d+)</g)].map((m) => Number(m[1]));
   const wSzablonie = indeksy.slice(0, indeksy.length / 2);

@@ -1,4 +1,4 @@
-/* Nasłuch własnym strumieniem — sprawdzenie tego, co naprawdę boli.
+/* Nasłuch własnym strumieniem – sprawdzenie tego, co naprawdę boli.
 
    Marcin zgłosił trzy rzeczy z realnego użycia trybu głosowego: mikrofon
    ciągle się włącza i wyłącza, Cosmos słyszy sam siebie i wpada w pętlę.
@@ -12,7 +12,7 @@
    sprawdzisz bez mówienia do mikrofonu:
 
      · czy cisza NIC nie wysyła (inaczej Whisper mieli szum całą dobę),
-     · czy podczas mówienia Cosmosa nie wychodzi ANI JEDNO żądanie — to jest
+     · czy podczas mówienia Cosmosa nie wychodzi ANI JEDNO żądanie – to jest
        dowód, że pętla sprzężenia jest niemożliwa, a nie tylko mało prawdopodobna,
      · czy pierwsza głoska nie ginie (przedbieg),
      · czy przepróbkowanie faktycznie tłumi aliasing, a nie tylko tak twierdzi
@@ -84,7 +84,7 @@ function zaladuj({ odpowiedzSTT = { text: 'test' }, statusSTT = 200 } = {}) {
     },
   };
   window.window = window;
-  // Moduł woła `navigator.mediaDevices` bez przedrostka — w przeglądarce to
+  // Moduł woła `navigator.mediaDevices` bez przedrostka – w przeglądarce to
   // pole `window`, tutaj musi być globalne w kontekście skryptu.
   const kontekst = vm.createContext(Object.assign({ console, Blob, TextEncoder }, window, { window }));
   const kod = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'nasluch.js'), 'utf8');
@@ -136,7 +136,7 @@ async function sekundyWav(blob) {
   const fail = [];
 
   // ---------------------------------------------------------------
-  // 1. Nagłówek WAV — czy to w ogóle jest plik, który ktoś odczyta
+  // 1. Nagłówek WAV – czy to w ogóle jest plik, który ktoś odczyta
   // ---------------------------------------------------------------
   {
     const { API } = zaladuj();
@@ -164,7 +164,7 @@ async function sekundyWav(blob) {
     for (const [k, v] of Object.entries(oczekiwane)) {
       if (pola[k] !== v) fail.push(`WAV: pole ${k} = ${pola[k]}, oczekiwane ${v}`);
     }
-    // Pierwsza próbka musi wrócić taka, jaka weszła — inaczej gubimy dźwięk
+    // Pierwsza próbka musi wrócić taka, jaka weszła – inaczej gubimy dźwięk
     // na samym zapisie, a nie w rozpoznawaniu.
     if (buf.readInt16LE(44) !== pcm[0]) fail.push('WAV: pierwsza próbka nie zgadza się z wejściem');
     console.log(`1. nagłówek WAV: ${oczekiwane.calosc} B, ${pola.rate} Hz, ${pola.bity} bit, mono`);
@@ -181,7 +181,7 @@ async function sekundyWav(blob) {
     if (wynik.length !== 1600) fail.push(`przeprόbkowanie: ${wynik.length} próbek zamiast 1600`);
     if (Math.abs(wynik[100] - 0.5 * 0x7fff) > 2) fail.push('przeprόbkowanie: stała amplituda się zmieniła');
 
-    // Pełna skala nie może przekroczyć zakresu int16 — przester słychać
+    // Pełna skala nie może przekroczyć zakresu int16 – przester słychać
     // jako trzask i psuje rozpoznawanie bardziej niż cichy sygnał.
     const gorne = API.przeprobkuj(new Float32Array(300).fill(1.5), 48000, 16000);
     const dolne = API.przeprobkuj(new Float32Array(300).fill(-1.5), 48000, 16000);
@@ -191,7 +191,7 @@ async function sekundyWav(blob) {
 
     /* Sedno: ton 12 kHz przy 48 kHz. Po zejściu na 16 kHz jest POWYŻEJ
        częstotliwości Nyquista, więc naiwne branie co trzeciej próbki zawinie
-       go do pasma jako 4 kHz o PEŁNEJ amplitudzie — czyli świst w środku
+       go do pasma jako 4 kHz o PEŁNEJ amplitudzie – czyli świst w środku
        mowy. Uśrednianie okna działa jak filtr dolnoprzepustowy i musi go
        wyraźnie stłumić. Jeśli ten test kiedyś padnie, znaczy że ktoś
        „zoptymalizował" przeprόbkowanie na wybieranie próbek. */
@@ -224,7 +224,7 @@ async function sekundyWav(blob) {
     podaj(proc(), cisza(120));            // ponad 2,5 s ciszy
     await pauza();
     console.log(`3. 2,5 s ciszy → ${zadania.length} żądań do Whispera`);
-    if (zadania.length) fail.push(`cisza wysłała ${zadania.length} nagrań — Whisper mieliłby szum bez końca`);
+    if (zadania.length) fail.push(`cisza wysłała ${zadania.length} nagrań – Whisper mieliłby szum bez końca`);
     n.stop();
   }
 
@@ -246,7 +246,7 @@ async function sekundyWav(blob) {
     if (zadania[0]) {
       if (zadania[0].adres !== '/api/stt') fail.push(`zły adres: ${zadania[0].adres}`);
       if (zadania[0].opcje.headers['Content-Type'] !== 'audio/wav') {
-        fail.push('nagranie wysłane bez nagłówka audio/wav — Whisper zgadywałby format');
+        fail.push('nagranie wysłane bez nagłówka audio/wav – Whisper zgadywałby format');
       }
       const s = await sekundyWav(zadania[0].opcje.body);
       // Głośna część to 30 ramek ≈ 0,64 s; z przedbiegiem i ogonem ciszy
@@ -257,14 +257,14 @@ async function sekundyWav(blob) {
   }
 
   // ---------------------------------------------------------------
-  // 5. GŁUCHY — dowód, że pętla sprzężenia jest niemożliwa
+  // 5. GŁUCHY – dowód, że pętla sprzężenia jest niemożliwa
   // ---------------------------------------------------------------
   {
     const { API, zadania, proc } = zaladuj();
     const n = API.utworz({});
     await n.start();
     n.gluchy(true);
-    // Cosmos „mówi" — to jego własny głos wraca do mikrofonu.
+    // Cosmos „mówi" – to jego własny głos wraca do mikrofonu.
     podaj(proc(), [...mowa(60), ...cisza(40)]);
     await pauza();
     const wGluchocie = zadania.length;
@@ -296,11 +296,11 @@ async function sekundyWav(blob) {
     const drugi = zaladuj();
     const m = drugi.API.utworz({});
     await m.start();
-    // Nieprzerwany hałas dłuższy niż limit — nie ma ciszy, która by go domknęła.
+    // Nieprzerwany hałas dłuższy niż limit – nie ma ciszy, która by go domknęła.
     podaj(drugi.proc(), mowa(Math.ceil(16000 / MS_RAMKI)));
     await pauza();
     console.log(`6b. 16 s nieprzerwanego dźwięku → ${drugi.zadania.length} żądań (limit domyka sam)`);
-    if (drugi.zadania.length < 1) fail.push('ciągły dźwięk rósł w nieskończoność — limit maxMowyMs nie zadziałał');
+    if (drugi.zadania.length < 1) fail.push('ciągły dźwięk rósł w nieskończoność – limit maxMowyMs nie zadziałał');
     if (drugi.zadania[0]) {
       const s = await sekundyWav(drugi.zadania[0].opcje.body);
       if (s > 16) fail.push(`nagranie ${s.toFixed(1)} s przekroczyło limit 15 s`);
@@ -309,7 +309,7 @@ async function sekundyWav(blob) {
   }
 
   // ---------------------------------------------------------------
-  // 7. Przedbieg — pierwsza głoska nie ginie
+  // 7. Przedbieg – pierwsza głoska nie ginie
   // ---------------------------------------------------------------
   {
     const bez = zaladuj();
@@ -341,7 +341,7 @@ async function sekundyWav(blob) {
   }
 
   // ---------------------------------------------------------------
-  // 8. Whisper oddał śmieć albo błąd — nic nie leci dalej, nic nie wybucha
+  // 8. Whisper oddał śmieć albo błąd – nic nie leci dalej, nic nie wybucha
   // ---------------------------------------------------------------
   {
     for (const [opis, odp] of [['pusty tekst', { text: '' }], ['sama interpunkcja', { text: '. . .' }]]) {
@@ -365,14 +365,14 @@ async function sekundyWav(blob) {
     if (bledy.length !== 1) fail.push(`błąd zmysłów nie dotarł do interfejsu (${bledy.length} zgłoszeń)`);
     if (bledy[0] && !/Whisper/.test(bledy[0])) fail.push(`komunikat nic nie tłumaczy: ${bledy[0]}`);
     // Najważniejsze: nasłuch DALEJ ŻYJE. Awaria jednej transkrypcji nie może
-    // kończyć trybu głosowego — zmysły mogą wstać za chwilę.
+    // kończyć trybu głosowego – zmysły mogą wstać za chwilę.
     if (!n.dziala()) fail.push('po błędzie transkrypcji nasłuch się wyłączył');
     n.stop();
     if (n.dziala()) fail.push('stop() nie zatrzymał nasłuchu');
   }
 
   // ---------------------------------------------------------------
-  // 9. CICHA GŁUCHOTA — awaria, która nie daje o sobie znać
+  // 9. CICHA GŁUCHOTA – awaria, która nie daje o sobie znać
   // ---------------------------------------------------------------
   /* To jest najgorszy możliwy stan tego modułu i dlatego dostaje własną
      sekcję: mikrofon przestaje dawać próbki, a ekran dalej pokazuje
@@ -402,7 +402,7 @@ async function sekundyWav(blob) {
     await m.start();
     b2.uspij();
     console.log(`9b. uśpiony kontekst → ${JSON.stringify(powody2)}`);
-    if (!powody2.length) fail.push('uśpienie AudioContextu przeszło bez słowa — Cosmos udawałby, że słucha');
+    if (!powody2.length) fail.push('uśpienie AudioContextu przeszło bez słowa – Cosmos udawałby, że słucha');
     if (!b2.wznowien()) fail.push('Cosmos nie spróbował sam obudzić dźwięku');
     m.stop();
 

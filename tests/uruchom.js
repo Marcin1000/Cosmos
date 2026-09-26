@@ -2,10 +2,10 @@
 /* ============================================================
    Bateria testów Cosmosa
 
-     npm test                    — wszystko
-     npm test -- szybkie         — tylko to, co nie potrzebuje przeglądarki
-     npm test -- kinect zdjec    — zestawy, których nazwa zawiera te słowa
-     npm test -- --lista         — co w ogóle jest do uruchomienia
+     npm test                    – wszystko
+     npm test -- szybkie         – tylko to, co nie potrzebuje przeglądarki
+     npm test -- kinect zdjec    – zestawy, których nazwa zawiera te słowa
+     npm test -- --lista         – co w ogóle jest do uruchomienia
 
    Każdy zestaw to osobny proces z własnym serwerem i własnym katalogiem
    danych. Wolniej niż jeden wspólny serwer, ale wynik znaczy to, co znaczy:
@@ -22,7 +22,7 @@ const ZESTAWY = path.join(__dirname, 'zestawy');
 const LIMIT_MS = Number(process.env.COSMOS_TEST_TIMEOUT || 300000);
 
 /* Zestawy sterujące przeglądarką są wolniejsze i wymagają Chromium.
-   Rozpoznajemy je po treści, nie po nazwie — nazwa kłamie przy pierwszej
+   Rozpoznajemy je po treści, nie po nazwie – nazwa kłamie przy pierwszej
    zmianie. */
 const potrzebujePrzegladarki = (plik) =>
   /przegladarka\(|require\('playwright'\)/.test(fs.readFileSync(plik, 'utf8'));
@@ -100,7 +100,7 @@ function selftestyPythona() {
   if (wzorce.length) lista = lista.filter((z) => wzorce.some((w) => z.nazwa.includes(w)));
 
   if (!maPrzegladarke() && lista.some((z) => z.wolny)) {
-    console.log('⚠  Brak Chromium albo pakietu playwright — pomijam zestawy przeglądarkowe.');
+    console.log('⚠  Brak Chromium albo pakietu playwright – pomijam zestawy przeglądarkowe.');
     console.log('   Zainstaluj: npm install --save-dev playwright   (przeglądarka: ' + (CHROMIUM || 'nie znaleziono') + ')\n');
     lista = lista.filter((z) => !z.wolny);
   }
@@ -128,7 +128,7 @@ function selftestyPythona() {
   /* Ostatnie czternaście linii to za mało, gdy zestaw kończy się wyjątkiem:
      ślad stosu Playwrighta ma sam kilkanaście linii i wypycha z widoku
      WSZYSTKIE `console.log` zestawu. Tak przepadła informacja, na którym
-     kroku wywrócił się `pasek-offline` — zostało samo „element is not
+     kroku wywrócił się `pasek-offline` – zostało samo „element is not
      visible", bez pojęcia, którego elementu i po czym.
      Dlatego: najpierw własne wypisy zestawu (to jego opowieść o tym, co
      mierzył), potem ogon całości. */

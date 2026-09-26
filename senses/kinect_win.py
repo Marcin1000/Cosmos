@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Cosmos Kinect Win — most do Kinecta 360 przez oficjalne Kinect for Windows SDK 1.8.
+Cosmos Kinect Win – most do Kinecta 360 przez oficjalne Kinect for Windows SDK 1.8.
 
 DLACZEGO TEN PLIK ISTNIEJE
     Przez długi czas zakładaliśmy, że SDK 1.8 jest dostępne wyłącznie z C#/C++,
-    i kierowaliśmy użytkowników Windowsa do libfreenect — co wymaga budowania
+    i kierowaliśmy użytkowników Windowsa do libfreenect – co wymaga budowania
     biblioteki, podmiany sterownika przez Zadig i utraty oficjalnego SDK.
     To było błędne. SDK instaluje `Kinect10.dll` z **płaskim API w C**
     (rodzina funkcji `Nui*`), które Python woła bezpośrednio przez ctypes.
@@ -15,7 +15,7 @@ DLACZEGO TEN PLIK ISTNIEJE
       |--------------------|-------------|---------------------|
       | głębia             | tak         | tak                 |
       | obraz RGB          | tak         | tak                 |
-      | ŚLEDZENIE SZKIELETU| NIE         | TAK — 20 stawów     |
+      | ŚLEDZENIE SZKIELETU| NIE         | TAK – 20 stawów     |
       | silnik pochylenia  | tak         | tak                 |
 
     Szkielet to jedyny sposób, by Kinect „rejestrował ruchy" w sensie postawy
@@ -46,7 +46,7 @@ PUŁAPKA
     SDK używa DWÓCH konwencji przekazywania klatek:
       NuiImageStreamGetNextFrame → NUI_IMAGE_FRAME **  (klatka należy do SDK)
       NuiSkeletonGetNextFrame    → NUI_SKELETON_FRAME * (my alokujemy)
-    Pomylenie ich nie daje błędu — daje wyzerowany bufor i awarię w sterowniku
+    Pomylenie ich nie daje błędu – daje wyzerowany bufor i awarię w sterowniku
     przy zwalnianiu klatki. Autotest pilnuje obu sygnatur.
 """
 from __future__ import annotations
@@ -62,13 +62,13 @@ from ctypes import (POINTER, byref, c_int, c_int32, c_uint, c_uint32, c_void_p,
                     c_float, c_ubyte)
 
 # Błąd w wywołaniu do Kinect10.dll (zły typ argumentu, zły indeks w vtable)
-# nie jest wyjątkiem Pythona — proces po prostu znika, bez śladu i bez kodu
+# nie jest wyjątkiem Pythona – proces po prostu znika, bez śladu i bez kodu
 # wyjścia. faulthandler zamienia to w ślad stosu wskazujący dokładne miejsce.
 faulthandler.enable()
 
 # Windows API: DWORD to zawsze 32 bity bez znaku, LONG to 32 bity ze znakiem.
 # c_ulong/c_long idą za platformą (8 bajtów na Linuksie 64-bit), więc rozjechałyby
-# układ struktur. Używamy szerokości stałych — autotest to weryfikuje.
+# układ struktur. Używamy szerokości stałych – autotest to weryfikuje.
 DWORD = c_uint32
 LONG = c_int32
 
@@ -76,14 +76,14 @@ def _dep_error(pakiety: str) -> str:
     """Komunikat o brakującej zależności.
 
     Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
-    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    nigdy nie jest brak pakietu – tylko nieaktywowane środowisko. Sama rada
     „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
     """
     msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
     venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if os.path.isdir(venv) and not in_venv:
-        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany – "
                "tylko nie w tym Pythonie.\n\n"
                "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
                "  Windows:      .venv\\Scripts\\activate\n"
@@ -125,7 +125,7 @@ RESOLUTIONS = {
 NUI_SKELETON_COUNT = 6
 NUI_SKELETON_POSITION_COUNT = 20
 
-# Kolejność stawów jest częścią API — indeks to znaczenie.
+# Kolejność stawów jest częścią API – indeks to znaczenie.
 JOINTS = [
     "biodra_srodek", "kregoslup", "barki_srodek", "glowa",
     "bark_lewy", "lokiec_lewy", "nadgarstek_lewy", "dlon_lewa",
@@ -146,7 +146,7 @@ E_NUI_NOTPOWERED = 0x8301027C
 HRESULT_NAMES = {
     E_NUI_DEVICE_NOT_CONNECTED: "Kinect niepodłączony (E_NUI_DEVICE_NOT_CONNECTED)",
     E_NUI_DEVICE_NOT_READY: "Kinect jeszcze się nie zgłosił (E_NUI_DEVICE_NOT_READY)",
-    E_NUI_NOTPOWERED: "Brak zasilania z zasilacza (E_NUI_NOTPOWERED) — sam USB nie wystarcza",
+    E_NUI_NOTPOWERED: "Brak zasilania z zasilacza (E_NUI_NOTPOWERED) – sam USB nie wystarcza",
 }
 
 
@@ -203,13 +203,13 @@ class NuiSkeletonFrame(ctypes.Structure):
 
 
 # ---------------------------------------------------------------------------
-# Rozpoznawanie postawy — czysta matematyka, testowalna bez Kinecta
+# Rozpoznawanie postawy – czysta matematyka, testowalna bez Kinecta
 # ---------------------------------------------------------------------------
 
 def joints_to_dict(positions, states=None) -> dict:
     """Zamień tablicę 20 pozycji na słownik nazwa → (x, y, z).
 
-    Stawy nieśledzone (stan 0) pomijamy — lepiej nie wiedzieć, niż zgadywać
+    Stawy nieśledzone (stan 0) pomijamy – lepiej nie wiedzieć, niż zgadywać
     na podstawie pozycji, której czujnik nie widzi.
     """
     out = {}
@@ -245,7 +245,7 @@ def describe_posture(j: dict) -> dict:
     elif hip and head:
         out["postawa"] = "stoi" if (head[1] - hip[1]) > 0.55 else "siedzi"
 
-    # Dłoń nad głową — najczytelniejszy gest, odporny na szum.
+    # Dłoń nad głową – najczytelniejszy gest, odporny na szum.
     if head:
         for side, key in (("lewa", "dlon_lewa"), ("prawa", "dlon_prawa")):
             if key in j and j[key][1] > head[1]:
@@ -265,7 +265,7 @@ def describe_posture(j: dict) -> dict:
 
 
 def posture_summary(d: dict) -> str:
-    """Jedno zdanie dla Cosmosa — takie, jakie powiedziałby człowiek."""
+    """Jedno zdanie dla Cosmosa – takie, jakie powiedziałby człowiek."""
     parts = []
     if d.get("postawa"):
         parts.append(d["postawa"])
@@ -281,7 +281,7 @@ def posture_summary(d: dict) -> str:
 def depth_stats(depth_mm: np.ndarray, near: int = 500, far: int = 3500) -> dict:
     """Statystyki mapy głębi: obecność w paśmie i dystans najbliższego obiektu.
 
-    Zera to „nie wiem" (cień podczerwieni, powierzchnia pochłaniająca) — muszą
+    Zera to „nie wiem" (cień podczerwieni, powierzchnia pochłaniająca) – muszą
     wypaść z liczenia, inaczej najbliższy obiekt zawsze wychodziłby na 0 mm.
     """
     valid = depth_mm[(depth_mm >= near) & (depth_mm <= far)]
@@ -310,7 +310,7 @@ def _vtable_call(iface: int, index: int, restype, *argtypes):
     """Pobierz metodę z tablicy wirtualnej interfejsu COM.
 
     `INuiFrameTexture` jest interfejsem COM, więc bufor obrazu zdobywa się
-    przez `LockRect` z jego vtable. Nie potrzeba do tego biblioteki COM —
+    przez `LockRect` z jego vtable. Nie potrzeba do tego biblioteki COM –
     wystarczy odczytać wskaźnik z tablicy i zbudować prototyp funkcji.
 
     Zwracamy zwykły `c_int32`, a nie `ctypes.HRESULT`: ten drugi sam rzuca
@@ -323,20 +323,20 @@ def _vtable_call(iface: int, index: int, restype, *argtypes):
 
 
 # ---------------------------------------------------------------------------
-# Odnajdywanie wskaźnika na teksturę — zamiast zgadywania układu struktury
+# Odnajdywanie wskaźnika na teksturę – zamiast zgadywania układu struktury
 # ---------------------------------------------------------------------------
 #
 # Z całej NUI_IMAGE_FRAME potrzebujemy dokładnie JEDNEGO pola: `pFrameTexture`.
 # Rozdzielczość znamy, bo sami otwieraliśmy strumień; reszta pól jest nam
 # obojętna. A ponieważ odwzorowanie układu z dokumentacji okazało się błędne
 # (odczyt spod złego przesunięcia dawał adres 0xFFFF... i wywracał proces),
-# nie zgadujemy go po raz kolejny — znajdujemy wskaźnik po jego kształcie.
+# nie zgadujemy go po raz kolejny – znajdujemy wskaźnik po jego kształcie.
 #
 # Obiekt COM rozpoznajemy tak: to czytelny adres, pod którym leży kolejny
 # czytelny adres (tablica metod wirtualnych), a w niej same czytelne adresy
 # funkcji. Przypadkowa liczba w buforze nie przejdzie tego sita.
 # Czytamy przez ReadProcessMemory, więc sprawdzanie kandydata nie może
-# wywrócić procesu — zły adres zwraca po prostu „nie da się przeczytać".
+# wywrócić procesu – zły adres zwraca po prostu „nie da się przeczytać".
 
 ADDR_MIN = 0x10000                  # niżej leży strefa niedostępna dla procesu
 ADDR_MAX = 0x7FFFFFFFFFFF           # górna granica przestrzeni użytkownika (x64)
@@ -401,18 +401,18 @@ def _out_struct(struct_type, slack: int = 512):
 
     Nagłówki SDK 1.8 odwzorowaliśmy z dokumentacji, nie z pliku na dysku.
     Gdyby prawdziwa struktura miała choć jedno pole więcej, sterownik zapisałby
-    poza końcem naszej alokacji — a to nie jest cichy błąd, tylko uszkodzenie
+    poza końcem naszej alokacji – a to nie jest cichy błąd, tylko uszkodzenie
     sterty (0xC0000374) i natychmiastowa śmierć procesu, bez szansy na obsługę.
 
     Zapas kilkuset bajtów kosztuje tyle co nic i usuwa całą tę klasę awarii:
     cokolwiek sterownik dopisze na końcu, trafia w pamięć, która jest nasza.
-    Zwracamy `(bufor, wskaźnik)` — bufor musi żyć tak długo jak wskaźnik.
+    Zwracamy `(bufor, wskaźnik)` – bufor musi żyć tak długo jak wskaźnik.
     """
     raw = ctypes.create_string_buffer(ctypes.sizeof(struct_type) + slack)
     return raw, ctypes.cast(raw, POINTER(struct_type))
 
 
-# Sygnatury funkcji SDK — na zewnątrz _declare, żeby autotest mógł je
+# Sygnatury funkcji SDK – na zewnątrz _declare, żeby autotest mógł je
 # sprawdzić bez ładowania biblioteki.
 _HANDLE = c_void_p
 _SIGNATURES = [
@@ -441,7 +441,7 @@ def _declare(dll) -> None:
 
     Bez tego ctypes zgaduje: zwracany HRESULT bierze za `int`, a argumenty
     przekazuje po typie obiektu Pythona. Na 64-bitowym Windowsie uchwyt
-    strumienia to 64-bitowy wskaźnik i przy zgadywaniu łatwo go obciąć —
+    strumienia to 64-bitowy wskaźnik i przy zgadywaniu łatwo go obciąć –
     a obcięty uchwyt to nie błąd, tylko odczyt z przypadkowego adresu.
     """
     for name, argtypes in _SIGNATURES:
@@ -469,7 +469,7 @@ class Kinect:
             self.dll = ctypes.WinDLL("Kinect10.dll")
         except OSError as e:
             raise KinectError(
-                "Nie znalazłem Kinect10.dll — czy Kinect for Windows SDK 1.8 jest zainstalowane?\n"
+                "Nie znalazłem Kinect10.dll – czy Kinect for Windows SDK 1.8 jest zainstalowane?\n"
                 "Pobierz: https://www.microsoft.com/en-us/download/details.aspx?id=40278\n"
                 "Sprawdź też, czy Python ma tę samą bitowość co SDK (64-bit do 64-bit).\n"
                 f"Szczegóły: {e}"
@@ -549,7 +549,7 @@ class Kinect:
     def _texture_from(self, frame_addr: int):
         """Wyłuskaj wskaźnik na INuiFrameTexture z klatki należącej do SDK.
 
-        Klatki nie posiadamy — mamy tylko jej adres — więc czytamy ją przez
+        Klatki nie posiadamy – mamy tylko jej adres – więc czytamy ją przez
         ReadProcessMemory. Przesunięcie pola ustalamy raz, przy pierwszej
         klatce; dalej jest to już zwykły odczyt spod znanego miejsca.
         """
@@ -568,10 +568,10 @@ class Kinect:
     def _grab(self, stream, timeout_ms: int):
         """Pobierz klatkę i zwróć jej bufor jako kopię (bajty + krok).
 
-        Ostatni kod błędu zapamiętujemy w `last_error` — bez tego „brak klatki"
+        Ostatni kod błędu zapamiętujemy w `last_error` – bez tego „brak klatki"
         nie odróżnia czujnika, który się jeszcze rozgrzewa, od realnej awarii.
         """
-        # SDK oddaje adres SWOJEJ klatki — my dostarczamy tylko miejsce na ten adres.
+        # SDK oddaje adres SWOJEJ klatki – my dostarczamy tylko miejsce na ten adres.
         frame_ptr = c_void_p()
         hr = self.dll.NuiImageStreamGetNextFrame(stream, DWORD(timeout_ms), byref(frame_ptr))
         if hr != 0:
@@ -602,14 +602,14 @@ class Kinect:
             del rect_keep
             return data, rect.Pitch
         finally:
-            # Oddajemy dokładnie ten adres, który dostaliśmy — nie adres naszej
+            # Oddajemy dokładnie ten adres, który dostaliśmy – nie adres naszej
             # zmiennej. Pomyłka tutaj to natychmiastowa awaria w sterowniku.
             self.dll.NuiImageStreamReleaseFrame(stream, frame_ptr)
 
     def color_frame(self, timeout_ms: int = 1000):
         """Obraz RGB jako tablica (wysokość × szerokość × 3) w kolejności BGR.
 
-        BGR, bo taką kolejność zakłada OpenCV — dzięki temu klatka trafia prosto
+        BGR, bo taką kolejność zakłada OpenCV – dzięki temu klatka trafia prosto
         do YOLO bez konwersji.
         """
         got = self._grab(self._color_stream, timeout_ms)
@@ -635,7 +635,7 @@ class Kinect:
         arr = arr[:, : self.width]
         if getattr(self, "_depth_has_player", False):
             # Przy strumieniu z indeksem gracza trzy najniższe bity to numer
-            # osoby, a nie odległość — trzeba je odciąć.
+            # osoby, a nie odległość – trzeba je odciąć.
             arr = arr >> 3
         return np.ascontiguousarray(arr)
 
@@ -714,7 +714,7 @@ def send_event(summary: str, type_: str = "kinect") -> None:
 def _try_frames(k, label: str, grab, settle_s: float = 4.0):
     """Poczekaj na pierwszą klatkę, raportując, co się dzieje.
 
-    Po `NuiInitialize` czujnik potrzebuje chwili, zanim ruszą strumienie —
+    Po `NuiInitialize` czujnik potrzebuje chwili, zanim ruszą strumienie –
     pojedyncza próba z sekundowym limitem potrafi wypaść tuż przed tym momentem
     i skłamać, że klatek nie ma wcale.
     """
@@ -724,15 +724,15 @@ def _try_frames(k, label: str, grab, settle_s: float = 4.0):
         attempt += 1
         try:
             frame = grab()
-        except Exception as e:                      # noqa: BLE001 — chcemy pokazać wszystko
+        except Exception as e:                      # noqa: BLE001 – chcemy pokazać wszystko
             print(f"  {label:<9} BŁĄD: {type(e).__name__}: {e}")
             return None
         if frame is not None:
-            print(f"  {label:<9} OK — {frame.shape} (próba {attempt})")
+            print(f"  {label:<9} OK – {frame.shape} (próba {attempt})")
             return frame
         time.sleep(0.3)
     powod = _hr_text(k.last_error) if k.last_error else "limit czasu bez błędu"
-    print(f"  {label:<9} brak klatki po {settle_s:.0f}s — {powod}")
+    print(f"  {label:<9} brak klatki po {settle_s:.0f}s – {powod}")
     return None
 
 
@@ -742,7 +742,7 @@ def cmd_info() -> None:
         print("\n  ✗ Nie znalazłem Kinect10.dll.")
         print("    Zainstaluj Kinect for Windows SDK 1.8 albo sprawdź bitowość Pythona.\n")
         sys.exit(1)
-    print(f"\n✦ Cosmos Kinect Win — czujników w systemie: {n}")
+    print(f"\n✦ Cosmos Kinect Win – czujników w systemie: {n}")
     if n == 0:
         print("  Podłącz Kinecta i upewnij się, że ma osobne zasilanie (sam USB nie wystarcza).\n")
         sys.exit(1)
@@ -769,7 +769,7 @@ def cmd_info() -> None:
         try:
             people = k.skeletons(timeout_ms=1000)
             print(f"  Szkielet: {len(people)} śledzonych sylwetek"
-                  + ("" if people else " — stań 1,5–3 m przed czujnikiem"))
+                  + ("" if people else " – stań 1,5–3 m przed czujnikiem"))
             for p in people:
                 print(f"            [{p['id']}] {posture_summary(p['opis'])}")
         except Exception as e:                      # noqa: BLE001
@@ -789,9 +789,9 @@ def cmd_depth(args) -> None:
                     time.sleep(0.1)
                     continue
                 st = depth_stats(d)
-                near = f"{st['najblizszy_mm']} mm" if st["najblizszy_mm"] else "—"
+                near = f"{st['najblizszy_mm']} mm" if st["najblizszy_mm"] else "–"
                 print(f"  zajęte {st['udzial'] * 100:5.1f}%   najbliżej {near:>8}   "
-                      f"mediana {st['mediana_mm'] or '—'} mm")
+                      f"mediana {st['mediana_mm'] or '–'} mm")
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             print("\n  Zatrzymano.\n")
@@ -860,7 +860,7 @@ def cmd_dump(args) -> None:
         raw = reader(frame_ptr.value, span) if reader else None
         if raw is None:
             sys.exit("\n  Nie mogę odczytać klatki spod tego adresu.\n")
-        print(f"\n✦ Surowy bufor klatki — pierwsze {span} B\n")
+        print(f"\n✦ Surowy bufor klatki – pierwsze {span} B\n")
         print("  Bajty (po 16 w wierszu):")
         for off in range(0, span, 16):
             hexy = " ".join(f"{b:02X}" for b in raw[off:off + 16])
@@ -887,14 +887,14 @@ def cmd_dump(args) -> None:
               + (f"+{found} B" if found is not None else "NIE ZNALEZIONO"))
         print(f"  Nasze odwzorowanie zakłada:       +{NuiImageFrame.pFrameTexture.offset} B\n")
         # Świadomie nie oddajemy klatki: gdy nie rozumiemy układu bufora,
-        # ReleaseFrame wywraca proces — a chcemy, żeby powyższy wydruk przetrwał.
+        # ReleaseFrame wywraca proces – a chcemy, żeby powyższy wydruk przetrwał.
     finally:
         k.close()
 
 
 def cmd_selftest() -> None:
     """Sprawdza to, co da się sprawdzić bez Kinecta: układ struktur i logikę."""
-    print("\n✦ Cosmos Kinect Win — autotest\n")
+    print("\n✦ Cosmos Kinect Win – autotest\n")
     ok = True
 
     def check(label, got, want):
@@ -925,7 +925,7 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if d['dystans_m'] == 2.5 else 'ZLE'} 6. dystans: {d['dystans_m']} m")
     ok = ok and d["dystans_m"] == 2.5
 
-    # 7. Ta sama osoba siedząca — kolana podjeżdżają do wysokości bioder.
+    # 7. Ta sama osoba siedząca – kolana podjeżdżają do wysokości bioder.
     siedzi = dict(stoi)
     siedzi["kolano_lewe"] = (-0.1, -0.05, 2.3)
     siedzi["kolano_prawe"] = (0.1, -0.05, 2.3)
@@ -963,7 +963,7 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if d6['pozycja'] == 'po lewej' else 'ZLE'} 11. pozycja w kadrze: {d6['pozycja']}")
     ok = ok and d6["pozycja"] == "po lewej"
 
-    # 12. Zera w mapie głębi to „nie wiem", nie „0 mm" — inaczej najbliższy
+    # 12. Zera w mapie głębi to „nie wiem", nie „0 mm" – inaczej najbliższy
     #     obiekt zawsze wychodziłby tuż przy obiektywie.
     depth = np.zeros((10, 10), dtype=np.uint16)
     depth[0, :5] = 1200
@@ -989,7 +989,7 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if good else 'ZLE'} 14. nieśledzone stawy pominięte: {len(jd)}/{len(JOINTS)}")
     ok = ok and good
 
-    # 15–17. Szukanie wskaźnika na teksturę — na sztucznej pamięci, bez Kinecta.
+    # 15–17. Szukanie wskaźnika na teksturę – na sztucznej pamięci, bez Kinecta.
     #        Sprawdzamy oba kierunki: że znajduje właściwy adres i że NIE daje
     #        się nabrać na przypadkowe liczby, które akurat wyglądają jak adres.
     FAKE_VTBL, FAKE_OBJ = 0x7FF000001000, 0x7FF000002000
@@ -1036,7 +1036,7 @@ def cmd_selftest() -> None:
     print(f"  {'OK ' if good else 'ZLE'} 18. konwencje: obraz = wskaźnik na wskaźnik, "
           "szkielet = wskaźnik na strukturę")
 
-    # 19–21. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas —
+    # 19–21. Bufory dla struktur wypełnianych przez sterownik muszą mieć zapas –
     #     bez niego jedno dodatkowe pole w nagłówku SDK niszczy stertę procesu.
     for i, (typ, nazwa) in enumerate(((NuiImageFrame, "NUI_IMAGE_FRAME"),
                                       (NuiSkeletonFrame, "NUI_SKELETON_FRAME"),
@@ -1051,7 +1051,7 @@ def cmd_selftest() -> None:
     if os.name == "nt":
         n = sensor_count()
         print(f"  {'OK ' if n >= 0 else 'ZLE'} 22. Kinect10.dll: "
-              + (f"znaleziona, czujników: {n}" if n >= 0 else "brak — zainstaluj SDK 1.8"))
+              + (f"znaleziona, czujników: {n}" if n >= 0 else "brak – zainstaluj SDK 1.8"))
     else:
         print("  --  22. Kinect10.dll: pominięte (nie Windows)")
 

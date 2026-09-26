@@ -1,10 +1,10 @@
-/* Cosmos umiał wyciągać tekst z PDF-ów i Office'a — ale wyłącznie przez
+/* Cosmos umiał wyciągać tekst z PDF-ów i Office'a – ale wyłącznie przez
    usługę zmysłów na komputerze domowym, który zwykle jest wyłączony.
    W praktyce wczytanie umowy z telefonu nie działało nigdy.
 
    Te czytniki są w Node, bez ani jednej zewnętrznej biblioteki, więc działają
    zawsze. Zestaw sprawdza je na plikach zbudowanych tutaj, a nie na
-   „przykładowym.pdf" wrzuconym kiedyś do repozytorium — inaczej nie wiadomo,
+   „przykładowym.pdf" wrzuconym kiedyś do repozytorium – inaczej nie wiadomo,
    czy test bada kod, czy pamiątkę. */
 const zlib = require('node:zlib');
 const { srodowisko } = require('../pomoc');
@@ -99,7 +99,7 @@ function pdfZTekstem() {
 (async () => {
   const fail = [];
 
-  // 1. DOCX — akapity i tabela
+  // 1. DOCX – akapity i tabela
   const docx = D.czytajLokalnie('umowa.docx', DOCX).text;
   console.log('1. DOCX:', JSON.stringify(docx.slice(0, 120)));
   if (!/Umowa o dzieło/.test(docx)) fail.push('DOCX: brak nagłówka');
@@ -107,21 +107,21 @@ function pdfZTekstem() {
   if (!/Kwota \| 4500 zł/.test(docx)) fail.push('DOCX: tabela rozsypana na pionowy słupek');
   if (!/Termin \| 14 dni/.test(docx)) fail.push('DOCX: drugi wiersz tabeli zgubiony');
 
-  // 2. XLSX — nazwa arkusza, teksty współdzielone i PUSTA kolumna w środku
+  // 2. XLSX – nazwa arkusza, teksty współdzielone i PUSTA kolumna w środku
   const xlsx = D.czytajLokalnie('budzet.xlsx', XLSX).text;
   console.log('2. XLSX:', JSON.stringify(xlsx));
   if (!/## Arkusz: Budżet/.test(xlsx)) fail.push('XLSX: brak nazwy arkusza');
   if (!/Miesiąc \| Przychód/.test(xlsx)) fail.push('XLSX: nie rozwinął tekstów współdzielonych');
-  // Styczeń jest w A2, liczba w C2 — B2 puste. Gdyby puste kolumny wypadały,
+  // Styczeń jest w A2, liczba w C2 – B2 puste. Gdyby puste kolumny wypadały,
   // 12000 wylądowałoby pod „Przychód", czyli dane przesunęłyby się o kolumnę.
   if (!/Styczeń \|\s*\| 12000/.test(xlsx)) fail.push('XLSX: pusta kolumna wypadła, dane przesunięte');
 
-  // 3. PDF — strumień FlateDecode, odstępy z kerningu, znaki uciekane
+  // 3. PDF – strumień FlateDecode, odstępy z kerningu, znaki uciekane
   const pdfBuf = pdfZTekstem();
   const pdf = D.czytajLokalnie('faktura.pdf', pdfBuf);
   console.log('3. PDF:', JSON.stringify(pdf.text));
   if (!/Faktura VAT nr 12\/2026/.test(pdf.text)) fail.push('PDF: nie rozpakował strumienia');
-  if (!/Sprzedawca: Marcin/.test(pdf.text)) fail.push('PDF: kerning nie dał spacji — słowa sklejone');
+  if (!/Sprzedawca: Marcin/.test(pdf.text)) fail.push('PDF: kerning nie dał spacji – słowa sklejone');
   if (!/\(przelew\)/.test(pdf.text)) fail.push('PDF: nawiasy uciekane odczytane źle');
   if (pdf.potrzebnyOcr) fail.push('PDF z tekstem uznany za skan');
 
@@ -159,7 +159,7 @@ function pdfZTekstem() {
   console.log(`8. pusty plik → HTTP ${pusty.status}`);
   if (pusty.status !== 400) fail.push('pusty plik nie został odrzucony');
 
-  // 9. format, którego nie umiemy — komunikat zamiast ciszy
+  // 9. format, którego nie umiemy – komunikat zamiast ciszy
   const dziwny = await wyslij('projekt.blend', Buffer.from('BLENDER-v300'));
   const dd = await dziwny.json();
   console.log(`9. nieznany format → „${dd.error}"`);

@@ -1,31 +1,31 @@
 /* ============================================================
-   COSMOS — design system, kierunek „Jeden wątek”
+   COSMOS – design system, kierunek „Jeden wątek”
    Ten sam świat co strona produktowa (public/strona/): jasno i spokojnie
-   jak w dobrym edytorze, a kolory mają tylko silniki — NVIDIA, lokalny GPU,
+   jak w dobrym edytorze, a kolory mają tylko silniki – NVIDIA, lokalny GPU,
    Claude, OpenAI. Każda odpowiedź nosi kolor silnika, który ją napisał.
-   Czcionki: Onest / Martian Mono (lokalne, offline) — patrz fonts/fonts.css.
+   Czcionki: Onest / Martian Mono (lokalne, offline) – patrz fonts/fonts.css.
    ============================================================ */
 
 /* Bez tego przeglądarka rysuje własne kontrolki (zegarek w polu godziny,
-   rozwijaną listę systemową) w jasnym schemacie — na ciemnym tle wychodziła
+   rozwijaną listę systemową) w jasnym schemacie – na ciemnym tle wychodziła
    z tego biała plama. */
 :root { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
 
-/* `hidden` ZNACZY schowany — bez wyjątków.
+/* `hidden` ZNACZY schowany – bez wyjątków.
    Reguła przeglądarki to tylko `[hidden] { display: none }`, więc każde
    `display: flex/grid/block` w naszym arkuszu ją pokonuje i element z atrybutem
    `hidden` zostaje na ekranie. Łatało się to dotąd punktowo (`.canvas[hidden]`,
    `.offline-bar[hidden]`, …), czyli za każdym razem PO tym, jak coś się
    pokazało. Wiersz aparatu Canon przeżył tak długo właśnie dlatego: kod
    ustawiał `hidden = true`, JavaScript widział `hidden === true`, test to
-   potwierdzał — a człowiek patrzył na martwy przycisk „Ustaw w aparacie"
+   potwierdzał – a człowiek patrzył na martwy przycisk „Ustaw w aparacie"
    przy aparacie, którego nigdy nie skonfigurował. Jedna reguła zamyka całą
    klasę tej pomyłki. */
 [hidden] { display: none !important; }
 
 :root {
-  /* ciemny: grafit, nie czerń kosmosu — tak samo jak strona w trybie ciemnym */
+  /* ciemny: grafit, nie czerń kosmosu – tak samo jak strona w trybie ciemnym */
   --bg: #111214;
   --bg-sidebar: #0D0E10;
   --bg-elevated: #1A1B1F;
@@ -37,14 +37,14 @@
   --border-strong: #34363C;
   --text: #ECEBE6;
   --text-dim: #A3A5AD;
-  /* #8A8D96, nie #6F727B: stary odcień miał 3,9:1 na tle i 3,6:1 na karcie —
+  /* #8A8D96, nie #6F727B: stary odcień miał 3,9:1 na tle i 3,6:1 na karcie –
      poniżej WCAG AA dla drobnego tekstu (podpisy, stopka, nieaktywne zakładki).
      Ta sama wartość co --blady na stronie produktowej. */
   --text-faint: #8A8D96;
   /* KOLOR MAJĄ TYLKO SILNIKI. Akcent był niebieskim lokalnego GPU (#5B8FF5
      == --k-local), więc linki, cytaty, karty akcji i suwaki w odpowiedzi
      NVIDII wyglądały, jakby pisał je lokalny model. Akcent jest teraz
-     neutralny — jak przyciski na stronie — a kolor niesie wyłącznie nić. */
+     neutralny – jak przyciski na stronie – a kolor niesie wyłącznie nić. */
   --accent: var(--text);
   --accent-strong: var(--text);
   --accent-contrast: var(--bg);
@@ -61,7 +61,7 @@
   --radius: 16px;
   --font-sans: 'Onest', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Martian Mono', ui-monospace, Menlo, Consolas, monospace;
-  /* kolory silników — te same co na stronie produktowej, rozjaśnione na ciemne tło */
+  /* kolory silników – te same co na stronie produktowej, rozjaśnione na ciemne tło */
   --k-nvidia: #76B84F;
   --k-local: #5B8FF5;
   --k-claude: #DE7A51;
@@ -77,7 +77,7 @@
   --k-local-tekst: var(--k-local);
   --k-claude-tekst: var(--k-claude);
   --k-openai-tekst: var(--k-openai);
-  /* silnik wybrany teraz — ustawia go setEndpoint() przez data-silnik na <html> */
+  /* silnik wybrany teraz – ustawia go setEndpoint() przez data-silnik na <html> */
   --k-akt: var(--k-nvidia);
   --k-akt-tekst: var(--k-nvidia-tekst);
 }
@@ -97,7 +97,7 @@
   --border-strong: #D5D2C9;
   --text: #16171B;
   --text-dim: #5E616B;
-  /* #686B75: 4,9:1 na tle, 4,5:1 na panelu bocznym (stary #8D909A — 2,9:1). */
+  /* #686B75: 4,9:1 na tle, 4,5:1 na panelu bocznym (stary #8D909A – 2,9:1). */
   --text-faint: #686B75;
   --danger: #D43B3B;
   --warning: #B8741F;
@@ -158,7 +158,7 @@ kbd {
 /* ============================ GWIAZDY ============================ */
 
 /* Gwiazdy należały do starego, nocnego kierunku. W „Jednym wątku” tło jest
-   spokojne, a fakturę daje ziarno — to samo co na stronie produktowej. */
+   spokojne, a fakturę daje ziarno – to samo co na stronie produktowej. */
 .stars { display: none; }
 body::after {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 400; opacity: .04;
@@ -167,7 +167,7 @@ body::after {
 
 /* ============================ SIDEBAR ============================ */
 
-/* Na szerokim ekranie panel boczny stoi obok treści — przyciemnienie zbędne.
+/* Na szerokim ekranie panel boczny stoi obok treści – przyciemnienie zbędne.
    Włącza je dopiero reguła mobilna, gdzie panel nakłada się na czat. */
 .sidebar-scrim { display: none; }
 
@@ -289,7 +289,7 @@ body::after {
 }
 .conv-item:hover .conv-action { display: inline-flex; }
 /* Z klawiatury też. `display: none` wyjmowało przypnij/zmień nazwę/usuń
-   z kolejności Tab — pod Tabem były same tytuły rozmów. */
+   z kolejności Tab – pod Tabem były same tytuły rozmów. */
 .conv-item:focus-within .conv-action,
 .conv-item:focus-within .conv-delete { display: inline-flex; }
 .conv-action:hover { color: var(--text); background: var(--bg); }
@@ -336,7 +336,7 @@ body::after {
 .conv-item:hover .conv-delete { display: inline-flex; }
 
 /* Na ekranie dotykowym `:hover` zostaje po dotknięciu i gaśnie dopiero przy
-   dotknięciu czegoś innego — przez to przypnij/zmień nazwę/usuń pojawiały się
+   dotknięciu czegoś innego – przez to przypnij/zmień nazwę/usuń pojawiały się
    pozornie losowo. Bez myszy pokazujemy je po prostu zawsze. */
 @media (hover: none) {
   .conv-item .conv-action,
@@ -417,13 +417,13 @@ body::after {
   min-height: 58px;
   z-index: 1;
   /* Pasek NIE MOŻE wyjść poza swoją kolumnę. Przy otwartym płótnie wystawał
-     na nie — plakietka modelu i „Eksportuj” leżały na tytule płótna. */
+     na nie – plakietka modelu i „Eksportuj” leżały na tytule płótna. */
   min-width: 0;
   row-gap: 8px;
 }
 /* Płótno otwarte: kolumna rozmowy ma ~560 px. Plakietka modelu znika (niżej),
-   a zakładki i ikony ścieśniają się tak, żeby komplet — cztery silniki
-   i pięć ikon — zmieścił się w jednym wierszu. Zawijanie zostaje jako
+   a zakładki i ikony ścieśniają się tak, żeby komplet – cztery silniki
+   i pięć ikon – zmieścił się w jednym wierszu. Zawijanie zostaje jako
    ostatnia deska: lepszy drugi wiersz niż ikona za krawędzią. */
 .app:has(.canvas:not([hidden])) .topbar { gap: 6px; padding: 12px; flex-wrap: wrap; }
 .app:has(.canvas:not([hidden])) .endpoint-tab { padding: 7px 10px; }
@@ -469,7 +469,7 @@ body::after {
   background: var(--bg-sidebar);
 }
 /* Miejsce na zakładki od pierwszej klatki. Budują się dopiero po sprawdzeniu
-   sesji, a pusty pasek (10×10) rozpychał potem cały pasek górny — przesunięcie
+   sesji, a pusty pasek (10×10) rozpychał potem cały pasek górny – przesunięcie
    układu 0,09 przy KAŻDYM starcie (zespół IT, runda 4). Liczbę zakładek zna
    skrypt w <head> (cosmos.zakladki); jedna zakładka to ~90 px. */
 .endpoint-switch:empty { min-height: 47px; min-width: 198px; }
@@ -477,7 +477,7 @@ body::after {
 [data-zakladki="3"] .endpoint-switch:empty { min-width: 288px; }
 [data-zakladki="4"] .endpoint-switch:empty { min-width: 378px; }
 
-/* Każdy silnik ma swój kolor — ten sam, którym potem podpisana jest odpowiedź. */
+/* Każdy silnik ma swój kolor – ten sam, którym potem podpisana jest odpowiedź. */
 .endpoint-tab { --k: var(--k-nvidia); }
 .endpoint-tab[data-endpoint="local"] { --k: var(--k-local); }
 .endpoint-tab[data-endpoint="claude"] { --k: var(--k-claude); }
@@ -496,7 +496,7 @@ body::after {
   color: var(--text-faint);
   transition: background .25s, color .25s, box-shadow .25s, border-color .25s;
 }
-/* Kropka w kolorze silnika zamiast ikonki — jak przełącznik na stronie
+/* Kropka w kolorze silnika zamiast ikonki – jak przełącznik na stronie
    produktowej. Ikony (chmura, monitor, gwiazdka) znikały na telefonie
    i razem z nimi znikał jedyny kolor zakładki; kropka zostaje wszędzie. */
 .endpoint-tab svg { display: none; }
@@ -534,22 +534,22 @@ body::after {
   transition: background .4s;
 }
 /* Przy otwartym płótnie kolumna rozmowy ma ~560 px, a nazwa modelu jest
-   i tak w podpisie każdej odpowiedzi — plakietka ustępuje miejsca. */
+   i tak w podpisie każdej odpowiedzi – plakietka ustępuje miejsca. */
 .app:has(.canvas:not([hidden])) .topbar-model { display: none; }
 
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
-  /* Zorza powitania ma 120% szerokości kolumny — bez tego ekran powitalny
+  /* Zorza powitania ma 120% szerokości kolumny – bez tego ekran powitalny
      dawał się przewinąć w bok o 39 px na telefonie. Samo `clip` nic by tu
      nie dało: obok `overflow-y: auto` przeglądarka i tak liczy je jako
      `hidden` (CSS Overflow 3), więc piszemy wprost. Zorzy nie przycinamy
-     na `.welcome` — na komputerze jej rozmyte brzegi wychodzą poza kolumnę
+     na `.welcome` – na komputerze jej rozmyte brzegi wychodzą poza kolumnę
      720 px i ucięcie dałoby dwie pionowe krawędzie światła. */
   overflow-x: hidden;
   /* BEZ `scroll-behavior: smooth`. Przy strumieniu animacja nie nadążała:
      jedna klatka z tabelą rosła o >120 px w trakcie przewijania i widok już
-     nie wracał na dół — długa odpowiedź pisała się poza ekranem (zmierzone:
+     nie wracał na dół – długa odpowiedź pisała się poza ekranem (zmierzone:
      52 z 61 próbek, do 5588 px od dołu). Kto chce płynnie, przewija sam. */
   z-index: 1;
 }
@@ -564,7 +564,7 @@ body::after {
   padding: 11vh 24px 24px;
   text-align: center;
 }
-/* Zorza z silników — ta sama co w hero strony, tylko ciszej. */
+/* Zorza z silników – ta sama co w hero strony, tylko ciszej. */
 .welcome-zorza {
   position: absolute; left: 50%; top: 0; width: min(900px, 120%); height: 420px;
   transform: translateX(-50%); pointer-events: none; z-index: -1;
@@ -575,7 +575,7 @@ body::after {
   overflow: hidden;
 }
 /* 120% szerokości mieści się tylko przy kolumnie rozmowy ≥ 864 px. Węższa
-   (telefon, 1024 z panelem bocznym) — zorza na szerokość kolumny, bez
+   (telefon, 1024 z panelem bocznym) – zorza na szerokość kolumny, bez
    wystawania poza nią. */
 @media (max-width: 1140px) {
   .welcome-zorza { width: 100%; }
@@ -587,7 +587,7 @@ body::after {
 @keyframes welcome-dryf { 50% { transform: translate(-4%, 6%) scale(1.1); } 100% { transform: translate(5%, -4%) scale(.94); } }
 [data-theme="dark"] .welcome-zorza { opacity: .28; }
 /* Znak i etykieta każde w swoim wierszu, na osi. Jako inline SVG i inline-flex
-   dzieliły jedną linię — znak ~130 px w lewo od środka, etykieta w prawo. */
+   dzieliły jedną linię – znak ~130 px w lewo od środka, etykieta w prawo. */
 .welcome-icon {
   display: block;
   width: 52px;
@@ -621,7 +621,7 @@ body::after {
   animation: welcome-plyn 9s linear infinite;
 }
 @keyframes welcome-plyn { to { background-position: -220% 0; } }
-/* Kto prosi system o mniej ruchu, dostaje zorzę i gradient w bezruchu —
+/* Kto prosi system o mniej ruchu, dostaje zorzę i gradient w bezruchu –
    kolory zostają, dryf i przepływ znikają. To samo z wejściem karty
    i rysowaniem nici (niżej). */
 @media (prefers-reduced-motion: reduce) {
@@ -690,7 +690,7 @@ body::after {
   word-break: break-word;
 }
 
-/* NIĆ — jak na stronie produktowej: odpowiedź nie ma awatara, tylko pasek
+/* NIĆ – jak na stronie produktowej: odpowiedź nie ma awatara, tylko pasek
    w kolorze silnika, który ją napisał, i podpis nad treścią. Przełączenie
    silnika w połowie rozmowy widać jako zmianę koloru nici. Starsze
    odpowiedzi bez zapisanego silnika dostają neutralną kreskę. */
@@ -700,7 +700,7 @@ body::after {
 .msg-assistant[data-silnik="claude"] { --k: var(--k-claude); --k-tekst: var(--k-claude-tekst); }
 .msg-assistant[data-silnik="openai"] { --k: var(--k-openai); --k-tekst: var(--k-openai-tekst); }
 /* Odpowiedź to karta, jak w rozmowie pokazowej na stronie: powierzchnia
-   ledwie jaśniejsza od tła, bez cienia — wątek czyta się jako jeden ciąg,
+   ledwie jaśniejsza od tła, bez cienia – wątek czyta się jako jeden ciąg,
    a nie stos pływających kart. Nić w środku przy lewej krawędzi, podpis
    silnika nad treścią. Awatar zostaje w DOM-ie (testy i czytniki ekranu
    go znają), ale nić przejęła jego rolę. */
@@ -723,9 +723,9 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .msg-assistant.nowa .msg-kolumna, .msg-assistant.nowa .msg-kolumna::before { animation: none !important; }
 }
-/* Łącznik — nić biegnie dalej przez cały wątek: od poprzedniej odpowiedzi
+/* Łącznik – nić biegnie dalej przez cały wątek: od poprzedniej odpowiedzi
    ALBO od pytania. Dawniej był tylko między dwiema odpowiedziami pod rząd,
-   a w prawdziwej rozmowie między nimi zawsze stoi pytanie — więc nie było
+   a w prawdziwej rozmowie między nimi zawsze stoi pytanie – więc nie było
    go nigdy. Wysokość = odstęp między wiadomościami (.messages gap). */
 .msg-assistant + .msg-assistant .msg-kolumna::after,
 .msg-user + .msg-assistant .msg-kolumna::after,
@@ -754,7 +754,7 @@ body::after {
   display: block;
 }
 
-/* Załączone dokumenty — kafelek z nazwą i liczbą znaków. Treść idzie do
+/* Załączone dokumenty – kafelek z nazwą i liczbą znaków. Treść idzie do
    modelu, ale na ekranie zostaje jedna linijka, nie ściana tekstu. */
 .attachment-doc {
   display: flex;
@@ -794,7 +794,7 @@ body::after {
 }
 /* Zwinięty pasek: tytuł z lewej, nastawy z prawej, strzałka na końcu.
    Tytuł ustępuje miejsca, gdy się nie mieści (`min-width: 0` + wielokropek);
-   nastawy nigdy — to jest jedyna rzecz, po którą się tu zagląda. */
+   nastawy nigdy – to jest jedyna rzecz, po którą się tu zagląda. */
 .plan-box-head {
   display: flex;
   align-items: center;
@@ -819,14 +819,14 @@ body::after {
   white-space: nowrap;
 }
 /* Zwinięty pasek z gotowym wynikiem NIE POWTARZA tytułu. Panel ma stałe
-   ~290 px, a „1/50 · f/5.6 · ISO 100" zajmuje z tego dwie trzecie — tytuł
+   ~290 px, a „1/50 · f/5.6 · ISO 100" zajmuje z tego dwie trzecie – tytuł
    wychodził wtedy jako „NASTAWY…", czyli gorzej niż wcale. Liczby ekspozycji
    same mówią, czym są; tytuł jest potrzebny dopóty, dopóki ich nie ma,
    i po rozwinięciu, gdzie tłumaczy trzy listy pod spodem. Pełna nazwa
    zostaje w `title` i dla czytnika ekranu. */
 .plan-box.ma-wynik:not([open]) .plan-box-title { display: none; }
 .plan-box.ma-wynik:not([open]) .plan-shot { flex: 1 1 auto; }
-/* Po rozwinięciu tytuł dostaje własny wiersz — tu o miejsce nie ma już wojny,
+/* Po rozwinięciu tytuł dostaje własny wiersz – tu o miejsce nie ma już wojny,
    a wciśnięty obok nastaw ucinał się tak samo jak w pasku zwiniętym. */
 .plan-box[open] .plan-box-head { flex-wrap: wrap; padding-top: 8px; }
 .plan-box[open] .plan-box-title { flex: 1 0 100%; }
@@ -834,7 +834,7 @@ body::after {
    `flex: 0 0 auto` znaczyło „nigdy się nie kurcz", a napis „1/50 · f/5.6 ·
    ISO 100" w foncie stałej szerokości ma swoje 190 px. W panelu kamery
    zwężonym do 170 px wystawał o 20 px poza pudełko i wypychał poziomy pasek
-   przewijania — zmierzone: `plan-box` szerokie na 170 px, jego treść na 203.
+   przewijania – zmierzone: `plan-box` szerokie na 170 px, jego treść na 203.
    Marcin: „wszystko rozjeżdża się". `min-width: 0` pozwala zejść poniżej
    szerokości treści, a łamanie po separatorze `·` robi z jednej linijki dwie
    zamiast ucinać ją w połowie liczby. */
@@ -852,19 +852,19 @@ body::after {
   transition: transform 0.15s ease;
 }
 .plan-box[open] .plan-box-chev { transform: rotate(180deg); }
-/* Odstęp pojawia się DOPIERO po rozwinięciu — zwinięty pasek ma być paskiem,
+/* Odstęp pojawia się DOPIERO po rozwinięciu – zwinięty pasek ma być paskiem,
    a nie paskiem z pustym marginesem pod spodem. */
 .plan-box[open] .plan-box-head { margin-bottom: 2px; }
 .plan-box[open] .plan-row { margin-top: 10px; }
 /* Siatka, nie rząd. Trzy listy wciśnięte na siłę w szerokość telefonu ucinały
-   napisy w połowie — Marcin widział „🌤 Z pro” i nie miał jak się domyślić,
+   napisy w połowie – Marcin widział „🌤 Z pro” i nie miał jak się domyślić,
    że to zachmurzenie. Przy 120 px na pole zawijają się do dwóch wierszy,
    zamiast się skracać. Tak samo robi to Plener. */
 .plan-row {
   display: grid;
   /* `min(120px, 100%)`, a nie samo `120px`. Kolumna o sztywnym minimum nie
      umie zejść poniżej niego, więc w wąskim panelu kamery siatka robiła się
-     szersza od swojego pojemnika i wypychała poziomy pasek przewijania —
+     szersza od swojego pojemnika i wypychała poziomy pasek przewijania –
      liczby nastaw uciekały wtedy poza prawą krawędź. Z `min()` minimum
      ustępuje, gdy panel jest węższy niż 120 px. */
   grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
@@ -876,7 +876,7 @@ body::after {
   min-width: 0;            /* bez tego pole rozpycha panel na wąskim telefonie */
   font-size: 12px;
   /* 34 px wysokości, nie 27. Ten panel jest używany w terenie, palcem,
-     często w rękawiczce — cel poniżej 28 px trafia się co drugi raz. */
+     często w rękawiczce – cel poniżej 28 px trafia się co drugi raz. */
   padding: 8px 6px;
   min-height: 34px;
 }
@@ -887,7 +887,7 @@ body::after {
 }
 .plan-light { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 /* W Plenerze to zdanie dla człowieka (faza światła, minuty do zachodu, komunikat),
-   więc zwykłą czcionką — mono zostaje dla liczb w małym panelu kamery. */
+   więc zwykłą czcionką – mono zostaje dla liczb w małym panelu kamery. */
 .plener-light { font-size: 12.5px; line-height: 1.55; font-variant-numeric: tabular-nums; }
 .plan-why { font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
 .plan-why p { margin: 0 0 3px; }
@@ -898,8 +898,8 @@ body::after {
 .canvas {
   display: flex;
   flex-direction: column;
-  /* Dolna granica 340 px — węższe płótno nie nadaje się do pisania; górna
-     720 px — dłuższy wiersz czyta się gorzej. Poniżej 1200 px płótno
+  /* Dolna granica 340 px – węższe płótno nie nadaje się do pisania; górna
+     720 px – dłuższy wiersz czyta się gorzej. Poniżej 1200 px płótno
      przestaje dzielić ekran z rozmową (reguła niżej): przy 1024 czat
      zostawał z 281 px. */
   width: clamp(340px, 42vw, 720px);
@@ -1058,7 +1058,7 @@ body::after {
   line-height: 1.5;
 }
 
-/* Zdjęcia znalezione w internecie. Siatka, nie rząd — na telefonie rząd
+/* Zdjęcia znalezione w internecie. Siatka, nie rząd – na telefonie rząd
    miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa. */
 .photo-grid {
   display: grid;
@@ -1092,7 +1092,7 @@ body::after {
 .photo-tile:hover { border-color: var(--accent); }
 
 /* Pasek pod siatką z archiwum: ile widać z ilu i przycisk po następną porcję.
-   Licznik po lewej, przycisk po prawej — przy jednej porcji zostaje sam
+   Licznik po lewej, przycisk po prawej – przy jednej porcji zostaje sam
    licznik i pasek nie zmienia wtedy wysokości wiadomości. */
 .arch-dalej {
   display: flex;
@@ -1111,7 +1111,7 @@ body::after {
   font-size: 13px;
 }
 
-/* Kafelek bez miniatury. Nie znika — zniknięcie dawało „znalazłem 8 zdjęć"
+/* Kafelek bez miniatury. Nie znika – zniknięcie dawało „znalazłem 8 zdjęć"
    nad pustym miejscem. Zostaje widoczny odnośnik do źródła. */
 .photo-brak {
   display: flex;
@@ -1149,7 +1149,7 @@ body::after {
 
 /* BŁĄD TO KARTA W WĄTKU, nie czerwony wydruk z terminala. Ten sam kształt
    co odpowiedź, nić w kolorze --danger zamiast koloru silnika, zwykła
-   czcionka — komunikat ma się dać przeczytać, a nie tylko zauważyć.
+   czcionka – komunikat ma się dać przeczytać, a nie tylko zauważyć.
    Pod treścią „↻ Ponów” (dokłada go app.js przy ostatnim błędzie rozmowy). */
 .msg-error .msg-content {
   position: relative;
@@ -1187,7 +1187,7 @@ body::after {
 }
 .msg-error .msg-ponow:hover { border-color: var(--text); background: var(--bg-elevated); }
 
-/* Kursor pisania w kolorze silnika, który właśnie pisze — ten sam kolor co nić. */
+/* Kursor pisania w kolorze silnika, który właśnie pisze – ten sam kolor co nić. */
 .cursor-blink {
   display: inline-block;
   width: 7px;
@@ -1197,7 +1197,7 @@ body::after {
   background: var(--k, var(--k-akt));
   border-radius: 2px;
   /* 1 s to było tempo zegara, nie oczekiwania. Kursor migający raz na
-     sekundę wygląda, jakby coś się zacięło — a to jedyny sygnał, że model
+     sekundę wygląda, jakby coś się zacięło – a to jedyny sygnał, że model
      pracuje. 0,6 s czyta się jako „liczy", nie jako „stoi". */
   animation: blink 0.6s steps(2) infinite;
 }
@@ -1210,14 +1210,14 @@ body::after {
   opacity: 0;
   transition: opacity .15s;
 }
-/* Mysz odsłania akcje najazdem, klawiatura — fokusem. Dawniej był tylko
+/* Mysz odsłania akcje najazdem, klawiatura – fokusem. Dawniej był tylko
    `:hover`, więc Tab lądował na niewidzialnym przycisku. */
 .msg:hover .msg-actions,
 .msg:focus-within .msg-actions { opacity: 1; }
 /* Akcje pod PYTANIEM nie rezerwują miejsca: pływający pasek pod dymkiem,
    widoczny tylko przy najeździe. W przepływie dokładały ~30 px pustki pod
    każdym pytaniem i wątek miał dwa rytmy (pytanie→odpowiedź ≈60 px,
-   odpowiedź→pytanie ≈27 px). `padding-top` zamiast `margin` — pasek styka
+   odpowiedź→pytanie ≈27 px). `padding-top` zamiast `margin` – pasek styka
    się z dymkiem, więc przejazd myszą z dymka na przycisk nie gubi najazdu. */
 @media (hover: hover) {
   .msg-user .user-col { position: relative; }
@@ -1235,7 +1235,7 @@ body::after {
   }
   .msg-user .msg-actions .msg-action-btn:hover { background: var(--bg-hover); }
 }
-/* Dotyk nie ma najazdu — akcje widać zawsze. Pod pytaniami tylko przy
+/* Dotyk nie ma najazdu – akcje widać zawsze. Pod pytaniami tylko przy
    ostatnim (edycja ma sens przy bieżącym wątku; przy starszych byłby to
    rząd przycisków pod każdym dymkiem). Starsze pytanie: przytrzymanie
    i zaznaczenie tekstu działa jak dotąd. */
@@ -1265,10 +1265,10 @@ body::after {
 .md h3 { font-size: 16px; } .md h4 { font-size: 15px; }
 .md ul, .md ol { margin: 0 0 12px; padding-left: 24px; }
 .md li { margin: 4px 0; }
-/* Link w odpowiedzi: kolor tekstu, podkreślenie w kolorze silnika — jak na
+/* Link w odpowiedzi: kolor tekstu, podkreślenie w kolorze silnika – jak na
    stronie. Niebieski link w zielonej karcie NVIDII mówił „lokalny GPU”. */
 .md a { color: inherit; }
-/* Tylko zwykłe odnośniki z Markdownu (bez klasy) — kafelki zdjęć i inne
+/* Tylko zwykłe odnośniki z Markdownu (bez klasy) – kafelki zdjęć i inne
    linki-komponenty w treści odpowiedzi mają własny wygląd. */
 .md a:not([class]) {
   text-decoration: underline;
@@ -1521,7 +1521,7 @@ body::after {
 .field-label { font-size: 12.5px; font-weight: 500; color: var(--text-dim); letter-spacing: .02em; }
 .field-hint { font-size: 11.5px; color: var(--text-faint); }
 /* Opis wybranego modelu. Sam identyfikator nie mówi, do czego model się
-   nadaje — ta ramka dokłada to, co trzeba wiedzieć przed wyborem. */
+   nadaje – ta ramka dokłada to, co trzeba wiedzieć przed wyborem. */
 .model-info {
   border: 1px solid var(--border);
   border-left: 2px solid var(--border-strong);
@@ -1565,7 +1565,7 @@ body::after {
 .field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 /* `select` też musi się kurczyć. Nazwy urządzeń audio potrafią mieć po
    80 znaków, a bez `min-width: 0` element rozpychał wiersz i jego obrys
-   wychodził poza okno — pole wyglądało wtedy na „rozjechane”. */
+   wychodził poza okno – pole wyglądało wtedy na „rozjechane”. */
 .field-row input, .field-row select { flex: 1; min-width: 0; max-width: 100%; }
 
 .field input[type="text"], .field input[type="number"],
@@ -1868,11 +1868,11 @@ body::after {
 
 /* ============================ KAMERA NA ŻYWO ============================ */
 
-/* PANEL NIGDY NIE PRZERASTA OKNA — i nie liczy tego z żadnej stałej.
+/* PANEL NIGDY NIE PRZERASTA OKNA – i nie liczy tego z żadnej stałej.
    Wcześniej wysokość obrazu wynikała z odjęcia „220 px na nagłówek, wybór
    źródła, status i przycisk". Taka stała starzeje się przy pierwszej nowej
    rzeczy w panelu: doszło pudełko nastaw, status urósł do trzech wierszy
-   i panel przestał się mieścić na ekranie — Marcin zobaczył ucięty nagłówek
+   i panel przestał się mieścić na ekranie – Marcin zobaczył ucięty nagłówek
    u góry i ucięty przycisk migawki na dole.
    Teraz to kolumna elastyczna: paski biorą tyle, ile potrzebują, a obraz
    dostaje resztę i kurczy się, gdy jej brakuje. Cokolwiek jeszcze tu
@@ -1882,15 +1882,15 @@ body::after {
   right: 20px;
   bottom: 20px;
   z-index: 45;
-  /* SZEROKOŚĆ USTĘPUJE WYSOKOŚCI — także w rogu, nie tylko po powiększeniu.
+  /* SZEROKOŚĆ USTĘPUJE WYSOKOŚCI – także w rogu, nie tylko po powiększeniu.
      Kamera w telefonie jest PIONOWA (9:16). Przy stałych 340 px szerokości
      daje to scenę wysoką na 604 px, czyli więcej, niż zostaje na telefonie
-     po paskach przeglądarki — obraz wypychał wtedy nastawy i przycisk poza
+     po paskach przeglądarki – obraz wypychał wtedy nastawy i przycisk poza
      panel. Skoro proporcja obrazu jest święta (inaczej pasy albo obcięty
      kadr), to ustąpić musi szerokość: pionowy kadr daje węższy panel. */
   /* DOLNA GRANICA 150 px, NIE 200. To ona zrobiła Marcinowi czarne pasy.
      Kadr 9:16 dzieli dostępną wysokość przez 0,5625, więc na wąskim telefonie
-     wyliczona szerokość schodziła do ~190 px — a podniesienie jej do 200
+     wyliczona szerokość schodziła do ~190 px – a podniesienie jej do 200
      znaczyło, że scena chce być wyższa, niż zostało miejsca. Wtedy ścinał ją
      sufit wysokości, proporcja pękała i obraz dostawał czarne pasy z obu
      stron, zajmujące więcej niż on sam. Panel szeroki na 150 px z pionowym
@@ -1928,12 +1928,12 @@ body::after {
 .live-rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
 /* PROPORCJA Z PRAWDZIWEGO OBRAZU, nie z założenia.
    Na sztywno wpisane 4:3 przy kamerze 16:9 dawało czarne pasy nad i pod
-   kadrem — u Marcina jedna czwarta wysokości panelu na nic. `--live-ar`
+   kadrem – u Marcina jedna czwarta wysokości panelu na nic. `--live-ar`
    ustawia kod, gdy strumień poda swoje wymiary; 4/3 zostaje na chwilę
    przed pierwszą klatką i dla Kinecta, który taki właśnie jest.
 
    Obraz NIE KURCZY SIĘ w pionie (`flex: 0 0 auto`). Kurczenie łamie
-   proporcję, a złamana proporcja to albo obcięty kadr, albo czarne pasy —
+   proporcję, a złamana proporcja to albo obcięty kadr, albo czarne pasy –
    czyli dokładnie to, czego pilnuje zestaw `kinect-i-prompt`. Zamiast tego
    w trybie powiększonym z dostępnej wysokości wyliczana jest SZEROKOŚĆ
    panelu, więc obraz maleje w obu wymiarach naraz i zostaje sobą. */
@@ -1942,26 +1942,26 @@ body::after {
   background: #000;
   aspect-ratio: var(--live-ar, 4/3);
   flex: 0 0 auto;
-  /* ANI SUFITU, ANI PODŁOGI NA WYSOKOŚĆ — i to jest wniosek z pomyłki.
+  /* ANI SUFITU, ANI PODŁOGI NA WYSOKOŚĆ – i to jest wniosek z pomyłki.
      Dołożyłem tu `max-height`, żeby obraz nie przerastał panelu, gdy
      szerokość dobije do swojej dolnej granicy. Działało, ale ceną było
      ZŁAMANIE PROPORCJI: scena zostawała szeroka, obraz wchodził w nią
      w całości i zostawiał czarne pasy z obu stron. Marcin dostał tak
      68% szerokości panelu na czarno.
-     Potem dobierałem dolną granicę szerokości — 200, 150, 110 — i każda
+     Potem dobierałem dolną granicę szerokości – 200, 150, 110 – i każda
      naprawiała jeden przypadek, psując inny. To był znak, że zły jest
      model, nie liczby.
      Właściwa zasada jest jedna i bez wyjątków: SCENA ZAWSZE MA KSZTAŁT
      KADRU, a wielkość bierze się z szerokości panelu. Gdy miejsca zabraknie
      nawet przy najwęższym panelu, ustępuje DOLNA CZĘŚĆ i to ona się
-     przewija — bo mały, poprawnie wykadrowany podgląd nad przewijanym
+     przewija – bo mały, poprawnie wykadrowany podgląd nad przewijanym
      sterowaniem jest użyteczny, a rozjechany podgląd nie jest wart nic. */
 }
-/* `cover` w małym podglądzie — jako zabezpieczenie, nie jako główny plan.
+/* `cover` w małym podglądzie – jako zabezpieczenie, nie jako główny plan.
  *
  *  Przez chwilę stało tu `contain`, z rozumowaniem: skoro proporcja sceny
  *  bierze się z prawdziwych wymiarów strumienia, obie wartości dają to samo,
- *  a różnią się dopiero po zadziałaniu sufitu wysokości — i wtedy lepiej
+ *  a różnią się dopiero po zadziałaniu sufitu wysokości – i wtedy lepiej
  *  pokazać cały kadr niż go po cichu obciąć. Marcin przysłał zrzut
  *  z telefonu, na którym z tego rozumowania został pasek obrazu pośrodku
  *  i 68% szerokości panelu na czarno.
@@ -1970,9 +1970,9 @@ body::after {
  *  w `clamp` niżej) i jest naprawiona. Ale wniosek o samym `object-fit`
  *  zostaje, bo dotyczy tego, JAK KTÓRA WARTOŚĆ SIĘ PSUJE:
  *
- *    — gdy proporcja sceny zgadza się z kadrem, `cover` i `contain`
+ *    – gdy proporcja sceny zgadza się z kadrem, `cover` i `contain`
  *      są nie do odróżnienia i wybór nic nie znaczy,
- *    — gdy się rozjadą, `cover` traci brzegi kadru, a `contain` traci
+ *    – gdy się rozjadą, `cover` traci brzegi kadru, a `contain` traci
  *      większość panelu.
  *
  *  W podglądzie wielkości znaczka pocztowego pierwsze jest do przeżycia,
@@ -1994,7 +1994,7 @@ body::after {
   font: inherit;
   font-size: 11.5px;
   /* Ten wybierak jest niski, więc strzałka musi być bliżej niż w Ustawieniach
-     — ale nadal nie na samym obrysie. */
+     – ale nadal nie na samym obrysie. */
   padding: 4px 24px 4px 8px;
   outline: none;
   appearance: none;
@@ -2008,17 +2008,17 @@ body::after {
 }
 .live-source select:focus { border-color: var(--accent); }
 /* Tryb powiększony: panel na środku ekranu, obraz tak duży, jak się zmieści.
-   `object-fit: contain` zamiast `cover` — przy dużym kadrze ważniejsze jest
+   `object-fit: contain` zamiast `cover` – przy dużym kadrze ważniejsze jest
    widzieć całość niż wypełnić prostokąt. */
 .live-panel.expanded {
   right: 50%;
   bottom: 50%;
   transform: translate(50%, 50%);
-  /* SZEROKOŚĆ WYNIKA Z DOSTĘPNEJ WYSOKOŚCI — inaczej wysoki obraz wypycha
+  /* SZEROKOŚĆ WYNIKA Z DOSTĘPNEJ WYSOKOŚCI – inaczej wysoki obraz wypycha
      przycisk migawki poza ekran. Pomysł ten sam co wcześniej, ale liczby
      inne: stało tu `calc((100dvh - 220px) * 4 / 3)`, gdzie 220 px było
      STAŁĄ na nagłówek, źródło, status i przycisk, a 4/3 stałą proporcją
-     obrazu. Obie się zestarzały — doszło pudełko nastaw i status o trzech
+     obrazu. Obie się zestarzały – doszło pudełko nastaw i status o trzech
      wierszach, a kamera Marcina jest 16:9. Teraz jedno i drugie mierzy kod
      i podaje tutaj: `--live-chrome` (wysokość pasków) i `--live-arn`
      (proporcja strumienia jako liczba). Odjęcie „tyle, ile zwykle zajmuje
@@ -2039,17 +2039,17 @@ body::after {
  *  Jedna kolumna zmusza do wyboru, którego nie trzeba robić. Wszystko stoi
  *  w słupku, więc obraz i nastawy dzielą się TĄ SAMĄ wysokością i konkurują
  *  o nią: im większy podgląd, tym węższy pasek na dole. Zmierzone przed
- *  zmianą przy 1440×700 — obraz 189 px, a pod nim 470 px sterowania.
+ *  zmianą przy 1440×700 – obraz 189 px, a pod nim 470 px sterowania.
  *  „Powiększenie" dawało obraz MNIEJSZY niż panel w rogu.
  *
  *  Na szerokim ekranie ten wybór jest sztuczny: w poziomie miejsca jest
  *  w bród i nikt z niego nie korzysta. Nastawy idą więc w drugą kolumnę,
- *  obraz dostaje całą wysokość, a konkurencja znika — rosną oba naraz.
+ *  obraz dostaje całą wysokość, a konkurencja znika – rosną oba naraz.
  *
  *  Szerokość panelu to nadal rachunek, nie zgadywanka: obraz zajmuje tyle,
  *  ile wynika z jego proporcji przy pełnej wysokości, plus stała kolumna
  *  na sterowanie. Odejmujemy przy tym `--live-chrome-gora` (nagłówek i wybór
- *  źródła), a nie całe `--live-chrome` — dolna część leży teraz z boku
+ *  źródła), a nie całe `--live-chrome` – dolna część leży teraz z boku
  *  i wysokości już nie zabiera.
  *
  *  Próg 900 px, bo poniżej druga kolumna zwęziłaby obraz bardziej, niż
@@ -2084,7 +2084,7 @@ body::after {
     border-left: 1px solid var(--border);
   }
   /* W słupku nastawy zwijały się, żeby zostawić miejsce obrazowi. W kolumnie
-     obok mają całą wysokość panelu i nie ma czego oszczędzać — pudełko stoi
+     obok mają całą wysokość panelu i nie ma czego oszczędzać – pudełko stoi
      otwarte, a przycisk migawki siada na dole kolumny. */
   .live-panel.expanded .plan-box { border-bottom: none; }
   .live-panel.expanded .live-body { display: flex; flex-direction: column; }
@@ -2096,7 +2096,7 @@ body::after {
  *  Zmierzone na wąskim telefonie: komunikat o wyłączonym rozpoznawaniu ma
  *  osiem linijek i 144 px, przy panelu wysokim na 441 px. Jedna trzecia
  *  panelu na zdanie, które mówi „uruchom `python service.py` na komputerze
- *  z GPU" — czyli na instrukcję do przeczytania raz w życiu, wiszącą nad
+ *  z GPU" – czyli na instrukcję do przeczytania raz w życiu, wiszącą nad
  *  podglądem na stałe i odbierającą miejsce obrazowi.
  *
  *  Ta sama zasada, co przy pudełku nastaw: to, co trzeba wiedzieć teraz,
@@ -2112,13 +2112,13 @@ body::after {
    *  Sam clamp wygląda na właściwe narzędzie i był pierwszą wersją, ale
    *  zmierzone: treść ma 107 px, element 53 px, a przeglądarka melduje
    *  `display: flow-root` zamiast `-webkit-box`. Obcięcie brało się więc
-   *  z `overflow: hidden`, a nie z clampa — bez wielokropka i bez gwarancji,
+   *  z `overflow: hidden`, a nie z clampa – bez wielokropka i bez gwarancji,
    *  gdzie dokładnie tnie. U Marcina zostawiało kawałek trzeciego wiersza
    *  wchodzący pod ramkę nastaw: „ten tekst wchodzi nieładnie pod Nastawy".
    *
    *  `line-height` podane wprost plus `max-height` w tych samych jednostkach
    *  daje wysokość CO DO WIERSZA, niezależnie od tego, czy clamp zadziała.
-   *  Clamp zostaje obok — tam, gdzie działa, dokłada wielokropek. */
+   *  Clamp zostaje obok – tam, gdzie działa, dokłada wielokropek. */
   line-height: 1.5;
   --linie-statusu: 2;
   max-height: calc(var(--linie-statusu) * 1.5em + 16px);
@@ -2131,7 +2131,7 @@ body::after {
   max-height: none;
   -webkit-line-clamp: unset;
 }
-/* Kursor tylko wtedy, gdy naprawdę jest co rozwijać — inaczej krótki status
+/* Kursor tylko wtedy, gdy naprawdę jest co rozwijać – inaczej krótki status
    („nic nie wykryto") udawałby, że coś pod nim jest. */
 .live-status.mozna-rozwinac { cursor: pointer; }
 .live-status.mozna-rozwinac:hover { color: var(--text); }
@@ -2139,12 +2139,12 @@ body::after {
 /* ⓘ W NAGŁÓWKU I JEGO DYMEK.
  *
  *  Marcin: „to ⓘ umieśćmy gdzieś w rogu po prostu. To nam wykluczy chyba
- *  problem." I rzeczywiście wyklucza — nie przez lepsze mieszczenie tekstu,
+ *  problem." I rzeczywiście wyklucza – nie przez lepsze mieszczenie tekstu,
  *  tylko przez wyjęcie go z układu. Dopóki wyjaśnienie stało w kolumnie nad
  *  podglądem, każda jego długość była czyimś problemem: kłóciło się o wysokość
  *  z obrazem i z nastawami. W rogu nagłówka nie kłóci się o nic.
  *
- *  Dymek jest `absolute`, więc pojawienie się go NICZEGO NIE PRZESUWA —
+ *  Dymek jest `absolute`, więc pojawienie się go NICZEGO NIE PRZESUWA –
  *  panel nie zmienia wysokości, pomiar `--live-chrome` nie rusza, obraz
  *  zostaje tam, gdzie był. */
 .live-info.aktywny { color: var(--accent); }
@@ -2168,7 +2168,7 @@ body::after {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-/* Na szerokim panelu dymek nie musi się rozciągać na całą szerokość —
+/* Na szerokim panelu dymek nie musi się rozciągać na całą szerokość –
    wiersz tekstu dłuższy niż ~70 znaków czyta się gorzej. */
 @media (min-width: 721px) {
   .live-info-box { left: auto; width: min(340px, calc(100% - 20px)); }
@@ -2177,7 +2177,7 @@ body::after {
 /* ================== TELEFON: ODWROTNA ZASADA NIŻ NA DESKTOPIE ==================
  *
  *  Na desktopie panel pływa w rogu dużego ekranu, więc może mieć dowolną
- *  szerokość — i wyliczanie jej z dostępnej wysokości jest tam poprawne:
+ *  szerokość – i wyliczanie jej z dostępnej wysokości jest tam poprawne:
  *  obraz nigdy nie przerasta okna, a miejsca w poziomie i tak jest w bród.
  *
  *  Na telefonie ta sama reguła daje absurd. Kadr pionowy 9:16 mnoży dostępną
@@ -2190,14 +2190,14 @@ body::after {
  *  więc całą dostępną szerokość, a to obraz ustępuje: dostaje sufit wysokości
  *  i przy `object-fit: cover` traci brzegi kadru zamiast zwężać cały panel.
  *  W małym podglądzie przycięte brzegi są do przeżycia; wąska kolumna nie.
- *  Powiększony panel pokazuje kadr w całości (`contain`) — tam jest na to miejsce.
+ *  Powiększony panel pokazuje kadr w całości (`contain`) – tam jest na to miejsce.
  */
 /* Próg telefonu to nie tylko SZEROKOŚĆ OKNA.
    Marcin przysłał zrzut, na którym panel zajmował dwie trzecie ekranu
-   telefonu — czyli reguła poniżej się nie zastosowała, choć urządzenie było
+   telefonu – czyli reguła poniżej się nie zastosowała, choć urządzenie było
    telefonem. Nie umiem tego odtworzyć w Chromium przy jego rozmiarze okna,
    a przyczyn może być kilka (tryb „wersja na komputer", inna skala strony).
-   Zamiast zgadywać, poszerzam warunek o `pointer: coarse` — palec zamiast
+   Zamiast zgadywać, poszerzam warunek o `pointer: coarse` – palec zamiast
    myszy znaczy „to jest ekran dotykowy" niezależnie od tego, ile pikseli
    raportuje okno. Ograniczenie do 1024 px zostawia tablety w trybie
    biurkowym, gdzie pływający panel ma sens. */
@@ -2207,20 +2207,20 @@ body::after {
     right: 12px;
     bottom: 12px;
     /* Na telefonie pasek adresu i pasek nawigacji zabierają swoje, a `dvh`
-       już to uwzględnia — zostaje zapas na sam margines panelu. */
+       już to uwzględnia – zostaje zapas na sam margines panelu. */
     max-height: calc(100dvh - 24px);
   }
   /* Sufit obrazu to UŁAMEK EKRANU, nie „reszta po paskach".
    *
    *  Odejmowanie pasków brzmi dokładniej i było pierwszą wersją, ale przy
-   *  rozwiniętych nastawach paski zajmują prawie cały ekran — i obraz dostawał
+   *  rozwiniętych nastawach paski zajmują prawie cały ekran – i obraz dostawał
    *  154 px z 650, których chciał. Kadr pionowy przycięty do 76% to już nie
    *  podgląd, tylko wąski poziomy wycinek środka.
    *
    *  55% wysokości ekranu daje dwie rzeczy naraz: kadr 9:16 traci najwyżej
    *  około połowy (na najciaśniejszym telefonie), a na sterowanie zawsze
    *  zostaje 45% ekranu. Gdy nastawy są rozwinięte i to nie starcza, dolna
-   *  część się przewija — i tu jest to w porządku, bo obraz ma już swój
+   *  część się przewija – i tu jest to w porządku, bo obraz ma już swój
    *  sufit i nie zabiera niczego ponad niego. */
   .live-stage {
     max-height: 55dvh;
@@ -2228,7 +2228,7 @@ body::after {
   }
   /* POWIĘKSZONY TO INNA UMOWA: użytkownik prosi wprost o CAŁY kadr, więc
      tu nie przycinamy niczego. Panel wraca do liczenia szerokości z dostępnej
-     wysokości — wychodzi węższy, ale pokazuje pełne pole widzenia, a po to
+     wysokości – wychodzi węższy, ale pokazuje pełne pole widzenia, a po to
      się go otwiera. Sufit obrazu musi wtedy zniknąć, bo to on łamałby
      proporcję i zamieniał „cały kadr" w kadr w czarnej ramce. */
   .live-panel.expanded {
@@ -2248,7 +2248,7 @@ body::after {
  *  wybór źródła, status i przycisk migawki zjadają ponad 200 px, więc na obraz
  *  zostaje sto kilkadziesiąt, a reszta wypada pod krawędź ekranu.
  *
- *  Lekarstwo jest to samo, co na powiększony panel na desktopie — dwie kolumny —
+ *  Lekarstwo jest to samo, co na powiększony panel na desktopie – dwie kolumny –
  *  tylko próg musi patrzeć na WYSOKOŚĆ, a nie na samą szerokość. Ekran niski
  *  i szeroki to dokładnie sytuacja, w której układ pionowy nie ma sensu,
  *  niezależnie od tego, czy to telefon, czy laptop z małą matrycą. */
@@ -2256,7 +2256,7 @@ body::after {
   /* Oba stany wymienione z nazwy, bo `.live-panel.expanded` z reguł
      desktopowych ma wyższą swoistość niż samo `.live-panel` i inaczej
      przebiłoby tę szerokość. Pierwsza wersja tego bloku pominęła
-     `.expanded` — panel powiększony dostawał wtedy 280 px z desktopu,
+     `.expanded` – panel powiększony dostawał wtedy 280 px z desktopu,
      obraz kurczył się do 16 px, a sterowanie wypadało pod ekran. */
   .live-panel,
   .live-panel.expanded {
@@ -2431,7 +2431,7 @@ body::after {
   padding: 24px;
   overflow: hidden;
 }
-/* Ta sama zorza z silników co w hero strony — wejście do Cosmosa ma wyglądać
+/* Ta sama zorza z silników co w hero strony – wejście do Cosmosa ma wyglądać
    jak ciąg dalszy strony, nie jak inny produkt. */
 .login-overlay::before {
   content: ""; position: absolute; inset: -20%; z-index: -1; pointer-events: none;
@@ -2501,7 +2501,7 @@ body::after {
 
 /* ============================ TRYB GŁOSOWY ============================ */
 
-/* Scena głosowa jest zawsze nocna, w obu motywach — tak jak na stronie
+/* Scena głosowa jest zawsze nocna, w obu motywach – tak jak na stronie
    produktowej. Rozmowa głosem to inny tryb uwagi niż czytanie: ciemne tło
    gasi resztę interfejsu, a jedynym światłem jest kula. */
 .voice-overlay {
@@ -2510,7 +2510,7 @@ body::after {
   z-index: 60;
   --text: #ECEBE6; --text-dim: #A3A5AD; --text-faint: #8E919B;
   --bg-hover: rgba(255, 255, 255, .08); --border-strong: rgba(255, 255, 255, .14);
-  /* Akcent to kolor tekstu, a tekst jest tu zawsze jasny — bez tego w jasnym
+  /* Akcent to kolor tekstu, a tekst jest tu zawsze jasny – bez tego w jasnym
      motywie aktywny przycisk kamery dziedziczyłby ciemny akcent z <html>. */
   --accent: var(--text);
   color: var(--text);
@@ -2523,13 +2523,13 @@ body::after {
   justify-content: center;
   gap: 26px;
   padding: 24px;
-  /* Miejsce na podpowiedź przyklejoną do dołu — bez tego treść wjeżdża pod nią. */
+  /* Miejsce na podpowiedź przyklejoną do dołu – bez tego treść wjeżdża pod nią. */
   padding-bottom: 64px;
   overflow: hidden;
 }
 
 
-/* Kula jest przyciskiem — w trybie „naciśnij, aby mówić" musi to być widać. */
+/* Kula jest przyciskiem – w trybie „naciśnij, aby mówić" musi to być widać. */
 .voice-orb.push {
   animation: orb-breathe 2.4s ease-in-out infinite;
   outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
@@ -2544,14 +2544,14 @@ body::after {
 .voice-close { position: absolute; top: 18px; right: 18px; }
 .voice-cam-btn { position: absolute; top: 18px; right: 66px; color: var(--text-faint); }
 .voice-cam-btn.active { color: var(--accent); }
-/* Trzeci przycisk w rzędzie. Był emoji „🐦” — na scenie głosu wyglądał jak
+/* Trzeci przycisk w rzędzie. Był emoji „🐦” – na scenie głosu wyglądał jak
    logo Twittera, a nie jak funkcja. Teraz liniowy ptak jak reszta ikon
    (ik-ptak), kolor i rozmiar jak kamera obok. */
 .voice-bird-btn { position: absolute; top: 18px; right: 114px; color: var(--text-faint); }
 .voice-bird-btn:hover, .voice-cam-btn:hover { color: var(--text); }
 
 /* Wiersz aparatu w panelu planu. Nastawy z aparatu i przycisk obok siebie,
-   bo pytanie brzmi „czy to, co mam ustawione, zgadza się z tym, co policzone" —
+   bo pytanie brzmi „czy to, co mam ustawione, zgadza się z tym, co policzone" –
    a na to odpowiada się porównaniem, nie dwoma osobnymi ekranami. */
 .plan-camera {
   display: flex;
@@ -2567,7 +2567,7 @@ body::after {
 .plan-camera-off { color: var(--text-faint); }
 
 /* Kolejka wiadomości napisanych w trakcie odpowiedzi. Wygląda jak to, czym
-   jest: czekający wpis, nie wysłana wiadomość — stąd przygaszenie i kreska
+   jest: czekający wpis, nie wysłana wiadomość – stąd przygaszenie i kreska
    z boku zamiast dymka. */
 .queue-box { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
 .queue-item {
@@ -2602,7 +2602,7 @@ body::after {
 
 /* ---------------------------- PLENER ----------------------------
    Sekcje wyglądają jak w Studiu i to jest zamierzone: to dwa okna tej samej
-   rangi — jedno o obrazie generowanym, drugie o kręconym. Człowiek nie
+   rangi – jedno o obrazie generowanym, drugie o kręconym. Człowiek nie
    powinien uczyć się dwóch układów do tej samej czynności. */
 .plener-modal { max-width: 760px; }
 .plener-sub { font-size: 12.5px; color: var(--text-dim); margin: -6px 0 0; }
@@ -2654,7 +2654,7 @@ body::after {
 .plener-section .plan-row select { width: 100%; }
 
 /* Siatki układają się w jedną kolumnę na wąskim ekranie same, bez zapytania
-   o szerokość okna — panel bywa otwarty obok czatu, a nie tylko na całości. */
+   o szerokość okna – panel bywa otwarty obok czatu, a nie tylko na całości. */
 .plener-grid3 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -2669,7 +2669,7 @@ body::after {
 .plener-num > span { font-size: 11px; color: var(--text-dim); }
 .plener-num input { font-family: var(--font-mono); font-size: 12px; }
 
-/* KARTA NIEBA — scena „Nie zgaduje. Liczy." ze strony produktowej, liczona
+/* KARTA NIEBA – scena „Nie zgaduje. Liczy." ze strony produktowej, liczona
    z prawdziwego planu. Gdy karta jest, jej kafelki nastaw zastępują surowy
    wiersz `#fp-shot` (ten zostaje w DOM-ie, czytają go testy i czytnik ekranu). */
 .niebo-karta {
@@ -2720,7 +2720,7 @@ body::after {
 .plener-err { color: var(--danger); }
 .plener-warn { color: var(--text-faint); line-height: 1.5; }
 
-/* Karty ujęć — lista do odhaczenia w terenie, więc liczby po prawej i duży
+/* Karty ujęć – lista do odhaczenia w terenie, więc liczby po prawej i duży
    odstęp między pozycjami. Czyta się to jednym okiem, drugim patrząc w kadr. */
 .plener-shots { display: flex; flex-direction: column; gap: 8px; }
 .plener-shots-title {
@@ -2745,7 +2745,7 @@ body::after {
   text-decoration: underline;
 }
 .plener-clear:hover { color: var(--text); }
-/* Pole wyboru w terenie trafia się palcem, często w rękawiczce — stąd 18 px
+/* Pole wyboru w terenie trafia się palcem, często w rękawiczce – stąd 18 px
    i margines, a nie domyślne 13 px przeglądarki. */
 .plener-tick {
   width: 18px;
@@ -2756,7 +2756,7 @@ body::after {
   cursor: pointer;
 }
 /* Odhaczone zostaje na liście, tylko przygaszone. Znikające pozycje kazałyby
-   pamiętać, co się już zrobiło — a od tego jest właśnie ta lista. */
+   pamiętać, co się już zrobiło – a od tego jest właśnie ta lista. */
 .plener-shot.zrobione { border-left-color: var(--border-strong); opacity: .5; }
 .plener-shot.zrobione .plener-shot-name { text-decoration: line-through; }
 .plener-shot {
@@ -2770,7 +2770,7 @@ body::after {
   flex-wrap: wrap;
 }
 /* Rola i liczby jadą razem i razem schodzą do drugiej linii, gdy zabraknie
-   miejsca. `margin-left: auto` zastępuje `space-between` — przy zawijaniu
+   miejsca. `margin-left: auto` zastępuje `space-between` – przy zawijaniu
    `space-between` rozrzucał elementy po równo i nazwa odklejała się od
    ptaszka, do którego należy. */
 .plener-shot-meta {
@@ -2780,7 +2780,7 @@ body::after {
   margin-left: auto;
 }
 /* `min-width` z jednostką, nie zero. Przy zerze pudełko nazwy kurczyło się
-   poniżej najdłuższego słowa, a słowo nie ma gdzie się złamać — wylewało się
+   poniżej najdłuższego słowa, a słowo nie ma gdzie się złamać – wylewało się
    poza swoje miejsce i „przebitka" nachodziła na plakietkę ROZWINIĘCIE.
    Widać to było dopiero na telefonie. `overflow-wrap` domyka sprawę dla nazw
    dłuższych niż cała szerokość ekranu. */
@@ -2793,7 +2793,7 @@ body::after {
 }
 .plener-shot-nums { font-size: 11.5px; font-weight: 500; color: var(--text); white-space: nowrap; }
 /* Rola ujęcia: otwarcie / rozwinięcie / domknięcie. Kolorem odróżniamy tylko
-   początek i koniec — środek jest tłem, na które te dwa mają się odcinać. */
+   początek i koniec – środek jest tłem, na które te dwa mają się odcinać. */
 .plener-shot-role {
   font-size: 10px;
   letter-spacing: .07em;
@@ -2839,8 +2839,8 @@ body::after {
 }
 .orb-fala { inset: 16%; border: 1.5px solid rgba(242, 165, 126, .55); opacity: 0; }
 
-/* Stany: czeka — oddycha; słucha — fale idą szybko; myśli — aura przyspiesza
-   i rdzeń chłodnieje; mówi — rdzeń pulsuje w rytmie. */
+/* Stany: czeka – oddycha; słucha – fale idą szybko; myśli – aura przyspiesza
+   i rdzeń chłodnieje; mówi – rdzeń pulsuje w rytmie. */
 .voice-orb.wake .orb-rdzen, .voice-orb.push .orb-rdzen { animation: orb-oddech 3.6s ease-in-out infinite; }
 .voice-orb.wake .orb-fala { animation: orb-fala 3.6s cubic-bezier(.2, .7, .1, 1) infinite; }
 .voice-orb.listening .orb-fala { animation: orb-fala 1.6s cubic-bezier(.2, .7, .1, 1) infinite; }
@@ -2866,7 +2866,7 @@ body::after {
 @keyframes orb-mowi { 50% { transform: scale(1.09); } }
 @keyframes orb-fala { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.75); opacity: 0; } }
 
-/* Kula jest przyciskiem — w trybie „naciśnij, aby mówić" musi to być widać. */
+/* Kula jest przyciskiem – w trybie „naciśnij, aby mówić" musi to być widać. */
 .voice-orb.push { outline: 2px dashed rgba(242, 165, 126, .5); outline-offset: 10px; }
 
 /* Słupki dźwięku pod kulą: żywe, gdy ktoś mówi (człowiek albo Cosmos),
@@ -2907,7 +2907,7 @@ body::after {
    Na zrzutach Marcina rozpoznane pytanie, odpowiedź i podpowiedź na dole
    leżały jedno na drugim. Powód: `.voice-transcript` nie miał żadnego
    ograniczenia wysokości, więc rozpoznanie długie na dwanaście linii
-   wypychało resztę kolumny poza ekran — a `.voice-hint` jest pozycjonowana
+   wypychało resztę kolumny poza ekran – a `.voice-hint` jest pozycjonowana
    bezwzględnie i zostawała na wierzchu.
 
    Każdy z tych bloków dostaje więc własny sufit i własne przewijanie,
@@ -2976,7 +2976,7 @@ body::after {
   background: #000;
 }
 /* TELEFON TRZYMANY POZIOMO. Na wysokość zostaje ~360 px, a sama kula ma 150.
-   Bez tego kadru mieści się kula i nic więcej — dokładnie tak, jak wyglądało
+   Bez tego kadru mieści się kula i nic więcej – dokładnie tak, jak wyglądało
    to na zrzucie: pytanie wchodzące na odpowiedź, odpowiedź na podpowiedź. */
 @media (orientation: landscape) and (max-height: 560px) {
   .voice-overlay { gap: 12px; padding: 12px 12px 46px; }
@@ -3002,7 +3002,7 @@ body::after {
 /* wyniki wyszukiwania w rozmowie */
 .msg-search { display: block; }
 /* PRZEKŁADKI MAJĄ BYĆ CICHE.
-   Marcin: „te przekładki Wyniki wyszukiwania i Tok myślenia — zróbmy to
+   Marcin: „te przekładki Wyniki wyszukiwania i Tok myślenia – zróbmy to
    bardziej delikatnie, bo teraz wydłużają konwersacje i zaburzają flow".
 
    Miał rację i nie chodzi o gust. Jedna odpowiedź z planem podróży ma ich
@@ -3010,7 +3010,7 @@ body::after {
    własny prostokąt w strumieniu rozmowy. Trzy takie pod rząd wyglądały
    ważniej niż odpowiedź, dla której powstały.
 
-   Zwinięta przekładka jest teraz jedną linijką bez ramki i bez tła —
+   Zwinięta przekładka jest teraz jedną linijką bez ramki i bez tła –
    przypisem, nie kafelkiem. Ramka wraca dopiero po ROZWINIĘCIU, bo wtedy
    naprawdę jest to osobny blok treści, który trzeba oddzielić od reszty. */
 .think-block {
@@ -3052,7 +3052,7 @@ body::after {
   line-height: 1.55;
 }
 
-/* Ta sama zasada, co przy toku myślenia — patrz komentarz wyżej. */
+/* Ta sama zasada, co przy toku myślenia – patrz komentarz wyżej. */
 .search-results {
   border: 0;
   border-radius: 10px;
@@ -3089,12 +3089,12 @@ body::after {
   overflow-y: auto;
 }
 
-/* Pasek „Jest nowa wersja — Odśwież" po wdrożeniu (app.js, controllerchange). */
+/* Pasek „Jest nowa wersja – Odśwież" po wdrożeniu (app.js, controllerchange). */
 .nowa-wersja {
   position: fixed;
   left: 50%;
   /* U góry, pod paskiem narzędzi. Na dole leżał NA polu wiadomości i jego
-     przyciskach — po każdym wdrożeniu, bez zamknięcia (zespół IT, runda 4). */
+     przyciskach – po każdym wdrożeniu, bez zamknięcia (zespół IT, runda 4). */
   top: calc(72px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   z-index: 60;
@@ -3116,7 +3116,7 @@ body::after {
   border: 0;
   border-radius: 10px;
   padding: 7px 12px;
-  background: var(--text);            /* neutralnie, jak przyciski strony — kolor mają tylko silniki */
+  background: var(--text);            /* neutralnie, jak przyciski strony – kolor mają tylko silniki */
   color: var(--bg-elevated);
   font: inherit;
   font-weight: 600;
@@ -3133,7 +3133,7 @@ body::after {
 
 @media (max-width: 720px) {
   /* Pasek górny ma na telefonie dwa rzędy (narzędzia + zakładki silników);
-     na całą szerokość — wyśrodkowany łamał napis na cztery linie. */
+     na całą szerokość – wyśrodkowany łamał napis na cztery linie. */
   .nowa-wersja {
     top: calc(128px + env(safe-area-inset-top, 0px));
     left: 12px;
@@ -3149,7 +3149,7 @@ body::after {
   }
   .sidebar.collapsed { margin-left: -288px; }
   /* Zanim aplikacja wystartuje (startApp dodaje .gotowa), panel jest schowany
-     bez względu na klasy — inaczej migał otwarty przy każdym starcie. */
+     bez względu na klasy – inaczej migał otwarty przy każdym starcie. */
   .app:not(.gotowa) .sidebar { margin-left: -288px; transition: none; }
   .app:not(.gotowa) .sidebar-scrim { opacity: 0; pointer-events: none; }
   #expand-btn { display: inline-flex; }
@@ -3160,7 +3160,7 @@ body::after {
   .conv-item .conv-delete { display: inline-flex; }
 
   /* JEDEN obszar przewijania, nie dwa.
-     Poprzednia wersja dawała własny scroll i liście rozmów, i stopce — przez to
+     Poprzednia wersja dawała własny scroll i liście rozmów, i stopce – przez to
      lista urywała się w pół wiersza, były dwa suwaki obok siebie, a pasek stanu
      był przycięty tak, że „Zmysły” w ogóle nie było widać. Teraz przewija się
      cała zawartość naraz: rozmowy, menu i status jedno pod drugim. */
@@ -3187,7 +3187,7 @@ body::after {
   .sidebar-footer { padding: 8px 14px 16px; }
   .footer-btn { padding: 8px 10px; }
 
-  /* Panel boczny nakłada się na czat, więc tło musi zgasnąć — inaczej obie
+  /* Panel boczny nakłada się na czat, więc tło musi zgasnąć – inaczej obie
      warstwy czyta się naraz. Dotknięcie przyciemnienia zamyka panel. */
   .sidebar-scrim {
     display: block;
@@ -3208,7 +3208,7 @@ body::after {
   .messages { padding: 12px 14px 20px; }
 
   /* Chrome na Androidzie (i Safari na iOS) przybliża stronę po dotknięciu pola
-     z czcionką < 16px — i zoom zostaje po zamknięciu klawiatury. 16px wyłącza
+     z czcionką < 16px – i zoom zostaje po zamknięciu klawiatury. 16px wyłącza
      ten mechanizm; wielkość dotyczy tylko pól tekstowych. */
   .composer textarea,
   .conv-search,
@@ -3218,9 +3218,9 @@ body::after {
 
   /* Pasek górny w DWÓCH WIERSZACH. Cztery silniki i pięć ikon (głos,
      czytanie, kamera, streszczenie, eksport) nie mieszczą się w 390 px
-     w żadnym ścieśnieniu — czwarta zakładka uciekała za krawędź jako
+     w żadnym ścieśnieniu – czwarta zakładka uciekała za krawędź jako
      „Clau…”. U góry: menu i ikony; pod spodem przełącznik silników na całą
-     szerokość, cztery równe pola z kropkami — jak na stronie produktowej. */
+     szerokość, cztery równe pola z kropkami – jak na stronie produktowej. */
   .topbar { padding: 8px 10px; gap: 6px; row-gap: 8px; flex-wrap: wrap; }
   #expand-btn { margin-right: auto; }
   .endpoint-switch {
@@ -3232,7 +3232,7 @@ body::after {
     padding: 3px;
     border-radius: 13px;
   }
-  /* Na telefonie zakładki mają własny rząd na całą szerokość — rezerwujemy jego wysokość. */
+  /* Na telefonie zakładki mają własny rząd na całą szerokość – rezerwujemy jego wysokość. */
   .endpoint-switch:empty { min-height: 43px; min-width: 0; }
   .endpoint-tab { min-width: 0; padding: 6px 4px; font-size: 12.5px; gap: 6px; }
   .topbar .icon-btn { width: 32px; height: 32px; }
@@ -3268,17 +3268,17 @@ body::after {
   .send-btn, .stop-btn { margin-left: auto; }
   .attach-btn, .send-btn, .stop-btn { width: 34px; height: 34px; }
 
-  /* Ekran powitalny ciaśniej — inaczej ostatnia podpowiedź chowa się
+  /* Ekran powitalny ciaśniej – inaczej ostatnia podpowiedź chowa się
      za polem wiadomości i wygląda na uciętą. */
   .welcome { padding: 4vh 16px 16px; }
   .welcome-icon { width: 44px; height: 44px; margin-bottom: 14px; }
   .welcome-et { margin-bottom: 14px; }
-  /* Rozstrzelenie .3em było reliktem dawnego logotypu „C O S M O S” —
+  /* Rozstrzelenie .3em było reliktem dawnego logotypu „C O S M O S” –
      nagłówek czytał się jako „O d  c z e g o”. Teraz tak jak h1 strony
      na telefonie: ciasno i duże. */
   .welcome h1 { font-size: clamp(30px, 9vw, 38px); letter-spacing: -.04em; padding-left: 0; margin-bottom: 14px; }
   .welcome-sub { margin-bottom: 20px; font-size: 12px; }
-  /* Identyfikatory modeli bywają dłuższe niż ekran — łamiemy je w dowolnym
+  /* Identyfikatory modeli bywają dłuższe niż ekran – łamiemy je w dowolnym
      miejscu, zamiast rozpychać stronę albo zawijać na dwa nierówne wiersze. */
   .welcome-sub .mono { font-size: 11px; overflow-wrap: anywhere; }
   .suggestions { gap: 8px; }
@@ -3305,7 +3305,7 @@ body::after {
 }
 
 /* Licznik „~N tok. w kontekście" pojawia się przy pierwszej wiadomości i na
-   wąskim ekranie zawijał stopkę do drugiej linii — pole wiadomości podskakiwało
+   wąskim ekranie zawijał stopkę do drugiej linii – pole wiadomości podskakiwało
    o 21 px (CLS 0,086). Na telefonie liczba tokenów i tak nic nie mówi. */
 @media (max-width: 720px) {
   #token-estimate { display: none; }
@@ -3458,7 +3458,7 @@ body::after {
   background: var(--bg-elevated);
 }
 
-/* Trening — „Dotrenuj" */
+/* Trening – „Dotrenuj" */
 .train-run { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
 .train-log {
   background: var(--bg-input);
@@ -3474,7 +3474,7 @@ body::after {
   color: var(--text-faint);
 }
 
-/* Licznik czekania — model rozumujący potrafi milczeć kilkadziesiąt sekund
+/* Licznik czekania – model rozumujący potrafi milczeć kilkadziesiąt sekund
    i bez tego pusty dymek wygląda jak zawieszona aplikacja. */
 .wait-note {
   margin-top: 6px;
@@ -3510,11 +3510,11 @@ body::after {
 }
 .img-viewer-bar .icon-btn { color: #e9ecf5; background: rgba(255, 255, 255, .08); }
 .img-viewer-bar .icon-btn:hover { background: rgba(255, 255, 255, .18); }
-/* Odnośnik do źródła jest kotwicą, nie przyciskiem — musi wyglądać tak samo
+/* Odnośnik do źródła jest kotwicą, nie przyciskiem – musi wyglądać tak samo
    jak sąsiedzi, inaczej pasek narzędzi rozjeżdża się na dwa style. */
 .img-viewer-bar a.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
 /* Podpis: tytuł, serwis, licencja. Przy Commons to warunek legalnego użycia,
-   a nie ozdoba — dlatego jest zawsze widoczny, a nie schowany w `title`. */
+   a nie ozdoba – dlatego jest zawsze widoczny, a nie schowany w `title`. */
 .img-viewer-caption {
   position: absolute;
   left: 16px;
@@ -3528,7 +3528,7 @@ body::after {
   pointer-events: none;
 }
 
-/* Miniatura w rozmowie zaprasza do kliknięcia — wcześniej nic nie wskazywało,
+/* Miniatura w rozmowie zaprasza do kliknięcia – wcześniej nic nie wskazywało,
    że obraz da się powiększyć. */
 .msg-images img { cursor: zoom-in; }
 
@@ -3562,7 +3562,7 @@ body::after {
   color: var(--text-dim);
 }
 
-/* Wynik sprawdzenia modelu — mierzony, nie zgadywany. */
+/* Wynik sprawdzenia modelu – mierzony, nie zgadywany. */
 .check-ok   { margin-top: 6px; color: var(--success-tekst); font-size: 12px; }
 .check-warn { margin-top: 6px; color: var(--warning-tekst); font-size: 12px; }
 .check-bad  { margin-top: 6px; color: var(--danger); font-size: 12px; }
@@ -3571,7 +3571,7 @@ body::after {
 /* Własna strzałka wybieraka zamiast systemowej.
    Natywna siedzi tuż przy obrysie pola i na każdej przeglądarce w innym
    miejscu. Rysujemy ją dwoma gradientami, żeby nie ciągnąć zewnętrznego
-   pliku — strona ma działać offline.
+   pliku – strona ma działać offline.
 
    Reguła stoi na końcu arkusza celowo: `.studio-section select`
    i `.learn-pane select` ustawiają skrótowe `background`, które skasowałoby
@@ -3592,7 +3592,7 @@ body::after {
 select::-ms-expand { display: none; }
 
 /* Mignięcie o zdarzeniu z czujnika albo z innego urządzenia.
-   Nad treścią, ale nie blokuje jej — to informacja, nie okno dialogowe.
+   Nad treścią, ale nie blokuje jej – to informacja, nie okno dialogowe.
    Siedzi NAD POLEM WIADOMOŚCI (jest w .composer-wrap), a nie pod paskiem
    górnym: tam na telefonie przykrywało pasek „Brak połączenia”, czyli
    akurat tę jedną informację, której nie wolno przegapić. */
@@ -3616,7 +3616,7 @@ select::-ms-expand { display: none; }
   box-shadow: var(--shadow-soft);
   pointer-events: none;
 }
-/* Kropka „na żywo” w kolorze aktywnego silnika — zamiast 👁 z tekstu. */
+/* Kropka „na żywo” w kolorze aktywnego silnika – zamiast 👁 z tekstu. */
 .event-flash::before {
   content: ""; display: inline-block; vertical-align: 1px; margin-right: 8px;
   width: 7px; height: 7px; border-radius: 50%;
@@ -3624,11 +3624,11 @@ select::-ms-expand { display: none; }
 }
 
 /* ================================================================
-   KONTA — Twoje konto i Dostęp (public/konta.js)
+   KONTA – Twoje konto i Dostęp (public/konta.js)
    ================================================================ */
 
 /* Elementy, które mają sens tylko u właściciela. Ukrycie to wygoda, nie
-   zabezpieczenie — serwer i tak odmawia (TYLKO_WLASCICIEL w server.js). */
+   zabezpieczenie – serwer i tak odmawia (TYLKO_WLASCICIEL w server.js). */
 .rola-czlonek .tylko-wlasciciel { display: none !important; }
 /* Pole modelu lokalnego ma sens tylko dla kogoś, kto ma do lokalnego GPU prawo. */
 .bez-lokalnego .tylko-z-lokalnym { display: none !important; }
@@ -3675,41 +3675,41 @@ select::-ms-expand { display: none; }
 .osoba-akcje { gap: 8px; }
 .btn-ghost.niebezpieczny { color: var(--danger); }
 
-/* Ekran zaproszenia korzysta ze stylu logowania — tylko pola jedno pod drugim. */
+/* Ekran zaproszenia korzysta ze stylu logowania – tylko pola jedno pod drugim. */
 #invite-form input[hidden], #invite-form button[hidden] { display: none; }
 
 /* ================================================================
    FOKUS Z KLAWIATURY
    ================================================================ */
 
-/* Arkusz nie miał żadnego `:focus-visible` — fokus był domyślnym obrysem
+/* Arkusz nie miał żadnego `:focus-visible` – fokus był domyślnym obrysem
    przeglądarki, na ciemnym tle ledwie widocznym. Obrys w kolorze silnika,
    jak na stronie produktowej. Tylko z klawiatury: kliknięcie myszą
    niczego nie obrysowuje. Pola tekstowe mają własną obwódkę przy fokusie. */
 :focus-visible { outline: 2px solid var(--k-akt); outline-offset: 2px; }
-/* Pola, które mają już własną obwódkę przy fokusie — drugi obrys byłby
+/* Pola, które mają już własną obwódkę przy fokusie – drugi obrys byłby
    podwójną ramką. Pola bez niej (Nauka, podgląd kamery) zostają z obrysem. */
 .composer textarea:focus-visible, .canvas-text:focus-visible, .conv-search:focus-visible,
 .field :is(input, textarea, select):focus-visible, .field-row input:focus-visible,
 .konto-blok input:focus-visible, .login-box input:focus-visible,
 .studio-section :is(input, textarea, select):focus-visible,
 .plener-section :is(input, select):focus-visible { outline: none; }
-/* Zakładka silnika dostaje obrys w SWOIM kolorze — to o nią pytasz Tabem. */
+/* Zakładka silnika dostaje obrys w SWOIM kolorze – to o nią pytasz Tabem. */
 .endpoint-tab:focus-visible { outline-color: var(--k); }
-/* Na scenie głosu tło jest zawsze ciemne — obrys jasny, nie w kolorze
+/* Na scenie głosu tło jest zawsze ciemne – obrys jasny, nie w kolorze
    ciemnego motywu OpenAI. */
 .voice-overlay :focus-visible { outline-color: #F2A57E; outline-offset: 4px; }
 .voice-orb:focus-visible { outline-offset: 10px; border-radius: 50%; }
 
 /* ================================================================
-   IKONY LINIOWE — zamiast emoji w przyciskach i tytułach sekcji
+   IKONY LINIOWE – zamiast emoji w przyciskach i tytułach sekcji
    ================================================================ */
 
 /* Emoji (🎒🌅📷🚁🗂, 🖼🔊🎬, 📁🎙…) rysował każdy system inaczej i żadne nie
    pasowało do liniowych ikon panelu bocznego. Te są tym samym rysunkiem
    (kreska 1,7, zaokrąglone końce) i biorą kolor tekstu.
    Maska w `::before`, a nie <svg> w środku: część przycisków dostaje tekst
-   przez `textContent` (i18n, stan nagrywania) — pseudo-element to przeżyje,
+   przez `textContent` (i18n, stan nagrywania) – pseudo-element to przeżyje,
    wstawiony SVG nie. Użycie: klasa `ik ik-<nazwa>` na elemencie. */
 .ik::before {
   content: "";
@@ -3728,11 +3728,11 @@ select::-ms-expand { display: none; }
 .plener-sec-title.ik::before {
   width: 18px; height: 18px; margin-right: 0; background: var(--text-dim);
 }
-/* Przycisk-ikona (bez tekstu) — ikona na środku, bez odstępu. */
+/* Przycisk-ikona (bez tekstu) – ikona na środku, bez odstępu. */
 .icon-btn.ik::before { width: 18px; height: 18px; margin: 0; vertical-align: 0; }
 /* Ostrzeżenia w Plenerze: trójkąt zamiast ⚠ w tekście. */
 .plener-warn.ik::before { background: var(--warning-tekst); }
-/* Przekładki „Tok myślenia” i „Wyniki wyszukiwania” — ikona zamiast 🧠/🔍. */
+/* Przekładki „Tok myślenia” i „Wyniki wyszukiwania” – ikona zamiast 🧠/🔍. */
 .think-block summary::before,
 .search-results summary::before {
   content: ""; display: inline-block; width: 1.2em; height: 1.2em; margin-right: .45em; vertical-align: -.25em;
@@ -3771,7 +3771,7 @@ select::-ms-expand { display: none; }
    DROBNE: puste stany, pola na telefonie
    ================================================================ */
 
-/* Puste listy (oś czasu, galeria, baza wiedzy, rozmowy) — spokojny,
+/* Puste listy (oś czasu, galeria, baza wiedzy, rozmowy) – spokojny,
    wyśrodkowany akapit zamiast szarej linijki przyklejonej do ramki.
    Tekst wstawia app.js; tu tylko wygląd. */
 .tl-empty, .gallery-empty, .kb-empty {
@@ -3785,10 +3785,10 @@ select::-ms-expand { display: none; }
 .kb-empty { padding: 22px 16px; }
 
 @media (max-width: 720px) {
-  /* Nazwy urządzeń audio bywają dłuższe niż ekran — lista dostaje cały
+  /* Nazwy urządzeń audio bywają dłuższe niż ekran – lista dostaje cały
      wiersz, a „Odśwież” schodzi pod nią, zamiast ucinać nazwę w pół. */
   #set-mic { flex: 1 1 100%; }
-  /* Tryb nasłuchu: to samo — długie opcje na całą szerokość. */
+  /* Tryb nasłuchu: to samo – długie opcje na całą szerokość. */
   #set-stt { width: 100%; }
 }
 
@@ -3834,7 +3834,7 @@ select::-ms-expand { display: none; }
 }
 .studio-off-klucz { font-size: 10.5px; color: var(--text-faint); }
 
-/* Silnik bez klucza albo offline — kropka gaśnie (tytuł mówi dlaczego). */
+/* Silnik bez klucza albo offline – kropka gaśnie (tytuł mówi dlaczego). */
 .topbar-model.niedostepny::before { background: var(--text-faint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-faint) 18%, transparent); }
 
 /* Puste stany (galeria, oś czasu, baza wiedzy). */
@@ -3842,7 +3842,7 @@ select::-ms-expand { display: none; }
 .pusty-stan .ik::before { width: 30px; height: 30px; margin: 0; background: var(--text-faint); }
 .pusty-stan p { margin: 0; max-width: 34ch; font-size: 14px; line-height: 1.5; }
 
-/* Karty ustawień — przyklejone u góry, przewijają do grupy (niczego nie chowają). */
+/* Karty ustawień – przyklejone u góry, przewijają do grupy (niczego nie chowają). */
 .set-karty {
   position: sticky; top: -24px; z-index: 2; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
   flex: none; margin: -24px -24px 0; padding: 12px 24px 10px;

@@ -43,22 +43,22 @@ up.listen(7089, async () => {
 
   let a = await ask(3015, 'nvidia/nemotron-nano-9b-v2');
   console.log(`1. model bez wzroku + ustawiony wizyjny → HTTP ${a.status}`);
-  console.log(`   odpowiedział: ${a.used}  (zamiast ${a.swapped || '—'})`);
+  console.log(`   odpowiedział: ${a.used}  (zamiast ${a.swapped || '–'})`);
   if (a.status !== 200) fail.push('nie przekierował na model wizyjny');
   if (a.used !== 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1') fail.push('użyty zły model');
   if (a.swapped !== 'nvidia/nemotron-nano-9b-v2') fail.push('brak informacji o podmianie');
 
-  // model, który widzi — bez podmiany
+  // model, który widzi – bez podmiany
   a = await ask(3015, 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
   console.log(`2. model wizyjny → odpowiedział: ${a.used}, podmiana: ${a.swapped || 'brak'}`);
   if (a.swapped) fail.push('podmienił model, który i tak widzi obrazy');
 
   /* Model spoza katalogu odmawia zdjęcia, a model wizyjny JEST ustawiony →
-     jedno ponowienie z wizyjnym, jawnie (nagłówek podmiany). Dawniej — błąd,
+     jedno ponowienie z wizyjnym, jawnie (nagłówek podmiany). Dawniej – błąd,
      choć było komu odpowiedzieć; nazwy z Ollamy katalog zna słabo, więc
      o ślepocie modelu dowiadujemy się dopiero z odmowy. */
   a = await ask(3015, 'acme/nieznany-model-tekstowy');
-  console.log(`3. model spoza katalogu odmawia, wizyjny ustawiony → HTTP ${a.status}, odpowiedział: ${a.used}, zamiast: ${a.swapped || '—'}`);
+  console.log(`3. model spoza katalogu odmawia, wizyjny ustawiony → HTTP ${a.status}, odpowiedział: ${a.used}, zamiast: ${a.swapped || '–'}`);
   if (a.status !== 200 || a.used !== 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1') fail.push('odmowa obrazu nie przeszła na ustawiony model wizyjny');
   if (a.swapped !== 'acme/nieznany-model-tekstowy') fail.push('ponowienie z modelem wizyjnym nie jest jawne (brak nagłówka podmiany)');
   try { process.kill(-srv.pid); } catch {}

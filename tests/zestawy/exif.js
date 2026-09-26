@@ -1,4 +1,4 @@
-/* EXIF — fundament archiwum materiału.
+/* EXIF – fundament archiwum materiału.
 
    Bez tego indeks wiedziałby tylko „jest plik IMG_4821.jpg". Z tym wie:
    Canon R6 II, 50 mm, f/1.8, 1/200 s, ISO 400, 14 czerwca o 19:42,
@@ -7,7 +7,7 @@
 
    Testowe zdjęcia składamy TUTAJ, bajt po bajcie, zamiast wrzucać do
    repozytorium plik „przykladowy.jpg". Dzięki temu wiadomo, że test bada
-   kod, a nie pamiątkę — i widać, jakie dokładnie bajty mają dać jaki wynik. */
+   kod, a nie pamiątkę – i widać, jakie dokładnie bajty mają dać jaki wynik. */
 const { czytajExif, czasJakoTekst } = require('../../lib/exif.js');
 
 /* --- składanie JPEG-a z EXIF-em ---------------------------------------
@@ -129,7 +129,7 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   const e = czytajExif(ZDJECIE());
   console.log('1.', JSON.stringify(e));
   if (!e) { console.log('\nDO POPRAWY:\n- nie odczytał żadnego EXIF-u'); process.exit(1); }
-  // Canon wpisuje „Canon" i w producenta, i w model — nie chcemy tego dwa razy.
+  // Canon wpisuje „Canon" i w producenta, i w model – nie chcemy tego dwa razy.
   if (e.aparat !== 'Canon EOS R6m2') fail.push(`aparat: „${e.aparat}" (podwójny producent?)`);
   if (e.obiektyw !== 'RF50mm F1.8 STM') fail.push(`obiektyw: „${e.obiektyw}"`);
   if (e.ogniskowa !== 50) fail.push(`ogniskowa: ${e.ogniskowa}`);
@@ -138,8 +138,8 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   if (Math.abs(e.czasS - 1 / 200) > 1e-9) fail.push(`czas: ${e.czasS}`);
   if (e.szerokosc !== 6000 || e.wysokosc !== 4000) fail.push('wymiary zdjęcia');
 
-  // 2. data — EXIF używa dwukropków także w części datowej
-  /* Aparat zapisuje czas ze swojego zegara — lokalny, bez strefy. Dopisanie
+  // 2. data – EXIF używa dwukropków także w części datowej
+  /* Aparat zapisuje czas ze swojego zegara – lokalny, bez strefy. Dopisanie
      „Z" znaczyłoby „19:42 UTC", czyli 21:42 w Polsce: zdjęcie ze złotej
      godziny wylądowałoby po ciemku. Dlatego data ma zostać naiwna. */
   console.log(`2. data: ${e.kiedy}`);
@@ -147,7 +147,7 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   if (/[Zz]|[+-]\d{2}:\d{2}$/.test(e.kiedy || '')) fail.push('data dostała strefę, której EXIF nie podaje');
 
   /* 3. GPS: stopnie-minuty-sekundy → stopnie dziesiętne. Tu najłatwiej
-     o cichy błąd — wynik „52,2" zamiast „52,2297" wygląda wiarygodnie,
+     o cichy błąd – wynik „52,2" zamiast „52,2297" wygląda wiarygodnie,
      a wskazuje miejsce oddalone o kilka kilometrów. */
   console.log(`3. GPS: ${e.lat}, ${e.lon}`);
   if (Math.abs(e.lat - 52.2297) > 0.0005) fail.push(`szerokość: ${e.lat}`);
@@ -161,7 +161,7 @@ const ZDJECIE = (opcje) => zbudujJpeg(
     0x0004: [TYPY.RATIONAL, [[70, 1], [40, 1], [0, 1]]],
   }));
   console.log(`4. półkula S/W: ${pd.lat}, ${pd.lon}`);
-  if (pd.lat > 0 || pd.lon > 0) fail.push('nie uwzględnił półkuli S/W — znak dodatni');
+  if (pd.lat > 0 || pd.lon > 0) fail.push('nie uwzględnił półkuli S/W – znak dodatni');
 
   /* 5. Big-endian. Aparaty Canona zapisują „II", ale Nikon i Fuji „MM".
      Pominięcie tego znaczyłoby, że połowa archiwum czyta się jako śmieci. */
@@ -169,8 +169,8 @@ const ZDJECIE = (opcje) => zbudujJpeg(
   console.log(`5. big-endian (MM): ISO ${mm && mm.iso}, ogniskowa ${mm && mm.ogniskowa}`);
   if (!mm || mm.iso !== 400 || mm.ogniskowa !== 50) fail.push('nie czyta zapisu big-endian');
 
-  // 6. pliki bez EXIF-u i uszkodzone — pominięcie, nie wywrotka
-  // 5b. producent bez powtórzenia w modelu — sklejamy normalnie
+  // 6. pliki bez EXIF-u i uszkodzone – pominięcie, nie wywrotka
+  // 5b. producent bez powtórzenia w modelu – sklejamy normalnie
   const nikon = czytajExif(zbudujJpeg({
     0x010f: [TYPY.ASCII, 'NIKON CORPORATION'], 0x0110: [TYPY.ASCII, 'NIKON Z 6'],
   }, null, null));

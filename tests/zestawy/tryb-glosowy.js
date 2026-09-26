@@ -37,7 +37,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
     window.SpeechRecognition = FakeSR; window.webkitSpeechRecognition = FakeSR;
   });
 
-  // podejrzyj, z czym wołane jest zadanie pytania — bez zgadywania po stanie
+  // podejrzyj, z czym wołane jest zadanie pytania – bez zgadywania po stanie
   await p.evaluate(() => {
     window.__asked = [];
     const real = window.handleVoiceQuery;
@@ -48,7 +48,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   let s = await p.evaluate(() => ({ ...window.__stats, state: voiceState, open: el.voiceOverlay.style.display !== 'none' }));
   console.log(`1. wejście w tryb głosowy: rozpoznawaczy=${s.created}, przejęć mikrofonu (getUserMedia audio)=${s.audioGum}`);
   if (!s.open) fail.push('tryb głosowy się nie otworzył');
-  if (s.audioGum > 0) fail.push('Cosmos trzyma własny strumień mikrofonu — to blokuje rozpoznawanie na Androidzie');
+  if (s.audioGum > 0) fail.push('Cosmos trzyma własny strumień mikrofonu – to blokuje rozpoznawanie na Androidzie');
   if (s.created !== 1) fail.push(`utworzono ${s.created} rozpoznawaczy zamiast jednego`);
 
   // wypowiedz słowo budzące
@@ -60,7 +60,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (s.created !== 1) fail.push('przejście wake→pytanie utworzyło nowy rozpoznawacz (dźwięk mikrofonu)');
 
   // zadaj pytanie, poczekaj na ciszę
-  // zaraz po wypowiedzeniu — zanim odliczanie ciszy wyśle pytanie dalej
+  // zaraz po wypowiedzeniu – zanim odliczanie ciszy wyśle pytanie dalej
   const live = await p.evaluate(() => {
     window.SpeechRecognition.last.say('jaka jest pogoda');
     return { txt: el.voiceTranscript.textContent, heard: voiceHeard, deaf: voiceDeaf };
@@ -78,7 +78,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (s.created !== 1) fail.push('pytanie utworzyło nowy rozpoznawacz');
   await p.waitForTimeout(1200);
 
-  // Chrome ucina sesję — ma się wznowić TYM SAMYM sposobem, bez skoku licznika
+  // Chrome ucina sesję – ma się wznowić TYM SAMYM sposobem, bez skoku licznika
   await p.evaluate(() => { const r = window.SpeechRecognition.last; r.onend && r.onend(); });
   await p.waitForTimeout(600);
   s = await p.evaluate(() => ({ ...window.__stats }));
@@ -91,7 +91,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const after = await p.evaluate(() => ({ created: window.__stats.created, mode: voiceMode, rec: voiceRec }));
   console.log(`5. po wyjściu: tryb=${after.mode}, rozpoznawacz=${after.rec === null ? 'zwolniony' : 'NADAL ŻYJE'}`);
   if (after.mode) fail.push('tryb głosowy nie wyłączony');
-  if (after.rec !== null) fail.push('rozpoznawacz nie zwolniony — mikrofon zostaje zajęty');
+  if (after.rec !== null) fail.push('rozpoznawacz nie zwolniony – mikrofon zostaje zajęty');
 
   // ---- kamera: najpierw zwolnij, potem otwórz ----
   const order = await p.evaluate(async () => {
@@ -117,7 +117,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
     return events;
   });
   console.log(`6. kolejność przy przełączaniu kamery: ${order.join(' → ')}`);
-  if (order[0] !== 'stop') fail.push('nowy obiektyw otwierany przed zwolnieniem starego — „Could not start video source"');
+  if (order[0] !== 'stop') fail.push('nowy obiektyw otwierany przed zwolnieniem starego – „Could not start video source"');
 
   // przycisk przełączania po prawej, obok zamknięcia
   const pos = await p.evaluate(() => {
@@ -129,7 +129,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       distFromEdge: Math.round(h.right - c.right) };
   });
   console.log(`7. przyciski nagłówka: odstęp przełącznik↔zamknij ${pos.gap}px, od krawędzi ${pos.distFromEdge}px`);
-  if (pos.gap > 24) fail.push(`przełącznik oderwany od zamknięcia (${pos.gap}px) — ląduje na środku nagłówka`);
+  if (pos.gap > 24) fail.push(`przełącznik oderwany od zamknięcia (${pos.gap}px) – ląduje na środku nagłówka`);
   await p.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/voice-camera-header.png' });
 
   console.log(fail.length ? '\nBŁĘDY:\n- ' + fail.join('\n- ') : '\nTRYB GŁOSOWY I KAMERA OK');

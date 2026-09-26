@@ -43,7 +43,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await checkOverflow('ekran powitalny');
   await page.screenshot({ path: `${SHOT}/m1-welcome.png` });
 
-  // 2. czcionki pól — Chrome auto-zoom threshold
+  // 2. czcionki pól – Chrome auto-zoom threshold
   const fonts = await page.evaluate(() => {
     const sel = ['#input', '.conv-search'];
     return sel.map(s => {
@@ -93,7 +93,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   /* 5. Pisanie nie podnosi pola. Licznik „~N tok. w kontekście" dopisywał się
      do stopki przy pierwszym znaku i na telefonie zawijał ją do drugiej linii
-     — pole podskakiwało o ~20 px (CLS 0,086). */
+     – pole podskakiwało o ~20 px (CLS 0,086). */
   const gora = () => page.evaluate(() => Math.round(document.getElementById('input').getBoundingClientRect().top));
   const przed = await gora();
   await page.fill('#input', 'Cześć');

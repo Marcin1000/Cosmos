@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Cosmos SoundLoc — słuch przestrzenny z macierzy mikrofonów Kinecta 360.
+Cosmos SoundLoc – słuch przestrzenny z macierzy mikrofonów Kinecta 360.
 
 Kinect ma **cztery mikrofony** ustawione w linii. Z różnicy czasu dotarcia
 dźwięku do poszczególnych mikrofonów (TDOA) da się policzyć **kierunek źródła**:
 „coś spadło po lewej", „ktoś mówi od strony drzwi".
 
 Cosmos ma już świadomość pozycji z kamery (po lewej / na środku / po prawej).
-Ten moduł daje mu to samo dla dźwięku — także w całkowitej ciemności i poza kadrem.
+Ten moduł daje mu to samo dla dźwięku – także w całkowitej ciemności i poza kadrem.
 
 Metoda: GCC-PHAT (uogólniona korelacja wzajemna z wyrównaniem fazowym) dla każdej
 pary mikrofonów + interpolacja paraboliczna dla dokładności poniżej próbki,
@@ -34,14 +34,14 @@ def _dep_error(pakiety: str) -> str:
     """Komunikat o brakującej zależności.
 
     Gdy obok skryptu leży `.venv`, a Python działa poza nim, przyczyną prawie
-    nigdy nie jest brak pakietu — tylko nieaktywowane środowisko. Sama rada
+    nigdy nie jest brak pakietu – tylko nieaktywowane środowisko. Sama rada
     „zainstaluj" prowadzi wtedy w ślepy zaułek: pakiet jest, dwa katalogi obok.
     """
     msg = f"Brak zależności: {pakiety}\nZainstaluj:  pip install {pakiety}"
     venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
     in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
     if os.path.isdir(venv) and not in_venv:
-        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany — "
+        msg = (f"Pakiet „{pakiety.split()[0]}” prawdopodobnie JEST zainstalowany – "
                "tylko nie w tym Pythonie.\n\n"
                "Obok skryptu jest środowisko .venv, ale nie zostało aktywowane.\n"
                "  Windows:      .venv\\Scripts\\activate\n"
@@ -61,7 +61,7 @@ COSMOS_TOKEN = os.environ.get("COSMOS_TOKEN", "")
 SPEED_OF_SOUND = 343.0          # m/s przy 20 °C
 
 # Pozycje mikrofonów Kinecta 360 na osi poziomej, w metrach względem środka.
-# Macierz jest liniowa — stąd liczymy azymut, nie pełny kierunek 3D.
+# Macierz jest liniowa – stąd liczymy azymut, nie pełny kierunek 3D.
 KINECT_MICS = np.array([-0.113, -0.036, 0.076, 0.113])
 
 
@@ -86,10 +86,10 @@ def gcc_phat(a: np.ndarray, b: np.ndarray, fs: int, max_tau: float | None = None
     """Opóźnienie sygnału a względem b w sekundach + pewność (0–1).
 
     Dwie rzeczy są tu kluczowe i wynikają z fizyki problemu:
-      • **Ograniczenie pasma** — PHAT dzieli przez moduł widma, więc w pasmach
+      • **Ograniczenie pasma** – PHAT dzieli przez moduł widma, więc w pasmach
         bez energii wzmacnia sam szum numeryczny. Liczymy tylko tam, gdzie
         sygnał realnie jest (domyślnie 200 Hz – 0,45·fs).
-      • **Nadpróbkowanie korelacji** — mikrofony Kinecta dzieli kilka centymetrów,
+      • **Nadpróbkowanie korelacji** – mikrofony Kinecta dzieli kilka centymetrów,
         więc opóźnienia to ułamki próbki. Zero-padding widma daje interpolację
         sinc w czasie i rozdzielczość 1/interp próbki.
     """
@@ -118,7 +118,7 @@ def gcc_phat(a: np.ndarray, b: np.ndarray, fs: int, max_tau: float | None = None
     window = cc[center - limit: center + limit + 1]
     peak = int(np.argmax(np.abs(window)))
 
-    # interpolacja paraboliczna — jeszcze poniżej kroku nadpróbkowania
+    # interpolacja paraboliczna – jeszcze poniżej kroku nadpróbkowania
     shift = 0.0
     if 0 < peak < len(window) - 1:
         y0, y1, y2 = window[peak - 1], window[peak], window[peak + 1]
@@ -198,7 +198,7 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
 
 def cmd_wav(path: Path) -> None:
     chans, fs = read_wav(path)
-    print(f"\n✦ Cosmos SoundLoc — {path.name}")
+    print(f"\n✦ Cosmos SoundLoc – {path.name}")
     print(f"  Kanałów: {chans.shape[0]}, próbkowanie: {fs} Hz, "
           f"długość: {chans.shape[1] / fs:.2f} s")
     res = direction_from_channels(chans, fs)
@@ -247,7 +247,7 @@ def cmd_listen(args) -> None:
     block = int(fs * args.window)
     device = resolve_device(args.device)
     name = sd.query_devices(device)["name"] if device is not None else "domyślne wejście"
-    print(f"\n✦ Cosmos SoundLoc — nasłuch ({args.channels} kanałów, {fs} Hz)")
+    print(f"\n✦ Cosmos SoundLoc – nasłuch ({args.channels} kanałów, {fs} Hz)")
     print(f"  Urządzenie: {name}. Ctrl+C kończy.\n")
     try:
         while True:
@@ -270,12 +270,12 @@ def cmd_listen(args) -> None:
 
 def cmd_selftest() -> None:
     """Sprawdza estymator na sygnale syntetycznym o ZNANYM kierunku."""
-    print("\n✦ Cosmos SoundLoc — samotest\n")
+    print("\n✦ Cosmos SoundLoc – samotest\n")
     fs = 16000
     dur = 0.5
     rng = np.random.default_rng(7)
     n = int(fs * dur)
-    # szerokopasmowy sygnał (jak uderzenie/upadek) — lekko wygładzony, ale
+    # szerokopasmowy sygnał (jak uderzenie/upadek) – lekko wygładzony, ale
     # z realną energią w całym paśmie roboczym estymatora
     base = rng.normal(0, 1, n)
     kernel = np.hanning(5) / np.sum(np.hanning(5))
@@ -302,7 +302,7 @@ def cmd_selftest() -> None:
               f"(błąd {err:4.1f}°)  {'OK' if good else 'BŁĄD'}")
 
     # przypadek realistyczny: niezależny szum w każdym mikrofonie (SNR ≈ 10 dB)
-    print("\n  Z szumem mikrofonów (SNR ≈ 10 dB) — tak będzie w praktyce:")
+    print("\n  Z szumem mikrofonów (SNR ≈ 10 dB) – tak będzie w praktyce:")
     errs = []
     for truth in (-45.0, -20.0, 0.0, 20.0, 45.0):
         s = math.sin(math.radians(truth))
@@ -330,7 +330,7 @@ def cmd_selftest() -> None:
     # cisza / brak sygnału nie może wywalić programu
     try:
         direction_from_channels(np.zeros((4, 1000)), fs)
-        print("  Sygnał zerowy: obsłużony bez błędu — OK")
+        print("  Sygnał zerowy: obsłużony bez błędu – OK")
     except Exception as e:                                    # pragma: no cover
         print(f"  Sygnał zerowy: WYJĄTEK {e}")
         ok = False
@@ -344,7 +344,7 @@ def main() -> None:
     ap.add_argument("--selftest", action="store_true", help="sprawdź poprawność bez sprzętu")
     # Pozostałe moduły przyjmują „selftest" jako podpolecenie. Ten jeden miał
     # tylko flagę, więc wpisanie tego samego co wszędzie kończyło się błędem
-    # argparse. Przyjmujemy obie formy — wzorzec ma być jeden.
+    # argparse. Przyjmujemy obie formy – wzorzec ma być jeden.
     ap.add_argument("cmd", nargs="?", choices=["selftest"], help=argparse.SUPPRESS)
     ap.add_argument("--wav", help="plik WAV wielokanałowy (np. z Kinecta)")
     ap.add_argument("--listen", action="store_true", help="nasłuch na żywo")

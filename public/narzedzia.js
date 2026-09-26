@@ -1,12 +1,12 @@
 /* ============================================================
-   NARZĘDZIA MODELU — jedno miejsce na jedno narzędzie
+   NARZĘDZIA MODELU – jedno miejsce na jedno narzędzie
 
    Do tej pory cała kaskada siedziała w `runGeneration()` w app.js: 535 linii
    jednej funkcji, w której po kolei sprawdzano wyszukiwanie, archiwum, plan
    zdjęciowy, płótno, uruchamianie kodu, grafiki i generowanie obrazu. Każde
    nowe narzędzie ją wydłużało, a wspólne fragmenty były przepisywane z ręki.
 
-   Co z tego wynikało — nie teoretycznie, tylko realnie:
+   Co z tego wynikało – nie teoretycznie, tylko realnie:
 
      • Gałąź wyszukiwania usuwała znacznik przez `replace(marker[0], '')`,
        czyli TYLKO pierwszy. Gałąź archiwum używała pełnego czyszczenia.
@@ -14,7 +14,7 @@
        naraz i dziewięć nie stanęło użytkownikowi na ekranie.
 
      • Obsługa „limit rund wyczerpany" była napisana TRZY RAZY. W dwóch
-       kopiach ustawiano `samoMyslenie`, w trzeciej nie — więc przy zdjęciach
+       kopiach ustawiano `samoMyslenie`, w trzeciej nie – więc przy zdjęciach
        model rozumujący, któremu budżet poszedł na myślenie, pokazywał surowe
        rozumowanie zamiast komunikatu.
 
@@ -22,7 +22,7 @@
        czytała i zapisywała kilkanaście zmiennych modułowych app.js.
 
    Dlatego: każde narzędzie to obiekt z tym samym kontraktem, a zależności
-   wchodzą przez `utworzNarzedzia({...})` — tak jak w `lib/`. Moduł nie zna
+   wchodzą przez `utworzNarzedzia({...})` – tak jak w `lib/`. Moduł nie zna
    ani DOM-u, ani stanu app.js, więc zestaw testów uruchamia go w Node
    z atrapami i sprawdza ZACHOWANIE, a nie treść pliku.
 
@@ -32,7 +32,7 @@
    dopasuj(acc)     zwraca wynik `match` albo null
    zawszeDozwolone  true = wolno uruchomić także w ostatniej rundzie
                     (dotyczy narzędzi KOŃCZĄCYCH turę: płótno, obraz)
-   gdyLimit(dop)    { tresc, etykieta } — co powiedzieć modelowi, gdy rund
+   gdyLimit(dop)    { tresc, etykieta } – co powiedzieć modelowi, gdy rund
                     już nie ma. Samo dokończenie odpowiedzi robi wywołujący,
                     w jednym miejscu dla wszystkich narzędzi.
    wykonaj(k)       robi robotę; zwraca { akcja: 'dalej' | 'koniec', finalText? }
@@ -47,8 +47,8 @@
  * Wynik pracy Studia, która na serwerze może trwać dłużej niż 100 s.
  *
  * Cloudflare zrywa żądanie bez odpowiedzi po 100 s (strona 524), więc serwer
- * czeka na generowanie najwyżej ~75 s. Zdąży — odpowiada wynikiem jak zawsze.
- * Nie zdąży — odpowiada 202 z numerem zadania, a tu dopytujemy
+ * czeka na generowanie najwyżej ~75 s. Zdąży – odpowiada wynikiem jak zawsze.
+ * Nie zdąży – odpowiada 202 z numerem zadania, a tu dopytujemy
  * GET /api/zadania?id=…, aż praca się skończy (lib/zadania.js).
  *
  * @param {Response} odp odpowiedź na żądanie, które zaczęło pracę
@@ -69,12 +69,12 @@ async function czekajNaZadanie(odp, { pobierz, readJsonSafe, t, naPostep, spij, 
   const czekaj = spij || ((ms) => new Promise((ok) => setTimeout(ok, ms)));
   const start = Date.now();
   let pomylek = 0;
-  // Od razu po 202 — człowiek czekał już ~75 s i ma się dowiedzieć, co się dzieje.
+  // Od razu po 202 – człowiek czekał już ~75 s i ma się dowiedzieć, co się dzieje.
   if (naPostep) naPostep({ sekund: d.sekund || 0 });
   while (Date.now() - start < maksMs) {
     await czekaj(coIleMs);
     let r;
-    // Chwilowy brak sieci (telefon w windzie) to nie koniec zadania — dopytamy za chwilę.
+    // Chwilowy brak sieci (telefon w windzie) to nie koniec zadania – dopytamy za chwilę.
     try { r = await pobierz(`/api/zadania?id=${encodeURIComponent(d.zadanie)}`); } catch {
       if (++pomylek > 40) throw new Error(t('zadanie.bezSieci'));
       continue;
@@ -124,22 +124,22 @@ function utworzNarzedzia(z) {
     naKafelek, naKontekst, bezOgonkowKlient, zebranyMaterial,
     zastosujZmianePlotna, pokazPlotno, mowGlosem, PORCJA_ARCHIWUM, WZORCE,
     wstawTekstModelu,
-    // silnik tury — pasek postępu dostaje kropkę w jego kolorze (opcjonalne w testach)
+    // silnik tury – pasek postępu dostaje kropkę w jego kolorze (opcjonalne w testach)
     znakSilnika = null,
   } = z;
 
   /* Wiadomość „trwa czynność", którą trzeba będzie PRZEPISAĆ, gdy czynność
      się skończy. Wisiała kiedyś w rozmowie na zawsze jako „Szukam zdjęć…"
-     — pod nią gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich szuka. */
+     – pod nią gotowe zdjęcia, a nad nimi zapewnienie, że Cosmos ich szuka. */
   function zapowiedz(conv, przed, tekst) {
     /* Tekst modelu i pasek postępu to DWIE różne wiadomości.
        Wcześniej były jedną: `przed + status`. Przy kilku rundach w turze model
        przepisywał całą odpowiedź od nowa, a każda runda dokładała kolejną
-       kopię — Marcin dostał w ten sposób trzy identyczne plany Majorki.
+       kopię – Marcin dostał w ten sposób trzy identyczne plany Majorki.
        Rozdzielone, tekst przechodzi przez zaporę `wstawTekstModelu`, która
        przepisaną wersję PODMIENIA zamiast dokładać. */
     if (przed) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
-    // `status` — pasek postępu, nie wypowiedź: nie wraca do modelu jako jego
+    // `status` – pasek postępu, nie wypowiedź: nie wraca do modelu jako jego
     // własne słowa i nie dostaje przycisków „Zapamiętaj" / „Regeneruj".
     const wiadomosc = { role: 'assistant', content: tekst, status: true, ...(znakSilnika ? znakSilnika() : {}) };
     conv.messages.push(wiadomosc);
@@ -155,7 +155,7 @@ function utworzNarzedzia(z) {
    *
    *  „obiektyw=24-70 f/2.8, 70-200 f/4" to jedna wartość, nie cztery
    *  parametry. Dzielenie po samych spacjach urywało ją na „24-70",
-   *  przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8 —
+   *  przysłona przepadała i Cosmos liczył f/4 komuś, kto ma f/2.8 –
    *  odpowiedź brzmiała sensownie i była nieprawdziwa. Tniemy więc tylko
    *  tam, gdzie po spacji zaczyna się kolejne `słowo=`.
    *
@@ -175,7 +175,7 @@ function utworzNarzedzia(z) {
     return out;
   }
 
-  /** Pobierz JSON i nigdy nie rzucaj — błąd wraca jako `{ error }`,
+  /** Pobierz JSON i nigdy nie rzucaj – błąd wraca jako `{ error }`,
    *  bo model ma się dowiedzieć, że nie wyszło, a nie zostać bez odpowiedzi. */
   async function jsonem(adres, opcje) {
     try {
@@ -207,7 +207,7 @@ function utworzNarzedzia(z) {
     async wykonaj(k) {
       const q = k.dop[1].trim();
       /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
-         jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć —
+         jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć –
          i tak powstał plan Majorki z godzinami otwarcia atrakcji, których
          nikt nie sprawdził. Musi wiedzieć, ile z jego zapytań poszło. */
       const ile = (k.acc.match(/[[【]\s*SZUKAJ\s*[:：]/gi) || []).length;   // tolerancyjnie, jak protokol.js
@@ -218,7 +218,7 @@ function utworzNarzedzia(z) {
       const uwaga = ile > 1
         ? `\n\nUWAGA: w tej turze poprosiłeś o ${ile} wyszukań, a wykonane zostało `
           + 'TYLKO to jedno. Pozostałych nikt nie sprawdził i nie masz ich wyników. '
-          + 'Nie pisz o nich tak, jakbyś je miał — jedno wyszukanie na turę. '
+          + 'Nie pisz o nich tak, jakbyś je miał – jedno wyszukanie na turę. '
           + 'Jeśli reszta jest potrzebna, poproś o kolejne pojedynczo.'
         : '';
       dodajWynikNarzedzia(k.conv, wyniki + uwaga, q);
@@ -238,9 +238,9 @@ function utworzNarzedzia(z) {
 
       /* Ten sam filtr drugi raz nie przyniesie innej odpowiedzi. Zamiast
          pytać archiwum jeszcze raz, mówimy modelowi wprost, że się powtarza
-         — bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
+         – bo inaczej wypala budżet tokenów na kółka i urywa odpowiedź
          w pół zdania. */
-      /* DRUGIE PYTANIE PO UDANYM PIERWSZYM — najczęstsza przyczyna tego,
+      /* DRUGIE PYTANIE PO UDANYM PIERWSZYM – najczęstsza przyczyna tego,
          co Marcin nazwał „rozpoczynają kolejne wznawiania odpowiedzi
          samoczynnie".
 
@@ -250,14 +250,14 @@ function utworzNarzedzia(z) {
          filtry IDENTYCZNE, a model za drugim razem zmienił drobiazg.
 
          Zasada jest prosta: jeśli pierwsze zapytanie coś znalazło, model ma
-         dane i drugie mu nie pomoże — ma odpowiedzieć. Jeśli pierwsze dało
+         dane i drugie mu nie pomoże – ma odpowiedzieć. Jeśli pierwsze dało
          zero, drugie jest sensowne (inny rok, `folder=` zamiast `miejsce=`)
          i wolno je zadać. Rozróżnienie idzie więc po WYNIKU, nie po liczbie
          wywołań. */
       if (k.stan.archiwumZWynikiem) {
         dodajWynikNarzedzia(k.conv,
           'MASZ JUŻ WYNIK Z ARCHIWUM w tej turze i on odpowiada na pytanie '
-          + 'użytkownika. Nie odpytuj archiwum drugi raz — napisz odpowiedź '
+          + 'użytkownika. Nie odpytuj archiwum drugi raz – napisz odpowiedź '
           + 'na podstawie tego, co dostałeś powyżej. Kolejne zapytanie tylko '
           + 'wydłuża czekanie i kończy się drugą, prawie taką samą odpowiedzią.',
           t('chat.archiveQuery'));
@@ -277,11 +277,11 @@ function utworzNarzedzia(z) {
       k.stan.archiwum.add(odcisk);
 
       const pasek = zapowiedz(k.conv, k.przed, t('chat.searchingArchive'));
-      // Zestawienie liczbowe albo lista plików — to dwa różne pytania.
+      // Zestawienie liczbowe albo lista plików – to dwa różne pytania.
       const dane = await jsonem(grupuj
         ? `/api/archive/stats?pole=${encodeURIComponent(grupuj)}&${q}`
         : `/api/archive/search?limit=${PORCJA_ARCHIWUM}&${q}`);
-      /* Pasek się domyka — „Przeszukuję…" zostawało w rozmowie na zawsze,
+      /* Pasek się domyka – „Przeszukuję…" zostawało w rozmowie na zawsze,
          także nad gotową odpowiedzią. */
       pasek.domknij(dane.error ? t('chat.archiveFail') : t('chat.archiveDone', {
         n: Number(dane.znaleziono) || (dane.wyniki || []).length || (dane.grupy || []).length || 0 }));
@@ -290,7 +290,7 @@ function utworzNarzedzia(z) {
          wyłącznie do modelu jako tekst, więc na „pokaż zdjęcia z rana"
          Marcin dostawał listę nazw plików. */
       const pliki = Array.isArray(dane.wyniki) ? dane.wyniki : [];
-      /* „Coś znalazłem" to także zestawienie liczbowe — ono również jest
+      /* „Coś znalazłem" to także zestawienie liczbowe – ono również jest
          odpowiedzią i po nim drugie pytanie jest zbędne. */
       if (pliki.length || (dane.grupy && dane.grupy.length) || Number(dane.znaleziono) > 0) {
         k.stan.archiwumZWynikiem = true;
@@ -303,7 +303,7 @@ function utworzNarzedzia(z) {
             text: '',
             photos: zPodgladem.map(naKafelek),
             /* Zapamiętane zapytanie dla przycisku pod siatką. Bez `limit`
-               i bez `pomin` — te dokleja stopka, bo tylko ona wie, ile
+               i bez `pomin` – te dokleja stopka, bo tylko ona wie, ile
                już pokazano. */
             dalej: {
               q: q.toString(),
@@ -317,7 +317,7 @@ function utworzNarzedzia(z) {
       }
 
       dodajWynikNarzedzia(k.conv,
-        'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki — odpowiadaj na podstawie '
+        'WYNIK Z ARCHIWUM UŻYTKOWNIKA (jego własne pliki – odpowiadaj na podstawie '
         + 'tych danych, nie zgaduj; miniatury już pokazałem użytkownikowi, więc ich '
         + 'nie zapowiadaj ani nie opisuj plik po pliku):\n' + naKontekst(dane),
         t('chat.archiveQuery'));
@@ -337,7 +337,7 @@ function utworzNarzedzia(z) {
       }
       /* TEN SAM PLAN LICZONY W KÓŁKO.
          W rozmowie o Majorce model poprosił o plan dla Es Trenc, dostał dane,
-         przepisał CAŁY plan od nowa i poprosił jeszcze raz — o dokładnie to
+         przepisał CAŁY plan od nowa i poprosił jeszcze raz – o dokładnie to
          samo miejsce. I jeszcze raz. Trzy identyczne obliczenia i trzy kopie
          planu na ekranie, bo każda runda to nowa wypowiedź modelu.
 
@@ -346,7 +346,7 @@ function utworzNarzedzia(z) {
       if (k.stan.plan.has(odcisk)) {
         dodajWynikNarzedzia(k.conv,
           'TEN PLAN JUŻ POLICZYŁEŚ W TEJ TURZE i masz jego dane wyżej. Nie proś '
-          + 'o niego ponownie i NIE PRZEPISUJ całej odpowiedzi od nowa — dopisz '
+          + 'o niego ponownie i NIE PRZEPISUJ całej odpowiedzi od nowa – dopisz '
           + 'tylko to, czego jeszcze nie napisałeś, albo zakończ.',
           t('chat.planQuery'));
         return { akcja: 'dalej' };
@@ -359,7 +359,7 @@ function utworzNarzedzia(z) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parametry),
       });
-      // „Liczę…" pod gotowym planem to nieprawda — domykamy pasek.
+      // „Liczę…" pod gotowym planem to nieprawda – domykamy pasek.
       pasek.domknij(t('chat.planned'));
       dodajWynikNarzedzia(k.conv,
         'DANE PLANU ZDJĘCIOWEGO (policzone dla lokalizacji użytkownika, użyj ich '
@@ -420,7 +420,7 @@ function utworzNarzedzia(z) {
       wiadomoscKodu.content = zPrzed + t(wynik.error ? 'chat.runFail' : 'chat.runDone');
       if (wynik.error) wynik = { stdout: '', stderr: wynik.error, wyniki: [] };
       k.conv.messages.push({ role: 'assistant', content: { text: '', run: wynik } });
-      // Model musi zobaczyć, co wyszło — bez tego skończyłoby się na stdout.
+      // Model musi zobaczyć, co wyszło – bez tego skończyłoby się na stdout.
       dodajWynikNarzedzia(k.conv, t('chat.runResult', {
         out: (wynik.stdout || '(brak wyjścia)').slice(0, 6000),
         err: wynik.stderr ? `\nBŁĘDY:\n${wynik.stderr.slice(0, 2000)}` : '',
@@ -434,9 +434,9 @@ function utworzNarzedzia(z) {
     dopasuj: (acc) => acc.match(WZORCE.GRAFIKA),
     /* Limit rund wyczerpany, a model wciąż prosi o zdjęcia. Tak skończyła się
        rozmowa o Majorce: ostatnią rzeczą na ekranie było „🖼️ Zdjęcia:
-       Andratx, Fornalutx…" i cisza — plan urwał się w połowie. */
+       Andratx, Fornalutx…" i cisza – plan urwał się w połowie. */
     gdyLimit: () => ({
-      tresc: 'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY — nie dostaniesz już kolejnych. '
+      tresc: 'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY – nie dostaniesz już kolejnych. '
         + 'Nie używaj więcej [GRAFIKA:]. Dokończ teraz odpowiedź tekstem: domknij '
         + 'plan i napisz wprost, dla których miejsc zdjęć nie pokazałeś, żeby '
         + 'użytkownik mógł o nie poprosić osobno.',
@@ -447,7 +447,7 @@ function utworzNarzedzia(z) {
 
          Marcin o planie na Majorkę: „te zdjęcia powinny być pod konkretnym
          dniem, a nie najpierw cały plan, a później same zdjęcia, bo traci się
-         nawiązanie do konkretnych punktów w planie". Miał rację — i nie był to
+         nawiązanie do konkretnych punktów w planie". Miał rację – i nie był to
          problem modelu, tylko tego narzędzia. Braliśmy PIERWSZY znacznik,
          resztę odpowiedzi zlepialiśmy w jedną wiadomość, a siatki dokładaliśmy
          hurtem na końcu. Stąd brała się też pusta sekcja „Propozycje zdjęć":
@@ -456,7 +456,7 @@ function utworzNarzedzia(z) {
          Teraz czytamy WSZYSTKIE znaczniki razem z ich miejscem w tekście
          i odtwarzamy kolejność: kawałek planu, siatka pod nim, kolejny
          kawałek, kolejna siatka. Wszystko w jednej rundzie, bo limit wynosi
-         cztery rundy na całą turę — przy rundzie na dzień siedmiodniowy plan
+         cztery rundy na całą turę – przy rundzie na dzień siedmiodniowy plan
          urwałby się w środę. */
       const WZ = new RegExp(WZORCE.GRAFIKA.source, 'gi');
       const segmenty = [];
@@ -471,13 +471,13 @@ function utworzNarzedzia(z) {
         /* Dziesięć siatek na turę. Sześć wystarczało na plan pięciodniowy,
            ale przy ośmiu dniach reszta znaczników zostawała w ogonie: dni
            5-8 lądowały jednym blokiem, a ich zdjęcia hurtem na samym końcu
-           — dokładnie to, od czego uciekaliśmy. */
+           – dokładnie to, od czego uciekaliśmy. */
         if (segmenty.length >= 10) break;
       }
       const ogon = k.acc.slice(odKad);
 
       /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
-         dostaniu wyniku lubi poprosić o to samo jeszcze raz — a drugi raz
+         dostaniu wyniku lubi poprosić o to samo jeszcze raz – a drugi raz
          te same zdjęcia to dla użytkownika po prostu usterka. */
       const wszystkie = [];
       for (const seg of segmenty) {
@@ -498,13 +498,13 @@ function utworzNarzedzia(z) {
         return { akcja: 'dalej' };
       }
 
-      /* Pasek postępu bez `przed` — i to jest istotne.
+      /* Pasek postępu bez `przed` – i to jest istotne.
          Grafiki SAME odtwarzają układ (kawałek planu, siatka pod nim), więc
          wydrukowanie tu całego tekstu z góry dawało plan dwa razy: raz
          w całości nad wszystkim, raz pokrojony na kawałki. Marcin zobaczył
          to jako „najpierw opis, potem jakieś myślenie, potem zdjęcia". */
       const pasek = zapowiedz(k.conv, '', t('chat.findingPhotos', { q: wszystkie.join(', ') }));
-      // Równolegle — inaczej trzy zapytania to trzy razy dłuższe czekanie.
+      // Równolegle – inaczej trzy zapytania to trzy razy dłuższe czekanie.
       const zestawy = await Promise.all(wszystkie.map(async (q) => {
         const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}`);
         return { q, photos: d.results || [], error: d.error || '' };
@@ -514,13 +514,13 @@ function utworzNarzedzia(z) {
       if (!znalezione.length) {
         /* Niepowodzenie wraca do modelu tak samo jak wynik. Kiedyś kończyliśmy
            tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
-           się o niczym — i następne zdanie użytkownika trafiało w próżnię. */
+           się o niczym – i następne zdanie użytkownika trafiało w próżnię. */
         const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
         pasek.domknij(t('chat.photosNone', { msg: powod }));
         dodajWynikNarzedzia(k.conv,
           `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
           + (powod ? `Powód techniczny: ${powod}\n` : '')
-          + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe — spróbuj RAZ '
+          + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe – spróbuj RAZ '
           + 'konkretniejszego. Jeśli było już konkretne, nie szukaj ponownie: powiedz '
           + 'wprost, że nie udało się znaleźć zdjęć, i zapytaj, czego dokładnie szukać.',
           t('chat.photosQuery'));
@@ -536,13 +536,13 @@ function utworzNarzedzia(z) {
       const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
       /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
          Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
-         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd —
+         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd –
          cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
          dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
          wstawiamy kawałków, w których nie została ani jedna litera. */
       const dodajTekst = (tresc) => {
         const czysty = stripSearchMarker(tresc)
-          // Punkt listy, po którym nic nie zostało — na końcu i w środku.
+          // Punkt listy, po którym nic nie zostało – na końcu i w środku.
           .replace(/^[ \t]*[-*•]\s*$/gm, '')
           .replace(/\n{3,}/g, '\n\n')
           .trim();
@@ -571,11 +571,11 @@ function utworzNarzedzia(z) {
       const bezWynikow = wszystkie.filter((q) => !poZapytaniu.has(bezOgonkowKlient(q)));
       dodajWynikNarzedzia(k.conv,
         'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI, KAŻDE POD SWOIM PUNKTEM PLANU (już je '
-        + 'widzi — nie opisuj ich po kolei, nie przypisuj ich jeszcze raz do dni '
+        + 'widzi – nie opisuj ich po kolei, nie przypisuj ich jeszcze raz do dni '
         + 'i nie rób z tego osobnej listy na końcu):\n'
-        + znalezione.map((x) => `• ${x.q} — ${x.photos.length} szt.`).join('\n')
+        + znalezione.map((x) => `• ${x.q} – ${x.photos.length} szt.`).join('\n')
         + (bezWynikow.length ? `\nBEZ WYNIKÓW: ${bezWynikow.join(', ')}` : '')
-        + '\n\nJeśli odpowiedź jest kompletna — napisz krótkie domknięcie albo nic. '
+        + '\n\nJeśli odpowiedź jest kompletna – napisz krótkie domknięcie albo nic. '
         + 'Jeśli w planie zostały przystanki bez zdjęć, poproś o nie JEDNYM '
         + 'znacznikiem [GRAFIKA: a; b; c]. Nie proś ponownie o to, co już masz powyżej.',
         t('chat.photosQuery'));
@@ -617,8 +617,8 @@ function utworzNarzedzia(z) {
   };
 
   /* KOLEJNOŚĆ MA ZNACZENIE i nie jest przypadkowa:
-     — kod przed grafikami, bo wynik programu zwykle JEST odpowiedzią,
-     — grafiki przed obrazem, bo gdy model wypisze oba, użytkownik prosił
+     – kod przed grafikami, bo wynik programu zwykle JEST odpowiedzią,
+     – grafiki przed obrazem, bo gdy model wypisze oba, użytkownik prosił
        o zdjęcia; generowanie było jego drugim wyborem, nie pierwszym. */
   return [szukaj, archiwum, plan, plotno, kod, grafiki, obraz];
 }

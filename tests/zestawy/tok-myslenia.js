@@ -53,10 +53,10 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   // ---- 2. model zużywa cały budżet na myślenie: NIE „pusta odpowiedź” ----
   await page.click('#new-chat-btn').catch(() => {});
   await page.waitForTimeout(400);
-  await send('pusto — ile kosztują nowe buty New Balance');
+  await send('pusto – ile kosztują nowe buty New Balance');
   await page.waitForTimeout(2500);
   /* Kontrakt zmienił się w Partii 31 i test musiał pójść za nim. Kiedyś surowe
-     rozumowanie SAMO stawało się odpowiedzią — angielskie, urwane w pół zdania,
+     rozumowanie SAMO stawało się odpowiedzią – angielskie, urwane w pół zdania,
      podane jak gotowy wynik. Teraz na miejscu odpowiedzi pada jedno zdanie, co
      się stało, a rozumowanie ląduje w panelu. Nie wolno go jednak zwinąć: gdy
      to jedyne, co przyszło, użytkownik zostałby z samym ostrzeżeniem. */
@@ -76,7 +76,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (/pusta odpowiedź|empty model/i.test(s.text)) fail.push('nadal „(pusta odpowiedź modelu)”');
   if (!s.hasThink) fail.push('tok myślenia nie trafił na ekran');
   if (!/buty|cen/i.test(s.thinkText)) fail.push('panel myślenia nie zawiera rozumowania');
-  if (!s.otwarty) fail.push('panel zwinięty, choć myślenie to jedyna treść — zostaje samo ostrzeżenie');
+  if (!s.otwarty) fail.push('panel zwinięty, choć myślenie to jedyna treść – zostaje samo ostrzeżenie');
   // …i rozumowanie NIE MOŻE udawać odpowiedzi poza panelem
   const pozaPanelem = await page.evaluate(() => {
     const b = [...document.querySelectorAll('.msg-assistant .msg-content')].pop().cloneNode(true);
@@ -89,7 +89,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   // ---- 3. pętla wyszukiwania kończy się odpowiedzią, bez surowego [SZUKAJ:] ----
   await page.click('#new-chat-btn').catch(() => {});
   await page.waitForTimeout(400);
-  await send('szukaj — jaka jest teraz pogoda w Warszawie');
+  await send('szukaj – jaka jest teraz pogoda w Warszawie');
   await page.waitForTimeout(14000);
   const conv = await page.evaluate(() => ({
     all: [...document.querySelectorAll('.msg')].map((m) => m.innerText.trim()),
@@ -107,7 +107,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   const sum = await page.evaluate(async () => {
     const r = await fetch('/api/summarize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: 'pusto — rozmowa', endpoint: 'cloud' }),
+      body: JSON.stringify({ text: 'pusto – rozmowa', endpoint: 'cloud' }),
     });
     return { ok: r.ok, d: await r.json() };
   });
@@ -120,7 +120,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
 
   // ---- 5. przełącznik kamery przód/tył ----
   // Chromium z atrapą ma tylko jedną kamerę, a przełącznik ma się pokazywać
-  // wyłącznie przy dwóch — udajemy telefon, dokładając drugie urządzenie.
+  // wyłącznie przy dwóch – udajemy telefon, dokładając drugie urządzenie.
   await page.evaluate(() => {
     const real = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
     navigator.mediaDevices.enumerateDevices = async () => {
@@ -179,7 +179,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await page.waitForTimeout(400);
 
   // ---- 7. mobile: panel boczny ----
-  // osobny kontekst z dotykiem — bez tego `@media (hover: none)` nie zadziała
+  // osobny kontekst z dotykiem – bez tego `@media (hover: none)` nie zadziała
   const mctx = await browser.newContext({
     viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: true,
     permissions: ['microphone', 'camera'],
@@ -231,8 +231,8 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   console.log(`7. panel boczny 360×740: lista ${sb.listH}px (${sb.visible}/${sb.items} rozmów widocznych), `
     + `stopka ${sb.footH}px z ${sb.vh}px, obszarów przewijania ${sb.obszarow}, „Zmysły" widać=${sb.zmyslyWidac}`);
   console.log(`   przyciski rozmowy widoczne bez najechania: ${sb.actsShown}/${sb.actsTotal}`);
-  if (sb.visible < 3) fail.push(`lista rozmów za niska — widać tylko ${sb.visible}`);
-  // Po przejściu na JEDEN obszar przewijania stopka jest wysoka z założenia —
+  if (sb.visible < 3) fail.push(`lista rozmów za niska – widać tylko ${sb.visible}`);
+  // Po przejściu na JEDEN obszar przewijania stopka jest wysoka z założenia –
   // liczy się tylko to, czy da się do niej dojechać (o to szła skarga).
   if (sb.obszarow !== 1) fail.push(`obszarów przewijania: ${sb.obszarow}, ma być 1`);
   if (!sb.zmyslyWidac) fail.push('nie da się dojechać do „Zmysłów”');
@@ -256,7 +256,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (st.over.length) fail.push('elementy ustawień wychodzą poza ekran: ' + st.over.join(', '));
   await m.screenshot({ path: SHOT + '/fix-settings.png' });
 
-  if (alerts.length) console.log(`   (okienka alert: ${alerts.length} — ${alerts[0].slice(0, 60)})`);
+  if (alerts.length) console.log(`   (okienka alert: ${alerts.length} – ${alerts[0].slice(0, 60)})`);
   console.log(fail.length ? '\nBŁĘDY:\n- ' + fail.join('\n- ') : '\nWSZYSTKO OK');
   await browser.close();
   env.koniec();

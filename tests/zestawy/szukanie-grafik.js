@@ -1,7 +1,7 @@
 /* Cosmos umiał obraz WYGENEROWAĆ, ale nie umiał żadnego ZNALEŹĆ. Na prośbę
    „poproszę zdjęcia tych miejsc" model odpowiadał uczciwie „nie mam dostępu
    do wyszukiwania obrazów" i proponował wizje artystyczne zamiast prawdziwej
-   Majorki — czyli dokładnie to, czego użytkownik nie chciał.
+   Majorki – czyli dokładnie to, czego użytkownik nie chciał.
 
    Sprawdzamy całą drogę: żeton → wyniki → miniatura przez proxy. Osobno
    pilnujemy, żeby proxy nie dało się użyć do zaglądania gdzie indziej. */
@@ -18,7 +18,7 @@ const { srodowisko } = require('../pomoc');
   if (!d.results || d.results.length < 5) fail.push('wyszukiwarka grafik nic nie zwróciła');
   const pierwsze = (d.results || [])[0] || {};
   if (!pierwsze.thumb) fail.push('brak miniatury w wyniku');
-  if (!pierwsze.source) fail.push('brak źródła — zdjęcie bez źródła jest bezwartościowe');
+  if (!pierwsze.source) fail.push('brak źródła – zdjęcie bez źródła jest bezwartościowe');
   if (!pierwsze.title) fail.push('brak tytułu');
 
   // 2. puste zapytanie odrzucone, nie wysyłane dalej
@@ -33,7 +33,7 @@ const { srodowisko } = require('../pomoc');
   if (mini.status !== 200) fail.push('proxy nie przepuszcza własnych miniatur');
   if (!/^image\//.test(typ)) fail.push('proxy oddaje coś, co nie jest obrazem');
 
-  // 4. proxy NIE jest otwarte — inaczej służy do skanowania sieci serwera
+  // 4. proxy NIE jest otwarte – inaczej służy do skanowania sieci serwera
   const obcy = await fetch(`${env.adres}/api/search/thumb?u=${encodeURIComponent('https://przyklad.pl/cokolwiek.jpg')}`);
   console.log(`4. obcy host → HTTP ${obcy.status}`);
   if (obcy.status !== 403) fail.push('proxy przepuszcza dowolny host (SSRF)');
@@ -46,10 +46,10 @@ const { srodowisko } = require('../pomoc');
   console.log(`6. śmieciowy adres → HTTP ${bezsens.status}`);
   if (bezsens.status !== 400) fail.push('proxy nie sprawdza adresu');
 
-  // 7. model musi WIEDZIEĆ, że to narzędzie istnieje — inaczej nadal będzie
+  // 7. model musi WIEDZIEĆ, że to narzędzie istnieje – inaczej nadal będzie
   //    odpowiadał „nie mam dostępu do wyszukiwania obrazów"
   /* Model podajemy WPROST. Za pierwszym razem test brał domyślny z konfiguracji
-     i przewrócił się, gdy poziomy narzędzi obcięły opis dla mniejszych modeli —
+     i przewrócił się, gdy poziomy narzędzi obcięły opis dla mniejszych modeli –
      badał wtedy nie to, co miał badać, tylko przypadkowe ustawienie. */
   const promptDla = async (model) => {
     const r = await fetch(`${env.adres}/api/chat`, {
@@ -70,51 +70,51 @@ const { srodowisko } = require('../pomoc');
   /* Marcin poprosił „ze zdjęciami proszę" do siedmiodniowego planu Majorki
      i dostał zdjęcia JEDNEGO miejsca, poprzedzone zapowiedzią „oto propozycje
      zapytań o zdjęcia". Obie rzeczy wynikały z tego, czego prompt NIE mówił. */
-  /* Pierwsza wersja tego sprawdzenia wymagała frazy „JEDNYM znaczniku" —
+  /* Pierwsza wersja tego sprawdzenia wymagała frazy „JEDNYM znaczniku" –
      bo taka wtedy była reguła: zbierz wszystkie miejsca i poproś o nie razem.
      Marcin zobaczył wynik i powiedział, o co naprawdę chodzi: „te zdjęcia
      powinny być pod konkretnym dniem, a nie najpierw cały plan, a później
-     same zdjęcia". Reguła jest więc dziś odwrotna — znacznik pod punktem,
-     którego dotyczy — ale GWARANCJA została ta sama i to jej pilnujemy:
+     same zdjęcia". Reguła jest więc dziś odwrotna – znacznik pod punktem,
+     którego dotyczy – ale GWARANCJA została ta sama i to jej pilnujemy:
      na plan z siedmioma przystankami nie wolno pokazać zdjęć jednego. */
   const podPunktem = /BEZPOŚREDNIO POD PUNKTEM/.test(prompt);
   const kilkaZnacznikow = /kilka w jednej odpowiedzi/i.test(prompt);
   console.log(`7b. prompt każe stawiać znacznik pod punktem planu: ${podPunktem ? 'tak' : 'NIE'}, `
     + `dopuszcza kilka w odpowiedzi: ${kilkaZnacznikow ? 'tak' : 'NIE'}`);
   if (!podPunktem) {
-    fail.push('prompt nie mówi, gdzie postawić znacznik — zdjęcia znów wylądują '
+    fail.push('prompt nie mówi, gdzie postawić znacznik – zdjęcia znów wylądują '
       + 'hurtem na końcu, oderwane od dni, których dotyczą');
   }
   if (!kilkaZnacznikow) {
-    fail.push('prompt nie dopuszcza kilku znaczników — stąd jedno zdjęcie z siedmiu '
+    fail.push('prompt nie dopuszcza kilku znaczników – stąd jedno zdjęcie z siedmiu '
       + 'przystanków planu');
   }
   if (!/nie rób sekcji|NIE RÓB SEKCJI/i.test(prompt)) {
-    fail.push('prompt nie zabrania osobnej sekcji „propozycje zdjęć" — a nagłówek, '
+    fail.push('prompt nie zabrania osobnej sekcji „propozycje zdjęć" – a nagłówek, '
       + 'pod którym są same znaczniki, zostaje na ekranie pusty');
   }
   if (!/NIE ZAPOWIADAJ WYSZUKIWANIA/.test(prompt)) {
-    fail.push('prompt nie zabrania zapowiadania — stąd „oto propozycje zapytań o zdjęcia"');
+    fail.push('prompt nie zabrania zapowiadania – stąd „oto propozycje zapytań o zdjęcia"');
   }
 
-  /* Źródła. „Podaj źródła" bez formatu kończyło się zapisem 【1†L1-L4】 —
+  /* Źródła. „Podaj źródła" bez formatu kończyło się zapisem 【1†L1-L4】 –
      nie linkiem, nie tytułem, tylko czymś, w co nie da się kliknąć. */
   const format = /Źródła:/.test(prompt) && /\[tytuł\]\(adres\)/.test(prompt);
   console.log(`7c. prompt podaje FORMAT źródeł: ${format ? 'tak' : 'NIE'}`);
-  if (!format) fail.push('prompt każe podać źródła, ale nie mówi jak — stąd 【1†L1-L4】');
+  if (!format) fail.push('prompt każe podać źródła, ale nie mówi jak – stąd 【1†L1-L4】');
   if (!/【/.test(prompt)) {
-    fail.push('prompt nie wymienia zapisu 【…】 jako zakazanego — model sam z niego nie zrezygnuje');
+    fail.push('prompt nie wymienia zapisu 【…】 jako zakazanego – model sam z niego nie zrezygnuje');
   }
 
-  // 8. mniejszy model też musi umieć szukać zdjęć — tylko krótszym tekstem
+  // 8. mniejszy model też musi umieć szukać zdjęć – tylko krótszym tekstem
   const krotki = await promptDla('nvidia/nvidia-nemotron-nano-9b-v2');
-  console.log(`8. mniejszy model — [GRAFIKA:] ${/GRAFIKA:/.test(krotki) ? 'jest' : 'BRAK'}`);
+  console.log(`8. mniejszy model – [GRAFIKA:] ${/GRAFIKA:/.test(krotki) ? 'jest' : 'BRAK'}`);
   if (!/GRAFIKA:/.test(krotki)) fail.push('skracanie instrukcji odebrało mniejszemu modelowi grafiki');
 
   /* ---- SEDNO POPRAWKI: zapas źródeł ----
      Marcin zgłosił „nie pokazuje zdjęć, które wyszukał". Jedno źródło
      (DuckDuckGo ze skrobanym żetonem) potrafi odmówić z powodów całkowicie
-     poza naszą kontrolą — i wtedy nie było ŻADNYCH zdjęć. Poniżej wyłączamy
+     poza naszą kontrolą – i wtedy nie było ŻADNYCH zdjęć. Poniżej wyłączamy
      źródła po kolei i pilnujemy, że zdjęcia nadal są. */
   const awaria = async (zrodla) => {
     await fetch(`http://127.0.0.1:7117/awaria?zrodla=${encodeURIComponent(zrodla)}`);
@@ -128,7 +128,7 @@ const { srodowisko } = require('../pomoc');
   };
 
   console.log('9. odporność na awarie źródeł:');
-  /* SearXNG jest źródłem WŁASNYM i idzie pierwszy — sprawdzamy osobno, że
+  /* SearXNG jest źródłem WŁASNYM i idzie pierwszy – sprawdzamy osobno, że
      naprawdę bierze udział, bo tylko nad nim mamy kontrolę. */
   const zSearx = await ile('wszystkie działają');
   if (!zSearx.results?.some((x) => x.zrodlo === 'SearXNG')) {
@@ -141,7 +141,7 @@ const { srodowisko } = require('../pomoc');
 
   await awaria('ddg');
   let d9 = await ile('bez DuckDuckGo');
-  if (!d9.results?.length) fail.push('padł DuckDuckGo i zdjęcia zniknęły — zapas nie działa');
+  if (!d9.results?.length) fail.push('padł DuckDuckGo i zdjęcia zniknęły – zapas nie działa');
   if (!d9.results?.some((x) => x.zrodlo === 'Wikimedia Commons')) {
     fail.push('Commons nie wskoczył na miejsce DuckDuckGo');
   }
@@ -152,8 +152,8 @@ const { srodowisko } = require('../pomoc');
 
   await awaria('searxng,ddg,commons,openverse');
   d9 = await ile('wszystkie padły');
-  if (d9.results?.length) fail.push('atrapa miała paść, a zdjęcia są — test nic nie sprawdza');
-  if (!d9.error) fail.push('wszystko padło, a Cosmos nie mówi DLACZEGO — nie do zdiagnozowania');
+  if (d9.results?.length) fail.push('atrapa miała paść, a zdjęcia są – test nic nie sprawdza');
+  if (!d9.error) fail.push('wszystko padło, a Cosmos nie mówi DLACZEGO – nie do zdiagnozowania');
   else console.log(`   powód podany użytkownikowi: „${d9.error.slice(0, 80)}"`);
 
   await awaria('');   // przywróć wszystkie źródła
@@ -166,11 +166,11 @@ const { srodowisko } = require('../pomoc');
      na jasnej licencji nie pokazywał się nigdy. */
   if (zrodlaWWynikach.length < 3) {
     fail.push(`w wynikach tylko ${zrodlaWWynikach.length} źródła (${zrodlaWWynikach.join(', ')}) `
-      + '— jedno źródło zajmuje wszystkie miejsca');
+      + '– jedno źródło zajmuje wszystkie miejsca');
   }
   const zLicencja = (d10.results || []).filter((x) => x.licencja);
   console.log(`    z podaną licencją: ${zLicencja.length} z ${d10.results.length}`);
-  if (!zLicencja.length) fail.push('żaden wynik nie niesie licencji — nie wiadomo, czego wolno użyć');
+  if (!zLicencja.length) fail.push('żaden wynik nie niesie licencji – nie wiadomo, czego wolno użyć');
   // Duplikaty: to samo zdjęcie z dwóch źródeł ma pojawić się raz.
   const pelne = (d10.results || []).map((x) => x.full);
   if (new Set(pelne).size !== pelne.length) fail.push('ten sam obraz pokazany dwa razy');

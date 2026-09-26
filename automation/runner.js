@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-/* Cosmos — moduł automatyzacji web (TYLKO DO ODCZYTU).
+/* Cosmos – moduł automatyzacji web (TYLKO DO ODCZYTU).
  *
  * Uruchamia kroki nauczonej procedury w prawdziwej przeglądarce (Playwright).
  * Dozwolone: otwórz stronę, poczekaj, odczytaj, kliknij (nawigacja) ORAZ
  * logowanie (kroki oznaczone auth: wpisanie loginu/hasła z menedżera haseł,
  * klik "Zaloguj"). ODRZUCANE: kroki wrażliwe (płatność, wysłanie, potwierdzenie)
- * oraz zwykłe wpisywanie danych (type bez auth) — te wymagają ręcznego runnera.
+ * oraz zwykłe wpisywanie danych (type bez auth) – te wymagają ręcznego runnera.
  *
  * Wartości sekretów są już podmienione przez serwer (z menedżera haseł) i
- * docierają tu przez stdin — runner nie zna vaulta i nie zapisuje niczego.
+ * docierają tu przez stdin – runner nie zna vaulta i nie zapisuje niczego.
  *
  * Zależność opcjonalna: `npm install playwright` (przeglądarka Chromium).
  * Bez niej reszta Cosmosa działa; ten moduł zwraca wtedy błąd „playwright-missing".
@@ -60,7 +60,7 @@ async function main() {
     if (!stepAllowed(s)) {
       return out({
         ok: false, error: 'not-readonly', stoppedAt: i + 1,
-        reason: `Krok ${i + 1} (${s.action}${s.sensitive ? ', wrażliwy' : ''}) zmienia stan — ` +
+        reason: `Krok ${i + 1} (${s.action}${s.sensitive ? ', wrażliwy' : ''}) zmienia stan – ` +
                 `użyj ręcznego runnera z potwierdzeniem.`,
       });
     }

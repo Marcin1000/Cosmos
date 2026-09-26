@@ -1,22 +1,22 @@
-/* Prognoza Kp — cztery układy tych samych danych, jeden wynik.
+/* Prognoza Kp – cztery układy tych samych danych, jeden wynik.
 
    Pierwsza wersja czytnika zakładała UKŁAD KOLUMN: „czas to w[0], Kp to w[1],
    pierwszy wiersz to nagłówek, więc go pomiń". Atrapa była zbudowana z tego
-   samego założenia, więc wszystko zgadzało się samo ze sobą — i przez to
+   samego założenia, więc wszystko zgadzało się samo ze sobą – i przez to
    nie znaczyło nic.
 
    Rozstrzygnęło pierwsze uruchomienie na serwerze Marcina: adres NOAA
    odpowiedział, a prognoza wyszła PUSTA. Pusta prognoza jest stanem
    dozwolonym (zorza to dodatek, nie może niczego blokować), więc nic nie
-   krzyknęło — usterka mogła tam siedzieć dowolnie długo.
+   krzyknęło – usterka mogła tam siedzieć dowolnie długo.
 
    Stąd ten zestaw. Nie sprawdza „czy nasza atrapa pasuje do naszego kodu",
    tylko czy czytnik przeżyje ZMIANĘ po stronie NOAA, na którą nie mamy
    wpływu: brak wiersza nagłówka, przestawione kolumny, obiekty zamiast
-   tablic. Danych jest za każdym razem tyle samo — ma wyjść to samo.
+   tablic. Danych jest za każdym razem tyle samo – ma wyjść to samo.
 
    POTWIERDZONE NA ŻYWO (serwer Marcina, 2026-08-09): NOAA oddaje
-   `tablicę obiektów (81; time_tag, kp, observed, noaa_scale)` — czyli układ
+   `tablicę obiektów (81; time_tag, kp, observed, noaa_scale)` – czyli układ
    „obiekty zamiast tablic" z listy niżej. Tak też wygląda teraz atrapa
    w `mock-grafiki.js`. Pozostałe trzy układy zostają w tym zestawie
    celowo: raz już nas zaskoczyli, a rozpoznawanie pól nic nie kosztuje.
@@ -32,7 +32,7 @@ const PORT = 7789;
 const zaGodzin = (h) => new Date(Date.now() + h * 3600e3).toISOString().replace('T', ' ').slice(0, 19);
 
 /* Te same trzy wartości w czterech układach. Wpis sprzed doby jest wszędzie
-   i wszędzie ma wypaść — prognoza dotyczy przyszłości. */
+   i wszędzie ma wypaść – prognoza dotyczy przyszłości. */
 function ksztalty() {
   const przeszlosc = zaGodzin(-24);
   const za3 = zaGodzin(3);
@@ -75,19 +75,19 @@ function ksztalty() {
   const fail = [];
   const dane = ksztalty();
   /* Port musi być wolny, zanim cokolwiek postawimy. Atrapa z poprzedniego
-     przebiegu odpowiada tak samo jak nowa — tylko starymi danymi. */
+     przebiegu odpowiada tak samo jak nowa – tylko starymi danymi. */
   await zwolnijPorty([PORT]);
   const serwer = http.createServer((q, s) => {
     const klucz = decodeURIComponent(q.url.slice(1));
     s.writeHead(200, { 'Content-Type': 'application/json' });
     s.end(JSON.stringify(dane[klucz] ?? []));
   });
-  // Tylko pętla lokalna — atrapa testowa nie ma czego szukać na zewnątrz.
+  // Tylko pętla lokalna – atrapa testowa nie ma czego szukać na zewnątrz.
   await new Promise((r) => serwer.listen(PORT, '127.0.0.1', r));
 
   const czytaj = async (klucz) => {
     process.env.SWPC_KP_FORECAST_URL = `http://127.0.0.1:${PORT}/${encodeURIComponent(klucz)}`;
-    // Moduł czyta adres przy każdym wywołaniu przez `process.env`? Nie —
+    // Moduł czyta adres przy każdym wywołaniu przez `process.env`? Nie –
     // czyta go RAZ, przy wczytaniu. Dlatego ładujemy go świeżo dla każdego
     // kształtu, zamiast udawać, że da się go przestawić w locie.
     delete require.cache[require.resolve('../../lib/zorza.js')];
@@ -103,7 +103,7 @@ function ksztalty() {
     if (JSON.stringify(kp) !== JSON.stringify(OCZEKIWANE)) {
       fail.push(`„${klucz}": Kp ${JSON.stringify(kp)}, oczekiwane ${JSON.stringify(OCZEKIWANE)}`);
     }
-    // Znacznik czasu musi się dać sparsować — bez tego szczyt prognozy
+    // Znacznik czasu musi się dać sparsować – bez tego szczyt prognozy
     // pokazywałby „Invalid Date" i nikt by nie wiedział, kiedy wyjść.
     for (const x of w) {
       if (Number.isNaN(new Date(String(x.kiedy).replace(' ', 'T') + 'Z').getTime())) {
@@ -132,7 +132,7 @@ function ksztalty() {
 
   /* ---- 4. Kp poza skalą odpada ----
      Skala Kp kończy się na 9. Liczba spoza zakresu znaczy, że trafiliśmy
-     w niewłaściwą kolumnę — lepiej nie oddać nic niż oddać „Kp 2024". */
+     w niewłaściwą kolumnę – lepiej nie oddać nic niż oddać „Kp 2024". */
   dane['zla kolumna'] = [['time_tag', 'rok'], [zaGodzin(3), '2026']];
   const zla = await czytaj('zla kolumna');
   console.log(`liczba spoza skali Kp (2026) odrzucona: ${zla.length === 0}`);

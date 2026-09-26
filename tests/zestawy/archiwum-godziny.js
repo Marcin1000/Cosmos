@@ -1,11 +1,11 @@
-/* „Zdjęcia z Mazur, które zrobiłem przed 14" — pytanie bez odpowiedzi.
+/* „Zdjęcia z Mazur, które zrobiłem przed 14" – pytanie bez odpowiedzi.
 
    Marcin zadał je po zakończeniu dociągania danych i dostał cztery rundy
    „nie udało się znaleźć", a na koniec 804 pliki, wszystkie wieczorne.
    Napisał: „wiem, kiedy robiłem zdjęcia na Mazurach (…) jest dużo więcej
    zdjęć wykonanych przed południem i po południu".
 
-   Miał rację, a archiwum go okłamało — z dwóch niezależnych powodów.
+   Miał rację, a archiwum go okłamało – z dwóch niezależnych powodów.
 
    1. NIE BYŁO FILTRA PO ZEGARZE. Istniały `od`/`do` (konkretne daty
       z godziną) i `poraDnia`. `poraDnia` wygląda jak odpowiedź, ale liczy się
@@ -14,7 +14,7 @@
       astronomię i dostawał wynik wyglądający na prawdziwy.
 
    2. `miejsce=Mazury` NIE MOŻE ZADZIAŁAĆ dla tych plików. Ten filtr zamienia
-      nazwę na współrzędne i filtruje po promieniu — a zdjęcia z lustrzanki
+      nazwę na współrzędne i filtruje po promieniu – a zdjęcia z lustrzanki
       nie mają GPS. 804 pliki leżały w katalogu „/Mazury 2026/" i były
       niewidoczne dla zapytania o miejsce. Model przez cztery rundy tłumaczył,
       że folder nazywa się pewnie inaczej. Nie nazywał się.
@@ -28,7 +28,7 @@ const katalog = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-godz-'));
 const archiwum = require('../../lib/archiwum.js').utworz(katalog);
 
 /* Materiał jak u Marcina: katalog „Mazury 2026", zdjęcia z Canona BEZ GPS,
-   rozrzucone po całym dniu — poranek, południe, popołudnie, wieczór. */
+   rozrzucone po całym dniu – poranek, południe, popołudnie, wieczór. */
 const godziny = [6, 8, 9, 11, 12, 13, 14, 15, 17, 19, 21];
 archiwum.dodaj(godziny.map((g, i) => ({
   id: `onedrive:m${i}`,
@@ -39,17 +39,17 @@ archiwum.dodaj(godziny.map((g, i) => ({
   kiedy: `2026-08-08T${String(g).padStart(2, '0')}:15:00`,
   aparat: 'Canon EOS R6 Mark II',
   exifCzytany: true,
-  // Bez lat/lon — dokładnie jak zdjęcia z lustrzanki bez modułu GPS.
+  // Bez lat/lon – dokładnie jak zdjęcia z lustrzanki bez modułu GPS.
 })));
 
 // --- 1. Filtr po godzinie zegarowej w ogóle istnieje ----------------------
 const przed14 = archiwum.szukaj({ folder: 'Mazury', godzinaDo: 14 });
 const po14 = archiwum.szukaj({ folder: 'Mazury', godzinaOd: 14 });
 console.log(`1. przed 14: ${przed14.length}, od 14: ${po14.length} (razem ${godziny.length})`);
-if (przed14.length !== 6) fail.push(`„przed 14" dało ${przed14.length} zamiast 6 — filtr po zegarze nie działa`);
+if (przed14.length !== 6) fail.push(`„przed 14" dało ${przed14.length} zamiast 6 – filtr po zegarze nie działa`);
 if (po14.length !== 5) fail.push(`„po 14" dało ${po14.length} zamiast 5`);
 if (przed14.length + po14.length !== godziny.length) {
-  fail.push('podział na przed/po 14 gubi albo dubluje pliki — granica jest źle postawiona');
+  fail.push('podział na przed/po 14 gubi albo dubluje pliki – granica jest źle postawiona');
 }
 // „do 14" znaczy PRZED czternastą: zdjęcie z 14:15 należy do drugiej grupy.
 if (przed14.some((w) => w.kiedy.slice(11, 13) === '14')) {
@@ -58,12 +58,12 @@ if (przed14.some((w) => w.kiedy.slice(11, 13) === '14')) {
 
 /* Zakres z obu stron. Granica górna jest WYŁĄCZNA, tak samo jak w „do 14":
    „między 9 a 12" to godziny 9, 10 i 11. Za pierwszym razem wpisałem tu
-   oczekiwanie 3, licząc dwunastą — i zestaw słusznie mnie poprawił. */
+   oczekiwanie 3, licząc dwunastą – i zestaw słusznie mnie poprawił. */
 const rano = archiwum.szukaj({ folder: 'Mazury', godzinaOd: 9, godzinaDo: 12 });
 console.log(`   między 9 a 12: ${rano.length} (godziny: ${rano.map((w) => w.kiedy.slice(11, 16)).join(', ')})`);
 if (rano.length !== 2) fail.push(`zakres 9-12 dał ${rano.length} zamiast 2 (9:15 i 11:15)`);
 if (rano.some((w) => w.kiedy.slice(11, 13) === '12')) {
-  fail.push('godzina 12 wpadła do zakresu „do 12" — granica ma być wyłączna');
+  fail.push('godzina 12 wpadła do zakresu „do 12" – granica ma być wyłączna');
 }
 
 // Zapis „14:30" też ma być zrozumiały, nie tylko goła liczba.
@@ -72,12 +72,12 @@ if (zDwukropkiem.length !== przed14.length) {
   fail.push('godzina zapisana jako „14:30" nie jest rozumiana');
 }
 
-/* --- 2. `poraDnia` to NIE jest zegar — i o to właśnie się potknęliśmy -----
+/* --- 2. `poraDnia` to NIE jest zegar – i o to właśnie się potknęliśmy -----
 
    Odtwarzamy sytuację z serwera Marcina: dom jest ustawiony, więc porę
    światła liczymy dla współrzędnych domowych nawet bez GPS w pliku (stąd
    `swiatloPrzyblizone` w jego wynikach). Wtedy `poraDnia` ISTNIEJE i wygląda
-   wiarygodnie — tylko odpowiada na inne pytanie niż zegarek. */
+   wiarygodnie – tylko odpowiada na inne pytanie niż zegarek. */
 archiwum.ustawDom({ lat: 52.02, lon: 20.90 });
 archiwum.przeliczSwiatlo();
 const po14zPora = archiwum.szukaj({ folder: 'Mazury', godzinaOd: 14 });
@@ -85,9 +85,9 @@ const pory = po14zPora.map((w) => `${w.kiedy.slice(11, 16)}→${w.poraDnia}`);
 console.log(`2. zdjęcia od 14 i ich poraDnia: ${pory.join(', ')}`);
 const czternasta = po14zPora.find((w) => w.kiedy.slice(11, 13) === '14');
 if (!czternasta) {
-  fail.push('brak zdjęcia z godziny 14 — nie ma na czym pokazać różnicy');
+  fail.push('brak zdjęcia z godziny 14 – nie ma na czym pokazać różnicy');
 } else if (czternasta.poraDnia === 'poludnie') {
-  console.log('   (14:15 wypadło jeszcze w „poludnie" — różnica pojawia się później)');
+  console.log('   (14:15 wypadło jeszcze w „poludnie" – różnica pojawia się później)');
 }
 /* Sedno: zdjęcia z popołudnia mają `poraDnia: wieczor`. Człowiek pytający
    „przed 14" nie ma na myśli astronomii, a model sięgał właśnie po nią. */
@@ -96,12 +96,12 @@ const najwczesniejszaWieczorem = wieczorne
   .map((w) => Number(w.kiedy.slice(11, 13))).sort((a2, b2) => a2 - b2)[0];
 console.log(`   najwcześniejsza godzina z etykietą „wieczor": ${najwczesniejszaWieczorem}`);
 if (najwczesniejszaWieczorem >= 18) {
-  fail.push('„wieczor" zaczyna się dopiero po 18 — to nie odtwarza danych Marcina i zestaw nic nie mierzy');
+  fail.push('„wieczor" zaczyna się dopiero po 18 – to nie odtwarza danych Marcina i zestaw nic nie mierzy');
 }
 
 // --- 3. Zero po miejscu → podpowiedź o folderze ---------------------------
 /* Zdjęcia nie mają GPS, więc `miejsce=Mazury` nie może trafić. Trasa ma
-   wtedy POWIEDZIEĆ, ile plików ma tę nazwę w ścieżce — zamiast zostawiać
+   wtedy POWIEDZIEĆ, ile plików ma tę nazwę w ścieżce – zamiast zostawiać
    modelowi zgadywanie, którego nie da się wygrać. */
 const trasy = require('../../lib/archiwum-trasy.js').utworz({
   archiwum,
@@ -111,7 +111,7 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
   readJson: async () => ({}),
   addEvent: () => {},
   sensesState: () => ({}),
-  // Geokoder zna Mazury — i to jest sedno: nazwa jest poprawna, GPS-u nie ma.
+  // Geokoder zna Mazury – i to jest sedno: nazwa jest poprawna, GPS-u nie ma.
   wspolrzedneMiejsca: async () => ({ nazwa: 'Mazury', lat: 53.8, lon: 21.6, promienKm: 40 }),
 });
 
@@ -123,7 +123,7 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
   console.log(`3. miejsce=Mazury → znaleziono ${d.znaleziono}, podpowiedź: `
     + `${d.zamiastMiejsca ? `${d.zamiastMiejsca.ile} plików po folderze` : 'BRAK'}`);
   if (d.znaleziono !== 0) {
-    fail.push(`miejsce=Mazury dało ${d.znaleziono} wyników — zestaw mierzy nie tę sytuację`);
+    fail.push(`miejsce=Mazury dało ${d.znaleziono} wyników – zestaw mierzy nie tę sytuację`);
   }
   if (!d.zamiastMiejsca) {
     fail.push('zero po miejscu i ani słowa o tym, że te pliki są w folderze o tej nazwie');
@@ -136,7 +136,7 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
     }
   }
 
-  /* Gdy miejsce działa (pliki mają GPS), podpowiedzi być NIE MA — inaczej
+  /* Gdy miejsce działa (pliki mają GPS), podpowiedzi być NIE MA – inaczej
      doklejalibyśmy szum do każdej poprawnej odpowiedzi. */
   archiwum.dodaj([{
     id: 'onedrive:gps', zrodlo: 'onedrive', typ: 'zdjecie', nazwa: 'z-gps.jpg',
@@ -153,7 +153,7 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
 
   /* --- 4. Model musi WIEDZIEĆ, że te filtry istnieją ----------------------
      Czytamy ZŁOŻONE instrukcje, nie plik. Wcześniej stał tu odczyt server.js
-     i regexp po jego treści — padło, gdy opisy narzędzi wyprowadziły się do
+     i regexp po jego treści – padło, gdy opisy narzędzi wyprowadziły się do
      `lib/instrukcje-narzedzi.js`, mimo że instrukcje były bez zmian. Sam
      filtr działa (punkty 1-3 wyżej), więc test krzyczał o usterce, której
      nie było. Składanie prawdziwego kontekstu jest odporne na przeprowadzki
@@ -172,8 +172,8 @@ const trasy = require('../../lib/archiwum-trasy.js').utworz({
   console.log(`4. w instrukcji: godziny ${maGodziny ? 'są' : 'BRAK'}, `
     + `ostrzeżenie o porze dnia ${maOstrzezenie ? 'jest' : 'BRAK'}, `
     + `o GPS w miejscu ${maMiejsce ? 'jest' : 'BRAK'}`);
-  if (!maGodziny) fail.push('model nie wie o filtrach godzinaOd/godzinaDo — nie użyje ich');
-  if (!maOstrzezenie) fail.push('nic nie odróżnia zegara od pory dnia — model znowu sięgnie po poraDnia');
+  if (!maGodziny) fail.push('model nie wie o filtrach godzinaOd/godzinaDo – nie użyje ich');
+  if (!maOstrzezenie) fail.push('nic nie odróżnia zegara od pory dnia – model znowu sięgnie po poraDnia');
   if (!maMiejsce) fail.push('model nie wie, że miejsce= wymaga GPS');
 
   fs.rmSync(katalog, { recursive: true, force: true });

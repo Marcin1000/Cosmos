@@ -1,7 +1,7 @@
 /* Renderer Markdown jako jedyna bariera przed `innerHTML`.
 
    Odpowiedź modelu trafia do rozmowy przez `innerHTML`. To znaczy, że
-   `renderMarkdown` nie jest ozdobnikiem — jest granicą bezpieczeństwa.
+   `renderMarkdown` nie jest ozdobnikiem – jest granicą bezpieczeństwa.
    A model bierze treść z internetu (wyszukiwarka, strony, opisy zdjęć),
    więc „model nie napisze przecież `<script>`" nie jest żadną gwarancją:
    wystarczy, że przepisze cytat ze znalezionej strony.
@@ -9,12 +9,12 @@
    Do tej pory sprawdzały to dwa punkty w zestawie przeglądarkowym
    `klikalne-linki`. Działały, ale wymagały Chromium i potrafiły sprawdzić
    tylko tyle, ile widać na ekranie. Po wydzieleniu `public/tekst.js` te
-   funkcje da się wywołać wprost — więc zamiast dwóch prób przepuszczamy
+   funkcje da się wywołać wprost – więc zamiast dwóch prób przepuszczamy
    całą listę, i to w ułamku sekundy.
 
    Zestaw pilnuje trzech rzeczy:
      1. nic z wejścia nie może wyjść jako wykonywalny HTML,
-     2. adresy w odnośnikach muszą być http(s) — nigdy `javascript:`,
+     2. adresy w odnośnikach muszą być http(s) – nigdy `javascript:`,
      3. składnia Markdown ma działać (bariera, która psuje tekst, zostanie
         prędzej czy później obejściem, nie barierą).
 */
@@ -32,7 +32,7 @@ const WOLNO = new Set(['p', 'br', 'strong', 'em', 'code', 'pre', 'a', 'h1', 'h2'
   'h4', 'ul', 'ol', 'li', 'blockquote', 'hr', 'table', 'thead', 'tbody', 'tr', 'th',
   'td', 'div', 'span', 'button', 'svg', 'path', 'rect']);
 
-/** Co realnie wyszło jako HTML — pierwsza wersja tego testu szukała frazy
+/** Co realnie wyszło jako HTML – pierwsza wersja tego testu szukała frazy
  *  `onerror=` w całym wyniku i zgłaszała usterkę przy poprawnie UCIECZKOWANYM
  *  `&lt;img src=x onerror=…&gt;`, czyli dokładnie tam, gdzie bariera zadziałała.
  *  Liczy się tylko to, co przeglądarka weźmie za znacznik. */
@@ -80,12 +80,12 @@ for (const [nazwa, wejscie] of PROBY) {
   const z = zarzuty(out);
   if (z.length) {
     przepuszczone++;
-    fail.push(`„${nazwa}": ${z.join('; ')} — wynik: ${out.slice(0, 120)}`);
+    fail.push(`„${nazwa}": ${z.join('; ')} – wynik: ${out.slice(0, 120)}`);
   }
 }
 console.log(`1. prób wstrzyknięcia: ${PROBY.length}, przepuszczonych: ${przepuszczone}`);
 
-/* Sam detektor też musi być sprawdzony — inaczej cały punkt 1 mógłby być
+/* Sam detektor też musi być sprawdzony – inaczej cały punkt 1 mógłby być
    zielony dlatego, że nic nie wykrywa. Podajemy mu HTML, który MA odrzucić. */
 {
   const kontrola = [
@@ -97,13 +97,13 @@ console.log(`1. prób wstrzyknięcia: ${PROBY.length}, przepuszczonych: ${przepu
   console.log(`   kontrola detektora: ${kontrola.length - slepe.length}/${kontrola.length} złapane`);
   for (const h of slepe) fail.push(`detektor nie widzi zagrożenia w: ${h}`);
   if (zarzuty(T.renderMarkdown('zwykły **tekst** z [linkiem](https://a.example)')).length) {
-    fail.push('detektor zgłasza zagrożenie w poprawnym tekście — punkt 1 nic nie znaczy');
+    fail.push('detektor zgłasza zagrożenie w poprawnym tekście – punkt 1 nic nie znaczy');
   }
 }
 
 /* --- 2. ADRESY W ODNOŚNIKACH ------------------------------------------
    `[tekst](javascript:…)` to zwykły odnośnik dla Markdowna, a wykonanie kodu
-   dla przeglądarki. Wzorzec musi wymagać http(s) — i musi to robić także
+   dla przeglądarki. Wzorzec musi wymagać http(s) – i musi to robić także
    wtedy, gdy adres jest zapisany dziwnie. */
 const ADRESY = [
   '[klik](javascript:alert(1))',
@@ -122,13 +122,13 @@ for (const wejscie of ADRESY) {
 }
 console.log(`2. niebezpiecznych adresów: ${ADRESY.length}, przepuszczonych: ${zleAdresy}`);
 
-// A zwykły adres ma dalej działać — inaczej „bezpieczeństwo" oznacza brak linków.
+// A zwykły adres ma dalej działać – inaczej „bezpieczeństwo" oznacza brak linków.
 const zwykly = T.renderMarkdown('[źródło](https://nikon.example/raw)');
 if (!/href="https:\/\/nikon\.example\/raw"/.test(zwykly)) {
   fail.push('poprawny odnośnik przestał się renderować');
 }
 if (!/rel="noopener noreferrer"/.test(zwykly)) {
-  fail.push('odnośnik nie ma `rel="noopener noreferrer"` — nowa karta dostaje `window.opener`');
+  fail.push('odnośnik nie ma `rel="noopener noreferrer"` – nowa karta dostaje `window.opener`');
 }
 
 /* --- 3. GOŁY ADRES W ZDANIU STAJE SIĘ ODNOŚNIKIEM ---------------------
@@ -149,7 +149,7 @@ if (!/rel="noopener noreferrer"/.test(zwykly)) {
 }
 
 /* Adres wewnątrz istniejącego odnośnika ani w bloku kodu nie może dostać
-   drugiego opakowania — kiedyś dawało to `<a href="<a href=…">`. */
+   drugiego opakowania – kiedyś dawało to `<a href="<a href=…">`. */
 {
   const out = T.renderMarkdown('[tu](https://a.example) i `https://b.example`');
   if (/<a[^>]*<a/.test(out)) fail.push('odnośnik został podlinkowany po raz drugi');
@@ -176,10 +176,10 @@ for (const [nazwa, wejscie, wzor] of SKLADNIA) {
   if (!wzor.test(T.renderMarkdown(wejscie))) zle.push(nazwa);
 }
 console.log(`4. składnia Markdown: ${SKLADNIA.length - zle.length}/${SKLADNIA.length} działa`
-  + (zle.length ? ` — nie działa: ${zle.join(', ')}` : ''));
+  + (zle.length ? ` – nie działa: ${zle.join(', ')}` : ''));
 for (const n of zle) fail.push(`składnia „${n}" przestała się renderować`);
 
-/* Nazwa języka trafia do nagłówka bloku i musi być oczyszczona — to jedyne
+/* Nazwa języka trafia do nagłówka bloku i musi być oczyszczona – to jedyne
    miejsce, gdzie tekst od modelu ląduje w atrybucie widocznym na ekranie. */
 {
   const out = T.renderMarkdown('```python\nx=1\n```');
@@ -188,7 +188,7 @@ for (const n of zle) fail.push(`składnia „${n}" przestała się renderować`)
 }
 
 /* --- 5. ODCZYT TREŚCI WIADOMOŚCI -------------------------------------
-   Wiadomości mają dwie postaci — stary zapis to goły string, nowy to obiekt.
+   Wiadomości mają dwie postaci – stary zapis to goły string, nowy to obiekt.
    Każdy odczyt musi znieść obie, inaczej wczytanie starej rozmowy wywraca
    ekran. To realna ścieżka: rozmowy leżą w `localStorage` od pierwszej wersji. */
 {

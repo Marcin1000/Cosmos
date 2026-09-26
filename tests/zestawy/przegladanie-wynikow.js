@@ -1,17 +1,17 @@
-/* „Pokazałem Ci 20, ale jest 311" — czyli wynik, którego nie da się obejrzeć.
+/* „Pokazałem Ci 20, ale jest 311" – czyli wynik, którego nie da się obejrzeć.
 
    Marcin: „Chciałbym móc przejrzeć wszystkie np. zdjęcia z wyszukania, a nie
    mieć informacje typu »pokazałem Ci 20 ale jest 311« bo nie o to tu chodzi."
 
    Miał rację i nie chodziło o gadatliwość modelu. Trasa `/api/archive/search`
-   przyjmowała `limit`, ale nie umiała pominąć początku — więc każde zapytanie oddawało ten
+   przyjmowała `limit`, ale nie umiała pominąć początku – więc każde zapytanie oddawało ten
    sam POCZĄTEK listy. Jedyną drogą do 311. pliku było zawężanie filtrów tak
    długo, aż wynik zejdzie poniżej limitu; do zdjęcia bez wyróżniającej cechy
    nie dało się dojść w ogóle.
 
    Sedno naprawy jest podziałem ról, nie większym limitem:
-     — MODEL dostaje próbkę i ma prawo jej nie przekraczać (kontekst kosztuje),
-     — CZŁOWIEK dostaje przycisk i dochodzi nim do ostatniego pliku.
+     – MODEL dostaje próbkę i ma prawo jej nie przekraczać (kontekst kosztuje),
+     – CZŁOWIEK dostaje przycisk i dochodzi nim do ostatniego pliku.
    Dlatego zestaw sprawdza obie strony: że trasa umie oddać dowolny kawałek
    wyniku, i że nagłówek dla modelu każe mu przestać przepraszać za limit.
 */
@@ -23,7 +23,7 @@ const fail = [];
 const katalog = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-strony-'));
 const archiwum = require('../../lib/archiwum.js').utworz(katalog);
 
-// 311 plików — dokładnie ta liczba, o którą pytał Marcin.
+// 311 plików – dokładnie ta liczba, o którą pytał Marcin.
 const ILE = 311;
 archiwum.dodaj(Array.from({ length: ILE }, (_, i) => ({
   id: `onedrive:p${String(i).padStart(4, '0')}`,
@@ -67,7 +67,7 @@ const zapytaj = async (qs) => {
 
   // --- 2. Da się dojść do OSTATNIEGO pliku --------------------------------
   /* Sedno skargi. Chodzimy porcjami tak, jak robi to przycisk pod siatką,
-     i liczymy, czy zobaczyliśmy wszystkie 311 — każdy raz, żadnego dwa razy. */
+     i liczymy, czy zobaczyliśmy wszystkie 311 – każdy raz, żadnego dwa razy. */
   const widziane = new Set();
   let pomin = 0;
   let porcji = 0;
@@ -77,14 +77,14 @@ const zapytaj = async (qs) => {
     for (const w of s.wyniki) widziane.add(w.id);
     pomin += s.wyniki.length;
     porcji++;
-    if (porcji > 100) { fail.push('przeglądanie nie kończy się — porcje kręcą się w kółko'); break; }
+    if (porcji > 100) { fail.push('przeglądanie nie kończy się – porcje kręcą się w kółko'); break; }
   }
   console.log(`2. po ${porcji} porcjach obejrzano ${widziane.size} z ${ILE} plików`);
   if (widziane.size !== ILE) {
-    fail.push(`przez stronicowanie widać ${widziane.size} z ${ILE} plików — reszta jest nieosiągalna`);
+    fail.push(`przez stronicowanie widać ${widziane.size} z ${ILE} plików – reszta jest nieosiągalna`);
   }
   if (porcji !== Math.ceil(ILE / 24)) {
-    fail.push(`${porcji} porcji zamiast ${Math.ceil(ILE / 24)} — porcje się nakładają albo gubią`);
+    fail.push(`${porcji} porcji zamiast ${Math.ceil(ILE / 24)} – porcje się nakładają albo gubią`);
   }
 
   // --- 3. Kolejne porcje to KOLEJNE pliki, nie te same --------------------
@@ -92,10 +92,10 @@ const zapytaj = async (qs) => {
   const b = await zapytaj('limit=24&pomin=24');
   const wspolne = a.wyniki.filter((w) => b.wyniki.some((x) => x.id === w.id)).length;
   console.log(`3. porcja 1 i porcja 2 mają wspólnych plików: ${wspolne}`);
-  if (wspolne) fail.push(`druga porcja powtarza ${wspolne} plików z pierwszej — \`pomin\` jest ignorowane`);
+  if (wspolne) fail.push(`druga porcja powtarza ${wspolne} plików z pierwszej – \`pomin\` jest ignorowane`);
   // Druga porcja ma iść DALEJ w czasie, nie wracać.
   if (b.wyniki[0].kiedy > a.wyniki[a.wyniki.length - 1].kiedy) {
-    fail.push('druga porcja zaczyna się nowszym plikiem niż koniec pierwszej — porządek się rozjeżdża');
+    fail.push('druga porcja zaczyna się nowszym plikiem niż koniec pierwszej – porządek się rozjeżdża');
   }
 
   // --- 4. Porządek od najnowszych trzyma się przez CAŁY wynik -------------
@@ -114,7 +114,7 @@ const zapytaj = async (qs) => {
   // --- 5. `pomin` poza końcem oddaje pustkę, nie błąd i nie ostatnią stronę
   const poza = await zapytaj(`limit=24&pomin=${ILE + 100}`);
   console.log(`5. pomin=${ILE + 100}: ${poza.wyniki.length} plików, zostało ${poza.zostalo}`);
-  if (poza.wyniki.length) fail.push('`pomin` za końcem listy oddaje pliki — przycisk nie ma jak się zatrzymać');
+  if (poza.wyniki.length) fail.push('`pomin` za końcem listy oddaje pliki – przycisk nie ma jak się zatrzymać');
   if (poza.zostalo !== 0) fail.push(`zostalo=${poza.zostalo} przy pustej stronie`);
   const ujemne = await zapytaj('limit=24&pomin=-50');
   if (ujemne.pomin !== 0) fail.push('ujemne `pomin` nie jest przycinane do zera');
@@ -123,12 +123,12 @@ const zapytaj = async (qs) => {
      Druga połowa skargi: nawet z działającym przyciskiem model dalej pisałby
      „pokazuję tylko część, zawęź wyszukiwanie". Musi wiedzieć, że limit
      dotyczy JEGO, nie człowieka. */
-  /* Budujemy nagłówek NAPRAWDĘ — tak, jak zbuduje go przeglądarka po wyniku
+  /* Budujemy nagłówek NAPRAWDĘ – tak, jak zbuduje go przeglądarka po wyniku
      większym niż próbka.
 
      Dwie wcześniejsze wersje czytały `public/app.js` tekstem. Pierwsza
      dopasowywała dokładną frazę i padła przy przeredagowaniu jej z „PRÓBKA"
-     na „LIMIT". Druga szukała już samej zasady, ale i tak padła — gdy
+     na „LIMIT". Druga szukała już samej zasady, ale i tak padła – gdy
      `naKontekst` przeniosło się do `public/protokol.js`. Reguła w obu
      wypadkach była na miejscu i działała; usterki nie było. */
   const { utworzProtokol } = require(path.join(__dirname, '..', '..', 'public', 'protokol.js'));
@@ -147,7 +147,7 @@ const zapytaj = async (qs) => {
   if (!maPrzycisk) fail.push('nagłówek nie wspomina o przycisku „pokaż kolejne"');
 
   /* Ta sama zasada musi być też w instrukcji STAŁEJ, nie tylko w nagłówku
-     doklejanym do wyniku — inaczej model pozna ją dopiero po pierwszym
+     doklejanym do wyniku – inaczej model pozna ją dopiero po pierwszym
      zapytaniu. Składamy instrukcje naprawdę: czytanie server.js regexpem
      przestało działać, gdy opisy narzędzi przeniosły się do osobnego
      modułu, choć treść była bez zmian. */
@@ -160,17 +160,17 @@ const zapytaj = async (qs) => {
     KOD_WLACZONY: false, capabilityText: '',
   }).map((b) => b.content).join('\n');
   if (!/DOTYCZY CIEBIE,?\s*NIE UŻYTKOWNIKA/i.test(stala)) {
-    fail.push('instrukcja stała nie zawiera tej samej zasady — model pozna ją dopiero po wyniku');
+    fail.push('instrukcja stała nie zawiera tej samej zasady – model pozna ją dopiero po wyniku');
   }
 
   /* --- 7. Stan przycisku „pokaż kolejne" ---------------------------------
-     Sprawdza to teraz zestaw `widoki-buduja` — wywołaniem, na atrapie DOM-u:
+     Sprawdza to teraz zestaw `widoki-buduja` – wywołaniem, na atrapie DOM-u:
      buduje siatkę, klika przycisk i patrzy, jaki adres poleciał, ile kafelków
      przybyło i czy rozmowa nie została przerysowana.
 
      Stały tu wcześniej cztery regexpy po `public/app.js` („czy jest napis
      `dalej: {`", „czy jest `pomin=${d.pomin}`"). Padły przy przeniesieniu
-     budowniczych do `public/widoki.js`, mimo że przycisk działał bez zmian —
+     budowniczych do `public/widoki.js`, mimo że przycisk działał bez zmian –
      PIĄTY raz w jednej sesji, gdy test pilnujący brzmienia pliku zgłosił
      usterkę, której nie było. Dlatego nie zostały przestawione na nowy plik,
      tylko zastąpione sprawdzeniem zachowania. */

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-/* Grafiki marki Cosmosa z jednego źródła — README i serwisy społecznościowe.
+/* Grafiki marki Cosmosa z jednego źródła – README i serwisy społecznościowe.
  *
  *   NODE_PATH=/opt/node22/lib/node_modules node scripts/zrzuty-readme.js   # najpierw zrzuty
  *   NODE_PATH=/opt/node22/lib/node_modules node scripts/grafiki-marki.js
  *
  * Kierunek „Jeden wątek”, ten sam co strona produktowa i aplikacja: jasne tło
  * #F6F5F1 (ciemne #111214), Onest i Martian Mono, kolor mają tylko silniki
- * (NVIDIA, lokalny GPU, Claude, OpenAI), a znak — planeta z pierścieniem
- * z czterech łuków — pochodzi ze scripts/ikony.js, nie z kopii.
+ * (NVIDIA, lokalny GPU, Claude, OpenAI), a znak – planeta z pierścieniem
+ * z czterech łuków – pochodzi ze scripts/ikony.js, nie z kopii.
  *
  * Grafiki to strony HTML renderowane przez Chromium: prawdziwe czcionki,
  * prawdziwe zrzuty aplikacji w środku (docs/obrazy/, robi je
@@ -15,9 +15,9 @@
  * w README na GitHubie nie wczyta żadnej czcionki z zewnątrz.
  *
  * Wynik:
- *   docs/obrazy/  — banner i schemat architektury (EN/PL × jasny/ciemny) do README,
- *   docs/grafiki/ — LinkedIn (post, kwadrat, pion, baner profilu), GitHub (podgląd
- *                   repozytorium), X, relacja 9:16 — po polsku i po angielsku.
+ *   docs/obrazy/  – banner i schemat architektury (EN/PL × jasny/ciemny) do README,
+ *   docs/grafiki/ – LinkedIn (post, kwadrat, pion, baner profilu), GitHub (podgląd
+ *                   repozytorium), X, relacja 9:16 – po polsku i po angielsku.
  */
 'use strict';
 
@@ -45,17 +45,17 @@ const T = {
   pl: {
     h1: 'Jedna rozmowa.', h2: 'Każdy model.',
     sub: 'Osobisty, hybrydowy system AI.',
-    lead: 'Chmura NVIDIA, lokalna karta graficzna, Claude i OpenAI w jednym wątku — z tą samą pamięcią, narzędziami i kontekstem.',
+    lead: 'Chmura NVIDIA, lokalna karta graficzna, Claude i OpenAI w jednym wątku – z tą samą pamięcią, narzędziami i kontekstem.',
     leadKrotki: 'Chmura NVIDIA, lokalny GPU, Claude i OpenAI w jednej rozmowie.',
     fakty: ['Zero zależności npm', 'Ponad 100 zestawów testów', 'Aplikacja na telefon'],
     gpu: 'GPU', lokalnyGpu: 'Lokalny GPU',
-    urywki: ['Złota godzina zaczyna się o 06:47…', 'RF 70-200 f/4 — stań dalej od krawędzi…', 'Na odbicie f/8, 1/125 s, ISO 400…', 'Najnowsze 10 z 311 znad jeziora…'],
+    urywki: ['Złota godzina zaczyna się o 06:47…', 'RF 70-200 f/4 – stań dalej od krawędzi…', 'Na odbicie f/8, 1/125 s, ISO 400…', 'Najnowsze 10 z 311 znad jeziora…'],
     arch: {
       tytul: 'Architektura', warstwy: ['WNIOSKOWANIE', 'ROZDZIAŁ', 'NARZĘDZIA', 'KRAWĘDŹ'],
       gpu: 'Lokalny GPU', gpuTresc: 'Ollama · vLLM · modele wizyjne · Whisper · YOLO', gpuPod: 'prywatnie · bez opłat za tokeny · komputer musi działać',
       chmura: 'Chmura', chmuraTresc: 'NVIDIA · OpenAI · Anthropic', chmuraPod: 'zawsze dostępna · większe modele · płatna za użycie',
       przelacznik: 'jeden przełącznik, ta sama rozmowa',
-      rozdzial: 'Warstwa multimodalna', rozdzialTresc: 'tekst · obrazy · dźwięk · dokumenty — kierowane do silnika, który umie je odczytać; kontekst składany przed każdą odpowiedzią',
+      rozdzial: 'Warstwa multimodalna', rozdzialTresc: 'tekst · obrazy · dźwięk · dokumenty – kierowane do silnika, który umie je odczytać; kontekst składany przed każdą odpowiedzią',
       narzedzia: 'Kaskada narzędzi i mostek MCP', narzedziaTresc: 'wyszukiwanie · zdjęcia miejsc · własne archiwum · plan zdjęciowy · Studio · kod',
       narzedziaPod: 'jedna umowa na narzędzie · do czterech rund w turze · każdy wynik wraca do modelu',
       krawedz: [['Interfejsy', 'PWA · pulpit · głos', 'działa offline, wraca w pół odpowiedzi'],
@@ -66,17 +66,17 @@ const T = {
   en: {
     h1: 'One thread.', h2: 'Every engine.',
     sub: 'A personal, hybrid AI system.',
-    lead: 'NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation — same memory, same tools, same context.',
+    lead: 'NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation – same memory, same tools, same context.',
     leadKrotki: 'NVIDIA’s cloud, a local GPU, Claude and OpenAI in one conversation.',
     fakty: ['Zero npm dependencies', '100+ behaviour test suites', 'Installable phone app'],
     gpu: 'GPU', lokalnyGpu: 'Local GPU',
-    urywki: ['Golden hour starts at 06:47…', 'RF 70-200 f/4 — stay back from the edge…', 'For the reflection: f/8, 1/125 s, ISO 400…', 'The newest 10 of 311 from the lake…'],
+    urywki: ['Golden hour starts at 06:47…', 'RF 70-200 f/4 – stay back from the edge…', 'For the reflection: f/8, 1/125 s, ISO 400…', 'The newest 10 of 311 from the lake…'],
     arch: {
       tytul: 'Architecture', warstwy: ['INFERENCE', 'ROUTING', 'TOOLS', 'EDGE'],
       gpu: 'Local GPU', gpuTresc: 'Ollama · vLLM · vision models · Whisper · YOLO', gpuPod: 'private · no per-token cost · needs the box on',
       chmura: 'Cloud APIs', chmuraTresc: 'NVIDIA · OpenAI · Anthropic', chmuraPod: 'always up · larger models · metered',
       przelacznik: 'one switch, same conversation',
-      rozdzial: 'Multimodal layer', rozdzialTresc: 'text · images · audio · documents — routed to whichever engine can read them; context assembled before every answer',
+      rozdzial: 'Multimodal layer', rozdzialTresc: 'text · images · audio · documents – routed to whichever engine can read them; context assembled before every answer',
       narzedzia: 'Tool cascade & MCP bridge', narzedziaTresc: 'web search · place photos · own photo archive · shoot planner · Studio · code',
       narzedziaPod: 'one contract per tool · up to four rounds per turn · every result goes back to the model',
       krawedz: [['Interfaces', 'PWA · desktop · voice', 'works offline, resumes mid-answer'],
@@ -140,7 +140,7 @@ function arkusz(m) {
 }
 
 function aura(m, w, h, uklad = 'szeroki') {
-  // Trzy miękkie plamy: zieleń u góry, błękit z prawej, pomarańcz u dołu — jak og.jpg strony.
+  // Trzy miękkie plamy: zieleń u góry, błękit z prawej, pomarańcz u dołu – jak og.jpg strony.
   const r = Math.max(w, h);
   const plamy = uklad === 'wysoki'
     ? [[0.82, 0.06, 0.62, 0], [1.02, 0.46, 0.70, 1], [0.05, 0.96, 0.66, 2]]
@@ -162,7 +162,7 @@ const marka = (m, rozmiar) => `<div class="marka" style="--rm:${rozmiar}px">${`<
 const naglowek = (j, rozmiar, styl = '') => `<h1 class="h" style="font-size:${rozmiar}px;${styl}">${T[j].h1}<br><em>${T[j].h2}</em></h1>`;
 const fakty = (j, rozmiar, ile = 3) => `<div class="fakty" style="font-size:${rozmiar}px">${T[j].fakty.slice(0, ile).map((f) => `<span>${f}</span>`).join('')}</div>`;
 
-/* Wątek na banerze: jedna nić, cztery silniki, każdy ze swoim podpisem — tak
+/* Wątek na banerze: jedna nić, cztery silniki, każdy ze swoim podpisem – tak
    wygląda rozmowa w aplikacji. */
 function watekMini(j, skala = 1) {
   const wiersz = (k, nazwa, model, urywek) => `<div style="padding:${7 * skala}px 0">
@@ -199,7 +199,7 @@ function architektura(j, m) {
       <div style="margin-top:6px;font:400 13px/1.45 Onest;color:var(--tekst)">${tresc}</div>
       ${pod ? `<div style="margin-top:6px;font:500 10.5px/1.4 'Martian Mono';color:var(--blady)">${pod}</div>` : ''}</div>`;
   const wiersz = (i, tresc) => `<div style="display:flex;gap:14px;align-items:stretch">${etykieta(i)}<div style="flex:1;display:flex;gap:12px;align-items:stretch">${tresc}</div></div>`;
-  /* Nić neutralna: kolor mają tylko silniki (kropki przy backendach) —
+  /* Nić neutralna: kolor mają tylko silniki (kropki przy backendach) –
      kolorowe warstwy sugerowałyby, że routing jest „niebieski", a narzędzia „Claude'a". */
   return { w: W, h: H, html: `<div class="scena" style="width:${W}px;padding:28px 34px">
     <div style="display:flex;flex-direction:column;gap:14px;position:relative">
@@ -215,15 +215,15 @@ function architektura(j, m) {
     </div></div>` };
 }
 
-/* Serwisy społecznościowe. `w`, `h` — rozmiary zalecane przez serwisy. */
+/* Serwisy społecznościowe. `w`, `h` – rozmiary zalecane przez serwisy. */
 function spolecznosc(rodzaj, j, m) {
-  // Rozmowa na pulpicie ma wersję ciemną — ciemna grafika dostaje ciemne okno.
+  // Rozmowa na pulpicie ma wersję ciemną – ciemna grafika dostaje ciemne okno.
   const ciemny = m === MOTYW.ciemny;
   const zrzut = (nazwa) => plikUrl(path.join(OBRAZY, `${nazwa}-${j}${ciemny && nazwa === 'rozmowa' ? '-ciemny' : ''}.png`));
   const okno = (nazwa, szer, styl = '') => `<div class="okno" style="width:${szer}px;${styl}"><div class="pasek"><i></i><i></i><i></i></div><img src="${zrzut(nazwa)}"></div>`;
   const tel = (szer, styl = '', nazwa = 'telefon') => `<div class="tel" style="width:${szer}px;${styl}"><img src="${zrzut(nazwa)}"></div>`;
 
-  if (rodzaj === 'linkedin-post') {                 // 1200×627 — post z obrazem i udostępniony link
+  if (rodzaj === 'linkedin-post') {                 // 1200×627 – post z obrazem i udostępniony link
     const W = 1200, H = 627;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
       <div style="position:absolute;left:72px;top:64px">${marka(m, 17)}</div>
@@ -233,7 +233,7 @@ function spolecznosc(rodzaj, j, m) {
       ${okno('rozmowa', 760, 'position:absolute;left:668px;top:84px')}
     </div>` };
   }
-  if (rodzaj === 'linkedin-kwadrat') {              // 1080×1080 — post, także Instagram i Facebook
+  if (rodzaj === 'linkedin-kwadrat') {              // 1080×1080 – post, także Instagram i Facebook
     const W = 1080, H = 1080;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H, 'wysoki')}
       <div style="position:absolute;left:84px;top:84px">${marka(m, 20)}</div>
@@ -243,8 +243,8 @@ function spolecznosc(rodzaj, j, m) {
       ${tel(336, 'position:absolute;right:76px;top:236px;transform:rotate(2deg)')}
     </div>` };
   }
-  if (rodzaj === 'linkedin-pion') {                 // 1080×1350 — pionowy post (4:5), najwięcej miejsca w strumieniu
-    /* Okno o szerokości 880 px mieści całą rozmowę aż do odpowiedzi Claude'a —
+  if (rodzaj === 'linkedin-pion') {                 // 1080×1350 – pionowy post (4:5), najwięcej miejsca w strumieniu
+    /* Okno o szerokości 880 px mieści całą rozmowę aż do odpowiedzi Claude'a –
        to ona jest puentą („zmiana silnika w tym samym wątku"). Szersze okno
        ucinało ją w pół. */
     const W = 1080, H = 1350;
@@ -259,7 +259,7 @@ function spolecznosc(rodzaj, j, m) {
         ${fakty(j, 14)}<span class="adres" style="font-size:16px;white-space:nowrap">cosmosai.live</span></div>
     </div>` };
   }
-  if (rodzaj === 'linkedin-baner') {                // 1584×396 — tło profilu; lewy dół zasłania zdjęcie profilowe
+  if (rodzaj === 'linkedin-baner') {                // 1584×396 – tło profilu; lewy dół zasłania zdjęcie profilowe
     const W = 1584, H = 396;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
       <div style="position:absolute;right:96px;top:74px;text-align:right;display:flex;flex-direction:column;align-items:flex-end">
@@ -269,7 +269,7 @@ function spolecznosc(rodzaj, j, m) {
       <div style="position:absolute;left:560px;top:96px;width:400px;opacity:.95">${watekMini(j, 1.1)}</div>
     </div>` };
   }
-  if (rodzaj === 'github') {                        // 1280×640 — podgląd repozytorium (Settings → Social preview)
+  if (rodzaj === 'github') {                        // 1280×640 – podgląd repozytorium (Settings → Social preview)
     // Dwa fakty, nie trzy: trzeci wchodził pod zrzut okna.
     const W = 1280, H = 640;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
@@ -281,7 +281,7 @@ function spolecznosc(rodzaj, j, m) {
       ${okno('rozmowa', 800, 'position:absolute;left:700px;top:96px')}
     </div>` };
   }
-  if (rodzaj === 'x') {                             // 1600×900 — X/Twitter, także slajd 16:9
+  if (rodzaj === 'x') {                             // 1600×900 – X/Twitter, także slajd 16:9
     const W = 1600, H = 900;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
       <div style="position:absolute;left:96px;top:88px">${marka(m, 20)}</div>
@@ -291,7 +291,7 @@ function spolecznosc(rodzaj, j, m) {
       ${okno('rozmowa', 900, 'position:absolute;left:860px;top:150px')}
     </div>` };
   }
-  if (rodzaj === 'relacja') {                       // 1080×1920 — relacja/story (Instagram, LinkedIn na telefonie)
+  if (rodzaj === 'relacja') {                       // 1080×1920 – relacja/story (Instagram, LinkedIn na telefonie)
     const W = 1080, H = 1920;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H, 'wysoki')}
       <div style="position:absolute;left:0;right:0;top:170px;display:flex;justify-content:center">${marka(m, 22)}</div>
@@ -309,12 +309,12 @@ function spolecznosc(rodzaj, j, m) {
 (async () => {
   let chromium;
   try { ({ chromium } = require('playwright')); } catch {
-    console.error('Brak Playwrighta — uruchom z NODE_PATH=/opt/node22/lib/node_modules.');
+    console.error('Brak Playwrighta – uruchom z NODE_PATH=/opt/node22/lib/node_modules.');
     process.exit(1);
   }
   for (const n of ['rozmowa-pl', 'rozmowa-en', 'telefon-pl', 'telefon-en']) {
     if (!fs.existsSync(path.join(OBRAZY, `${n}.png`))) {
-      console.error(`Brak docs/obrazy/${n}.png — najpierw: node scripts/zrzuty-readme.js`);
+      console.error(`Brak docs/obrazy/${n}.png – najpierw: node scripts/zrzuty-readme.js`);
       process.exit(1);
     }
   }
@@ -331,11 +331,11 @@ function spolecznosc(rodzaj, j, m) {
     await pg.goto(plikUrl(strona), { waitUntil: 'load' });
     await pg.evaluate(() => document.fonts.ready);
     await pg.waitForTimeout(150);
-    // 'auto' — wysokość z treści (schemat), zaokrąglona w górę do pełnego piksela.
+    // 'auto' – wysokość z treści (schemat), zaokrąglona w górę do pełnego piksela.
     const wys = h === 'auto' ? await pg.evaluate(() => Math.ceil(document.querySelector('.scena').getBoundingClientRect().height)) : h;
     await pg.screenshot({ path: plik, clip: { x: 0, y: 0, width: w, height: wys }, ...(jpeg ? { type: 'jpeg', quality: 92 } : {}) });
     await ctx.close();
-    console.log(`  ✓ ${path.relative(KORZEN, plik)} — ${Math.round(fs.statSync(plik).size / 1024)} KB`);
+    console.log(`  ✓ ${path.relative(KORZEN, plik)} – ${Math.round(fs.statSync(plik).size / 1024)} KB`);
   }
 
   console.log('README');
@@ -354,7 +354,7 @@ function spolecznosc(rodzaj, j, m) {
     }
   }
   await renderuj(spolecznosc('github', 'en', MOTYW.jasny), 'jasny', path.join(GRAFIKI, 'github-podglad.jpg'), { jpeg: true });
-  // Wariant ciemny postu — na LinkedIn w trybie ciemnym jasna grafika świeci.
+  // Wariant ciemny postu – na LinkedIn w trybie ciemnym jasna grafika świeci.
   for (const j of ['pl', 'en']) {
     await renderuj(spolecznosc('linkedin-post', j, MOTYW.ciemny), 'ciemny', path.join(GRAFIKI, `linkedin-post-${j}-ciemny.jpg`), { jpeg: true });
   }

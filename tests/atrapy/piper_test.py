@@ -1,4 +1,4 @@
-"""Sprawdź piper_wav() na trzech wersjach API Pipera — bez instalowania Pipera."""
+"""Sprawdź piper_wav() na trzech wersjach API Pipera – bez instalowania Pipera."""
 import io, sys, wave, importlib.util
 
 spec = importlib.util.spec_from_file_location("svc", "/home/user/Bear/senses/service.py")
@@ -27,14 +27,14 @@ class NewApiWav:
 
 
 class NewApiGen:
-    """piper 1.3 — synthesize() zwraca generator kawałków"""
+    """piper 1.3 – synthesize() zwraca generator kawałków"""
     def synthesize(self, text):
         yield Chunk(PCM[:8000])
         yield Chunk(PCM[8000:])
 
 
 class OldApi:
-    """piper ≤1.2 — synthesize(text, wav_file)"""
+    """piper ≤1.2 – synthesize(text, wav_file)"""
     def synthesize(self, text, wav_file=None):
         if wav_file is None:
             raise TypeError("synthesize() wymaga wav_file")
@@ -43,7 +43,7 @@ class OldApi:
 
 
 class Broken:
-    """zwraca pusty generator — tak wyglądała awaria u użytkownika"""
+    """zwraca pusty generator – tak wyglądała awaria u użytkownika"""
     def synthesize(self, text):
         return iter(())
 
@@ -68,5 +68,5 @@ for name, voice, expect in [("piper 1.3 (synthesize_wav)", NewApiWav(), True),
               f"{w.getframerate()} Hz, {w.getnframes()} ramek")
         if w.getnframes() != 8000: fail.append(name + " (zła liczba ramek)")
 
-print("\nBŁĘDY: " + "; ".join(fail) if fail else "\nPIPER — WSZYSTKIE WERSJE API OK")
+print("\nBŁĘDY: " + "; ".join(fail) if fail else "\nPIPER – WSZYSTKIE WERSJE API OK")
 sys.exit(1 if fail else 0)

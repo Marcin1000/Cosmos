@@ -7,7 +7,7 @@ let mode = 'sse';
 const upstream = http.createServer((req, res) => {
   if (req.method === 'GET') { res.writeHead(200, {'Content-Type':'application/json'}); return res.end('{"data":[]}'); }
   if (mode === 'sse') {
-    // strumień mimo stream:false — to odtwarza zgłoszony objaw
+    // strumień mimo stream:false – to odtwarza zgłoszony objaw
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Zbuduj system śledzenia meczów.\n\nWymagania:\n- kanał\n- godzina\n- dyscyplina' } }] }) + '\n\n');
     res.write('data: [DONE]\n\n'); res.end();
