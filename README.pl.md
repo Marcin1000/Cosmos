@@ -978,7 +978,9 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 ## 🧩 Układ kodu
 
 ```
-server.js          router, czat, rozmowy, baza wiedzy, manifest zdolności
+server.js          router, czat, składanie kontekstu, manifest zdolności
+lib/rozmowy.js     historia rozmów: plik na rozmowę, indeks, kopia zapasowa
+lib/baza-wiedzy.js baza wiedzy: pliki, linki, notatki, fragmenty z wektorami
 lib/instrukcje-narzedzi.js  opisy narzędzi doklejane do promptu systemowego
 lib/rdzen.js       konfiguracja, silniki, ścieżki, cztery pomocnicze
 lib/pamiec.js      pamięć długotrwała (RAG) i embeddingi — wektory plus słowa

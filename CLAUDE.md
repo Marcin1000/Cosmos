@@ -93,10 +93,10 @@ godzinę) — jest w **`docs/ZESPOLY.md`**. Przeczytaj go, zanim wypuścisz zesp
 
 ## Architektura
 
-Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,6 tys. linii, `lib/` 13,2 tys. w 44
-modułach, `public/` 13,2 tys. w 14 skryptach. Zero zależności npm w rdzeniu — nadal.
+Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2 tys. linii, `lib/` 14 tys. w 46
+modułach, `public/` 13,3 tys. w 15 skryptach. Zero zależności npm w rdzeniu — nadal.
 
-### `server.js` — dyrygent (2,6 tys. linii, zero zależności)
+### `server.js` — dyrygent (2 tys. linii, zero zależności)
 
 Ręcznie pisany router na `node:http` (bez frameworka), sekcje oddzielone komentarzami
 `// ---`. Kolejność w routerze ma znaczenie: `/api/auth`, `/api/login`, `/api/logout`
@@ -118,7 +118,9 @@ robi większość szybkich zestawów.
 | `instrukcje-narzedzi.js` | **wszystkie opisy narzędzi dla modelu** (dawniej `extras` w `server.js`) |
 | `kontekst.js`, `konta.js`, `silniki.js` | kto pyta, konta i sesje, kto może użyć którego silnika |
 | `nauka.js` | procedury, bramka trybu auto |
-| `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, baza wiedzy, wyszukiwanie w sieci |
+| `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, wyciąganie tekstu z dokumentów, wyszukiwanie w sieci |
+| `baza-wiedzy.js` | baza wiedzy: pliki, linki, notatki, fragmenty z wektorami, podgląd obrazu dla modelu |
+| `rozmowy.js` | historia rozmów: plik na rozmowę + indeks, dopisywanie odpowiedzi-sierot, kopia zapasowa |
 | `exif.js`, `raw-podglad.js`, `srt.js`, `kmz.js` | formaty plików, bez zależności zewnętrznych |
 | `canon.js`, `onedrive.js`, `zorza.js`, `miejsca.js` | integracje zewnętrzne |
 | `zadania.js` | praca dłuższa niż 100 s Cloudflare'a (Studio): czekanie do 75 s, potem 202 i dopytywanie |
