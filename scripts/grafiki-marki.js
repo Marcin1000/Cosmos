@@ -160,7 +160,7 @@ const chipySilnikow = (j) => `<div class="chipy">`
 
 const marka = (m, rozmiar) => `<div class="marka" style="--rm:${rozmiar}px">${`<svg viewBox="0 0 40 40">${m.znak()}</svg>`}<span>COSMOS</span></div>`;
 const naglowek = (j, rozmiar, styl = '') => `<h1 class="h" style="font-size:${rozmiar}px;${styl}">${T[j].h1}<br><em>${T[j].h2}</em></h1>`;
-const fakty = (j, rozmiar) => `<div class="fakty" style="font-size:${rozmiar}px">${T[j].fakty.map((f) => `<span>${f}</span>`).join('')}</div>`;
+const fakty = (j, rozmiar, ile = 3) => `<div class="fakty" style="font-size:${rozmiar}px">${T[j].fakty.slice(0, ile).map((f) => `<span>${f}</span>`).join('')}</div>`;
 
 /* Wątek na banerze: jedna nić, cztery silniki, każdy ze swoim podpisem — tak
    wygląda rozmowa w aplikacji. */
@@ -270,12 +270,13 @@ function spolecznosc(rodzaj, j, m) {
     </div>` };
   }
   if (rodzaj === 'github') {                        // 1280×640 — podgląd repozytorium (Settings → Social preview)
+    // Dwa fakty, nie trzy: trzeci wchodził pod zrzut okna.
     const W = 1280, H = 640;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
       <div style="position:absolute;left:80px;top:72px">${marka(m, 17)}</div>
       <div style="position:absolute;left:80px;top:170px;width:560px">${naglowek(j, 78)}
         <p class="sub" style="font-size:21px;margin-top:22px;max-width:500px">${T[j].leadKrotki}</p></div>
-      <div style="position:absolute;left:80px;bottom:70px">${fakty(j, 14)}
+      <div style="position:absolute;left:80px;bottom:70px;max-width:580px">${fakty(j, 14, 2)}
         <div class="adres" style="font-size:15px;margin-top:16px">github.com/Marcin1000/Cosmos</div></div>
       ${okno('rozmowa', 800, 'position:absolute;left:700px;top:96px')}
     </div>` };
@@ -284,7 +285,7 @@ function spolecznosc(rodzaj, j, m) {
     const W = 1600, H = 900;
     return { w: W, h: H, html: `<div class="scena" style="width:${W}px;height:${H}px">${aura(m, W, H)}
       <div style="position:absolute;left:96px;top:88px">${marka(m, 20)}</div>
-      <div style="position:absolute;left:96px;top:236px;width:700px">${naglowek(j, 100)}
+      <div style="position:absolute;left:96px;top:262px;width:740px">${naglowek(j, 100)}
         <p class="sub" style="font-size:27px;margin-top:28px;max-width:640px">${T[j].lead}</p></div>
       <div style="position:absolute;left:96px;bottom:92px;font-size:17px">${chipySilnikow(j)}</div>
       ${okno('rozmowa', 900, 'position:absolute;left:860px;top:150px')}
