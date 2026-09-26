@@ -69,7 +69,8 @@ async function czekajNaZadanie(odp, { pobierz, readJsonSafe, t, naPostep, spij, 
   const czekaj = spij || ((ms) => new Promise((ok) => setTimeout(ok, ms)));
   const start = Date.now();
   let pomylek = 0;
-  if (naPostep) naPostep({ sekund: 0 });
+  // Od razu po 202 — człowiek czekał już ~75 s i ma się dowiedzieć, co się dzieje.
+  if (naPostep) naPostep({ sekund: d.sekund || 0 });
   while (Date.now() - start < maksMs) {
     await czekaj(coIleMs);
     let r;

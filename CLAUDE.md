@@ -93,8 +93,8 @@ godzinę) — jest w **`docs/ZESPOLY.md`**. Przeczytaj go, zanim wypuścisz zesp
 
 ## Architektura
 
-Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,9 tys. linii, `lib/` 10,6 tys. w 34
-modułach, `public/` 11,7 tys. w 11 skryptach. Zero zależności npm w rdzeniu — nadal.
+Rozmiary, żeby wiedzieć, gdzie szukać: `server.js` 2,6 tys. linii, `lib/` 13,2 tys. w 44
+modułach, `public/` 13,2 tys. w 14 skryptach. Zero zależności npm w rdzeniu — nadal.
 
 ### `server.js` — dyrygent (2,6 tys. linii, zero zależności)
 
@@ -332,6 +332,8 @@ z pozostałych.
 | `konta.js` | zaproszenie, Twoje konto, panel Dostęp; czyszczenie pamięci przeglądarki przy zmianie osoby |
 | `models.js` | katalog modeli, zakładki silników |
 | `i18n.js` | dwa słowniki (PL/EN) |
+| `studio-widok.js` | widok Studia: obraz, szablony, storyboard, edycja, dźwięk, wideo; zadania w tle |
+| `pwa.js` | service worker i pasek „Jest nowa wersja” |
 | `strona/` | strona produktowa pod `/` — osobna od aplikacji, własny CSS i skrypt |
 
 Moduły trzymają się wzorca dwustronnego, żeby ten sam plik działał w przeglądarce

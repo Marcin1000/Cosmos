@@ -20,8 +20,10 @@
      7. Pomocnik przeglądarki (czekajNaZadanie) prowadzi od 202 do wyniku,
         przeżywa chwilowy brak sieci i przekazuje błąd z tła.
      8. Storyboard, edycja i dźwięk idą tą samą drogą; pobranie gotowego
-        wideo nie wisi w odpytaniu statusu. */
-const { srodowisko } = require('../pomoc');
+        wideo nie wisi w odpytaniu statusu.
+     9. W przeglądarce: „Generuj" przy wolnym generowaniu pokazuje „Trwa
+        dłużej niż zwykle", a potem obraz — przez widok Studia (studio-widok.js). */
+const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 const { utworzZadania } = require('../../lib/zadania.js');
 const { wKontekscie } = require('../../lib/kontekst.js');
 const { czekajNaZadanie } = require('../../public/narzedzia.js');
@@ -186,6 +188,38 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
     }
     ok(koniec.status === 'done' && koniec.url, `wideo: gotowe i zapisane (${koniec.status || 'brak'})`);
     ok(najdluzej < 1000, `odpytanie statusu nie wisi na pobieraniu filmu (najdłuższe ${najdluzej} ms; pobranie trwa 1500 ms)`);
+  }
+
+  // --- 9. przeglądarka: przycisk „Generuj" przy wolnym generowaniu ---------
+  if (!maPrzegladarke()) {
+    console.log('⚠ Brak Chromium — pomijam część z przeglądarką.');
+  } else {
+    const b = await przegladarka();
+    const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+    const bledy = [];
+    p.on('pageerror', (e) => bledy.push(e.message));
+    await p.goto(`${A}/app`, { waitUntil: 'load' });
+    await p.waitForFunction(() => typeof openStudio === 'function');
+    await p.evaluate(() => openStudio());
+    await p.waitForFunction(() => !document.getElementById('studio-image-go').disabled);
+    await p.fill('#studio-image-prompt', 'POWOLI latarnia morska o świcie');
+    await p.click('#studio-image-go');
+    const napisy = [];
+    const koniec = Date.now() + 15000;
+    let obraz = false;
+    while (Date.now() < koniec) {
+      const stan = await p.evaluate(() => ({
+        tekst: document.getElementById('studio-image-out').textContent,
+        img: Boolean(document.querySelector('#studio-image-out img')),
+      }));
+      if (stan.tekst) napisy.push(stan.tekst);
+      if (stan.img) { obraz = true; break; }
+      await spij(150);
+    }
+    ok(napisy.some((x) => /st\.dluzej|Trwa dłużej/.test(x)), `widok mówi, że trwa dłużej (${napisy.find((x) => /dłużej/.test(x)) || napisy.slice(-1)[0] || 'nic'})`);
+    ok(obraz, 'po chwili w Studiu jest wygenerowany obraz');
+    ok(bledy.length === 0, `bez błędów JavaScript (${bledy.slice(0, 2).join(' | ') || 'brak'})`);
+    await b.close();
   }
 
   env.koniec();

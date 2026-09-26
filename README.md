@@ -244,7 +244,7 @@ shared with the app. Four decisions worth stating:
 
 ```
 server.js            router, chat, conversations, knowledge base
-lib/                 31 domain modules — one concern each, injected, no cycles
+lib/                 44 domain modules — one concern each, injected, no cycles
 public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
