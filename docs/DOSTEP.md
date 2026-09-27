@@ -101,8 +101,10 @@ załatwia Cloudflare, a adres IP serwera pozostaje ukryty.
 
 ### 2a. W panelu Cloudflare (przeglądarka)
 
-1. **dash.cloudflare.com** → z lewej **Zero Trust** (przy pierwszym wejściu
-   wybierz darmowy plan *Free*).
+1. **one.dash.cloudflare.com** (panel **Zero Trust** – osobny od panelu domeny;
+   z panelu domeny prowadzi tam pozycja „Zero Trust” w menu konta). Przy pierwszym
+   wejściu wybierz darmowy plan *Free*. Tunel **nie** jest w SSL/TLS → Custom
+   Hostnames – to płatna usługa dla firm hostujących domeny klientów, nie włączaj jej.
 2. **Networks → Tunnels → Create a tunnel** → typ **Cloudflared** → nazwa
    `cosmos` → **Save tunnel**.
 3. Wybierz system **Debian** (także gdy VPS ma Ubuntu – to ta sama paczka) i architekturę **64-bit**. Cloudflare pokaże
@@ -123,7 +125,9 @@ Ma pokazać `active (running)`, a w panelu Cloudflare tunel zmieni status na
 
 ### 2c. Z powrotem w panelu
 
-**Next** → zakładka **Public Hostname** → **Add a public hostname**:
+**Next** (albo później: Networks → Tunnels → `cosmos` → **Configure**) → zakładka
+**Published application routes** – w starszym wyglądzie panelu **Public Hostname** –
+→ **Add a published application route** (dawniej *Add a public hostname*):
 
 | Pole | Wartość |
 |---|---|
