@@ -2205,13 +2205,10 @@ body::after {
   .live-panel {
     width: calc(100vw - 24px);
     right: 12px;
-    /* NAD polem wiadomości, nie na nim: panel zasłaniał całe pole i nie dało
-       się pisać przy włączonej kamerze (zespół IT, runda 5). Wysokość pola
-       mierzy kamera.js (--composer-h). */
-    bottom: calc(var(--composer-h, 0px) + 12px);
+    bottom: 12px;
     /* Na telefonie pasek adresu i pasek nawigacji zabierają swoje, a `dvh`
        już to uwzględnia – zostaje zapas na sam margines panelu. */
-    max-height: calc(100dvh - 24px - var(--composer-h, 0px));
+    max-height: calc(100dvh - 24px);
   }
   /* Sufit obrazu to UŁAMEK EKRANU, nie „reszta po paskach".
    *
@@ -3896,3 +3893,14 @@ select::-ms-expand { display: none; }
 }
 .edycja-bar span { flex: 1; }
 .edycja-bar[hidden] { display: none; }
+
+/* Telefon pionowo: panel kamery NAD polem wiadomości, nie na nim – zasłaniał
+   całe pole i nie dało się pisać przy włączonej kamerze (zespół IT, runda 5).
+   Wysokość pola mierzy kamera.js (--composer-h). Poziomo (niski ekran) na to
+   miejsca nie ma: tam kamera jest zajęciem głównym i panel zostaje przy dole. */
+@media (max-width: 720px) and (min-height: 560px), (pointer: coarse) and (max-width: 1024px) and (min-height: 560px) {
+  .live-panel {
+    bottom: calc(var(--composer-h, 0px) + 12px);
+    max-height: calc(100dvh - 24px - var(--composer-h, 0px));
+  }
+}
