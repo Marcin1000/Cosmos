@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="135 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-135-5E9E3A?style=flat-square">
+  <img alt="137 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-137-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 135 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 137 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 135 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 137 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -275,6 +275,12 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   palców pokazuję?” model odpowiada liczbą. Wymaga pakietu **Ciało** (MediaPipe) –
   model dłoni pobiera się sam przy pierwszym użyciu. Przycisk **Rozpoznawanie** wyłącza
   ramki, dłonie i dymki rozpoznawania (także te z obserwatora na komputerze)
+- 🔎 **Wyszukiwanie z Google** – z kluczem `SERPER_API_KEY` (serper.dev, wyniki Google)
+  albo `BRAVE_API_KEY` (Brave Search) w `.env` strony i zdjęcia przychodzą z tych
+  wyszukiwarek, a zdjęcia miejsc przeplatają się z Wikimedia Commons. Bez klucza –
+  jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia w odpowiedzi nie zasłaniają planu:
+  tekst stoi, a siatki wskakują pod swoje punkty, gdy przychodzą; „pokaż inne zdjęcia”
+  daje zdjęcia, których w rozmowie jeszcze nie było
 - 🌐 **Otwieranie stron** – „otwórz onet.pl”, „wejdź na YouTube”: strona otwiera się
   w nowej karcie od razu. Gdy przeglądarka zablokuje okno otwierane bez kliknięcia,
   zostaje karta z przyciskiem **Otwórz** (albo zezwól tej stronie na wyskakujące okna)
@@ -1355,7 +1361,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 135 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 137 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```
@@ -1403,7 +1409,7 @@ decyzji, nie usterki – skrypt celowo ich nie liczy jako błędów.
 | Błąd 404 przy czacie / „404 page not found" | Zły identyfikator modelu. Komunikat podaje w nawiasie kwadratowym silnik i model, który poleciał. NVIDIA zmienia nazwy – sprawdź **Ustawienia → Pobierz listę** i popraw `NEMOTRON_MODEL` w `.env` |
 | „(pusta odpowiedź modelu)" | Model rozumujący zużył cały budżet na myślenie. Zwiększ **Maks. tokenów odpowiedzi** albo weź szybszy model; Cosmos pokaże wtedy przynajmniej tok myślenia |
 | „Model oddał odpowiedź, której nie da się odczytać" | Dostawca zwrócił coś innego niż JSON – strumień mimo `stream: false` albo stronę błędu proxy. Komunikat zawiera status HTTP i początek odpowiedzi |
-| „Wyszukiwarka ogranicza ruch z tego serwera (HTTP 202)" | DuckDuckGo odmawia adresom centrów danych. Zmierzone na VPS-ie: dwa pierwsze zapytania dostają wyniki, każde następne stronę weryfikacyjną. Z domu tego nie widać. Trwałe wyjście – własny SearXNG (`SEARXNG_URL`): nie znosi blokady, ale pyta kilkanaście silników, więc odmowa jednego nie kończy sprawy |
+| „Wyszukiwarka ogranicza ruch z tego serwera (HTTP 202)" | DuckDuckGo odmawia adresom centrów danych. Zmierzone na VPS-ie: dwa pierwsze zapytania dostają wyniki, każde następne stronę weryfikacyjną. Z domu tego nie widać. Najprostsze wyjście – klucz do wyszukiwarki z API (`SERPER_API_KEY` – wyniki Google, albo `BRAVE_API_KEY`); inne – własny SearXNG (`SEARXNG_URL`): nie znosi blokady, ale pyta kilkanaście silników, więc odmowa jednego nie kończy sprawy |
 | „Wyszukiwarka nie odpowiada (fetch failed, przyczyna: …)" | To jest awaria połączenia, a przyczyna po przecinku mówi która: `ENOTFOUND` – DNS, `ECONNREFUSED` – nic nie nasłuchuje pod tym adresem, `ENETUNREACH` – brak trasy, `CERT_*` – certyfikat. Bez tej przyczyny wszystkie te przypadki wyglądały identycznie |
 | Czytanie na głos milczy, w oknie zmysłów `wave.Error: # channels not specified` | Stare API Pipera. Zaktualizuj zmysły (`git pull` na komputerze z czujnikami) |
 | Dyktowanie nie działa, `Library cublas64_12.dll is not found` | Brak bibliotek CUDA 12 dla `faster-whisper`. Usługa sama przechodzi na procesor; żeby pominąć próbę – `WHISPER_DEVICE=cpu` |

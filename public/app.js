@@ -889,6 +889,14 @@ function messageElement(m, idx = -1) {
     body.prepend(imgs);
   }
   const photos = msgPhotos(m);
+  // Siatka w drodze: szkielet w miejscu, gdzie za chwilę staną zdjęcia (narzedzia.js).
+  if (!photos.length && m.content && typeof m.content === 'object' && m.content.szukam) {
+    const szkielet = document.createElement('div');
+    szkielet.className = 'photo-grid szukam';
+    szkielet.setAttribute('aria-label', t('chat.photosLoading'));
+    for (let i = 0; i < 4; i++) szkielet.appendChild(document.createElement('span'));
+    body.appendChild(szkielet);
+  }
   if (photos.length) {
     body.appendChild(photosGrid(photos));
     const dalej = stopkaArchiwum(m);
@@ -2594,7 +2602,7 @@ async function runGeneration(conv, podpiecie = null) {
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
          zapytania do modelu i mają dostać własne biegi. */
-      const acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
+      let acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
       const ostatnia = depth === MAX_SEARCHES;
 
       /* Które narzędzie zawołał model. Kolejność sprawdzania jest kolejnością
@@ -2604,6 +2612,14 @@ async function runGeneration(conv, podpiecie = null) {
       for (const narzedzie of NARZEDZIA) {
         const m = narzedzie.dopasuj(acc);
         if (m) { uzyte = narzedzie; dop = m; break; }
+      }
+      /* Długi plan ze zdjęciami potrafi skończyć budżet tokenów w połowie –
+         w rozmowie o Sycylii ucięło „Źródła” na „travelplanet.pl/przew”, a zdjęcia
+         poszły dalej, jakby odpowiedź była cała. Zdjęcia rozcinają tekst na
+         kawałki, więc dokończyć trzeba PRZED nimi, nie po. */
+      if (uzyte && uzyte.nazwa === 'grafiki' && lastFinish === 'length' && !turaPrzerwana) {
+        acc = await dokoncz(conv, acc);
+        dop = uzyte.dopasuj(acc);
       }
 
       if (!uzyte) {

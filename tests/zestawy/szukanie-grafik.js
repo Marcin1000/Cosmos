@@ -21,6 +21,14 @@ const { srodowisko } = require('../pomoc');
   if (!pierwsze.source) fail.push('brak źródła – zdjęcie bez źródła jest bezwartościowe');
   if (!pierwsze.title) fail.push('brak tytułu');
 
+  // 1b. `ile` – aplikacja prosi o więcej wyników przy „pokaż inne zdjęcia”
+  //     (odsiewa te, które rozmowa już pokazała) albo o mniej.
+  const dMalo = await (await fetch(`${env.adres}/api/search/images?q=Majorka%20La%20Seu&ile=3`)).json();
+  const dDuzo = await (await fetch(`${env.adres}/api/search/images?q=Majorka%20La%20Seu&ile=16`)).json();
+  console.log(`1b. ile=3 → ${dMalo.results?.length}, ile=16 → ${dDuzo.results?.length} (domyślnie ${d.results?.length})`);
+  if ((dMalo.results || []).length !== 3) fail.push('parametr ile=3 nie ogranicza wyników');
+  if (!((dDuzo.results || []).length > (d.results || []).length)) fail.push('parametr ile=16 nie daje więcej wyników niż domyślnie');
+
   // 2. puste zapytanie odrzucone, nie wysyłane dalej
   const puste = await fetch(`${env.adres}/api/search/images?q=`);
   console.log(`2. puste zapytanie → HTTP ${puste.status}`);

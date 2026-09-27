@@ -42,12 +42,21 @@ function makeMock(port, name) {
            `finish_reason: "length"` w ostatnim zdarzeniu – bez tego nie da się
            odróżnić „skończyłem" od „zabrakło mi miejsca". Drugie żądanie,
            z prośbą o kontynuację, dostaje resztę i normalne `stop`. */
-        const urwij = /urwana/i.test(lastText) && !flat.includes('Kontynuuj DOKŁADNIE');
+        /* „urwany plan”: plan ze znacznikiem zdjęć, ucięty budżetem w połowie
+           adresu w „Źródłach” – jak plan Sycylii Marcina. */
+        const urwanyPlan = /urwany plan/i.test(flat);
+        const urwij = (/urwana/i.test(lastText) || /urwany plan/i.test(lastText)) && !flat.includes('Kontynuuj DOKŁADNIE');
         const dokancza = flat.includes('Kontynuuj DOKŁADNIE');
         const juzOdcieto = flat.includes('ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ');
         const poZdjeciach = flat.includes('ZDJĘCIA POKAZANE UŻYTKOWNIKOWI');
         let text;
-        if (urwij) {
+        if (urwij && urwanyPlan) {
+          text = 'Plan: Palermo.\n[GRAFIKA: Katedra Palermo]\nŹródła: [Przewodnik](https://travelplanet.pl/przew';
+        } else if (dokancza && urwanyPlan) {
+          text = 'odnik-sycylia)\n\nMiłej podróży.';
+        } else if (poZdjeciach && urwanyPlan) {
+          text = 'Gotowe.';
+        } else if (urwij) {
           text = 'Plan na tydzień. Dzień 1 – Palma. Źródła: [Przewodnik](https://przyklad.pl/majorka-atrakcje-wynajem';
         } else if (dokancza) {
           text = '-samochodu)\n\nGotowe.';

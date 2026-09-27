@@ -235,7 +235,14 @@ function utworzNarzedzia(z) {
           + 'Nie pisz o nich tak, jakbyś je miał – jedno wyszukanie na turę. '
           + 'Jeśli reszta jest potrzebna, poproś o kolejne pojedynczo.'
         : '';
-      dodajWynikNarzedzia(k.conv, wyniki + uwaga, q);
+      /* „Możesz jakieś inne zdjęcia wyszukać?” → model zawołał [SZUKAJ:
+         zdjęcia Palermo; zdjęcia Etna; …] i odpowiedział, że zdjęć nie ma.
+         Wyszukiwanie tekstu zdjęć nie pokazuje – mówimy mu, czego użyć. */
+      const oZdjecia = /(?<!\p{L})(zdj[eę]ci|zdjęć|fotografi|foto|obraz(y|ów)|grafik|photos?|images?|pictures?)/iu.test(q)
+        ? '\n\nUWAGA: to wyszukiwanie TEKSTU – zdjęć nie pokazuje. Jeśli użytkownik chce zdjęć, '
+          + 'użyj [GRAFIKA: miejsce 1; miejsce 2; …] z konkretnymi zapytaniami (inny kadr, pora dnia, widok).'
+        : '';
+      dodajWynikNarzedzia(k.conv, wyniki + uwaga + oZdjecia, q);
       return { akcja: 'dalej' };
     },
   };
@@ -476,17 +483,28 @@ function utworzNarzedzia(z) {
       const segmenty = [];
       let odKad = 0;
       let m = null;
+      /* Szesnaście siatek i dwadzieścia cztery zapytania na odpowiedź. Przy
+         dziesięciu siatkach plan Sycylii zgubił Etnę, Katanię i plażę – bez
+         słowa: ich znaczniki lądowały w ogonie i znikały. Teraz to, co się
+         nie zmieściło, model dostaje z nazwy i może poprosić o to osobno. */
+      const MAX_SIATEK = 16;
+      const MAX_ZAPYTAN = 24;
+      const pominiete = [];
+      let zapytan = 0;
       while ((m = WZ.exec(k.acc)) !== null) {
-        segmenty.push({
-          tekst: k.acc.slice(odKad, m.index),
-          zapytania: m[1].split(';').map((x) => x.trim()).filter(Boolean).slice(0, 4),
-        });
+        const zapytania = m[1].split(';').map((x) => x.trim()).filter(Boolean);
+        if (segmenty.length >= MAX_SIATEK || zapytan >= MAX_ZAPYTAN) {
+          pominiete.push(...zapytania);
+          // Tekst między pominiętymi znacznikami zostaje – znika tylko znacznik.
+          segmenty.push({ tekst: k.acc.slice(odKad, m.index), zapytania: [] });
+          odKad = m.index + m[0].length;
+          continue;
+        }
+        const wzięte = zapytania.slice(0, Math.min(4, MAX_ZAPYTAN - zapytan));
+        pominiete.push(...zapytania.slice(wzięte.length));
+        zapytan += wzięte.length;
+        segmenty.push({ tekst: k.acc.slice(odKad, m.index), zapytania: wzięte });
         odKad = m.index + m[0].length;
-        /* Dziesięć siatek na turę. Sześć wystarczało na plan pięciodniowy,
-           ale przy ośmiu dniach reszta znaczników zostawała w ogonie: dni
-           5-8 lądowały jednym blokiem, a ich zdjęcia hurtem na samym końcu
-           – dokładnie to, od czego uciekaliśmy. */
-        if (segmenty.length >= 10) break;
       }
       const ogon = k.acc.slice(odKad);
 
@@ -512,51 +530,20 @@ function utworzNarzedzia(z) {
         return { akcja: 'dalej' };
       }
 
-      /* Pasek postępu bez `przed` – i to jest istotne.
-         Grafiki SAME odtwarzają układ (kawałek planu, siatka pod nim), więc
-         wydrukowanie tu całego tekstu z góry dawało plan dwa razy: raz
-         w całości nad wszystkim, raz pokrojony na kawałki. Marcin zobaczył
-         to jako „najpierw opis, potem jakieś myślenie, potem zdjęcia". */
-      const pasek = zapowiedz(k.conv, '', t('chat.findingPhotos', { q: wszystkie.join(', ') }));
-      // Równolegle – inaczej trzy zapytania to trzy razy dłuższe czekanie.
-      const zestawy = await Promise.all(wszystkie.map(async (q) => {
-        const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}`);
-        return { q, photos: d.results || [], error: d.error || '' };
-      }));
-      const znalezione = zestawy.filter((x) => x.photos.length);
-
-      if (!znalezione.length) {
-        /* Niepowodzenie wraca do modelu tak samo jak wynik. Kiedyś kończyliśmy
-           tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
-           się o niczym – i następne zdanie użytkownika trafiało w próżnię. */
-        const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
-        /* Człowiekowi jedno zdanie, bez nazw usług i angielskich wyjątków
-           („searxng: The operation was aborted…”); powód techniczny idzie
-           tylko do modelu, niżej (agencja, runda 5). */
-        pasek.domknij(t(powod ? 'chat.photosNoneErr' : 'chat.photosNoneEmpty'));
-        dodajWynikNarzedzia(k.conv,
-          `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
-          + (powod ? `Powód techniczny: ${powod}\n` : '')
-          + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe – spróbuj RAZ '
-          + 'konkretniejszego. Jeśli było już konkretne, nie szukaj ponownie: powiedz '
-          + 'wprost, że nie udało się znaleźć zdjęć, i zapytaj, czego dokładnie szukać.',
-          t('chat.photosQuery'));
-        return { akcja: 'dalej' };
+      /* TEKST NIE ZNIKA NA CZAS SZUKANIA. Marcin o planie Sycylii: „w momencie,
+         kiedy szukał zdjęć, nagle cała jego odpowiedź zniknęła, po czym
+         pojawiła się wraz ze zdjęciami”. Wcześniej w miejsce odpowiedzi stawał
+         pasek „Szukam zdjęć…”, a plan wracał dopiero z gotowymi siatkami.
+         Teraz od razu stoi pokrojony plan, pod każdym punktem miejsce na
+         zdjęcia (szkielet siatki), a siatki wypełniają się, gdy przychodzą. */
+      /* Zdjęcia, które ta rozmowa już pokazała. „Możesz wyszukać jakieś
+         inne?” dawało te same osiem – teraz bierzemy dalsze wyniki. */
+      const juzPokazane = new Set();
+      for (const w of k.conv.messages) {
+        const fotki = w && w.content && typeof w.content === 'object' ? (w.content.photos || []) : [];
+        for (const f of fotki) juzPokazane.add(f.full || f.thumb);
       }
-
-      /* Pasek postępu znika, a na jego miejsce wchodzi ODTWORZONA kolejność.
-         Usuwamy go z rozmowy zamiast przepisywać, bo teraz w to miejsce
-         wchodzi nie jedna wiadomość, tylko cały przeplot. */
-      const gdzie = k.conv.messages.indexOf(pasek.wiadomosc);
-      if (gdzie >= 0) k.conv.messages.splice(gdzie, 1);
-
-      const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
-      /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
-         Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
-         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd –
-         cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
-         dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
-         wstawiamy kawałków, w których nie została ani jedna litera. */
+      const miejsca = new Map();
       const dodajTekst = (tresc) => {
         const czysty = stripSearchMarker(tresc)
           // Punkt listy, po którym nic nie zostało – na końcu i w środku.
@@ -566,21 +553,72 @@ function utworzNarzedzia(z) {
         if (!/\p{L}|\p{N}/u.test(czysty)) return;
         wstawTekstModelu(k.conv, czysty, k.conv.__turaOd || 0);
       };
+      /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
+         Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
+         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd –
+         cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
+         dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
+         wstawiamy kawałków, w których nie została ani jedna litera. */
       for (const seg of segmenty) {
         dodajTekst(seg.tekst);
         for (const q of seg.zapytania) {
-          const znalezisko = poZapytaniu.get(bezOgonkowKlient(q));
-          if (!znalezisko) continue;
           /* Podpis nad siatką zostaje ZAWSZE, także przy jednym zestawie.
              To on wiąże zdjęcia z punktem planu, pod którym stoją. */
-          k.conv.messages.push({
-            role: 'assistant',
-            content: { text: znalezisko.q, photos: znalezisko.photos },
-          });
+          const w = { role: 'assistant', content: { text: q, photos: [], szukam: true } };
+          k.conv.messages.push(w);
+          miejsca.set(bezOgonkowKlient(q), w);
         }
       }
       dodajTekst(ogon);
+      saveConversations();
+      renderMessages();
 
+      // Równolegle – inaczej trzy zapytania to trzy razy dłuższe czekanie.
+      // Każda siatka wskakuje na swoje miejsce, gdy tylko przyjdzie.
+      const zestawy = await Promise.all(wszystkie.map(async (q) => {
+        const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}&ile=16`);
+        const nowe = (d.results || []).filter((f) => !juzPokazane.has(f.full || f.thumb));
+        const photos = (nowe.length ? nowe : (d.results || [])).slice(0, 8);
+        const w = miejsca.get(bezOgonkowKlient(q));
+        if (photos.length) w.content = { text: q, photos };
+        else {
+          const gdzie = k.conv.messages.indexOf(w);
+          if (gdzie >= 0) k.conv.messages.splice(gdzie, 1);
+        }
+        renderMessages();
+        return { q, photos, error: d.error || '' };
+      }));
+      const znalezione = zestawy.filter((x) => x.photos.length);
+      saveConversations();
+      const uwagaPominiete = pominiete.length
+        ? `\nPOMINIĘTE (limit siatek w jednej odpowiedzi): ${pominiete.join(', ')}. Jeśli użytkownik ich `
+          + 'potrzebuje, poproś o nie JEDNYM znacznikiem [GRAFIKA: …] w kolejnej odpowiedzi.'
+        : '';
+
+      if (!znalezione.length) {
+        /* Niepowodzenie wraca do modelu tak samo jak wynik. Kiedyś kończyliśmy
+           tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
+           się o niczym – i następne zdanie użytkownika trafiało w próżnię. */
+        const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
+        /* Człowiekowi jedno zdanie, bez nazw usług i angielskich wyjątków
+           („searxng: The operation was aborted…”); powód techniczny idzie
+           tylko do modelu, niżej (agencja, runda 5). */
+        k.conv.messages.push({ role: 'assistant', content: t(powod ? 'chat.photosNoneErr' : 'chat.photosNoneEmpty'), status: true });
+        saveConversations();
+        renderMessages();
+        dodajWynikNarzedzia(k.conv,
+          `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
+          + (powod ? `Powód techniczny: ${powod}\n` : '')
+          + 'Twoja odpowiedź jest już pokazana użytkownikowi – nie pisz jej od nowa. '
+          + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe – spróbuj RAZ '
+          + 'konkretniejszego. Jeśli było już konkretne, nie szukaj ponownie: powiedz '
+          + 'wprost, że nie udało się znaleźć zdjęć, i zapytaj, czego dokładnie szukać.'
+          + uwagaPominiete,
+          t('chat.photosQuery'));
+        return { akcja: 'dalej' };
+      }
+
+      const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
       for (const x of znalezione) k.stan.grafiki.add(bezOgonkowKlient(x.q));
       saveConversations();
       renderMessages();
@@ -592,6 +630,7 @@ function utworzNarzedzia(z) {
         + 'i nie rób z tego osobnej listy na końcu):\n'
         + znalezione.map((x) => `• ${x.q} – ${x.photos.length} szt.`).join('\n')
         + (bezWynikow.length ? `\nBEZ WYNIKÓW: ${bezWynikow.join(', ')}` : '')
+        + uwagaPominiete
         + '\n\nJeśli odpowiedź jest kompletna – napisz krótkie domknięcie albo nic. '
         + 'Jeśli w planie zostały przystanki bez zdjęć, poproś o nie JEDNYM '
         + 'znacznikiem [GRAFIKA: a; b; c]. Nie proś ponownie o to, co już masz powyżej.',

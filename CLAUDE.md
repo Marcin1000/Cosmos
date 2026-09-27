@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 135 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 137 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -128,6 +128,7 @@ robi większość szybkich zestawów.
 | `kontekst.js`, `konta.js`, `silniki.js` | kto pyta, konta i sesje, kto może użyć którego silnika |
 | `nauka.js` | procedury, bramka trybu auto |
 | `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, wyciąganie tekstu z dokumentów, wyszukiwanie w sieci |
+| `wyszukiwarki.js`, `grafiki.js` | wyszukiwarki z kluczem (Serper = Google, Brave) przed darmowymi; źródła zdjęć przeplatane |
 | `baza-wiedzy.js` | baza wiedzy: pliki, linki, notatki, fragmenty z wektorami, podgląd obrazu dla modelu |
 | `rozmowy.js` | historia rozmów: plik na rozmowę + indeks, dopisywanie odpowiedzi-sierot, kopia zapasowa |
 | `czat.js` | `POST /api/chat`: składanie kontekstu, okno modelu lokalnego, wybór modelu, wysyłka, biegi – kroki jako osobne funkcje, czyste na poziomie modułu |

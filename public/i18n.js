@@ -669,6 +669,7 @@ const I18N = {
     'chat.searched': '*Szukane w internecie: „{q}"*',
     'chat.genImage': '*Generuję obraz – to zwykle trwa od kilkunastu sekund do minuty…*',
     'chat.findingPhotos': '*Szukam zdjęć: {q}…*',
+    'chat.photosLoading': 'Szukam zdjęć…',
     /* Wersja PO znalezieniu. Bez niej „Szukam zdjęć…" zostawało na ekranie na
        zawsze – Marcin patrzył na gotowe zdjęcia i na wiszący pod nimi
        komunikat, że Cosmos ich właśnie szuka. */
@@ -1702,6 +1703,7 @@ const I18N = {
     'chat.searched': '*Searched the internet: “{q}”*',
     'chat.genImage': '*Generating the image – this usually takes from a few seconds to a minute…*',
     'chat.findingPhotos': '*Looking for photos: {q}…*',
+    'chat.photosLoading': 'Looking for photos…',
     'chat.photosNoneErr': 'Couldn’t fetch photos right now: the image search services aren’t responding. Try again in a moment.',
     'chat.photosNoneEmpty': 'No photos found for this query.',
     'chat.photosQuery': 'image search',

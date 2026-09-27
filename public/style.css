@@ -1097,6 +1097,14 @@ body::after {
   gap: 8px;
   margin-top: 10px;
 }
+/* Szkielet siatki, zanim przyjdą zdjęcia – tekst planu stoi, a pod punktem
+   widać, że zdjęcia są w drodze. */
+.photo-grid.szukam span {
+  aspect-ratio: 4 / 3; border-radius: 10px; background: var(--bg-hover);
+  animation: szkielet-zdjec 1.2s ease-in-out infinite alternate;
+}
+@keyframes szkielet-zdjec { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .photo-grid.szukam span { animation: none; } }
 .photo-tile {
   display: block;
   text-decoration: none;
