@@ -21,7 +21,7 @@ const PRZYPADKI = [
   ['Źródła bez dwukropka', 'Jutro będzie słonecznie.\n\nŹródła\n1. imgw.pl\n2. meteo.pl', /imgw|meteo/i, /słonecznie/],
   ['### Źródła', 'Jutro pada.\n\n### Źródła\n- meteo.pl\n- yr.no', /meteo|yr\.no/, /pada/],
   ['*Źródło:* kursywą', 'Wschód słońca jutro o 6:41.\n\n*Źródło: timeanddate.com*', /timeanddate|Źródło/, /6:41/],
-  ['— Źródła:', 'Wschód o 6:41.\n\n— Źródła: timeanddate.com, sunrise-sunset.org', /timeanddate|sunrise/, /6:41/],
+  ['długi myślnik + Źródła:', 'Wschód o 6:41.\n\n\u2014 Źródła: timeanddate.com, sunrise-sunset.org', /timeanddate|sunrise/, /6:41/],
   ['Bibliografia', 'Jutro pada.\n\nBibliografia:\n- meteo.pl', /meteo/, /pada/],
   ['Źródła w linii', 'Jutro pada. Źródła: meteo.pl, yr.no.', /meteo|yr/, /pada/],
   ['– źródło: w środku linii', 'Jutro 18 stopni – źródło: pogoda.onet.pl', /onet|źródło/, /18 stopni/],
