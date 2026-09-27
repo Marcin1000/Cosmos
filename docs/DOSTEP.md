@@ -136,6 +136,11 @@ Ma pokazać `active (running)`, a w panelu Cloudflare tunel zmieni status na
 | Service → Type | `HTTP` |
 | Service → URL | `127.0.0.1:3000` |
 
+W nowym wyglądzie panelu (okno „Add published application”) typ i adres są w jednym
+polu **Service URL**: wpisz `http://127.0.0.1:3000` – z `http://`, nie `https://`
+(Cosmos na VPS-ie mówi zwykłym HTTP, szyfruje Cloudflare). Path zostaw puste,
+„Additional application settings” na domyślnych, potem **Add route**.
+
 `127.0.0.1`, nie `localhost`: Cosmos słucha tylko na IPv4, a `localhost` bywa
 tłumaczony na IPv6 i tunel dostaje wtedy odmowę.
 
