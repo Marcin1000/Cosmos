@@ -64,8 +64,11 @@ const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
       window.__conv = conv;
       renderMessages();
       const g = NARZEDZIA.find((n) => n.nazwa === 'grafiki');
+      // Jak w prawdziwej turze: szkielet siatki żyje tylko w trakcie generowania.
+      isGenerating = true;
       window.__wynik = g.wykonaj({ acc, dop: g.dopasuj(acc), conv, depth: 0, ostatnia: false, przed: '',
-        stan: { archiwum: new Set(), grafiki: new Set(), plan: new Set(), grafikiOdlozone: new Set() } });
+        stan: { archiwum: new Set(), grafiki: new Set(), plan: new Set(), grafikiOdlozone: new Set() } })
+        .finally(() => { isGenerating = false; });
     }, acc);
     const ostatniWynikNarzedzia = () => p.evaluate(() => {
       const m = [...window.__conv.messages].reverse().find((x) => x.role === 'user');

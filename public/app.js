@@ -4423,18 +4423,21 @@ async function startVoiceCamera() {
   const zrodlo = localStorage.getItem('cosmos.liveSource') || 'camera';
   if (zrodlo.startsWith('kinect') && kinectDostepny()) return startVoiceKinect();
   let strumien;
+  // Wyścig: tryb głosowy zamknięty w trakcie czekania na zgodę na kamerę.
+  const bylGlosowy = voiceMode;
+  const porzucony = () => bylGlosowy && !voiceMode;
   try {
     strumien = await getMedia(videoConstraints(cameraFacing));
   } catch {
     // Komputer bez kamery, za to z Kinectem – bierzemy Kinecta. Ale nie po
     // wyjściu z trybu głosowego w trakcie czekania na zgodę.
-    if (voiceMode && kinectDostepny()) return startVoiceKinect();
+    if (!porzucony() && kinectDostepny()) return startVoiceKinect();
     return false;                     // tryb głosowy działa też bez kamery
   }
   /* Zgoda na kamerę przyszła, gdy trybu głosowego już nie było (albo kamera
      w nim zdążyła wstać drugą drogą). Bez tego kamera zostawała włączona
      w tle, z zapaloną diodą i bez podglądu (agencja, runda 7). */
-  if (!voiceMode || voiceCameraStream || voiceKinectStop) {
+  if (porzucony() || voiceCameraStream || voiceKinectStop) {
     strumien.getTracks().forEach((tr) => tr.stop());
     return Boolean(voiceCameraStream || voiceKinectStop);
   }

@@ -219,6 +219,7 @@ except agent.urllib.error.HTTPError as e:
 a = object.__new__(agent.Agent)
 a.serwer, a.token = S, "t"
 a.krotkie, a.dlugie = threading.Semaphore(4), threading.Semaphore(2)
+a.pule = {"/kinect/": threading.Semaphore(2)}
 a.przekaz({"id": "z1", "metoda": "GET", "sciezka": "/kinect/frame?stream=color", "naglowki": {}, "dlugosc": 0})
 time.sleep(1.2)
 print(json.dumps({"po_przerwie": po_przerwie, "blad": blad}, ensure_ascii=False))
