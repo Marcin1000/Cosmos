@@ -33,7 +33,15 @@ przeniesienia zostaje obok, w `data/kopia-przed-kontami-<data>/`.
 
 ## Krok 1 – ustaw login i hasło właściciela
 
-Na VPS-ie, w `/opt/cosmos/.env`:
+Na VPS-ie, w pliku `/opt/cosmos/.env`. To plik z ustawieniami, nie polecenie –
+otwórz go w edytorze (gdy go nie ma: najpierw `cp /opt/cosmos/.env.example /opt/cosmos/.env`):
+
+```
+nano /opt/cosmos/.env
+```
+
+Na końcu pliku dopisz (hasło: co najmniej 8 znaków), zapisz **Ctrl+O**, **Enter**,
+wyjdź **Ctrl+X**, a potem zamknij plik przed innymi kontami: `chmod 600 /opt/cosmos/.env`.
 
 ```
 COSMOS_PASSWORD=twoje-dotychczasowe-haslo
