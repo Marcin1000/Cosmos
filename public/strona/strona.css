@@ -814,6 +814,8 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .cta-karta p { font-size: clamp(16.5px, 1.5vw, 19px); opacity: .7; max-width: 52ch; }
 /* Osoba bez konta: następny krok zamiast ślepego „Zaloguj się”. */
 .cta-karta p.cta-zaproszenie { font-size: 14.5px; opacity: .6; }
+.cta-zaproszenie a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.cta-zaproszenie a:hover { opacity: .8; }
 .cta-karta .hero-cta { justify-content: center; margin-top: 8px; }
 .cta-znak { width: 72px; height: 72px; }
 .cta-znak { --planeta: var(--tlo); --planeta-obrys: var(--tekst); }
