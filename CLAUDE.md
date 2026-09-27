@@ -57,10 +57,14 @@ python senses/watcher.py          # obserwator kamery → POST /api/events
 python senses/kinect_watcher.py   # zmysł głębi (libfreenect)
 ```
 
+Na co dzień nikt tego nie wpisuje: `senses/agent.py` (agent zmysłów, sama biblioteka
+standardowa) uruchamia i zatrzymuje te trzy programy na komputerze osoby z przełączników
+w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje aplikacja.
+
 ## Testy i audyt
 
 ```bash
-npm test                  # 126 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 129 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -134,6 +138,7 @@ robi większość szybkich zestawów.
 | `statyka.js` | pliki statyczne, ETag, pamięć skompresowanych, **CSP aplikacji** |
 | `plener-trasy.js` | plan zdjęciowy, misja drona (KMZ), Canon, zestaw sprzętu |
 | `zmysly-proxy.js` | pośrednik do usługi zmysłów: ptak, wykrywanie, poza, Kinect |
+| `agent-zmyslow.js` | zmysły na komputerze KAŻDEJ osoby: parowanie kodem, długie odpytywanie, przełączniki, **`fetchZmyslow()` – jedyna droga do zmysłów** |
 | `os-czasu.js` | oś czasu migawek otoczenia |
 
 Źródła inteligencji za wspólnym interfejsem OpenAI-compatible:
@@ -278,12 +283,16 @@ Zasady, których nie wolno łamać:
    i `llmComplete` już to robią).
 7. **Dane od innych osób (imiona, loginy) do DOM-u tylko przez `textContent`.**
    Panel Dostęp pokazuje właścicielowi imiona wpisane przez gości.
-8. **Zmysły to domowe GPU właściciela** – każda droga do `SENSES_URL` w imieniu osoby
-   sprawdza `silniki.zmyslyDozwolone()` (trasa → 403, wyciąganie tekstu → pusty wynik).
-   Adres domu (`SENSES_URL`, `LOCAL_BASE_URL`) i ścieżki serwera nie trafiają do członka
-   ani w `/api/config`, ani w komunikatach błędów.
+8. **Zmysły idą wyłącznie przez `fetchZmyslow()` z `lib/agent-zmyslow.js`** – nigdy
+   `fetch(`${SENSES_URL}…`)` w nowym kodzie. Ona wybiera źródło dla bieżącej osoby: jej
+   własny komputer (agent zmysłów) → domowe GPU właściciela, gdy `silniki.zmyslyDozwolone()`
+   → wyjątek `zmysly-niedostepne`. Czy osoba w ogóle ma zmysły: `zmyslyDostepne()`
+   (trasa → 403, wyciąganie tekstu → pusty wynik). Adres domu (`SENSES_URL`,
+   `LOCAL_BASE_URL`) i ścieżki serwera nie trafiają do członka ani w `/api/config`,
+   ani w komunikatach błędów.
 
-Pilnują tego zestawy `izolacja-osob`, `konta-i-logowanie`, `konta-w-przegladarce`.
+Pilnują tego zestawy `izolacja-osob`, `konta-i-logowanie`, `konta-w-przegladarce`,
+`agent-zmyslow`.
 
 ### Dane
 
@@ -350,6 +359,8 @@ z pozostałych.
 | `wysylka.js` | wysyłka pliku do bazy wiedzy z postępem; podgląd zdjęcia dla modelu |
 | `kamera.js` | kamera na żywo: podgląd, Kinect, detekcja, sylwetka, dopasowanie panelu |
 | `nauka-widok.js` | panel Nauka: rozpoznawanie, procedury, rutyny, runner z potwierdzeniem |
+| `zmysly-widok.js` | Ustawienia → Zmysły: kreator „Podłącz komputer”, przełączniki składników, pakiety |
+| `samouczek.js` | samouczek pierwszego uruchomienia; pod automatem (`navigator.webdriver`) sam się nie pokazuje |
 | `strona/` | strona produktowa pod `/` – osobna od aplikacji, własny CSS i skrypt |
 
 Moduły trzymają się wzorca dwustronnego, żeby ten sam plik działał w przeglądarce

@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="126 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-126-5E9E3A?style=flat-square">
+  <img alt="129 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-129-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 126 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 129 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 126 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 129 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -703,6 +703,39 @@ Wymaga zainstalowanych zależności (patrz `training/README.md`); trening korzys
 Szczegóły, wybór modelu bazowego (Qwen/Llama/Nemotron) i wymagania sprzętowe:
 **[training/README.md](training/README.md)**.
 
+### 🖥️ Zmysły na Twoim komputerze – agent zmysłów
+
+Zmysły (Whisper, wykrywanie obiektów, sylwetka, Kinect, wyciąganie tekstu,
+embeddingi) liczą się na komputerze **tej osoby, która pyta** – nie zawsze na
+komputerze właściciela. Każda osoba podłącza swój komputer w **Ustawienia → Zmysły**:
+
+1. „Podłącz komputer” daje jedno polecenie do wklejenia (PowerShell na Windowsie,
+   Terminal na macOS i Linuksie) z 6-cyfrowym kodem ważnym 10 minut.
+2. Polecenie pobiera `senses/agent.py` (sama biblioteka standardowa Pythona),
+   w razie potrzeby instaluje Pythona (winget), paruje komputer z kontem, dodaje
+   agenta do autostartu i odpina go od okna – okno można zamknąć.
+3. Resztą sterujesz z aplikacji: przełączniki **Zmysły**, **Obserwator kamery**,
+   **Kinect** uruchamiają i zatrzymują programy na tym komputerze; „Zainstaluj
+   zalecane” instaluje pakiety do osobnego środowiska `~/.cosmos/venv`; „Aktualizuj
+   agenta”, autostart, „Odłącz”. Gdy składnik padnie (brak pakietu, brak kamery),
+   w aplikacji widać „Nie wystartował” z końcówką dziennika.
+
+Połączenie jest **wychodzące**: agent sam pyta serwer o zlecenia (długie
+odpytywanie, 25 s), więc nie trzeba przekierowywać portów ani stawiać VPN-a,
+a usługa zmysłów słucha tylko na `127.0.0.1`. Agent przekazuje wyłącznie ścieżki
+zmysłów z zamkniętej listy i instaluje wyłącznie pakiety z własnej listy.
+
+Kolejność źródeł dla osoby: **jej komputer** (gdy zmysły na nim działają) →
+komputer domowy właściciela pod `SENSES_URL` (tylko właściciel albo osoba z jego
+zgodą) → bez zmysłów (mowa i kamera w przeglądarce, embeddingi w chmurze). Zdarzenia
+z obserwatora kamery idą tokenem agenta i trafiają tylko na konto tej osoby.
+
+Właściciel robi to samo: podłączony komputer domowy ma pierwszeństwo przed
+`SENSES_URL`, a zmysły włącza się i wyłącza przełącznikiem zamiast z wiersza poleceń.
+
+Za odwrotnym pośrednikiem innym niż Cloudflare Tunnel ustaw `COSMOS_PUBLIC_URL`
+(adres, pod którym komputery osób widzą Cosmosa) – trafia do skryptu instalacji.
+
 ### 🦴 Kinect 360 – cztery czujniki w jednym
 
 Kinect nie jest kamerą UVC: przeglądarka go nie widzi, a `getUserMedia` nigdy go nie
@@ -956,6 +989,11 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
 | `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) – przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
+| `/api/agent/kod` `/api/agent/lista` `/api/agent?id=` | POST / GET / DELETE | Agent zmysłów: 6-cyfrowy kod parowania (ważny 10 min), lista Twoich komputerów z ich stanem, odłączenie komputera |
+| `/api/agent/ustaw?id=` `/api/agent/polecenie?id=` | POST | Przełączniki Zmysły / Obserwator / Kinect (zapamiętane na serwerze) oraz polecenia: instalacja pakietów z zamkniętej listy, aktualizacja plików, autostart |
+| `/api/agent/instaluj.ps1?kod=` `/api/agent/instaluj.sh?kod=` `/api/agent/agent.py` `/api/agent/paruj` | GET / POST | Publiczne: skrypt instalacji jednym poleceniem, sam agent i parowanie kodem (odpowiada tokenem agenta; na serwerze zostaje tylko jego skrót) |
+| `/api/agent/czekaj` `/api/agent/wynik` `/api/agent/stan` `/api/agent/zdarzenie` `/api/agent/pliki` `/api/agent/plik` | GET / POST | Kanał agenta, tokenem agenta: długie odpytywanie o zlecenia (25 s), wynik zlecenia, stan komputera co 10 s, zdarzenie, pliki zmysłów do pobrania (stała lista, skróty SHA-256) |
+| `/api/konto/samouczek` | POST | Samouczek pierwszego uruchomienia przejęty albo pominięty – pamiętane per osoba |
 | `/api/polish` | POST | Przepisuje podyktowany tekst na precyzyjny prompt (`{text, endpoint}` → `{text}`) |
 | `/api/lessons` `/api/lessons/match` | GET/POST/DELETE | Nauka: wzorce rozpoznawania i dopasowanie |
 | `/api/procedures` | GET/POST/PUT/DELETE | Nauka: procedury (czynności krok po kroku) |
@@ -1278,7 +1316,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 126 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 129 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

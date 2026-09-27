@@ -732,14 +732,21 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 }
 .warstwa {
   position: absolute; left: 50%; top: 58%; width: clamp(200px, 26vw, 310px); aspect-ratio: 1; margin: 0;
-  border-radius: 22px; border: 1.5px solid color-mix(in srgb, var(--k) 70%, transparent);
+  border-radius: 22px; border: 1.5px solid color-mix(in srgb, var(--k) 85%, transparent);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--k) 20%, var(--powierzchnia)), color-mix(in srgb, var(--k) 6%, var(--powierzchnia)));
   box-shadow: 0 30px 60px -30px color-mix(in srgb, var(--k) 60%, transparent);
   transform: translate(-50%, -50%) translateY(calc(var(--i) * (-1 * (28px + var(--p) * 58px)))) rotateX(58deg) rotateZ(-45deg);
   transition: opacity .4s, filter .4s;
 }
-.warstwa.przygas { opacity: .35; filter: saturate(.5); }
+/* Przygaszona warstwa ma dalej być warstwą: przy .35 i odbarwieniu w ciemnym
+   motywie znikała prawie cała, a z przekroju zostawała jedna płyta w pustce
+   (Marcin: „kiepsko działa”). */
+.warstwa.przygas { opacity: .6; }
+.stos:has(.warstwa.przygas) .warstwa:not(.przygas) {
+  border-color: var(--k);
+  box-shadow: 0 30px 70px -24px color-mix(in srgb, var(--k) 85%, transparent), 0 0 0 1px color-mix(in srgb, var(--k) 40%, transparent);
+}
 .w-siatka {
   position: absolute; inset: 10px; border-radius: 14px; opacity: .5;
   background-image: linear-gradient(color-mix(in srgb, var(--k) 30%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--k) 30%, transparent) 1px, transparent 1px);

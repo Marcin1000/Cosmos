@@ -421,6 +421,9 @@ body::after {
   min-width: 0;
   row-gap: 8px;
 }
+/* Otwarta lista modeli spod plakietki musi leżeć NAD rozmową – pasek ma
+   z-index 1, więc bez tego ekran powitalny przechwytywał kliknięcia w listę. */
+.topbar:has(.model-lista:not([hidden])) { z-index: 40; }
 /* Płótno otwarte: kolumna rozmowy ma ~560 px. Plakietka modelu znika (niżej),
    a zakładki i ikony ścieśniają się tak, żeby komplet – cztery silniki
    i pięć ikon – zmieścił się w jednym wierszu. Zawijanie zostaje jako
@@ -521,12 +524,40 @@ body::after {
   background: var(--bg-elevated);
   padding: 6px 14px 6px 12px;
   border-radius: 999px;
-  max-width: 46%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-left: auto;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
 }
+.topbar-model:hover, .topbar-model[aria-expanded="true"] { color: var(--text); border-color: var(--border-strong, var(--border)); }
+.topbar-model::after { content: "▾"; margin-left: 8px; opacity: .6; }
+/* Wybór modelu z plakietki – lista modeli bieżącego silnika. */
+.model-wybor { position: relative; margin-left: auto; max-width: 46%; min-width: 0; display: flex; }
+.model-lista {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+  width: min(360px, 90vw); max-height: min(60vh, 440px); overflow-y: auto;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-soft); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.model-lista[hidden] { display: none; }
+.model-lista-glowa { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); padding: 8px 10px 6px; }
+.model-lista-info { font-size: 12.5px; color: var(--text-dim); padding: 8px 10px; }
+.model-lista-info.blad { color: var(--danger); white-space: pre-wrap; }
+.model-opcja {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left;
+  background: none; border: 0; border-radius: 9px; padding: 8px 10px; cursor: pointer; color: var(--text);
+}
+.model-opcja:hover, .model-opcja:focus-visible { background: color-mix(in srgb, var(--k-akt) 10%, transparent); outline: none; }
+.model-opcja.wybrany { background: color-mix(in srgb, var(--k-akt) 16%, transparent); }
+.model-opcja-nazwa { font-family: var(--font-mono); font-size: 12px; word-break: break-all; }
+.model-opcja-podpis { font-size: 11.5px; color: var(--text-dim); }
+.model-lista-ustawienia { margin-top: 4px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--text-dim); font-size: 12px; padding: 9px 10px 6px; text-align: left; cursor: pointer; }
+.model-lista-ustawienia:hover { color: var(--text); }
 .topbar-model::before {
   content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   margin-right: 8px; vertical-align: 1px; background: var(--k-akt);
@@ -535,7 +566,7 @@ body::after {
 }
 /* Przy otwartym płótnie kolumna rozmowy ma ~560 px, a nazwa modelu jest
    i tak w podpisie każdej odpowiedzi – plakietka ustępuje miejsca. */
-.app:has(.canvas:not([hidden])) .topbar-model { display: none; }
+.app:has(.canvas:not([hidden])) .model-wybor { display: none; }
 
 .chat-scroll {
   flex: 1;
@@ -3203,7 +3234,7 @@ body::after {
   .field-grid { grid-template-columns: 1fr; }
   .msg-user .msg-content { max-width: 90%; }
   .endpoint-tab { padding: 6px 10px; }
-  .topbar-model { display: none; }
+  .model-wybor { display: none; }
   .composer-wrap { padding: 8px 12px 12px; }
   .messages { padding: 12px 14px 20px; }
 
@@ -3903,4 +3934,101 @@ select::-ms-expand { display: none; }
     bottom: calc(var(--composer-h, 0px) + 12px);
     max-height: calc(100dvh - 24px - var(--composer-h, 0px));
   }
+}
+
+/* ---- ZMYSŁY NA MOIM KOMPUTERZE (public/zmysly-widok.js) ---------------- */
+.zm-lista { display: flex; flex-direction: column; gap: 10px; }
+.zm-zrodlo { margin: 2px 0 0; }
+.zm-komputer {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg);
+}
+.zm-glowa { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.zm-nazwa { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-meta { font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
+.zm-kropka { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.zm-kropka.on { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
+.zm-caps { margin: 0; }
+.zm-baner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  font-size: 12.5px;
+}
+.zm-baner .btn-primary { margin-left: auto; }
+.zm-skladniki { display: flex; flex-direction: column; gap: 6px; }
+.zm-skladnik { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.zm-przelacznik { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; min-width: 0; }
+.zm-przelacznik input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.zm-suwak {
+  width: 34px; height: 20px; border-radius: 10px; flex: none; position: relative;
+  background: var(--border-strong); transition: background .15s;
+}
+.zm-suwak::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text); transition: transform .15s;
+}
+.zm-przelacznik input:checked + .zm-suwak { background: var(--k-akt, var(--success)); }
+.zm-przelacznik input:checked + .zm-suwak::after { transform: translateX(14px); background: var(--bg); }
+.zm-przelacznik input:focus-visible + .zm-suwak { outline: 2px solid var(--text); outline-offset: 2px; }
+.zm-przelacznik input:disabled + .zm-suwak { opacity: .45; }
+.zm-stan { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.zm-ok { color: var(--success-tekst); }
+.zm-zle { color: var(--danger); }
+.zm-trwa { color: var(--warning-tekst); }
+.zm-log pre, .zm-log-pre {
+  font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto;
+  background: var(--code-bg); border-radius: 8px; padding: 8px 10px; margin: 6px 0 0; color: var(--text-dim);
+}
+.zm-log summary, .zm-pakiety summary, .zm-recznie summary { cursor: pointer; font-size: 12px; color: var(--text-dim); }
+.zm-pakiety-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; margin: 8px 0; }
+.zm-pakiet { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.zm-stopka { flex-wrap: wrap; align-items: center; }
+.zm-stopka .zm-auto { margin-left: 0; }
+.zm-stopka .btn-ghost { margin-left: auto; }
+.zm-kreator { margin-top: 10px; }
+.zm-kroki { display: flex; flex-direction: column; gap: 10px; }
+.zm-system { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; align-self: flex-start; }
+.zm-system button {
+  border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 12.5px;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
+}
+.zm-system button.aktywna { background: var(--bg-hover); color: var(--text); }
+.zm-lista-krokow { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.zm-polecenie-wiersz { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
+.zm-polecenie {
+  flex: 1; min-width: 0; display: block; padding: 8px 10px; border-radius: 8px;
+  background: var(--code-bg); font-size: 11.5px; word-break: break-all; user-select: all;
+}
+.zm-czekam { font-size: 12.5px; color: var(--text-dim); margin: 0; }
+.zm-czekam::before { content: '◌ '; }
+.zm-czekam.zm-ok { color: var(--success-tekst); }
+.zm-czekam.zm-ok::before { content: '✓ '; }
+
+/* ---- SAMOUCZEK (public/samouczek.js) ------------------------------------ */
+.sm-nakladka { z-index: 60; }
+.sm-okno { padding: 26px 26px 18px; gap: 16px; overflow: auto; }
+.sm-kropki { display: flex; gap: 6px; }
+.sm-kropki span { width: 22px; height: 3px; border-radius: 2px; background: var(--border-strong); }
+.sm-kropki span.za { background: var(--text-faint); }
+.sm-kropki span.aktywna { background: var(--k-akt, var(--text)); }
+.sm-cialo { display: flex; flex-direction: column; gap: 10px; min-height: 180px; }
+.sm-tytul { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+.sm-lead { font-size: 14.5px; color: var(--text-dim); margin: 0; line-height: 1.5; }
+.sm-pole {
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg-input); color: var(--text); font: inherit; font-size: 14px;
+}
+.sm-punkty { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+.sm-stopka { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sm-odstep { flex: 1; }
+@media (max-width: 520px) {
+  .sm-okno { padding: 20px 16px 14px; }
+  .sm-tytul { font-size: 19px; }
+  .zm-meta { display: none; }
 }

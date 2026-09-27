@@ -425,6 +425,21 @@ function utworzKonta({ $, t, zmienJezyk }) {
       try { await navigator.clipboard.writeText(pole.value); komunikat(t('acc.copied')); }
       catch { pole.select(); document.execCommand('copy'); komunikat(t('acc.copied')); }
     });
+    /* Messenger (Meta): na telefonie aplikacja przyjmuje link wprost
+       (fb-messenger://share). Na komputerze Meta nie pozwala wstawić treści
+       z zewnątrz bez własnej aplikacji Facebooka – kopiujemy link i otwieramy
+       messenger.com, a komunikat mówi, żeby go wkleić. */
+    $('dostep-messenger').addEventListener('click', async () => {
+      const link = $('dostep-link-pole').value;
+      if (!link) return;
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        location.href = `fb-messenger://share/?link=${encodeURIComponent(link)}`;
+        return;
+      }
+      try { await navigator.clipboard.writeText(link); } catch { $('dostep-link-pole').select(); document.execCommand('copy'); }
+      window.open('https://www.messenger.com/', '_blank', 'noopener');
+      komunikat(t('acc.messengerPaste'));
+    });
     $('dostep-udostepnij').addEventListener('click', async () => {
       try {
         await navigator.share({ title: 'Cosmos', text: t('acc.shareText'), url: $('dostep-link-pole').value });

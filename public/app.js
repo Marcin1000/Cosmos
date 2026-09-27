@@ -2912,6 +2912,15 @@ function stripForSpeech(text) {
   t = t
     // Sekcja źródeł to linki dla oka – lektor czytał je po kolei, adres po adresie.
     .replace(/\n[ \t]*(?:\*\*)?(?:Źródła|Zrodla|Sources)(?:\*\*)?:?[ \t]*\n[\s\S]*$/i, '')
+    /* Źródła w trybie głosowym nie są mówione (Marcin, runda 5): linie „Źródło: …”
+       w dowolnym miejscu, dopiski „(źródło: …)” i wstęp „Według wyników
+       wyszukiwania, …” – gdy model mimo instrukcji je napisze. */
+    .replace(/^[ \t]*(?:\*\*)?(?:Źródło|Źródła|Źródłem|Source|Sources|Via)(?:\*\*)?[ \t]*:.*$/gim, '')
+    .replace(/\s*\((?:źródło|źródła|wg|według|source|sources|via)\b[^)]*\)/gi, '')
+    .replace(/(^|[.!?]\s+)(?:Według|Na podstawie|Zgodnie z|Z)\s+[^,.!?\n]{0,60}?(?:wyszukiwa|wynik|stron|serwis|internet|sieci|źród)[^,.!?\n]*,\s*(\p{L})/giu,
+      (_, przed, litera) => przed + litera.toUpperCase())
+    .replace(/(^|[.!?]\s+)(?:According to|Based on)\s+[^,.!?\n]{0,60}?(?:search|result|site|web|source)[^,.!?\n]*,\s*(\p{L})/giu,
+      (_, przed, litera) => przed + litera.toUpperCase())
     .replace(/【[^】]*】/g, '')                                  // przypisy w stylu 【1†L1-L4】
     .replace(/\[\d+(?:[,–-]\s*\d+)*\](?!\()/g, '')              // przypisy [1], [2–3]
     .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
@@ -3505,6 +3514,10 @@ const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywa
    więc musi stać dokładnie tu, gdzie stał przeniesiony kod. */
 /* Konta: zaproszenie, Twoje konto, Dostęp (public/konta.js). */
 const konta_ = utworzKonta({ $, t, zmienJezyk: () => setLang(getLang() === 'pl' ? 'en' : 'pl') });
+// Zmysły na komputerze osoby (Ustawienia → Zmysły) i samouczek pierwszego uruchomienia.
+const zmyslyWidok_ = utworzZmyslyWidok({ $, t });
+zmyslyWidok_.pilnuj();
+const samouczek_ = utworzSamouczek({ $, t, zmysly: zmyslyWidok_ });
 
 const { odswiezPlan, zamknijPlener } = utworzPlener({
   $, el, t, readJsonSafe, closeSettings, dopasujPanelKamery,
@@ -5289,6 +5302,7 @@ function buildEndpointTabs(zPamieci = null) {
 }
 
 function setEndpoint(name) {
+  if (typeof zamknijListeModeli === 'function') zamknijListeModeli();
   endpoint = name;
   localStorage.setItem(STORAGE_KEYS.endpoint, name);
   document.documentElement.dataset.silnik = name;   // kolor nici, obwódki pola i kropki modelu
@@ -6106,6 +6120,111 @@ function updateModelBadge() {
   el.welcomeModel.textContent = model;
 }
 
+/* WYBÓR MODELU Z PLAKIETKI. Model zmieniało się tylko w Ustawieniach → Silniki;
+   plakietka w prawym górnym rogu pokazywała go, ale nic nie robiła (Marcin).
+   Klik otwiera listę modeli BIEŻĄCEGO silnika – tej samej, co „Pobierz listę”
+   (u członka przyciętej do modeli właściciela). Wybór to to samo nadpisanie
+   co pole w Ustawieniach. Nazwy modeli przychodzą od dostawcy, więc do DOM-u
+   idą przez textContent. */
+const listyModeli = {};                 // silnik → { modele, kiedy }
+const LISTA_MODELI_WAZNA_MS = 5 * 60 * 1000;
+async function modeleSilnika(ep) {
+  const z = listyModeli[ep];
+  if (z && Date.now() - z.kiedy < LISTA_MODELI_WAZNA_MS) return z.modele;
+  const res = await fetch(`/api/models?endpoint=${encodeURIComponent(ep)}`);
+  const data = await readJsonSafe(res);
+  if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : (data.error?.message || `HTTP ${res.status}`));
+  const nieDoRozmowy = (m) => typeof modelNotAChatPartner === 'function' && modelNotAChatPartner(m);
+  const modele = [...new Set((data.data || []).map((m) => m.id))].filter((m) => m && !nieDoRozmowy(m)).sort();
+  listyModeli[ep] = { modele, kiedy: Date.now() };
+  return modele;
+}
+function zamknijListeModeli() {
+  const lista = $('model-lista');
+  if (!lista || lista.hidden) return;
+  lista.hidden = true;
+  el.topbarModel.setAttribute('aria-expanded', 'false');
+}
+function wybierzModelZPlakietki(id) {
+  const pole = POLE_MODELU[endpoint];
+  if (!pole) return;
+  settings[pole] = id;
+  saveSettings();
+  const polePanel = $(`set-model-${endpoint}`);
+  if (polePanel) polePanel.value = id;
+  updateModelBadge();
+  zamknijListeModeli();
+  el.input.focus();
+}
+function pozycjaListyModeli(tekst, podpis, wybrany, naKlik) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'model-opcja' + (wybrany ? ' wybrany' : '');
+  b.setAttribute('role', 'option');
+  b.setAttribute('aria-selected', wybrany ? 'true' : 'false');
+  const n = document.createElement('span');
+  n.className = 'model-opcja-nazwa';
+  n.textContent = tekst;
+  b.appendChild(n);
+  if (podpis) {
+    const p = document.createElement('span');
+    p.className = 'model-opcja-podpis';
+    p.textContent = podpis;
+    b.appendChild(p);
+  }
+  b.addEventListener('click', naKlik);
+  return b;
+}
+async function otworzListeModeli() {
+  const lista = $('model-lista');
+  if (!lista) return;
+  if (!lista.hidden) { zamknijListeModeli(); return; }
+  const ep = endpoint;
+  lista.hidden = false;
+  el.topbarModel.setAttribute('aria-expanded', 'true');
+  const labels = { cloud: t('tabCloud'), local: t('tabLocal'), openai: 'OpenAI', claude: 'Claude' };
+  const naglowek = document.createElement('div');
+  naglowek.className = 'model-lista-glowa';
+  naglowek.textContent = t('model.pickFor', { silnik: labels[ep] || ep });
+  const ladowanie = document.createElement('div');
+  ladowanie.className = 'model-lista-info';
+  ladowanie.textContent = t('model.pickLoading');
+  lista.replaceChildren(naglowek, ladowanie);
+  let modele = [];
+  let blad = '';
+  try { modele = await modeleSilnika(ep); } catch (err) { blad = err.message; }
+  if (lista.hidden || ep !== endpoint) return;   // zamknięta albo zmieniony silnik w międzyczasie
+  const obecny = nadpisanieModelu(ep);
+  const domyslny = epConfig(ep).model || '';
+  const pozycje = [pozycjaListyModeli(t('model.pickDefault'), domyslny, !obecny, () => wybierzModelZPlakietki(''))];
+  const wszystkie = obecny && !modele.includes(obecny) ? [obecny, ...modele] : modele;
+  for (const m of wszystkie) {
+    if (m === domyslny && !obecny) continue;       // jest już jako „domyślny”
+    const info = typeof modelInfo === 'function' ? modelInfo(m, ep) : null;
+    pozycje.push(pozycjaListyModeli(m, info && !info.zgadywane ? info.nazwa : '', m === obecny, () => wybierzModelZPlakietki(m)));
+  }
+  const dol = [];
+  if (blad) {
+    const e = document.createElement('div');
+    e.className = 'model-lista-info blad';
+    e.textContent = blad;
+    dol.push(e);
+  }
+  const doUst = document.createElement('button');
+  doUst.type = 'button';
+  doUst.className = 'model-lista-ustawienia';
+  doUst.textContent = t('model.pickSettings');
+  doUst.addEventListener('click', () => { zamknijListeModeli(); openSettings(); });
+  dol.push(doUst);
+  lista.replaceChildren(naglowek, ...pozycje, ...dol);
+  (lista.querySelector('.model-opcja.wybrany') || lista.querySelector('.model-opcja'))?.focus();
+}
+el.topbarModel.addEventListener('click', otworzListeModeli);
+document.addEventListener('click', (e) => { if (!e.target.closest('#model-wybor')) zamknijListeModeli(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('model-lista')?.hidden) { zamknijListeModeli(); el.topbarModel.focus(); }
+});
+
 function setStatusRow(rowEl, online, extra) {
   const dot = rowEl.querySelector('.status-dot');
   const state = rowEl.querySelector('.status-state');
@@ -6380,6 +6499,8 @@ function startApp() {
      CSS trzyma go schowanego (.app:not(.gotowa)). Bez tego przy każdym
      starcie migał otwarty z przyciemnieniem przez ~0,4 s. */
   document.querySelector('.app').classList.add('gotowa');
+  // Pierwsze wejście tej osoby: samouczek (imię, klucze, zmysły, telefon).
+  samouczek_.wystartuj().catch(() => { /* samouczek nie może zablokować aplikacji */ });
 }
 
 // ----------------------------------------------------------------

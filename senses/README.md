@@ -9,6 +9,12 @@ na Twoim GPU – bez wysyłania dźwięku i obrazu do chmury.
 > – CZĘŚĆ 5. Oba pliki opisują ten sam moduł; tutaj jest więcej szczegółów i wszystkie
 > narzędzia sprzętowe.
 
+> **Najprościej: agent zmysłów.** W aplikacji **Ustawienia → Zmysły → Podłącz komputer**
+> daje jedno polecenie do wklejenia. Instaluje ono `agent.py` (sama biblioteka standardowa
+> Pythona), który paruje ten komputer z Twoim kontem, instaluje pakiety do `~/.cosmos/venv`
+> jednym kliknięciem i uruchamia `service.py`, `watcher.py` i `kinect_watcher.py`
+> z przełączników w aplikacji. Ręczne uruchamianie opisane niżej jest dalej możliwe.
+
 ## Co działa, a co nie – stan na dziś
 
 Nie każdy moduł w tym folderze jest wpięty w interfejs Cosmosa. Poniższa tabela mówi

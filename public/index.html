@@ -236,7 +236,11 @@
         <button class="icon-btn" id="export-btn" data-i18n-title="exportConv" title="Eksportuj (Markdown)" aria-label="Eksportuj" style="display:none">
           <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="topbar-model" id="topbar-model" data-i18n-title="activeModel" title="Aktywny model">–</div>
+        <!-- Plakietka jest też wyborem modelu dla bieżącego silnika (Chmura, Lokalnie, OpenAI, Claude). -->
+        <div class="model-wybor" id="model-wybor">
+          <button type="button" class="topbar-model" id="topbar-model" aria-haspopup="listbox" aria-expanded="false" data-i18n-title="activeModel" title="Aktywny model">–</button>
+          <div class="model-lista" id="model-lista" role="listbox" data-i18n-aria="activeModel" aria-label="Aktywny model" hidden></div>
+        </div>
       </header>
 
       <div class="chat-scroll" id="chat-scroll">
@@ -329,6 +333,7 @@
         <!-- Nawigacja po grupach – przewija do grupy, niczego nie chowa (app.js: karty ustawień). -->
         <nav class="set-karty" aria-label="Ustawienia" data-i18n-aria="set.karty">
           <button type="button" data-cel="konto" data-i18n="set.k.konto">Konto</button>
+          <button type="button" data-cel="zmysly" data-i18n="set.k.zmysly">Zmysły</button>
           <button type="button" data-cel="silniki" data-i18n="set.k.silniki">Silniki</button>
           <button type="button" data-cel="glos" data-i18n="set.k.glos">Głos</button>
           <button type="button" data-cel="pamiec" data-i18n="set.k.pamiec">Pamięć</button>
@@ -377,6 +382,7 @@
             </div>
             <div class="field-row">
               <button type="button" class="btn-secondary" id="konto-wyloguj-wszedzie" data-i18n="acc.logoutAll">Wyloguj pozostałe urządzenia</button>
+              <button type="button" class="btn-secondary" id="konto-samouczek" data-i18n="acc.tutorial">Pokaż samouczek</button>
             </div>
           </details>
           <p class="field-hint konto-komunikat" id="konto-komunikat" role="status"></p>
@@ -394,6 +400,7 @@
             <div class="field-row">
               <button type="button" class="btn-secondary" id="dostep-kopiuj" data-i18n="acc.copy">Kopiuj link</button>
               <button type="button" class="btn-secondary" id="dostep-udostepnij" data-i18n="acc.share">Wyślij…</button>
+              <button type="button" class="btn-secondary" id="dostep-messenger" data-i18n="acc.messenger">Messenger</button>
             </div>
             <span class="field-hint" data-i18n="acc.linkHint">Link działa raz i wygasa po 7 dniach. Wyślij go tylko tej osobie – kto go otworzy pierwszy, ten zakłada konto.</span>
           </div>
@@ -402,6 +409,14 @@
           <div class="dostep-lista" id="dostep-lista"></div>
           <div class="dostep-lista" id="dostep-zaproszenia"></div>
           <span class="field-hint" data-i18n="acc.privacy">Widzisz konta, ostatnią wizytę, liczbę wiadomości i zajęte miejsce. Rozmów, pamięci i bazy wiedzy innych osób nie widzisz – i nikt nie widzi Twoich.</span>
+        </div>
+
+        <!-- ZMYSŁY NA MOIM KOMPUTERZE – każdy. Wypełnia public/zmysly-widok.js. -->
+        <div data-karta="zmysly" class="field zm-blok" id="zm-blok">
+          <span class="field-label" data-i18n="zm.title">Zmysły na Twoim komputerze</span>
+          <span class="field-hint" data-i18n="zm.hint">Rozpoznawanie mowy, wykrywanie obiektów, sylwetka i Kinect mogą liczyć się na Twoim komputerze – prywatnie i bez kosztów. Podłączasz go raz, potem wszystkim sterujesz stąd.</span>
+          <div class="zm-lista" id="zm-lista" aria-live="polite"></div>
+          <div class="zm-kreator" id="zm-kreator"></div>
         </div>
 
         <label data-karta="silniki" class="field">
@@ -1276,6 +1291,8 @@
   <script src="/wysylka.js"></script>
   <script src="/kamera.js"></script>
   <script src="/nauka-widok.js"></script>
+  <script src="/zmysly-widok.js"></script>
+  <script src="/samouczek.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -250,17 +250,35 @@ czegokolwiek.
 
 | Zmysł | Co trzeba zrobić |
 |---|---|
-| Mikrofon, dyktowanie, „naciśnij, aby mówić" | nic – przeglądarka; z przełącznikiem **lokalny GPU** – Whisper na Twoim komputerze |
-| Czytanie na głos | nic – głos systemu; z przełącznikiem **lokalny GPU** – Piper |
+| Mikrofon, dyktowanie, „naciśnij, aby mówić" | nic – przeglądarka; z własnym komputerem – Whisper na jej karcie |
+| Czytanie na głos | nic – głos systemu; z własnym komputerem – Piper |
 | Kamera (zdjęcie do rozmowy, tryb głosowy z kamerą) | nic – przeglądarka zapyta o zgodę |
-| Kinect, YOLO na żywo, Whisper na własnej karcie | **jeszcze nie** – patrz niżej |
+| Kinect, YOLO na żywo, Whisper na własnej karcie | **Ustawienia → Zmysły → Podłącz komputer** |
 
-Zaawansowane zmysły (Kinect, wykrywanie obiektów na żywo, Whisper na GPU)
-działają dziś **tylko u właściciela**, bo usługa zmysłów łączy się
-z serwerem jako Ty. Następny etap to **agent zmysłów** dla każdej osoby:
-program na jej komputerze, który sam łączy się z `cosmosai.live`, paruje się
-6-cyfrowym kodem z Ustawień i wysyła zdarzenia tylko na jej konto. Nie trzeba
-będzie przekierowywać portów ani stawiać VPN-a.
+Każda osoba podłącza **swój** komputer – zmysły liczą się wtedy na jej
+sprzęcie, a zdarzenia z jej kamery trafiają tylko na jej konto:
+
+1. **Ustawienia → Zmysły → Podłącz komputer.** Aplikacja pokazuje jedno
+   polecenie z 6-cyfrowym kodem (ważnym 10 minut).
+2. Na komputerze, który ma liczyć zmysły: Windows – klawisz Windows, wpisać
+   „PowerShell”, Enter; macOS/Linux – Terminal. Wkleić polecenie, Enter.
+   Polecenie samo pobiera agenta, w razie potrzeby instaluje Pythona, dodaje
+   agenta do autostartu. Okno można potem zamknąć.
+3. Aplikacja sama zauważa połączenie. Dalej wszystko z panelu:
+   **Zainstaluj zalecane** (pakiety zmysłów, ok. 3 GB), przełączniki
+   **Zmysły / Obserwator kamery / Kinect**, **Aktualizuj agenta**, **Odłącz**.
+
+Nie trzeba przekierowywać portów ani stawiać VPN-a: to komputer osoby łączy
+się z `cosmosai.live`, nie odwrotnie. Przełącznik **lokalny GPU** w panelu
+Dostęp dalej daje osobie Twoje zmysły, gdy nie ma własnego komputera – jej
+własny ma pierwszeństwo.
+
+Ty też możesz tak podłączyć komputer domowy: zmysły włączasz i wyłączasz
+wtedy przełącznikiem w aplikacji, bez `python senses/service.py` w oknie.
+
+Pierwsze wejście każdej osoby prowadzi **samouczek** (imię, własne klucze,
+zmysły, telefon) – można go pominąć i wrócić do niego w **Ustawienia →
+Konto → Pokaż samouczek**.
 
 ---
 

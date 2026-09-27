@@ -36,6 +36,7 @@ const {
 const { stan, naUzytkownika, istniejacy, wKontekscie, kto, czyWlasciciel, katalogDla,
   zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
 const konta = require('./lib/konta.js');
+const agent = require('./lib/agent-zmyslow.js');
 const silniki = require('./lib/silniki.js');
 ustawStraznikaSilnikow(silniki.wybierz);
 const { stanOsoby } = require('./lib/stan-osoby.js');
@@ -53,6 +54,7 @@ const sesjaWazna = (req) => () => Boolean(ktoPyta(req));
    Tryb głosowy bez Web Speech API = bez piszczenia mikrofonu na Androidzie. */
 const glos = require('./lib/glos.js').utworz({
   SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, STUDIO,
+  zmysly: { fetch: agent.fetchZmyslow, zrodlo: agent.zrodloZmyslow, stanAgenta: agent.stanAgenta },
 });
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
@@ -107,6 +109,8 @@ const { serveStatic } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
 const pamiec_ = naUzytkownika('pamiec', (katalog) => pamiecModul_.utworz({
   katalogDanych: katalog,
   sensesUrl: SENSES_URL,
+  fetchZmyslow: agent.fetchZmyslow,
+  zmyslyDostepne: () => agent.zmyslyDostepne(),
   chmura: () => ENDPOINTS.cloud,
   sendJson,
   readJson,
@@ -126,12 +130,16 @@ const U = () => stanOsoby(BRIEFING);
 const plener_ = require('./lib/plener-trasy.js').utworz({ U, readJson, sendJson, addEvent, bladZapisu });
 // Pośrednik do usługi zmysłów (Python w domu właściciela) – lib/zmysly-proxy.js.
 const zmysly_ = require('./lib/zmysly-proxy.js').utworz({ U });
+/* Agent zmysłów: komputer osoby łączy się sam (długie odpytywanie), paruje
+   kodem z Ustawień i wykonuje zlecenia zmysłów w jej imieniu – lib/agent-zmyslow.js. */
+const agentTrasy = agent.utworzTrasy({ konta, wKontekscie, addEvent, stanDomu: async () => sensesState() });
 // Historia rozmów: jeden plik na rozmowę + indeks – lib/rozmowy.js.
 const rozmowy_ = require('./lib/rozmowy.js').utworz({ U, readJson, sendJson, bladZapisu });
 const { convPath } = rozmowy_;
 // Baza wiedzy: pliki, linki, notatki, fragmenty z wektorami – lib/baza-wiedzy.js.
 const kb_ = require('./lib/baza-wiedzy.js').utworz({
   U, readJson, readBodyBuffer, sendJson, bladZapisu, addEvent, embedTexts, stripTags, czytelnyTekst, SENSES_URL,
+  fetchZmyslow: agent.fetchZmyslow, zmyslyDostepne: () => agent.zmyslyDostepne(),
 });
 const { kbPliki: KB_FILES, saveKb, kbAddFile, kbItemMeta, kbSearch, obrazDlaModelu, extractKbText, extOf, wymagaTranskrypcji } = kb_;
 
@@ -527,6 +535,10 @@ let sensesOdswiezanie = null;
    dociąga się w tle na następną wiadomość. */
 const ZMYSLY_CACHE_MS = Number(process.env.SENSES_CACHE_MS || 60000);
 function sensesState() {
+  /* Zmysły z komputera tej osoby (agent) – stan zgłasza sam agent, bez pytania. */
+  const zrodlo = agent.zrodloZmyslow();
+  if (zrodlo === 'agent') return agent.stanAgenta() || { online: false, caps: {} };
+  if (zrodlo !== 'dom') return { online: false, caps: {} };
   const swiezy = Date.now() - sensesCache.at < ZMYSLY_CACHE_MS;
   if (!swiezy && !sensesOdswiezanie) {
     sensesOdswiezanie = (async () => {
@@ -552,7 +564,7 @@ function moduleExists(...parts) {
 
 async function capabilityManifest() {
   // Członek bez zgody na zmysły ich nie ma – model nie może mu ich obiecywać.
-  const senses = silniki.zmyslyDozwolone() ? await sensesState() : { online: false, caps: {} };
+  const senses = agent.zmyslyDostepne() ? await sensesState() : { online: false, caps: {} };
   /* Manifest idzie do kontekstu czatu tej osoby – ma mówić o JEJ możliwościach.
      Członkowi obiecywał Studio i silniki, których mu nie przyznano, i oddawał
      ścieżkę eksportu z dysku serwera (zasada 8). */
@@ -811,7 +823,8 @@ async function handleStatus(req, res) {
   /* Tylko silniki tej osoby (własny klucz albo przyznane). Członek odpytywał
      OpenAI i Claude'a kluczami właściciela co 30 s z każdej karty i widział,
      czy domowy komputer właściciela jest włączony. */
-  const zmysly = silniki.zmyslyDozwolone();
+  const zrodloZmyslow = agent.zrodloZmyslow();
+  const zmysly = Boolean(zrodloZmyslow);
   await Promise.all([
     ...silniki.dostepne().map(async ({ nazwa: name, ep }) => {
       try {
@@ -826,6 +839,11 @@ async function handleStatus(req, res) {
     }),
     (async () => {
       if (!zmysly) return;
+      if (zrodloZmyslow === 'agent') {
+        const st = agent.stanAgenta() || { online: false, caps: {} };
+        results.senses = { online: st.online, caps: st.caps, agent: st.agent };
+        return;
+      }
       try {
         const r = await fetch(`${SENSES_URL}/health`, { signal: AbortSignal.timeout(3000) });
         const caps = r.ok ? await r.json() : {};
@@ -1166,12 +1184,16 @@ nauka_.polacz({
    offline. Dlatego „ile klipów 50 mm w tym roku" odpowie z telefonu w terenie
    przy wyłączonym komputerze domowym. Całość tras: lib/archiwum-trasy.js. */
 const archiwumTrasy_ = require('./lib/archiwum-trasy.js').utworz({
-  archiwum, onedrive, SENSES_URL, sendJson, readJson, addEvent,
+  archiwum, onedrive, SENSES_URL, fetchZmyslow: agent.fetchZmyslow, sendJson, readJson, addEvent,
   sensesState, wspolrzedneMiejsca,
 });
 const handleArchiwum = (req, res, p) => archiwumTrasy_.handleArchiwum(req, res, p);
 
 async function trasyApi(req, res, p) {
+  if (p === '/api/agent' || p.startsWith('/api/agent/')) {
+    const wynik = await agentTrasy.osoby(req, res, p);
+    if (wynik !== null) return wynik;
+  }
   /* Restart w toku: nasłuch zostaje otwarty – statyka, wznowienie odpowiedzi,
      zapis rozmowy działają – a nowej pracy nie zaczynamy: czytelne 503 z prośbą
      o ponowienie. Dawniej `server.close()` na samym początku zamykania dawało
@@ -1180,7 +1202,10 @@ async function trasyApi(req, res, p) {
     res.setHeader('Retry-After', '5');
     return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje – wyślij za kilka sekund.', kod: 'aktualizacja' });
   }
-  if (!czyWlasciciel() && TYLKO_WLASCICIEL.some((w) => w.test(p))) {
+  /* Kinect na WŁASNYM komputerze osoby (agent zmysłów) jest jej – ten sam
+     przełącznik co reszta zmysłów. Kinect w domu właściciela zostaje jego. */
+  const kinectSwoj = p.startsWith('/api/kinect/') && agent.zrodloZmyslow() === 'agent';
+  if (!czyWlasciciel() && !kinectSwoj && TYLKO_WLASCICIEL.some((w) => w.test(p))) {
     return sendJson(res, 403, { error: 'Ta funkcja jest dostępna tylko dla właściciela Cosmosa.' });
   }
   if (p.startsWith('/api/studio') && !silniki.studioDozwolone()) {
@@ -1429,7 +1454,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/logout' && req.method === 'POST') return handleLogout(req, res);
     if (p === '/api/zaproszenie') return await handleZaproszenie(req, res);
 
-    const u = ktoPyta(req);
+    // Agent zmysłów na komputerze osoby – własny token, przed bramką (lib/agent-zmyslow.js).
+    if (p.startsWith('/api/agent/') && await agentTrasy.publiczne(req, res, p)) return;
+    /* Obserwator kamery na komputerze osoby wysyła zdarzenia tokenem jej agenta
+       – trafiają na JEJ konto, nie właściciela. Tylko ta jedna trasa. */
+    const uidAgenta = agent.osobaAgentaZdarzen(req, p);
+    const u = ktoPyta(req) || (uidAgenta ? konta.znajdz(uidAgenta) : null);
     if (!u) return sendJson(res, 401, { error: 'Sesja wygasła albo nie jesteś zalogowany. Zaloguj się ponownie.', kod: 'niezalogowany' });
     if (obcePochodzenie(req)) return sendJson(res, 403, { error: 'Żądanie z innej strony – odrzucone.' });
 

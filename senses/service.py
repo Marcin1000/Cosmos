@@ -805,4 +805,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("SENSES_PORT", 7060))
     active = ", ".join(k for k, v in CAPS.items() if v) or "brak (zainstaluj zależności)"
     print(f"\n  ✦ Cosmos Senses – port {port}\n  → aktywne zmysły: {active}\n")
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    # Agent zmysłów ustawia SENSES_HOST=127.0.0.1: zlecenia przychodzą przez niego,
+    # więc usługa nie musi być widoczna w sieci lokalnej.
+    uvicorn.run(app, host=os.environ.get("SENSES_HOST", "0.0.0.0"), port=port, log_level="warning")

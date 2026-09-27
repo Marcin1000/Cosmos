@@ -95,6 +95,14 @@ sprawdz('Plan: świt o 6:41.', 'Plan: świt o 6:41.');
       const plan = await pg.evaluate(() => stripForSpeech('**Nastawy:** f/2.8, 1/250 s, ISO 3200, EV −0,7.\n- Złota godzina 6:41–7:25\n- przewyższenie 450 m, 1 h 20 min'));
       console.log(`   plan do lektora (PL): „${plan}”`);
       if (/\/\d|\d\s*(?:s|m|h|min)\b|−|–/.test(plan.replace(/1\/250 sekundy/, ''))) fail.push(`plan do lektora z zapisem dla oka: „${plan}”`);
+      /* Asystent głosowy nie wymienia źródeł (zgłoszenie Marcina): linia
+         „Źródło:”, nawias „(źródło: …)” i wstęp „Według wyników wyszukiwania”
+         nie idą do lektora – sama treść zostaje. */
+      const zrodla = await pg.evaluate(() => stripForSpeech(
+        'Według wyników wyszukiwania, jutro w Krakowie będzie słonecznie (źródło: pogoda.onet.pl).\n\nŹródło: [IMGW](https://imgw.pl)\nŹródła: meteo.pl, yr.no'));
+      console.log(`   odpowiedź ze źródłami do lektora: „${zrodla}”`);
+      if (/źródł|według|imgw|onet|meteo|yr\.no/i.test(zrodla)) fail.push(`lektor czyta źródła: „${zrodla}”`);
+      if (!/jutro w Krakowie będzie słonecznie/i.test(zrodla)) fail.push(`razem ze źródłami zniknęła treść: „${zrodla}”`);
       const en = await pg.evaluate(() => { setLang('en'); return stripForSpeech('Up to 20 °C tomorrow.'); });
       console.log(`   do lektora (EN): „${en}”`);
       if (!/20 degrees Celsius/.test(en)) fail.push(`angielski lektor dostaje „${en}”`);

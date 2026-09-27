@@ -100,7 +100,7 @@
         <a href="#pamiec" data-t="nav.pamiec">Pamięć</a>
         <a href="#glos" data-t="nav.glos">Głos</a>
         <a href="#prywatnosc" data-t="nav.prywatnosc">Prywatność</a>
-        <a href="#pod-maska" data-t="nav.podMaska">Pod maską</a>
+        <a href="#pod-maska" data-t="nav.podMaska">Jak to działa</a>
       </nav>
       <div class="nav-prawa">
         <div class="jezyk" role="group" aria-label="Język / Language">
@@ -129,7 +129,6 @@
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
             <a class="btn btn-jasny btn-duzy magnes" href="#hybryda"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
           </div>
-          <p class="hero-uwaga wejscie" style="--d:7"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span data-t="hero.uwaga">Dostęp na zaproszenie. Zaproszenie wysyła administrator.</span></p>
         </div>
 
         <div class="hero-scena wejscie" style="--d:3">
@@ -167,7 +166,7 @@
       <div class="kol">
         <dl class="liczby" data-pokaz>
           <div><dt><span class="licznik" data-od="1200" data-do="0">0</span></dt><dd data-t="liczby.zal">zależności npm w&nbsp;rdzeniu</dd></div>
-          <div><dt><span class="licznik" data-do="126">126</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
+          <div><dt><span class="licznik" data-do="129">129</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
           <div><dt><span class="licznik" data-do="6">6</span></dt><dd data-t="liczby.narzedzia">narzędzi, które model woła w&nbsp;trakcie odpowiedzi</dd></div>
           <div><dt><span class="licznik" data-do="4">4</span></dt><dd data-t="liczby.silniki">silniki w&nbsp;jednej rozmowie</dd></div>
         </dl>
@@ -433,30 +432,19 @@
     <section class="sekcja" id="prywatnosc">
       <div class="kol pryw-w">
         <header class="sekcja-glowa" data-pokaz>
-          <p class="etykieta"><span class="kropka" style="--k:var(--k-local)"></span><span data-t="pryw.et">Prywatność i&nbsp;konta</span></p>
-          <h2 data-t="pryw.h">Dostęp na zaproszenie.</h2>
-          <p class="lead" data-t="pryw.lead">Zaproszenia wysyła administrator. Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy. Panel administratora pokazuje listę kont, ostatnie wizyty i&nbsp;liczbę wiadomości – treści nie pokazuje, bo aplikacja mu jej nie udostępnia. Dane leżą na serwerze, na którym działa Cosmos. Rozmowę z&nbsp;silnikiem w&nbsp;chmurze widzi też dostawca tego silnika; przy modelu lokalnym nic nie wychodzi z&nbsp;domu.</p>
+          <p class="etykieta"><span class="kropka" style="--k:var(--k-local)"></span><span data-t="pryw.et">Prywatność</span></p>
+          <h2 data-t="pryw.h">Twoja przestrzeń. Tylko Twoja.</h2>
+          <p class="lead" data-t="pryw.lead">Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy – i&nbsp;nikt inny ich nie widzi. Z&nbsp;modelem lokalnym rozmowa nie wychodzi z&nbsp;domu, a&nbsp;w&nbsp;chmurze trafia wyłącznie do dostawcy silnika, który wybierzesz.</p>
           <ul class="lista-cech">
-            <li data-t="pryw.c1">Silniki przyznaje administrator – albo dodajesz własny klucz API, a&nbsp;koszty idą na Twój rachunek u&nbsp;dostawcy</li>
-            <li data-t="pryw.c2">Hasła przechowywane jako skróty scrypt, sesje – wyłącznie jako skróty</li>
-            <li data-t="pryw.c3">Kod bez ustalonej osoby zgłasza błąd, zamiast pokazać cudze dane</li>
+            <li data-t="pryw.c1">Własny klucz do OpenAI albo Claude – płacisz bezpośrednio dostawcy, bez pośrednika</li>
+            <li data-t="pryw.c2">Hasła i&nbsp;sesje zapisane wyłącznie jako skróty – nigdy jawnym tekstem</li>
+            <li data-t="pryw.c3">Dane każdej osoby oddzielone na każdym kroku, nie tylko w&nbsp;interfejsie</li>
           </ul>
         </header>
         <div class="pokoje" data-pokaz aria-hidden="true">
           <div class="pokoj" style="--k:var(--k-nvidia);--d:0"><div class="pokoj-glowa"><b>A</b><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><i></i><i style="--w:70%"></i><i style="--w:84%"></i></div>
           <div class="pokoj" style="--k:var(--k-claude);--d:1"><div class="pokoj-glowa"><b>K</b><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><i></i><i style="--w:60%"></i><i style="--w:76%"></i></div>
           <div class="pokoj" style="--k:var(--k-local);--d:2"><div class="pokoj-glowa"><b>T</b><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><i></i><i style="--w:80%"></i><i style="--w:52%"></i></div>
-          <div class="panel-admina">
-            <div class="panel-glowa mono" data-t="pryw.panel">panel administratora</div>
-            <table class="mono">
-              <thead><tr><th data-t="pryw.kolKonto">konto</th><th data-t="pryw.kolWizyta">ostatnio</th><th data-t="pryw.kolWiad">wiad.</th><th data-t="pryw.kolTresc">treść</th></tr></thead>
-              <tbody>
-                <tr><td>A</td><td data-t="pryw.dzis">dziś</td><td>128</td><td class="brak">–</td></tr>
-                <tr><td>K</td><td data-t="pryw.wczoraj">wczoraj</td><td>41</td><td class="brak">–</td></tr>
-                <tr><td>T</td><td>3 d</td><td>9</td><td class="brak">–</td></tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </section>
@@ -465,9 +453,9 @@
     <section class="sekcja pod-maska" id="pod-maska">
       <div class="kol">
         <header class="sekcja-glowa" data-pokaz>
-          <p class="etykieta"><span class="kropka" style="--k:var(--k-nvidia)"></span><span data-t="pm.et">Pod maską</span></p>
-          <h2 data-t="pm.h">Cztery warstwy. Jedna zasada.</h2>
-          <p class="lead" data-t="pm.lead">Każda warstwa dostaje tylko to, czego potrzebuje do swojej pracy. Kaskada narzędzi nie widzi stanu aplikacji, widoki nie widzą rozmowy, a&nbsp;rdzeń Node nie importuje czujników z&nbsp;Pythona. Moduł, który czegoś nie sięga, nie zacznie od tego po cichu zależeć.</p>
+          <p class="etykieta"><span class="kropka" style="--k:var(--k-nvidia)"></span><span data-t="pm.et">Jak to działa</span></p>
+          <h2 data-t="pm.h">Cztery warstwy. Jedna rozmowa.</h2>
+          <p class="lead" data-t="pm.lead">Każde pytanie przechodzi przez cztery warstwy: od Ciebie, przez narzędzia i&nbsp;Twój kontekst, do modelu – i&nbsp;z&nbsp;powrotem. Dlatego zmiana silnika w&nbsp;połowie rozmowy niczego nie gubi.</p>
         </header>
 
         <div class="przekroj-tor" data-postep="widok">
@@ -480,18 +468,18 @@
               <i class="stos-nic"></i>
             </div>
             <ol class="legenda">
-              <li data-w="3" style="--k:var(--k-openai)"><span class="mono">04</span><div><b data-t="pm.w4">Krawędź</b><p data-t="pm.w4p">Aplikacja na telefon, głos, kamera, czujniki i&nbsp;sprzęt.</p></div></li>
-              <li data-w="2" style="--k:var(--k-claude)"><span class="mono">03</span><div><b data-t="pm.w3">Narzędzia</b><p data-t="pm.w3p">Jedna umowa na narzędzie i&nbsp;do czterech rund w&nbsp;jednej turze.</p></div></li>
-              <li data-w="1" style="--k:var(--k-local)"><span class="mono">02</span><div><b data-t="pm.w2">Routing</b><p data-t="pm.w2p">Katalog modeli, wykrywanie możliwości, składanie kontekstu.</p></div></li>
-              <li data-w="0" style="--k:var(--k-nvidia)"><span class="mono">01</span><div><b data-t="pm.w1">Inferencja</b><p data-t="pm.w1p">Adaptery dostawców, strumieniowanie, odpowiedzi wznawiane po zerwaniu połączenia.</p></div></li>
+              <li data-w="3" style="--k:var(--k-openai)"><span class="mono">04</span><div><b data-t="pm.w4">Ty</b><p data-t="pm.w4p">Telefon, komputer, głos i&nbsp;kamera – rozmowa idzie za Tobą między urządzeniami.</p></div></li>
+              <li data-w="2" style="--k:var(--k-claude)"><span class="mono">03</span><div><b data-t="pm.w3">Narzędzia</b><p data-t="pm.w3p">Wyszukiwanie w&nbsp;sieci, plan zdjęciowy, archiwum i&nbsp;zdjęcia miejsc – kilka naraz w&nbsp;jednej odpowiedzi.</p></div></li>
+              <li data-w="1" style="--k:var(--k-local)"><span class="mono">02</span><div><b data-t="pm.w2">Kontekst</b><p data-t="pm.w2p">Pamięć, profil i&nbsp;baza wiedzy dołączane do każdego pytania, przy każdym silniku tak samo.</p></div></li>
+              <li data-w="0" style="--k:var(--k-nvidia)"><span class="mono">01</span><div><b data-t="pm.w1">Modele</b><p data-t="pm.w1p">Chmura NVIDIA, lokalna karta graficzna, Claude i&nbsp;OpenAI. Odpowiedź wraca nawet po zerwanym połączeniu.</p></div></li>
             </ol>
           </div>
         </div>
 
         <div class="fakty">
-          <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f1.h">zależności w&nbsp;rdzeniu</h3><p data-t="pm.f1.p"><code>node server.js</code> i&nbsp;gotowe. Nie ma czego budować ani drzewa pakietów, które przestanie działać w&nbsp;nocy.</p></article>
-          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">126</span><h3 data-t="pm.f2.h">zestawów testów zachowań</h3><p data-t="pm.f2.p">Testy wołają funkcję i&nbsp;patrzą na wynik, nie na tekst źródła. Każdy nowy musi najpierw paść na starym, zepsutym kodzie.</p></article>
-          <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">15</span><h3 data-t="pm.f3.h">sekcji audytu</h3><p data-t="pm.f3.p">Audyt sprawdza też sam siebie: wzorzec, który przestał cokolwiek łapać, jest błędem, a&nbsp;nie ciszą.</p></article>
+          <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f1.h">silniki w&nbsp;jednej rozmowie</h3><p data-t="pm.f1.p">Chmura NVIDIA, lokalna karta, Claude i&nbsp;OpenAI – przełączasz w&nbsp;połowie wątku, a&nbsp;rozmowa zostaje.</p></article>
+          <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">1</span><h3 data-t="pm.f2.h">pamięć dla wszystkich silników</h3><p data-t="pm.f2.p">To, co Cosmos o&nbsp;Tobie wie, działa tak samo przy każdym modelu – nie zaczynasz od zera.</p></article>
+          <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f3.h">instalacji na telefonie</h3><p data-t="pm.f3.p">Otwierasz adres, dodajesz do ekranu głównego i&nbsp;Cosmos działa jak aplikacja.</p></article>
           <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi – grafiki trafiają pod gotowe punkty planu.</p></article>
         </div>
       </div>
@@ -503,11 +491,11 @@
         <div class="cta-karta" data-pokaz>
           <div class="cta-zorza" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <svg class="znak cta-znak" aria-hidden="true"><use href="#znak"/></svg>
-          <h2 data-t="cta.h">Masz zaproszenie? Twój Cosmos już czeka.</h2>
-          <p data-t="cta.p">Otwórz link z&nbsp;zaproszenia – login i&nbsp;hasło ustawisz w&nbsp;minutę. Masz już konto? Zaloguj się. Nie masz zaproszenia? Postaw własny Cosmos: kod jest publiczny, do użytku niekomercyjnego.</p>
+          <h2 data-t="cta.h">Twój Cosmos już czeka.</h2>
+          <p data-t="cta.p">Zaloguj się i&nbsp;wróć do rozmowy dokładnie tam, gdzie się skończyła – na komputerze, na telefonie albo głosem.</p>
           <div class="hero-cta">
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
-            <a class="btn btn-jasny btn-duzy magnes" href="https://github.com/Marcin1000/Cosmos#readme" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" class="gh"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span data-t="cta.kod">Postaw własny Cosmos</span></a>
+            <a class="btn btn-jasny btn-duzy magnes" href="#hybryda"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
           </div>
         </div>
       </div>
@@ -522,8 +510,7 @@
       </div>
       <nav class="stopka-linki" aria-label="Stopka" data-t-aria="stopkaAria">
         <a class="js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span></a>
-        <a href="https://github.com/Marcin1000/Cosmos" rel="noopener" data-t="stopka.kod">Kod źródłowy (do użytku niekomercyjnego)</a>
-        <a href="#pod-maska" data-t="nav.podMaska">Pod maską</a>
+        <a href="#pod-maska" data-t="nav.podMaska">Jak to działa</a>
       </nav>
       <p class="stopka-adres mono">cosmosai.live</p>
     </div>
