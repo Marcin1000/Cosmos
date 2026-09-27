@@ -90,6 +90,54 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   if (n2 > n1) fail.push('odpytywanie trwa po zamknięciu panelu');
   if (src1) fail.push('src obrazka nie wyczyszczony – MJPEG zostaje otwarty w tle');
 
+  /* 5. Czujnik zajęty (zgłoszenie Marcina: czarny kadr, ikona zepsutego
+     obrazka i „czy działa senses/service.py?”). Agent nie przepuszcza
+     strumienia (501), klatka odpowiada 503 z przyczyną – przyczyna ma stanąć
+     pod kadrem, a ikona zepsutego obrazka zniknąć. */
+  let zajety = true;
+  await page.route('**/api/kinect/stream?*', (r) => r.fulfill({ status: 501, contentType: 'application/json', body: '{"error":"bez strumienia","kod":"bez-strumienia"}' }));
+  await page.route('**/api/kinect/frame?*', (r) => (zajety
+    ? r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Kinect niedostępny: urządzenie w użyciu' }) })
+    : r.continue()));
+  await page.evaluate(() => startLive());
+  await page.waitForFunction(() => /urządzenie w użyciu/.test(document.getElementById('live-panel').textContent), null, { timeout: 8000 }).catch(() => {});
+  s = await page.evaluate(() => ({
+    tekst: document.getElementById('live-status').textContent,
+    widocznosc: document.getElementById('live-image').style.visibility,
+  }));
+  const przyczyna = /urządzenie w użyciu/.test(s.tekst);
+  console.log(`5. czujnik zajęty: przyczyna pod kadrem=${przyczyna}, obrazek ukryty=${s.widocznosc === 'hidden'}, stary tekst o service.py=${/service\.py/.test(s.tekst)}`);
+  if (!przyczyna) fail.push('przyczyna z usługi zmysłów nie stanęła pod kadrem');
+  if (s.widocznosc !== 'hidden') fail.push('ikona zepsutego obrazka zostaje przy błędzie');
+  if (/service\.py/.test(s.tekst)) fail.push('komunikat odsyła do senses/service.py');
+
+  // 6. Czujnik się zwolnił – klatki wracają same, przyczyna znika.
+  zajety = false;
+  await page.waitForFunction(() => {
+    const img = document.getElementById('live-image');
+    return img.naturalWidth > 0 && img.style.visibility !== 'hidden'
+      && !/urządzenie w użyciu/.test(document.getElementById('live-panel').textContent);
+  }, null, { timeout: 8000 }).then(() => true).catch(() => false).then((wrocily) => {
+    console.log(`6. czujnik wolny: klatki wróciły i komunikat zniknął=${wrocily}`);
+    if (!wrocily) fail.push('po zwolnieniu czujnika klatki nie wróciły albo komunikat został');
+  });
+  await page.evaluate(() => stopLive());
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
+  /* 7. Komputer bez kamery (Kinect to nie kamera dla przeglądarki):
+     zamiast „Requested device not found” zdanie, że Kinect jest na liście. */
+  await page.evaluate(() => {
+    localStorage.setItem('cosmos.liveSource', 'camera');
+    navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Requested device not found', 'NotFoundError'); };
+  });
+  await page.evaluate(() => { document.getElementById('live-source').value = 'camera'; document.getElementById('live-source').dispatchEvent(new Event('change')); });
+  await page.evaluate(() => startLive());
+  await page.waitForTimeout(800);
+  const bezKamery = await page.evaluate(() => document.getElementById('live-status').textContent);
+  const dobrze7 = /Kinect/.test(bezKamery) && !/Requested device not found/.test(bezKamery);
+  console.log(`7. brak kamery w przeglądarce: podpowiedź o Kinekcie=${dobrze7} („${bezKamery}”)`);
+  if (!dobrze7) fail.push('brak kamery: surowe „Requested device not found” zamiast podpowiedzi o Kinekcie');
+
   console.log(fail.length ? '\nPROBLEMY: ' + fail.join('; ') : '\nPODGLĄD Z KINECTA OK');
   await browser.close();
   env.koniec();

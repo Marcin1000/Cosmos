@@ -95,10 +95,11 @@ except ImportError:
 
 try:
     import mediapipe
-    # mediapipe od 0.10.30 nie ma `mp.solutions`, którego używa /pose – taka
-    # wersja zgłaszana jako działająca dawała 500 przy każdej osobie w kadrze.
-    CAPS["mediapipe"] = hasattr(mediapipe, "solutions")
-except ImportError:
+    # mediapipe od 0.10.30 nie ma `mp.solutions` – wtedy /pose idzie przez
+    # Tasks API (PoseLandmarker). Stare 0.10.21 nie ma kół dla Pythona 3.13,
+    # więc przypięcie do niego zostawiało Windowsa z nowym Pythonem bez ciała.
+    CAPS["mediapipe"] = hasattr(mediapipe, "solutions") or hasattr(mediapipe, "tasks")
+except Exception:
     pass
 
 try:
@@ -529,21 +530,67 @@ def detect(payload: dict = Body(...)):
     return {"objects": objects, "summary": summary}
 
 
+# Model sylwetki dla Tasks API – pobierany raz, przy pierwszej sylwetce.
+POSE_MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
+                  "pose_landmarker_lite/float16/latest/pose_landmarker_lite.task")
+_poza = None
+_poza_zamek = threading.Lock()
+
+
+def _plik_modelu_pozy() -> str:
+    """Ścieżka do pose_landmarker_lite.task; pobiera go, gdy go jeszcze nie ma."""
+    wlasny = os.environ.get("POSE_MODEL")
+    if wlasny:
+        return wlasny
+    katalog = os.path.join(os.environ.get("COSMOS_AGENT_DIR", os.path.join(os.path.expanduser("~"), ".cosmos")), "modele")
+    plik = os.path.join(katalog, "pose_landmarker_lite.task")
+    if not os.path.exists(plik):
+        import urllib.request
+        os.makedirs(katalog, exist_ok=True)
+        with urllib.request.urlopen(POSE_MODEL_URL, timeout=60) as r:
+            dane = r.read()
+        with open(plik + ".tmp", "wb") as f:
+            f.write(dane)
+        os.replace(plik + ".tmp", plik)
+    return plik
+
+
+def _punkty_sylwetki(rgb):
+    """Punkty sylwetki (33, znormalizowane) albo None. Stare API albo Tasks."""
+    global _poza
+    import mediapipe as mp
+    if hasattr(mp, "solutions"):
+        with mp.solutions.pose.Pose(static_image_mode=True) as pose_model:
+            res = pose_model.process(rgb)
+        return res.pose_landmarks.landmark if res.pose_landmarks else None
+    from mediapipe.tasks import python as mp_tasks
+    from mediapipe.tasks.python import vision
+    # PoseLandmarker nie jest bezpieczny dla wątków – jeden na proces, pod zamkiem.
+    with _poza_zamek:
+        if _poza is None:
+            opcje = vision.PoseLandmarkerOptions(
+                base_options=mp_tasks.BaseOptions(model_asset_path=_plik_modelu_pozy()),
+                running_mode=vision.RunningMode.IMAGE, num_poses=1)
+            _poza = vision.PoseLandmarker.create_from_options(opcje)
+        res = _poza.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+    return res.pose_landmarks[0] if res.pose_landmarks else None
+
+
 @app.post("/pose")
 def pose(payload: dict = Body(...)):
     """{"image": dataURL} -> {"present": bool, "summary": "..."}"""
     if not CAPS["mediapipe"]:
         return JSONResponse({"error": "MediaPipe niezainstalowany (pip install mediapipe)."}, status_code=501)
     import cv2
-    import mediapipe as mp
     img = decode_image(payload)
     if img is None:
         return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
-    with mp.solutions.pose.Pose(static_image_mode=True) as pose_model:
-        res = pose_model.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    if not res.pose_landmarks:
+    try:
+        lm = _punkty_sylwetki(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    except OSError as e:
+        return JSONResponse({"error": f"Nie udało się pobrać modelu sylwetki: {e}"}, status_code=503)
+    if not lm:
         return {"present": False, "summary": "nie widać sylwetki"}
-    lm = res.pose_landmarks.landmark
     nose_y = lm[0].y
     hip_y = (lm[23].y + lm[24].y) / 2
     posture = "stoi" if (hip_y - nose_y) > 0.45 else "siedzi lub jest blisko kamery"
@@ -663,19 +710,48 @@ def upscale(payload: dict = Body(...)):
 # nie może użyć getUserMedia. Zamiast tego serwujemy pojedyncze klatki JPEG,
 # a interfejs odświeża je jak zwykły obrazek.
 
+# Jedyny właściciel czujnika na tym komputerze. Kinect for Windows SDK 1.8
+# oddaje czujnik jednemu procesowi (NuiInitialize w drugim kończy się
+# „urządzenie w użyciu”), więc obserwator kamery i zmysł głębi, gdy działa ta
+# usługa, biorą obraz, głębię i sylwetki stąd (/kinect/frame, /kinect/depth,
+# /kinect/sylwetki), zamiast otwierać czujnik samemu i zabierać go podglądowi.
+
 _kinect = None
 _kinect_err = ""
+# Odczyty z SDK nie są bezpieczne dla wątków, a trasy biegną w puli wątków.
+_kinect_zamek = threading.Lock()
 
 
 def get_kinect():
     """Jedna instancja czujnika na cały proces – Kinect nie znosi dwóch naraz."""
     global _kinect, _kinect_err
-    if _kinect is None:
-        import kinect_win
-        _kinect = kinect_win.Kinect(color=True, depth=True, skeleton=True)
-        _kinect.open()
-        _kinect_err = ""
-    return _kinect
+    with _kinect_zamek:
+        if _kinect is None:
+            import kinect_win
+            k = kinect_win.Kinect(color=True, depth=True, skeleton=True)
+            k.open()
+            _kinect = k
+            _kinect_err = ""
+        return _kinect
+
+
+def _zwolnij_kinect(e):
+    """Czujnik mógł zostać odłączony – następne żądanie spróbuje otworzyć od nowa."""
+    global _kinect, _kinect_err
+    _kinect_err = str(e)
+    with _kinect_zamek:
+        if _kinect is not None:
+            try:
+                _kinect.close()
+            except Exception:
+                pass
+        _kinect = None
+
+
+def _niedostepny(e):
+    global _kinect_err
+    _kinect_err = str(e)
+    return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
 
 
 def _to_jpeg(img, quality: int = 80) -> bytes:
@@ -687,7 +763,7 @@ def _to_jpeg(img, quality: int = 80) -> bytes:
 
 
 @app.get("/kinect/status")
-async def kinect_status():
+def kinect_status():
     """Czy czujnik jest dostępny i co potrafi."""
     try:
         import kinect_win
@@ -709,7 +785,8 @@ def _render(k, stream: str):
     if stream == "depth":
         import cv2
         import numpy as np
-        frame = k.depth_frame()
+        with _kinect_zamek:
+            frame = k.depth_frame()
         if frame is None:
             return None
         vis = np.clip((frame.astype(np.float32) - 500) / (4000 - 500), 0, 1)
@@ -717,11 +794,12 @@ def _render(k, stream: str):
         vis = cv2.applyColorMap(vis, cv2.COLORMAP_TURBO)
         vis[frame == 0] = 0
         return vis
-    return k.color_frame()
+    with _kinect_zamek:
+        return k.color_frame()
 
 
 @app.get("/kinect/stream")
-async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70):
+def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70):
     """Ciągły strumień MJPEG.
 
     Pojedyncze klatki przez /kinect/frame znaczą jedno żądanie HTTP na klatkę.
@@ -733,7 +811,7 @@ async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70)
     try:
         k = get_kinect()
     except Exception as e:
-        return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
+        return _niedostepny(e)
     try:
         import cv2  # noqa: F401
     except ImportError:
@@ -766,32 +844,61 @@ async def kinect_stream(stream: str = "color", fps: int = 15, quality: int = 70)
 
 
 @app.get("/kinect/frame")
-async def kinect_frame(stream: str = "color"):
+def kinect_frame(stream: str = "color", quality: int = 80):
     """Pojedyncza klatka jako JPEG. `stream` = color albo depth."""
-    global _kinect, _kinect_err
     try:
         k = get_kinect()
     except Exception as e:
-        _kinect_err = str(e)
-        return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
-
+        return _niedostepny(e)
     try:
         img = _render(k, stream)
         if img is None:
             return JSONResponse({"error": "Brak klatki z Kinecta."}, status_code=503)
-        return Response(content=_to_jpeg(img), media_type="image/jpeg",
+        return Response(content=_to_jpeg(img, max(20, min(95, quality))), media_type="image/jpeg",
                         headers={"Cache-Control": "no-store"})
     except ImportError:
         return JSONResponse({"error": "Podgląd wymaga: pip install opencv-python"},
                             status_code=501)
     except Exception as e:
-        # Czujnik mógł zostać odłączony – następne żądanie spróbuje otworzyć od nowa.
-        _kinect_err = str(e)
-        try:
-            k.close()
-        except Exception:
-            pass
-        _kinect = None
+        _zwolnij_kinect(e)
+        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
+
+
+@app.get("/kinect/depth")
+def kinect_depth():
+    """Surowa głębia w milimetrach: uint16 little-endian, wymiary w nagłówkach
+    X-Szerokosc i X-Wysokosc. Dla zmysłu głębi (kinect_watcher.py)."""
+    try:
+        k = get_kinect()
+    except Exception as e:
+        return _niedostepny(e)
+    try:
+        import numpy as np
+        with _kinect_zamek:
+            frame = k.depth_frame()
+        if frame is None:
+            return JSONResponse({"error": "Brak klatki głębi z Kinecta."}, status_code=503)
+        h, w = frame.shape[:2]
+        return Response(content=frame.astype("<u2").tobytes(), media_type="application/octet-stream",
+                        headers={"X-Szerokosc": str(w), "X-Wysokosc": str(h), "Cache-Control": "no-store"})
+    except Exception as e:
+        _zwolnij_kinect(e)
+        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
+
+
+@app.get("/kinect/sylwetki")
+def kinect_sylwetki():
+    """Śledzone sylwetki: {"sylwetki": [{id, stawy, opis}]}."""
+    try:
+        k = get_kinect()
+    except Exception as e:
+        return _niedostepny(e)
+    try:
+        with _kinect_zamek:
+            osoby = k.skeletons(timeout_ms=50)
+        return {"sylwetki": osoby}
+    except Exception as e:
+        _zwolnij_kinect(e)
         return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
 
 

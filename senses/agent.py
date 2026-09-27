@@ -72,15 +72,15 @@ SKLADNIKI = {
 }
 
 # Pakiety instalowane przyciskiem. Agent nie wykona pip dla niczego spoza tej listy.
-# mediapipe od 0.10.30 nie ma już `mp.solutions`, którego używa /pose –
-# 0.10.21 to ostatnia wersja z nim (Python 3.9–3.12).
+# mediapipe bez przypięcia: nowe wersje (bez `mp.solutions`) obsługuje /pose
+# przez Tasks API, a stare 0.10.21 nie ma kół dla Pythona 3.13.
 PAKIETY = {
     "rdzen": (["fastapi", "uvicorn", "python-multipart", "numpy", "requests"], "fastapi"),
     "dokumenty": (["pypdf", "python-docx", "openpyxl", "python-pptx"], "pypdf"),
     "sluch": (["faster-whisper"], "faster_whisper"),
     "glos": (["piper-tts"], "piper"),
     "wzrok": (["ultralytics", "opencv-python"], "ultralytics"),
-    "cialo": (["mediapipe==0.10.21"], "mediapipe"),
+    "cialo": (["mediapipe"], "mediapipe"),
     "pamiec": (["sentence-transformers"], "sentence_transformers"),
 }
 # Pakiety, które ciągną torch – na Linuksie bez karty NVIDIA z wersją CPU
@@ -196,6 +196,8 @@ class Skladniki:
         self.starty = {}
         self.zewnetrzne = set()
         self.zamek = threading.Lock()
+        # Czy składnik z Kinectem wystartował z KINECT_PRZEZ_USLUGE=1.
+        self.przez_usluge = {}
 
     def dziala(self, nazwa):
         if nazwa in self.zewnetrzne:
@@ -241,6 +243,10 @@ class Skladniki:
                 "COSMOS_URL": self.agent.serwer,
                 "COSMOS_TOKEN": self.agent.token,
             })
+            # Kinect ma jednego właściciela: usługę zmysłów, gdy jest włączona.
+            przez = bool((self.agent.chce or {}).get("zmysly"))
+            env["KINECT_PRZEZ_USLUGE"] = "1" if przez else "0"
+            self.przez_usluge[nazwa] = przez
             glos = next(iter(sorted(GLOSY.glob("*.onnx"))), None) if GLOSY.exists() else None
             if glos and not env.get("PIPER_VOICE"):
                 env["PIPER_VOICE"] = str(glos)
@@ -291,6 +297,17 @@ class Skladniki:
                     log(f"nie udało się włączyć {nazwa}: {e}")
             elif not chce.get(nazwa) and self.dziala(nazwa):
                 self.zatrzymaj(nazwa)
+        # Zmysły włączone albo wyłączone, gdy obserwator lub czujnik głębi już
+        # działał: trzeba go przestawić, bo inaczej trzyma Kinecta sam (i podgląd
+        # jest czarny) albo czeka na usługę, której już nie ma.
+        for nazwa in ("obserwator", "kinect"):
+            if chce.get(nazwa) and nazwa in self.procesy and self.dziala(nazwa) \
+                    and self.przez_usluge.get(nazwa) != bool(chce.get("zmysly")):
+                self.zatrzymaj(nazwa)
+                try:
+                    self.uruchom(nazwa)
+                except Exception as e:
+                    log(f"nie udało się włączyć {nazwa}: {e}")
 
     def zatrzymaj_wszystko(self):
         for nazwa in list(self.procesy) + list(self.zewnetrzne):

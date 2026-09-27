@@ -31,7 +31,7 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | Powiększanie – `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
 | Ptaki – `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer – bez nich BirdNET szuka wśród gatunków całego świata |
 | Sylwetka – `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
-| `watcher.py` – ciągła percepcja | ✅ działa | webcam, telefon, aparat – albo Kinect przez `CAMERA_SOURCE=kinect` |
+| `watcher.py` – ciągła percepcja | ✅ działa | webcam, telefon, aparat – a bez zwykłej kamery sam bierze obraz z Kinecta |
 | `wake_listener.py` – słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
 | `kinect_watcher.py` – głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
 | `kinect_win.py` – szkielet, RGB, głębia, silnik | ✅ działa | Windows; **cała funkcjonalność Kinecta 360** |
@@ -77,7 +77,7 @@ pip install faster-whisper                            # + słuch (rozpoznawanie 
 #   procesor od razu:  set WHISPER_DEVICE=cpu
 pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
-pip install mediapipe                                 # + sylwetka i gesty
+pip install mediapipe                                 # + sylwetka i gesty (model pobiera się przy pierwszej sylwetce)
 pip install sentence-transformers                     # + pamięć (wyszukiwanie semantyczne)
 pip install birdnetlib librosa resampy tensorflow      # + ptaki (gatunek z głosu, BirdNET)
 pip install pypdf python-docx openpyxl python-pptx    # + czytanie dokumentów do bazy wiedzy
@@ -151,8 +151,8 @@ prawdziwych obserwacji.
 |---|---|
 | `COSMOS_URL` | adres serwera; **na VPS to nie jest `localhost`** |
 | `COSMOS_TOKEN` | `COSMOS_API_TOKEN` z `.env` serwera – bez niego `/api/events` zwraca 401 |
-| `CAMERA_SOURCE` | `auto` (zwykła kamera) albo `kinect` (Kinect 360 przez SDK 1.8) |
-| `CAMERA_INDEX` | numer kamery przy `CAMERA_SOURCE=auto`, domyślnie `0` |
+| `CAMERA_SOURCE` | `auto` (zwykła kamera, a bez niej Kinect), `cv` (tylko zwykła) albo `kinect` |
+| `CAMERA_INDEX` | numer kamery OpenCV, domyślnie `0` |
 | `WATCH_INTERVAL` | sekundy między analizami, domyślnie `5` |
 
 Obserwator działa na komputerze z kamerą, a serwer może stać gdzie indziej.
@@ -173,8 +173,8 @@ zgłaszających zdarzenia. Bez tokena zdarzenia po cichu nie dolatują.
 > python -c "import cv2; print([i for i in range(6) if cv2.VideoCapture(i).isOpened()])"
 > ```
 > Jeśli lista jest pusta, komputer nie ma żadnej kamery dostępnej dla OpenCV.
-> **Masz Kinecta? Ustaw `CAMERA_SOURCE=kinect`** – nie jest kamerą UVC, więc na liście
-> się nie pojawi, ale jego obraz RGB czytamy prosto z SDK (patrz sekcja o Kinekcie).
+> Kinect nie jest kamerą UVC, więc na liście się nie pojawi – ale przy `CAMERA_SOURCE=auto`
+> obserwator sam przechodzi wtedy na Kinecta (obraz RGB z SDK, patrz sekcja o Kinekcie).
 > Inne opcje: webcam, telefon jako kamera (Iriun, DroidCam), aparat przez
 > *Canon EOS Webcam Utility*. Numer z listy podajesz w `CAMERA_INDEX`.
 
@@ -228,6 +228,20 @@ python kinect_win.py depth        # statystyki mapy głębi
 python kinect_win.py color -o kadr.png
 python kinect_win.py tilt 10      # kąt pochylenia (-27..27°)
 ```
+
+### Jeden właściciel czujnika
+
+SDK 1.8 oddaje Kinecta **jednemu procesowi** – drugi dostaje „urządzenie w użyciu”.
+Dlatego, gdy działa usługa zmysłów (`service.py`), czujnik trzyma ona, a obserwator
+kamery i zmysł głębi biorą z niej obraz (`/kinect/frame`), głębię (`/kinect/depth`,
+surowe milimetry) i sylwetki (`/kinect/sylwetki`) – moduł `kinect_usluga.py`.
+Czujnik otwierają same tylko wtedy, gdy usługi nie ma. Dzięki temu podgląd Kinecta
+w Cosmosie działa równocześnie z obserwatorem i zmysłem głębi.
+
+| Zmienna | Znaczenie |
+|---|---|
+| `KINECT_PRZEZ_USLUGE` | `1` = usługa zmysłów jest włączona (ustawia agent), więc czekaj na nią zamiast otwierać czujnik |
+| `KINECT_CZEKAJ_S` | jak długo czekać na usługę, domyślnie `300` s (ładuje modele) |
 
 ### Zmysł głębi w tle
 
@@ -493,6 +507,8 @@ stałe w zmiennych środowiskowych Windowsa.
 | `YOLO_MODEL` | `yolo11n.pt` | model rozpoznawania obiektów; `yolo11s.pt`/`yolo11m.pt` są dokładniejsze i wolniejsze |
 | `REALESRGAN_MODEL` | wbudowany | ścieżka do własnego modelu powiększania |
 | `PIPER_VOICE` | – | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
+| `POSE_MODEL` | pobierany | model sylwetki dla mediapipe 0.10.30+ (`pose_landmarker_lite.task`); bez niego pobiera się sam przy pierwszej sylwetce |
+| `COSMOS_AGENT_DIR` | `~/.cosmos` | katalog agenta zmysłów: środowisko, dzienniki, głosy i pobrane modele (`modele/`) |
 | `COSMOS_RECORD_OUT` | – | folder na nagrania z `tether.py` (sterowanie aparatem) |
 
 ## Wydajność na RTX 3080

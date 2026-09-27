@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="131 test suites" src="https://img.shields.io/badge/test%20suites-131-5E9E3A?style=flat-square">
+  <img alt="132 test suites" src="https://img.shields.io/badge/test%20suites-132-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 131 suites plus 9 Python
+**Tests measure behaviour, never source text.** 132 suites plus 9 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -155,7 +155,10 @@ current person – their own computer, the owner's home GPU with permission, or
 nothing – so the privacy rule lives in one place instead of fifteen. Toggles in the
 app start and stop the senses, the camera watcher and Kinect on that computer;
 packages install from a fixed list with one click, and a component that crashes
-shows up in the app with the tail of its log. A first-run tutorial walks each new
+shows up in the app with the tail of its log. The Kinect SDK hands the sensor to a
+single process, so the senses service owns it and the camera watcher and depth sense
+read frames, depth and skeletons from it over loopback – the live preview no longer
+goes black the moment another component grabs the sensor. A first-run tutorial walks each new
 person through their name, their own API keys, the senses and the phone install.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
@@ -244,7 +247,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 131 suites + 9 Python selftests (~20 min)
+npm test                  # 132 suites + 9 Python selftests (~20 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -300,7 +303,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               131 behaviour suites, mock upstreams, fake DOM
+tests/               132 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 

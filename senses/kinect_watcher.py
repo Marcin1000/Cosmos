@@ -136,6 +136,16 @@ def open_source():
     order = {"win": ["win"], "freenect": ["freenect"]}.get(
         BACKEND, ["win", "freenect"] if os.name == "nt" else ["freenect", "win"])
 
+    # Usługa zmysłów trzyma czujnik (podgląd w Cosmosie) – bierzemy z niej,
+    # zamiast zabierać go jej i zostawiać podgląd czarny.
+    if BACKEND != "freenect":
+        try:
+            import kinect_usluga
+            if kinect_usluga.przez_usluge():
+                return kinect_usluga.GlebiaZUslugi()
+        except ImportError:
+            pass
+
     problems = []
     for kind in order:
         try:

@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="131 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-131-5E9E3A?style=flat-square">
+  <img alt="132 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-132-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 131 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 132 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 131 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 132 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -774,6 +774,12 @@ i logikę **bez sprzętu** (22 kontrole).
 klatki jedna za drugą), więc podgląd jest płynny także przez Tailscale. Detekcja YOLO
 działa na obu źródłach tak samo.
 
+SDK oddaje czujnik **jednemu programowi**, więc trzyma go usługa zmysłów, a obserwator
+kamery i zmysł głębi biorą z niej obraz, głębię i sylwetki. Dzięki temu podgląd,
+obserwator i zmysł głębi działają naraz. Komputer bez zwykłej kamery: obserwator sam
+bierze obraz z Kinecta. Gdy podglądu nie ma, pod kadrem stoi przyczyna podana przez
+usługę zmysłów (np. „urządzenie w użyciu”), a nie sama czarna ramka.
+
 Na **Linuksie** `kinect_watcher.py` używa libfreenect – daje głębię, ale **nie ma
 szkieletu**; ten jest wyłącznie w SDK Microsoftu. Pełny opis, z pułapkami dwóch różnych
 konwencji wywołań w jednym API: [`senses/README.md`](senses/README.md).
@@ -1330,7 +1336,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 131 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 132 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

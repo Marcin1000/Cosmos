@@ -228,7 +228,7 @@ const I18N = {
     'live.planTitle': 'Nastawy kadru',
     'live.srcKinectColor': 'Kinect – obraz',
     'live.srcKinectDepth': 'Kinect – głębia',
-    'live.kinectErr': 'Brak obrazu z Kinecta – czy działa senses/service.py na komputerze z czujnikiem?',
+    'live.kinectErr': 'Brak obrazu z Kinecta:',
     'media.insecure': 'Przeglądarka udostępnia kamerę i mikrofon tylko przez HTTPS albo na localhost. Wchodzisz po zwykłym HTTP, więc to API jest niedostępne. Wybierz źródło „Kinect” (nie wymaga kamery przeglądarki) albo włącz HTTPS – patrz docs/START-TUTAJ.md.',
     'set.mic': 'Mikrofon do dyktowania',
     'set.micRefresh': 'Odśwież',
@@ -593,6 +593,7 @@ const I18N = {
     'cam.title': 'Kamera',
     'cam.capture': 'Zrób zdjęcie',
     'cam.err': 'Brak dostępu do kamery:',
+    'cam.notFound': 'Ta przeglądarka nie widzi żadnej kamery. Kinecta wybierz z listy wyżej („Kinect – obraz”).',
     'cam.maxImages': 'Maksymalnie 4 obrazy na wiadomość.',
     'cam.readErr': 'Nie udało się wczytać obrazu.',
 
@@ -1263,7 +1264,7 @@ const I18N = {
     'live.planTitle': 'Frame settings',
     'live.srcKinectColor': 'Kinect – colour',
     'live.srcKinectDepth': 'Kinect – depth',
-    'live.kinectErr': 'No image from the Kinect – is senses/service.py running on the machine with the sensor?',
+    'live.kinectErr': 'No image from the Kinect:',
     'media.insecure': 'Browsers expose the camera and microphone only over HTTPS or on localhost. You are on plain HTTP, so the API is unavailable. Pick a “Kinect” source (it needs no browser camera) or enable HTTPS – see docs/START-TUTAJ.md.',
     'set.mic': 'Dictation microphone',
     'set.micRefresh': 'Refresh',
@@ -1618,6 +1619,7 @@ const I18N = {
     'cam.title': 'Camera',
     'cam.capture': 'Take photo',
     'cam.err': 'No camera access:',
+    'cam.notFound': 'This browser cannot see any camera. Pick the Kinect from the list above (“Kinect – colour”).',
     'cam.maxImages': 'Maximum 4 images per message.',
     'cam.readErr': 'Failed to load the image.',
 

@@ -185,8 +185,10 @@ function utworzZmyslyWidok({ $, t }) {
     if (/address already in use|Errno 98|10048|Only one usage of each socket/i.test(l)) return t('zm.why.port');
     const brak = /No module named ['"]?([\w.]+)/.exec(l);
     if (brak) return t('zm.why.module').replace('{modul}', brak[1]);
-    if (/freenect|kinect/i.test(l)) return t('zm.why.kinect');
-    if (/camera|VideoCapture|cannot open|kamer/i.test(l)) return t('zm.why.camera');
+    // Kamera przed Kinectem: podpowiedź w dzienniku obserwatora wspomina
+    // Kinecta, choć padła zwykła kamera – wcześniej wychodziło „Nie widać Kinecta”.
+    if (/Nie mogę otworzyć kamery|Camera index out of range|VideoCapture|cannot open camera/i.test(l)) return t('zm.why.camera');
+    if (/otworzyć Kinecta|NuiInitialize|sync_get_depth|Kinect.*(niedostępny|nie widzę)|KinectError/i.test(l)) return t('zm.why.kinect');
     return t('zm.why.other');
   }
 

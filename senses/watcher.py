@@ -15,8 +15,8 @@ Uruchomienie (wymaga: pip install ultralytics opencv-python requests):
 Zmienne środowiskowe:
     COSMOS_URL      adres Cosmosa (domyślnie http://localhost:3000)
     COSMOS_TOKEN    COSMOS_API_TOKEN serwera – wymagany, gdy Cosmos ma hasło
-    CAMERA_SOURCE   auto (domyślnie, zwykła kamera) | kinect (Kinect 360 przez SDK 1.8)
-    CAMERA_INDEX    numer kamery przy CAMERA_SOURCE=auto (domyślnie 0)
+    CAMERA_SOURCE   auto (domyślnie: zwykła kamera, a bez niej Kinect) | cv | kinect
+    CAMERA_INDEX    numer kamery OpenCV (domyślnie 0)
     WATCH_INTERVAL  sekundy między analizami (domyślnie 5)
     YOLO_MODEL      domyślnie yolo11n.pt
 """
@@ -50,19 +50,24 @@ def send_event(summary: str, type_: str = "kamera") -> None:
         print(f"! nie wysłano zdarzenia: {e}")
 
 
+class BrakKamery(RuntimeError):
+    """Zwykła kamera się nie otworzyła – przy CAMERA_SOURCE=auto próbujemy Kinecta."""
+
+
 class CvCamera:
     """Zwykła kamera przez OpenCV (webcam, telefon, aparat jako webcam)."""
 
     def __init__(self, index: int):
         self._cap = cv2.VideoCapture(index)
         if not self._cap.isOpened():
-            raise SystemExit(
+            self._cap.release()
+            raise BrakKamery(
                 f"Nie mogę otworzyć kamery {index}.\n"
                 "Sprawdź, co widzi system:\n"
                 '  python -c "import cv2; print([i for i in range(6) '
                 'if cv2.VideoCapture(i).isOpened()])"\n'
-                "Pusta lista = brak kamery dla OpenCV. Masz Kinecta? Ustaw CAMERA_SOURCE=kinect\n"
-                "– Kinect nie jest kamerą UVC, ale jego obraz RGB czyta kinect_win.py."
+                "Pusta lista = brak zwykłej kamery. Kinect nie jest kamerą UVC – jego obraz\n"
+                "bierzemy z SDK, ale tylko gdy czujnik jest podłączony (z zasilaczem)."
             )
         self.name = f"kamera {index}"
 
@@ -94,12 +99,41 @@ class KinectCamera:
         self._k.close()
 
 
+def open_kinect():
+    """Kinect z usługi zmysłów, gdy ona go trzyma; bez niej – wprost z SDK."""
+    import kinect_usluga
+    if kinect_usluga.przez_usluge():
+        return kinect_usluga.KameraZUslugi()
+    return KinectCamera()
+
+
+def kinect_podlaczony() -> bool:
+    try:
+        import kinect_usluga
+        if kinect_usluga.stan_uslugi()[1]:
+            return True
+        import kinect_win
+        return kinect_win.sensor_count() > 0
+    except Exception:
+        return False
+
+
 def open_camera():
     source = os.environ.get("CAMERA_SOURCE", "auto").lower()
     if source == "kinect":
-        return KinectCamera()
-    if source in ("cv", "opencv", "auto"):
+        return open_kinect()
+    if source in ("cv", "opencv"):
         return CvCamera(CAMERA_INDEX)
+    if source == "auto":
+        # Komputer bez zwykłej kamery, ale z Kinectem, to częsty układ –
+        # wcześniej obserwator padał tu na „Camera index out of range”.
+        try:
+            return CvCamera(CAMERA_INDEX)
+        except BrakKamery as e:
+            if not kinect_podlaczony():
+                raise SystemExit(str(e))
+            print("Brak zwykłej kamery – biorę obraz z Kinecta.")
+            return open_kinect()
     raise SystemExit(f"Nieznane CAMERA_SOURCE: {source} (dozwolone: auto, cv, kinect)")
 
 

@@ -283,12 +283,18 @@ function utworzKamere(z) {
   let liveStreaming = false;
   const liveFps = 15;
 
+  let bladKinecta = '';
+  let pokolenieKinecta = 0;   // stara pętla klatek po zmianie źródła nie może ruszyć nowej
+
   function stopKinectStream() {
     liveStreaming = false;
+    pokolenieKinecta++;
     clearTimeout(liveImgTimer);
     liveImgTimer = null;
+    bladKinecta = '';
     const img = $('live-image');
     img.onload = img.onerror = null;
+    img.style.visibility = '';
     img.removeAttribute('src');
   }
 
@@ -303,23 +309,56 @@ function utworzKamere(z) {
    * Gdyby strumień padł (np. stara wersja usługi zmysłów), wracamy do
    * pojedynczych klatek – wolniej, ale działa.
    */
+  /** Błąd kamery przeglądarki po ludzku. „Requested device not found” znaczy:
+   *  ta przeglądarka nie widzi żadnej kamery – a Kinect jest na liście wyżej. */
+  function bladKamery(err) {
+    if (err && (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')) return t('cam.notFound');
+    return `${t('cam.err')} ${err && err.message}`;
+  }
+
   function startKinectStream() {
     const stream = liveSource === 'kinect-depth' ? 'depth' : 'color';
     const img = $('live-image');
     liveStreaming = true;
+    const moje = ++pokolenieKinecta;
+    const aktualne = () => liveStreaming && moje === pokolenieKinecta;
     let fellBack = false;
 
+    /* Klatki przez fetch, nie przez img.src: przy błędzie widać PRZYCZYNĘ
+       z usługi zmysłów („urządzenie w użyciu”, „agent nie odpowiada”), a nie
+       samą ikonę zepsutego obrazka i zgadywanie. */
+    let adresKlatki = null;
     const singleFrames = () => {
       fellBack = true;
+      img.onload = img.onerror = null;
       const next = (delay) => {
-        if (!liveStreaming) return;
-        liveImgTimer = setTimeout(() => {
-          if (liveStreaming) img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
-        }, delay);
+        if (aktualne()) liveImgTimer = setTimeout(klatka, delay);
       };
-      img.onload = () => next(120);
-      img.onerror = () => { ustawStatusKamery(t('live.kinectErr')); next(2000); };
-      img.src = `/api/kinect/frame?stream=${stream}&t=${Date.now()}`;
+      const klatka = async () => {
+        if (!aktualne()) return;
+        try {
+          const r = await fetch(`/api/kinect/frame?stream=${stream}&t=${Date.now()}`);
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            throw new Error(d.error || `HTTP ${r.status}`);
+          }
+          const url = URL.createObjectURL(await r.blob());
+          if (!aktualne()) { URL.revokeObjectURL(url); return; }
+          img.src = url;
+          img.style.visibility = '';
+          if (adresKlatki) URL.revokeObjectURL(adresKlatki);
+          adresKlatki = url;
+          if (bladKinecta) { bladKinecta = ''; ustawStatusSpoczynkowy(); }
+          next(120);
+        } catch (e) {
+          if (!aktualne()) return;
+          img.style.visibility = 'hidden';   // bez ikony zepsutego obrazka
+          bladKinecta = `${t('live.kinectErr')} ${e.message}`;
+          ustawStatusKamery(bladKinecta);
+          next(2000);
+        }
+      };
+      klatka();
     };
 
     img.onload = null;
@@ -354,7 +393,7 @@ function utworzKamere(z) {
       } catch (err) {
         img.hidden = true;
         video.hidden = false;
-        ustawStatusKamery(`${t('cam.err')} ${err.message}`);
+        ustawStatusKamery(bladKamery(err));
         return;                       // panel zostaje otwarty – można zmienić źródło
       }
       img.hidden = true;
@@ -543,7 +582,7 @@ function utworzKamere(z) {
       if (s) video.play().catch(() => {});
     });
     if (r.ok) ustawStatusSpoczynkowy();
-    else ustawStatusKamery(`${t('cam.err')} ${r.error.message}`);
+    else ustawStatusKamery(bladKamery(r.error));
   });
   $('live-expand').addEventListener('click', () => {
     const on = $('live-panel').classList.contains('expanded');
