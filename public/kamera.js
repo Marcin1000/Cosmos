@@ -23,6 +23,14 @@ function utworzKamere(z) {
   let liveLastAutoSnap = 0;
   let liveLastPose = 0;
   let livePrevPose = '';
+  /* Dłonie mają własną, szybszą pętlę niż obiekty: gest trwa sekundę,
+     a pętla YOLO chodzi co 3 s i przegapiała go w całości. */
+  let dlonieTimer = null;
+  let dlonieWToku = false;
+  let liveDlonie = '';          // opis pod obrazem („prawa dłoń: 2 palce…”)
+  let dloniePoprzedni = '';     // kandydat – zdarzenie idzie, gdy powtórzy się dwa razy
+  let dlonieWyslane = '';       // co ostatnio poszło do kontekstu modelu
+  let liveObiekty = '';         // część opisu z rozpoznanych obiektów
 
   function updateLiveRec() {
     const rec = $('live-rec');
@@ -44,6 +52,15 @@ function utworzKamere(z) {
       });
       return true;
     } catch { return false; }
+  }
+
+  /** Opis pod obrazem złożony z trzech części: obiekty, sylwetka, dłonie.
+   *  Każda pętla podmienia swoją część, zamiast nadpisywać cudze. */
+  function zlozStatus() {
+    const czesci = [liveObiekty];
+    if (livePrevPose) czesci.push(`${t('live.sylwetka')} ${livePrevPose}`);
+    if (liveDlonie) czesci.push(`${t('live.dlonie')} ${liveDlonie}`);
+    ustawStatusKamery(czesci.filter(Boolean).join(' · '));
   }
 
   function posLabel(cx, w) {
@@ -216,9 +233,11 @@ function utworzKamere(z) {
    *  dziwna kreska pod podglądem i później nie znika".
    */
   function ustawStatusSpoczynkowy() {
-    const zmyslyDzialaja = senses().online && senses().caps.yolo;
+    // „…” znaczy „rozpoznaję, zaraz coś napiszę” – przy wyłączonym rozpoznawaniu
+    // nic nie przyjdzie, więc samotny wielokropek wisiał pod obrazem bez końca.
+    const zmyslyDzialaja = senses().online && senses().caps.yolo && liveRozpoznawanie;
     // Członek bez zgody na zmysły: komputer działa, tylko nie dla niego (zespół IT, runda 5).
-    ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja ? '' : t(senses().tylkoWlasciciel ? 'liveNotForYou' : 'liveNoSenses'));
+    ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja || (liveRozpoznawanie === false && senses().online) ? '' : t(senses().tylkoWlasciciel ? 'liveNotForYou' : 'liveNoSenses'));
   }
 
   /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
@@ -293,6 +312,7 @@ function utworzKamere(z) {
   function stopKinectStream() {
     liveStreaming = false;
     pokolenieKinecta++;
+    zatrzymajKlatki();
     clearTimeout(liveImgTimer);
     liveImgTimer = null;
     bladKinecta = '';
@@ -320,6 +340,59 @@ function utworzKamere(z) {
     return `${t('cam.err')} ${err && err.message}`;
   }
 
+  /** Klatki Kinecta pojedynczo, przez fetch – gdy strumienia nie ma (agent
+   *  zmysłów). Wspólne dla panelu kamery i trybu głosowego.
+   *
+   *  Przez agenta każda klatka to pełny obieg telefon → serwer → komputer
+   *  z Kinectem → serwer → telefon. Jedna klatka naraz, a potem jeszcze stała
+   *  przerwa, dawały podgląd „strasznie poklatkowy”. Teraz W_DRODZE klatek leci
+   *  równolegle, przerwy dopełniają tylko do limitu fps, a spóźniona klatka
+   *  (starsza niż pokazana) idzie do kosza. Przez fetch, nie img.src: przy
+   *  błędzie widać PRZYCZYNĘ z usługi zmysłów, a nie ikonę zepsutego obrazka. */
+  function klatkiKinecta(img, { stream = 'color', fps = 15, aktualne: zewn = () => true, onOk = () => {}, onBlad = () => {} } = {}) {
+    const W_DRODZE = 2;
+    let dziala = true;
+    let adresKlatki = null;
+    let wyslane = 0;
+    let pokazana = 0;
+    const aktualne = () => dziala && zewn();
+    const odstep = (1000 / fps) * W_DRODZE;
+    const petla = async () => {
+      if (!aktualne()) return;
+      const nr = ++wyslane;
+      const start = performance.now();
+      let przerwa;
+      try {
+        const r = await fetch(`/api/kinect/frame?stream=${stream}&quality=70&t=${Date.now()}`);
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          throw new Error(d.error || `HTTP ${r.status}`);
+        }
+        const url = URL.createObjectURL(await r.blob());
+        if (!aktualne() || nr < pokazana) { URL.revokeObjectURL(url); }
+        else {
+          pokazana = nr;
+          img.src = url;
+          img.style.visibility = '';
+          if (adresKlatki) URL.revokeObjectURL(adresKlatki);
+          adresKlatki = url;
+          onOk();
+        }
+        przerwa = Math.max(0, odstep - (performance.now() - start));
+      } catch (e) {
+        if (!aktualne()) return;
+        img.style.visibility = 'hidden';   // bez ikony zepsutego obrazka
+        onBlad(e);
+        przerwa = 2000;
+      }
+      if (aktualne()) setTimeout(petla, przerwa);
+    };
+    for (let i = 0; i < W_DRODZE; i++) setTimeout(petla, i * (odstep / W_DRODZE));
+    return () => { dziala = false; };
+  }
+
+  let zatrzymajKlatki = () => {};
+
   function startKinectStream() {
     const stream = liveSource === 'kinect-depth' ? 'depth' : 'color';
     const img = $('live-image');
@@ -331,51 +404,18 @@ function utworzKamere(z) {
     /* Klatki przez fetch, nie przez img.src: przy błędzie widać PRZYCZYNĘ
        z usługi zmysłów („urządzenie w użyciu”, „agent nie odpowiada”), a nie
        samą ikonę zepsutego obrazka i zgadywanie. */
-    /* Przez agenta zmysłów każda klatka to pełny obieg telefon → serwer →
-       komputer z Kinectem → serwer → telefon. Jedna klatka naraz, a potem
-       jeszcze stała przerwa, dawały podgląd „strasznie poklatkowy”. Teraz
-       W_DRODZE klatek leci równolegle, przerwy między nimi dopełniają tylko do
-       limitu liveFps, a spóźniona klatka (starsza niż pokazana) idzie do kosza. */
-    const W_DRODZE = 2;
-    let adresKlatki = null;
-    let wyslane = 0;
-    let pokazana = 0;
     const singleFrames = () => {
       fellBack = true;
       img.onload = img.onerror = null;
-      const odstep = (1000 / liveFps) * W_DRODZE;
-      const petla = async () => {
-        if (!aktualne()) return;
-        const nr = ++wyslane;
-        const start = performance.now();
-        let przerwa;
-        try {
-          const r = await fetch(`/api/kinect/frame?stream=${stream}&quality=70&t=${Date.now()}`);
-          if (!r.ok) {
-            const d = await r.json().catch(() => ({}));
-            throw new Error(d.error || `HTTP ${r.status}`);
-          }
-          const url = URL.createObjectURL(await r.blob());
-          if (!aktualne() || nr < pokazana) { URL.revokeObjectURL(url); }
-          else {
-            pokazana = nr;
-            img.src = url;
-            img.style.visibility = '';
-            if (adresKlatki) URL.revokeObjectURL(adresKlatki);
-            adresKlatki = url;
-            if (bladKinecta) { bladKinecta = ''; ustawStatusSpoczynkowy(); }
-          }
-          przerwa = Math.max(0, odstep - (performance.now() - start));
-        } catch (e) {
-          if (!aktualne()) return;
-          img.style.visibility = 'hidden';   // bez ikony zepsutego obrazka
+      const stop = klatkiKinecta(img, {
+        stream, fps: liveFps, aktualne,
+        onOk: () => { if (bladKinecta) { bladKinecta = ''; ustawStatusSpoczynkowy(); } },
+        onBlad: (e) => {
           bladKinecta = `${t('live.kinectErr')} ${e.message}`;
           ustawStatusKamery(bladKinecta);
-          przerwa = 2000;
-        }
-        if (aktualne()) liveImgTimer = setTimeout(petla, przerwa);
-      };
-      for (let i = 0; i < W_DRODZE; i++) setTimeout(petla, i * (odstep / W_DRODZE));
+        },
+      });
+      zatrzymajKlatki = stop;
     };
 
     img.onload = null;
@@ -439,10 +479,12 @@ function utworzKamere(z) {
     ustawStatusSpoczynkowy();
     liveTimer = setInterval(liveDetect, 3000);
     setTimeout(liveDetect, 800);
+    startDlonie();
   }
 
   function stopLive() {
     clearInterval(liveTimer); liveTimer = null;
+    stopDlonie();
     stopKinectStream();
     if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
     $('live-video').srcObject = null;
@@ -505,10 +547,10 @@ function utworzKamere(z) {
     // Postawę doklejamy przy KAŻDYM cyklu, nie tylko w chwili pomiaru –
     // inaczej następna detekcja nadpisuje status i sylwetka miga na ułamek
     // sekundy. Zmienia się wolno, więc ostatnia znana jest nadal prawdziwa.
-    const ogon = livePrevPose ? ` · ${t('live.sylwetka')} ${livePrevPose}` : '';
-    ustawStatusKamery((objs.length
+    liveObiekty = objs.length
       ? objs.map((o) => `${o.label} (${posLabel((o.box[0] + o.box[2]) / 2, overlay.width)})`).join(', ')
-      : t('liveNothing')) + ogon);
+      : t('liveNothing');
+    zlozStatus();
 
     // zdarzenie percepcji z pozycją – tylko gdy zestaw obiektów się zmienił
     const sig = objs.map((o) => o.label).sort().join(',');
@@ -559,10 +601,8 @@ function utworzKamere(z) {
              postawy linijkę z dwiema: starą (wpisaną wyżej jako `ogon`) i nową.
              Widać to było przez ułamek sekundy i wyglądało jak usterka
              rozpoznawania, a było usterką składania napisu. */
-          const znacznik = ` · ${t('live.sylwetka')} `;
-          const bezOgona = statusKamery.includes(znacznik) ? statusKamery.slice(0, statusKamery.indexOf(znacznik)) : statusKamery;
           livePrevPose = poz.summary;
-          ustawStatusKamery(`${bezOgona}${znacznik}${poz.summary}`);
+          zlozStatus();
           // Człowiek wyszedł z kadru → przestajemy twierdzić, że stoi.
           // Do kontekstu rozmowy: model ma wiedzieć, czy stoisz, czy siedzisz.
           fetch('/api/events', {
@@ -574,6 +614,82 @@ function utworzKamere(z) {
     } else if (!objs.some((o) => o.label === 'person')) {
       livePrevPose = '';
     }
+  }
+
+  /** Połączenia punktów dłoni (MediaPipe, 21 punktów): kciuk, cztery palce
+   *  i łuk dłoni. Rysujemy je, żeby było widać, CO Cosmos policzył. */
+  const KOSCI_DLONI = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
+    [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16],
+    [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
+
+  function dlonieMozliwe() {
+    return liveRozpoznawanie && liveSource !== 'kinect-depth'   // na mapie głębi dłoni nie znajdzie
+      && senses().online && senses().caps.dlonie;
+  }
+
+  function wyczyscDlonie() {
+    const c = $('live-dlonie');
+    if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    liveDlonie = '';
+    dloniePoprzedni = '';
+  }
+
+  async function liveDlonieKrok() {
+    if (dlonieWToku || !dlonieMozliwe()) return;
+    const media = liveMedia();
+    const { w, h } = liveMediaSize();
+    if (!w || !h) return;
+    dlonieWToku = true;
+    try {
+      const cap = document.createElement('canvas');
+      cap.width = w; cap.height = h;
+      cap.getContext('2d').drawImage(media, 0, 0);
+      const res = await fetch('/api/dlonie', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: cap.toDataURL('image/jpeg', 0.75) }),
+      });
+      const d = await readJsonSafe(res);
+      if (!res.ok || !dlonieMozliwe()) return;
+      const dlonie = d.dlonie || [];
+      const c = $('live-dlonie');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#f2b36b'; ctx.fillStyle = '#f2b36b';
+      ctx.lineWidth = Math.max(2, w / 320);
+      for (const dl of dlonie) {
+        const p = (dl.punkty || []).map(([x, y]) => [x * w, y * h]);
+        if (p.length !== 21) continue;
+        ctx.beginPath();
+        for (const [a, b] of KOSCI_DLONI) { ctx.moveTo(p[a][0], p[a][1]); ctx.lineTo(p[b][0], p[b][1]); }
+        ctx.stroke();
+        for (const [x, y] of p) { ctx.beginPath(); ctx.arc(x, y, Math.max(2.5, w / 260), 0, Math.PI * 2); ctx.fill(); }
+      }
+      liveDlonie = dlonie.length ? String(d.summary || '') : '';
+      zlozStatus();
+      // Do kontekstu modelu tylko opis, który utrzymał się dwa odczyty z rzędu –
+      // dłoń w ruchu daje po drodze przypadkowe liczby palców.
+      const opis = liveDlonie || (dlonieWyslane ? t('live.dlonieZniknely') : '');
+      if (opis && opis === dloniePoprzedni && opis !== dlonieWyslane) {
+        dlonieWyslane = liveDlonie ? opis : '';
+        fetch('/api/events', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'dlonie', summary: opis }),
+        }).catch(() => {});
+      }
+      dloniePoprzedni = opis;
+    } catch { /* zmysły chwilowo niedostępne – następny krok spróbuje znowu */ }
+    finally { dlonieWToku = false; }
+  }
+
+  function startDlonie() {
+    clearInterval(dlonieTimer);
+    dlonieTimer = setInterval(liveDlonieKrok, 1200);
+  }
+  function stopDlonie() {
+    clearInterval(dlonieTimer);
+    dlonieTimer = null;
+    wyczyscDlonie();
   }
 
   // O tym, czy panel jest otwarty, decyduje jego widoczność – nie obecność
@@ -627,6 +743,8 @@ function utworzKamere(z) {
     livePrevObjects = '';
     livePrevPose = '';
     liveLastObjects = [];
+    liveObiekty = '';
+    wyczyscDlonie();
     if (!bladKinecta) ustawStatusSpoczynkowy();
   });
 
@@ -642,7 +760,7 @@ function utworzKamere(z) {
 
   /** Zatrzymaj cykliczne wykrywanie (YOLO co 3 s), zostawiając podgląd.
    *  Dla pomiarów układu: każdy takt wpisuje proporcję prawdziwego strumienia. */
-  function wstrzymajWykrywanie() { clearInterval(liveTimer); liveTimer = null; }
+  function wstrzymajWykrywanie() { clearInterval(liveTimer); liveTimer = null; stopDlonie(); }
 
   // ręczna migawka do osi czasu (Digital Time Machine)
   $('live-snapshot').addEventListener('click', async () => {
@@ -653,7 +771,7 @@ function utworzKamere(z) {
     setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1400);
   });
 
-  return { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie };
+  return { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta };
 }
 
 if (typeof window !== 'undefined') window.utworzKamere = utworzKamere;

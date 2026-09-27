@@ -1419,7 +1419,7 @@ async function trasyApi(req, res, p) {
   if (p === '/api/stt' && req.method === 'POST') return await glos.handleStt(req, res);
   if (p === '/api/tts' && req.method === 'POST') return await glos.handleTts(req, res);
   // Zmysły przez pośrednika: ptak (BirdNET), wykrywanie, poza, Kinect – lib/zmysly-proxy.js.
-  if (p === '/api/ptak' || p === '/api/detect' || p === '/api/pose' || p.startsWith('/api/kinect/')) {
+  if (p === '/api/ptak' || p === '/api/detect' || p === '/api/pose' || p === '/api/dlonie' || p.startsWith('/api/kinect/')) {
     return await zmysly_.handleZmysly(req, res, p);
   }
   return sendJson(res, 404, { error: 'Nie ma takiej trasy.' });

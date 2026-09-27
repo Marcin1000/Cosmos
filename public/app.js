@@ -811,6 +811,7 @@ function messageElement(m, idx = -1) {
       : (m.actionType === 'procedura' || m.actionType === 'procedure') ? t('learn.runProc')
       : (m.actionType === 'urządzenie' || m.actionType === 'device') ? t('dev.action')
       : (m.actionType === 'pomysł' || m.actionType === 'pomysl' || m.actionType === 'idea') ? t('imp.action')
+      : czyOtworz(m.actionType) ? t('open.action')
       : t('kb.record');
     msg.innerHTML =
       `<div class="action-card">` +
@@ -818,7 +819,7 @@ function messageElement(m, idx = -1) {
       `<span class="action-card-text">${escapeHtml(m.actionText)}</span></div>` +
       (done
         ? `<span class="action-card-done">✓</span>`
-        : `<div class="action-card-btns"><button class="btn-primary act-do">${t('actionDo')}</button>` +
+        : `<div class="action-card-btns"><button class="btn-primary act-do">${t(czyOtworz(m.actionType) ? 'open.do' : 'actionDo')}</button>` +
           `<button class="btn-secondary act-skip">${t('actionSkip')}</button></div>`) +
       `</div>`;
     if (!done) {
@@ -992,10 +993,29 @@ function messageActions(text, { copy, role, idx = -1 }) {
   return actions;
 }
 
+/** Otwórz stronę w nowej karcie. Zwraca true, gdy przeglądarka ją otworzyła
+ *  (false: zablokowane okno albo adres, który nie jest stroną http/https). */
+function otworzStrone(tekst) {
+  const adres = adresDoOtwarcia(tekst);
+  if (!adres) return false;
+  /* Bez 'noopener' w trzecim argumencie: z nim window.open zawsze zwraca null
+     i nie dałoby się odróżnić otwartej karty od zablokowanej. Odcinamy
+     opener ręcznie – otwarta strona nie dostaje dostępu do Cosmosa. */
+  const okno = window.open(adres, '_blank');
+  if (!okno) return false;
+  try { okno.opener = null; } catch { /* inna domena – i tak bez dostępu */ }
+  return true;
+}
+
 async function runAction(m, msgEl) {
   const btn = msgEl.querySelector('.act-do');
   if (btn) btn.disabled = true;
   try {
+    if (czyOtworz(m.actionType)) {
+      if (otworzStrone(m.actionText)) { m.done = true; saveConversations(); renderMessages(); }
+      else if (btn) btn.disabled = false;
+      return;
+    }
     if (m.actionType === 'pomysł' || m.actionType === 'pomysl' || m.actionType === 'idea') {
       await fetch('/api/improvements', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2373,7 +2393,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
-  scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel,
+  scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel, adresDoOtwarcia, czyOtworz,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
@@ -2512,10 +2532,22 @@ async function domknijOdpowiedz(conv, surowe) {
 
   if (akcja) {
     const widoczne = tresc;
+    const typ = akcja[1].trim().toLowerCase();
     conv.messages.push({ role: 'assistant', content: widoczne || '…',
       think: lastThink, note: lastModelNote, ...znakSilnika() });
-    conv.messages.push({ role: 'action',
-      actionType: akcja[1].trim().toLowerCase(), actionText: akcja[2].trim() });
+    const karta = { role: 'action', actionType: typ, actionText: akcja[2].trim() };
+    conv.messages.push(karta);
+    /* „Otwórz onet.pl” – strona otwiera się od razu, bez zatwierdzania: to nic
+       nie zapisuje i niczego nie wysyła. Przeglądarka może jednak zablokować
+       okno otwierane bez kliknięcia – wtedy zostaje karta z „Otwórz”, a jej
+       kliknięcie jest gestem, którego blokada nie dotyczy. */
+    if (czyOtworz(typ)) {
+      const otwarte = otworzStrone(karta.actionText);
+      if (otwarte) karta.done = true;
+      saveConversations();
+      if (!voiceMode) return widoczne;
+      return otwarte ? widoczne : `${widoczne || ''} ${t('open.clickOnScreen')}`.trim();
+    }
     saveConversations();
     /* Akcja czeka na kliknięcie „Wykonaj”. W trybie głosowym słychać było samo
        „Zapiszę to.”, a bez kliknięcia nic się nie zapisywało (agencja, runda 5). */
@@ -3496,7 +3528,7 @@ const { openStudio, zadanieStudia } = utworzStudioWidok({
 // KAMERA NA ŻYWO – podgląd + detekcja YOLO + zdarzenia percepcji
 // ----------------------------------------------------------------
 /* Kamera na żywo: podgląd, detekcja, sylwetka – public/kamera.js. */
-const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie } = utworzKamere({
+const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta } = utworzKamere({
   settings: () => settings, senses: () => senses, cameraFacing: () => cameraFacing, odswiezPlan: () => odswiezPlan,
   $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
 });
@@ -3949,13 +3981,8 @@ el.kbDrop.addEventListener('drop', (e) => {
 // Wake word i rozmowa: Web Speech API (Chrome/Edge, także Android).
 // ----------------------------------------------------------------
 
-/* Bez `\b` po nazwie – i to jest poprawka po zrzucie Marcina.
-   Przy sklejonych rozpoznaniach („Hej kosmosHej kosmos co widzisz") granica
-   słowa po „kosmos" nie istniała, bo zaraz za nim stała litera. Wzorzec nie
-   pasował do PIERWSZEGO wystąpienia i słowo budzące wjeżdżało w treść
-   pytania. Rozluźnienie jest bezpieczne: żeby cokolwiek dopasować, trzeba
-   i tak mieć przed nazwą „hej"/„ok". */
-const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
+// Wzorzec słowa budzącego i jego historia: public/mowa.js (SLOWO_BUDZACE).
+const WAKE_RE = window.SLOWO_BUDZACE;
 
 /* Czyste przekształcenia tekstu mowy – `public/mowa.js`. Tam mieszka też
    `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
@@ -3964,7 +3991,9 @@ const {
   przepisanie, doklejBezZakladki,
 } = utworzMowe({ WAKE_RE });
 const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
-const VISUAL_RE = /\b(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj)\b/i;
+/* „Ile palców pokazuję?” nie pasowało do żadnego słowa i klatka w ogóle nie
+   szła. Stąd palce, gesty, dłonie i „pokazuję”. */
+const VISUAL_RE = /(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj|pokazuj|palc|palec|gest|d[łl]o[nń]|r[ęe]k[ęaie]|what (am i|do you see)|how many fingers|showing)/i;
 
 function getSR() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -4018,13 +4047,14 @@ function pokazPoziom(p) {
 function pokazPodglad(tekst) {
   if (!voiceMode || voiceState !== 'listening') return;
   el.voiceTranscript.textContent = bezSlowaBudzacego(tekst) || tekst;
+  el.voiceTranscript.classList.remove('komunikat');
   el.voiceTranscript.classList.add('podglad');
   delete el.voiceTranscript.dataset.komunikat;
 }
 
 function bezPodgladu() {
   if (!el.voiceTranscript.classList.contains('podglad')) return;
-  el.voiceTranscript.classList.remove('podglad');
+  el.voiceTranscript.classList.remove('podglad', 'komunikat');
   el.voiceTranscript.textContent = '';
 }
 
@@ -4191,13 +4221,38 @@ async function enterVoiceMode() {
   startWakeListening();
 }
 
+/* Kinect w trybie głosowym. Marcin: „przy asystencie głosowym nie można
+   wrzucić podglądu z kamery” – przycisk znał tylko kamerę przeglądarki, a jego
+   komputer ma wyłącznie Kinecta. Teraz: wybrany w panelu kamery Kinect, a przy
+   kamerze przeglądarki, której nie ma – Kinect, jeśli zmysły go mają. */
+let voiceKinectStop = null;
+
+function kinectDostepny() {
+  return Boolean(senses.online && senses.caps.kinect);
+}
+
+function startVoiceKinect() {
+  const img = $('voice-kinect');
+  el.voiceCamera.hidden = true;
+  img.hidden = false;
+  el.voiceCameraWrap.style.display = '';
+  voiceKinectStop = klatkiKinecta(img, { stream: 'color', fps: 10 });
+  return true;
+}
+
 async function startVoiceCamera() {
-  if (voiceCameraStream) return true;
+  if (voiceCameraStream || voiceKinectStop) return true;
+  const zrodlo = localStorage.getItem('cosmos.liveSource') || 'camera';
+  if (zrodlo.startsWith('kinect') && kinectDostepny()) return startVoiceKinect();
   try {
     voiceCameraStream = await getMedia(videoConstraints(cameraFacing));
   } catch {
+    // Komputer bez kamery, za to z Kinectem – bierzemy Kinecta.
+    if (kinectDostepny()) return startVoiceKinect();
     return false;                     // tryb głosowy działa też bez kamery
   }
+  $('voice-kinect').hidden = true;
+  el.voiceCamera.hidden = false;
   el.voiceCamera.srcObject = voiceCameraStream;
   el.voiceCameraWrap.style.display = '';
   return true;
@@ -4208,19 +4263,23 @@ function stopVoiceCamera() {
     voiceCameraStream.getTracks().forEach((tr) => tr.stop());
     voiceCameraStream = null;
   }
+  if (voiceKinectStop) { voiceKinectStop(); voiceKinectStop = null; }
+  const img = $('voice-kinect');
+  if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  img.removeAttribute('src');
   el.voiceCamera.srcObject = null;
   el.voiceCameraWrap.style.display = 'none';
 }
 
 function updateVoiceCamButton() {
-  const on = Boolean(voiceCameraStream);
+  const on = Boolean(voiceCameraStream || voiceKinectStop);
   const btn = $('voice-cam-btn');
   btn.classList.toggle('active', on);
   btn.title = t(on ? 'voice.camOff' : 'voice.camOn');
 }
 
 $('voice-cam-btn').addEventListener('click', async () => {
-  if (voiceCameraStream) {
+  if (voiceCameraStream || voiceKinectStop) {
     stopVoiceCamera();
     localStorage.setItem('cosmos.voiceCam', '0');
   } else {
@@ -4347,6 +4406,10 @@ let voiceHeard = '';          // złożone zdanie w trybie pytania
    Zapamiętujemy więc, co było komunikatem. */
 function komunikatGlosu(tekst) {
   el.voiceTranscript.classList.remove('podglad');
+  /* Komunikat nie w dymku pytania. Marcin zobaczył „Nie udało się rozpoznać
+     mowy: HTTP 502” w miejscu swojej wypowiedzi i wyglądało to, jakby Cosmos
+     wysłał ten błąd do modelu. Teraz to przygaszona linijka bez dymka. */
+  el.voiceTranscript.classList.toggle('komunikat', Boolean(tekst));
   el.voiceTranscript.textContent = tekst;
   el.voiceTranscript.dataset.komunikat = tekst;
 }
@@ -4459,6 +4522,8 @@ function startNasluchWlasny() {
   if (nasluch) { nasluch.gluchy(voiceDeaf); return; }
   nasluch = window.NasluchWlasny.utworz({
     adres: () => adresStt(voiceState === 'wake' ? 'nasluch' : 'pytanie'),
+    // Przy nasłuchu słowa budzącego liczy się tylko najświeższa wypowiedź.
+    jednaNaRaz: () => voiceState === 'wake',
     onWypowiedz: (tekst) => { nasluchAwarie = 0; wypowiedzZNasluchu(tekst); },
     onBlad: (err) => {
       // Awaria transkrypcji nie kończy trybu głosowego – następna wypowiedź
@@ -4468,7 +4533,11 @@ function startNasluchWlasny() {
          błędy i zmiana dopiero po trzecim – pytanie przepadało (zespół IT, runda 5). */
       const offline = err.kod === 'zmysly-offline';
       if (!offline) {
-        komunikatGlosu(t('voice.sttErr', { msg: err.message }));
+        /* Przy nasłuchu słowa budzącego błąd dotyczy dźwięku z pokoju, o który
+           nikt nie pytał – nie ma czego komunikować. Liczymy go tylko. */
+        if (voiceState !== 'wake') {
+          komunikatGlosu(err.kod === 'serwer-niedostepny' ? t('voice.sttServer') : t('voice.sttErr', { msg: err.message }));
+        }
         if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
       }
       /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
@@ -4576,7 +4645,7 @@ function wypowiedzZNasluchu(tekst) {
   const czyste = bezSlowaBudzacego(tekst);
   if (!czyste) return;
   clearTimeout(nasluchCisza);
-  el.voiceTranscript.classList.remove('podglad');
+  el.voiceTranscript.classList.remove('podglad', 'komunikat');
   el.voiceTranscript.textContent = czyste;
   askVoice(czyste);
 }
@@ -4586,7 +4655,7 @@ function wypowiedzZNasluchu(tekst) {
  *  ktoś powiedział „Hej, Kosmos" i się rozmyślił. */
 function czekajNaPytanie() {
   setVoiceState('listening');
-  el.voiceTranscript.classList.remove('podglad');
+  el.voiceTranscript.classList.remove('podglad', 'komunikat');
   el.voiceTranscript.textContent = '';
   czekajDalej();
 }
@@ -4836,22 +4905,45 @@ function startQueryListening() {
 }
 
 function captureVoiceFrame() {
-  const video = el.voiceCamera;
-  if (!voiceCameraStream || !video.videoWidth) return null;
+  const kinect = $('voice-kinect');
+  const zKinecta = Boolean(voiceKinectStop);
+  const zrodlo = zKinecta ? kinect : el.voiceCamera;
+  const w = zKinecta ? kinect.naturalWidth : zrodlo.videoWidth;
+  const h = zKinecta ? kinect.naturalHeight : zrodlo.videoHeight;
+  if ((!voiceCameraStream && !zKinecta) || !w) return null;
   const canvas = document.createElement('canvas');
   const maxDim = 1024;
-  const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
-  canvas.width = Math.round(video.videoWidth * scale);
-  canvas.height = Math.round(video.videoHeight * scale);
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  canvas.getContext('2d').drawImage(zrodlo, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+/** Dłonie na klatce z pytania głosowego → zdarzenie w kontekście percepcji,
+ *  zanim pytanie pójdzie do modelu. Bez tego model widział obraz (albo i nie –
+ *  Nemotron nie jest wizyjny) i odpowiadał „nie mogę określić liczby palców”. */
+async function dlonieNaKlatce(klatka) {
+  if (!klatka || !(senses.online && senses.caps.dlonie)) return;
+  try {
+    const r = await fetch('/api/dlonie', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: klatka }), signal: AbortSignal.timeout(8000),
+    });
+    const d = await readJsonSafe(r);
+    if (!r.ok || !d.summary) return;
+    await fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'dlonie', summary: d.summary }),
+    });
+  } catch { /* bez dłoni pytanie i tak idzie */ }
 }
 
 const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|start)\s+(nagrywanie|nagrywa[ćc]|notatk[ęe]|dyktowanie)|new note|start (a )?note|start recording)\b/i;
 const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae])|(end|stop|save)\s+(note|recording))\b/i;
 
 async function handleVoiceQuery(text) {
-  el.voiceTranscript.classList.remove('podglad');
+  el.voiceTranscript.classList.remove('podglad', 'komunikat');
   el.voiceTranscript.textContent = text;
   /* Pytanie głosowe w trakcie pisanej odpowiedzi uruchamiało drugą generację
      obok pierwszej – obie lądowały w rozmowie na krzyż i obie były czytane. */
@@ -4903,7 +4995,10 @@ async function handleVoiceQuery(text) {
 
   // pytanie „wizualne” → dołącz klatkę z kamery (model wizyjny sam się dobierze)
   let frame = null;
-  if (VISUAL_RE.test(text)) frame = captureVoiceFrame();
+  if (VISUAL_RE.test(text)) {
+    frame = captureVoiceFrame();
+    await dlonieNaKlatce(frame);
+  }
 
   const conv = ensureConversation(text);
   const content = frame ? { text, images: [frame] } : text;
@@ -6588,8 +6683,16 @@ async function obsluzZdarzenie(z) {
    *
    *  Czujniki, urządzenia i rutyny lecą dalej: ich w podglądzie nie widać. */
   const podgladOtwarty = $('live-panel') && $('live-panel').style.display !== 'none';
-  if (podgladOtwarty && (z.type === 'kamera' || z.type === 'sylwetka')) return;
-  if (['kamera', 'czujnik', 'sylwetka', 'urządzenie', 'rutyna'].includes(z.type)) pokazZdarzenie(z);
+  const rozpoznania = ['kamera', 'sylwetka', 'dlonie'];
+  if (podgladOtwarty && rozpoznania.includes(z.type)) return;
+  /* Wyłączone „Rozpoznawanie” w panelu kamery wycisza WSZYSTKIE dymki
+     rozpoznawania, nie tylko te z podglądu. Marcin wyłączył je i dalej co
+     chwilę widział „w kadrze pojawiło się: chair” – to mówił obserwator
+     kamery na jego komputerze (osobny program), a przycisk działał tylko na
+     przeglądarkę. Zdarzenia dalej trafiają do kontekstu modelu; kto chce
+     wyłączyć samo obserwowanie, ma przełącznik Obserwatora w Ustawieniach. */
+  if (rozpoznania.includes(z.type) && localStorage.getItem('cosmos.liveRozpoznawanie') === '0') return;
+  if ([...rozpoznania, 'czujnik', 'urządzenie', 'rutyna'].includes(z.type)) pokazZdarzenie(z);
 }
 
 // Przełącznik w Ustawieniach – czytany przy otwarciu okna i zapisywany od razu.

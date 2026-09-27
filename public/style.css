@@ -2980,6 +2980,11 @@ body::after {
 .voice-transcript:empty, .voice-answer:empty { display: none; }
 /* Szkic w trakcie mówienia: przygaszony, bo może się jeszcze zmienić. */
 .voice-transcript.podglad { opacity: .72; font-style: italic; }
+/* Komunikat (błąd rozpoznawania, mikrofon) to nie wypowiedź – bez dymka. */
+.voice-transcript.komunikat {
+  background: none; border-color: transparent;
+  color: var(--text-dim); font-size: 13px; font-style: italic;
+}
 @keyframes voice-dymek { from { opacity: 0; transform: translateY(10px); } }
 .voice-transcript {
   max-width: min(460px, 88%);
@@ -3022,8 +3027,8 @@ body::after {
   width: 190px;
   max-width: 40vw;          /* na telefonie podgląd ma być kontrolką, nie ekranem */
 }
-.voice-camera-wrap video { max-height: 30vh; object-fit: cover; }
-.voice-camera-wrap video {
+.voice-camera-wrap video, .voice-camera-wrap img { max-height: 30vh; object-fit: cover; }
+.voice-camera-wrap video, .voice-camera-wrap img {
   width: 100%;
   border-radius: 10px;
   border: 1px solid var(--border-strong);

@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 132 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 134 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -204,7 +204,7 @@ w osobnej linii, a klient go wychwytuje:
 | `[OBRAZ: opis po angielsku]` | generowanie grafiki przez Studio |
 | `[ARCHIWUM: grupuj=rok]` | własne archiwum zdjęć |
 | `[PLAN: obiektyw=…]` | plan zdjęciowy – nastawy liczone z efemeryd i pogody |
-| `[AKCJA: typ \| treść]` | zapamiętaj / notatka / procedura – **zawsze z zatwierdzeniem człowieka** |
+| `[AKCJA: typ \| treść]` | zapamiętaj / notatka / procedura – **zawsze z zatwierdzeniem człowieka**; wyjątek: `otwórz` (strona w nowej karcie od razu, tylko http/https – `adresDoOtwarcia()` w `public/protokol.js`) |
 
 Dodając narzędzie, zmieniasz **dwa miejsca naraz**: opis w `lib/instrukcje-narzedzi.js`
 i wyrażenie regularne + obsługę w `public/narzedzia.js`. Rozjechanie się ich to najczęstszy

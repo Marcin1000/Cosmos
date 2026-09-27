@@ -41,7 +41,7 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "image/png")
         elif self.path.startswith("/health"):
             body = json.dumps({"whisper": False, "yolo": True, "mediapipe": True,
-                               "kinect": True}).encode()
+                               "dlonie": True, "kinect": True}).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json")
         else:
             self.send_response(404); body = b"{}"
@@ -54,6 +54,17 @@ class H(http.server.BaseHTTPRequestHandler):
         if self.path.startswith("/detect"):
             body = json.dumps({"objects": [
                 {"label": "person", "box": [10, 10, 40, 40], "conf": 0.9}]}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+        elif self.path.startswith("/dlonie"):
+            # Dwie dłonie: prawa pokazuje znak V, lewa pięść. Punkty w kształcie
+            # dłoni, żeby panel miał co narysować.
+            def dlon(x0):
+                return [[round(x0 + 0.02 * (i % 5), 4), round(0.8 - 0.03 * i, 4)] for i in range(21)]
+            body = json.dumps({"dlonie": [
+                {"strona": "prawa", "palce": ["wskazujący", "środkowy"], "gest": "znak V", "punkty": dlon(0.3)},
+                {"strona": "lewa", "palce": [], "gest": "pięść", "punkty": dlon(0.6)},
+            ], "summary": "prawa dłoń: 2 palce (wskazujący, środkowy), znak V · lewa dłoń: 0 palców, pięść · razem 2 palce"},
+                ensure_ascii=False).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json")
         elif self.path.startswith("/pose"):
             body = json.dumps({"present": True,

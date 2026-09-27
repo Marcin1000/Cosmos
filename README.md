@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="132 test suites" src="https://img.shields.io/badge/test%20suites-132-5E9E3A?style=flat-square">
+  <img alt="134 test suites" src="https://img.shields.io/badge/test%20suites-134-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 132 suites plus 9 Python
+**Tests measure behaviour, never source text.** 134 suites plus 9 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -160,7 +160,12 @@ single process, so the senses service owns it and the camera watcher and depth s
 read frames, depth and skeletons from it over loopback – the live preview no longer
 goes black the moment another component grabs the sensor. Frames relayed through the
 agent ride persistent connections, two in flight, because a fresh TLS handshake per
-request made the preview crawl at two frames a second. A first-run tutorial walks each new
+request made the preview crawl at two frames a second. Hands get their own faster
+loop: MediaPipe gives 21 points per hand, Cosmos counts extended fingers from the
+geometry and puts "right hand: 2 fingers, V sign" into the perception context, because
+the Kinect skeleton has the hand as a single joint and the model could only apologise.
+The assistant can also open web pages; a blocked pop-up falls back to a one-click card.
+A first-run tutorial walks each new
 person through their name, their own API keys, the senses and the phone install.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
@@ -249,7 +254,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 132 suites + 9 Python selftests (~20 min)
+npm test                  # 134 suites + 9 Python selftests (~20 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -305,7 +310,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               132 behaviour suites, mock upstreams, fake DOM
+tests/               134 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 

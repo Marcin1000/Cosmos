@@ -145,6 +145,13 @@
     const onRozpoznane = o.onRozpoznane || (() => {});
     // Czy wolno wysyłać podgląd (aplikacja: tylko pytanie, nie nasłuch otoczenia).
     const podgladWolno = typeof o.podglad === 'function' ? o.podglad : () => false;
+    /* Przy nasłuchu słowa budzącego transkrypcje nie mogą stać w kolejce:
+       rozmowa w pokoju albo telewizor dawały kilka wycinków naraz, każdy szedł
+       do Whispera, a „Hej, Cosmos” czekało za nimi – stąd „łapie po długim
+       czasie”. Gdy jedna transkrypcja trwa, czeka najwyżej JEDNA następna,
+       i to najnowsza; starsze wycinki idą do kosza. */
+    const jednaNaRaz = typeof o.jednaNaRaz === 'function' ? o.jednaNaRaz : () => false;
+    let czekajaca = null;
 
     let ctx = null;
     let strumien = null;
@@ -455,6 +462,7 @@
     }
 
     async function wyslij(blob) {
+      if (jednaNaRaz() && rozpoznawanych > 0) { czekajaca = blob; return; }
       rozpoznawanych++;
       try {
         /* Adres podaje aplikacja: język rozmowy i to, czy to nasłuch słowa
@@ -468,7 +476,13 @@
         let dane = {};
         try { dane = await res.json(); } catch { /* nie-JSON = i tak błąd */ }
         // Kod od serwera („zmysly-offline”) – aplikacja decyduje po nim, nie po treści.
-        if (!res.ok) throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { kod: dane.kod || '' });
+        if (!res.ok) {
+          /* Odpowiedź bez JSON-a przy 502/503/504/52x to nie Cosmos, tylko
+             pośrednik (Cloudflare) – serwer restartuje się albo nie odpowiada.
+             Samo „HTTP 502” nic człowiekowi nie mówiło. */
+          const posrednik = !dane.error && (res.status >= 502 && res.status <= 504 || res.status >= 520);
+          throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { kod: dane.kod || (posrednik ? 'serwer-niedostepny' : '') });
+        }
         const tekst = String(dane.text || '').trim();
         // Whisper na czystym szumie oddaje puste albo same znaki interpunkcyjne.
         rozpoznawanych--;
@@ -478,6 +492,11 @@
         rozpoznawanych--;
         onRozpoznane('');
         onBlad(err);
+      }
+      if (czekajaca && rozpoznawanych === 0) {
+        const nastepna = czekajaca;
+        czekajaca = null;
+        wyslij(nastepna);
       }
     }
 

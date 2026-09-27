@@ -492,7 +492,28 @@ function utworzProtokol() {
       .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '');
   }
 
+  /** Adres z akcji „otwórz” albo '' , gdy to nie jest strona do otwarcia.
+   *
+   *  Model pisze różnie: „onet.pl”, „www.onet.pl/pogoda”, „https://onet.pl”,
+   *  „<https://onet.pl>”, czasem ze spacją albo kropką na końcu. Otwieramy
+   *  wyłącznie http(s) – `javascript:`, `data:` czy `file:` z odpowiedzi modelu
+   *  (albo z wstrzykniętej strony, którą przeczytał) nie mogą niczego uruchomić. */
+  function adresDoOtwarcia(tekst) {
+    let a = String(tekst || '').trim().replace(/^<|>$/g, '').replace(/[.,;:!?)\]]+$/, '').trim();
+    if (!a || /\s/.test(a)) return '';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(a) && !/^https?:\/\//i.test(a)) return '';
+    if (!/^https?:\/\//i.test(a)) a = `https://${a.replace(/^\/+/, '')}`;
+    try {
+      const u = new URL(a);
+      if (!/^https?:$/.test(u.protocol) || !/\./.test(u.hostname) || u.username || u.password) return '';
+      return u.href;
+    } catch { return ''; }
+  }
+  const czyOtworz = (typ) => /^(otw[oó]rz|open)$/i.test(String(typ || '').trim());
+
   return {
+    adresDoOtwarcia,
+    czyOtworz,
     SEARCH_MARKER_RE,
     IMAGE_MARKER_RE,
     PHOTO_MARKER_RE,

@@ -30,7 +30,8 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | Dokumenty – `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy. Z `docling` albo `markitdown` czyta też SKANY (OCR) i zachowuje tabele oraz kolumny – bez nich pypdf oddaje ciąg luźnych liczb |
 | Powiększanie – `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
 | Ptaki – `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer – bez nich BirdNET szuka wśród gatunków całego świata |
-| Sylwetka – `/pose` (MediaPipe) | ⚠️ endpoint działa, **nic go nie wywołuje** | dostępny przez API, ale żadna funkcja Cosmosa z niego nie korzysta |
+| Sylwetka – `/pose` (MediaPipe) | ✅ działa | panel kamery pyta o postawę, gdy w kadrze jest osoba; mediapipe bez `solutions` idzie przez Tasks API |
+| Dłonie – `/dlonie` (MediaPipe) | ✅ działa | 21 punktów na dłoń, liczba i nazwy wyprostowanych palców, gest (pięść, znak V, kciuk…); model `gesture_recognizer.task` pobiera się sam |
 | `watcher.py` – ciągła percepcja | ✅ działa | webcam, telefon, aparat – a bez zwykłej kamery sam bierze obraz z Kinecta |
 | `wake_listener.py` – słowo aktywujące | ⚠️ niedokończony | zgłasza zdarzenie, ale nic go nie odbiera; brak polskiego słowa |
 | `kinect_watcher.py` – głębia | ✅ działa | Windows przez SDK 1.8, Linux przez libfreenect |
@@ -507,6 +508,8 @@ stałe w zmiennych środowiskowych Windowsa.
 | `YOLO_MODEL` | `yolo11n.pt` | model rozpoznawania obiektów; `yolo11s.pt`/`yolo11m.pt` są dokładniejsze i wolniejsze |
 | `REALESRGAN_MODEL` | wbudowany | ścieżka do własnego modelu powiększania |
 | `PIPER_VOICE` | – | **wymagane** dla głosu: pełna ścieżka do pliku `.onnx` (patrz wyżej) |
+| `GESTY_MODEL` | pobierany | model dłoni i gestów (`gesture_recognizer.task`); bez niego pobiera się sam przy pierwszej dłoni |
+| `WHISPER_ROZGRZEJ` | `1` | `0` wyłącza ładowanie Whispera zaraz po starcie (w tle) – wtedy pierwsze „Hej, Cosmos” czeka na załadowanie modelu |
 | `POSE_MODEL` | pobierany | model sylwetki dla mediapipe 0.10.30+ (`pose_landmarker_lite.task`); bez niego pobiera się sam przy pierwszej sylwetce |
 | `COSMOS_AGENT_DIR` | `~/.cosmos` | katalog agenta zmysłów: środowisko, dzienniki, głosy i pobrane modele (`modele/`) |
 | `COSMOS_RECORD_OUT` | – | folder na nagrania z `tether.py` (sterowanie aparatem) |

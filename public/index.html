@@ -1104,6 +1104,7 @@
       <video id="live-video" autoplay playsinline muted></video>
       <img id="live-image" alt="" hidden>
       <canvas id="live-overlay"></canvas>
+      <canvas id="live-dlonie"></canvas>
     </div>
     <!-- Wszystko pod obrazem PRZEWIJA SIĘ. Panel miał `overflow: hidden`,
          więc gdy treść nie mieściła się w oknie, przycisk migawki po prostu
@@ -1228,6 +1229,7 @@
     <div class="voice-answer" id="voice-answer" aria-live="polite"></div>
     <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
       <video id="voice-camera" autoplay playsinline muted></video>
+      <img id="voice-kinect" alt="" hidden>
       <span class="voice-camera-label mono ik ik-oko" data-i18n="voice.camLabel">podgląd</span>
     </div>
     <p class="voice-hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>

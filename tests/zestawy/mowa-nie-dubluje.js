@@ -27,10 +27,10 @@
 */
 const path = require('node:path');
 
-const { utworzMowe } = require(path.join(__dirname, '..', '..', 'public', 'mowa.js'));
+const { utworzMowe, SLOWO_BUDZACE } = require(path.join(__dirname, '..', '..', 'public', 'mowa.js'));
 
 const fail = [];
-const WAKE_RE = /\b(hej|hey|ok(?:ej)?)[\s,.!]*(kosmos|cosmos)/i;
+const WAKE_RE = SLOWO_BUDZACE;
 const M = utworzMowe({ WAKE_RE });
 
 /** Przepuść ciąg rozpoznań tak, jak robi to pętla `onresult`. */

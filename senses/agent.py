@@ -63,7 +63,7 @@ MAX_WYNIK_B = 47 * 1024 * 1024   # serwer przyjmuje do 48 MB
 SESJA = uuid.uuid4().hex
 
 # Ścieżki usługi zmysłów, które agent przekaże dalej. Nic spoza tej listy.
-DOZWOLONE = ("/health", "/stt", "/tts", "/detect", "/pose", "/extract", "/embed", "/upscale", "/ptak", "/kinect/")
+DOZWOLONE = ("/health", "/stt", "/tts", "/detect", "/pose", "/dlonie", "/extract", "/embed", "/upscale", "/ptak", "/kinect/")
 # Długie zlecenia (transkrypcja, dokumenty, powiększanie) mają osobną pulę –
 # cztery nagrania naraz nie mogą zablokować głosu i wykrywania na minuty.
 DLUGIE = ("/stt", "/extract", "/upscale", "/ptak")

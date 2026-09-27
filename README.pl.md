@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="132 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-132-5E9E3A?style=flat-square">
+  <img alt="134 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-134-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 132 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 134 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 132 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 134 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -254,7 +254,11 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
 - ⚙️ Osobny wybór modelu dla chmury i dla GPU, system prompt, temperatura, limit tokenów
 - 🌗 Motyw jasny i ciemny (domyślnie jak w systemie), ten sam wygląd co strona produktowa; czcionki Onest i Martian Mono dołączone offline
 - 🧵 Nić rozmowy: każda odpowiedź ma pasek i podpis w kolorze silnika, który ją napisał (NVIDIA, lokalny GPU, Claude, OpenAI) – zmianę silnika w połowie wątku widać od razu
-- 🎙 Tryb głosowy jako nocna scena: kula z aurą w kolorach silników, fale, słupki dźwięku i dymki pytania oraz odpowiedzi
+- 🎙 Tryb głosowy jako nocna scena: kula z aurą w kolorach silników, fale, słupki dźwięku i dymki pytania oraz odpowiedzi.
+  Przycisk kamery pokazuje kamerę przeglądarki albo Kinecta (gdy wybrany w panelu kamery
+  albo gdy przeglądarka nie widzi żadnej kamery); pytanie o to, co widać, o palce czy gest
+  dołącza klatkę i liczy na niej dłonie. „Hej, Cosmos” łapie też przekręcenia nazwy
+  („Hej Cosmo”, „Ej, Kosmos”, „Cosmos, …”), a nasłuch nie kolejkuje hałasu z pokoju
 - 🌄 Plener: karta nieba z łukiem Słońca od wschodu do zachodu, liczona z planu – wysokość, azymut, wschód, zachód i nastawy na kafelkach
 - 🌍 **Dwa języki interfejsu – polski i angielski** (przełącznik w panelu bocznym
   i na ekranie logowania); język steruje też instrukcją systemową modelu
@@ -263,6 +267,15 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   (po lewej / na środku / po prawej) i **wake-word „Hej, Kosmos"**. Źródłem może być
   kamera przeglądarki (na telefonie z przełącznikiem przód/tył) albo **Kinect 360** –
   obraz i mapa głębi. Przycisk powiększenia przenosi podgląd na środek ekranu
+- ✋ **Dłonie, palce i gesty** – na podglądzie (także z Kinecta) Cosmos rysuje szkielet
+  dłoni i pisze, ile palców i które pokazujesz, oraz gest (pięść, otwarta dłoń, znak V,
+  kciuk w górę/w dół, palec w górę). Opis trafia do kontekstu rozmowy, więc na „ile
+  palców pokazuję?” model odpowiada liczbą. Wymaga pakietu **Ciało** (MediaPipe) –
+  model dłoni pobiera się sam przy pierwszym użyciu. Przycisk **Rozpoznawanie** wyłącza
+  ramki, dłonie i dymki rozpoznawania (także te z obserwatora na komputerze)
+- 🌐 **Otwieranie stron** – „otwórz onet.pl”, „wejdź na YouTube”: strona otwiera się
+  w nowej karcie od razu. Gdy przeglądarka zablokuje okno otwierane bez kliknięcia,
+  zostaje karta z przyciskiem **Otwórz** (albo zezwól tej stronie na wyskakujące okna)
 - 📷 **Plener** – foto i wideo w jednym oknie: sprzęt, plan zdjęciowy dla dowolnego
   miejsca i dowolnej godziny, lista ujęć do nakręcenia dobrana do tematu i sprzętu,
   Canon po Wi-Fi (CCAPI), misja waypointowa dla drona jako `.kmz` i archiwum materiału.
@@ -1011,7 +1024,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
 | `/api/events/stream` | GET | **Strumień SSE w drugą stronę** – przeglądarka dowiaduje się o zdarzeniach zamiast tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte przez `senses/wake_listener.py` na domowym komputerze otwiera tryb głosowy na telefonie |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
-| `/api/stt` `/api/tts` `/api/detect` `/api/pose` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` jest dostępny, ale żadna funkcja interfejsu z niego jeszcze nie korzysta |
+| `/api/stt` `/api/tts` `/api/detect` `/api/pose` `/api/dlonie` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` – postawa, `/api/dlonie` – palce i gesty; oba woła panel kamery |
 | `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) – przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
 | `/api/agent/kod` `/api/agent/lista` `/api/agent?id=` | POST / GET / DELETE | Agent zmysłów: kod podłączenia (6 cyfr do przepisania i długi kod do polecenia instalacji, oba ważne 10 min), lista Twoich komputerów z ich stanem, odłączenie komputera (agent dostaje 410, usuwa u siebie autostart i token) |
 | `/api/agent/ustaw?id=` `/api/agent/polecenie?id=` | POST | Przełączniki Zmysły / Obserwator / Kinect (zapamiętane na serwerze) oraz polecenia: instalacja pakietów z zamkniętej listy, aktualizacja plików, autostart |
@@ -1340,7 +1353,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 132 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 134 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

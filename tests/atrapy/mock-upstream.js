@@ -76,6 +76,8 @@ function makeMock(port, name) {
           text = 'Rozpoznaję smartfon Samsunga – sprawdzę dokładny model.\n\n[SZUKAJ: Samsung Galaxy S24 specyfikacja cena]';
         } else if (/wygeneruj.*(grafik|obraz|logo)/i.test(lastText)) {
           text = 'Jasne, generuję!\n\n[OBRAZ: a majestic cosmic bear astronaut floating in a nebula, cinematic lighting]';
+        } else if (/otw[oó]rz stron/i.test(lastText)) {
+          text = 'Otwieram Onet.\n\n[AKCJA: otwórz | onet.pl]';
         } else if (/zapami[eę]taj|zapisz/i.test(lastText)) {
           text = 'Jasne.\n\n[AKCJA: zapamiętaj | Ulubiony obiektyw to 50mm f/1.8]';
         } else if (hasImage) {

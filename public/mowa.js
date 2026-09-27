@@ -198,5 +198,19 @@ function utworzMowe(z) {
   return { doklej, odciskWyniku, bezSlowaBudzacego, toSamoZdanie, tenSamTekst, przepisanie, doklejBezZakladki, golo };
 }
 
-if (typeof window !== 'undefined') window.utworzMowe = utworzMowe;
-if (typeof module !== 'undefined') module.exports = { utworzMowe };
+/* SŁOWO BUDZĄCE. Mieszka tutaj, a nie w app.js, żeby zestaw testów
+   sprawdzał TEN wzorzec, a nie własną kopię (tak było i kopia się rozjechała).
+
+   Whisper pisze nazwę różnie: „Hej, Kosmos”, „Hej Cosmo!”, „Hejka kosmos”,
+   „Ej, Cosmos”, „Okej Kosmos”, a sama nazwa na początku wypowiedzi
+   („Cosmos, która godzina?”) też jest wołaniem. Wzorzec sprzed tej zmiany
+   znał tylko hej/hey/ok + kosmos/cosmos i część wołań przepadała bez śladu
+   (Marcin: „albo nic nie robi, albo łapie po długim czasie”).
+
+   Bez `\b` po nazwie – przy sklejonych rozpoznaniach („Hej kosmosHej kosmos
+   co widzisz”) granica słowa po „kosmos” nie istniała. Gołe „kosmos” w środku
+   zdania NIE budzi: trzeba przed nim wołacza albo początku wypowiedzi. */
+const SLOWO_BUDZACE = /(?:\b(?:he[jy](?:ka|że)?|ej|ey|hi|hal+o|ok(?:ej|ay|e)?)[\s,.!…-]*[kc]o[sz]mo(?:s|sie|su|sa)?|^\s*[kc]o[sz]mos[,!.])/i;
+
+if (typeof window !== 'undefined') { window.utworzMowe = utworzMowe; window.SLOWO_BUDZACE = SLOWO_BUDZACE; }
+if (typeof module !== 'undefined') module.exports = { utworzMowe, SLOWO_BUDZACE };

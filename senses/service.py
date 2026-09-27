@@ -8,7 +8,8 @@ a /health mówi Cosmosowi, które zmysły są dostępne.
     słuch    /stt     Whisper (faster-whisper)     pip install faster-whisper
     głos     /tts     Piper                        pip install piper-tts
     wzrok    /detect  YOLO (ultralytics)           pip install ultralytics
-    ciało    /pose    MediaPipe (sylwetka/gesty)   pip install mediapipe
+    ciało    /pose    MediaPipe (sylwetka)         pip install mediapipe
+    dłonie   /dlonie  MediaPipe (palce, gesty)     pip install mediapipe
     ptaki    /ptak    BirdNET (gatunek z głosu)    pip install birdnetlib
 
 Uruchomienie:
@@ -59,7 +60,7 @@ async def any_error_as_json(request: Request, exc: Exception):
 # Wykrywanie dostępnych zmysłów (leniwa inicjalizacja modeli)
 # ---------------------------------------------------------------------------
 
-CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False,
+CAPS = {"whisper": False, "piper": False, "yolo": False, "mediapipe": False, "dlonie": False,
         "embed": False, "upscale": False, "kinect": False, "birdnet": False,
         # Nie True/False, tylko NAZWA czytnika ("docling" / "markitdown") albo
         # False. Cosmos pokazuje ja w panelu zmyslow, bo to realna roznica
@@ -99,6 +100,9 @@ try:
     # Tasks API (PoseLandmarker). Stare 0.10.21 nie ma kół dla Pythona 3.13,
     # więc przypięcie do niego zostawiało Windowsa z nowym Pythonem bez ciała.
     CAPS["mediapipe"] = hasattr(mediapipe, "solutions") or hasattr(mediapipe, "tasks")
+    # Dłonie i gesty idą zawsze przez Tasks API (GestureRecognizer) – jest od 0.10.0.
+    from mediapipe.tasks.python import vision as _mp_vision  # noqa: F401
+    CAPS["dlonie"] = hasattr(_mp_vision, "GestureRecognizer")
 except Exception:
     pass
 
@@ -359,19 +363,32 @@ def stt(request: Request):
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio)
         tmp = f.name
+    # Tryb od Cosmosa: „nasluch” (słowo budzące), „podglad” (szkic w trakcie
+    # mówienia) albo „pytanie”. Krótkie wycinki dostają narzucony język i szybkie
+    # dekodowanie – wykrywanie języka na sekundzie nagrania myli się najczęściej,
+    # a na słowo budzące czeka się po każdej wypowiedzi w pokoju. Podpowiedzi
+    # („initial_prompt”) celowo nie ma: na szumie Whisper potrafi ją „usłyszeć”
+    # i Cosmos budziłby się sam – przekręcenia nazwy łapie wzorzec w aplikacji.
+    tryb = request.query_params.get("tryb", "")
+    jezyk = request.query_params.get("jezyk", "")
     lang = os.environ.get("WHISPER_LANG") or None
+    opcje = {"vad_filter": True}
+    if tryb in ("nasluch", "podglad"):
+        opcje["beam_size"] = 1
+        if not lang and jezyk in ("pl", "en"):
+            lang = jezyk
     try:
         # `transcribe` zwraca leniwy generator – lista wymusza przeliczenie
         # TERAZ, wewnątrz try. Inaczej błąd CUDA wypadłby dopiero przy
         # składaniu tekstu, poza zasięgiem tego zabezpieczenia.
         try:
-            segments, info = get_whisper().transcribe(tmp, language=lang, vad_filter=True)
+            segments, info = get_whisper().transcribe(tmp, language=lang, **opcje)
             segments = list(segments)
         except Exception as e:
             if not _is_cuda_runtime_error(e):
                 raise
             print(f"  ⚠ Whisper: brak bibliotek CUDA ({e}). Przechodzę na procesor.", flush=True)
-            segments, info = whisper_to_cpu().transcribe(tmp, language=lang, vad_filter=True)
+            segments, info = whisper_to_cpu().transcribe(tmp, language=lang, **opcje)
             segments = list(segments)
         text = " ".join(s.text.strip() for s in segments).strip()
         return {"text": text, "language": info.language}
@@ -537,22 +554,27 @@ _poza = None
 _poza_zamek = threading.Lock()
 
 
-def _plik_modelu_pozy() -> str:
-    """Ścieżka do pose_landmarker_lite.task; pobiera go, gdy go jeszcze nie ma."""
-    wlasny = os.environ.get("POSE_MODEL")
+def _model_mediapipe(zmienna: str, nazwa: str, url: str) -> str:
+    """Ścieżka do modelu .task: z zmiennej środowiskowej albo pobrany raz do
+    ~/.cosmos/modele przy pierwszym użyciu."""
+    wlasny = os.environ.get(zmienna)
     if wlasny:
         return wlasny
     katalog = os.path.join(os.environ.get("COSMOS_AGENT_DIR", os.path.join(os.path.expanduser("~"), ".cosmos")), "modele")
-    plik = os.path.join(katalog, "pose_landmarker_lite.task")
+    plik = os.path.join(katalog, nazwa)
     if not os.path.exists(plik):
         import urllib.request
         os.makedirs(katalog, exist_ok=True)
-        with urllib.request.urlopen(POSE_MODEL_URL, timeout=60) as r:
+        with urllib.request.urlopen(url, timeout=60) as r:
             dane = r.read()
         with open(plik + ".tmp", "wb") as f:
             f.write(dane)
         os.replace(plik + ".tmp", plik)
     return plik
+
+
+def _plik_modelu_pozy() -> str:
+    return _model_mediapipe("POSE_MODEL", "pose_landmarker_lite.task", POSE_MODEL_URL)
 
 
 def _punkty_sylwetki(rgb):
@@ -595,6 +617,115 @@ def pose(payload: dict = Body(...)):
     hip_y = (lm[23].y + lm[24].y) / 2
     posture = "stoi" if (hip_y - nose_y) > 0.45 else "siedzi lub jest blisko kamery"
     return {"present": True, "summary": f"widoczna sylwetka, osoba prawdopodobnie {posture}"}
+
+
+# ---------------------------------------------------------------------------
+# Dłonie, palce i gesty
+# ---------------------------------------------------------------------------
+#
+# Szkielet Kinecta ma 20 stawów i dłoń jest w nim jednym punktem – model
+# uczciwie odpowiadał „nie mogę określić liczby palców”. GestureRecognizer
+# z MediaPipe daje 21 punktów na dłoń i gotowe gesty; palce liczymy sami
+# z geometrii, bo gotowych gestów jest siedem, a palców da się pokazać
+# dowolną kombinację.
+
+GESTY_MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
+                   "gesture_recognizer/float16/latest/gesture_recognizer.task")
+GESTY = {
+    "Closed_Fist": "pięść", "Open_Palm": "otwarta dłoń", "Pointing_Up": "palec wskazujący w górę",
+    "Thumb_Up": "kciuk w górę", "Thumb_Down": "kciuk w dół", "Victory": "znak V",
+    "ILoveYou": "znak „kocham cię” (kciuk, wskazujący i mały)",
+}
+PALCE = ("kciuk", "wskazujący", "środkowy", "serdeczny", "mały")
+_gesty = None
+_gesty_zamek = threading.Lock()
+
+
+def _odl(a, b) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5
+
+
+def palce_wyprostowane(p) -> list:
+    """Które palce są wyprostowane. `p` = 21 punktów (x, y, z) w układzie
+    MediaPipe (0 nadgarstek, 4 czubek kciuka, 8/12/16/20 czubki pozostałych).
+
+    Odległości, nie kierunki: dłoń obrócona albo pokazana bokiem dalej się
+    liczy, a „w górę ekranu” nie znaczy nic dla dłoni skierowanej w dół.
+    Palec jest prosty, gdy czubek leży dalej od nadgarstka niż staw środkowy.
+    Kciuk zgina się w inną stronę – porównujemy go z podstawą małego palca:
+    schowany kciuk leży blisko niej, odstawiony daleko."""
+    wynik = []
+    if _odl(p[4], p[17]) > _odl(p[2], p[17]) * 1.25 and _odl(p[4], p[5]) > _odl(p[3], p[5]):
+        wynik.append(PALCE[0])
+    for i, (czubek, staw) in enumerate(((8, 6), (12, 10), (16, 14), (20, 18)), start=1):
+        if _odl(p[0], p[czubek]) > _odl(p[0], p[staw]) * 1.1:
+            wynik.append(PALCE[i])
+    return wynik
+
+
+def _palce_slowo(n: int) -> str:
+    """1 palec, 2–4 palce, 5+ palców (i 0 palców)."""
+    return "palec" if n == 1 else ("palce" if 2 <= n <= 4 else "palców")
+
+
+def opis_dloni(dlonie: list) -> str:
+    """Zdanie dla modelu i pod podglądem: „prawa dłoń: 2 palce (wskazujący,
+    środkowy), znak V”. Pusto = nie widać dłoni."""
+    czesci = []
+    for d in dlonie:
+        n = len(d["palce"])
+        tekst = f"{d['strona']} dłoń: {n} {_palce_slowo(n)}"
+        if d["palce"]:
+            tekst += f" ({', '.join(d['palce'])})"
+        if d.get("gest"):
+            tekst += f", {d['gest']}"
+        czesci.append(tekst)
+    if len(dlonie) == 2:
+        razem = sum(len(d["palce"]) for d in dlonie)
+        czesci.append(f"razem {razem} {_palce_slowo(razem)}")
+    return " · ".join(czesci)
+
+
+@app.post("/dlonie")
+def dlonie(payload: dict = Body(...)):
+    """{"image": dataURL} -> {"dlonie": [{strona, palce, gest, punkty}], "summary": "..."}"""
+    global _gesty
+    if not CAPS["dlonie"]:
+        return JSONResponse({"error": "Rozpoznawanie dłoni wymaga pakietu MediaPipe (Ciało w Pakietach zmysłów)."}, status_code=501)
+    import cv2
+    import mediapipe as mp
+    from mediapipe.tasks import python as mp_tasks
+    from mediapipe.tasks.python import vision
+    img = decode_image(payload)
+    if img is None:
+        return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    try:
+        with _gesty_zamek:
+            if _gesty is None:
+                opcje = vision.GestureRecognizerOptions(
+                    base_options=mp_tasks.BaseOptions(model_asset_path=_model_mediapipe(
+                        "GESTY_MODEL", "gesture_recognizer.task", GESTY_MODEL_URL)),
+                    running_mode=vision.RunningMode.IMAGE, num_hands=2)
+                _gesty = vision.GestureRecognizer.create_from_options(opcje)
+            res = _gesty.recognize(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+    except OSError as e:
+        return JSONResponse({"error": f"Nie udało się pobrać modelu dłoni: {e}"}, status_code=503)
+    wynik = []
+    for i, punkty in enumerate(res.hand_landmarks or []):
+        p = [(q.x, q.y, q.z) for q in punkty]
+        # MediaPipe podaje stronę tak, jak widzi ją kamera (obraz nie jest
+        # lustrem), a więc odwrotnie niż ta osoba: jej prawa dłoń to „Left”.
+        strona_mp = res.handedness[i][0].category_name if res.handedness and i < len(res.handedness) else ""
+        strona = {"Left": "prawa", "Right": "lewa"}.get(strona_mp, "")
+        gest = ""
+        if res.gestures and i < len(res.gestures) and res.gestures[i]:
+            g = res.gestures[i][0]
+            if g.category_name in GESTY and g.score >= 0.5:
+                gest = GESTY[g.category_name]
+        wynik.append({"strona": strona, "palce": palce_wyprostowane(p), "gest": gest,
+                      "punkty": [[round(x, 4), round(y, 4)] for x, y, _ in p]})
+    return {"dlonie": wynik, "summary": opis_dloni(wynik) or "nie widać dłoni"}
 
 
 @app.post("/extract")
@@ -916,8 +1047,21 @@ def embed(payload: dict = Body(...)):
     return {"vectors": [v.tolist() for v in vectors], "model": os.environ.get("EMBED_MODEL", "BAAI/bge-m3")}
 
 
+def _rozgrzej_whispera():
+    """Załaduj Whispera od razu po starcie, w tle. Leniwe ładowanie przy
+    pierwszym „Hej, Cosmos” kosztowało kilka do kilkunastu sekund – akurat
+    wtedy, gdy ktoś czeka na odpowiedź."""
+    try:
+        get_whisper()
+        print("  ✓ Whisper załadowany", flush=True)
+    except Exception as e:
+        print(f"  ⚠ Whisper nie wstał przy starcie: {e}", flush=True)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("SENSES_PORT", 7060))
+    if CAPS["whisper"] and os.environ.get("WHISPER_ROZGRZEJ", "1") != "0":
+        threading.Thread(target=_rozgrzej_whispera, daemon=True).start()
     active = ", ".join(k for k, v in CAPS.items() if v) or "brak (zainstaluj zależności)"
     print(f"\n  ✦ Cosmos Senses – port {port}\n  → aktywne zmysły: {active}\n")
     # Agent zmysłów ustawia SENSES_HOST=127.0.0.1: zlecenia przychodzą przez niego,

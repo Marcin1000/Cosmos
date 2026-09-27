@@ -55,7 +55,8 @@ const atrapa = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ whisper: true, piper: true }));
     }
-    if (req.url === '/zm/stt') {
+    // Zmysły dostają tryb i język w parametrach (?tryb=nasluch&jezyk=pl) – liczy się ścieżka.
+    if (req.url.split('?')[0] === '/zm/stt') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ text: 'z Whispera' }));
     }
@@ -150,7 +151,7 @@ const atrapa = http.createServer((req, res) => {
   ktoTeraz = gosc;
   wywolania.length = 0;
   r = await fetch(`http://127.0.0.1:${serwer2.address().port}/api/stt?jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
-  ok(r.status === 502 && !wywolania.some((w) => w.url === '/zm/stt'), `gość bez zgody nie trafia do zmysłów właściciela (${r.status})`);
+  ok(r.status === 502 && !wywolania.some((w) => w.url.split('?')[0] === '/zm/stt'), `gość bez zgody nie trafia do zmysłów właściciela (${r.status})`);
   ktoTeraz = { ...gosc, silniki: { local: true } };
   r = await fetch(`http://127.0.0.1:${serwer2.address().port}/api/stt?jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
   d = await r.json();
