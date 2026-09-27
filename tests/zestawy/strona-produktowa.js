@@ -37,7 +37,9 @@
  *      podpowiedź „Read in English” nie zasłania przełącznika silników,
  *      a nazwa modelu w pigułce nie jest ucięta.
  *  18. „Cztery warstwy”: przy przewijaniu każda warstwa się podświetla, a jej
- *      płyta i opis są wtedy na ekranie razem (telefon i komputer). */
+ *      płyta i opis są wtedy na ekranie razem (telefon i komputer).
+ *  19. Pas znaczników leży NAD pionową nicią wątku (Marcin: „poziomy pasek
+ *      wchodzi pod pasek pionowy”) – w punkcie przecięcia na wierzchu jest pas. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -409,6 +411,29 @@ const { srodowisko, przegladarka } = require('../pomoc');
     }
     ok(swiecily.size === 4, `${viewport.width} px: każda z czterech warstw choć raz się podświetla (${[...swiecily].sort().join(', ') || 'żadna'})`);
     ok(zlych === 0, `${viewport.width} px: podświetlona płyta i jej opis są na ekranie razem (klatek bez tego: ${zlych})`);
+    await ctx.close();
+  }
+
+  // --- 19. pas znaczników nad nicią wątku ----------------------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1600, height: 900 } });
+    await p.goto(`${env.adres}/`, { waitUntil: 'load' });
+    await p.evaluate(() => document.querySelector('.pas').scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await p.waitForTimeout(300);
+    const wynik = await p.evaluate(() => {
+      const pas = document.querySelector('.pas').getBoundingClientRect();
+      const nic = document.querySelector('.watek');
+      if (!nic || getComputedStyle(nic).display === 'none') return { brakNici: true };
+      // Nić ma pointer-events: none – bez tego elementFromPoint patrzyłby przez nią
+      // i test przechodziłby bez względu na to, co jest narysowane na wierzchu.
+      for (const e of [nic, ...nic.querySelectorAll('*')]) e.style.pointerEvents = 'auto';
+      const n = nic.getBoundingClientRect();
+      const x = n.left + n.width / 2;
+      const y = pas.top + pas.height / 2;
+      const el = document.elementFromPoint(x, y);
+      return { naWierzchu: el ? (el.closest('.pas') ? 'pas' : (el.closest('.watek') ? 'nic' : el.className || el.tagName)) : '–' };
+    });
+    ok(!wynik.brakNici && wynik.naWierzchu === 'pas', `19. w przecięciu z nicią wątku na wierzchu jest pas znaczników (${wynik.naWierzchu || 'brak nici'})`);
     await ctx.close();
   }
 

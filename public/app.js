@@ -2393,7 +2393,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
-  scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel, adresDoOtwarcia, czyOtworz,
+  scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel, adresDoOtwarcia, czyOtworz, liczbyNaGlos,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
@@ -2971,6 +2971,8 @@ function stripForSpeech(text) {
     .trim();
   // „20 °C” → „20 stopni Celsjusza”; lektor czytał „degrisy” (public/protokol.js).
   t = jednostkiNaGlos(t, getLang());
+  // „do 21 stopni” → „do dwudziestu jeden stopni”, „o 17:00” → „o siedemnastej” (public/protokol.js).
+  if (getLang() !== 'en') t = liczbyNaGlos(t);
   /* Czytamy porcjami (porcjeGlosu), więc długość nie jest problemem techniczną
      – ale pięciominutowego monologu nikt nie słucha. Ucinamy na końcu zdania
      i MÓWIMY, że reszta jest na ekranie; dawniej cięcie było bez słowa. */

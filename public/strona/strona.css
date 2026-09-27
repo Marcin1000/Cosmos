@@ -413,7 +413,9 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .liczby dd { font-size: 14px; color: var(--przygaszony); }
 
 /* --- pas znaczników ----------------------------------------------------- */
-.pas { border-block: 1px solid var(--linia); overflow: hidden; padding-block: 18px; background: var(--tlo); background: color-mix(in srgb, var(--powierzchnia) 50%, transparent);
+/* Pas leży NAD nicią wątku (z-index 1) i ma pełne tło. Bez własnej warstwy nić
+   przecinała go na szerokich ekranach, a półprzezroczyste tło i tak ją pokazywało. */
+.pas { position: relative; z-index: 2; border-block: 1px solid var(--linia); overflow: hidden; padding-block: 18px; background: var(--tlo); background: color-mix(in srgb, var(--powierzchnia) 50%, var(--tlo));
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 .pas-tor { display: flex; gap: 56px; width: max-content; animation: przesuw 48s linear infinite; font: 400 13px/1 var(--mono); font-stretch: 87.5%; color: var(--przygaszony); white-space: nowrap; }
 .pas-tor b { color: var(--k); font-weight: 500; }

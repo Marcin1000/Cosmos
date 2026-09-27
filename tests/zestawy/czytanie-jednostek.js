@@ -90,10 +90,12 @@ sprawdz('Plan: świt o 6:41.', 'Plan: świt o 6:41.');
       await pg.waitForFunction(() => typeof stripForSpeech === 'function');
       const pl = await pg.evaluate(() => stripForSpeech('**Jutro** w Złotokłosie do 20 °C, szansa opadów 40%.'));
       console.log(`\n2. do lektora (PL): „${pl}”`);
-      if (!/20 stopni Celsjusza/.test(pl) || !/40 procent/.test(pl)) fail.push(`lektor dostaje „${pl}”`);
+      // „do 20 °C” → jednostka słowem i liczba odmieniona po przyimku (public/protokol.js: liczbyNaGlos).
+      if (!/do dwudziestu stopni Celsjusza/.test(pl) || !/40 procent/.test(pl)) fail.push(`lektor dostaje „${pl}”`);
       if (/°|%/.test(pl)) fail.push('do lektora nadal idą znaki ° albo %');
       const plan = await pg.evaluate(() => stripForSpeech('**Nastawy:** f/2.8, 1/250 s, ISO 3200, EV −0,7.\n- Złota godzina 6:41–7:25\n- przewyższenie 450 m, 1 h 20 min'));
       console.log(`   plan do lektora (PL): „${plan}”`);
+      if (!/od szóstej czterdzieści jeden do siódmej dwadzieścia pięć/.test(plan)) fail.push(`godziny w planie bez odmiany: „${plan}”`);
       if (/\/\d|\d\s*(?:s|m|h|min)\b|−|–/.test(plan.replace(/1\/250 sekundy/, ''))) fail.push(`plan do lektora z zapisem dla oka: „${plan}”`);
       /* Asystent głosowy nie wymienia źródeł (zgłoszenie Marcina): linia
          „Źródło:”, nawias „(źródło: …)” i wstęp „Według wyników wyszukiwania”

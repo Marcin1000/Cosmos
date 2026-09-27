@@ -459,6 +459,158 @@ function utworzProtokol() {
     return t.replace(/ {2,}/g, ' ');
   }
 
+  /* ---- LICZBY SŁOWAMI, W DOBRYM PRZYPADKU ---------------------------------
+     Marcin: „w trybie głosowym należy poprawić odmianę liczb, bo teraz mówi je
+     w ogóle ich nie odmieniając”. Każdy lektor (Piper, ElevenLabs, OpenAI) czyta
+     cyfry w mianowniku: „do dwadzieścia jeden stopni”, „o siedemnaście zero
+     zero”, „dwanaście września”, „dwa godziny”. Tu zamieniamy je na słowa tam,
+     gdzie przypadek da się ustalić pewnie – po przyimku, przy godzinie, dacie
+     i roku, i przed rzeczownikiem rodzaju żeńskiego. Reszta zostaje cyframi:
+     w mianowniku lektor i tak przeczyta ją dobrze, a zgadywanie przypadku
+     w ciemno psułoby więcej, niż naprawia. */
+  const L_JEDN = { m: ['zero', 'jeden', 'dwa', 'trzy', 'cztery', 'pięć', 'sześć', 'siedem', 'osiem', 'dziewięć'],
+    d: ['zera', 'jednego', 'dwóch', 'trzech', 'czterech', 'pięciu', 'sześciu', 'siedmiu', 'ośmiu', 'dziewięciu'] };
+  const L_NAST = { m: ['dziesięć', 'jedenaście', 'dwanaście', 'trzynaście', 'czternaście', 'piętnaście', 'szesnaście', 'siedemnaście', 'osiemnaście', 'dziewiętnaście'],
+    d: ['dziesięciu', 'jedenastu', 'dwunastu', 'trzynastu', 'czternastu', 'piętnastu', 'szesnastu', 'siedemnastu', 'osiemnastu', 'dziewiętnastu'] };
+  const L_DZIES = { m: ['', '', 'dwadzieścia', 'trzydzieści', 'czterdzieści', 'pięćdziesiąt', 'sześćdziesiąt', 'siedemdziesiąt', 'osiemdziesiąt', 'dziewięćdziesiąt'],
+    d: ['', '', 'dwudziestu', 'trzydziestu', 'czterdziestu', 'pięćdziesięciu', 'sześćdziesięciu', 'siedemdziesięciu', 'osiemdziesięciu', 'dziewięćdziesięciu'] };
+  const L_SETKI = { m: ['', 'sto', 'dwieście', 'trzysta', 'czterysta', 'pięćset', 'sześćset', 'siedemset', 'osiemset', 'dziewięćset'],
+    d: ['', 'stu', 'dwustu', 'trzystu', 'czterystu', 'pięciuset', 'sześciuset', 'siedmiuset', 'ośmiuset', 'dziewięciuset'] };
+  // Liczebniki porządkowe, rodzaj męski, dopełniacz: „dwunastego”, „dwudziestego”.
+  const P_JEDN = ['', 'pierwszego', 'drugiego', 'trzeciego', 'czwartego', 'piątego', 'szóstego', 'siódmego', 'ósmego', 'dziewiątego'];
+  const P_NAST = ['dziesiątego', 'jedenastego', 'dwunastego', 'trzynastego', 'czternastego', 'piętnastego', 'szesnastego', 'siedemnastego', 'osiemnastego', 'dziewiętnastego'];
+  const P_DZIES = ['', '', 'dwudziestego', 'trzydziestego', 'czterdziestego', 'pięćdziesiątego', 'sześćdziesiątego', 'siedemdziesiątego', 'osiemdziesiątego', 'dziewięćdziesiątego'];
+  const P_SETKI = ['', 'setnego', 'dwusetnego', 'trzechsetnego', 'czterechsetnego', 'pięćsetnego', 'sześćsetnego', 'siedemsetnego', 'osiemsetnego', 'dziewięćsetnego'];
+  // Godziny: liczebnik porządkowy, rodzaj żeński („siedemnasta”).
+  const GODZINY = ['zero', 'pierwsza', 'druga', 'trzecia', 'czwarta', 'piąta', 'szósta', 'siódma', 'ósma', 'dziewiąta',
+    'dziesiąta', 'jedenasta', 'dwunasta', 'trzynasta', 'czternasta', 'piętnasta', 'szesnasta', 'siedemnasta', 'osiemnasta',
+    'dziewiętnasta', 'dwudziesta', 'dwudziesta pierwsza', 'dwudziesta druga', 'dwudziesta trzecia', 'dwudziesta czwarta'];
+  const MIESIACE = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+  const MIESIACE_MSC = ['styczniu', 'lutym', 'marcu', 'kwietniu', 'maju', 'czerwcu', 'lipcu', 'sierpniu', 'wrześniu', 'październiku', 'listopadzie', 'grudniu'];
+  const MIES_SKROT = { sty: 0, lut: 1, mar: 2, kwi: 3, maj: 4, cze: 5, lip: 6, sie: 7, wrz: 8, 'paź': 9, paz: 9, lis: 10, gru: 11 };
+
+  /** 1..999 słownie; `p` = 'm' (mianownik) albo 'd' (dopełniacz). */
+  function doTysiaca(n, p, zenski) {
+    const s = Math.floor(n / 100), r = n % 100, dz = Math.floor(r / 10), j = r % 10;
+    const cz = [];
+    if (s) cz.push(L_SETKI[p][s]);
+    if (r >= 10 && r < 20) cz.push(L_NAST[p][r - 10]);
+    else {
+      if (dz) cz.push(L_DZIES[p][dz]);
+      if (j) {
+        let w = L_JEDN[p][j];
+        if (j === 1 && n !== 1) w = 'jeden';                 // „dwudziestu jeden”, nie „dwudziestu jednego”
+        else if (j === 1 && zenski && p === 'm') w = 'jedna';
+        if (j === 2 && zenski && p === 'm') w = 'dwie';
+        cz.push(w);
+      }
+    }
+    return cz.join(' ');
+  }
+
+  /** Liczba całkowita 0..999 999 słownie albo null (większej nie ruszamy). */
+  function liczbaSlownie(n, p = 'm', zenski = false) {
+    if (!Number.isInteger(n) || n < 0 || n >= 1e6) return null;
+    if (n === 0) return L_JEDN[p][0];
+    const t = Math.floor(n / 1000), r = n % 1000;
+    const cz = [];
+    if (t === 1) cz.push(p === 'm' ? 'tysiąc' : 'tysiąca');
+    else if (t) {
+      const j = t % 10, dz = Math.floor((t % 100) / 10);
+      cz.push(doTysiaca(t, p, false), p === 'd' ? 'tysięcy' : (j >= 2 && j <= 4 && dz !== 1 ? 'tysiące' : 'tysięcy'));
+    }
+    if (r) cz.push(doTysiaca(r, p, zenski));
+    return cz.join(' ');
+  }
+
+  /** 1..99 porządkowo, rodzaj męski, dopełniacz („dwudziestego siódmego”). */
+  function porzadkowyDop(n) {
+    if (n < 10) return P_JEDN[n];
+    if (n < 20) return P_NAST[n - 10];
+    return [P_DZIES[Math.floor(n / 10)], P_JEDN[n % 10]].filter(Boolean).join(' ');
+  }
+
+  /** Rok 1000..2999 porządkowo w dopełniaczu: „dwa tysiące dwudziestego siódmego”. */
+  function rokSlownie(y) {
+    const th = Math.floor(y / 1000), r = y % 1000, s = Math.floor(r / 100), dj = r % 100;
+    if (!r) return th === 2 ? 'dwutysięcznego' : 'tysięcznego';
+    const cz = [th === 2 ? 'dwa tysiące' : 'tysiąc'];
+    if (!dj) cz.push(P_SETKI[s]);
+    else {
+      if (s) cz.push(L_SETKI.m[s]);
+      cz.push(porzadkowyDop(dj));
+    }
+    return cz.join(' ');
+  }
+
+  /** Godzina słownie: mianownik („siedemnasta”), dopełniacz/miejscownik
+   *  („siedemnastej”) albo narzędnik („siedemnastą”). */
+  function godzinaSlownie(h, przypadek) {
+    const w = GODZINY[h];
+    if (!h || przypadek === 'm') return w;
+    return w.split(' ').map((s) => (przypadek === 'n'
+      ? s.replace(/a$/, 'ą')
+      : s.replace(/ga$/, 'giej').replace(/cia$/, 'ciej').replace(/a$/, 'ej'))).join(' ');
+  }
+  function minutySlownie(mm) {
+    if (mm === 0) return '';
+    return mm < 10 ? `zero ${L_JEDN.m[mm]}` : liczbaSlownie(mm, 'm');
+  }
+
+  const PRZYIMKI_DOP = '(?:od|do|około|ok\\.|koło|powyżej|poniżej|bez|dla|wśród|spośród|zamiast|blisko|niespełna|u)';
+  const ZENSKIE = '(?:godzin|minut|sekund|osob|osób|dob|noc|złotów|sztuk|wycieczk|atrakcj|plaż|gwiazdk|klatk|stacj|ulic|lini|kaw|szklank|łyżk|porcj|butelk|tabletk|stron|książk|lekcj|częśc|wersj|opcj|propozycj|restauracj|wysp|tras|rzecz|kobiet|córk|mil|nagrod|dzielnic|wiosk|miejscowośc|ścieżk|drog|trasy)';
+
+  function liczbyNaGlos(tekst) {
+    let t = String(tekst || '');
+    const bezCyfry = '(?<![\\p{L}\\p{N}.,:/])';
+
+    // 1. Godziny „17:30”, z przypadkiem od słowa przed nimi.
+    t = t.replace(new RegExp(`(?:(\\p{L}+\\.?)\\s+)?${bezCyfry}([01]?\\d|2[0-4]):([0-5]\\d)(?![\\p{N}:])`, 'gu'), (cale, slowo, h, m, offset, calosc) => {
+      const s = (slowo || '').toLowerCase();
+      // „między 7:00 a 9:00” – drugi koniec po „a” też w narzędniku.
+      const poMiedzy = s === 'a' && /(?:po)?między\s+\S+(?:\s+\S+)?\s*$/i.test(calosc.slice(Math.max(0, offset - 40), offset));
+      const przypadek = /^(o|po)$/.test(s) ? 'dm' : /^(od|do|około|ok\.|koło)$/.test(s) ? 'dm'
+        : (/^(przed|między|pomiędzy|nad)$/.test(s) || poMiedzy) ? 'n' : 'm';
+      const godz = godzinaSlownie(Number(h), przypadek === 'dm' ? 'd' : przypadek);
+      const min = minutySlownie(Number(m));
+      return `${slowo ? `${slowo} ` : ''}${godz}${min ? ` ${min}` : ''}`;
+    });
+
+    // 2. Rok: „2027 r.”, „2027 roku”, „września 2027”.
+    t = t.replace(new RegExp(`${bezCyfry}([12]\\d{3})\\s*(?:r\\.|roku\\b)`, 'gu'), (_, y) => `${rokSlownie(Number(y))} roku`);
+    t = t.replace(new RegExp(`(${MIESIACE.join('|')}|${MIESIACE_MSC.join('|')})\\s+([12]\\d{3})(?![\\p{N}])`, 'gu'), (_, mies, y) => `${mies} ${rokSlownie(Number(y))}`);
+
+    // 3. Data „12 września”, „6 wrz” → „dwunastego września”.
+    t = t.replace(new RegExp(`${bezCyfry}([1-9]|[12]\\d|3[01])\\s+(${MIESIACE.join('|')}|(?:${Object.keys(MIES_SKROT).join('|')})(?![\\p{L}]))(\\.?)`, 'gu'),
+      (_, d, mies, kropka, offset, calosc) => {
+        const klucz = mies.toLowerCase();
+        const pelny = klucz in MIES_SKROT ? MIESIACE[MIES_SKROT[klucz]] : mies;
+        // Kropka po skrócie („wrz.”) zostaje tylko wtedy, gdy kończyła też zdanie.
+        const dalej = calosc.slice(offset + _.length);
+        const zostaw = kropka && (klucz in MIES_SKROT ? !/^\s*[\p{Ll},;:]/u.test(dalej) : true);
+        return `${porzadkowyDop(Number(d))} ${pelny}${zostaw ? '.' : ''}`;
+      });
+
+    // 4. Po przyimku z dopełniaczem: „do 21 stopni” → „do dwudziestu jeden stopni”.
+    //    Liczba z częścią ułamkową („do 2,5 km”) zostaje – nie zgadujemy.
+    // „ok. 3 tysiące” – liczba przed „tysiące/mln” to część większej liczby, nie ruszamy.
+    t = t.replace(new RegExp(`(^|[^\\p{L}])(${PRZYIMKI_DOP})\\s+(\\d{1,6})(?![\\p{N}.,:/]?\\d)(?![.,:]\\d)(?!\\s*(?:tys|mln|mld|milion|miliard))`, 'giu'), (cale, przed, przyimek, n) => {
+      const slowo = liczbaSlownie(Number(n), 'd');
+      return slowo ? `${przed}${przyimek} ${slowo}` : cale;
+    });
+    // „od dwudziestu do 25 stopni” – drugi koniec zakresu po „do” już złapany wyżej;
+    // „10 do 20” bez „od” też: liczba po „do” ma dopełniacz niezależnie od początku.
+
+    // 5. Rodzaj żeński: „2 godziny” → „dwie godziny”, „1 osoba” → „jedna osoba”.
+    t = t.replace(new RegExp(`${bezCyfry}(\\d{1,6})(?=\\s+${ZENSKIE})`, 'giu'), (cale, n) => {
+      const x = Number(n);
+      const j = x % 10, dz = Math.floor((x % 100) / 10);
+      if (!((j === 2 && dz !== 1) || x === 1)) return cale;
+      return liczbaSlownie(x, 'm', true) || cale;
+    });
+    return t;
+  }
+
   /* Źródła w trybie głosowym nie są mówione (Marcin, runda 5). Modele piszą
      je na dziesięć sposobów: „**Źródła:**” z listą, „### Źródła”, „*Źródło:
      …*”, „(długi myślnik) Źródła: a, b”, „[źródło: plik]” (format, którego sam Cosmos
@@ -512,6 +664,8 @@ function utworzProtokol() {
   const czyOtworz = (typ) => /^(otw[oó]rz|open)$/i.test(String(typ || '').trim());
 
   return {
+    liczbyNaGlos,
+    liczbaSlownie,
     adresDoOtwarcia,
     czyOtworz,
     SEARCH_MARKER_RE,
