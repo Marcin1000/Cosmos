@@ -187,7 +187,9 @@ const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) 
   const tekst = dodatki.map((m) => m.content).join('\n');
   ok(/TERAZ JEST: sobota/.test(tekst) && /ZNAJDUJE SIĘ W: Piaseczno/.test(tekst), 'czas i miejsce w kontekście');
   ok(/PROFIL UŻYTKOWNIKA[\s\S]*krajobrazy/.test(tekst), 'profil w kontekście');
-  ok(/Kod do bramy: 1234/.test(tekst) && /\[źródło: nazwa\]/.test(tekst), 'zaznaczona notatka z bazy wiedzy, z prośbą o źródło');
+  ok(/Kod do bramy: 1234/.test(tekst), 'zaznaczona notatka z bazy wiedzy w kontekście');
+  // Tryb głosowy (ten payload): bez prośby o „[źródło: nazwa]” – lektor czytał te dopiski (runda 6).
+  ok(!/\[źródło: nazwa\]/.test(tekst), 'w trybie głosowym baza wiedzy nie każe dopisywać [źródło: …]');
   const ostatnia = messages[messages.length - 1];
   const obrazy = Array.isArray(ostatnia.content) ? ostatnia.content.filter((p) => p.type === 'image_url') : [];
   ok(obrazy.length === 1 && obrazy[0].image_url.url === `data:image/jpeg;base64,${Buffer.from('JPEG').toString('base64')}`,
