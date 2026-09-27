@@ -2015,8 +2015,10 @@ body::after {
 .live-stage video, .live-stage img, .live-stage canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
-.live-source { padding: 6px 10px 0; }
+.live-source { padding: 6px 10px 0; display: flex; gap: 6px; align-items: center; }
 .live-source select {
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -2038,6 +2040,27 @@ body::after {
   background-repeat: no-repeat;
 }
 .live-source select:focus { border-color: var(--accent); }
+/* Przełącznik rozpoznawania: ramki wokół rzeczy i ludzi. Kropka mówi stan,
+   tekst zostaje ten sam – czytnik ekranu dostaje aria-pressed. */
+.live-rozpoznawanie {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.live-rozpoznawanie::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  border: 1px solid currentColor; box-sizing: border-box;
+}
+.live-rozpoznawanie[aria-pressed="true"] { color: var(--text); }
+.live-rozpoznawanie[aria-pressed="true"]::before { background: #9db9ff; border-color: #9db9ff; }
+.live-rozpoznawanie:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Tryb powiększony: panel na środku ekranu, obraz tak duży, jak się zmieści.
    `object-fit: contain` zamiast `cover` – przy dużym kadrze ważniejsze jest
    widzieć całość niż wypełnić prostokąt. */

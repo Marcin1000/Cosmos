@@ -21,7 +21,14 @@
         czujnik): surowa głębia i sylwetki, czujnik otwarty RAZ na dwanaście
         żądań naraz, odczyty z niego po kolei, nigdy dwa jednocześnie,
      7. ciało na mediapipe bez `solutions` (0.10.30+, jedyne z kołami dla
-        Pythona 3.13): /pose działa przez Tasks API zamiast 501.
+        Pythona 3.13): /pose działa przez Tasks API zamiast 501,
+     8. agent trzyma stałe połączenia z serwerem (Marcin: podgląd Kinecta
+        „strasznie poklatkowy” – każda klatka to trzy zapytania i każde
+        otwierało nowe połączenie HTTPS): kolejne zapytania z różnych wątków
+        idą jednym połączeniem, zamknięte przez serwer otwiera się samo,
+        a błąd HTTP dalej jest wyjątkiem z czytelną treścią,
+     9. zlecenie bez ciała (klatka Kinecta) nie czeka na potwierdzenie:
+        wynik wraca, zanim serwer odpowie na /cialo.
 */
 const http = require('http');
 const fs = require('fs');
@@ -173,6 +180,58 @@ s.zatrzymaj_wszystko()
       ok(w.poza && w.poza[0] === 200 && /stoi/.test(w.poza[1]), `7. /pose przez Tasks API (${JSON.stringify(w.poza)})`);
       ok(w.model && w.model[0] === '/atrapa/pose_landmarker_lite.task', '7. model sylwetki z POSE_MODEL');
     }
+
+    /* ---- 8–9. Stałe połączenia agenta, potwierdzenie obok ---- */
+    const P2 = 7463;
+    const gniazda = [];
+    let cialoSkonczone = 0, wynikPrzyszedl = 0;
+    const serwerAgenta = http.createServer((req, res) => {
+      const g = req.socket.__sciezki || (req.socket.__sciezki = [], gniazda.push(req.socket.__sciezki), req.socket.__sciezki);
+      const p = req.url.split('?')[0];
+      g.push(p);
+      if (p === '/ping') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"ok":true}'); }
+      if (p === '/blad') { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end('{"error":"nie ma takiego zlecenia"}'); }
+      if (p === '/kinect/frame') { res.writeHead(200, { 'Content-Type': 'image/jpeg' }); return res.end(Buffer.from([0xff, 0xd8, 9])); }
+      if (p === '/api/agent/cialo') {
+        return setTimeout(() => { cialoSkonczone = Date.now(); res.writeHead(200, { 'Content-Type': 'application/octet-stream' }); res.end(); }, 800);
+      }
+      if (p === '/api/agent/wynik') {
+        req.resume();
+        return req.on('end', () => { wynikPrzyszedl = Date.now(); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{}'); });
+      }
+      res.writeHead(404); res.end();
+    });
+    serwerAgenta.keepAliveTimeout = 300;   // bezczynne połączenie zamyka serwer (Node dokłada do tego ~1 s) – agent ma to przeżyć
+    await new Promise((r) => serwerAgenta.listen(P2, '127.0.0.1', r));
+    const ag = await uruchom(['-c', `
+import sys, json, time, threading
+sys.path.insert(0, ${JSON.stringify(SENSES)})
+import agent
+S = "http://127.0.0.1:${P2}"
+for i in range(10):
+    t = threading.Thread(target=lambda: agent.zapytanie(S, "/ping")); t.start(); t.join()
+time.sleep(2.0)
+po_przerwie = agent.zapytanie(S, "/ping")[1].get("ok")
+try:
+    agent.zapytanie(S, "/blad"); blad = None
+except agent.urllib.error.HTTPError as e:
+    blad = [e.code, json.loads(e.read())["error"]]
+a = object.__new__(agent.Agent)
+a.serwer, a.token = S, "t"
+a.krotkie, a.dlugie = threading.Semaphore(4), threading.Semaphore(2)
+a.przekaz({"id": "z1", "metoda": "GET", "sciezka": "/kinect/frame?stream=color", "naglowki": {}, "dlugosc": 0})
+time.sleep(1.2)
+print(json.dumps({"po_przerwie": po_przerwie, "blad": blad}, ensure_ascii=False))
+`], { SENSES_PORT: String(P2), COSMOS_AGENT_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'agent-pol-')) });
+    serwerAgenta.close();
+    let w8 = {};
+    try { w8 = JSON.parse(ag.out.split('\n').pop()); } catch { console.log(ag.err.split('\n').slice(-4).join('\n')); }
+    const zPingiem = gniazda.filter((g) => g.includes('/ping'));
+    const najwiecejNaJednym = Math.max(0, ...zPingiem.map((g) => g.filter((x) => x === '/ping').length));
+    ok(najwiecejNaJednym >= 10, `8. dziesięć zapytań z różnych wątków jednym połączeniem (najwięcej na jednym: ${najwiecejNaJednym}, połączeń: ${zPingiem.length})`);
+    ok(w8.po_przerwie === true && zPingiem.length === 2, `8. połączenie zamknięte przez serwer otwiera się samo (${w8.po_przerwie}, połączeń z zapytaniami: ${zPingiem.length})`);
+    ok(JSON.stringify(w8.blad) === '[404,"nie ma takiego zlecenia"]', `8. błąd HTTP to wyjątek z treścią (${JSON.stringify(w8.blad)})`);
+    ok(wynikPrzyszedl && cialoSkonczone && wynikPrzyszedl < cialoSkonczone, `9. zlecenie bez ciała: wynik wrócił ${wynikPrzyszedl && cialoSkonczone ? cialoSkonczone - wynikPrzyszedl : '?'} ms przed odpowiedzią na /cialo`);
   } catch (e) {
     fail.push(`wyjątek: ${e.message}`);
     console.error(e);

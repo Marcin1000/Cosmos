@@ -138,6 +138,75 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   console.log(`7. brak kamery w przeglądarce: podpowiedź o Kinekcie=${dobrze7} („${bezKamery}”)`);
   if (!dobrze7) fail.push('brak kamery: surowe „Requested device not found” zamiast podpowiedzi o Kinekcie');
 
+  /* 8. Klatki przez agenta nie idą gęsiego (Marcin: „strasznie poklatkowo”).
+     Agent nie przepuszcza strumienia, każda klatka odpowiada po 300 ms – jak
+     obieg telefon → serwer → komputer z Kinectem. Klatki mają lecieć po kilka
+     naraz i bez stałej przerwy po każdej: 3 s to co najmniej 12 klatek
+     (jedna naraz z przerwą 120 ms dawała ~7). */
+  await page.evaluate(() => { stopLive(); const w = document.getElementById('live-source'); w.value = 'kinect-color'; w.dispatchEvent(new Event('change')); });
+  let wLocie = 0, najwiecej = 0, klatek = 0;
+  await page.route('**/api/kinect/stream?*', (r) => r.fulfill({ status: 501, contentType: 'application/json', body: '{"kod":"bez-strumienia"}' }));
+  await page.route('**/api/kinect/frame?*', async (r) => {
+    wLocie++; najwiecej = Math.max(najwiecej, wLocie);
+    try {
+      const odp = await r.fetch();
+      const cialo = await odp.body();
+      await new Promise((k) => setTimeout(k, 300));
+      klatek++;
+      await r.fulfill({ status: 200, contentType: odp.headers()['content-type'], body: cialo });
+    } catch { /* trasa zdjęta w trakcie – koniec punktu */ } finally { wLocie--; }
+  });
+  await page.evaluate(() => startLive());
+  await page.waitForTimeout(700);   // rozbieg: 501 ze strumienia i pierwsze klatki
+  const przed8 = klatek;
+  await page.waitForTimeout(3000);
+  const w3s = klatek - przed8;
+  console.log(`8. klatki przez agenta: ${w3s} w 3 s, najwięcej naraz ${najwiecej}`);
+  if (najwiecej < 2) fail.push('klatki przez agenta idą jedna po drugiej');
+  if (w3s < 12) fail.push(`podgląd przez agenta poklatkowy: ${w3s} klatek w 3 s`);
+  await page.evaluate(() => stopLive());
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
+  /* 9. Rozpoznawanie da się wyłączyć: ramki znikają od razu, do zmysłów nie
+     idzie już żadna klatka, a wybór przeżywa przeładowanie. */
+  const detekcje = [];
+  page.on('request', (r) => { if (r.url().includes('/api/detect')) detekcje.push(Date.now()); });
+  const ramki = () => page.evaluate(() => {
+    const c = document.getElementById('live-overlay');
+    if (!c.width) return 0;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i]) n++;
+    return n;
+  });
+  await page.evaluate(() => startLive());
+  await page.waitForFunction(() => {
+    const c = document.getElementById('live-overlay');
+    return c.width && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 === 3 && v);
+  }, null, { timeout: 8000 }).catch(() => {});
+  const zRamkami = await ramki();
+  const przycisk = await page.$('#live-rozpoznawanie');
+  const wlaczonyNaStart = przycisk && await przycisk.getAttribute('aria-pressed');
+  if (przycisk) await przycisk.click();
+  const poWylaczeniu = await ramki();
+  const status9 = await page.evaluate(() => document.getElementById('live-status').textContent);
+  const detPrzed = detekcje.length;
+  await page.waitForTimeout(4000);
+  const detPo = detekcje.length - detPrzed;
+  const poCzasie = await ramki();
+  console.log(`9. rozpoznawanie: ramki ${zRamkami} px → po wyłączeniu ${poWylaczeniu} px (po 4 s ${poCzasie}), zapytań do zmysłów przez 4 s: ${detPo}, przycisk na starcie aria-pressed=${wlaczonyNaStart}`);
+  if (!przycisk) fail.push('brak przełącznika rozpoznawania');
+  if (!zRamkami) fail.push('rozpoznawanie włączone, a ramek nie ma');
+  if (poWylaczeniu || poCzasie) fail.push('ramki zostają po wyłączeniu rozpoznawania');
+  if (detPo) fail.push('wyłączone rozpoznawanie dalej wysyła klatki do zmysłów');
+  if (/person/.test(status9)) fail.push('opis rozpoznanych rzeczy zostaje po wyłączeniu');
+  await page.evaluate(() => stopLive());
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(500);
+  const poPrzeladowaniu = await page.$eval('#live-rozpoznawanie', (b) => b.getAttribute('aria-pressed')).catch(() => null);
+  console.log(`   po przeładowaniu aria-pressed=${poPrzeladowaniu}`);
+  if (poPrzeladowaniu !== 'false') fail.push('wybór rozpoznawania nie przeżywa przeładowania');
+
   console.log(fail.length ? '\nPROBLEMY: ' + fail.join('; ') : '\nPODGLĄD Z KINECTA OK');
   await browser.close();
   env.koniec();

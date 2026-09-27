@@ -55,6 +55,10 @@ function utworzKamere(z) {
   // nigdy go nie zwróci. Jego klatki pobieramy po HTTP z usługi zmysłów
   // i pokazujemy w zwykłym <img> zamiast w <video>.
   let liveSource = localStorage.getItem('cosmos.liveSource') || 'camera';
+  /* Rozpoznawanie (ramki YOLO, sylwetka, zdarzenia „widzę w kadrze”) da się
+     wyłączyć: czasem chcesz sam obraz. Wyłączone nie wysyła też klatek do
+     zmysłów, więc podgląd przez agenta ma cały obieg dla siebie. */
+  let liveRozpoznawanie = localStorage.getItem('cosmos.liveRozpoznawanie') !== '0';
   let liveImgTimer = null;
 
   function liveIsKinect() { return liveSource.startsWith('kinect'); }
@@ -327,38 +331,51 @@ function utworzKamere(z) {
     /* Klatki przez fetch, nie przez img.src: przy błędzie widać PRZYCZYNĘ
        z usługi zmysłów („urządzenie w użyciu”, „agent nie odpowiada”), a nie
        samą ikonę zepsutego obrazka i zgadywanie. */
+    /* Przez agenta zmysłów każda klatka to pełny obieg telefon → serwer →
+       komputer z Kinectem → serwer → telefon. Jedna klatka naraz, a potem
+       jeszcze stała przerwa, dawały podgląd „strasznie poklatkowy”. Teraz
+       W_DRODZE klatek leci równolegle, przerwy między nimi dopełniają tylko do
+       limitu liveFps, a spóźniona klatka (starsza niż pokazana) idzie do kosza. */
+    const W_DRODZE = 2;
     let adresKlatki = null;
+    let wyslane = 0;
+    let pokazana = 0;
     const singleFrames = () => {
       fellBack = true;
       img.onload = img.onerror = null;
-      const next = (delay) => {
-        if (aktualne()) liveImgTimer = setTimeout(klatka, delay);
-      };
-      const klatka = async () => {
+      const odstep = (1000 / liveFps) * W_DRODZE;
+      const petla = async () => {
         if (!aktualne()) return;
+        const nr = ++wyslane;
+        const start = performance.now();
+        let przerwa;
         try {
-          const r = await fetch(`/api/kinect/frame?stream=${stream}&t=${Date.now()}`);
+          const r = await fetch(`/api/kinect/frame?stream=${stream}&quality=70&t=${Date.now()}`);
           if (!r.ok) {
             const d = await r.json().catch(() => ({}));
             throw new Error(d.error || `HTTP ${r.status}`);
           }
           const url = URL.createObjectURL(await r.blob());
-          if (!aktualne()) { URL.revokeObjectURL(url); return; }
-          img.src = url;
-          img.style.visibility = '';
-          if (adresKlatki) URL.revokeObjectURL(adresKlatki);
-          adresKlatki = url;
-          if (bladKinecta) { bladKinecta = ''; ustawStatusSpoczynkowy(); }
-          next(120);
+          if (!aktualne() || nr < pokazana) { URL.revokeObjectURL(url); }
+          else {
+            pokazana = nr;
+            img.src = url;
+            img.style.visibility = '';
+            if (adresKlatki) URL.revokeObjectURL(adresKlatki);
+            adresKlatki = url;
+            if (bladKinecta) { bladKinecta = ''; ustawStatusSpoczynkowy(); }
+          }
+          przerwa = Math.max(0, odstep - (performance.now() - start));
         } catch (e) {
           if (!aktualne()) return;
           img.style.visibility = 'hidden';   // bez ikony zepsutego obrazka
           bladKinecta = `${t('live.kinectErr')} ${e.message}`;
           ustawStatusKamery(bladKinecta);
-          next(2000);
+          przerwa = 2000;
         }
+        if (aktualne()) liveImgTimer = setTimeout(petla, przerwa);
       };
-      klatka();
+      for (let i = 0; i < W_DRODZE; i++) setTimeout(petla, i * (odstep / W_DRODZE));
     };
 
     img.onload = null;
@@ -461,6 +478,8 @@ function utworzKamere(z) {
        z tym nic wspólnego. */
     odswiezPlan()(cap);   // getter: plener powstaje w app.js po kamerze
 
+    if (!liveRozpoznawanie) return;   // sam podgląd i nastawy, bez ramek
+
     if (!(senses().online && senses().caps.yolo)) return; // sam podgląd bez detekcji
 
     let data;
@@ -472,6 +491,7 @@ function utworzKamere(z) {
       data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'detect');
     } catch { return; }
+    if (!liveRozpoznawanie) return;   // wyłączone w trakcie – nie rysuj spóźnionych ramek
 
     const objs = data.objects || [];
     liveLastObjects = objs.map((o) => o.label);
@@ -589,6 +609,27 @@ function utworzKamere(z) {
     localStorage.setItem('cosmos.liveExpanded', on ? '0' : '1');
     applyLiveExpanded();
   });
+  function pokazRozpoznawanie() {
+    $('live-rozpoznawanie').setAttribute('aria-pressed', String(liveRozpoznawanie));
+  }
+  pokazRozpoznawanie();
+  $('live-rozpoznawanie').addEventListener('click', () => {
+    liveRozpoznawanie = !liveRozpoznawanie;
+    try { localStorage.setItem('cosmos.liveRozpoznawanie', liveRozpoznawanie ? '1' : '0'); } catch { /* tryb prywatny */ }
+    pokazRozpoznawanie();
+    if (liveRozpoznawanie) {
+      if ($('live-panel').style.display !== 'none') setTimeout(liveDetect, 50);
+      return;
+    }
+    // Wyłączone: ramki i opis znikają od razu, nie przy następnym cyklu.
+    const overlay = $('live-overlay');
+    overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    livePrevObjects = '';
+    livePrevPose = '';
+    liveLastObjects = [];
+    if (!bladKinecta) ustawStatusSpoczynkowy();
+  });
+
   $('live-source').addEventListener('change', async (e) => {
     liveSource = e.target.value;
     localStorage.setItem('cosmos.liveSource', liveSource);

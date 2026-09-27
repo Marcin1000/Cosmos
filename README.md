@@ -158,7 +158,9 @@ packages install from a fixed list with one click, and a component that crashes
 shows up in the app with the tail of its log. The Kinect SDK hands the sensor to a
 single process, so the senses service owns it and the camera watcher and depth sense
 read frames, depth and skeletons from it over loopback – the live preview no longer
-goes black the moment another component grabs the sensor. A first-run tutorial walks each new
+goes black the moment another component grabs the sensor. Frames relayed through the
+agent ride persistent connections, two in flight, because a fresh TLS handshake per
+request made the preview crawl at two frames a second. A first-run tutorial walks each new
 person through their name, their own API keys, the senses and the phone install.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the

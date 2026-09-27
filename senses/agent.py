@@ -28,17 +28,21 @@ Inne polecenia:
 
 import argparse
 import hashlib
+import http.client
+import io
 import json
 import os
 import platform
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -119,6 +123,79 @@ def zapisz_konfig(k):
 
 # ------------------------------------------------------------------------ HTTP
 
+# Stałe połączenia z serwerem. Podgląd Kinecta to zlecenie na każdą klatkę,
+# a każde zlecenie to trzy zapytania (/czekaj, /cialo, /wynik). urllib
+# otwierał za każdym razem nowe połączenie HTTPS – z pełnym uzgadnianiem TLS
+# przez Cloudflare – i podgląd szedł po 2–3 klatki na sekundę. Teraz
+# połączenie wraca po zapytaniu do puli i bierze je następne (także z innego
+# wątku – każde zlecenie ma własny, krótki wątek).
+_pula = {}
+_pula_zamek = threading.Lock()
+_POSREDNICY = None
+
+
+def _bez_posrednika(schemat):
+    """Stałe połączenia tylko bez pośrednika HTTP – z nim zostaje urllib."""
+    global _POSREDNICY
+    if _POSREDNICY is None:
+        _POSREDNICY = urllib.request.getproxies()
+    return schemat not in _POSREDNICY
+
+
+def _wez_polaczenie(adres, czas):
+    klucz = (adres.scheme, adres.netloc)
+    with _pula_zamek:
+        wolne = _pula.setdefault(klucz, [])
+        p = wolne.pop() if wolne else None
+    if p is None:
+        if adres.scheme == "https":
+            p = http.client.HTTPSConnection(adres.netloc, timeout=czas, context=ssl.create_default_context())
+        else:
+            p = http.client.HTTPConnection(adres.netloc, timeout=czas)
+    p.timeout = czas
+    if p.sock is not None:
+        p.sock.settimeout(czas)
+    return klucz, p
+
+
+def _oddaj_polaczenie(klucz, p):
+    with _pula_zamek:
+        wolne = _pula.setdefault(klucz, [])
+        if len(wolne) < 6:
+            wolne.append(p)
+            return
+    p.close()
+
+
+def _zapytanie_stale(url, metoda, cialo, naglowki, czas):
+    """(status, nagłówki, treść) po stałym połączeniu; None = użyj urllib."""
+    adres = urllib.parse.urlsplit(url)
+    if adres.scheme not in ("http", "https") or not _bez_posrednika(adres.scheme):
+        return None
+    cel = adres.path + ("?" + adres.query if adres.query else "")
+    for proba in (1, 2):
+        klucz, p = _wez_polaczenie(adres, czas)
+        try:
+            p.request(metoda, cel, body=cialo, headers=naglowki)
+            r = p.getresponse()
+            tresc = r.read()
+        except (http.client.RemoteDisconnected, http.client.CannotSendRequest,
+                BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Serwer albo Cloudflare zamknął bezczynne połączenie – raz od nowa.
+            p.close()
+            if proba == 2:
+                raise
+            continue
+        except Exception:
+            p.close()
+            raise
+        if r.will_close:
+            p.close()
+        else:
+            _oddaj_polaczenie(klucz, p)
+        return r.status, r.headers, tresc
+
+
 def zapytanie(serwer, sciezka, metoda="GET", dane=None, token="", czas=30, surowe=False,
               cialo=None, naglowki_dodatkowe=None):
     naglowki = {"User-Agent": "cosmos-agent", "X-Sesja": SESJA}
@@ -128,12 +205,21 @@ def zapytanie(serwer, sciezka, metoda="GET", dane=None, token="", czas=30, surow
     if token:
         naglowki["Authorization"] = "Bearer " + token
     naglowki.update(naglowki_dodatkowe or {})
-    req = urllib.request.Request(serwer + sciezka, data=cialo, method=metoda, headers=naglowki)
-    with urllib.request.urlopen(req, timeout=czas) as r:
-        tresc = r.read()
-        if surowe:
-            return r.status, tresc
-        return r.status, (json.loads(tresc.decode("utf-8")) if tresc else {})
+    url = serwer + sciezka
+    wynik = _zapytanie_stale(url, metoda, cialo, naglowki, czas)
+    if wynik is not None and not (300 <= wynik[0] < 400):
+        status, nagl, tresc = wynik
+        if status >= 400:
+            # Jak urllib: błąd HTTP jako wyjątek, z treścią do przeczytania.
+            raise urllib.error.HTTPError(url, status, nagl.get("X-Blad", "") or str(status), nagl, io.BytesIO(tresc))
+    else:
+        # Przekierowanie albo pośrednik – urllib wie, co z nimi zrobić.
+        req = urllib.request.Request(url, data=cialo, method=metoda, headers=naglowki)
+        with urllib.request.urlopen(req, timeout=czas) as r:
+            status, tresc = r.status, r.read()
+    if surowe:
+        return status, tresc
+    return status, (json.loads(tresc.decode("utf-8")) if tresc else {})
 
 
 # --------------------------------------------------------------------- python
@@ -439,11 +525,17 @@ class Agent:
         """Zlecenie zmysłów: odbierz ciało (to jest potwierdzenie), wywołaj
         lokalną usługę i odeślij wynik surowymi bajtami."""
         id_ = zad["id"]
-        try:
-            _, cialo = zapytanie(self.serwer, f"/api/agent/cialo?id={id_}", token=self.token, surowe=True, czas=60)
-        except Exception as e:
-            log(f"ciało zlecenia: {e}")
-            return
+        if zad.get("dlugosc") == 0:
+            # Bez ciała nie ma na co czekać: potwierdzenie idzie obok, a zmysły
+            # liczą już teraz. Klatka Kinecta oszczędza w ten sposób cały obieg.
+            cialo = b""
+            threading.Thread(target=self._potwierdz, args=(id_,), daemon=True).start()
+        else:
+            try:
+                _, cialo = zapytanie(self.serwer, f"/api/agent/cialo?id={id_}", token=self.token, surowe=True, czas=60)
+            except Exception as e:
+                log(f"ciało zlecenia: {e}")
+                return
         sciezka = str(zad.get("sciezka", ""))
         if not sciezka.startswith(DOZWOLONE):
             return self.odeslij(id_, 403, "application/json", json.dumps({"error": "Ścieżka niedozwolona."}).encode())
@@ -459,6 +551,12 @@ class Agent:
             except Exception:
                 blad = {"error": "Zmysły na tym komputerze są wyłączone – włącz je w Ustawieniach → Zmysły."}
                 return self.odeslij(id_, 503, "application/json", json.dumps(blad).encode())
+
+    def _potwierdz(self, id_):
+        try:
+            zapytanie(self.serwer, f"/api/agent/cialo?id={id_}", token=self.token, surowe=True, czas=30)
+        except Exception:
+            pass   # zlecenie mogło już dostać wynik – wtedy serwer odpowiada 404
 
     def odeslij(self, id_, status, typ, tresc):
         tresc = tresc or b""
@@ -644,6 +742,9 @@ class Agent:
             log(f"pliki: {e}")
         self.pakiety = zainstalowane()
         threading.Thread(target=self.tetno, daemon=True).start()
+        # Dwa odpytania naraz (serwer trzyma najwyżej dwa): kolejne zlecenie
+        # nie czeka, aż wróci odpowiedź na poprzednie i otworzy się nowe /czekaj.
+        threading.Thread(target=self.petla, daemon=True).start()
         log(f"połączono z {self.serwer} – czekam na zlecenia")
         try:
             self.petla()

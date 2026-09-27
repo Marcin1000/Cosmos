@@ -772,7 +772,11 @@ i logikę **bez sprzętu** (22 kontrole).
 **W interfejsie Cosmosa** panel „Kamera na żywo" ma wybór źródła: kamera przeglądarki,
 **Kinect – obraz**, **Kinect – głębia**. Obraz leci strumieniem MJPEG (jedno połączenie,
 klatki jedna za drugą), więc podgląd jest płynny także przez Tailscale. Detekcja YOLO
-działa na obu źródłach tak samo.
+działa na obu źródłach tak samo, a przycisk **Rozpoznawanie** obok wyboru źródła
+wyłącza ją razem z ramkami i opisem (wybór zostaje zapamiętany) – gdy chcesz sam obraz.
+
+Przez agenta zmysłów strumienia nie ma, więc klatki idą pojedynczo – ale po dwie naraz,
+a agent trzyma z serwerem stałe połączenia zamiast otwierać nowe przy każdej klatce.
 
 SDK oddaje czujnik **jednemu programowi**, więc trzyma go usługa zmysłów, a obserwator
 kamery i zmysł głębi biorą z niej obraz, głębię i sylwetki. Dzięki temu podgląd,
