@@ -155,7 +155,7 @@ function loadJson(key, fallback) {
 // Zapis aktywnej rozmowy na serwer (data/conversations/) – wspólny dla
 // wszystkich urządzeń. Zapis serwerowy jest debounce'owany; kopia w
 // localStorage służy tylko jako podgląd offline, gdy serwer jest niedostępny.
-let convSaveTimer = null;
+const convSaveTimers = new Map();
 
 /* Zapis z opóźnieniem – do pisania w płótnie. Zapisywanie przy każdym
    naciśnięciu klawisza słałoby na serwer kilkanaście żądań na sekundę. */
@@ -171,34 +171,38 @@ function saveConversationsSoon(ms = 800) {
  *  przed startem generowania: gdy karta zamknie się w tej ćwierci sekundy,
  *  serwer dokończy odpowiedź i nie będzie miał jej gdzie dopisać, bo plik
  *  rozmowy jeszcze nie istnieje. */
-function saveConversations(natychmiast = false) {
-  clearTimeout(zapisZaChwile);
-  zapisZaChwile = null;
-  if (!activeConversation) return;
-  activeConversation.updatedAt = Date.now();
+/* `c` – rozmowa do zapisu; domyślnie aktywna. Ścieżki błędu i przerwania
+   dopisują do rozmowy, która w międzyczasie mogła przestać być aktywna –
+   dawniej zapisywała się wtedy tylko nowa, a fragment w starej ginął
+   (zespół IT, runda 5). */
+function saveConversations(natychmiast = false, c = activeConversation) {
+  if (c === activeConversation) { clearTimeout(zapisZaChwile); zapisZaChwile = null; }
+  if (!c) return;
+  c.updatedAt = Date.now();
 
   // odśwież metadane w indeksie (pasek boczny) i wypłyń na górę
-  const i = conversations.findIndex((c) => c.id === activeConversation.id);
+  const i = conversations.findIndex((x) => x.id === c.id);
   const meta = {
-    id: activeConversation.id,
-    title: activeConversation.title,
-    createdAt: activeConversation.createdAt,
-    updatedAt: activeConversation.updatedAt,
+    id: c.id,
+    title: c.title,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
     // Pinezka zostaje – nowa wiadomość w przypiętej rozmowie ją zdejmowała do odświeżenia strony.
-    pinned: Boolean((i >= 0 && conversations[i].pinned) || activeConversation.pinned),
+    pinned: Boolean((i >= 0 && conversations[i].pinned) || c.pinned),
   };
   if (i >= 0) conversations[i] = meta; else conversations.unshift(meta);
   conversations.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0));
   renderSidebar();
   cacheConvIndex();
 
-  try { localStorage.setItem('cosmos.conv.' + activeConversation.id, JSON.stringify(activeConversation)); } catch { /* limit */ }
+  try { localStorage.setItem('cosmos.conv.' + c.id, JSON.stringify(c)); } catch { /* limit */ }
 
-  const conv = activeConversation;
+  const conv = c;
   const id = conv.id;
-  clearTimeout(convSaveTimer);
-  if (natychmiast) zapiszNaSerwerze(id, conv);
-  else convSaveTimer = setTimeout(() => zapiszNaSerwerze(id, conv), 400);
+  // Zwłoka osobno dla każdej rozmowy: zapis jednej nie może skasować czekającego zapisu drugiej.
+  clearTimeout(convSaveTimers.get(id));
+  if (natychmiast) { convSaveTimers.delete(id); zapiszNaSerwerze(id, conv); }
+  else convSaveTimers.set(id, setTimeout(() => { convSaveTimers.delete(id); zapiszNaSerwerze(id, conv); }, 400));
 }
 
 /* DWA URZĄDZENIA, JEDNA ROZMOWA. Zapis wysyłał cały dokument, a serwer go
@@ -221,9 +225,13 @@ function zapiszNaSerwerze(id, conv, proba = 0) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...conv, ...(baza ? { bazaUpdatedAt: baza } : {}) }),
       });
-    } catch { return; /* offline – zostaje kopia w localStorage */ }
+    } catch { oznaczNiezapisana(id, t('zapis.offline')); return; /* zostaje kopia w localStorage */ }
     const d = await readJsonSafe(r).catch(() => ({}));
-    if (r.ok && d.meta) { wersjaNaSerwerze.set(id, d.meta.updatedAt); return; }
+    if (r.ok && d.meta) { wersjaNaSerwerze.set(id, d.meta.updatedAt); oznaczNiezapisana(id, null); return; }
+    /* Pełny dysk, limit miejsca (507), błąd serwera: dawniej po cichu – a po
+       odświeżeniu wersja z serwera wygrywała z kopią w przeglądarce i odpowiedź
+       znikała (zespół IT, runda 5). Teraz pasek z przyczyną i ponowienie. */
+    if (r.status === 507 || r.status >= 500) { oznaczNiezapisana(id, d.error || t('httpErr', { status: r.status })); return; }
     if (r.status === 409 && d.rozmowa && proba < 2) {
       const scalona = scalRozmowy(conv, d.rozmowa);
       wersjaNaSerwerze.set(id, d.rozmowa.updatedAt);
@@ -237,6 +245,35 @@ function zapiszNaSerwerze(id, conv, proba = 0) {
   });
   zapisyWToku.set(id, teraz.catch(() => {}));
   return teraz;
+}
+
+/* NIEZAPISANE ROZMOWY. Lista w localStorage przeżywa odświeżenie: rozmowa,
+   której zapis się nie udał, przy wczytaniu wygrywa kopią z przeglądarki,
+   zamiast przegrać ze starszą wersją z serwera. */
+const NIEZAPISANE_KLUCZ = 'cosmos.niezapisane';
+const niezapisane = () => new Set(loadJson(NIEZAPISANE_KLUCZ, []));
+function oznaczNiezapisana(id, powod) {
+  const zbior = niezapisane();
+  if (powod) zbior.add(id); else zbior.delete(id);
+  try { localStorage.setItem(NIEZAPISANE_KLUCZ, JSON.stringify([...zbior])); } catch { /* prywatne okno */ }
+  const pasek = $('zapis-bar');
+  if (!pasek) return;
+  if (powod) $('zapis-powod').textContent = powod;
+  pasek.hidden = zbior.size === 0;
+}
+/** Ponów zapis wszystkich niezapisanych rozmów (z kopii w przeglądarce). */
+function ponowNiezapisane() {
+  for (const id of niezapisane()) {
+    const c = activeConversation && activeConversation.id === id ? activeConversation : loadJson('cosmos.conv.' + id, null);
+    if (c) zapiszNaSerwerze(id, c); else oznaczNiezapisana(id, null);
+  }
+}
+window.addEventListener('online', ponowNiezapisane);
+$('zapis-retry')?.addEventListener('click', ponowNiezapisane);
+if (niezapisane().size) {
+  const pasek = $('zapis-bar');
+  if (pasek) { $('zapis-powod').textContent = t('zapis.poprzednio'); pasek.hidden = false; }
+  setTimeout(ponowNiezapisane, 1500);
 }
 
 /* Powrót do karty (telefon wyjęty z kieszeni): świeża wersja aktywnej
@@ -809,8 +846,15 @@ function messageElement(m, idx = -1) {
     if (idx >= 0 && conv && idx === conv.messages.length - 1) {
       const ponow = document.createElement('button');
       ponow.className = 'msg-action-btn msg-ponow';
-      ponow.textContent = '↻ ' + t('chat.ponow');
-      ponow.addEventListener('click', () => regenerateFrom(idx));
+      /* Błąd trwały (zły klucz, brak środków, model spoza rozmowy): „Ponów”
+         zawsze skończy się tak samo – droga prowadzi do Ustawień. */
+      if (m.trwaly) {
+        ponow.textContent = '⚙ ' + t('chat.doUstawien');
+        ponow.addEventListener('click', () => openSettings());
+      } else {
+        ponow.textContent = '↻ ' + t('chat.ponow');
+        ponow.addEventListener('click', () => regenerateFrom(idx));
+      }
       body.appendChild(ponow);
     }
     return msg;
@@ -1003,6 +1047,22 @@ function regenerateFrom(idx) {
 
 // Edycja w toku: od której wiadomości zostanie ucięta historia przy wysłaniu.
 let edycjaOd = null;
+/* Tryb edycji był niewidoczny i bez wyjścia: „Edytuj”, wyczyszczenie pola
+   i nowe pytanie kasowało po cichu poprzednie pytanie i odpowiedź (zespół IT,
+   runda 5). Teraz pasek nad polem, „Anuluj”, Escape i puste pole kończą edycję. */
+function pokazEdycje(tak) {
+  const pasek = $('edycja-bar');
+  if (pasek) pasek.hidden = !tak;
+}
+function anulujEdycje({ wyczysc = false } = {}) {
+  if (!edycjaOd) return;
+  edycjaOd = null;
+  pokazEdycje(false);
+  if (wyczysc) { el.input.value = ''; autosizeInput(); updateSendButton(); }
+}
+$('edycja-anuluj')?.addEventListener('click', () => { anulujEdycje({ wyczysc: true }); el.input.focus(); });
+el.input.addEventListener('keydown', (e) => { if (e.key === 'Escape' && edycjaOd) { e.preventDefault(); anulujEdycje({ wyczysc: true }); } });
+el.input.addEventListener('input', () => { if (edycjaOd && !el.input.value.trim()) anulujEdycje(); });
 
 function editFrom(idx) {
   const conv = activeConv();
@@ -1015,6 +1075,7 @@ function editFrom(idx) {
      przy samym kliknięciu „Edytuj" kasowało dalszą rozmowę od razu i na
      serwerze – kto się rozmyślił, tracił wszystko bez ostrzeżenia. */
   edycjaOd = { convId: conv.id, idx };
+  pokazEdycje(true);
   pendingImages = images.length ? [...images] : pendingImages;
   renderAttachments();
   el.input.value = text;
@@ -1087,8 +1148,47 @@ function collapseSidebarOnMobile() {
   }
 }
 
+/* PRZEŁĄCZENIE W TRAKCIE ODPOWIEDZI. Dawniej „Nowa rozmowa” i wybór innej
+   rozmowy wołały stop – odpowiedź była ucinana po cichu, a po powrocie stało
+   samo pytanie (zespół IT, runda 5). Teraz odchodzi tylko widz: serwer pisze
+   dalej i sam zapisze odpowiedź w tamtej rozmowie (lib/biegi.js), a po powrocie
+   podpinamy się do biegu i widać ją na żywo. */
+const biegiWTle = new Map();   // id rozmowy → id biegu, od którego odszedł widz
+let odlaczanie = false;
+function odlaczOdBiegu() {
+  const b = biegBiezacy;
+  if (b && b.id && b.convId) biegiWTle.set(b.convId, b.id);
+  odlaczanie = true;
+  turaPrzerwana = true;           // kolejnych rund narzędzi ta karta już nie prowadzi
+  zapamietajBieg(null);
+  if (abortController) abortController.abort();
+}
+
+/** Po powrocie do rozmowy, od której odszedł widz: podepnij się do jej biegu. */
+async function podepnijBiegWTle(id) {
+  const biegId = biegiWTle.get(id);
+  if (!biegId || isGenerating) return;
+  biegiWTle.delete(id);
+  let b = null;
+  try {
+    const r = await fetch('/api/chat/biegi');
+    if (r.ok) b = ((await r.json()).biegi || []).find((x) => x.id === biegId) || null;
+  } catch { return; }
+  if (activeId !== id || !activeConversation) return;
+  // Skończony i zapisany przez serwer – wersja z serwera (już wczytana) ma odpowiedź.
+  if (!b || (!b.trwa && b.zapisany)) {
+    if (b || !activeConversation.messages.some((m) => m.role === 'assistant' && !m.error)) {
+      const r = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`).catch(() => null);
+      if (r && r.ok && activeId === id) { activeConversation = naprawStareRuchyNarzedzi(await r.json()); renderMessages(); }
+    }
+    return;
+  }
+  await runGeneration(activeConversation, { bieg: biegId, od: 0 });
+}
+
 function newConversation() {
-  if (isGenerating) stopGeneration();
+  if (isGenerating) odlaczOdBiegu();
+  anulujEdycje();
   activeId = null;
   renderKolejka();
   zapamietajOstatnia(null);
@@ -1144,7 +1244,8 @@ async function przywrocOstatnia() {
 }
 
 async function selectConversation(id) {
-  if (isGenerating) stopGeneration();
+  if (isGenerating && activeId !== id) odlaczOdBiegu();
+  if (activeId !== id) anulujEdycje();
   activeId = id;
   renderKolejka();   // kolejka pokazuje pozycje TEJ rozmowy
   zapamietajOstatnia(id);
@@ -1178,8 +1279,18 @@ async function selectConversation(id) {
   const taSama = kopia && kopia.updatedAt === zSerwera.updatedAt
     && (kopia.messages || []).length === (zSerwera.messages || []).length;
   wersjaNaSerwerze.set(id, zSerwera.updatedAt);
+  /* Kopia z przeglądarki, której zapis się nie udał, jest NOWSZA niż wersja
+     z serwera – scalamy i zapisujemy jeszcze raz, zamiast ją zgubić. */
+  if (kopia && niezapisane().has(id) && (kopia.updatedAt || 0) > (zSerwera.updatedAt || 0)) {
+    activeConversation = scalRozmowy(kopia, zSerwera);
+    renderMessages();
+    zapiszNaSerwerze(id, activeConversation);
+    ruszKolejke();
+    return;
+  }
   activeConversation = zSerwera;
   if (!taSama) renderMessages();
+  if (biegiWTle.has(id)) { podepnijBiegWTle(id); return; }
   // Pytania wpisane w TEJ rozmowie, które czekały, aż do niej wrócisz.
   ruszKolejke();
 }
@@ -1736,6 +1847,7 @@ async function sendMessage() {
   const conv = ensureConversation(text || (gotowe[0] && gotowe[0].name) || '');
   if (edycjaOd && edycjaOd.convId === conv.id) conv.messages = conv.messages.slice(0, edycjaOd.idx);
   edycjaOd = null;
+  pokazEdycje(false);
   const content = (pendingImages.length || gotowe.length)
     ? {
         text,
@@ -1775,6 +1887,20 @@ async function sendMessage() {
    nie prosimy o nową – druga odpowiedź na to samo pytanie kosztuje tokeny
    i bywa inna niż ta, którą użytkownik zdążył zobaczyć. */
 const BIEG_KLUCZ = 'cosmos.bieg';
+/** Klucz zdania do przeczytania na głos po błędzie czatu. */
+function glosBledu(err) {
+  const kod = err && err.kod;
+  if (kod === 'lokalny-niedostepny') return err.rodzaj === 'odmowa' ? 'voice.errOllama' : 'voice.errConn';
+  if (kod === 'zimny-start') return 'voice.errColdStart';
+  if (kod === 'klucz-dostawcy' || kod === 'brak-klucza') return 'voice.errKey';
+  const m = String((err && err.message) || '');
+  return /środk|kredyt|credit|billing|balance|insufficient|płatno/i.test(m) ? 'voice.errMoney'
+    : /429|limit|przeciąż|rate|overloaded/i.test(m) ? 'voice.errLimit'
+    : /401|403|klucz|api key/i.test(m) ? 'voice.errKey'
+    : /komputer domowy|nie odpowiada|odrzuca połączenie|połącz|offline/i.test(m) ? 'voice.errConn'
+    : 'voice.errReply';
+}
+
 const BIEG_PROB = 6;
 
 let biegBiezacy = null;      // { id, convId, ostatnie }
@@ -1840,10 +1966,15 @@ async function streamOnce(conv, opcje = {}) {
   // trwa – i ile już trwa.
   const started = Date.now();
   let waitNote = '';
+  /* Zanim dostawca odpowie nagłówkami, model jeszcze nie „myśli”: łączymy
+     się albo lokalny model ładuje się do pamięci karty (zimny start) – napis
+     „model myśli… 45 s” był wtedy nieprawdą (zespół IT, runda 5). */
+  let naglowkiPrzyszly = false;
   const waitTimer = setInterval(() => {
     if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
     const s = Math.round((Date.now() - started) / 1000);
-    waitNote = `<div class="wait-note mono">${escapeHtml(t('chat.stillWorking', { s }))}</div>`;
+    const klucz = naglowkiPrzyszly ? 'chat.stillWorking' : ep === 'local' ? 'chat.waitLocal' : 'chat.waitStart';
+    waitNote = `<div class="wait-note mono">${escapeHtml(t(klucz, { s }))}</div>`;
     schedulePaint();
   }, 1000);
 
@@ -1930,18 +2061,27 @@ async function streamOnce(conv, opcje = {}) {
 
     if (!res.ok) {
       let errText = t('httpErr', { status: res.status });
+      let data = {};
       try {
-        const data = await readJsonSafe(res);
+        data = await readJsonSafe(res);
         errText = data.error || errText;
       } catch { /* ignore */ }
       zapamietajBieg(null);
-      throw new Error(errText);
+      /* Kod i „trwały" od serwera: głos wybiera zdanie po kodzie, a przy błędzie
+         trwałym (zły klucz, brak środków, model, który nie rozmawia) zamiast
+         „Ponów", który zawsze skończy się tak samo, jest droga do Ustawień. */
+      throw Object.assign(new Error(errText), { kod: data.kod || '', rodzaj: data.rodzaj || '', trwaly: Boolean(data.trwaly), status: res.status });
     }
 
+    naglowkiPrzyszly = true;
     // Serwer mógł skierować zdjęcie do modelu wizyjnego. Podmiana za plecami
     // użytkownika byłaby nieuczciwa – mówimy, kto naprawdę odpowiedział.
     const swapped = res.headers.get('X-Cosmos-Model-Swapped-From');
     const used = decodeURIComponent(res.headers.get('X-Cosmos-Model') || '');
+    /* Podpis odpowiedzi i zapis w rozmowie – model, który NAPRAWDĘ odpowiedział.
+       Po podmianie (zdjęcie → model wizyjny, członek → lista właściciela) podpis
+       mówił o modelu wybranym (zespół IT, runda 5). */
+    if (used && znakTury) znakTury.model = used;
     // Na silniku przyznanym przez właściciela członek dostaje model z jego listy.
     const spozaListy = res.headers.get('X-Cosmos-Model-Spoza-Listy');
     // Lokalny model z małym oknem: najstarsze wiadomości nie poszły do modelu – mówimy ile,
@@ -2012,7 +2152,7 @@ async function streamOnce(conv, opcje = {}) {
        normalnym stanem telefonu, który zgasił ekran. Wracamy do biegu od
        ostatniego numeru; poddajemy się dopiero, gdy serwer przestaje o nim
        wiedzieć albo gdy nie da się wrócić po kilku próbach. */
-    while (!koniecBiegu) {
+    petla: while (!koniecBiegu) {
       const reader = res.body.getReader();
       let rozlaczone = false;
       try {
@@ -2033,26 +2173,33 @@ async function streamOnce(conv, opcje = {}) {
       if (buffer.trim()) { zjedzZdarzenie(buffer); buffer = ''; }
       if (koniecBiegu) break;
 
-      // Strumień się skończył, a serwer nie powiedział „koniec”. Wracamy.
-      if (++proby > BIEG_PROB) {
-        if (rozlaczone) throw new Error(t('bieg.zerwane'));
-        break;                       // serwer bez biegów – kończymy po staremu
+      /* Strumień się skończył, a serwer nie powiedział „koniec”. Wracamy.
+         Próby powrotu mają WŁASNĄ pętlę: nieudany fetch nie może wrócić do
+         `getReader()` na starym, zablokowanym strumieniu – dawniej przerwa
+         w Wi-Fi dłuższa niż pół sekundy kończyła się angielskim „Failed to
+         execute 'getReader'…” zamiast wznowieniem (zespół IT, runda 5). */
+      for (;;) {
+        if (++proby > BIEG_PROB) {
+          if (rozlaczone) throw new Error(t('bieg.zerwane'));
+          break petla;               // serwer bez biegów – kończymy po staremu
+        }
+        await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
+        const od = (biegBiezacy?.ostatnie ?? -1) + 1;
+        let wrot;
+        try {
+          wrot = await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
+            { signal: abortController.signal });
+        } catch (err) {
+          if (abortController.signal.aborted) throw err;
+          continue;                  // sieci nadal nie ma – próbujemy dalej
+        }
+        /* 404 = serwer już nie pamięta tego biegu. Przy podpięciu po odświeżeniu
+           to zwykły koniec (odpowiedź wylądowała w rozmowie), przy zerwaniu
+           w locie – utrata. W obu razach nie ma czego dalej czytać. */
+        if (!wrot.ok) break petla;
+        res = wrot;
+        break;
       }
-      await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
-      const od = (biegBiezacy?.ostatnie ?? -1) + 1;
-      let wrot;
-      try {
-        wrot = await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
-          { signal: abortController.signal });
-      } catch (err) {
-        if (abortController.signal.aborted) throw err;
-        continue;                    // sieci nadal nie ma – próbujemy dalej
-      }
-      /* 404 = serwer już nie pamięta tego biegu. Przy podpięciu po odświeżeniu
-         to zwykły koniec (odpowiedź wylądowała w rozmowie), przy zerwaniu
-         w locie – utrata. W obu razach nie ma czego dalej czytać. */
-      if (!wrot.ok) break;
-      res = wrot;
     }
     clearInterval(waitTimer);
     zapamietajBieg(null);
@@ -2527,7 +2674,11 @@ async function runGeneration(conv, podpiecie = null) {
       }
     }
   } catch (err) {
-    if (err.name === 'AbortError') {
+    if (err.name === 'AbortError' && odlaczanie) {
+      /* Widz odszedł do innej rozmowy – odpowiedź pisze się dalej na serwerze
+         i tam zostanie zapisana. Tu nic nie dopisujemy: fragment z notką
+         „Zatrzymano” byłby nieprawdą. */
+    } else if (err.name === 'AbortError') {
       /* Przerwana odpowiedź też przechodzi przez czyszczenie znaczników.
          To jedyna droga, którą tekst z modelu trafiał na ekran surowy –
          a przerywa się najczęściej wtedy, gdy coś trwa za długo, czyli
@@ -2536,7 +2687,7 @@ async function runGeneration(conv, podpiecie = null) {
       if (czesc) {
         // Widać, że to przerwane, a nie cała odpowiedź (agencja, runda 5).
         conv.messages.push({ role: 'assistant', content: czesc, note: t('chat.stopped'), ...znakSilnika() });
-        saveConversations();
+        saveConversations(false, conv);
       }
     } else {
       /* Błąd w połowie odpowiedzi (dostawca przeciążony, zerwane połączenie):
@@ -2544,25 +2695,29 @@ async function runGeneration(conv, podpiecie = null) {
          razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
       const czesc = stripSearchMarker(err.partial || '');
       if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
-      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true });
-      saveConversations();
+      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true, ...(err.trwaly ? { trwaly: true } : {}) });
+      saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
          powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
-         brzmiały identycznie: „błąd połączenia z modelem” (agencja, runda 5). */
-      if (voiceMode) {
-        const m = String(err.message || '');
-        finalText = t(/środk|kredyt|credit|billing|balance|insufficient|płatno/i.test(m) ? 'voice.errMoney'
-          : /429|limit|przeciąż|rate|overloaded/i.test(m) ? 'voice.errLimit'
-          : /401|403|klucz|api key/i.test(m) ? 'voice.errKey'
-          : /komputer domowy|nie odpowiada|odrzuca połączenie|połącz|offline/i.test(m) ? 'voice.errConn'
-          : 'voice.errReply');
-      }
+         brzmiały identycznie: „błąd połączenia z modelem” (agencja, runda 5).
+         Najpierw KOD od serwera – regexp po treści mówił „komputer chyba śpi”,
+         gdy padła sama Ollama (zespół IT, runda 5). */
+      if (voiceMode) finalText = t(glosBledu(err));
     }
   } finally {
+    const odlaczony = odlaczanie;
+    odlaczanie = false;
     isGenerating = false;
     abortController = null;
     znakTury = null;
     setGeneratingUI(false);
+    // Widz przeszedł do innej rozmowy: tamta ma swój zapis i swój ekran.
+    if (odlaczony) {
+      // To, co ta karta zdążyła dopisać (np. wynik narzędzia), zapisujemy w TAMTEJ rozmowie.
+      if (conv !== activeConversation) saveConversations(true, conv);
+      if (activeId && biegiWTle.has(activeId)) podepnijBiegWTle(activeId);
+      return;
+    }
     /* Zapis bez zwłoki. Przeglądarka właśnie potwierdziła serwerowi, że ma
        odpowiedź, więc awaryjna kopia po jego stronie już nie powstanie –
        te 400 ms zwłoki byłyby jedynym momentem, w którym gotowa odpowiedź
@@ -3522,7 +3677,8 @@ function fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  // Przecinek po polsku („1,4 MB”), kropka po angielsku.
+  return (bytes / 1024 / 1024).toLocaleString(getLang() === 'en' ? 'en-US' : 'pl-PL', { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + ' MB';
 }
 
 function saveKbSelected() {
@@ -3590,7 +3746,11 @@ async function loadKbList() {
       if (item.size) bits.push(fmtSize(item.size));
       bits.push(new Date(item.time).toLocaleDateString(getLang()));
       bits.push(item.przetwarzanie ? t('kb.wTle')
-        : item.textChars ? t('kb.chars', { n: item.textChars }) : t('kb.noText'));
+        /* Tekst przycięty do 200 tys. znaków – mówimy to wprost, z pełną długością.
+           „tekst: 200000 zn.” przy pliku na 1,5 mln wyglądało jak całość (zespół IT, runda 5). */
+        : item.textPelny > item.textChars
+          ? t('kb.charsCut', { n: item.textChars.toLocaleString(), z: item.textPelny.toLocaleString() })
+          : item.textChars ? t('kb.chars', { n: item.textChars.toLocaleString() }) : t('kb.noText'));
       meta.textContent = bits.join(' · ');
       meta.title = item.preview || '';
       main.append(name, meta);
@@ -3987,6 +4147,8 @@ async function enterVoiceMode() {
      nadejściu startował drugi nasłuch obok pierwszego. Czekamy na nie,
      ale nie dłużej niż 4 s. */
   setVoiceState('thinking');
+  // „MYŚLĘ…” przed pierwszym pytaniem było nieprawdą – Cosmos dopiero się przygotowuje.
+  el.voiceStatus.textContent = t('voice.preparing');
   await Promise.race([gotowoscGlosu, pauza(4000)]);
   if (!voiceMode) return;
   silnikSesji = null;
@@ -4081,7 +4243,7 @@ async function rozpoznajPtaka() {
     return;
   }
   if (!(senses.online && senses.caps.birdnet)) {
-    el.voiceAnswer.textContent = t('voice.birdNoSenses');
+    el.voiceAnswer.textContent = t(senses.tylkoWlasciciel ? 'voice.birdNotForYou' : 'voice.birdNoSenses');
     return;
   }
   // Mikrofon jest zajęty przez nasłuch ciągły – zwalniamy go na czas nagrania
@@ -4296,8 +4458,14 @@ function startNasluchWlasny() {
     onBlad: (err) => {
       // Awaria transkrypcji nie kończy trybu głosowego – następna wypowiedź
       // może się udać (zmysły wstają, GPU zwalnia się po innym zadaniu).
-      komunikatGlosu(t('voice.sttErr', { msg: err.message }));
-      if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
+      /* Komputer domowy zasnął w trakcie rozmowy (serwer: „zmysly-offline”):
+         przejście na przeglądarkę OD RAZU. Dawniej 10 s „Rozpoznaję…”, dwa
+         błędy i zmiana dopiero po trzecim – pytanie przepadało (zespół IT, runda 5). */
+      const offline = err.kod === 'zmysly-offline';
+      if (!offline) {
+        komunikatGlosu(t('voice.sttErr', { msg: err.message }));
+        if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
+      }
       /* Trzeci raz z rzędu. Przeglądarkowe rozpoznawanie jest gorsze, ale
          DZIAŁA – a Cosmos, który w kółko powtarza ten sam błąd, jest po
          prostu zepsuty. Zmiana jest jawna: człowiek musi wiedzieć, czemu
@@ -4306,7 +4474,15 @@ function startNasluchWlasny() {
       sttSerweraPadl = true;
       silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
-      komunikatGlosu(t('voice.sttFallback'));
+      komunikatGlosu(t(offline ? 'voice.sttOfflineSwitch' : 'voice.sttFallback'));
+      // Człowiek nie patrzy na ekran – zmianę mówimy głosem systemowym, krótko.
+      if (offline && voiceMode && 'speechSynthesis' in window) {
+        try {
+          const u = new SpeechSynthesisUtterance(t('voice.sttOfflineSwitch'));
+          u.lang = getLang() === 'en' ? 'en-US' : 'pl-PL';
+          speechSynthesis.speak(u);
+        } catch { /* bez głosu systemowego zostaje napis */ }
+      }
       /* Na Androidzie ciągłe Web Speech to piszczenie co kilka sekund –
          lepiej kula pod palcem: jedno dotknięcie, jedna sesja. */
       if (voiceMode) {
@@ -5262,6 +5438,8 @@ function komunikatLokalizacji(tekst) {
 $('set-location').addEventListener('change', async (e) => {
   const nazwa = e.currentTarget.value.trim();
   if (!nazwa) { komunikatLokalizacji(''); return; }
+  // Znak życia: wyszukiwarka miejsc potrafi milczeć kilka sekund.
+  komunikatLokalizacji(t('set.locationSearching', { nazwa }));
   try {
     const r = await fetch('/api/location', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5270,7 +5448,10 @@ $('set-location').addEventListener('change', async (e) => {
     const d = await readJsonSafe(r);
     if (!r.ok) { komunikatLokalizacji(d.error || t('set.locationFailed')); return; }
     const w = d.wspolrzedne;
-    komunikatLokalizacji(d.wspolrzedneNieznane ? t('set.locationNoCoords', { nazwa })
+    /* Dwie różne przyczyny, dwie różne rady: wyszukiwarka miejsc nie odpowiada
+       (spróbuj za chwilę albo „Wykryj”) albo nie zna takiej nazwy (zespół IT, runda 5). */
+    komunikatLokalizacji(d.wspolrzedneNieznane
+      ? t(d.powod === 'usluga' ? 'set.locationServiceDown' : 'set.locationNoCoords', { nazwa })
       : w ? t('set.locationFound', { lat: w.lat.toFixed(2), lon: w.lon.toFixed(2) }) : '');
   } catch { komunikatLokalizacji(t('set.locationFailed')); }
 });
@@ -5592,7 +5773,7 @@ async function checkOneModel(epName, model) {
   return readJsonSafe(res);
 }
 
-function renderCheckResult(box, r) {
+function renderCheckResult(box, r, ep = '') {
   const lines = [];
   if (r.rozmowa) {
     lines.push(`<div class="check-ok">${escapeHtml(t('set.checkOkChat'))}</div>`);
@@ -5600,7 +5781,13 @@ function renderCheckResult(box, r) {
       ? `<div class="check-ok">${escapeHtml(t('set.checkOkVision'))}</div>`
       : `<div class="check-warn">${escapeHtml(t('set.checkNoVision'))}</div>`);
   } else {
-    lines.push(`<div class="check-bad">${escapeHtml(t(r.siec ? 'set.checkNoConn' : 'set.checkFail'))}</div>`);
+    /* Nagłówek wg RODZAJU porażki. „✗ niedostępny na Twoim koncie” stało przy
+       zimnym starcie, zawieszonej Ollamie i limicie zapytań – a to żadna
+       z tych rzeczy (zespół IT, runda 5). */
+    const rodzaj = r.rodzaj || (r.siec ? 'siec' : r.niepewne ? 'czas' : 'odmowa');
+    const naglowek = { siec: 'set.checkNoConn', czas: 'set.checkSlow', limit: 'set.checkLimit' }[rodzaj]
+      || (ep === 'local' ? 'set.checkFailLocal' : 'set.checkFail');
+    lines.push(`<div class="${rodzaj === 'odmowa' ? 'check-bad' : 'check-warn'}">${escapeHtml(t(naglowek))}</div>`);
     if (r.podpowiedz) lines.push(`<div class="check-warn">${escapeHtml(r.podpowiedz)}</div>`);
     if (r.blad) lines.push(`<pre class="model-info-err">${escapeHtml(r.blad)}</pre>`);
   }
@@ -5622,7 +5809,7 @@ async function checkModelField(epName) {
   try {
     const r = await checkOneModel(epName, model);
     if (r.error && r.rozmowa === undefined) throw new Error(r.error);
-    renderCheckResult(box, r);
+    renderCheckResult(box, r, epName);
   } catch (err) {
     box.hidden = false;
     box.innerHTML = `<div class="check-bad">${escapeHtml(err.message)}</div>`;
@@ -5653,6 +5840,14 @@ async function checkAllModels(epName) {
     box.innerHTML = escapeHtml(t('set.checkAllRun', { i: i + 1, n: opts.length, m: o.value }));
     let r;
     try { r = await checkOneModel(epName, o.value); } catch { r = { rozmowa: false }; }
+    /* Brak połączenia z silnikiem dotyczy WSZYSTKICH modeli naraz. Dawniej
+       „Sprawdź wszystkie” przy uśpionym domu szło przez całą listę (przy
+       uśpionym komputerze ~3 min) i kończyło „Działa 0 z 21” (zespół IT, runda 5). */
+    if (r.siec) {
+      renderCheckResult(box, r, epName);
+      if (link) link.disabled = false;
+      return;
+    }
     // Pięć stanów, nie dwa: „nie zdążył odpowiedzieć" i „to nie jest model do
     // rozmowy" to nie to samo, co „nie masz dostępu" – mieszanie ich kazałoby
     // odpuścić modele, które działają.
@@ -5982,7 +6177,8 @@ async function refreshStatusWlasciwe() {
       local: st.local?.online === true ? 'ok' : 'offline',
     };
     updateModelBadge();
-    senses = { online: st.senses?.online === true, caps: st.senses?.caps || {} };
+    // `tylkoWlasciciel`: zmysły działają, ale nie dla tej osoby – inne zdanie niż „komputer nie odpowiada”.
+    senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true };
     if (senses.online) {
       /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
          (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i
@@ -6021,9 +6217,21 @@ async function loadServerConfigWlasciwe() {
     serverConfig = await res.json();
     zglosOsiagalnosc(true, start);
     mamy = true;
+    /* Same nazwy modeli na drogę bez sieci: PWA otwarta offline pisała
+       „Aktywny model: model nieustawiony”, choć model był ustawiony, a nie
+       przyszła tylko konfiguracja (zespół IT, runda 5). */
+    try {
+      localStorage.setItem('cosmos.modeleSerwera', JSON.stringify(Object.fromEntries(Object.entries(serverConfig.endpoints || {})
+        .map(([n, e]) => [n, { model: (e && e.model) || '' }]))));
+    } catch { /* prywatne okno */ }
   } catch {
     // interfejs działa dalej z pamięci podręcznej – pasek u góry mówi o awarii
     zglosOsiagalnosc(false, start);
+    const modele = loadJson('cosmos.modeleSerwera', null);
+    if (modele && !Object.values(serverConfig.endpoints || {}).some((e) => e && e.model)) {
+      serverConfig = { ...serverConfig, endpoints: { ...modele, ...Object.fromEntries(
+        Object.entries(serverConfig.endpoints || {}).filter(([, e]) => e && Object.keys(e).length)) } };
+    }
   }
   /* Bez konfiguracji zakładki zostają z pamięci. Dawniej jedno otwarcie bez
      sieci (albo w trakcie restartu) budowało zakładki z pustej konfiguracji,
@@ -6070,6 +6278,12 @@ window.fetch = async (...args) => {
   if (res.status === 401 && !sesjaWygaslaPokazana) {
     let sciezka = '';
     try { sciezka = new URL(String(args[0]?.url || args[0] || ''), location.href).pathname; } catch { /* zły adres */ }
+    /* Tylko 401 NASZEJ bramki (kod „niezalogowany”). 401 przepuszczone od
+       dostawcy – zły klucz NVIDII – pokazywało każdemu „Sesja wygasła” przy
+       każdej wiadomości (zespół IT, runda 5). Serwer już tak nie robi; to druga
+       warstwa na każdą inną trasę, która kiedyś by się pomyliła. */
+    const d = await res.clone().json().catch(() => ({}));
+    if (d.kod && d.kod !== 'niezalogowany') return res;
     if (sciezka.startsWith('/api/') && !/^\/api\/(login|logout|auth)\b/.test(sciezka)) {
       sesjaWygaslaPokazana = true;
       showLogin();
@@ -6101,8 +6315,11 @@ function showLogin() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || t('login.failed'));
+        throw new Error(konta_.bladKonta(d, t('login.failed')));
       }
+      /* Poprawne hasło, a ciastko nie przyjęte (Secure po zwykłym http):
+         dawniej cichy powrót do pustego formularza (zespół IT, runda 5). */
+      if (!(await konta_.ciastkoPrzyjete())) throw new Error(t('login.notHttps'));
       location.reload();
     } catch (ex) {
       err.textContent = ex.message;

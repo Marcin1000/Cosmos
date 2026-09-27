@@ -174,6 +174,7 @@
     let przedbiegProbek = 0;
     let wypowiedz = 0;            // numer bieżącej wypowiedzi (podgląd spóźniony = do kosza)
     let podgladWToku = false;
+    let podgladWylaczony = false;   // serwer: szkicu dla tej osoby nie będzie
     let ostatniPodglad = 0;
     let rozpoznawanych = 0;       // wypowiedzi wysłane, na które czekamy
 
@@ -382,7 +383,7 @@
         }
       }
       if ((zebranychProbek / naSekunde) * 1000 >= o.maxMowyMs) { domknij(naSekunde); return; }
-      if (!podgladWToku && (zebranychProbek / naSekunde) * 1000 >= o.podgladOdMs
+      if (!podgladWToku && !podgladWylaczony && (zebranychProbek / naSekunde) * 1000 >= o.podgladOdMs
         && Date.now() - ostatniPodglad >= o.podgladCoMs && podgladWolno()) {
         podglad(naSekunde);
       }
@@ -406,6 +407,8 @@
           body: sklej(zebrane.slice(), zebranychProbek, naSekunde),
         });
         const dane = res.ok ? await res.json().catch(() => ({})) : {};
+        // Serwer mówi, że szkicu dla tej osoby nie będzie (tylko pytanie po ciszy).
+        if (dane.bezPodgladu) podgladWylaczony = true;
         const tekst = String(dane.text || '').trim();
         // Wypowiedź mogła się już skończyć: wtedy liczy się tylko wynik ostateczny.
         if (moja === wypowiedz && wMowie && tekst && /[\p{L}\p{N}]/u.test(tekst)) onPodglad(tekst);
@@ -464,7 +467,8 @@
         });
         let dane = {};
         try { dane = await res.json(); } catch { /* nie-JSON = i tak błąd */ }
-        if (!res.ok) throw new Error(dane.error || `HTTP ${res.status}`);
+        // Kod od serwera („zmysly-offline”) – aplikacja decyduje po nim, nie po treści.
+        if (!res.ok) throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { kod: dane.kod || '' });
         const tekst = String(dane.text || '').trim();
         // Whisper na czystym szumie oddaje puste albo same znaki interpunkcyjne.
         rozpoznawanych--;

@@ -2205,10 +2205,13 @@ body::after {
   .live-panel {
     width: calc(100vw - 24px);
     right: 12px;
-    bottom: 12px;
+    /* NAD polem wiadomości, nie na nim: panel zasłaniał całe pole i nie dało
+       się pisać przy włączonej kamerze (zespół IT, runda 5). Wysokość pola
+       mierzy kamera.js (--composer-h). */
+    bottom: calc(var(--composer-h, 0px) + 12px);
     /* Na telefonie pasek adresu i pasek nawigacji zabierają swoje, a `dvh`
        już to uwzględnia – zostaje zapas na sam margines panelu. */
-    max-height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px - var(--composer-h, 0px));
   }
   /* Sufit obrazu to UŁAMEK EKRANU, nie „reszta po paskach".
    *
@@ -3864,3 +3867,32 @@ select::-ms-expand { display: none; }
 
 /* Kropka „niedostępne dla Ciebie”: szara, to nie awaria. */
 .status-dot.brak { background: var(--text-faint); box-shadow: none; }
+
+/* Studio u osoby bez przyznanego dostępu – jedno zdanie zamiast „Wymaga klucza” przy każdej sekcji. */
+.studio-brak-dostepu {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning-tekst) 10%, var(--bg-elevated));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.studio-brak-dostepu[hidden] { display: none; }
+
+/* Tryb edycji wiadomości – pasek nad polem, żeby było widać, że wysłanie zastąpi dalszą część rozmowy. */
+.edycja-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto 6px;
+  max-width: var(--composer-max, 820px);
+  padding: 6px 10px 6px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--k-akt, var(--accent)) 10%, var(--bg-elevated));
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.edycja-bar span { flex: 1; }
+.edycja-bar[hidden] { display: none; }

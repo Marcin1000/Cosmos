@@ -39,11 +39,27 @@ function utworzStudioWidok(z) {
     el.studioModal.style.display = '';
     try {
       const res = await fetch('/api/studio/providers');
-      const prov = await res.json();
+      /* Członek bez przyznanego Studia: serwer odpowiada 403 „poproś
+         właściciela", a to czytane jak lista dostawców dawało „Wymaga klucza"
+         przy każdej sekcji – człowiek szukał, gdzie wpisać klucz, którego i tak
+         nie może użyć (zespół IT, runda 5). Jedno zdanie na górze. */
+      const odmowa = res.status === 403;
+      const prov = odmowa ? {} : await res.json();
+      let info = $('studio-brak-dostepu');
+      if (odmowa && !info) {
+        info = document.createElement('p');
+        info.id = 'studio-brak-dostepu';
+        info.className = 'studio-brak-dostepu';
+        $('studio-sec-image').before(info);
+      }
+      if (info) { info.textContent = t('st.brakDostepu'); info.hidden = !odmowa; }
+      // Członek z przyznaniem generuje na kluczach właściciela, nie swoich.
+      const czlonek = document.body.classList.contains('rola-czlonek');
+      $('studio-footer-hint').textContent = t(czlonek ? 'st.footerHintCzlonek' : 'st.footerHint');
       for (const [sec, on] of [['image', prov.image], ['speech', prov.speech], ['video', prov.video]]) {
         const box = $(`studio-sec-${sec}`);
         box.classList.toggle('disabled', !on);
-        box.querySelector('.studio-off').style.display = on ? 'none' : '';
+        box.querySelector('.studio-off').style.display = on || odmowa ? 'none' : '';
         /* Wyszarzenie samym CSS-em zostawiało przyciski klikalne z klawiatury –
            Enter nie robił nic i nic nie mówił. Wyłączamy je naprawdę. */
         box.querySelectorAll('button, input, select, textarea').forEach((x) => { x.disabled = !on; });

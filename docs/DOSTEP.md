@@ -44,13 +44,15 @@ COSMOS_HOST=127.0.0.1
 ```
 
 `COSMOS_HOST=127.0.0.1` sprawia, że Cosmos słucha **tylko na samym VPS-ie**.
-Tunel łączy się lokalnie, więc działa jak dotąd – a `http://<IP-VPS>:3000`
+Tunel z kroku 2 łączy się lokalnie, więc będzie działał – a `http://<IP-VPS>:3000`
 przestaje odpowiadać. Bez tego port 3000 był osiągalny z internetu wprost:
-po zwykłym HTTP (hasło jawnym tekstem), z pominięciem Cloudflare. Dla
-pewności włącz też zaporę – zostaw tylko SSH:
+po zwykłym HTTP (hasło jawnym tekstem), z pominięciem Cloudflare.
+
+**Zaporę włącz dopiero po kroku 2**, gdy `https://cosmosai.live` już działa –
+wtedy wiadomo, że niczego nie odcinasz. Zostaw SSH i Tailscale:
 
 ```
-sudo ufw allow OpenSSH && sudo ufw enable
+sudo ufw allow OpenSSH && sudo ufw allow in on tailscale0 && sudo ufw enable
 ```
 
 Tailscale jako tylne wejście działa dalej przez `tailscale serve --bg 3000`
@@ -82,15 +84,12 @@ załatwia Cloudflare, a adres IP serwera pozostaje ukryty.
 
 1. **dash.cloudflare.com** → **Add a domain** → `cosmosai.live` → plan **Free**.
    Rekordy `A` i `CNAME` dla `cosmosai.live` i `www` (parking rejestratora) usuń,
-   tunel doda własne.
+   tunel doda własne – dla obu adresów, w kroku 2c.
 2. Cloudflare pokaże dwa serwery nazw (`…ns.cloudflare.com`). U rejestratora domeny
    ustaw je jako jedyne serwery DNS. **Najpierw wyłącz tam DNSSEC**, jeśli jest
    włączony, bo inaczej domena przestanie odpowiadać na kilka godzin.
 3. Sprawdzenie w `cmd`: `nslookup -type=ns cosmosai.live` pokazuje oba serwery
    Cloudflare. Zmiana trwa od kilku minut do kilku godzin.
-
-Pełna wersja z przyciskami „Kopiuj” i listą problemów jest na stronie z instrukcją
-wdrożenia (link w raporcie z przeglądu).
 
 ### 2a. W panelu Cloudflare (przeglądarka)
 
@@ -98,7 +97,7 @@ wdrożenia (link w raporcie z przeglądu).
    wybierz darmowy plan *Free*).
 2. **Networks → Tunnels → Create a tunnel** → typ **Cloudflared** → nazwa
    `cosmos` → **Save tunnel**.
-3. Wybierz system **Debian** i architekturę **64-bit**. Cloudflare pokaże
+3. Wybierz system **Debian** (także gdy VPS ma Ubuntu – to ta sama paczka) i architekturę **64-bit**. Cloudflare pokaże
    polecenia – interesuje Cię **ostatnie**, zaczynające się od
    `sudo cloudflared service install eyJ…`. Skopiuj je w całości.
 
@@ -123,9 +122,16 @@ Ma pokazać `active (running)`, a w panelu Cloudflare tunel zmieni status na
 | Subdomain | *(puste)* |
 | Domain | `cosmosai.live` |
 | Service → Type | `HTTP` |
-| Service → URL | `localhost:3000` |
+| Service → URL | `127.0.0.1:3000` |
 
-**Save**. Po minucie `https://cosmosai.live` pokaże stronę produktową,
+`127.0.0.1`, nie `localhost`: Cosmos słucha tylko na IPv4, a `localhost` bywa
+tłumaczony na IPv6 i tunel dostaje wtedy odmowę.
+
+**Save**, potem **Add a public hostname** jeszcze raz – ten sam wiersz, ale
+**Subdomain** `www`. Bez tego `www.cosmosai.live` przestaje istnieć (jego stary
+rekord usunąłeś w kroku 2-0).
+
+Po minucie `https://cosmosai.live` pokaże stronę produktową,
 a `https://cosmosai.live/app` – ekran logowania.
 
 Trzy ustawienia domeny (zwykły panel, `cosmosai.live`):
@@ -151,6 +157,12 @@ sudo journalctl -u cosmos -n 30 --no-pager | grep -E "Logowanie|Migracja|kopia"
 Szukaj linii `Logowanie: WŁĄCZONE – kont: 1, login właściciela: marcin`.
 
 **Tailscale zostaje** – to Twoje tylne wejście, gdyby coś się stało z tunelem.
+
+**Telefon z Cosmosem na ekranie głównym:** ikona dodana z adresu `100.x…`
+albo `…ts.net` wskazuje stary adres i przestanie działać. Usuń ją i dodaj
+od nowa z `https://cosmosai.live/app`. Ustawienia przeglądarki (język, motyw,
+mikrofon) na nowym adresie zaczynają od zera; rozmowy są na serwerze, więc
+nic nie ginie.
 
 ---
 
@@ -240,11 +252,14 @@ będzie przekierowywać portów ani stawiać VPN-a.
 | Objaw | Co zrobić |
 |---|---|
 | Zapomniałem hasła | `sudo systemctl stop cosmos && cd /opt/cosmos && node scripts/konto.js haslo marcin && sudo systemctl start cosmos` |
-| „Za dużo nieudanych prób. Spróbuj ponownie za N min." | Pięć pomyłek z jednego adresu → kwadrans przerwy. Z innego adresu (np. telefon na LTE zamiast Wi-Fi) da się wejść od razu. |
+| Osoba zaproszona zapomniała hasła | Panel Dostęp → przy tej osobie **Link do nowego hasła**. Działa raz, przez 24 godziny; po ustawieniu nowego hasła jej inne urządzenia zostaną wylogowane. Rozmowy zostają. |
+| „Za dużo nieudanych prób. Spróbuj ponownie za N min." | Pięć pomyłek z jednego adresu → kwadrans przerwy dla tego adresu. Dziesięć pod jednym loginem blokuje ten login tylko na **nowych** urządzeniach – telefon czy komputer, na którym ktoś już się poprawnie logował, wchodzi dalej, więc obcy nie zamknie Ci drzwi zgadywaniem. |
+| „Hasło jest poprawne, ale przeglądarka odrzuciła sesję…" | Adres zaczyna się od `http://` (stara zakładka, ikona z `100.x…`). Przy `COSMOS_COOKIE_SECURE=1` sesja działa tylko po `https://` – wejdź przez `https://cosmosai.live/app`. |
 | „To zaproszenie wygasło albo zostało już użyte" | Wystaw nowe. Stare linki nie wracają – serwer trzyma tylko skrót tokenu, więc nawet Ty nie odtworzysz starego linku. |
 | Osoba nie widzi zakładki Claude / OpenAI | Włącz jej przełącznik w panelu Dostęp albo niech wpisze własny klucz. |
 | Po aktualizacji telefon pokazuje starą wersję | Na dole pojawia się „Jest nowa wersja Cosmosa. Odśwież" – kliknij. Nie pojawiło się? Przełącz się na chwilę do innej aplikacji i wróć (wtedy Cosmos sprawdza wersję) albo odśwież dwa razy. |
 | Po ustawieniu `COSMOS_HOST=127.0.0.1` obserwator kamery albo mostek MCP milczą | Łączą się jeszcze pod `http://100.x.y.z:3000`. Zmień im `COSMOS_URL` na adres z `tailscale serve` albo `https://cosmosai.live`. |
+| Obserwator kamery albo mostek MCP pod `https://cosmosai.live` dostają 403 albo stronę „Just a moment…” | To ochrona Cloudflare przed botami (Security → Bots: **Bot Fight Mode**, Settings: **Browser Integrity Check**). Wyłącz je albo łącz te programy przez `tailscale serve`. |
 | `cosmosai.live` pokazuje błąd 502 | Tunel działa, ale Cosmos nie: `sudo systemctl status cosmos --no-pager`. |
 | `cosmosai.live` pokazuje błąd 1033 | Nie działa tunel: `sudo systemctl restart cloudflared`. |
 | Lista kont z wiersza poleceń | `node scripts/konto.js lista` |
@@ -258,8 +273,12 @@ będzie przekierowywać portów ani stawiać VPN-a.
   wyciek pliku `data/konta/sesje.json` nie daje nikomu działającej sesji.
   Pliki kont mają uprawnienia `0600`.
 - **Blokada** – 5 pomyłek z jednego adresu albo 10 pod jednym loginem →
-  kwadrans przerwy. Za tunelem adres bierzemy z `CF-Connecting-IP`, ale ufamy
-  mu **tylko** wtedy, gdy połączenie przyszło z tej samej maszyny. Adresy IPv6
+  kwadrans przerwy. Blokada pod loginem nie zatrzymuje **znanego urządzenia**
+  (długie ciastko po udanym logowaniu, na dysku tylko skrót) – inaczej obcy
+  mógłby co kwadrans zamykać właściciela na zewnątrz. Za tunelem adres
+  bierzemy z `CF-Connecting-IP`, ale ufamy mu **tylko** wtedy, gdy połączenie
+  przyszło z tej samej maszyny; za innym pośrednikiem (Caddy) ustaw
+  `COSMOS_POSREDNIK=inny` – liczy się wtedy ostatni wpis `X-Forwarded-For`. Adresy IPv6
   liczymy po całej sieci `/64` – łącze domowe ma ich 2⁶⁴, więc zmiana adresu
   co pięć prób nic nie daje.
 - **Zaproszenia** – jednorazowe, ważne 7 dni. Token siedzi po `#` w linku,

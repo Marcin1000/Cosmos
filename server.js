@@ -57,7 +57,7 @@ const glos = require('./lib/glos.js').utworz({
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
-const { wspolrzedneMiejsca } = require('./lib/miejsca.js');
+const { wspolrzedneMiejsca, szukajMiejsca } = require('./lib/miejsca.js');
 const canon = require('./lib/canon.js');
 const archiwum_ = require('./lib/archiwum.js');
 const pamiecModul_ = require('./lib/pamiec.js');
@@ -170,8 +170,18 @@ function saveLocation(text, wspolrzedne) {
   const blad = zapiszLubBlad('lokalizacji', () => zapiszAtomowo(LOCATION_FILE(), nazwa));
   if (blad) return blad;
   U().location = nazwa;
+  /* `null` jawnie = współrzędne do skasowania: nowa nazwa bez współrzędnych
+     nie może zostać ze współrzędnymi poprzedniego miejsca („Reykjavik"
+     liczony dla Krakowa, zespół IT, runda 5). */
+  if (wspolrzedne === null) {
+    const bladWsp = zapiszLubBlad('współrzędnych', () => zapiszAtomowo(WSPOLRZEDNE_FILE(), 'null'));
+    if (bladWsp) return bladWsp;
+    U().wspolrzedne = null;
+    return null;
+  }
   if (wspolrzedne && Number.isFinite(wspolrzedne.lat) && Number.isFinite(wspolrzedne.lon)) {
-    const wsp = { lat: wspolrzedne.lat, lon: wspolrzedne.lon };
+    // Nazwa, dla której te współrzędne są – po niej poznajemy, że wpisano nowe miejsce.
+    const wsp = { lat: wspolrzedne.lat, lon: wspolrzedne.lon, nazwa };
     const bladWsp = zapiszLubBlad('współrzędnych', () => zapiszAtomowo(WSPOLRZEDNE_FILE(), JSON.stringify(wsp)));
     if (bladWsp) return bladWsp;
     U().wspolrzedne = wsp;
@@ -228,7 +238,9 @@ async function handleGeokod(req, res) {
     const miejsce = a.village || a.town || a.city || a.municipality || a.county || '';
     const region = a.state || '';
     const nazwa = [miejsce, region].filter(Boolean).join(', ') || d.display_name || '';
-    if (!nazwa) return sendJson(res, 502, { error: 'Nie udało się ustalić nazwy miejsca.' });
+    /* Nominatim na morzu i na pustkowiu odpowiada 200 z {"error":"Unable to
+       geocode"} – współrzędne z telefonu są dobre i nie mogą przepaść. */
+    if (!nazwa) return zapiszSameWspolrzedne();
     // Zapisujemy od razu: to jedyny moment, w którym mamy i nazwę,
     // i współrzędne. Bez nich złota godzina nie ma z czego się policzyć.
     const blad = saveLocation(nazwa, { lat, lon });
@@ -1258,17 +1270,24 @@ async function trasyApi(req, res, p) {
          współrzędne z wyszukiwarki miejsc. Dawniej zapisywała się sama nazwa,
          a Plener liczy tylko ze współrzędnych i dalej prosił „Ustaw lokalizację”
          (agencja, runda 5). Nie wyszło: zostaje nazwa i uczciwa informacja. */
-      let wsp = d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : null;
+      let wsp = d.lat !== undefined ? { lat: Number(d.lat), lon: Number(d.lon) } : undefined;
       let wspolrzedneNieznane = false;
-      const nazwa = String(d.location || '').trim();
-      if (!wsp && nazwa && nazwa !== U().location) {
-        const z = await wspolrzedneMiejsca(nazwa).catch(() => null);
-        if (z) wsp = { lat: z.lat, lon: z.lon };
-        else wspolrzedneNieznane = true;
+      let powod = '';
+      const nazwa = String(d.location || '').trim().slice(0, 200);
+      /* Porównujemy z nazwą, DLA KTÓREJ zapisano współrzędne, nie z nazwą
+         w polu: po nieudanym szukaniu ta sama nazwa wpisana drugi raz musi być
+         szukana znowu, a nie „już ją mamy". Stare zapisy (bez `nazwa`) – jak dawniej. */
+      const obecne = U().wspolrzedne;
+      const nazwaWspolrzednych = obecne ? (obecne.nazwa ?? U().location) : null;
+      if (wsp === undefined && nazwa && nazwa !== nazwaWspolrzednych) {
+        const z = await szukajMiejsca(nazwa).catch(() => ({ wynik: null, powod: 'usluga' }));
+        if (z.wynik) wsp = { lat: z.wynik.lat, lon: z.wynik.lon };
+        else { wspolrzedneNieznane = true; powod = z.powod; wsp = null; }
       }
-      const blad = saveLocation(d.location, wsp);
+      if (!nazwa) wsp = null;
+      const blad = saveLocation(nazwa, wsp);
       if (blad) return bladZapisu(res, blad);
-      return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne, wspolrzedneNieznane });
+      return sendJson(res, 200, { ok: true, location: U().location, wspolrzedne: U().wspolrzedne, wspolrzedneNieznane, powod });
     }
   }
   if (p === '/api/location/resolve' && req.method === 'POST') return await handleGeokod(req, res);

@@ -525,13 +525,27 @@ Co znaczą dodatkowe linie – każda wzięła się z konkretnej awarii:
 - `UMask=0077` – nowe pliki (rozmowy, pamięć, kopie) czyta tylko Cosmos, a nie
   każde konto na serwerze.
 
+**Bezpieczniej (opcjonalnie): osobny użytkownik zamiast `root`.** Cosmos ma
+funkcje, które uruchamiają kod (tylko dla właściciela), więc na publicznym
+serwerze lepiej, żeby nie działał jako administrator:
+
+```bash
+sudo useradd --system --home /opt/cosmos --shell /usr/sbin/nologin cosmos
+sudo chown -R cosmos:cosmos /opt/cosmos
+sudo sed -i 's/^User=root/User=cosmos/' /etc/systemd/system/cosmos.service
+sudo systemctl daemon-reload && sudo systemctl restart cosmos
+```
+
+Aktualizacja wygląda wtedy tak: `cd /opt/cosmos && sudo -u cosmos git pull && sudo systemctl restart cosmos`.
+
 Masz już tę usługę ze starszej instrukcji? Wklej powyższy blok jeszcze raz
 i wykonaj `sudo systemctl daemon-reload && sudo systemctl restart cosmos`.
 
 ## KROK 7 – Wejdź z telefonu i Surface Pro
 
 1. Zainstaluj **Tailscale** na telefonie i na Surface Pro, zaloguj tym samym kontem.
-2. Otwórz w przeglądarce: `http://100.101.102.103:3000` (adres VPS z Tailscale).
+2. Otwórz w przeglądarce: `http://100.101.102.103:3000/app` (adres VPS z Tailscale;
+   bez `/app` zobaczysz stronę produktową).
 3. Pojawi się ekran logowania Cosmosa – wpisz `COSMOS_PASSWORD`.
 4. Zainstaluj jako aplikację (szczegóły w **Części 4**). Gotowe. 🎉
 
@@ -754,8 +768,10 @@ curl -L -o service.py ADRES-REPO/senses/service.py
 > częściej niż raz, zainstaluj Gita – wyjdzie taniej.
 
 > ⚠️ **Po aktualizacji serwera odśwież stronę z pominięciem pamięci podręcznej**
-> (`Ctrl+F5` na komputerze). W aplikacji PWA na telefonie zamknij ją całkowicie
-> i otwórz ponownie – nowa wersja wchodzi dopiero wtedy.
+> (`Ctrl+F5` na komputerze). W aplikacji PWA na telefonie pojawi się na dole pasek
+> „Jest nowa wersja Cosmosa. Odśwież” – kliknij go. Samo zamknięcie i otwarcie
+> aplikacji pokazuje jeszcze starą wersję razem z tym paskiem. Paska nie ma?
+> Przełącz się na chwilę do innej aplikacji i wróć – wtedy Cosmos sprawdza wersję.
 
 ### Co zrobić po aktualizacji
 
@@ -818,11 +834,17 @@ Jeśli wolisz zwykły adres `https://cosmos.twojadomena.pl`:
 3. Ustaw Caddy jako pośrednika:
    ```bash
    echo 'cosmos.twojadomena.pl {
-       reverse_proxy localhost:3000
+       reverse_proxy 127.0.0.1:3000 {
+           header_up -CF-Connecting-IP
+       }
    }' | sudo tee /etc/caddy/Caddyfile
    sudo systemctl restart caddy
    ```
-4. W `.env` dodaj `COSMOS_COOKIE_SECURE=1` (cookie tylko po HTTPS) i zrestartuj Cosmosa.
+   `header_up -CF-Connecting-IP` usuwa nagłówek, który mógłby przysłać sam
+   klient – bez tego limit prób logowania po adresie dałoby się obejść.
+4. W `.env` dodaj `COSMOS_COOKIE_SECURE=1` (cookie tylko po HTTPS)
+   i `COSMOS_POSREDNIK=inny` (adres gościa z `X-Forwarded-For` od Caddy),
+   potem zrestartuj Cosmosa.
 
 Caddy sam pobierze certyfikat. Hasło (`COSMOS_PASSWORD`) jest tu jeszcze ważniejsze –
 adres jest publiczny.

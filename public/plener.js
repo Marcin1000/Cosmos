@@ -521,9 +521,15 @@ function utworzPlener(z) {
       if ($('fp-sky').value) dane.zachmurzenie = $('fp-sky').value;
       if ($('fp-place').value.trim()) dane.miejsce = $('fp-place').value.trim();
       if ($('fp-topic').value.trim()) dane.temat = $('fp-topic').value.trim();
+      /* Godzina BEZ strefy („2026-10-02T19:00”): serwer liczy ją w strefie
+         MIEJSCA planu. Zamieniona tu na UTC znaczyła 19:00 w strefie
+         przeglądarki – plan dla Reykjavíku wychodził o dwie godziny obok
+         (zespół IT, runda 5). */
       if ($('fp-when').value) {
         const kiedy = new Date($('fp-when').value);
-        if (!Number.isNaN(kiedy.getTime())) dane.kiedy = kiedy.toISOString();
+        if (!Number.isNaN(kiedy.getTime())) {
+          dane.kiedy = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test($('fp-when').value) ? $('fp-when').value : kiedy.toISOString();
+        }
       }
       const r = await fetch('/api/plan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -538,6 +544,25 @@ function utworzPlener(z) {
           : d.brakLokalizacji ? t('plan.needLocation') : (d.error || t('plan.needLocation'));
         $('fp-why').textContent = '';
         $('fp-shots').innerHTML = '';
+        /* Brak lokalizacji: przycisk tu, zamiast odsyłania do Ustawień – przeglądarka
+           i tak zna położenie, wystarczy zgoda (zespół IT, runda 5). */
+        if (d.brakLokalizacji && navigator.geolocation) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn-secondary';
+          btn.textContent = t('plan.useMyLocation');
+          btn.addEventListener('click', () => {
+            btn.disabled = true;
+            navigator.geolocation.getCurrentPosition(async (poz) => {
+              await fetch('/api/location/resolve', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat: poz.coords.latitude, lon: poz.coords.longitude }),
+              }).catch(() => {});
+              liczPlanPlener();
+            }, () => { btn.disabled = false; btn.textContent = t('plan.locationDenied'); }, { timeout: 15000 });
+          });
+          $('fp-why').appendChild(btn);
+        }
         return;
       }
       pokazPlan(d, 'fp');

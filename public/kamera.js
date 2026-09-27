@@ -101,6 +101,12 @@ function utworzKamere(z) {
     const scena = $('live-stage');
     const dol = $('live-body');
     if (!panel || !scena || panel.style.display === 'none') return;
+    // Ile od dołu ekranu zajmuje pole wiadomości – na telefonie panel stoi nad nim (style.css).
+    const pole = $('composer');
+    if (pole) {
+      const odDolu = Math.max(0, window.innerHeight - pole.getBoundingClientRect().top);
+      document.documentElement.style.setProperty('--composer-h', `${Math.round(odDolu)}px`);
+    }
     const przed = panel.style.getPropertyValue('--live-chrome');
     let paski = panel.getBoundingClientRect().height - scena.getBoundingClientRect().height;
     /* DOLICZ TO, CO JUŻ NIE MIEŚCI SIĘ W DOLNEJ CZĘŚCI.
@@ -207,7 +213,8 @@ function utworzKamere(z) {
    */
   function ustawStatusSpoczynkowy() {
     const zmyslyDzialaja = senses().online && senses().caps.yolo;
-    ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja ? '' : t('liveNoSenses'));
+    // Członek bez zgody na zmysły: komputer działa, tylko nie dla niego (zespół IT, runda 5).
+    ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja ? '' : t(senses().tylkoWlasciciel ? 'liveNotForYou' : 'liveNoSenses'));
   }
 
   /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego

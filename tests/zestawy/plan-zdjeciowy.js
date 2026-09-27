@@ -174,6 +174,17 @@ const hhmm = (d) => (d ? d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute
   if (!/PLAN ZDJĘCIOWY/.test(prompt)) fail.push('model nie wie o planie zdjęciowym');
   if (!/NIE zgaduj tych liczb/.test(prompt)) fail.push('nic nie powstrzymuje modelu przed zgadywaniem godzin');
 
+  /* 15. Dron nocą w trybie zdjęcia: rady nie mogą sobie przeczyć. Dawniej
+        „stąd tak długo można z ręki", „potrzebny statyw" i „W locie i tak
+        potrzebny filtr ND, żeby utrzymać regułę 180°" naraz – ND zabiera
+        brakujące światło, a reguła 180° dotyczy wideo (zespół IT, runda 5). */
+  const dronNoc = dobierz(-2, { sprzet: 'DJI Mavic 3', tryb: 'zdjecie' }).powody.join(' ');
+  console.log(`15. dron nocą: ${dronNoc.slice(0, 160)}…`);
+  if (/filtr ND|180°/.test(dronNoc)) fail.push('dron nocą w trybie zdjęcia dostaje radę o filtrze ND i regule 180°');
+  if (/z ręki|statyw/.test(dronNoc)) fail.push('dron dostaje rady „z ręki" albo „statyw"');
+  const dronWideoDzien = dobierz(14, { sprzet: 'DJI Mavic 3', tryb: 'wideo', klatki: 25 }).powody.join(' ');
+  if (!/filtr ND/.test(dronWideoDzien)) fail.push('dron w dzień przy wideo stracił radę o filtrze ND');
+
   env.koniec();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nPLAN ZDJĘCIOWY OK');
   process.exit(fail.length ? 1 : 0);

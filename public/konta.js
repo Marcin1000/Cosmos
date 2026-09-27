@@ -43,14 +43,42 @@ function utworzKonta({ $, t, zmienJezyk }) {
      przeglądarka pamięta, czyja jest kopia, i czyści ją przy zmianie osoby
      i przy wylogowaniu. Ustawienia urządzenia (język, mikrofon) zostają. */
   // `cosmos.zakladki` też: zakładki silników zależą od osoby (przyznania właściciela).
-  const PAMIEC_OSOBY = [/^cosmos\.conv\./, /^cosmos\.convIndex$/, /^cosmos\.kbSelected$/, /^cosmos\.promptTemplates$/, /^cosmos\.zakladki$/];
+  /* Wspólny telefon: instrukcja systemowa Ani (dane o zdrowiu) zostawała po
+     wylogowaniu i szła w każdym żądaniu Bartka (zespół IT, runda 5). Stąd też
+     kadry, klatka wideo, bieg w toku, niezapisane rozmowy – a z ustawień
+     pola OSOBY (instrukcja, modele); ustawienia urządzenia zostają. */
+  const PAMIEC_OSOBY = [/^cosmos\.conv\./, /^cosmos\.convIndex$/, /^cosmos\.kbSelected$/, /^cosmos\.promptTemplates$/,
+    /^cosmos\.zakladki$/, /^cosmos\.ujecia\./, /^cosmos\.videoFrame$/, /^cosmos\.bieg$/, /^cosmos\.conversations$/,
+    /^cosmos\.niezapisane$/, /^cosmos\.modeleSerwera$/];
+  const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*)$/;
   function wyczyscPamiecOsoby(magazyn = (typeof localStorage !== 'undefined' ? localStorage : null)) {
     if (!magazyn) return 0;
     const klucze = [];
     for (let i = 0; i < magazyn.length; i++) klucze.push(magazyn.key(i));
     const doUsuniecia = klucze.filter((k) => k && PAMIEC_OSOBY.some((w) => w.test(k)));
     for (const k of doUsuniecia) magazyn.removeItem(k);
+    try {
+      const ust = JSON.parse(magazyn.getItem('cosmos.settings') || 'null');
+      if (ust && typeof ust === 'object') {
+        for (const k of Object.keys(ust)) if (USTAWIENIA_OSOBY.test(k)) delete ust[k];
+        magazyn.setItem('cosmos.settings', JSON.stringify(ust));
+      }
+    } catch { /* uszkodzone ustawienia – zostają domyślne */ }
     return doUsuniecia.length;
+  }
+
+  /* Stały kod błędu od serwera → zdanie w języku osoby. Gość z angielskim
+     interfejsem dostawał polskie „Hasło musi mieć co najmniej 8 znaków"
+     (zespół IT, runda 5). Nieznany kod – tekst serwera. */
+  const BLEDY_KONT = {
+    'zle-haslo': 'login.failed', 'za-duzo-prob': 'login.tooMany', 'zaproszenie-wygaslo': 'inv.expired',
+    'login-zajety': 'inv.loginTaken', 'login-krotki': 'inv.loginShort', 'haslo-krotkie': 'inv.passShort',
+    'haslo-dlugie': 'inv.passLong', 'stare-haslo': 'acc.oldPassWrong',
+  };
+  function bladKonta(json, zapas) {
+    const klucz = json && BLEDY_KONT[json.kod];
+    if (klucz) return t(klucz, { n: json.minut || 15, min: 8 });
+    return (json && json.error) || zapas;
   }
   function pilnujWlascicielaPamieci(u, magazyn = (typeof localStorage !== 'undefined' ? localStorage : null)) {
     if (!magazyn || !u) return false;
@@ -78,6 +106,17 @@ function utworzKonta({ $, t, zmienJezyk }) {
     return m ? m[1] : '';
   }
 
+  /* Ciastko sesji z flagą Secure (COSMOS_COOKIE_SECURE=1) przeglądarka odrzuca
+     po zwykłym http – poprawne hasło kończyło się cichym powrotem do pustego
+     formularza (zespół IT, runda 5). Pytamy serwer, czy nas już zna. */
+  async function ciastkoPrzyjete() {
+    try {
+      const r = await fetch('/api/auth');
+      const d = await r.json();
+      return d.authed !== false;
+    } catch { return true; }   // nie wiemy – przeładowanie pokaże
+  }
+
   async function pokazZaproszenie(token) {
     const nakladka = $('invite-overlay');
     const blad = $('invite-error');
@@ -90,19 +129,25 @@ function utworzKonta({ $, t, zmienJezyk }) {
     // Token w nagłówku, nie w adresie – adresy lądują w logach po drodze.
     const r = await zadaj('/api/zaproszenie', { naglowki: { 'X-Cosmos-Zaproszenie': token } });
     if (!r.ok) {
-      $('invite-sub').textContent = r.json.error || t('inv.expired');
+      $('invite-sub').textContent = bladKonta(r.json, t('inv.expired'));
       for (const id of ['invite-name', 'invite-login', 'invite-pass', 'invite-pass2', 'invite-submit']) $(id).hidden = true;
       return;
     }
     // Zdanie z imieniem składa skrypt, więc po zmianie języka trzeba je złożyć od nowa.
+    /* Link do nowego hasła (wystawiony przez właściciela) – ten sam formularz,
+       ale bez imienia i loginu: konto już jest. */
+    const reset = Boolean(r.json.reset);
     opis = () => {
-      $('invite-sub').textContent = r.json.zapraszajacy
-        ? t('inv.subFrom', { kto: r.json.zapraszajacy })
-        : t('inv.sub');
+      $('invite-sub').textContent = reset
+        ? t('inv.resetSub', { login: r.json.login || '' })
+        : r.json.zapraszajacy
+          ? t('inv.subFrom', { kto: r.json.zapraszajacy })
+          : t('inv.sub');
     };
     opis();
     $('invite-name').value = r.json.nazwa || '';
-    $('invite-login').value = r.json.proponowanyLogin || '';
+    $('invite-login').value = reset ? (r.json.login || '') : (r.json.proponowanyLogin || '');
+    if (reset) for (const id of ['invite-name', 'invite-login']) $(id).hidden = true;
     $('invite-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       blad.textContent = '';
@@ -115,13 +160,14 @@ function utworzKonta({ $, t, zmienJezyk }) {
         token, nazwa: $('invite-name').value, login: $('invite-login').value, haslo: $('invite-pass').value,
       } });
       if (!w.ok) {
-        blad.textContent = w.json.error || t('login.failed');
+        blad.textContent = bladKonta(w.json, t('login.failed'));
         $('invite-submit').disabled = false;
         return;
       }
       /* Czyścimy fragment ZANIM przeładujemy: token w historii przeglądarki
          jest już zużyty, ale nie ma powodu, żeby wisiał w pasku adresu. */
       history.replaceState(null, '', location.pathname);
+      if (!(await ciastkoPrzyjete())) { blad.textContent = t('login.notHttps'); $('invite-submit').disabled = false; return; }
       location.reload();
     });
   }
@@ -229,7 +275,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     const z = u.zuzycie || {};
     opis.append(element('div', 'osoba-meta mono',
       `${u.login} · ${u.rola === 'wlasciciel' ? t('acc.roleOwner') : t('acc.roleMember')} · `
-      + `${t('acc.lastSeen')}: ${kiedy(u.ostatnio)} · ${t('acc.messages', { n: z.wiadomosci || 0, dzis: z.dzien === new Date().toISOString().slice(0, 10) ? (z.dzisiaj || 0) : 0 })}`
+      + `${t('acc.lastSeen')}: ${kiedy(u.ostatnio)} · ${t('acc.messages', { n: z.wiadomosci || 0, dzis: z.dzisiaj || 0 })}`
       + (u.miejsce ? ` · ${t('acc.disk', { zajete: rozmiar(u.miejsce.zajete) })}` : '')));
     glowa.append(opis);
     w.append(glowa);
@@ -270,7 +316,19 @@ function utworzKonta({ $, t, zmienJezyk }) {
       komunikat(r.ok ? t('acc.removed') : r.json.error, !r.ok);
       odswiezDostep();
     });
-    akcje.append(wyloguj, usun);
+    /* Zapomniane hasło członka: jednorazowy link na 24 h (zespół IT, runda 5).
+       Dawniej jedyną drogą było usunięcie konta, czyli wyniesienie rozmów. */
+    const haslo = element('button', 'btn-ghost', t('acc.newPassLink'));
+    haslo.type = 'button';
+    haslo.addEventListener('click', async () => {
+      const r = await zadaj('/api/konta/nowe-haslo', { metoda: 'POST', dane: { id: u.id } });
+      if (!r.ok) return komunikat(r.json.error, true);
+      $('dostep-link-pole').value = `${location.origin}${r.json.sciezka}`;
+      $('dostep-link').hidden = false;
+      $('dostep-udostepnij').hidden = !(typeof navigator !== 'undefined' && navigator.share);
+      komunikat(t('acc.newPassReady', { kto: u.nazwa || u.login }));
+    });
+    akcje.append(haslo, wyloguj, usun);
     w.append(akcje);
     return w;
   }
@@ -351,7 +409,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('konto-haslo-zapisz').addEventListener('click', async () => {
       const r = await zadaj('/api/konto/haslo', { metoda: 'POST',
         dane: { stare: $('konto-haslo-stare').value, nowe: $('konto-haslo-nowe').value } });
-      if (!r.ok) return komunikat(r.json.error, true);
+      if (!r.ok) return komunikat(bladKonta(r.json, r.json.error), true);
       $('konto-haslo-stare').value = '';
       $('konto-haslo-nowe').value = '';
       komunikat(t('acc.passChanged', { n: r.json.wylogowano || 0 }));
@@ -381,7 +439,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
   }
 
   return { tokenZaproszenia, pokazZaproszenie, zastosujRole, odswiez, odswiezKonto, odswiezDostep,
-    wyczyscPamiecOsoby, pilnujWlascicielaPamieci, ja: () => ja };
+    wyczyscPamiecOsoby, pilnujWlascicielaPamieci, bladKonta, ciastkoPrzyjete, ja: () => ja };
 }
 
 if (typeof window !== 'undefined') window.utworzKonta = utworzKonta;

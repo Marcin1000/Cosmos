@@ -319,8 +319,23 @@ const MODEL_CATALOG = [
   },
 
   // ---- OpenAI ----
+  /* Nano przed mini i przed pełnym: „gpt-5-nano” łapało się na „gpt-5”
+     i miało etykietę „GPT (pełny)” (zespół IT, runda 5). */
   {
-    dopasuj: ['gpt-4o-mini', 'gpt-5-mini', 'o4-mini'],
+    dopasuj: ['gpt-5-nano', 'gpt-4.1-nano'],
+    nazwa: 'GPT nano',
+    opis: 'Najmniejsza i najtańsza wersja – do bardzo prostych zadań.',
+    mocne: ['krótkie odpowiedzi', 'najniższy koszt', 'klasyfikacja'],
+    kontekst: 'duży',
+    cechy: ['szybki'],
+    en: {
+      opis: 'Smallest and cheapest version – for very simple tasks.',
+      mocne: ['short answers', 'lowest cost', 'classification'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['gpt-4o-mini', 'gpt-5-mini', 'gpt-4.1-mini'],
     nazwa: 'GPT mini',
     opis: 'Tania i szybka wersja – do prostych zadań i dużej liczby zapytań.',
     mocne: ['szybkie odpowiedzi', 'niski koszt', 'proste przetwarzanie tekstu'],
@@ -333,7 +348,23 @@ const MODEL_CATALOG = [
     },
   },
   {
-    dopasuj: ['gpt-4o', 'gpt-5', 'gpt-4.1'],
+    /* GPT-5 i nowsze myślą przed odpowiedzią – bez tej cechy wyglądały jak
+       gpt-4o (zespół IT, runda 5). */
+    dopasuj: ['gpt-5', 'gpt-6'],
+    nazwa: 'GPT-5 (rozumujący)',
+    opis: 'Flagowy model OpenAI – myśli przed odpowiedzią; mocny w kodzie, obrazach i rozmowie.',
+    mocne: ['kod', 'analiza obrazów', 'trudniejsze pytania', 'wywoływanie narzędzi'],
+    kontekst: 'duży',
+    cechy: ['wizja', 'rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      nazwa: 'GPT-5 (reasoning)',
+      opis: 'OpenAI flagship – thinks before it answers; strong at code, images and conversation.',
+      mocne: ['code', 'image analysis', 'harder questions', 'tool calling'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['gpt-4o', 'gpt-4.1'],
     nazwa: 'GPT (pełny)',
     opis: 'Uniwersalny model OpenAI – mocny w kodzie, obrazach i rozmowie.',
     mocne: ['kod', 'analiza obrazów', 'pisanie', 'wywoływanie narzędzi'],
@@ -363,7 +394,7 @@ const MODEL_CATALOG = [
     },
   },
   {
-    dopasuj: ['o3', 'o1'],
+    dopasuj: ['o3', 'o1', 'o4-mini'],
     nazwa: 'OpenAI o-series (rozumowanie)',
     opis: 'Model rozumujący – myśli dłużej, zanim odpowie.',
     mocne: ['matematyka', 'logika', 'trudne debugowanie'],
@@ -380,15 +411,29 @@ const MODEL_CATALOG = [
   },
 
   // ---- Anthropic ----
+  /* Fable lądował w „Pozostałe” bez opisu (zespół IT, runda 5). */
+  {
+    dopasuj: ['claude-fable'],
+    nazwa: 'Claude Fable',
+    opis: 'Duży model Anthropic – do najbardziej złożonych, długich zadań.',
+    mocne: ['złożone analizy', 'długie dokumenty', 'pisanie', 'kod'],
+    kontekst: 'bardzo duży',
+    cechy: ['wizja', 'rozumowanie', 'narzędzia', 'polski'],
+    en: {
+      opis: 'Large Anthropic model – for the most complex, long tasks.',
+      mocne: ['complex analysis', 'long documents', 'writing', 'code'],
+      kontekst: 'very large',
+    },
+  },
   {
     dopasuj: ['claude-opus'],
     nazwa: 'Claude Opus',
-    opis: 'Najmocniejszy Claude – do długich, złożonych zadań.',
+    opis: 'Bardzo mocny Claude – do długich, złożonych zadań.',
     mocne: ['analiza długich dokumentów', 'refaktoryzacja kodu', 'pisanie'],
     kontekst: 'bardzo duży',
     cechy: ['wizja', 'rozumowanie', 'narzędzia', 'polski'],
     en: {
-      opis: 'The most capable Claude – for long, complex tasks.',
+      opis: 'A very capable Claude – for long, complex tasks.',
       mocne: ['long-document analysis', 'code refactoring', 'writing'],
       kontekst: 'very large',
     },
@@ -589,6 +634,8 @@ const NIE_DO_ROZMOWY = [
      „Pobierz listę” podsuwała do czatu dall-e-3 i whisper-1 (agencja, runda 5). */
   'dall-e', 'gpt-image', 'whisper', 'tts-', '-tts', 'transcribe', 'moderation',
   'davinci', 'babbage', 'text-embedding', 'sora', 'realtime', 'audio-preview',
+  /* Tylko przez Responses API – w czacie zawsze 404 (zespół IT, runda 5). */
+  'gpt-5-pro', 'o1-pro', 'o3-pro', 'codex',
 ];
 
 /** Czy to model o innym przeznaczeniu niż rozmowa? */

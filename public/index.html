@@ -206,6 +206,13 @@
           <span data-i18n="offline.hint">Widzisz kopię zapisaną w telefonie – nowe wiadomości nie zostaną wysłane. Sprawdź połączenie i czy serwer Cosmosa działa.</span></span>
         <button class="offline-retry" id="offline-retry" data-i18n="offline.retry">Spróbuj ponownie</button>
       </div>
+      <!-- rozmowa nie zapisała się na serwerze (pełny dysk, limit miejsca, brak sieci) -->
+      <div class="offline-bar zapis-bar" id="zapis-bar" role="alert" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 8v5M12 16.2v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span><strong data-i18n="zapis.title">Rozmowa nie jest zapisana na serwerze.</strong>
+          <span id="zapis-powod"></span></span>
+        <button class="offline-retry" id="zapis-retry" data-i18n="offline.retry">Spróbuj ponownie</button>
+      </div>
 
       <header class="topbar">
         <button class="icon-btn" id="expand-btn" data-i18n-title="expand" title="Pokaż panel" aria-label="Pokaż panel">
@@ -260,6 +267,11 @@
              i dają się wyjąć – „wyślę to za chwilę" musi być odwracalne. -->
         <div class="queue-box" id="queue-box" role="status" hidden></div>
         <div class="attachments" id="attachments"></div>
+        <!-- tryb edycji wiadomości – widoczny i z wyjściem (zespół IT, runda 5) -->
+        <div class="edycja-bar" id="edycja-bar" hidden>
+          <span data-i18n="edit.bar">Edytujesz wiadomość – po wysłaniu dalsza część rozmowy zostanie zastąpiona.</span>
+          <button type="button" class="btn-ghost" id="edycja-anuluj" data-i18n="edit.cancel">Anuluj</button>
+        </div>
         <div class="composer" id="composer">
           <button class="attach-btn" id="attach-btn" data-i18n-title="addImage" title="Dodaj obraz" aria-label="Dodaj obraz">
             <svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
