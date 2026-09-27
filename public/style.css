@@ -3889,6 +3889,13 @@ select::-ms-expand { display: none; }
 .set-karty button[hidden] { display: none; }
 #settings-modal .modal-body { position: relative; }   /* offsetTop bloków liczony od okna ustawień */
 @media (max-width: 720px) { .set-karty { top: -16px; margin: -16px -16px 0; padding: 10px 16px 8px; } }
+/* Siedem kart (od „Zmysłów”) nie mieści się w 360 px: „Dane” chowało się za
+   krawędzią przewijanego paska i na telefonie nikt by go nie znalazł. Ciaśniej,
+   a gdyby i tak nie weszło – drugi rząd zamiast ukrytej karty. */
+@media (max-width: 480px) {
+  .set-karty { flex-wrap: wrap; gap: 2px; row-gap: 4px; }
+  .set-karty button { padding: 5px 8px; font-size: 12.5px; }
+}
 
 /* „Przywróć domyślne” uzbrojone: drugie kliknięcie kasuje ustawienia. */
 #settings-reset.uzbrojony { color: var(--danger, #c0392b); border-color: currentColor; }
