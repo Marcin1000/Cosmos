@@ -636,12 +636,17 @@ const NIE_DO_ROZMOWY = [
   'davinci', 'babbage', 'text-embedding', 'sora', 'realtime', 'audio-preview',
   /* Tylko przez Responses API – w czacie zawsze 404 (zespół IT, runda 5). */
   'gpt-5-pro', 'o1-pro', 'o3-pro', 'codex',
+  /* Też nie do rozmowy (zespół IT, runda 6): nowsze -pro, głębokie badania,
+     sterowanie komputerem, stare modele uzupełniania, embeddingi z Ollamy. */
+  'deep-research', 'computer-use', 'gpt-3.5-turbo-instruct', 'all-minilm', 'multilingual-e5',
+  'paraphrase-', 'sentence-transformers/', 'mxbai-embed', 'snowflake-arctic-embed',
 ];
 
 /** Czy to model o innym przeznaczeniu niż rozmowa? */
 function modelNotForChat(id) {
   const key = String(id || '').toLowerCase();
-  return NIE_DO_ROZMOWY.some((frag) => key.includes(frag));
+  // gpt-5.x-pro działa tylko przez Responses API – ale deepseek-v4-pro to zwykły czat.
+  return NIE_DO_ROZMOWY.some((frag) => key.includes(frag)) || /^gpt-5[\w.-]*-pro\b/.test(key);
 }
 
 /* Osobna kategoria: modele, które MAJĄ /chat/completions i odpowiadają

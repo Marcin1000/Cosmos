@@ -840,7 +840,7 @@ const tmpDane = fs.mkdtempSync(path.join(os.tmpdir(), 'cosmos-audyt-'));
       && !/login|logout|chat|polish|stream|studio|record|train|run/.test(t)
       /* Trasy agenta zmysłów mają własny token (nie sesję) – 401 to tam
          poprawna odmowa, nie zgubiona sesja audytu. */
-      && !/^\/api\/agent\/(czekaj|stan|pliki|plik|wynik|zdarzenie|paruj)$/.test(t));
+      && !/^\/api\/agent\/(czekaj|cialo|stan|pliki|plik|wynik|zdarzenie|paruj)$/.test(t));
     const padly = [];
     const niedostepne = [];
     /* 401 tu znaczy, że audyt zgubił własną sesję – a wtedy CAŁE pukanie po

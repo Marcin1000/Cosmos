@@ -2357,7 +2357,10 @@ async function webSearch(query) {
     const lines = data.results.map((r, i) =>
       `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
       + (r.text ? `\n   TREŚĆ STRONY:\n   ${r.text.replace(/\n/g, '\n   ')}` : ''));
-    return t('search.results', { q: query, lines: lines.join('\n') });
+    /* W trybie głosowym wynik NIE każe dopisywać sekcji „Źródła:” – jako
+       najświeższa wiadomość wygrywał z instrukcją TRYB GŁOSOWY i lektor czytał
+       „Źródła. IMGW.” (agencja, runda 6). */
+    return t(voiceMode ? 'search.resultsGlos' : 'search.results', { q: query, lines: lines.join('\n') });
   } catch (err) {
     return t('search.netErr', { q: query, e: err.message });
   }
@@ -2370,7 +2373,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
-  scalRozmowy, granicaPonowienia, jednostkiNaGlos,
+  scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
@@ -2909,18 +2912,7 @@ function stripForSpeech(text) {
   let t = String(text || '');
   if (typeof rozdzielMyslenie === 'function') t = rozdzielMyslenie(t).tresc;   // <think> się nie czyta
   if (typeof stripSearchMarker === 'function') t = stripSearchMarker(t);   // wszystkie znaczniki narzędzi
-  t = t
-    // Sekcja źródeł to linki dla oka – lektor czytał je po kolei, adres po adresie.
-    .replace(/\n[ \t]*(?:\*\*)?(?:Źródła|Zrodla|Sources)(?:\*\*)?:?[ \t]*\n[\s\S]*$/i, '')
-    /* Źródła w trybie głosowym nie są mówione (Marcin, runda 5): linie „Źródło: …”
-       w dowolnym miejscu, dopiski „(źródło: …)” i wstęp „Według wyników
-       wyszukiwania, …” – gdy model mimo instrukcji je napisze. */
-    .replace(/^[ \t]*(?:\*\*)?(?:Źródło|Źródła|Źródłem|Source|Sources|Via)(?:\*\*)?[ \t]*:.*$/gim, '')
-    .replace(/\s*\((?:źródło|źródła|wg|według|source|sources|via)\b[^)]*\)/gi, '')
-    .replace(/(^|[.!?]\s+)(?:Według|Na podstawie|Zgodnie z|Z)\s+[^,.!?\n]{0,60}?(?:wyszukiwa|wynik|stron|serwis|internet|sieci|źród)[^,.!?\n]*,\s*(\p{L})/giu,
-      (_, przed, litera) => przed + litera.toUpperCase())
-    .replace(/(^|[.!?]\s+)(?:According to|Based on)\s+[^,.!?\n]{0,60}?(?:search|result|site|web|source)[^,.!?\n]*,\s*(\p{L})/giu,
-      (_, przed, litera) => przed + litera.toUpperCase())
+  t = bezZrodel(t)   // źródeł się nie mówi – public/protokol.js
     .replace(/【[^】]*】/g, '')                                  // przypisy w stylu 【1†L1-L4】
     .replace(/\[\d+(?:[,–-]\s*\d+)*\](?!\()/g, '')              // przypisy [1], [2–3]
     .replace(/```[\s\S]*?```/g, ' (fragment kodu) ')
@@ -5033,6 +5025,12 @@ document.addEventListener('keydown', (e) => {
     cialo.addEventListener('scroll', () => requestAnimationFrame(odswiez), { passive: true });
     new MutationObserver(() => { if ($('settings-modal').style.display !== 'none') requestAnimationFrame(odswiez); })
       .observe($('settings-modal'), { attributes: true, attributeFilter: ['style'] });
+    /* Blok Konta odsłania się dopiero po odpowiedzi serwera – bez tego karta
+       „Konto” zostawała ukryta, a świeciły „Zmysły” (agencja, runda 6). */
+    new MutationObserver((zmiany) => {
+      // Karty same zmieniają swoje `hidden` – ich zmiany pomijamy, inaczej pętla.
+      if (zmiany.some((z) => !z.target.closest('.set-karty'))) requestAnimationFrame(odswiez);
+    }).observe(cialo, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
   }
 }
 
@@ -6131,9 +6129,20 @@ const LISTA_MODELI_WAZNA_MS = 5 * 60 * 1000;
 async function modeleSilnika(ep) {
   const z = listyModeli[ep];
   if (z && Date.now() - z.kiedy < LISTA_MODELI_WAZNA_MS) return z.modele;
-  const res = await fetch(`/api/models?endpoint=${encodeURIComponent(ep)}`);
-  const data = await readJsonSafe(res);
-  if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : (data.error?.message || `HTTP ${res.status}`));
+  /* Błąd też pamiętamy (minutę): przy zawieszonej Ollamie każde otwarcie
+     listy to było 15 s „Ładuję…” (zespół IT, runda 6). */
+  if (z && z.blad && Date.now() - z.kiedy < 60000) throw new Error(z.blad);
+  let res;
+  let data;
+  try {
+    res = await fetch(`/api/models?endpoint=${encodeURIComponent(ep)}`);
+    data = await readJsonSafe(res);
+  } catch (err) { listyModeli[ep] = { blad: err.message, kiedy: Date.now() }; throw err; }
+  if (!res.ok) {
+    const blad = typeof data.error === 'string' ? data.error : (data.error?.message || `HTTP ${res.status}`);
+    listyModeli[ep] = { blad, kiedy: Date.now() };
+    throw new Error(blad);
+  }
   const nieDoRozmowy = (m) => typeof modelNotAChatPartner === 'function' && modelNotAChatPartner(m);
   const modele = [...new Set((data.data || []).map((m) => m.id))].filter((m) => m && !nieDoRozmowy(m)).sort();
   listyModeli[ep] = { modele, kiedy: Date.now() };
@@ -6220,6 +6229,21 @@ async function otworzListeModeli() {
   (lista.querySelector('.model-opcja.wybrany') || lista.querySelector('.model-opcja'))?.focus();
 }
 el.topbarModel.addEventListener('click', otworzListeModeli);
+/* Strzałki po liście (role=listbox), Tab poza listę zamyka ją. */
+$('model-lista')?.addEventListener('keydown', (e) => {
+  const opcje = [...$('model-lista').querySelectorAll('.model-opcja')];
+  const i = opcje.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const n = e.key === 'ArrowDown' ? Math.min(opcje.length - 1, i + 1) : Math.max(0, i - 1);
+    opcje[n]?.focus();
+  } else if (e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    (e.key === 'Home' ? opcje[0] : opcje[opcje.length - 1])?.focus();
+  } else if (e.key === 'Tab') {
+    zamknijListeModeli();
+  }
+});
 document.addEventListener('click', (e) => { if (!e.target.closest('#model-wybor')) zamknijListeModeli(); });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('model-lista')?.hidden) { zamknijListeModeli(); el.topbarModel.focus(); }
@@ -6324,6 +6348,8 @@ async function refreshStatusWlasciwe() {
 }
 
 async function loadServerConfig() {
+  // Nowy klucz albo nowe przyznanie = inna lista modeli pod plakietką.
+  for (const k of Object.keys(listyModeli)) delete listyModeli[k];
   try { await loadServerConfigWlasciwe(); } finally { gotowyConfig(); }
 }
 
@@ -6501,6 +6527,12 @@ function startApp() {
   document.querySelector('.app').classList.add('gotowa');
   // Pierwsze wejście tej osoby: samouczek (imię, klucze, zmysły, telefon).
   samouczek_.wystartuj().catch(() => { /* samouczek nie może zablokować aplikacji */ });
+  /* Konto i Zmysły wczytane zawczasu: otwarte Ustawienia rysują gotowy stan,
+     zamiast dopisywać bloki po 150 ms (skok układu 0,85 na telefonie). */
+  setTimeout(() => {
+    konta_.odswiez().catch(() => {});
+    zmyslyWidok_.odswiez().catch(() => {});
+  }, 1500);
 }
 
 // ----------------------------------------------------------------

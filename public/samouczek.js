@@ -40,13 +40,21 @@ function utworzSamouczek({ $, t, zmysly }) {
   }
 
   const NAZWY_SILNIKOW = { cloud: 'NVIDIA', local: 'GPU', openai: 'OpenAI', claude: 'Claude' };
+  const naTelefonie = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 720px)').matches;
+  /** Imię, którym można się zwrócić – nie login techniczny w rodzaju „wlasciciel”. */
+  function prawdziweImie(konto) {
+    const u = (konto && konto.uzytkownik) || {};
+    const n = String(u.nazwa || '').trim();
+    const bezOgonkow = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l');
+    return n && n !== u.login && bezOgonkow !== 'wlasciciel' ? n : '';
+  }
 
   /* ---- kroki: każdy buduje swoją treść i mówi, co robi „Dalej” ---- */
   const KROKI = [
     {
       id: 'witaj',
       rysuj(ctx) {
-        const imie = ctx.konto.uzytkownik && ctx.konto.uzytkownik.nazwa;
+        const imie = prawdziweImie(ctx.konto);
         return [
           el('h2', 'sm-tytul', imie ? t('sm.hiName').replace('{imie}', imie) : t('sm.hi')),
           el('p', 'sm-lead', t('sm.intro')),
@@ -56,6 +64,8 @@ function utworzSamouczek({ $, t, zmysly }) {
     },
     {
       id: 'imie',
+      // Imię podane minutę wcześniej w formularzu zaproszenia – nie pytamy drugi raz.
+      pomin: (ctx) => Boolean(prawdziweImie(ctx.konto)),
       rysuj(ctx) {
         const pole = el('input', 'sm-pole');
         pole.type = 'text';
@@ -89,6 +99,7 @@ function utworzSamouczek({ $, t, zmysly }) {
           pola[nazwa] = p;
           tresc.push(p);
         }
+        let zapisanoKlucz = false;
         const blad = el('p', 'field-hint konto-komunikat', '');
         blad.setAttribute('role', 'status');
         tresc.push(blad);
@@ -98,7 +109,10 @@ function utworzSamouczek({ $, t, zmysly }) {
             const r = await zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa, klucz: p.value.trim() } });
             if (!r.ok) { blad.textContent = r.json.error || t('sm.keyFail'); return false; }
             p.value = '';
+            zapisanoKlucz = true;
           }
+          // Zakładka nowego silnika od razu, bez przeładowania strony.
+          if (zapisanoKlucz && typeof loadServerConfig === 'function') loadServerConfig();
           return true;
         };
         return tresc;
@@ -111,8 +125,16 @@ function utworzSamouczek({ $, t, zmysly }) {
         const tresc = [el('h2', 'sm-tytul', t('sm.sensesTitle')), el('p', 'sm-lead', t('sm.sensesLead'))];
         const lista = el('ul', 'sm-punkty');
         for (const k of ['sm.sensesP1', 'sm.sensesP2', 'sm.sensesP3']) lista.append(el('li', '', t(k)));
-        tresc.push(lista, miejsce, el('p', 'field-hint', t('sm.sensesLater')));
-        if (zmysly) zmysly.kreator(miejsce, () => { ctx.polaczono = true; });
+        tresc.push(lista);
+        /* Na telefonie polecenia terminala nikt nie wklei – zamiast kreatora
+           jedno zdanie, gdzie to zrobić (agencja, runda 6). */
+        if (naTelefonie()) {
+          tresc.push(el('p', 'sm-lead', t('sm.phone.senses').replace('{adres}', `${location.origin}/app`)));
+          return tresc;
+        }
+        tresc.push(miejsce, el('p', 'field-hint', t('sm.sensesLater')));
+        ctx.drugorzedneDalej = true;   // „Później”, dopóki komputer się nie połączy
+        if (zmysly) zmysly.kreator(miejsce, () => { ctx.polaczono = true; ctx.drugorzedneDalej = false; ctx.odswiezStopke(); });
         return tresc;
       },
     },
@@ -128,6 +150,7 @@ function utworzSamouczek({ $, t, zmysly }) {
           b.addEventListener('click', async () => { instalacjaPwa.prompt(); instalacjaPwa = null; b.disabled = true; });
           tresc.push(b);
         }
+        if (!naTelefonie()) tresc.push(el('p', 'sm-lead mono', t('sm.phoneOpen').replace('{adres}', `${location.origin}/app`)));
         const lista = el('ul', 'sm-punkty');
         lista.append(el('li', '', t('sm.phoneAndroid')), el('li', '', t('sm.phoneIos')));
         tresc.push(lista);
@@ -147,18 +170,24 @@ function utworzSamouczek({ $, t, zmysly }) {
   ];
 
   let nakladka = null;
+  let skadFokus = null;
 
   async function zakoncz(pominiety) {
     await zadaj('/api/konto/samouczek', { metoda: 'POST', dane: { pominiety } }).catch(() => {});
     if (nakladka) { nakladka.remove(); nakladka = null; }
-    const pole = $('input');
-    if (pole) pole.focus();
+    const app = document.querySelector('.app');
+    if (app) app.inert = false;
+    // Fokus wraca tam, skąd samouczek otwarto (albo do pola wiadomości).
+    const cel = skadFokus && skadFokus.isConnected ? skadFokus : $('input');
+    if (cel) cel.focus();
   }
 
   async function pokaz() {
     if (nakladka) return;
+    skadFokus = document.activeElement;
     const konto = (await zadaj('/api/konto').catch(() => ({ json: {} }))).json || {};
-    const ctx = { konto, dalej: null, polaczono: false };
+    const ctx = { konto, dalej: null, polaczono: false, drugorzedneDalej: false, odswiezStopke: () => {} };
+    const kroki = KROKI.filter((k) => !(k.pomin && k.pomin(ctx)));
     let nr = 0;
 
     nakladka = el('div', 'modal-overlay sm-nakladka');
@@ -168,7 +197,10 @@ function utworzSamouczek({ $, t, zmysly }) {
     okno.setAttribute('aria-modal', 'true');
     okno.setAttribute('aria-labelledby', 'sm-tytul-biezacy');
     const kropki = el('div', 'sm-kropki');
-    kropki.setAttribute('aria-hidden', 'true');
+    const pasek = el('div', 'sm-pasek');
+    pasek.setAttribute('aria-hidden', 'true');
+    const licznik = el('span', 'sm-licznik');
+    kropki.append(pasek, licznik);
     const cialo = el('div', 'sm-cialo');
     const stopka = el('div', 'sm-stopka');
     const pomin = przycisk('btn-ghost sm-pomin', '');
@@ -178,20 +210,34 @@ function utworzSamouczek({ $, t, zmysly }) {
     okno.append(kropki, cialo, stopka);
     nakladka.append(okno);
     document.body.append(nakladka);
+    /* Aplikacja pod spodem niedostępna dla klawiatury i czytnika – dawniej
+       Tab uciekał z samouczka do rozmowy (agencja, runda 6). */
+    const app = document.querySelector('.app');
+    if (app) app.inert = true;
+
+    function odswiezStopke() {
+      const ostatni = nr === kroki.length - 1;
+      dalej.textContent = nr === 0 ? t('sm.start') : ostatni ? t('sm.finish')
+        : ctx.drugorzedneDalej ? t('sm.later') : t('sm.next');
+      dalej.className = ctx.drugorzedneDalej && !ostatni ? 'btn-secondary sm-dalej' : 'btn-primary sm-dalej';
+    }
+    ctx.odswiezStopke = odswiezStopke;
 
     function rysuj() {
-      const krok = KROKI[nr];
+      const krok = kroki[nr];
       ctx.dalej = null;
+      ctx.drugorzedneDalej = false;
       cialo.replaceChildren(...krok.rysuj(ctx));
       const tytul = cialo.querySelector('.sm-tytul');
       if (tytul) tytul.id = 'sm-tytul-biezacy';
       cialo.dataset.krok = krok.id;
-      kropki.replaceChildren(...KROKI.map((_, i) => el('span', i === nr ? 'aktywna' : i < nr ? 'za' : '')));
-      wstecz.hidden = nr === 0 || nr === KROKI.length - 1;
-      const ostatni = nr === KROKI.length - 1;
-      dalej.textContent = nr === 0 ? t('sm.start') : ostatni ? t('sm.finish') : t('sm.next');
+      pasek.replaceChildren(...kroki.map((_, i) => el('span', i === nr ? 'aktywna' : i < nr ? 'za' : '')));
+      licznik.textContent = t('sm.step').replace('{n}', nr + 1).replace('{z}', kroki.length);
+      const ostatni = nr === kroki.length - 1;
+      wstecz.hidden = nr === 0 || ostatni;
       pomin.textContent = nr === 0 ? t('sm.skipAll') : t('sm.skipStep');
       pomin.hidden = ostatni;
+      odswiezStopke();
       const pierwszePole = cialo.querySelector('input');
       (pierwszePole || dalej).focus();
     }
@@ -203,7 +249,7 @@ function utworzSamouczek({ $, t, zmysly }) {
         dalej.disabled = false;
         if (wynik === false) return;
       }
-      if (nr === KROKI.length - 1) return zakoncz(false);
+      if (nr === kroki.length - 1) return zakoncz(false);
       nr++;
       rysuj();
     });
@@ -213,9 +259,18 @@ function utworzSamouczek({ $, t, zmysly }) {
       nr++;
       rysuj();
     });
-    okno.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); zakoncz(true); }
-      if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); dalej.click(); }
+    // Nasłuch na całej nakładce: klik w tło zostawiał fokus na body i Escape nie działał.
+    nakladka.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); zakoncz(true); return; }
+      if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); dalej.click(); return; }
+      if (e.key !== 'Tab') return;
+      const dostepne = [...okno.querySelectorAll('button, input, a[href], summary, [tabindex]:not([tabindex="-1"])')]
+        .filter((x) => !x.disabled && !x.hidden && x.offsetParent !== null);
+      if (!dostepne.length) return;
+      const pierwszy = dostepne[0];
+      const ostatni = dostepne[dostepne.length - 1];
+      if (e.shiftKey && (document.activeElement === pierwszy || !okno.contains(document.activeElement))) { e.preventDefault(); ostatni.focus(); }
+      else if (!e.shiftKey && (document.activeElement === ostatni || !okno.contains(document.activeElement))) { e.preventDefault(); pierwszy.focus(); }
     });
     rysuj();
   }
@@ -229,7 +284,7 @@ function utworzSamouczek({ $, t, zmysly }) {
     if (konto.ok && !konto.json.samouczek) pokaz();
   }
 
-  return { pokaz, wystartuj, KROKI };
+  return { pokaz, wystartuj, KROKI, prawdziweImie };
 }
 
 if (typeof window !== 'undefined') window.utworzSamouczek = utworzSamouczek;

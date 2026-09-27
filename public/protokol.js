@@ -459,6 +459,39 @@ function utworzProtokol() {
     return t.replace(/ {2,}/g, ' ');
   }
 
+  /* Źródła w trybie głosowym nie są mówione (Marcin, runda 5). Modele piszą
+     je na dziesięć sposobów: „**Źródła:**” z listą, „### Źródła”, „*Źródło:
+     …*”, „(długi myślnik) Źródła: a, b”, „[źródło: plik]” (format, którego sam Cosmos
+     wymaga przy bazie wiedzy), „Według wyników wyszukiwania, …”, „According
+     to the Met Office, …”. Dawniej przechodziło 19 z 41 realnych odpowiedzi,
+     a zwykłe „Z sieci rybackich wyciągnięto…” traciło początek (agencja,
+     runda 6). Tylko formy jednoznaczne; „według mnie” i „zgodnie z planem”
+     zostają. */
+  const NAGLOWEK_ZRODEL = '(?:Źródła|Źródło|Zrodla|Sources?|References|Bibliografia|Przypisy|Odnośniki)';
+  const LINIA_ODNOSNIKA = String.raw`[ \t]*(?:[-*•]|\d+[.)])?[ \t]*\*?(?:\[[^\]\n]*\]\([^)\n]*\)|https?:\/\/\S+|[\w-]+(?:\.[\w-]+)+\S*)[^\n]*`;
+  const duza = (_, przed, litera) => przed + litera.toUpperCase();
+  function bezZrodel(tekst) {
+    return String(tekst || '')
+      // 1. Sekcja: nagłówek w dowolnym stroju (**, ###, *, myślnik) + kolejne linie-odnośniki.
+      .replace(new RegExp(String.raw`(^|\n)[ \t]*(?:[#>*_\u2014–-]+[ \t]*)*${NAGLOWEK_ZRODEL}(?:[*_]+)?[ \t]*:?[ \t]*(?:[*_]+)?[ \t]*(?:\n|$)(?:${LINIA_ODNOSNIKA}(?:\n|$)|[ \t]*\n)*`, 'gi'), '$1')
+      // 2. Linia „Źródło: …” (też kursywą, po myślniku) i zdanie „Źródła: …” na końcu akapitu.
+      .replace(new RegExp(String.raw`(^|[.!?][ \t]+)[ \t]*(?:[\u2014–-][ \t]*)?[*_]*${NAGLOWEK_ZRODEL}[*_]*[ \t]*:[^\n]*`, 'gim'), '$1')
+      // „… – źródło: pogoda.onet.pl” w środku linii.
+      .replace(/[ \t]*[\u2014–-][ \t]*(?:źródło|źródła|source)[ \t]*:[^\n]*/gi, '')
+      // 3. „[źródło: nazwa]”, „(źródło: …)”, „[pogoda.onet.pl]”, przypis „[^1]”.
+      .replace(/\s*[[(](?:źródło|źródła|source|sources|via)\s*:[^\])\n]*[\])]/gi, '')
+      .replace(/\s*\[(?:\^\d+|(?:[\w-]+\.)+[a-z]{2,}[^\]\s]*)\](?!\()/gi, '')
+      .replace(/\s*\((?:[\w-]+\.)+(?:pl|com|org|net|eu|gov|edu|info|io|uk|de)(?:\/[^)\s]*)?\)/gi, '')
+      // 4. Wstępy źródłowe na początku zdania – tylko formy jednoznaczne.
+      .replace(/(^|[.!?]\s+)(?:Według|Wg|Zgodnie z|Na podstawie)\s+(?:(?:serwis|stron|portal)\p{L}*\s+)?(?:[\w-]+\.)+[a-z]{2,}\S*?[,:]?\s+(\p{L})/giu, duza)
+      .replace(/(^|[.!?]\s+)(?:Według|Wg|Zgodnie z)\s+(?:(?:wynik\p{L}*|informacj\p{L}*|dany\p{L}*)\s+)?(?:wyszukiwa\p{L}*|stron\p{L}*|serwis\p{L}*|internet\p{L}*|sieci|źród\p{L}*|IMGW|prognoz\p{L}* \p{Lu}\p{L}*)[^,.!?\n]{0,40}?[, ]\s*(\p{L})/giu, duza)
+      .replace(/(^|[.!?]\s+)(?:Znalazłem|Znalazłam|Sprawdziłem|Sprawdziłam) (?:w sieci|w internecie|online)(?:,\s*że|,)?\s*(\p{L})/giu, duza)
+      .replace(/(^|[.!?]\s+)(?:Z|Na podstawie) (?:informacji|danych|wyników)(?: wyszukiwania)? (?:na|ze?|w) \S+(?: \S+)?(?: wynika)?,\s*(?:że\s+)?(\p{L})/giu, duza)
+      .replace(/(^|[.!?]\s+)(?:According to|Per|Based on)\s+(?:the\s+)?(?:search\p{L}*|results?|(?:official\s+)?(?:web)?site|web\b|online|sources?|Met Office|BBC|[\w-]+\.[a-z]{2,}\S*)[^,.!?\n]{0,40},\s*(\p{L})/giu, duza)
+      .replace(/(^|[.!?]\s+)I found (?:online|on the web)(?: that)?\s*(\p{L})/giu, duza)
+      .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '');
+  }
+
   return {
     SEARCH_MARKER_RE,
     IMAGE_MARKER_RE,
@@ -480,6 +513,7 @@ function utworzProtokol() {
     scalRozmowy,
     granicaPonowienia,
     jednostkiNaGlos,
+    bezZrodel,
   };
 }
 

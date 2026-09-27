@@ -3234,7 +3234,13 @@ body::after {
   .field-grid { grid-template-columns: 1fr; }
   .msg-user .msg-content { max-width: 90%; }
   .endpoint-tab { padding: 6px 10px; }
-  .model-wybor { display: none; }
+  /* Na telefonie plakietka to sama kropka w kolorze silnika (36 px) – dawniej
+     znikała całkiem i modelu nie dało się zmienić bez Ustawień (agencja, runda 6). */
+  .model-wybor { max-width: none; }
+  .topbar-model { width: 36px; height: 36px; padding: 0; font-size: 0; justify-content: center; }
+  .topbar-model::before { margin: 0; }
+  .topbar-model::after { display: none; }
+  .model-lista { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; }
   .composer-wrap { padding: 8px 12px 12px; }
   .messages { padding: 12px 14px 20px; }
 
@@ -3945,6 +3951,8 @@ select::-ms-expand { display: none; }
 
 /* ---- ZMYSŁY NA MOIM KOMPUTERZE (public/zmysly-widok.js) ---------------- */
 .zm-lista { display: flex; flex-direction: column; gap: 10px; }
+/* Miejsce zarezerwowane, zanim przyjdzie lista – bez niego Ustawienia na telefonie skakały (CLS 0,85). */
+.zm-lista:empty { min-height: 40px; }
 .zm-zrodlo { margin: 2px 0 0; }
 .zm-komputer {
   border: 1px solid var(--border);
@@ -3969,24 +3977,27 @@ select::-ms-expand { display: none; }
 }
 .zm-baner .btn-primary { margin-left: auto; }
 .zm-skladniki { display: flex; flex-direction: column; gap: 6px; }
-.zm-skladnik { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.zm-skladnik { display: flex; align-items: center; gap: 4px 10px; justify-content: space-between; flex-wrap: wrap; }
 .zm-przelacznik { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; min-width: 0; }
 .zm-przelacznik input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .zm-suwak {
   width: 34px; height: 20px; border-radius: 10px; flex: none; position: relative;
-  background: var(--border-strong); transition: background .15s;
+  background: var(--text-faint); transition: background .15s;
 }
 .zm-suwak::after {
   content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%;
-  background: var(--text); transition: transform .15s;
+  background: var(--bg-elevated); transition: transform .15s;
 }
 .zm-przelacznik input:checked + .zm-suwak { background: var(--k-akt, var(--success)); }
-.zm-przelacznik input:checked + .zm-suwak::after { transform: translateX(14px); background: var(--bg); }
+.zm-przelacznik input:checked + .zm-suwak::after { transform: translateX(14px); }
 .zm-przelacznik input:focus-visible + .zm-suwak { outline: 2px solid var(--text); outline-offset: 2px; }
 .zm-przelacznik input:disabled + .zm-suwak { opacity: .45; }
-.zm-stan { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.zm-stan { font-size: 11.5px; color: var(--text-faint); text-align: right; max-width: 45%; }
+.zm-dlaczego { margin: 0; }
+.zm-offline-zdanie { margin: 0; }
+.zm-komputer.offline .zm-nazwa { color: var(--text-dim); }
 .zm-ok { color: var(--success-tekst); }
-.zm-zle { color: var(--danger); }
+.zm-zle { color: color-mix(in srgb, var(--danger) 82%, var(--text)); }
 .zm-trwa { color: var(--warning-tekst); }
 .zm-log pre, .zm-log-pre {
   font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto;
@@ -3996,7 +4007,8 @@ select::-ms-expand { display: none; }
 .zm-pakiety-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; margin: 8px 0; }
 .zm-pakiet { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .zm-stopka { flex-wrap: wrap; align-items: center; }
-.zm-stopka .zm-auto { margin-left: 0; }
+.zm-stopka .zm-auto { margin-left: 0; flex: 1 1 auto; }
+.zm-stopka .zm-auto input { flex: none; width: auto; }
 .zm-stopka .btn-ghost { margin-left: auto; }
 .zm-kreator { margin-top: 10px; }
 .zm-kroki { display: flex; flex-direction: column; gap: 10px; }
@@ -4007,7 +4019,7 @@ select::-ms-expand { display: none; }
 }
 .zm-system button.aktywna { background: var(--bg-hover); color: var(--text); }
 .zm-lista-krokow { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-.zm-polecenie-wiersz { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
+.zm-polecenie-wiersz { display: flex; gap: 8px; align-items: flex-start; margin-top: 6px; }
 .zm-polecenie {
   flex: 1; min-width: 0; display: block; padding: 8px 10px; border-radius: 8px;
   background: var(--code-bg); font-size: 11.5px; word-break: break-all; user-select: all;
@@ -4018,13 +4030,16 @@ select::-ms-expand { display: none; }
 .zm-czekam.zm-ok::before { content: '✓ '; }
 
 /* ---- SAMOUCZEK (public/samouczek.js) ------------------------------------ */
-.sm-nakladka { z-index: 60; }
-.sm-okno { padding: 26px 26px 18px; gap: 16px; overflow: auto; }
-.sm-kropki { display: flex; gap: 6px; }
-.sm-kropki span { width: 22px; height: 3px; border-radius: 2px; background: var(--border-strong); }
-.sm-kropki span.za { background: var(--text-faint); }
-.sm-kropki span.aktywna { background: var(--k-akt, var(--text)); }
-.sm-cialo { display: flex; flex-direction: column; gap: 10px; min-height: 180px; }
+.sm-nakladka { z-index: 60; align-items: flex-start; }
+.sm-okno { padding: 26px 26px 18px; gap: 16px; overflow: auto; margin-top: min(12vh, 96px); }
+.sm-licznik { font-size: 11.5px; color: var(--text-faint); margin-left: auto; }
+.sm-stopka button { min-height: 44px; }
+.sm-kropki { display: flex; gap: 6px; align-items: center; }
+.sm-pasek { display: flex; gap: 6px; }
+.sm-pasek span { width: 22px; height: 3px; border-radius: 2px; background: var(--border-strong); }
+.sm-pasek span.za { background: var(--text-faint); }
+.sm-pasek span.aktywna { background: var(--k-akt, var(--text)); }
+.sm-cialo { display: flex; flex-direction: column; gap: 10px; min-height: 260px; }
 .sm-tytul { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
 .sm-lead { font-size: 14.5px; color: var(--text-dim); margin: 0; line-height: 1.5; }
 .sm-pole {
@@ -4037,5 +4052,11 @@ select::-ms-expand { display: none; }
 @media (max-width: 520px) {
   .sm-okno { padding: 20px 16px 14px; }
   .sm-tytul { font-size: 19px; }
-  .zm-meta { display: none; }
+  /* Stan komputera pod nazwą, a stan składnika pod jego etykietą – obok
+     nachodziły na siebie na 360 px. */
+  .zm-glowa { flex-wrap: wrap; }
+  .zm-meta { margin-left: 16px; flex-basis: 100%; white-space: normal; }
+  .zm-stan { max-width: none; text-align: left; flex-basis: 100%; padding-left: 44px; }
+  .zm-polecenie-wiersz { flex-direction: column; }
+  .zm-polecenie-wiersz .zm-kopiuj { align-self: flex-start; }
 }

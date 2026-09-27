@@ -402,6 +402,7 @@
               <button type="button" class="btn-secondary" id="dostep-udostepnij" data-i18n="acc.share">Wyślij…</button>
               <button type="button" class="btn-secondary" id="dostep-messenger" data-i18n="acc.messenger">Messenger</button>
             </div>
+            <span class="field-hint" id="dostep-messenger-info" role="status" hidden></span>
             <span class="field-hint" data-i18n="acc.linkHint">Link działa raz i wygasa po 7 dniach. Wyślij go tylko tej osobie – kto go otworzy pierwszy, ten zakłada konto.</span>
           </div>
           <span class="field-hint" id="dostep-bez-hasla" hidden data-i18n="acc.needPassword">Zanim zaprosisz kogokolwiek, ustaw sobie hasło (w .env: COSMOS_PASSWORD, albo powyżej). Bez hasła każdy, kto zna adres, wchodzi jako Ty.</span>
@@ -415,7 +416,7 @@
         <div data-karta="zmysly" class="field zm-blok" id="zm-blok">
           <span class="field-label" data-i18n="zm.title">Zmysły na Twoim komputerze</span>
           <span class="field-hint" data-i18n="zm.hint">Rozpoznawanie mowy, wykrywanie obiektów, sylwetka i Kinect mogą liczyć się na Twoim komputerze – prywatnie i bez kosztów. Podłączasz go raz, potem wszystkim sterujesz stąd.</span>
-          <div class="zm-lista" id="zm-lista" aria-live="polite"></div>
+          <div class="zm-lista" id="zm-lista"></div>
           <div class="zm-kreator" id="zm-kreator"></div>
         </div>
 
@@ -539,9 +540,9 @@
           <span class="field-label"><input type="checkbox" id="set-offline" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.offline">Tryb offline – bez wyszukiwania w internecie</span></span>
         </label>
 
-        <label data-karta="glos" class="field">
+        <label data-karta="glos" class="field tylko-wlasciciel">
           <span class="field-label"><input type="checkbox" id="set-wake-remote" style="width:15px;height:15px;vertical-align:-2px;accent-color:var(--accent)"> <span data-i18n="set.wakeRemote">Reaguj na „Hej, Cosmos” z innych urządzeń</span></span>
-          <span class="field-hint" data-i18n="set.wakeRemoteHint">Gdy na domowym komputerze działa nasłuch słowa aktywującego (senses/wake_listener.py), to okno samo wejdzie w tryb głosowy. Wyłącz, jeśli nie chcesz, żeby mikrofon włączał się bez Twojego kliknięcia.</span>
+          <span class="field-hint" data-i18n="set.wakeRemoteHint">Gdy na komputerze domowym działa nasłuch „Hej, Cosmos”, to okno samo przejdzie w tryb głosowy. Wyłącz, jeśli mikrofon nie ma się włączać bez Twojego kliknięcia.</span>
         </label>
 
         <label data-karta="dane" class="field">

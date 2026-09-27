@@ -432,13 +432,23 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('dostep-messenger').addEventListener('click', async () => {
       const link = $('dostep-link-pole').value;
       if (!link) return;
+      const info = $('dostep-messenger-info');
+      const powiedz = (klucz) => { if (info) { info.hidden = false; info.textContent = t(klucz); } else komunikat(t(klucz)); };
+      const kopiuj = async () => {
+        try { await navigator.clipboard.writeText(link); } catch { $('dostep-link-pole').select(); document.execCommand('copy'); }
+      };
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        /* Najpierw schowek i zdanie przy przycisku: bez aplikacji Messenger
+           link fb-messenger:// nie robi nic i dawniej nic nie mówił. */
+        await kopiuj();
+        powiedz('acc.messengerMobile');
         location.href = `fb-messenger://share/?link=${encodeURIComponent(link)}`;
         return;
       }
-      try { await navigator.clipboard.writeText(link); } catch { $('dostep-link-pole').select(); document.execCommand('copy'); }
+      // Okno otwieramy od razu w geście kliknięcia – po `await` Safari blokuje je jako wyskakujące.
       window.open('https://www.messenger.com/', '_blank', 'noopener');
-      komunikat(t('acc.messengerPaste'));
+      await kopiuj();
+      powiedz('acc.messengerPaste');
     });
     $('dostep-udostepnij').addEventListener('click', async () => {
       try {

@@ -42,7 +42,7 @@
   <meta property="og:image" content="https://cosmosai.live/strona/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Znak Cosmosa i napis: jedna rozmowa, każdy model – chmura NVIDIA, lokalny GPU, Claude i OpenAI">
+  <meta property="og:image:alt" content="Znak Cosmosa i napis: jedna rozmowa, każdy model – chmura NVIDIA, lokalny GPU, Claude i OpenAI" data-en="Cosmos mark and the words: one thread, every engine – NVIDIA cloud, local GPU, Claude and OpenAI">
   <meta property="og:locale" content="pl_PL" data-en="en_GB">
   <meta property="og:locale:alternate" content="en_GB" data-en="pl_PL">
   <meta name="twitter:card" content="summary_large_image">
@@ -127,7 +127,7 @@
           <p class="hero-lead wejscie" style="--d:5" data-t="hero.lead">Cosmos prowadzi jedną rozmowę przez chmurę NVIDIA, lokalną kartę graficzną, Claude i&nbsp;OpenAI. Silnik zmienisz w&nbsp;połowie wątku, a&nbsp;rozmowa toczy się dalej: z&nbsp;tą samą pamięcią, tymi samymi narzędziami i&nbsp;tym samym kontekstem.</p>
           <div class="hero-cta wejscie" style="--d:6">
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
-            <a class="btn btn-jasny btn-duzy magnes" href="#hybryda"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
+            <a class="btn btn-jasny btn-duzy magnes" href="#pod-maska"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
           </div>
         </div>
 
@@ -166,7 +166,7 @@
       <div class="kol">
         <dl class="liczby" data-pokaz>
           <div><dt><span class="licznik" data-od="1200" data-do="0">0</span></dt><dd data-t="liczby.zal">zależności npm w&nbsp;rdzeniu</dd></div>
-          <div><dt><span class="licznik" data-do="129">129</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
+          <div><dt><span class="licznik" data-do="131">131</span></dt><dd data-t="liczby.testy">zestawów testów zachowań</dd></div>
           <div><dt><span class="licznik" data-do="6">6</span></dt><dd data-t="liczby.narzedzia">narzędzi, które model woła w&nbsp;trakcie odpowiedzi</dd></div>
           <div><dt><span class="licznik" data-do="4">4</span></dt><dd data-t="liczby.silniki">silniki w&nbsp;jednej rozmowie</dd></div>
         </dl>
@@ -223,7 +223,7 @@
             </div>
             <div class="karta-stopka">
               <h3 data-t="hyb.r.h">Wspólny wątek, wspólne gwarancje</h3>
-              <p data-t="hyb.r.p">Ciekawe nie jest to, że działają obie strony, tylko to, że dzielą jedną rozmowę, jedną kaskadę narzędzi i&nbsp;jeden zestaw zasad. Zmiana dostawcy w&nbsp;połowie wątku nie może zgubić wątku.</p>
+              <p data-t="hyb.r.p">Obie strony dzielą jedną rozmowę, jedną kaskadę narzędzi i&nbsp;jeden zestaw zasad – zmiana dostawcy w&nbsp;połowie wątku niczego nie gubi.</p>
             </div>
           </article>
 
@@ -231,7 +231,7 @@
             <div class="ikona" style="--k:var(--k-local)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
             <span class="nr">01</span>
             <h3 data-t="hyb.1.h">Prywatność</h3>
-            <p data-t="hyb.1.p">Archiwum zdjęć to prywatne pliki: dom, bliscy, miejsca. Takie pytania obsługuje lokalny indeks i&nbsp;lokalny model wizyjny – nic nie musi wychodzić z&nbsp;domu.</p>
+            <p data-t="hyb.1.p">Archiwum zdjęć to prywatne pliki: dom, bliscy, miejsca. Takie pytania obsługuje lokalny indeks i&nbsp;lokalny model wizyjny – nic nie trafia do zewnętrznych dostawców AI.</p>
           </article>
 
           <article class="karta" data-pokaz style="--d:2">
@@ -343,7 +343,7 @@
             </div>
             <div class="karta-stopka">
               <h3 data-t="pam.k1.h">Przywołanie po znaczeniu</h3>
-              <p data-t="pam.k1.p">Embeddingi bge-m3 dobierają wspomnienia pasujące sensem do pytania, nawet gdy nie pada w&nbsp;nim żadne z&nbsp;tych samych słów.</p>
+              <p data-t="pam.k1.p">Cosmos przywołuje wspomnienia pasujące sensem do pytania, nawet gdy nie pada w&nbsp;nim żadne z&nbsp;tych samych słów.</p>
             </div>
           </article>
           <article class="karta" data-pokaz style="--d:1">
@@ -358,8 +358,8 @@
           </article>
           <article class="karta" data-pokaz style="--d:3">
             <div class="ikona" style="--k:var(--k-nvidia)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h6l2-5 3 10 2-5h3"/></svg></div>
-            <h3 data-t="pam.k4.h">Działa też bez dodatkowych usług</h3>
-            <p data-t="pam.k4.p">Gdy usługa embeddingów nie odpowiada, przywoływanie przechodzi na słowa kluczowe – i&nbsp;działa dalej.</p>
+            <h3 data-t="pam.k4.h">Działa zawsze</h3>
+            <p data-t="pam.k4.p">Gdy któraś usługa nie odpowiada, Cosmos przechodzi na drogę zapasową, a&nbsp;rozmowa toczy się dalej.</p>
           </article>
         </div>
       </div>
@@ -382,13 +382,12 @@
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-claude)"></span><span data-t="glos.et">Głos i&nbsp;kamera</span></p>
           <h2 data-t="glos.h">Powiedz „Hej, Cosmos” albo po prostu dotknij i&nbsp;mów.</h2>
-          <p class="lead" data-t="glos.lead">Tryb głosowy, kamera, która widzi, co trzymasz, i&nbsp;czujnik głębi. Każda z&nbsp;tych usług ma zapasową ścieżkę, więc brak jednej nie wyłącza całości. Gdy działa komputer domowy, nasłuch słowa budzącego zostaje w&nbsp;domu i&nbsp;do chmury trafia tylko to, co świadomie mówisz do Cosmosa.</p>
+          <p class="lead" data-t="glos.lead">Tryb głosowy, kamera, która widzi, co trzymasz, i&nbsp;czujnik głębi. Każda z&nbsp;tych usług ma zapasową ścieżkę, więc brak jednej nie wyłącza całości. Gdy na Twoim komputerze działają zmysły, słowa budzącego nasłuchuje on sam, a&nbsp;do modelu trafia tylko to, co świadomie mówisz do Cosmosa.</p>
           <ul class="zapas">
             <li><span class="mono">Whisper</span><i aria-hidden="true"></i><span data-t="glos.z1">własny serwer mowy, potem OpenAI</span></li>
             <li><span class="mono">ElevenLabs</span><i aria-hidden="true"></i><span data-t="glos.z2">OpenAI, Piper, na końcu głos systemowy</span></li>
             <li><span class="mono">bge-m3</span><i aria-hidden="true"></i><span data-t="glos.z3">słowa kluczowe</span></li>
           </ul>
-          <p class="przypis" data-t="glos.android">Na telefonie z&nbsp;Androidem Chrome nie utrzymuje ciągłego nasłuchu, więc Cosmos od razu pokazuje „dotknij, aby mówić” zamiast piszczeć mikrofonem co kilka sekund.</p>
         </header>
       </div>
     </section>
@@ -434,7 +433,7 @@
         <header class="sekcja-glowa" data-pokaz>
           <p class="etykieta"><span class="kropka" style="--k:var(--k-local)"></span><span data-t="pryw.et">Prywatność</span></p>
           <h2 data-t="pryw.h">Twoja przestrzeń. Tylko Twoja.</h2>
-          <p class="lead" data-t="pryw.lead">Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy – i&nbsp;nikt inny ich nie widzi. Z&nbsp;modelem lokalnym rozmowa nie wychodzi z&nbsp;domu, a&nbsp;w&nbsp;chmurze trafia wyłącznie do dostawcy silnika, który wybierzesz.</p>
+          <p class="lead" data-t="pryw.lead">Każda osoba ma własne rozmowy, pamięć, profil i&nbsp;bazę wiedzy – i&nbsp;nikt inny ich nie widzi. Z&nbsp;modelem lokalnym rozmowa nie trafia do żadnej firmy AI, a&nbsp;w&nbsp;chmurze – wyłącznie do dostawcy silnika, który wybierzesz.</p>
           <ul class="lista-cech">
             <li data-t="pryw.c1">Własny klucz do OpenAI albo Claude – płacisz bezpośrednio dostawcy, bez pośrednika</li>
             <li data-t="pryw.c2">Hasła i&nbsp;sesje zapisane wyłącznie jako skróty – nigdy jawnym tekstem</li>
@@ -479,8 +478,8 @@
         <div class="fakty">
           <article class="fakt" data-pokaz style="--d:0"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f1.h">silniki w&nbsp;jednej rozmowie</h3><p data-t="pm.f1.p">Chmura NVIDIA, lokalna karta, Claude i&nbsp;OpenAI – przełączasz w&nbsp;połowie wątku, a&nbsp;rozmowa zostaje.</p></article>
           <article class="fakt" data-pokaz style="--d:1"><span class="fakt-liczba mono">1</span><h3 data-t="pm.f2.h">pamięć dla wszystkich silników</h3><p data-t="pm.f2.p">To, co Cosmos o&nbsp;Tobie wie, działa tak samo przy każdym modelu – nie zaczynasz od zera.</p></article>
-          <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f3.h">instalacji na telefonie</h3><p data-t="pm.f3.p">Otwierasz adres, dodajesz do ekranu głównego i&nbsp;Cosmos działa jak aplikacja.</p></article>
-          <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi na turę</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi – grafiki trafiają pod gotowe punkty planu.</p></article>
+          <article class="fakt" data-pokaz style="--d:2"><span class="fakt-liczba mono">0</span><h3 data-t="pm.f3.h">pobrań ze sklepu z&nbsp;aplikacjami</h3><p data-t="pm.f3.p">Otwierasz adres, dodajesz do ekranu głównego i&nbsp;Cosmos działa jak aplikacja.</p></article>
+          <article class="fakt" data-pokaz style="--d:3"><span class="fakt-liczba mono">4</span><h3 data-t="pm.f4.h">rundy narzędzi w&nbsp;jednej odpowiedzi</h3><p data-t="pm.f4.p">Plan, archiwum i&nbsp;zdjęcia miejsc w&nbsp;jednej odpowiedzi – grafiki trafiają pod gotowe punkty planu.</p></article>
         </div>
       </div>
     </section>
@@ -495,7 +494,7 @@
           <p data-t="cta.p">Zaloguj się i&nbsp;wróć do rozmowy dokładnie tam, gdzie się skończyła – na komputerze, na telefonie albo głosem.</p>
           <div class="hero-cta">
             <a class="btn btn-ciemny btn-duzy magnes js-wejscie" href="/app"><span data-t="wejdz" class="js-wejscie-tekst" data-alt="Otwórz Cosmos">Zaloguj się</span><svg class="strzalka" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
-            <a class="btn btn-jasny btn-duzy magnes" href="#hybryda"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
+            <a class="btn btn-jasny btn-duzy magnes" href="#pod-maska"><span data-t="hero.zobacz">Zobacz, jak działa</span></a>
           </div>
         </div>
       </div>

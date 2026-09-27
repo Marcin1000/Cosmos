@@ -35,7 +35,9 @@
  *      własny ETag, a powrót na polski przywraca polską głowę.
  *  17. 320 px: przycisk wejścia w nawigacji mieści się na ekranie; 1024 i 768 px:
  *      podpowiedź „Read in English” nie zasłania przełącznika silników,
- *      a nazwa modelu w pigułce nie jest ucięta. */
+ *      a nazwa modelu w pigułce nie jest ucięta.
+ *  18. „Cztery warstwy”: przy przewijaniu każda warstwa się podświetla, a jej
+ *      płyta i opis są wtedy na ekranie razem (telefon i komputer). */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -370,6 +372,43 @@ const { srodowisko, przegladarka } = require('../pomoc');
     await p.waitForTimeout(600);
     const pigulka = await p.evaluate(() => { const e = document.getElementById('pill-tekst'); return { tekst: e.textContent, sw: e.scrollWidth, cw: e.clientWidth }; });
     ok(pigulka.sw <= pigulka.cw + 1, `${viewport.width} px: nazwa modelu w pigułce cała („${pigulka.tekst}”, ${pigulka.sw}/${pigulka.cw} px)`);
+    await ctx.close();
+  }
+
+  // --- 17. Cztery warstwy: podświetlona płyta i jej opis widać RAZEM ----------
+  /* Marcin: „kiepsko działa część Cztery warstwy”. Pomiar agencji: na 360 px
+     ani jedna klatka z 44 nie pokazywała naraz podświetlonej płyty i jej opisu,
+     a na 1280 warstwa „Modele” nie była tak widoczna nigdy. Przewijamy sekcję
+     krok po kroku i sprawdzamy dwie rzeczy: każda z czterech warstw choć raz
+     świeci, i za każdym razem, gdy świeci, jej płyta i opis są na ekranie. */
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    const { ctx, p } = await nowaStrona({ viewport, reducedMotion: 'no-preference' });
+    // Wejście z menu („Jak to działa”): z kotwicą sekcje nad nią mają prawdziwą
+    // wysokość (content-visibility), więc strona nie przesuwa się pod pomiarem.
+    await p.goto(env.adres + '/#pod-maska', { waitUntil: 'load' });
+    await p.waitForTimeout(400);
+    for (let k = 0; k < 15; k++) {
+      await p.evaluate(() => scrollBy({ top: document.querySelector('.przekroj-tor').getBoundingClientRect().top - innerHeight * 0.6, behavior: 'instant' }));
+      await p.waitForTimeout(120);
+    }
+    const swiecily = new Set();
+    let zlych = 0;
+    for (let i = 0; i < 50; i++) {
+      await p.evaluate(() => scrollBy({ top: 70, behavior: 'instant' }));
+      await p.waitForTimeout(70);
+      const stan = await p.evaluate(() => {
+        const a = document.querySelector('.legenda li.aktywna');
+        if (!a) return null;
+        const plyta = document.querySelector(`.warstwa[data-w="${a.dataset.w}"]`);
+        const naEkranie = (r) => r.top >= 56 && r.bottom <= innerHeight;
+        return { w: a.dataset.w, razem: naEkranie(a.getBoundingClientRect()) && naEkranie(plyta.getBoundingClientRect()) };
+      });
+      if (!stan) continue;
+      swiecily.add(stan.w);
+      if (!stan.razem) zlych++;
+    }
+    ok(swiecily.size === 4, `${viewport.width} px: każda z czterech warstw choć raz się podświetla (${[...swiecily].sort().join(', ') || 'żadna'})`);
+    ok(zlych === 0, `${viewport.width} px: podświetlona płyta i jej opis są na ekranie razem (klatek bez tego: ${zlych})`);
     await ctx.close();
   }
 

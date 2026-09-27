@@ -53,6 +53,12 @@ if (!maPrzegladarke()) {
     const jest = await p.waitForSelector('#samouczek', { timeout: 8000 }).then(() => true).catch(() => false);
     ok(jest, '1. pierwsze wejście pokazuje samouczek');
 
+    /* ---- 1c. Klawiatura: Tab nie ucieka do aplikacji pod spodem ---- */
+    for (let i = 0; i < 8; i++) await p.keyboard.press('Tab');
+    const wSrodku = await p.evaluate(() => document.getElementById('samouczek').contains(document.activeElement));
+    const appInert = await p.evaluate(() => document.querySelector('.app').inert === true);
+    ok(wSrodku && appInert, `1. Tab krąży po samouczku, aplikacja pod spodem niedostępna (fokus w środku: ${wSrodku}, inert: ${appInert})`);
+
     /* ---- 2. Imię ---- */
     await p.click('.sm-dalej');                                  // Zaczynamy
     await p.waitForSelector('#sm-imie');
@@ -111,8 +117,8 @@ if (!maPrzegladarke()) {
     await p.evaluate(() => document.querySelector('#zm-kreator .zm-podlacz').click());
     await p.waitForSelector('#zm-kreator .zm-polecenie');
     const polecenie = await p.$eval('#zm-kreator .zm-polecenie', (e) => e.textContent);
-    const kod = (/kod=(\d{6})/.exec(polecenie) || [])[1];
-    ok(polecenie.includes(S) && kod, `6. polecenie niesie adres tego Cosmosa i kod („${polecenie}”)`);
+    const kod = (/kod=([A-Za-z0-9_-]{20,})/.exec(polecenie) || [])[1];
+    ok(polecenie.includes(S) && kod, `6. polecenie niesie adres tego Cosmosa i długi kod, którego nie da się zgadnąć („${polecenie}”)`);
     const skrypt = await fetch(`${S}/api/agent/instaluj.${/irm/.test(polecenie) ? 'ps1' : 'sh'}?kod=${kod}`);
     ok(skrypt.status === 200 && (await skrypt.text()).includes(kod), '6. pod poleceniem serwer oddaje skrypt instalacji z tym kodem');
     const zrodlo = await p.$eval('.zm-zrodlo', (e) => e.textContent);

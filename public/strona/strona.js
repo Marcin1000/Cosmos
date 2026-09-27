@@ -45,9 +45,9 @@
     'hyb.lead': 'The switch between local and cloud is the one decision everything else follows from. Five reasons, in the order they actually matter.',
     'hyb.rozmowa': 'one conversation',
     'hyb.r.h': 'One thread, one set of guarantees',
-    'hyb.r.p': 'The interesting part isn’t that both exist. It’s that they share one conversation, one tool cascade and one set of rules. Switching providers mid-thread must not lose the thread.',
+    'hyb.r.p': 'Both sides share one conversation, one tool cascade and one set of rules – switching provider mid-thread loses nothing.',
     'hyb.1.h': 'Privacy',
-    'hyb.1.p': 'A photo archive is personal: home, people, places. Those queries hit a local index and a local vision model. None of it has to leave the house.',
+    'hyb.1.p': 'A photo archive is personal: home, people, places. Those queries hit a local index and a local vision model. None of it goes to an outside AI provider.',
     'hyb.2.h': 'Cost',
     'hyb.2.p': 'Bulk work is unmetered locally. Indexing tens of thousands of photos through a cloud vision API is a bill; on your own GPU it’s an evening.',
     'hyb.3.h': 'Latency',
@@ -82,22 +82,21 @@
     'pam.w5': 'Plan: Tatra lakes in autumn',
     'pam.w6': 'Drone registration number',
     'pam.k1.h': 'Recall by meaning',
-    'pam.k1.p': 'bge-m3 embeddings surface memories that match the question in meaning, even when they share none of its words.',
+    'pam.k1.p': 'Cosmos recalls memories that match your question in meaning, even when they share none of its words.',
     'pam.k2.h': 'Nothing without your approval',
     'pam.k2.p': 'Remember, note, new procedure – every such action waits for a human to approve it.',
     'pam.k3.h': 'Images stay images',
     'pam.k3.p': 'Pictures from the knowledge base reach vision models as pixels, not as someone’s caption of them.',
-    'pam.k4.h': 'Works without the extra services too',
-    'pam.k4.p': 'If the embedding service is down, recall falls back to keywords and keeps working.',
+    'pam.k4.h': 'Always on',
+    'pam.k4.p': 'When a service does not respond, Cosmos switches to a fallback and the conversation carries on.',
     'glos.et': 'Voice & camera',
     'glos.h': 'Say “Hey, Cosmos”, or just tap and talk.',
-    'glos.lead': 'Voice mode, a camera that sees what you’re holding, a depth sensor. Each has a fallback, so losing one service never takes the whole thing down. While the home computer is on, listening for the wake word stays at home and only what you deliberately say to Cosmos goes to the cloud.',
+    'glos.lead': 'Voice mode, a camera that sees what you’re holding, a depth sensor. Each has a fallback, so losing one service never takes the whole thing down. When the senses run on your own computer, it listens for the wake word itself, and only what you deliberately say to Cosmos reaches the model.',
     'glos.ty': 'Hey, Cosmos, what am I holding?',
     'glos.on': 'A 24–105 lens. The cap’s still on.',
     'glos.z1': 'your own speech server, then OpenAI',
     'glos.z2': 'OpenAI, Piper, then the system voice',
     'glos.z3': 'keyword search',
-    'glos.android': 'Chrome on Android can’t keep listening continuously, so Cosmos goes straight to tap-to-talk instead of chiming the microphone every few seconds.',
     'ciag.et': 'Continuity',
     'ciag.h': 'Lock your phone. The answer keeps going.',
     'ciag.lead': 'Answers are generated on the server; the browser only attaches to them. Screen lock, a tunnel, Wi-Fi handing over to LTE – when you’re back, you rejoin the same stream right where it broke off.',
@@ -110,7 +109,7 @@
     'ciag.l4': 'client back – rejoins the same reply',
     'pryw.et': 'Privacy',
     'pryw.h': 'Your space. Only yours.',
-    'pryw.lead': 'Everyone has their own conversations, memory, profile and knowledge base – and nobody else can see them. With a local model the conversation never leaves the house; in the cloud it goes only to the provider of the engine you choose.',
+    'pryw.lead': 'Everyone has their own conversations, memory, profile and knowledge base – and nobody else can see them. With a local model the conversation reaches no AI company at all; in the cloud it goes only to the provider of the engine you choose.',
     'pryw.c1': 'Your own OpenAI or Claude key – you pay the provider directly, with no middleman',
     'pryw.c2': 'Passwords and sessions stored only as hashes – never as plain text',
     'pryw.c3': 'Each person’s data kept apart at every step, not just in the interface',
@@ -120,7 +119,7 @@
     'pm.w4': 'You',
     'pm.w4p': 'Phone, computer, voice and camera – the conversation follows you between devices.',
     'pm.w3': 'Tools',
-    'pm.w3p': 'Web search, the photo plan, your archive and photos of places – several in a single reply.',
+    'pm.w3p': 'Web search, the shoot planner, your archive and photos of places – several in a single reply.',
     'pm.w2': 'Context',
     'pm.w2p': 'Memory, profile and knowledge base attached to every question, the same with every engine.',
     'pm.w1': 'Models',
@@ -129,9 +128,9 @@
     'pm.f1.p': 'NVIDIA cloud, a local card, Claude and OpenAI – switch mid-thread and the conversation stays.',
     'pm.f2.h': 'memory for every engine',
     'pm.f2.p': 'What Cosmos knows about you works the same with every model – you never start from scratch.',
-    'pm.f3.h': 'installs on your phone',
+    'pm.f3.h': 'app-store downloads',
     'pm.f3.p': 'Open the address, add it to your home screen and Cosmos works like an app.',
-    'pm.f4.h': 'tool rounds per turn',
+    'pm.f4.h': 'tool rounds in a single reply',
     'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
     'cta.h': 'Your Cosmos is ready.',
     'cta.p': 'Sign in and pick up the conversation exactly where it left off – on your computer, your phone or by voice.',
@@ -677,23 +676,57 @@
     scenaPlener.style.setProperty('--dzien', ogr((wys + 2) / 10).toFixed(3));
   }
 
+  /* „Cztery warstwy”: dawniej postęp liczył się z przejazdu całego toru przez
+     okno, a tor nie był przyklejony – podświetlona płyta i jej opis prawie
+     nigdy nie były na ekranie razem (360 px: 0 klatek z 44, agencja, runda 6).
+     Teraz:
+       – od 980 px sekcja stoi przyklejona, a postęp to położenie w torze
+         (jak plener): najpierw płyty się rozsuwają, potem świecą po kolei,
+       – węższy ekran: stos przyklejony nad opisem, świeci pozycja legendy,
+         która jest najbliżej miejsca pod stosem; dotknięcie też wybiera. */
   let hoverWarstwa = -1;
-  let ostatniP = 0;
-  function przekroj(q) {
-    /* q: przejście sekcji przez ekran (0 – wchodzi od dołu, 1 – znika u góry).
-       Warstwy rozsuwają się do połowy drogi, potem podświetla się jedna po
-       drugiej, od krawędzi do inferencji. */
-    stos.style.setProperty('--p', ogr((q - 0.1) / 0.4).toFixed(3));
-    let wyrozniona = -1;
-    if (hoverWarstwa >= 0) wyrozniona = hoverWarstwa;
-    else if (q > 0.36 && q < 0.86) wyrozniona = 3 - Math.min(3, Math.floor((q - 0.36) / 0.125));
-    warstwy.forEach((w) => w.classList.toggle('przygas', wyrozniona >= 0 && Number(w.dataset.w) !== wyrozniona));
-    legenda.forEach((l) => l.classList.toggle('aktywna', Number(l.dataset.w) === wyrozniona));
+  let ostatnia = { p: 0, w: -1 };
+  function przekroj(p, wyrozniona) {
+    ostatnia = { p, w: wyrozniona };
+    const w = hoverWarstwa >= 0 ? hoverWarstwa : wyrozniona;
+    stos.style.setProperty('--p', ogr(p).toFixed(3));
+    warstwy.forEach((x) => x.classList.toggle('przygas', w >= 0 && Number(x.dataset.w) !== w));
+    legenda.forEach((l) => l.classList.toggle('aktywna', Number(l.dataset.w) === w));
   }
+  const odswiezWarstwy = () => przekroj(ostatnia.p, ostatnia.w);
   legenda.forEach((l) => {
-    l.addEventListener('mouseenter', () => { hoverWarstwa = Number(l.dataset.w); przekroj(ostatniP); });
-    l.addEventListener('mouseleave', () => { hoverWarstwa = -1; przekroj(ostatniP); });
+    l.addEventListener('mouseenter', () => { hoverWarstwa = Number(l.dataset.w); odswiezWarstwy(); });
+    l.addEventListener('mouseleave', () => { hoverWarstwa = -1; odswiezWarstwy(); });
+    l.addEventListener('click', () => {
+      const w = Number(l.dataset.w);
+      hoverWarstwa = hoverWarstwa === w ? -1 : w;
+      odswiezWarstwy();
+    });
   });
+  /** Pozycja w torze (≥980 px) albo pozycja legendy (węższy ekran) → p i warstwa. */
+  function stanWarstw(rk, rPrzekroj, rLegenda, vh) {
+    if (innerWidth >= 980) {
+      const q = ogr(-rk.top / Math.max(1, rk.height - rPrzekroj.height));
+      // Świeci tylko, gdy przyklejona sekcja jest cała na ekranie – na wjeździe
+      // i przy odjeździe pod nawigację płyta byłaby widoczna tylko w części.
+      const cala = rPrzekroj.top >= 56 && rPrzekroj.bottom <= vh + 4;
+      const wyrozniona = q < 0.22 || !cala ? -1 : 3 - Math.min(3, Math.floor((q - 0.22) / 0.195));
+      return { p: q / 0.22, w: wyrozniona };
+    }
+    // Miejsce pod przyklejonym stosem – tam czyta się opis.
+    const cel = Math.min(vh * 0.8, rStosu.bottom + 90);
+    let najblizej = -1;
+    let odl = Infinity;
+    rLegenda.forEach((r, i) => {
+      // Tylko pozycja widoczna w całości – wystający brzeg na dole to jeszcze nie „czytam”.
+      if (r.top < rStosu.bottom - 4 || r.bottom > vh) return;
+      const d = Math.abs((r.top + r.bottom) / 2 - cel);
+      if (d < odl) { odl = d; najblizej = i; }
+    });
+    const widac = rk.top < vh * 0.7 && rk.bottom > vh * 0.3;
+    return { p: widac ? 1 : ogr((vh - rk.top) / vh), w: widac && najblizej >= 0 ? Number(legenda[najblizej].dataset.w) : -1 };
+  }
+  let rStosu = { bottom: 0 };
 
   let czeka = false;
   function klatka() {
@@ -708,6 +741,9 @@
     const rp = ruchOgraniczony ? null : plenerTor.getBoundingClientRect();
     const rs = ruchOgraniczony ? null : scenaPlener.getBoundingClientRect();
     const rk = ruchOgraniczony ? null : przekrojTor.getBoundingClientRect();
+    const rPrzekroj = ruchOgraniczony ? null : przekrojTor.firstElementChild.getBoundingClientRect();
+    const rLegenda = ruchOgraniczony || innerWidth >= 980 ? [] : legenda.map((l) => l.getBoundingClientRect());
+    if (!ruchOgraniczony) rStosu = stos.getBoundingClientRect();
     let aktywny = -1;
     sekcje.forEach((s, i) => { if (s && s.getBoundingClientRect().top < vh * 0.4) aktywny = i; });
 
@@ -725,15 +761,16 @@
 
     /* Bez ruchu scena stoi w złotej godzinie wieczorem (~18:02, Słońce nisko nad
        granią) – dla tego obrazu jest cała sekcja, a nie dla południa. */
-    if (ruchOgraniczony) { plener(0.955); przekroj(0.5); } else {
+    // Bez ruchu: płyty rozsunięte, żadna nie przygaszona – cała mapa naraz.
+    if (ruchOgraniczony) { plener(0.955); przekroj(1, -1); } else {
       /* Dzień mija dokładnie wtedy, gdy scena stoi przyklejona: od chwili, gdy
          dojeżdża do swojego „top”, do chwili, gdy tor ją puszcza. Położenie sceny
          w torze mówi to wprost przy każdej szerokości i wysokości ekranu – dawny
          dzielnik z wysokości okna kończył wieczór, gdy karta już odjeżdżała pod
          nawigację. */
       plener(ogr((rs.top - rp.top) / Math.max(1, rp.height - rs.height)));
-      ostatniP = ogr((vh - rk.top) / (vh + rk.height));
-      przekroj(ostatniP);
+      const sw = stanWarstw(rk, rPrzekroj, rLegenda, vh);
+      przekroj(sw.p, sw.w);
     }
     linki.forEach((a, i) => a.classList.toggle('aktywny', i === aktywny));
   }

@@ -20,7 +20,15 @@
      7. przełącznik w Ustawieniach uruchamia składnik na komputerze osoby,
         a jego upadek (brak pakietu) widać w aplikacji z dziennikiem,
      8. lista komputerów osoby nie pokazuje cudzych,
-     9. odłączenie komputera w aplikacji wyłącza agenta.
+     9. odłączenie komputera w aplikacji wyłącza agenta, a ten usuwa u siebie
+        token,
+    10. uśpiony laptop (SIGSTOP): zlecenie kończy się po kilku sekundach, nie
+        po minucie, a po przebudzeniu komputer znów liczy,
+    11. usunięte konto: agent tej osoby kończy pracę, token nie pobiera plików,
+    12. seria błędnych kodów z wielu adresów wstrzymuje parowanie – nawet
+        prawdziwy kod – a nie blokuje logowania z tych adresów.
+   Oraz (punkt 1 i 4): długi kod w poleceniu instalacji, podrobiony
+   X-Forwarded-Host nie trafia do skryptu, 6 MB dociera bajt w bajt.
 */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -118,16 +126,20 @@ async function czekajNaWarunek(fn, ms = 20000) {
     ok(bez.kod === 403 && !/DOM/.test(bez.tekst), `5. członek bez komputera i bez zgody: 403, nic z domu właściciela (${bez.kod})`);
 
     /* ---- 1. Instalator ---- */
-    const kodM = (await marcin('/api/agent/kod', { metoda: 'POST' })).json.kod;
-    ok(/^\d{6}$/.test(kodM || ''), `1. kod parowania ma 6 cyfr (${kodM})`);
-    const ps1 = await fetch(`${S}/api/agent/instaluj.ps1?kod=${kodM}`, { headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'cosmosai.live' } });
+    const kodyM = (await marcin('/api/agent/kod', { metoda: 'POST' })).json;
+    const kodM = kodyM.dlugi;
+    ok(/^\d{6}$/.test(kodyM.kod || '') && /^[A-Za-z0-9_-]{20,}$/.test(kodM || ''),
+      `1. dwa kody: 6 cyfr do przepisania i długi do polecenia instalacji (${kodyM.kod}, ${String(kodM).length} znaków)`);
+    const ps1 = await fetch(`${S}/api/agent/instaluj.ps1?kod=${kodM}`, { headers: { 'X-Forwarded-Proto': 'https' } });
     const tps1 = await ps1.text();
-    ok(ps1.status === 200 && tps1.includes("'https://cosmosai.live'") && tps1.includes(`'${kodM}'`) && /agent\.py/.test(tps1),
+    ok(ps1.status === 200 && tps1.includes(`'https://127.0.0.1:${PORT}'`) && tps1.includes(`'${kodM}'`) && /agent\.py/.test(tps1),
       '1. instalator PowerShell niesie adres serwera (https za tunelem) i kod');
     const sh = await (await fetch(`${S}/api/agent/instaluj.sh?kod=${kodM}`)).text();
     ok(sh.includes(`'${S}'`) && sh.includes(`'${kodM}'`), '1. instalator sh niesie adres i kod');
-    const zlyHost = await fetch(`${S}/api/agent/instaluj.sh?kod=${kodM}`, { headers: { 'X-Forwarded-Host': "x';rm -rf ~;'" } });
-    ok(zlyHost.status === 400, `1. dziwny nagłówek Host nie trafia do skryptu (${zlyHost.status})`);
+    /* Podrobiony X-Forwarded-Host dawał skrypt pobierający agenta z obcego
+       serwera – bez pośrednika (COSMOS_POSREDNIK=inny) jest ignorowany. */
+    const obcy = await (await fetch(`${S}/api/agent/instaluj.sh?kod=${kodM}`, { headers: { 'X-Forwarded-Host': 'zly.example.com' } })).text();
+    ok(!obcy.includes('zly.example.com') && obcy.includes(`'${S}'`), '1. podrobiony X-Forwarded-Host nie trafia do skryptu instalacji');
 
     /* ---- 2. Parowanie ---- */
     const zly = await fetch(`${S}/api/agent/paruj`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kod: '000000' === kodM ? '111111' : '000000' }) });
@@ -153,10 +165,14 @@ async function czekajNaWarunek(fn, ms = 20000) {
     const detM = await marcin('/api/detect', { metoda: 'POST', dane: { image: 'data:image/png;base64,AAAA' } });
     ok(detM.kod === 200 && detM.json.kto === 'MARCIN', `4. wykrywanie właściciela liczy JEGO komputer z agentem, nie dom (${detM.json.kto})`);
     ok(detM.json.bajtow > 10, `4. ciało żądania dotarło do usługi przez agenta (${detM.json.bajtow} B)`);
+    // Duże ciało jedzie surowymi bajtami (dawniej base64 w JSON-ie stawiało pętlę zdarzeń).
+    const duze = JSON.stringify({ image: `data:image/png;base64,${'A'.repeat(6 * 1024 * 1024)}` });
+    const detDuze = await marcin('/api/detect', { metoda: 'POST', dane: JSON.parse(duze) });
+    ok(detDuze.kod === 200 && detDuze.json.bajtow === Buffer.byteLength(duze), `4. 6 MB dociera do usługi bajt w bajt (${detDuze.json.bajtow} z ${Buffer.byteLength(duze)})`);
 
     /* ---- 5b. Członek podłącza swój komputer ---- */
     const kodA = (await ania('/api/agent/kod', { metoda: 'POST' })).json.kod;
-    uruchomAgenta(katAni, komputerAni.address().port, 17070, ['--serwer', S, '--kod', kodA]);
+    const aA = uruchomAgenta(katAni, komputerAni.address().port, 17070, ['--serwer', S, '--kod', kodA]);
     const onlineA = await czekajNaWarunek(async () => ((await ania('/api/agent/lista')).json.agenci || []).find((a) => a.online && a.zmyslyDzialaja));
     ok(Boolean(onlineA), '5. komputer członka połączony');
     const detA = await ania('/api/detect', { metoda: 'POST', dane: { image: 'x' } });
@@ -184,6 +200,20 @@ async function czekajNaWarunek(fn, ms = 20000) {
       body: JSON.stringify({ type: 'wzrok', summary: 'x' }) });
     ok(zdZly.status === 401, `6. zmyślony token nie wysyła zdarzeń (${zdZly.status})`);
 
+    /* ---- 10. Uśpiony laptop: bez minuty czekania ---- */
+    // SIGSTOP = uśpienie: połączenie TCP zostaje, agent nic nie odbiera.
+    // Dawniej zlecenie leżało w martwym gnieździe i głos milkł na 61 s.
+    aA.kill('SIGSTOP');
+    const t0 = Date.now();
+    const spiacy = await ania('/api/detect', { metoda: 'POST', dane: { image: 'x' } });
+    const ms = Date.now() - t0;
+    ok(ms < 8000 && spiacy.kod >= 400, `10. zlecenie do uśpionego komputera kończy się po ${ms} ms (${spiacy.kod}), nie po minucie`);
+    const drugie = await ania('/api/detect', { metoda: 'POST', dane: { image: 'x' } });
+    ok(drugie.kod === 403, `10. następne żądanie od razu wie, że zmysłów nie ma (${drugie.kod})`);
+    aA.kill('SIGCONT');
+    const wrocil = await czekajNaWarunek(async () => (await ania('/api/detect', { metoda: 'POST', dane: { image: 'x' } })).json.kto === 'ANIA', 40000);
+    ok(Boolean(wrocil), '10. po przebudzeniu komputer znów liczy zmysły');
+
     /* ---- 7. Przełącznik uruchamia składnik ---- */
     const ust = await marcin(`/api/agent/ustaw?id=${onlineM.id}`, { metoda: 'POST', dane: { chce: { obserwator: true } } });
     ok(ust.kod === 200 && ust.json.chce.obserwator === true, '7. przełącznik „Obserwator kamery” zapisany');
@@ -209,6 +239,31 @@ async function czekajNaWarunek(fn, ms = 20000) {
     ok(kodWyjscia !== 'dalej działa', `9. agent po odłączeniu kończy pracę (${kodWyjscia})`);
     const detM3 = await marcin('/api/detect', { metoda: 'POST', dane: { image: 'x' } });
     ok(detM3.json.kto === 'DOM', `9. właściciel bez agenta wraca do zmysłów w domu (${detM3.json.kto})`);
+    const cfgM = JSON.parse(fs.readFileSync(path.join(katMarcina, 'agent.json'), 'utf8'));
+    ok(!cfgM.token, '9. odłączony agent usuwa u siebie token (nie wstaje na próżno przy każdym starcie)');
+    ok(!(await marcin('/api/agent/lista')).json.agenci.length, '9. odłączony komputer znika z listy');
+
+    /* ---- 11. Usunięte konto: jego komputer traci dostęp ---- */
+    const idAni = przyj.json.uzytkownik.id;
+    await marcin(`/api/konta/uzytkownik?id=${encodeURIComponent(idAni)}`, { metoda: 'DELETE' });
+    const koniecAni = await Promise.race([aA.zakonczony, pauza(35000).then(() => 'dalej działa')]);
+    ok(koniecAni !== 'dalej działa', `11. agent usuniętego konta kończy pracę (${koniecAni})`);
+    const poUsunieciu = await fetch(`${S}/api/agent/pliki`, { headers: { Authorization: `Bearer ${tokenA}` } });
+    ok(poUsunieciu.status === 410, `11. token agenta usuniętego konta nie pobiera już plików (${poUsunieciu.status})`);
+
+    /* ---- 12. Zgadywanie kodu z wielu adresów ---- */
+    const kodPrawdziwy = (await marcin('/api/agent/kod', { metoda: 'POST' })).json.kod;
+    for (let i = 0; i < 31; i++) {
+      await fetch(`${S}/api/agent/paruj`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': `203.0.113.${i + 1}` },
+        body: JSON.stringify({ kod: String(100000 + i) }) });
+    }
+    const trafiony = await fetch(`${S}/api/agent/paruj`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '198.51.100.7' }, body: JSON.stringify({ kod: kodPrawdziwy }) });
+    ok(trafiony.status === 429, `12. po serii błędnych kodów z różnych adresów nawet prawdziwy kod nie paruje (${trafiony.status})`);
+    const logowanie = await fetch(`${S}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.1' },
+      body: JSON.stringify({ password: HASLO }) });
+    ok(logowanie.status === 200, `12. pomyłki w kodzie nie blokują logowania z tego adresu (${logowanie.status})`);
   } catch (e) {
     fail.push(`wyjątek: ${e.message}`);
     console.error(e);

@@ -30,6 +30,7 @@ import tempfile
 import threading
 from datetime import datetime
 
+import anyio
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 import uvicorn
@@ -93,8 +94,10 @@ except ImportError:
     pass
 
 try:
-    import mediapipe  # noqa: F401
-    CAPS["mediapipe"] = True
+    import mediapipe
+    # mediapipe od 0.10.30 nie ma `mp.solutions`, którego używa /pose – taka
+    # wersja zgłaszana jako działająca dawała 500 przy każdej osobie w kadrze.
+    CAPS["mediapipe"] = hasattr(mediapipe, "solutions")
 except ImportError:
     pass
 
@@ -341,11 +344,11 @@ def health():
 
 
 @app.post("/stt")
-async def stt(request: Request):
+def stt(request: Request):
     """Audio (webm/ogg/wav/mp3) w body -> {"text": "..."}"""
     if not CAPS["whisper"]:
         return JSONResponse({"error": "Whisper niezainstalowany (pip install faster-whisper)."}, status_code=501)
-    audio = await request.body()
+    audio = anyio.from_thread.run(request.body)
     suffix = ".webm"
     ctype = request.headers.get("content-type", "")
     for ext in ("wav", "ogg", "mp3", "mp4", "m4a"):
@@ -376,7 +379,7 @@ async def stt(request: Request):
 
 
 @app.post("/ptak")
-async def ptak(request: Request):
+def ptak(request: Request):
     """Nagranie (wav/mp3/flac) w body -> {"gatunki": [{...}]}  – BirdNET.
 
     MIEJSCE I DATA SĄ TU ISTOTNE, nie ozdobne. BirdNET zawęża listę do
@@ -392,7 +395,7 @@ async def ptak(request: Request):
                       "resampy tensorflow)."},
             status_code=501,
         )
-    audio = await request.body()
+    audio = anyio.from_thread.run(request.body)
     if not audio:
         return JSONResponse({"error": "Puste nagranie."}, status_code=400)
 
@@ -456,14 +459,13 @@ async def ptak(request: Request):
 
 
 @app.post("/tts")
-async def tts(request: Request):
+def tts(payload: dict = Body(...)):
     """{"text": "..."} -> audio/wav"""
     if not CAPS["piper"]:
         return JSONResponse(
             {"error": "Piper niedostępny (pip install piper-tts + ustaw PIPER_VOICE na plik głosu .onnx)."},
             status_code=501,
         )
-    payload = await request.json()
     text = (payload.get("text") or "").strip()
     if not text:
         return JSONResponse({"error": "Puste pole text."}, status_code=400)
@@ -495,6 +497,14 @@ async def tts(request: Request):
 YOLO_ZAMEK = threading.Lock()
 
 
+# Ta sama zasada dotyczy /stt, /tts, /pose, /extract, /upscale, /embed i /ptak:
+# pierwsze pobranie Whispera czy bge-m3 i długa transkrypcja trwają minuty,
+# a przy `async def` /health milczało przez cały ten czas – agent zmysłów
+# meldował „zmysły wyłączone” i Cosmos przełączał osobę na inny komputer
+# (zespół IT, runda 6). Surowe ciało (nagranie) wczytujemy przez
+# `anyio.from_thread.run(request.body)` – działa w wątku z puli FastAPI.
+
+
 @app.post("/detect")
 def detect(payload: dict = Body(...)):
     """{"image": dataURL} -> {"objects": [{label, conf, box}], "summary": "..."}"""
@@ -520,13 +530,12 @@ def detect(payload: dict = Body(...)):
 
 
 @app.post("/pose")
-async def pose(request: Request):
+def pose(payload: dict = Body(...)):
     """{"image": dataURL} -> {"present": bool, "summary": "..."}"""
     if not CAPS["mediapipe"]:
         return JSONResponse({"error": "MediaPipe niezainstalowany (pip install mediapipe)."}, status_code=501)
     import cv2
     import mediapipe as mp
-    payload = await request.json()
     img = decode_image(payload)
     if img is None:
         return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
@@ -542,10 +551,9 @@ async def pose(request: Request):
 
 
 @app.post("/extract")
-async def extract(request: Request):
+def extract(payload: dict = Body(...)):
     """{"name": "plik.xlsx", "data": base64} -> {"text": "..."}
     Wyciąga tekst z PDF/DOCX/XLSX/PPTX na potrzeby bazy wiedzy Cosmosa."""
-    payload = await request.json()
     name = str(payload.get("name", ""))
     try:
         data = base64.b64decode(payload.get("data", ""))
@@ -622,7 +630,7 @@ async def extract(request: Request):
 
 
 @app.post("/upscale")
-async def upscale(request: Request):
+def upscale(payload: dict = Body(...)):
     """{"image": dataURL, "scale": 4} -> {"image": dataURL} – powiększanie Real-ESRGAN.
     Opcjonalne: pip install realesrgan basicsr  (wymaga GPU dla sensownej szybkości)."""
     try:
@@ -635,7 +643,6 @@ async def upscale(request: Request):
         )
     import cv2
     import numpy as np
-    payload = await request.json()
     img = decode_image(payload)
     if img is None:
         return JSONResponse({"error": "Nieprawidłowy obraz."}, status_code=400)
@@ -789,16 +796,17 @@ async def kinect_frame(stream: str = "color"):
 
 
 @app.post("/embed")
-async def embed(request: Request):
+def embed(payload: dict = Body(...)):
     """{"texts": ["...", ...]} -> {"vectors": [[...], ...]} (pamięć długotrwała)"""
     if not CAPS["embed"]:
         return JSONResponse({"error": "Embeddingi niedostępne (pip install sentence-transformers)."}, status_code=501)
-    payload = await request.json()
     texts = payload.get("texts") or []
     if not isinstance(texts, list) or not texts:
         return JSONResponse({"error": "Pole texts (lista) jest wymagane."}, status_code=400)
     vectors = get_embedder().encode([str(t)[:4000] for t in texts], normalize_embeddings=True)
-    return {"vectors": [v.tolist() for v in vectors]}
+    # Nazwa modelu: Cosmos nie może mieszać wektorów dwóch różnych modeli
+    # o tym samym wymiarze (komputer domowy i komputer osoby).
+    return {"vectors": [v.tolist() for v in vectors], "model": os.environ.get("EMBED_MODEL", "BAAI/bge-m3")}
 
 
 if __name__ == "__main__":

@@ -118,7 +118,7 @@ const pamiec_ = naUzytkownika('pamiec', (katalog) => pamiecModul_.utworz({
 const handleMemory = (req, res) => pamiec_.handleMemory(req, res);
 const searchMemory = (q, limit) => pamiec_.searchMemory(q, limit);
 const memoryContextLines = (items) => pamiec_.memoryContextLines(items);
-const embedTexts = (texts, timeoutMs, inputType) => pamiec_.embedTexts(texts, timeoutMs, inputType);
+const embedTexts = (texts, timeoutMs, inputType, opcje) => pamiec_.embedTexts(texts, timeoutMs, inputType, opcje);
 const embedStatus = (sensesHasEmbed) => pamiec_.embedStatus(sensesHasEmbed);
 // Czyste funkcje podobieństwa – z modułu, nie z instancji: potrzebne też poza żądaniem.
 const { cosine, sameModel, keywordScore } = pamiecModul_;
@@ -1198,7 +1198,8 @@ async function trasyApi(req, res, p) {
      zapis rozmowy działają – a nowej pracy nie zaczynamy: czytelne 503 z prośbą
      o ponowienie. Dawniej `server.close()` na samym początku zamykania dawało
      przez ~20 s dokańczania strony 502 Cloudflare wszystkim (zespół IT, runda 4). */
-  if (zamykanie && req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/'))) {
+  if (zamykanie && req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/')
+    || /^\/api\/(stt|tts|detect|pose|ptak)$/.test(p))) {
     res.setHeader('Retry-After', '5');
     return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje – wyślij za kilka sekund.', kod: 'aktualizacja' });
   }
@@ -1553,7 +1554,8 @@ function zamknijPorzadnie(sygnal) {
     /* Czekamy na odpowiedzi w toku, na czaty wysłane do dostawcy, który jeszcze
        nie odpowiedział (OCZEKUJACE – dawniej ginęły bez śladu, zostawało samo
        pytanie), i na zadania Studia. Nasłuch zamykamy dopiero potem. */
-    const wToku = () => biegi_.aktywne() + OCZEKUJACE.size + zadania_.ileWszystkich();
+    // Zlecenia zmysłów u agentów osób też: wynik wraca po chwili, a restart by go zgubił.
+    const wToku = () => biegi_.aktywne() + OCZEKUJACE.size + zadania_.ileWszystkich() + agent.ileZlecen();
     const dokonczone = async () => {
       if (wToku()) console.log(`  Zamykanie: czekam na ${wToku()} rzeczy w toku (do ${CZAS_NA_DOKONCZENIE_MS / 1000} s)…`);
       while (wToku() && Date.now() < koniec) await new Promise((r) => setTimeout(r, 250));

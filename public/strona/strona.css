@@ -25,6 +25,7 @@
   /* Kolor silnika jako TEKST: kreski i kropki zostają w kolorach wyżej,
      ale drobny napis w zieleni czy pomarańczu na jasnym tle nie trzyma AA. */
   --k-nvidia-tekst: #3F7B22;
+  --k-local-tekst: #2A62D4;
   --k-claude-tekst: #A94F2A;
   --zloto-tekst: #95590F;
   --cien-1: 0 1px 0 rgba(22, 23, 27, .04), 0 1px 2px rgba(22, 23, 27, .05);
@@ -57,7 +58,7 @@
     --k-local: #5B8FF5;
     --k-claude: #DE7A51;
     --k-openai: #ECEBE6;
-    --k-nvidia-tekst: #76B84F; --k-claude-tekst: #DE7A51; --zloto-tekst: #E8A33D;
+    --k-nvidia-tekst: #76B84F; --k-local-tekst: #5B8DEF; --k-claude-tekst: #DE7A51; --zloto-tekst: #E8A33D;
     --cien-1: 0 1px 0 rgba(0, 0, 0, .3);
     --cien-2: 0 12px 32px -12px rgba(0, 0, 0, .6);
     --cien-3: 0 40px 90px -30px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .03);
@@ -69,7 +70,7 @@
   --tlo: #111214; --tlo-2: #16171A; --powierzchnia: #1A1B1F; --tekst: #ECEBE6;
   --przygaszony: #A3A5AD; --blady: #8A8D96; --linia: #2A2B30; --linia-2: #34363C;
   --k-nvidia: #76B84F; --k-local: #5B8FF5; --k-claude: #DE7A51; --k-openai: #ECEBE6;
-  --k-nvidia-tekst: #76B84F; --k-claude-tekst: #DE7A51; --zloto-tekst: #E8A33D;
+  --k-nvidia-tekst: #76B84F; --k-local-tekst: #5B8DEF; --k-claude-tekst: #DE7A51; --zloto-tekst: #E8A33D;
   --cien-1: 0 1px 0 rgba(0, 0, 0, .3); --cien-2: 0 12px 32px -12px rgba(0, 0, 0, .6);
   --cien-3: 0 40px 90px -30px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .03);
   --szklo: rgba(17, 18, 20, .7);
@@ -111,7 +112,10 @@ code { font: 500 .88em var(--mono); background: var(--tlo-2); border: 1px solid 
 
 /* --- znak --------------------------------------------------------------- */
 .znak { width: 28px; height: 28px; overflow: visible; }
-.znak .planeta { fill: var(--tekst); stroke: var(--tlo); stroke-width: 2.4; }
+/* Planeta siedzi w <symbol> wstawianym przez <use>: selektor z przodkiem
+   (.znak .planeta) do niej nie sięga i była zawsze czarna. Zmienne CSS
+   przechodzą do środka <use>, więc kolor idzie przez nie. */
+#znak .planeta { fill: var(--planeta, var(--tekst)); stroke: var(--planeta-obrys, var(--tlo)); stroke-width: 2.4; }
 .luk { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 21 79; animation: obrot-luku 14s linear infinite; }
 .l1 { stroke: var(--k-nvidia); stroke-dashoffset: 0; }
 .l2 { stroke: var(--k-local); stroke-dashoffset: -25; }
@@ -253,10 +257,12 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 [data-pokaz].widoczne { opacity: 1; transform: none; }
 
 /* wejście hero przy załadowaniu */
-.wejscie { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wejdz .8s var(--wolno) forwards; animation-delay: calc(60ms + var(--d, 0) * 60ms); }
-.hero-cta.wejscie, .hero-uwaga.wejscie, .hero-scena.wejscie { filter: none; }
+/* .01 zamiast 0: Chrome nie liczy do LCP elementów malowanych przezroczyście,
+   więc LCP łapał plakietkę dema po 1,5 s zamiast nagłówka po 0,6 s. */
+.wejscie { opacity: .01; transform: translateY(14px); filter: blur(6px); animation: wejdz .8s var(--wolno) forwards; animation-delay: calc(60ms + var(--d, 0) * 60ms); }
+.hero-cta.wejscie, .hero-scena.wejscie { filter: none; }
 @keyframes wejdz { to { opacity: 1; transform: none; filter: none; } }
-.slowo { display: inline-block; opacity: 0; transform: translateY(.35em); filter: blur(6px); animation: wejdz .8s var(--wolno) forwards; animation-delay: calc(100ms + var(--i) * 60ms); }
+.slowo { display: inline-block; opacity: .01; transform: translateY(.35em); filter: blur(6px); animation: wejdz .8s var(--wolno) forwards; animation-delay: calc(100ms + var(--i) * 60ms); }
 
 /* ================================================================ HERO */
 .hero { position: relative; padding-top: clamp(40px, 7vw, 96px); padding-bottom: clamp(48px, 6vw, 80px); overflow: clip; }
@@ -305,8 +311,6 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 @keyframes plyn { from { background-position: 0 0; } to { background-position: -120% 0; } }
 .hero-lead { font-size: clamp(17.5px, 1.55vw, 20px); color: var(--przygaszony); max-width: 54ch; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; }
-.hero-uwaga { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--blady); }
-.hero-uwaga svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 
 /* --- czat w hero -------------------------------------------------------- */
 .hero-scena { perspective: 1400px; }
@@ -368,6 +372,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .odp-silnik { display: flex; align-items: center; gap: 6px; font: 500 10.5px/1 var(--mono); font-stretch: 87.5%; letter-spacing: .06em; text-transform: uppercase; color: var(--kt, var(--k)); margin-bottom: 5px; }
 /* Napis silnika w kolorze czytelnym jako tekst (zielony i pomarańcz są za jasne). */
 .odp[style*="--k-nvidia"] { --kt: var(--k-nvidia-tekst); }
+.odp[style*="--k-local"] { --kt: var(--k-local-tekst); }
 .odp[style*="--k-claude"] { --kt: var(--k-claude-tekst); }
 .odp-tekst .w { opacity: 0; filter: blur(4px); animation: slowo-wpada .5s var(--wolno) forwards; }
 @keyframes slowo-wpada { to { opacity: 1; filter: none; } }
@@ -703,30 +708,32 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 /* ======================================================== PRYWATNOŚĆ */
 .pryw-w { display: grid; gap: 48px; align-items: center; }
 @media (min-width: 980px) { .pryw-w { grid-template-columns: 1fr 1fr; gap: 80px; } }
-.pokoje { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+/* Trzy „pokoje” w wachlarzu – po wycięciu panelu administratora trzy małe
+   karty stały w pustej kolumnie (agencja, runda 6). */
+.pokoje { position: relative; width: 100%; max-width: 440px; height: 330px; margin-inline: auto; }
 .pokoj {
-  background: var(--powierzchnia); border: 1px solid var(--linia); border-radius: var(--r-m); padding: 14px;
-  display: flex; flex-direction: column; gap: 8px; box-shadow: var(--cien-1); position: relative; overflow: hidden;
+  background: var(--powierzchnia); border: 1px solid var(--linia); border-radius: var(--r-m); padding: 16px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: var(--cien-2, var(--cien-1)); overflow: hidden;
+  position: absolute; width: 60%; height: 230px; left: calc(var(--d) * 20%); top: calc(var(--d) * 34px);
+  transform: rotate(calc((var(--d) - 1) * 4deg));
 }
 .pokoj::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--k); }
 .pokoj-glowa { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .pokoj-glowa b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: color-mix(in srgb, var(--k) 14%, transparent); color: var(--k); }
 .pokoj-glowa svg { width: 16px; height: 16px; fill: none; stroke: var(--blady); stroke-width: 1.8; }
 .pokoj > i { height: 6px; border-radius: 3px; background: var(--linia); width: var(--w, 100%); filter: blur(1.5px); }
-.panel-admina { grid-column: 1 / -1; background: var(--tekst); color: var(--tlo); border-radius: var(--r-m); padding: 16px 18px; box-shadow: var(--cien-3); }
-.panel-glowa { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; opacity: .6; margin-bottom: 10px; }
-.panel-admina table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.panel-admina th { text-align: left; font-weight: 400; opacity: .5; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--tlo) 16%, transparent); }
-.panel-admina td { padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--tlo) 8%, transparent); }
-.panel-admina tr:last-child td { border-bottom: 0; }
-.panel-admina .brak { opacity: .4; }
 .pokoje.widoczne .pokoj { animation: pokoj-wchodzi .9s var(--wolno) both; animation-delay: calc(var(--d) * 120ms); }
 @keyframes pokoj-wchodzi { from { transform: translateY(16px) scale(.97); opacity: 0; } }
 
 /* ========================================================= POD MASKĄ */
 .przekroj-tor { position: relative; }
 .przekroj { display: grid; gap: 40px; align-items: center; }
-@media (min-width: 980px) { .przekroj { grid-template-columns: 1.2fr 1fr; gap: 64px; } }
+/* Od 980 px sekcja stoi przyklejona, a tor daje drogę na rozsunięcie płyt
+   i cztery podświetlenia – płyta i jej opis są na ekranie razem. */
+@media (min-width: 980px) {
+  .przekroj-tor { height: 230vh; }
+  .przekroj { grid-template-columns: 1.2fr 1fr; gap: 64px; position: sticky; top: max(72px, calc(50vh - 290px)); }
+}
 .stos {
   --p: 0; position: relative; height: clamp(360px, 46vw, 540px); perspective: 1600px; display: grid; place-items: center;
 }
@@ -761,6 +768,17 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
   background: linear-gradient(to top, var(--k-nvidia), var(--k-local) 34%, var(--k-claude) 66%, var(--k-openai));
   opacity: calc(.3 + var(--p) * .7); z-index: 5;
 }
+/* Węższy ekran: stos przyklejony pod nawigacją, opis przewija się pod nim. */
+@media (max-width: 979px) {
+  .przekroj { align-items: start; gap: 12px; }
+  .stos { position: sticky; top: 64px; z-index: 2; height: clamp(250px, 42vh, 340px); background: var(--tlo);
+    box-shadow: 0 18px 24px -18px var(--tlo); }
+  .warstwa { top: 70%; width: clamp(150px, 42vw, 220px);
+    transform: translate(-50%, -50%) translateY(calc(var(--i) * (-1 * (18px + var(--p) * 34px)))) rotateX(58deg) rotateZ(-45deg); }
+  .stos-nic { height: calc(3 * (18px + var(--p) * 34px) + 14px); bottom: 32%; }
+  .legenda li { cursor: pointer; }
+}
+@media (prefers-reduced-motion: reduce) { .przekroj-tor { height: auto; } .przekroj { position: static; } }
 .legenda { list-style: none; display: grid; gap: 8px; }
 .legenda li {
   display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 16px 18px; border-radius: var(--r-m);
@@ -770,6 +788,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .legenda .mono { font-size: 12px; color: var(--k); padding-top: 4px; }
 .legenda li[data-w="0"] .mono { color: var(--k-nvidia-tekst); }
 .legenda li[data-w="2"] .mono { color: var(--k-claude-tekst); }
+.legenda li[data-w="1"] .mono { color: var(--k-local-tekst); }
 .legenda b { font-size: 18px; letter-spacing: -.01em; display: block; margin-bottom: 2px; }
 .legenda p { font-size: 14.5px; color: var(--przygaszony); }
 .fakty { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: clamp(48px, 6vw, 80px); }
@@ -795,7 +814,7 @@ html:has(:target) .sekcja:not(.plener):not(.pod-maska) { content-visibility: vis
 .cta-karta p { font-size: clamp(16.5px, 1.5vw, 19px); opacity: .7; max-width: 52ch; }
 .cta-karta .hero-cta { justify-content: center; margin-top: 8px; }
 .cta-znak { width: 72px; height: 72px; }
-.cta-znak .planeta { fill: var(--tlo); stroke: var(--tekst); }
+.cta-znak { --planeta: var(--tlo); --planeta-obrys: var(--tekst); }
 .cta-zorza { position: absolute; inset: 0; z-index: -1; opacity: .38; }
 .cta-zorza i { position: absolute; width: 60%; aspect-ratio: 1; border-radius: 50%; animation: dryf 22s ease-in-out infinite alternate; -webkit-mask: radial-gradient(closest-side, #000, transparent); mask: radial-gradient(closest-side, #000, transparent); }
 .cta-zorza i:nth-child(1) { left: -10%; top: -30%; background: var(--k-nvidia); }
