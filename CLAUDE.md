@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 137 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 138 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -129,6 +129,7 @@ robi większość szybkich zestawów.
 | `nauka.js` | procedury, bramka trybu auto |
 | `pamiec.js`, `dokumenty.js`, `szukanie.js` | pamięć długotrwała, wyciąganie tekstu z dokumentów, wyszukiwanie w sieci |
 | `wyszukiwarki.js`, `grafiki.js` | wyszukiwarki z kluczem (Serper = Google, Brave) przed darmowymi; źródła zdjęć przeplatane |
+| `gesty.js` | własne gesty osoby (`/api/gesty`): zapis i walidacja wzorców; rozpoznaje przeglądarka |
 | `baza-wiedzy.js` | baza wiedzy: pliki, linki, notatki, fragmenty z wektorami, podgląd obrazu dla modelu |
 | `rozmowy.js` | historia rozmów: plik na rozmowę + indeks, dopisywanie odpowiedzi-sierot, kopia zapasowa |
 | `czat.js` | `POST /api/chat`: składanie kontekstu, okno modelu lokalnego, wybór modelu, wysyłka, biegi – kroki jako osobne funkcje, czyste na poziomie modułu |
@@ -361,6 +362,7 @@ z pozostałych.
 | `kamera.js` | kamera na żywo: podgląd, Kinect, detekcja, sylwetka, dopasowanie panelu |
 | `nauka-widok.js` | panel Nauka: rozpoznawanie, procedury, rutyny, runner z potwierdzeniem |
 | `zmysly-widok.js` | Ustawienia → Zmysły: kreator „Podłącz komputer”, przełączniki składników, pakiety |
+| `gesty.js` | własne gesty: kształt dłoni, ruch, dopasowanie – czyste funkcje; nagrywanie i rozpoznawanie woła `kamera.js` |
 | `samouczek.js` | samouczek pierwszego uruchomienia; pod automatem (`navigator.webdriver`) sam się nie pokazuje |
 | `strona/` | strona produktowa pod `/` – osobna od aplikacji, własny CSS i skrypt |
 

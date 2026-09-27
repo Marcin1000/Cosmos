@@ -15,6 +15,9 @@ function utworzKamere(z) {
     settings, senses, cameraFacing, odswiezPlan,   // funkcje zwracające bieżącą wartość
     $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
   } = z;
+  // Rozpoznany własny gest → czynność (app.js). Bez niej gest tylko się pokazuje.
+  const onGest = z.onGest || (() => {});
+  const G = window.utworzGesty ? window.utworzGesty() : null;
 
   let liveStream = null;
   let liveTimer = null;
@@ -678,19 +681,146 @@ function utworzKamere(z) {
         }).catch(() => {});
       }
       dloniePoprzedni = opis;
+      probkaGestu(dlonie[0]);
     } catch { /* zmysły chwilowo niedostępne – następny krok spróbuje znowu */ }
     finally { dlonieWToku = false; }
   }
 
+  /* ---- WŁASNE GESTY -------------------------------------------------
+     Ta sama pętla dłoni karmi nagrywanie i rozpoznawanie. Przy zapisanych
+     gestach (i w czasie nagrywania) chodzi co 350 ms zamiast co 1,2 s – ruch
+     dłoni w górę trwa sekundę i przy rzadkich odczytach zostawałby jednym
+     punktem. Bez gestów – rzadko, bo każdy odczyt przez agenta to obieg
+     przez serwer. */
+  let wzorceGestow = [];
+  let oknoGestow = [];          // ostatnie ~2,5 s próbek pierwszej dłoni
+  let nagrywanieGestu = null;   // { do, probki, gotowe }
+  let ostatniGest = 0;
+  let nagranyWzorzec = null;
+
+  function probkaGestu(dlon) {
+    if (!G) return;
+    const teraz = Date.now();
+    const probka = dlon ? { t: teraz, palce: dlon.palce || [], punkty: dlon.punkty || [] } : { t: teraz };
+    if (nagrywanieGestu) {
+      nagrywanieGestu.probki.push(probka);
+      if (teraz >= nagrywanieGestu.do) { const n = nagrywanieGestu; nagrywanieGestu = null; n.gotowe(n.probki); }
+      return;
+    }
+    if (!wzorceGestow.length) return;
+    oknoGestow.push(probka);
+    oknoGestow = oknoGestow.filter((p) => teraz - p.t <= 2500);
+    // Po rozpoznaniu dwie sekundy przerwy – jeden gest, jedna czynność.
+    if (teraz - ostatniGest < 2000) return;
+    const gest = G.dopasuj(wzorceGestow, oknoGestow);
+    if (!gest) return;
+    ostatniGest = teraz;
+    oknoGestow = [];
+    ustawStatusKamery(`✋ ${gest.nazwa}`);
+    onGest(gest);
+  }
+
+  function odstepDloni() {
+    return nagrywanieGestu || wzorceGestow.length ? 350 : 1200;
+  }
   function startDlonie() {
-    clearInterval(dlonieTimer);
-    dlonieTimer = setInterval(liveDlonieKrok, 1200);
+    clearTimeout(dlonieTimer);
+    const krok = async () => {
+      await liveDlonieKrok();
+      if (dlonieTimer !== null) dlonieTimer = setTimeout(krok, odstepDloni());
+    };
+    dlonieTimer = setTimeout(krok, odstepDloni());
+    wczytajGesty();
   }
   function stopDlonie() {
-    clearInterval(dlonieTimer);
+    clearTimeout(dlonieTimer);
     dlonieTimer = null;
+    oknoGestow = [];
     wyczyscDlonie();
   }
+
+  async function wczytajGesty() {
+    try {
+      const r = await fetch('/api/gesty');
+      const d = await readJsonSafe(r);
+      if (r.ok) { wzorceGestow = d.gesty || []; pokazGesty(); }
+    } catch { /* bez listy gesty po prostu nie działają */ }
+  }
+
+  function pokazGesty() {
+    const lista = $('gesty-lista');
+    if (!lista) return;
+    lista.replaceChildren();
+    for (const g of wzorceGestow) {
+      const li = document.createElement('li');
+      const nazwa = document.createElement('strong');
+      nazwa.textContent = g.nazwa;                           // nazwę wpisał człowiek – tylko textContent
+      const opis = document.createElement('span');
+      opis.className = 'gest-opis';
+      opis.textContent = `${G.opisWzorca(g, t)} → ${t(`gest.cz.${g.czynnosc}`)}${g.parametr ? `: ${g.parametr}` : ''}`;
+      const usun = document.createElement('button');
+      usun.type = 'button';
+      usun.className = 'icon-btn gest-usun';
+      usun.textContent = '×';
+      usun.setAttribute('aria-label', t('gest.usun', { nazwa: g.nazwa }));
+      usun.addEventListener('click', async () => {
+        usun.disabled = true;
+        const r = await fetch(`/api/gesty?id=${encodeURIComponent(g.id)}`, { method: 'DELETE' }).catch(() => null);
+        if (r && r.ok) await wczytajGesty(); else usun.disabled = false;
+      });
+      li.append(nazwa, opis, usun);
+      lista.appendChild(li);
+    }
+  }
+
+  function stanGestu(tekst) { const e = $('gest-stan'); if (e) e.textContent = tekst; }
+  const pauzaMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  $('gest-czynnosc')?.addEventListener('change', () => {
+    const cz = $('gest-czynnosc').value;
+    const pole = $('gest-parametr');
+    pole.hidden = !(cz === 'wyslij' || cz === 'otworz');
+    pole.placeholder = t(cz === 'otworz' ? 'gest.parametrAdres' : 'gest.parametrTekst');
+  });
+
+  $('gest-nagraj')?.addEventListener('click', async () => {
+    const przycisk = $('gest-nagraj');
+    if (!G || !dlonieMozliwe() || $('live-panel').style.display === 'none') {
+      stanGestu(t('gest.niemozliwe'));
+      return;
+    }
+    przycisk.disabled = true;
+    $('gest-zapisz').disabled = true;
+    nagranyWzorzec = null;
+    for (const n of [3, 2, 1]) { stanGestu(t('gest.odliczanie', { n })); await pauzaMs(1000); }
+    stanGestu(t('gest.pokazuj'));
+    const probki = await new Promise((gotowe) => { nagrywanieGestu = { do: Date.now() + 2500, probki: [], gotowe }; });
+    przycisk.disabled = false;
+    const w = G.wzorzecZNagrania(probki);
+    if (!w) { stanGestu(t('gest.bezDloni')); return; }
+    nagranyWzorzec = w;
+    stanGestu(t('gest.nagrany', { opis: G.opisWzorca(w, t) }));
+    $('gest-zapisz').disabled = false;
+  });
+
+  $('gest-zapisz')?.addEventListener('click', async () => {
+    if (!nagranyWzorzec) return;
+    const przycisk = $('gest-zapisz');
+    przycisk.disabled = true;
+    const r = await fetch('/api/gesty', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nazwa: $('gest-nazwa').value, czynnosc: $('gest-czynnosc').value,
+        parametr: $('gest-parametr').value, znaczenie: $('gest-znaczenie').value, ...nagranyWzorzec,
+      }),
+    }).catch(() => null);
+    const d = r ? await readJsonSafe(r) : {};
+    if (!r || !r.ok) { stanGestu(d.error || t('gest.bladZapisu')); przycisk.disabled = false; return; }
+    nagranyWzorzec = null;
+    for (const id of ['gest-nazwa', 'gest-parametr', 'gest-znaczenie']) $(id).value = '';
+    stanGestu(t('gest.zapisany', { nazwa: d.gest.nazwa }));
+    await wczytajGesty();
+  });
 
   // O tym, czy panel jest otwarty, decyduje jego widoczność – nie obecność
   // strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.

@@ -1116,6 +1116,33 @@
          gdzie nie zabierają ani jednej linijki. -->
     <div class="live-status mono" id="live-status" hidden>–</div>
 
+    <!-- Własne gesty: nagraj dłoń, nazwij, przypisz czynność (public/gesty.js,
+         nagrywanie i rozpoznawanie w pętli dłoni w kamera.js). -->
+    <details class="live-gesty" id="live-gesty">
+      <summary data-i18n="gest.tytul">Własne gesty</summary>
+      <ul class="gesty-lista" id="gesty-lista"></ul>
+      <div class="gest-nowy">
+        <input id="gest-nazwa" maxlength="40" data-i18n-ph="gest.nazwaPh" placeholder="Nazwa, np. Dwa palce w górę">
+        <select id="gest-czynnosc" data-i18n-aria="gest.czynnosc" aria-label="Co ma zrobić">
+          <option value="przewin-gora" data-i18n="gest.cz.przewin-gora">Przewiń rozmowę w górę</option>
+          <option value="przewin-dol" data-i18n="gest.cz.przewin-dol">Przewiń rozmowę w dół</option>
+          <option value="migawka" data-i18n="gest.cz.migawka">Zrób migawkę</option>
+          <option value="glos" data-i18n="gest.cz.glos">Włącz albo wyłącz tryb głosowy</option>
+          <option value="stop" data-i18n="gest.cz.stop">Przerwij odpowiedź i czytanie</option>
+          <option value="wyslij" data-i18n="gest.cz.wyslij">Wyślij tekst do Cosmosa</option>
+          <option value="otworz" data-i18n="gest.cz.otworz">Otwórz stronę</option>
+          <option value="znaczenie" data-i18n="gest.cz.znaczenie">Tylko znaczenie dla Cosmosa</option>
+        </select>
+        <input id="gest-parametr" maxlength="300" hidden>
+        <input id="gest-znaczenie" maxlength="200" data-i18n-ph="gest.znaczeniePh" placeholder="Co znaczy – Cosmos dostanie to w rozmowie">
+        <div class="gest-przyciski">
+          <button type="button" class="btn-secondary" id="gest-nagraj" data-i18n="gest.nagraj">Nagraj gest</button>
+          <button type="button" class="btn-primary" id="gest-zapisz" data-i18n="gest.zapisz" disabled>Zapisz</button>
+        </div>
+        <p class="field-hint" id="gest-stan" aria-live="polite"></p>
+      </div>
+    </details>
+
     <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
          w którym stoisz, więc działa w terenie z telefonu. -->
     <!-- ZWINIĘTE DOMYŚLNIE. Rozwinięte pudełko zajmowało na telefonie ponad
@@ -1291,6 +1318,7 @@
   <script src="/protokol.js"></script>
   <script src="/plener.js"></script>
   <script src="/mowa.js"></script>
+  <script src="/gesty.js"></script>
   <script src="/konta.js"></script>
   <script src="/studio-widok.js"></script>
   <script src="/pwa.js"></script>

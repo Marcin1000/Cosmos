@@ -3546,9 +3546,39 @@ const { openStudio, zadanieStudia } = utworzStudioWidok({
 // KAMERA NA ŻYWO – podgląd + detekcja YOLO + zdarzenia percepcji
 // ----------------------------------------------------------------
 /* Kamera na żywo: podgląd, detekcja, sylwetka – public/kamera.js. */
+/** Własny gest rozpoznany w panelu kamery (public/gesty.js) → jego czynność.
+ *  Każdy gest idzie też do kontekstu rozmowy – ze znaczeniem, które nadała mu
+ *  osoba, więc model wie, co „dwa palce w górę” miały powiedzieć. */
+function wykonajGest(g) {
+  fetch('/api/events', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'dlonie', summary: `gest „${g.nazwa}”${g.znaczenie ? ` – ${g.znaczenie}` : ''}` }),
+  }).catch(() => {});
+  // Przewija się pojemnik rozmowy (el.chatScroll), nie sama lista wiadomości.
+  const krok = () => Math.round(el.chatScroll.clientHeight * 0.7);
+  switch (g.czynnosc) {
+    case 'przewin-gora': el.chatScroll.scrollBy({ top: -krok(), behavior: 'smooth' }); break;
+    case 'przewin-dol': el.chatScroll.scrollBy({ top: krok(), behavior: 'smooth' }); break;
+    case 'migawka': $('live-snapshot').click(); break;
+    case 'glos': if (voiceMode) exitVoiceMode(); else enterVoiceMode(); break;
+    case 'stop':
+      stopSpeaking();
+      if (isGenerating) stopGeneration();
+      break;
+    case 'wyslij':
+      if (!g.parametr) break;
+      el.input.value = g.parametr;
+      sendMessage();
+      break;
+    case 'otworz': otworzStrone(g.parametr); break;
+    default: break;   // „znaczenie” – samo zdarzenie w kontekście
+  }
+}
+
 const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta } = utworzKamere({
   settings: () => settings, senses: () => senses, cameraFacing: () => cameraFacing, odswiezPlan: () => odswiezPlan,
   $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
+  onGest: (g) => wykonajGest(g),
 });
 
 /* Plan zdjęciowy, karty ujęć i misja drona mieszkają w `public/plener.js`

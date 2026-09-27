@@ -85,6 +85,7 @@ const trening_ = require('./lib/trening.js');
 const { addEvent, recentEvents, podlaczStrumien, ileZdarzen } = require('./lib/zdarzenia.js');
 const { TRAIN_DIR, TRAIN_SCRIPT, buildTrainingDataset, commandExists, startTraining, trainJob, trainLog, trainStatusView } = trening_;
 const urzadzenia_ = require('./lib/urzadzenia.js');
+const { handleGesty } = require('./lib/gesty.js');
 const { BRIEFING, handleBriefing, handleDevices, urzadzenia } = urzadzenia_;
 const nauka_ = require('./lib/nauka.js');
 const { handleAutomation, handleLessons, handleProcedures, handleRoutines,
@@ -1405,6 +1406,7 @@ async function trasyApi(req, res, p) {
   if (p === '/api/procedures/run-readonly' || p === '/api/automation/status') return await handleAutomation(req, res, p);
   if (p.startsWith('/api/procedures/record/')) return await handleRecord(req, res, p);
   if (p === '/api/devices' || p === '/api/devices/run') return await handleDevices(req, res, p);
+  if (p === '/api/gesty') return await handleGesty(req, res);
   if (p === '/api/briefing' && req.method === 'GET') return await handleBriefing(req, res);
   if (p === '/api/capabilities' && req.method === 'GET') {
     const m = await capabilityManifest();

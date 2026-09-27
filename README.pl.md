@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="137 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-137-5E9E3A?style=flat-square">
+  <img alt="138 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-138-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 137 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 138 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 137 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 138 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -281,6 +281,13 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia w odpowiedzi nie zasłaniają planu:
   tekst stoi, a siatki wskakują pod swoje punkty, gdy przychodzą; „pokaż inne zdjęcia”
   daje zdjęcia, których w rozmowie jeszcze nie było
+- 🤚 **Własne gesty** – w panelu kamery „Własne gesty”: nazwij gest, wybierz, co ma
+  zrobić (przewinąć rozmowę w górę albo w dół, zrobić migawkę, włączyć tryb głosowy,
+  przerwać odpowiedź, wysłać tekst do Cosmosa, otworzyć stronę albo tylko przekazać
+  znaczenie), naciśnij **Nagraj gest** i po odliczaniu pokaż go przez 2,5 s. Cosmos
+  zapamiętuje palce, kształt dłoni i ruch („dwa palce w górę”), a potem, gdy pokażesz
+  gest przy otwartym podglądzie, wykonuje czynność i mówi o tym modelowi. Gesty są
+  Twoje – każda osoba ma własne
 - 🌐 **Otwieranie stron** – „otwórz onet.pl”, „wejdź na YouTube”: strona otwiera się
   w nowej karcie od razu. Gdy przeglądarka zablokuje okno otwierane bez kliknięcia,
   zostaje karta z przyciskiem **Otwórz** (albo zezwól tej stronie na wyskakujące okna)
@@ -1032,6 +1039,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/events` | POST/GET | Zdarzenia percepcji (od watcherów/czujników) |
 | `/api/events/stream` | GET | **Strumień SSE w drugą stronę** – przeglądarka dowiaduje się o zdarzeniach zamiast tylko je wysyłać. Dzięki temu „Hej, Kosmos" wykryte przez `senses/wake_listener.py` na domowym komputerze otwiera tryb głosowy na telefonie |
 | `/api/memory` | POST/GET/DELETE | Pamięć długotrwała (zapis, lista, usuwanie) |
+| `/api/gesty` | GET/POST/DELETE | Własne gesty osoby: wzorzec dłoni (palce, kształt, ruch), czynność, znaczenie |
 | `/api/stt` `/api/tts` `/api/detect` `/api/pose` `/api/dlonie` | POST | Proxy do zmysłów (Whisper/Piper/YOLO/MediaPipe). `/api/pose` – postawa, `/api/dlonie` – palce i gesty; oba woła panel kamery |
 | `/api/kinect/stream` `/api/kinect/frame` `/api/kinect/status` | GET | Obraz z Kinecta 360 (kolor / głębia) – przeglądarka nie widzi go sama, bo nie jest kamerą UVC. `stream` to MJPEG (płynny podgląd), `frame` to pojedyncza klatka |
 | `/api/agent/kod` `/api/agent/lista` `/api/agent?id=` | POST / GET / DELETE | Agent zmysłów: kod podłączenia (6 cyfr do przepisania i długi kod do polecenia instalacji, oba ważne 10 min), lista Twoich komputerów z ich stanem, odłączenie komputera (agent dostaje 410, usuwa u siebie autostart i token) |
@@ -1361,7 +1369,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 137 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 138 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

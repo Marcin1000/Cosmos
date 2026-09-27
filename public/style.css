@@ -2988,6 +2988,21 @@ body::after {
 .voice-transcript:empty, .voice-answer:empty { display: none; }
 /* Szkic w trakcie mówienia: przygaszony, bo może się jeszcze zmienić. */
 .voice-transcript.podglad { opacity: .72; font-style: italic; }
+/* Własne gesty w panelu kamery: zwinięte, żeby nie zabierały miejsca obrazowi. */
+.live-gesty { margin: 4px 14px 8px; font-size: 12.5px; }
+.live-gesty summary { cursor: pointer; color: var(--text-dim); padding: 4px 0; }
+.gesty-lista { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.gesty-lista li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.gest-opis { color: var(--text-dim); font-size: 11.5px; min-width: 0; overflow-wrap: anywhere; }
+.gest-usun { width: 24px; height: 24px; }
+.gest-nowy { display: grid; gap: 6px; }
+.gest-nowy input, .gest-nowy select {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text); font: inherit; font-size: 12.5px; padding: 6px 8px;
+}
+.gest-przyciski { display: flex; gap: 6px; }
+.gest-przyciski button { flex: 1; }
+
 /* Komunikat (błąd rozpoznawania, mikrofon) to nie wypowiedź – bez dymka. */
 .voice-transcript.komunikat {
   background: none; border-color: transparent;
