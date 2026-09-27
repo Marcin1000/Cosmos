@@ -141,15 +141,29 @@ def _load_whisper(device: str):
     return WhisperModel(name, device=device, compute_type=compute)
 
 
+# Jedno ładowanie naraz. Rozgrzewka startuje w tle przy starcie usługi, a to
+# dokładnie chwila, w której nasłuch „Hej, Cosmos” wysyła pierwsze wycinki –
+# bez zamka każde /stt w trakcie ładowania ładowało własną kopię modelu
+# (za pierwszym razem także pobierało ją z sieci; na GPU kilka kopii w VRAM).
+_whisper_zamek = threading.Lock()
+_whisper_na_cpu = False
+
+
 def get_whisper():
-    global _whisper_model
-    if _whisper_model is None:
-        device = os.environ.get("WHISPER_DEVICE", "auto")
-        try:
-            _whisper_model = _load_whisper(device)
-        except Exception:
-            _whisper_model = _load_whisper("cpu")
-    return _whisper_model
+    global _whisper_model, _whisper_na_cpu
+    model = _whisper_model
+    if model is not None:
+        return model
+    with _whisper_zamek:
+        if _whisper_model is None:
+            device = os.environ.get("WHISPER_DEVICE", "auto")
+            try:
+                _whisper_model = _load_whisper(device)
+                _whisper_na_cpu = device == "cpu"
+            except Exception:
+                _whisper_model = _load_whisper("cpu")
+                _whisper_na_cpu = True
+        return _whisper_model
 
 
 def whisper_to_cpu():
@@ -160,10 +174,15 @@ def whisper_to_cpu():
     zabezpieczenie przy ładowaniu nic nie dawało: proces wywracał się w środku
     transkrypcji na „Library cublas64_12.dll is not found”. Ten przełącznik
     wołamy właśnie wtedy – raz, i zostajemy na procesorze do restartu usługi.
+    Kilka /stt, które potknęły się na CUDA naraz, ładuje model procesora raz:
+    kolejne czekają na zamku i dostają gotowy.
     """
-    global _whisper_model
-    _whisper_model = _load_whisper("cpu")
-    return _whisper_model
+    global _whisper_model, _whisper_na_cpu
+    with _whisper_zamek:
+        if _whisper_model is None or not _whisper_na_cpu:
+            _whisper_model = _load_whisper("cpu")
+            _whisper_na_cpu = True
+        return _whisper_model
 
 
 # Rozpoznajemy po treści: brakująca biblioteka CUDA/cuDNN, nie błąd samego audio.
@@ -343,8 +362,11 @@ def decode_image(payload: dict):
 # Endpointy
 # ---------------------------------------------------------------------------
 
+# `async`: odpowiada z pętli zdarzeń, nie z puli wątków. Wisząca trasa
+# (zawieszony czujnik) zajmowała wszystkie wątki i /health milczało – agent
+# i Cosmos brały wtedy zdrowe zmysły za wyłączone (zespół IT, runda 7).
 @app.get("/health")
-def health():
+async def health():
     return CAPS
 
 
@@ -375,6 +397,10 @@ def stt(request: Request):
     opcje = {"vad_filter": True}
     if tryb in ("nasluch", "podglad"):
         opcje["beam_size"] = 1
+        # Bez tego faster-whisper przy niepewności i tak próbkuje kolejne
+        # temperatury po kilku kandydatów – zjada zysk z beam_size=1
+        # i sprzyja halucynacjom na szumie (zespół IT, runda 7).
+        opcje["temperature"] = 0.0
         if not lang and jezyk in ("pl", "en"):
             lang = jezyk
     try:
@@ -390,6 +416,19 @@ def stt(request: Request):
             print(f"  ⚠ Whisper: brak bibliotek CUDA ({e}). Przechodzę na procesor.", flush=True)
             segments, info = whisper_to_cpu().transcribe(tmp, language=lang, **opcje)
             segments = list(segments)
+        # Pytanie: język wykrywany sam, a na 1–2 s nagrania myli się najczęściej.
+        # Niepewny wynik – jeszcze raz w języku interfejsu.
+        if (tryb == "pytanie" and not lang and jezyk in ("pl", "en")
+                and getattr(info, "language", jezyk) != jezyk
+                and float(getattr(info, "language_probability", 1.0) or 0) < 0.7):
+            try:
+                segments, info = get_whisper().transcribe(tmp, language=jezyk, **opcje)
+                segments = list(segments)
+            except Exception as e:
+                if not _is_cuda_runtime_error(e):
+                    raise
+                segments, info = whisper_to_cpu().transcribe(tmp, language=jezyk, **opcje)
+                segments = list(segments)
         text = " ".join(s.text.strip() for s in segments).strip()
         return {"text": text, "language": info.language}
     finally:
@@ -530,7 +569,7 @@ def detect(payload: dict = Body(...)):
         return JSONResponse({"error": "YOLO niezainstalowany (pip install ultralytics)."}, status_code=501)
     img = decode_image(payload)
     if img is None:
-        return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
+        return JSONResponse({"error": "Nie udało się odczytać obrazu."}, status_code=400)
     with YOLO_ZAMEK:
         results = get_yolo()(img, verbose=False)[0]
     objects = []
@@ -554,23 +593,85 @@ _poza = None
 _poza_zamek = threading.Lock()
 
 
+# Pobieranie modeli – osobny zamek, nie zamek trasy: gdy model już leży na
+# dysku, nikt tu nie czeka, a pobieranie nie blokuje rozpoznawania.
+_modele_zamek = threading.Lock()
+# Prawdziwe modele mają kilka MB (sylwetka ~5,8 MB, dłonie ~8,4 MB).
+_MODEL_MIN_BAJTOW = 1_000_000
+
+
+class ModelUszkodzony(Exception):
+    """MediaPipe nie przyjął pliku modelu – plik skasowany, pobierze się od nowa."""
+
+
+def _pobierz_model(url: str, plik: str) -> None:
+    """Pobierz model do `plik` albo rzuć OSError i nie zostaw nic na dysku.
+
+    Sprawdzamy, co przyszło, zanim plik stanie pod docelową nazwą: sieć hotelowa
+    albo pośrednik potrafi oddać 200 ze stroną logowania, a taki plik
+    zostawał na stałe i /dlonie padało aż do ręcznego skasowania katalogu.
+    Plik .task to archiwum zip (z dwoma bajtami przed nagłówkiem, więc
+    sprawdza je `zipfile.is_zipfile`, nie pierwsze bajty)."""
+    import http.client
+    import urllib.request
+    import zipfile
+    tmp = plik + ".tmp"
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            dlugosc = (r.headers.get("Content-Length") or "").strip()
+            with open(tmp, "wb") as f:
+                while True:
+                    kawalek = r.read(1 << 20)
+                    if not kawalek:
+                        break
+                    f.write(kawalek)
+        rozmiar = os.path.getsize(tmp)
+        if dlugosc.isdigit() and int(dlugosc) != rozmiar:
+            raise OSError(f"pobieranie przerwane ({rozmiar} z {dlugosc} bajtów)")
+        if rozmiar < _MODEL_MIN_BAJTOW or not zipfile.is_zipfile(tmp):
+            raise OSError("zamiast modelu przyszło coś innego (strona logowania sieci? pośrednik?)")
+        os.replace(tmp, plik)
+    except http.client.HTTPException as e:
+        # IncompleteRead i podobne nie są OSError – trasa oddałaby 500.
+        raise OSError(f"pobieranie przerwane ({type(e).__name__})") from e
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
 def _model_mediapipe(zmienna: str, nazwa: str, url: str) -> str:
     """Ścieżka do modelu .task: z zmiennej środowiskowej albo pobrany raz do
-    ~/.cosmos/modele przy pierwszym użyciu."""
+    ~/.cosmos/modele przy pierwszym użyciu. Nieudane pobranie = OSError."""
     wlasny = os.environ.get(zmienna)
     if wlasny:
         return wlasny
     katalog = os.path.join(os.environ.get("COSMOS_AGENT_DIR", os.path.join(os.path.expanduser("~"), ".cosmos")), "modele")
     plik = os.path.join(katalog, nazwa)
-    if not os.path.exists(plik):
-        import urllib.request
-        os.makedirs(katalog, exist_ok=True)
-        with urllib.request.urlopen(url, timeout=60) as r:
-            dane = r.read()
-        with open(plik + ".tmp", "wb") as f:
-            f.write(dane)
-        os.replace(plik + ".tmp", plik)
+    if os.path.exists(plik):
+        return plik
+    with _modele_zamek:
+        if not os.path.exists(plik):
+            os.makedirs(katalog, exist_ok=True)
+            _pobierz_model(url, plik)
     return plik
+
+
+def _utworz_z_modelu(zmienna: str, plik: str, utworz):
+    """`utworz()` rozpoznawacza z pliku modelu. Gdy MediaPipe pliku nie
+    przyjmie, kasujemy go (tylko pobrany przez nas, nie wskazany zmienną)
+    i rzucamy ModelUszkodzony – następna próba pobierze model od nowa."""
+    try:
+        return utworz()
+    except Exception as e:
+        if not os.environ.get(zmienna):
+            try:
+                os.remove(plik)
+            except OSError:
+                pass
+        raise ModelUszkodzony(str(e)) from e
 
 
 def _plik_modelu_pozy() -> str:
@@ -587,13 +688,16 @@ def _punkty_sylwetki(rgb):
         return res.pose_landmarks.landmark if res.pose_landmarks else None
     from mediapipe.tasks import python as mp_tasks
     from mediapipe.tasks.python import vision
+    # Model najpierw na dysk (bez zamka trasy), potem pod zamkiem rozpoznawacz.
+    plik = _plik_modelu_pozy() if _poza is None else ""
     # PoseLandmarker nie jest bezpieczny dla wątków – jeden na proces, pod zamkiem.
     with _poza_zamek:
         if _poza is None:
             opcje = vision.PoseLandmarkerOptions(
-                base_options=mp_tasks.BaseOptions(model_asset_path=_plik_modelu_pozy()),
+                base_options=mp_tasks.BaseOptions(model_asset_path=plik),
                 running_mode=vision.RunningMode.IMAGE, num_poses=1)
-            _poza = vision.PoseLandmarker.create_from_options(opcje)
+            _poza = _utworz_z_modelu("POSE_MODEL", plik,
+                                     lambda: vision.PoseLandmarker.create_from_options(opcje))
         res = _poza.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
     return res.pose_landmarks[0] if res.pose_landmarks else None
 
@@ -606,17 +710,22 @@ def pose(payload: dict = Body(...)):
     import cv2
     img = decode_image(payload)
     if img is None:
-        return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
+        return JSONResponse({"error": "Nie udało się odczytać obrazu."}, status_code=400)
     try:
         lm = _punkty_sylwetki(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     except OSError as e:
         return JSONResponse({"error": f"Nie udało się pobrać modelu sylwetki: {e}"}, status_code=503)
+    except ModelUszkodzony:
+        return JSONResponse({"error": "Model sylwetki był uszkodzony – skasowany, następna próba "
+                                      "pobierze go od nowa."}, status_code=503)
     if not lm:
         return {"present": False, "summary": "nie widać sylwetki"}
     nose_y = lm[0].y
     hip_y = (lm[23].y + lm[24].y) / 2
-    posture = "stoi" if (hip_y - nose_y) > 0.45 else "siedzi lub jest blisko kamery"
-    return {"present": True, "summary": f"widoczna sylwetka, osoba prawdopodobnie {posture}"}
+    # `kod` dla przeglądarki (tłumaczy go przez t()), `summary` po polsku dla modelu.
+    kod = "stoi" if (hip_y - nose_y) > 0.45 else "siedzi"
+    posture = "stoi" if kod == "stoi" else "siedzi lub jest blisko kamery"
+    return {"present": True, "kod": kod, "summary": f"widoczna sylwetka, osoba prawdopodobnie {posture}"}
 
 
 # ---------------------------------------------------------------------------
@@ -691,26 +800,32 @@ def dlonie(payload: dict = Body(...)):
     """{"image": dataURL} -> {"dlonie": [{strona, palce, gest, punkty}], "summary": "..."}"""
     global _gesty
     if not CAPS["dlonie"]:
-        return JSONResponse({"error": "Rozpoznawanie dłoni wymaga pakietu MediaPipe (Ciało w Pakietach zmysłów)."}, status_code=501)
+        return JSONResponse({"error": "Rozpoznawanie dłoni wymaga pakietu MediaPipe – w Cosmosie: Ustawienia → "
+                                      "Zmysły → Pakiety zmysłów → „Sylwetka, dłonie i gesty”."}, status_code=501)
     import cv2
     import mediapipe as mp
     from mediapipe.tasks import python as mp_tasks
     from mediapipe.tasks.python import vision
     img = decode_image(payload)
     if img is None:
-        return JSONResponse({"error": "Nie udało się zdekodować obrazu."}, status_code=400)
+        return JSONResponse({"error": "Nie udało się odczytać obrazu."}, status_code=400)
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     try:
+        # Model najpierw na dysk (bez zamka trasy), potem pod zamkiem rozpoznawacz.
+        plik = _model_mediapipe("GESTY_MODEL", "gesture_recognizer.task", GESTY_MODEL_URL) if _gesty is None else ""
         with _gesty_zamek:
             if _gesty is None:
                 opcje = vision.GestureRecognizerOptions(
-                    base_options=mp_tasks.BaseOptions(model_asset_path=_model_mediapipe(
-                        "GESTY_MODEL", "gesture_recognizer.task", GESTY_MODEL_URL)),
+                    base_options=mp_tasks.BaseOptions(model_asset_path=plik),
                     running_mode=vision.RunningMode.IMAGE, num_hands=2)
-                _gesty = vision.GestureRecognizer.create_from_options(opcje)
+                _gesty = _utworz_z_modelu("GESTY_MODEL", plik,
+                                          lambda: vision.GestureRecognizer.create_from_options(opcje))
             res = _gesty.recognize(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
     except OSError as e:
         return JSONResponse({"error": f"Nie udało się pobrać modelu dłoni: {e}"}, status_code=503)
+    except ModelUszkodzony:
+        return JSONResponse({"error": "Model dłoni był uszkodzony – skasowany, następna próba "
+                                      "pobierze go od nowa."}, status_code=503)
     wynik = []
     for i, punkty in enumerate(res.hand_landmarks or []):
         p = [(q.x, q.y, q.z) for q in punkty]
@@ -853,10 +968,32 @@ _kinect_err = ""
 _kinect_zamek = threading.Lock()
 
 
+class KinectZajety(RuntimeError):
+    """Czujnik zajęty dłużej niż 2 s – inna trasa wisi na nim (np. otwieranie)."""
+
+
+class _ZamekKinecta:
+    """`with _zamek_kinecta:` – jak zamek, ale czeka najwyżej 2 s. Zawieszone
+    otwarcie czujnika pod zwykłym zamkiem zbierało za sobą wszystkie wątki
+    usługi: 40 tras czekało, /dlonie i /stt przestawały odpowiadać, a SIGTERM
+    nie kończył procesu (zespół IT, runda 7)."""
+    def __enter__(self):
+        if not _kinect_zamek.acquire(timeout=2):
+            raise KinectZajety("czujnik zajęty – spróbuj za chwilę")
+        return self
+
+    def __exit__(self, *a):
+        _kinect_zamek.release()
+        return False
+
+
+_zamek_kinecta = _ZamekKinecta()
+
+
 def get_kinect():
     """Jedna instancja czujnika na cały proces – Kinect nie znosi dwóch naraz."""
     global _kinect, _kinect_err
-    with _kinect_zamek:
+    with _zamek_kinecta:
         if _kinect is None:
             import kinect_win
             k = kinect_win.Kinect(color=True, depth=True, skeleton=True)
@@ -866,23 +1003,43 @@ def get_kinect():
         return _kinect
 
 
-def _zwolnij_kinect(e):
-    """Czujnik mógł zostać odłączony – następne żądanie spróbuje otworzyć od nowa."""
+def _zwolnij_kinect(e, k):
+    """Czujnik mógł zostać odłączony – następne żądanie spróbuje otworzyć od nowa.
+
+    `k` to czujnik, na którym był błąd. Zamykamy go tylko, gdy nadal jest
+    bieżący: trzy trasy naraz (podgląd, obserwator, zmysł głębi) po chwilowym
+    błędzie zamykały sobie nawzajem świeżo otwarte czujniki."""
     global _kinect, _kinect_err
     _kinect_err = str(e)
+    if isinstance(e, KinectZajety):
+        return                       # zajęty to nie zepsuty – czujnika nie zamykamy
     with _kinect_zamek:
-        if _kinect is not None:
-            try:
-                _kinect.close()
-            except Exception:
-                pass
+        if _kinect is not k or k is None:
+            return
+        try:
+            k.close()
+        except Exception:
+            pass
         _kinect = None
+
+
+# Komunikaty bez słowa „Kinect”: przeglądarka dokleja przed nimi
+# „Brak obrazu z Kinecta:”. `kod` – dla programów, które chcą rozpoznać błąd.
+def _blad_kinecta(tekst: str, kod: str, status: int = 503):
+    return JSONResponse({"error": tekst, "kod": kod}, status_code=status)
 
 
 def _niedostepny(e):
     global _kinect_err
     _kinect_err = str(e)
-    return JSONResponse({"error": f"Kinect niedostępny: {e}"}, status_code=503)
+    return _blad_kinecta(f"czujnik niedostępny ({e})", "kinect-niedostepny")
+
+
+def _blad_odczytu(e, k):
+    if isinstance(e, KinectZajety):
+        return _blad_kinecta(str(e), "kinect-zajety")
+    _zwolnij_kinect(e, k)
+    return _blad_kinecta(f"błąd odczytu z czujnika ({e})", "kinect-blad-odczytu")
 
 
 def _to_jpeg(img, quality: int = 80) -> bytes:
@@ -916,7 +1073,7 @@ def _render(k, stream: str):
     if stream == "depth":
         import cv2
         import numpy as np
-        with _kinect_zamek:
+        with _zamek_kinecta:
             frame = k.depth_frame()
         if frame is None:
             return None
@@ -925,7 +1082,7 @@ def _render(k, stream: str):
         vis = cv2.applyColorMap(vis, cv2.COLORMAP_TURBO)
         vis[frame == 0] = 0
         return vis
-    with _kinect_zamek:
+    with _zamek_kinecta:
         return k.color_frame()
 
 
@@ -984,15 +1141,14 @@ def kinect_frame(stream: str = "color", quality: int = 80):
     try:
         img = _render(k, stream)
         if img is None:
-            return JSONResponse({"error": "Brak klatki z Kinecta."}, status_code=503)
+            return _blad_kinecta("czujnik nie podał klatki", "kinect-brak-klatki")
         return Response(content=_to_jpeg(img, max(20, min(95, quality))), media_type="image/jpeg",
                         headers={"Cache-Control": "no-store"})
     except ImportError:
         return JSONResponse({"error": "Podgląd wymaga: pip install opencv-python"},
                             status_code=501)
     except Exception as e:
-        _zwolnij_kinect(e)
-        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
+        return _blad_odczytu(e, k)
 
 
 @app.get("/kinect/depth")
@@ -1005,16 +1161,15 @@ def kinect_depth():
         return _niedostepny(e)
     try:
         import numpy as np
-        with _kinect_zamek:
+        with _zamek_kinecta:
             frame = k.depth_frame()
         if frame is None:
-            return JSONResponse({"error": "Brak klatki głębi z Kinecta."}, status_code=503)
+            return _blad_kinecta("czujnik nie podał klatki głębi", "kinect-brak-klatki")
         h, w = frame.shape[:2]
         return Response(content=frame.astype("<u2").tobytes(), media_type="application/octet-stream",
                         headers={"X-Szerokosc": str(w), "X-Wysokosc": str(h), "Cache-Control": "no-store"})
     except Exception as e:
-        _zwolnij_kinect(e)
-        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
+        return _blad_odczytu(e, k)
 
 
 @app.get("/kinect/sylwetki")
@@ -1025,12 +1180,11 @@ def kinect_sylwetki():
     except Exception as e:
         return _niedostepny(e)
     try:
-        with _kinect_zamek:
+        with _zamek_kinecta:
             osoby = k.skeletons(timeout_ms=50)
         return {"sylwetki": osoby}
     except Exception as e:
-        _zwolnij_kinect(e)
-        return JSONResponse({"error": f"Błąd odczytu z Kinecta: {e}"}, status_code=503)
+        return _blad_odczytu(e, k)
 
 
 @app.post("/embed")
@@ -1052,7 +1206,19 @@ def _rozgrzej_whispera():
     pierwszym „Hej, Cosmos” kosztowało kilka do kilkunastu sekund – akurat
     wtedy, gdy ktoś czeka na odpowiedź."""
     try:
-        get_whisper()
+        model = get_whisper()
+        # Samo załadowanie nie liczy nic na karcie – brak bibliotek CUDA
+        # (cuBLAS) wychodził dopiero przy pierwszym „Hej, Cosmos”. Sekunda
+        # ciszy przez cały model wykrywa to od razu i przechodzi na procesor.
+        try:
+            import numpy as np
+            list(model.transcribe(np.zeros(16000, dtype=np.float32), language="pl", beam_size=1,
+                                  vad_filter=False, temperature=0.0)[0])
+        except Exception as e:
+            if not _is_cuda_runtime_error(e):
+                raise
+            print(f"  ⚠ Whisper: brak bibliotek CUDA ({e}). Przechodzę na procesor.", flush=True)
+            whisper_to_cpu()
         print("  ✓ Whisper załadowany", flush=True)
     except Exception as e:
         print(f"  ⚠ Whisper nie wstał przy starcie: {e}", flush=True)

@@ -96,17 +96,22 @@ function utworzWidoki(z) {
   function photosGrid(photos) {
     const wrap = document.createElement('div');
     wrap.className = 'photo-grid';
+    /* Link na ekranie tylko http(s) albo własna ścieżka – adres z wyników
+       cudzej wyszukiwarki (`javascript:`, `data:`) nie trafia do `href`. */
+    const bezpiecznyLink = (u) => (typeof u === 'string' && (/^https?:\/\//i.test(u) || /^\/(?!\/)/.test(u)) ? u : '');
     for (const p of photos) {
       const a = document.createElement('a');
       a.className = 'photo-tile';
-      a.href = p.source || p.full || '#';
+      const zrodloStrony = typeof p.source === 'string' && /^https?:\/\//i.test(p.source) ? p.source : '';
+      a.href = zrodloStrony || bezpiecznyLink(p.full) || '#';
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.title = [p.title, p.zrodlo, p.licencja].filter(Boolean).join(' · ');
       const img = document.createElement('img');
       /* Adres własny (np. z archiwum) bierzemy wprost – proxy miniatur jest
-         od CUDZYCH hostów i tylko by tu przeszkadzało. */
-      const wlasny = /^\//.test(p.thumb || '');
+         od CUDZYCH hostów i tylko by tu przeszkadzało. Tylko „/ścieżka”:
+         „//obcy.host/…” to adres obcego hosta i ominąłby proxy. */
+      const wlasny = /^\/(?!\/)/.test(p.thumb || '');
       img.src = wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`;
       img.alt = p.title || t('photo.found');
       img.loading = 'lazy';
@@ -125,7 +130,7 @@ function utworzWidoki(z) {
         e.preventDefault();
         openImageViewer(p.podglad || p.full || p.thumb, {
           zapas: p.podglad ? '' : (wlasny ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb)}`),
-          zrodlo: p.podglad ? '' : (p.source || ''),
+          zrodlo: p.podglad ? '' : zrodloStrony,
           tytul: p.title || '',
           opis: [p.zrodlo, p.licencja].filter(Boolean).join(' · '),
         });

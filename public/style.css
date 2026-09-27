@@ -1103,6 +1103,7 @@ body::after {
   aspect-ratio: 4 / 3; border-radius: 10px; background: var(--bg-hover);
   animation: szkielet-zdjec 1.2s ease-in-out infinite alternate;
 }
+.photo-grid.szukam span:nth-child(even) { animation-delay: .3s; }
 @keyframes szkielet-zdjec { from { opacity: .45; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .photo-grid.szukam span { animation: none; } }
 .photo-tile {
@@ -1878,7 +1879,12 @@ body::after {
 }
 .action-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .action-card-type { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: .04em; }
-.action-card-text { font-size: 13.5px; color: var(--text); }
+/* Długi adres do otwarcia: łamie się gdziekolwiek i ucina po trzech
+   wierszach (pełny w podpowiedzi), zamiast wypychać przycisk poza kartę. */
+.action-card-text {
+  font-size: 13.5px; color: var(--text); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .action-card-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .action-card-btns .btn-primary, .action-card-btns .btn-secondary { padding: 6px 14px; font-size: 13px; }
 .action-card-done { color: var(--success-tekst); font-size: 20px; }
@@ -2992,9 +2998,15 @@ body::after {
 .live-gesty { margin: 4px 14px 8px; font-size: 12.5px; }
 .live-gesty summary { cursor: pointer; color: var(--text-dim); padding: 4px 0; }
 .gesty-lista { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
-.gesty-lista li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-.gest-opis { color: var(--text-dim); font-size: 11.5px; min-width: 0; overflow-wrap: anywhere; }
-.gest-usun { width: 24px; height: 24px; }
+/* Nazwa nad opisem, usuwanie z boku. Długa nazwa i adres ucinają się
+   wielokropkiem (pełne w podpowiedzi), zamiast rozpychać panel. */
+.gesty-lista li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "nazwa usun" "opis usun";
+  column-gap: 8px; align-items: center;
+}
+.gest-nazwa { grid-area: nazwa; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gest-opis { grid-area: opis; color: var(--text-dim); font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gest-usun { grid-area: usun; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
 .gest-nowy { display: grid; gap: 6px; }
 .gest-nowy input, .gest-nowy select {
   width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px;

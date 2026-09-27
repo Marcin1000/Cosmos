@@ -238,6 +238,18 @@ function klient(ip) {
   const listaW = (await marcin.zadaj('/api/chat/biegi')).json.biegi || [];
   ok(listaW.some((b) => b.id === BIEG), 'właściciel widzi swój bieg');
 
+  // --- 6b. Własne gesty i dłonie (runda 7) ---------------------------------------------
+  const ksztalt = Array(42).fill(0.1);
+  const gestA = await ania.zadaj('/api/gesty', { metoda: 'POST', dane: { nazwa: 'Tajny gest Ani', czynnosc: 'znaczenie', ksztalt, palce: ['kciuk'] } });
+  ok(gestA.kod === 200, `członek zapisuje własny gest (${gestA.kod})`);
+  const gestyW = (await marcin.zadaj('/api/gesty')).json.gesty || [];
+  ok(!gestyW.some((g) => g.nazwa === 'Tajny gest Ani'), 'właściciel nie widzi gestów członka');
+  const podmiana = await marcin.zadaj('/api/gesty', { metoda: 'POST', dane: { id: gestA.json.gest.id, nazwa: 'Podmieniony', czynnosc: 'znaczenie', ksztalt } });
+  const gestyA = (await ania.zadaj('/api/gesty')).json.gesty || [];
+  ok(podmiana.kod === 200 && gestyA.length === 1 && gestyA[0].nazwa === 'Tajny gest Ani', 'ten sam identyfikator u drugiej osoby nie nadpisuje cudzego gestu');
+  const dlonieA = await ania.zadaj('/api/dlonie', { metoda: 'POST', dane: { image: 'data:image/jpeg;base64,AAAA' } });
+  ok(dlonieA.kod === 403 && !/127\.0\.0\.1|localhost|SENSES_URL/.test(dlonieA.tekst), `członek bez zmysłów: /api/dlonie → ${dlonieA.kod}, bez adresu domu`);
+
   // --- 7. Zużycie tak, treści nie ---------------------------------------------------
   const kontaW = await marcin.zadaj('/api/konta');
   const aniaW = (kontaW.json.uzytkownicy || []).find((u) => u.id === idAni) || {};

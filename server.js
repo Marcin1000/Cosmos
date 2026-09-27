@@ -1199,8 +1199,11 @@ async function trasyApi(req, res, p) {
      zapis rozmowy działają – a nowej pracy nie zaczynamy: czytelne 503 z prośbą
      o ponowienie. Dawniej `server.close()` na samym początku zamykania dawało
      przez ~20 s dokańczania strony 502 Cloudflare wszystkim (zespół IT, runda 4). */
-  if (zamykanie && req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/')
-    || /^\/api\/(stt|tts|detect|pose|ptak)$/.test(p))) {
+  /* Klatki Kinecta i dłonie też (każda metoda): przeglądarka dokładała nowe
+     zlecenia szybciej, niż licznik rzeczy w toku spadał do zera, i każdy
+     restart przy otwartej kamerze trwał pełne 20 s (zespół IT, runda 7). */
+  if (zamykanie && ((req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/')
+    || /^\/api\/(stt|tts|detect|pose|ptak)$/.test(p))) || p === '/api/dlonie' || p.startsWith('/api/kinect/'))) {
     res.setHeader('Retry-After', '5');
     return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje – wyślij za kilka sekund.', kod: 'aktualizacja' });
   }
@@ -1475,6 +1478,11 @@ const server = http.createServer(async (req, res) => {
     else res.end();
   }
 });
+/* cloudflared trzyma połączenia do Cosmosa do ~90 s, a Node domyślnie zamyka
+   bezczynne po 5 s – żądanie wysłane w tej samej chwili dostaje zerwane
+   połączenie, a pula agenta zmysłów martwe gniazda (zespół IT, runda 7). */
+server.keepAliveTimeout = 95_000;
+server.headersTimeout = 96_000;
 
 function start(port = PORT) {
   /* Nowe pliki tylko dla procesu Cosmosa (0600/0700): rozmowy, pamięć, kopie.

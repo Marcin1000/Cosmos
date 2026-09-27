@@ -182,6 +182,20 @@ const atrapa = http.createServer((req, res) => {
   r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.alloc(26 * 1024 * 1024) }).catch(() => ({ status: 0 }));
   ok(r.status === 413 || r.status === 0, `nagranie ponad 25 MB odrzucone (${r.status})`);
   s4.close();
+  /* Własny LOKALNY serwer rozpoznawania: nasłuch słowa budzącego bez podpowiedzi
+     („Hej, Cosmos.” w prompt) – na szumie Whisper „słyszał” ją i Cosmos budził
+     się sam. Pytanie podpowiedź dostaje (agencja, runda 7). */
+  const s5 = await stawiaj(glos3({ STT_BASE_URL: `${A}/oa/v1` }));
+  const u5 = `http://127.0.0.1:${s5.address().port}/api/stt`;
+  wywolania.length = 0;
+  await fetch(`${u5}?tryb=nasluch&jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  const nasl = wywolania.find((w) => w.url === '/oa/v1/audio/transcriptions');
+  wywolania.length = 0;
+  await fetch(`${u5}?tryb=pytanie&jezyk=pl`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  const pyt = wywolania.find((w) => w.url === '/oa/v1/audio/transcriptions');
+  ok(nasl && !/name="prompt"/.test(nasl.tresc), 'własny lokalny serwer: nasłuch słowa budzącego BEZ podpowiedzi');
+  ok(pyt && /name="prompt"/.test(pyt.tresc), 'własny lokalny serwer: pytanie z podpowiedzią');
+  s5.close();
 
   atrapa.close(); serwer.close(); serwer2.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nGŁOS SERWERA OK');

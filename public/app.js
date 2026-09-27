@@ -195,7 +195,7 @@ function saveConversations(natychmiast = false, c = activeConversation) {
   renderSidebar();
   cacheConvIndex();
 
-  try { localStorage.setItem('cosmos.conv.' + c.id, JSON.stringify(c)); } catch { /* limit */ }
+  try { localStorage.setItem('cosmos.conv.' + c.id, JSON.stringify(doZapisu(c))); } catch { /* limit */ }
 
   const conv = c;
   const id = conv.id;
@@ -223,7 +223,7 @@ function zapiszNaSerwerze(id, conv, proba = 0) {
       r = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...conv, ...(baza ? { bazaUpdatedAt: baza } : {}) }),
+        body: JSON.stringify({ ...doZapisu(conv), ...(baza ? { bazaUpdatedAt: baza } : {}) }),
       });
     } catch { oznaczNiezapisana(id, t('zapis.offline')); return; /* zostaje kopia w localStorage */ }
     const d = await readJsonSafe(r).catch(() => ({}));
@@ -815,8 +815,8 @@ function messageElement(m, idx = -1) {
       : t('kb.record');
     msg.innerHTML =
       `<div class="action-card">` +
-      `<div class="action-card-body"><span class="action-card-type ik ik-blyskawica">${escapeHtml(label.replace(/^✦\s*/, ''))}</span>` +
-      `<span class="action-card-text">${escapeHtml(m.actionText)}</span></div>` +
+      `<div class="action-card-body"><span class="action-card-type ik ${czyOtworz(m.actionType) ? 'ik-link' : 'ik-blyskawica'}">${escapeHtml(label.replace(/^✦\s*/, ''))}</span>` +
+      `<span class="action-card-text" title="${escapeHtml(m.actionText)}">${escapeHtml(m.actionText)}</span></div>` +
       (done
         ? `<span class="action-card-done">✓</span>`
         : `<div class="action-card-btns"><button class="btn-primary act-do">${t(czyOtworz(m.actionType) ? 'open.do' : 'actionDo')}</button>` +
@@ -890,11 +890,13 @@ function messageElement(m, idx = -1) {
   }
   const photos = msgPhotos(m);
   // Siatka w drodze: szkielet w miejscu, gdzie za chwilę staną zdjęcia (narzedzia.js).
-  if (!photos.length && m.content && typeof m.content === 'object' && m.content.szukam) {
+  if (!photos.length && toSzkielet(m)) {
     const szkielet = document.createElement('div');
     szkielet.className = 'photo-grid szukam';
     szkielet.setAttribute('aria-label', t('chat.photosLoading'));
-    for (let i = 0; i < 4; i++) szkielet.appendChild(document.createElement('span'));
+    // Tyle pól, ile zdjęć przyjdzie (8) – przy czterech tekst pod siatką skakał o 190–340 px.
+    szkielet.setAttribute('role', 'status');
+    for (let i = 0; i < 8; i++) szkielet.appendChild(document.createElement('span'));
     body.appendChild(szkielet);
   }
   if (photos.length) {
@@ -999,6 +1001,23 @@ function messageActions(text, { copy, role, idx = -1 }) {
   }
 
   return actions;
+}
+
+/** Czy wolno otworzyć stronę bez kliknięcia (patrz domknijOdpowiedz). */
+function mozeSamOtworzyc(conv, tekst) {
+  const adres = adresDoOtwarcia(tekst);
+  if (!adres || adresPrywatny(adres)) return false;
+  // Parametry w adresie to kanał na dane osoby – taki adres tylko z kliknięciem.
+  const u = new URL(adres);
+  if (u.search || u.hash || u.username || u.password) return false;
+  const tura = conv.messages.slice(conv.__turaOd || 0);
+  if (tura.some((m) => m.role === 'user' && m.search)) return false;      // w turze był wynik narzędzia
+  const pytanie = [...conv.messages.slice(0, conv.__turaOd || conv.messages.length)].reverse().find((m) => m.role === 'user' && !m.search);
+  const tresc = bezOgonkowKlient(pytanie ? msgText(pytanie) : '');
+  const host = u.hostname.replace(/^www\./, '');
+  const rdzen = host.split('.').slice(-2, -1)[0] || host;
+  return /(otworz|otwórz|wejdz|wejdź|odpal|uruchom|pokaz strone|pokaż stronę|open|go to)/.test(tresc)
+    && (tresc.includes(host) || new RegExp(`(^|[^a-z0-9])${rdzen}([^a-z0-9]|$)`).test(tresc));
 }
 
 /** Otwórz stronę w nowej karcie. Zwraca true, gdy przeglądarka ją otworzyła
@@ -1130,6 +1149,8 @@ function renderMessages({ przewin = true } = {}) {
   if (!hasMessages) return;
 
   conv.messages.forEach((m, idx) => {
+    // Szkielet siatki po przerwanym szukaniu – nic już na niego nie przyjdzie.
+    if (toSzkielet(m) && !isGenerating) return;
     el.messages.appendChild(messageElement(m, idx));
   });
   if (przewin) scrollToBottom(true);
@@ -1238,8 +1259,17 @@ const PREFIKSY_NARZEDZI = [
   'WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW',
   'DANE PLANU ZDJĘCIOWEGO',
 ];
+/* Szkielet siatki („szukam zdjęć”) żyje tylko w trakcie szukania. Zapisany
+   wisiał po przerwaniu albo odświeżeniu na zawsze jako cztery szare pola
+   (agencja, runda 7) – dlatego do zapisu idzie rozmowa bez nich. */
+function toSzkielet(m) { return Boolean(m && m.content && typeof m.content === 'object' && m.content.szukam); }
+function doZapisu(conv) {
+  return conv.messages.some(toSzkielet) ? { ...conv, messages: conv.messages.filter((m) => !toSzkielet(m)) } : conv;
+}
+
 function naprawStareRuchyNarzedzi(conv) {
   if (!conv?.messages) return conv;
+  conv.messages = conv.messages.filter((m) => !toSzkielet(m));
   for (const m of conv.messages) {
     if (m.role !== 'user' || m.search || typeof m.content !== 'string') continue;
     if (PREFIKSY_NARZEDZI.some((p) => m.content.startsWith(p))) {
@@ -1703,6 +1733,12 @@ el.input.addEventListener('paste', async (e) => {
 // Wysyłanie wiadomości + streaming SSE
 // ----------------------------------------------------------------
 
+/** Czy pytanie bieżącej tury niesie klatkę z kamery dołączoną automatycznie. */
+function klatkaWTurze(conv) {
+  const pytanie = [...conv.messages].reverse().find((m) => m.role === 'user' && !m.search);
+  return Boolean(pytanie && pytanie.content && typeof pytanie.content === 'object' && pytanie.content.klatka);
+}
+
 function toApiMessages(conv) {
   const api = [];
   const sysPrompt = settings.systemPrompt.trim() || t('systemPromptDefault');
@@ -1735,8 +1771,10 @@ function toApiMessages(conv) {
     // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura – serwer przy małym
     // oknie modelu lokalnego wyrzuca tylko wiadomości sprzed niej.
     if (i === granica) api.turaOd = api.length;
-    if (m.error || m.role === 'action' || m.status || m.komunikatCosmosa) return;
+    if (m.error || m.role === 'action' || m.status || m.komunikatCosmosa || toSzkielet(m)) return;
     let text = msgText(m);
+    // Siatka zdjęć ma w treści samo zapytanie – bez ramki model brał je za swoje zdanie.
+    if (m.role === 'assistant' && msgPhotos(m).length) text = `(pokazano zdjęcia: ${text || 'bez podpisu'})`;
     const images = i === granica ? msgImages(m) : [];
     if (i !== granica && msgImages(m).length && m.role === 'user') {
       text = `(tu użytkownik pokazał zdjęcie${msgImages(m).length > 1 ? 'a' : ''})` + (text ? `\n${text}` : '');
@@ -1762,6 +1800,14 @@ function toApiMessages(conv) {
       // nie wracają do API – wysyłamy sam tekst. Pustej wypowiedzi nie
       // wysyłamy wcale: część dostawców (Claude) ją odrzuca.
       if (!String(text || '').trim()) return;
+      /* Kawałki jednej odpowiedzi (plan pokrojony siatkami zdjęć) to dla
+         modelu JEDNA wypowiedź. Pięć wiadomości asystenta pod rząd część
+         dostawców odrzuca, a reszta czyta je jak pięć osobnych odpowiedzi. */
+      const poprzednia = api[api.length - 1];
+      if (m.role === 'assistant' && poprzednia && poprzednia.role === 'assistant' && typeof poprzednia.content === 'string') {
+        poprzednia.content += `\n\n${text}`;
+        return;
+      }
       api.push({ role: m.role, content: text });
     }
   });
@@ -2074,6 +2120,8 @@ async function streamOnce(conv, opcje = {}) {
           // służy dokańczaniu odpowiedzi uciętej limitem długości.
           messages: [...doModelu, ...(opcje.dodatkowe || [])],
           turaOd: doModelu.turaOd,
+          // Obraz tej tury to klatka dołączona sama (tryb głosowy), nie zdjęcie od człowieka.
+          klatkaKamery: klatkaWTurze(conv) || undefined,
           model: modelOverride || undefined,
           temperature: settings.temperature,
           max_tokens: settings.maxTokens,
@@ -2339,13 +2387,22 @@ let lastFinish = '';
  *  ciąg i doklejamy go do tego, co już jest.
  */
 const DOPISKI_MAX = 3;
+let dopiskiTury = 0;
 async function dokoncz(conv, tekst) {
   /* Pusta treść przy „length" = cały budżet poszedł na myślenie. Drugie
      żądanie znaczyłoby drugi pełny przebieg myślenia i zwykle ten sam wynik. */
   if (!String(tekst || '').trim()) return tekst;
   let pelny = tekst;
-  for (let i = 0; i < DOPISKI_MAX && lastFinish === 'length'; i++) {
-    const ciag = await streamOnce(conv, {
+  /* Licznik na całą TURĘ, nie na wywołanie: kaskada woła dokańczanie przed
+     zdjęciami i przy domknięciu, a każde dokończenie wysyła całą dotychczasową
+     odpowiedź. Jedno pytanie kosztowało do czterech pełnych przebiegów
+     w każdej rundzie (zespół IT, runda 7). */
+  for (; dopiskiTury < DOPISKI_MAX && lastFinish === 'length'; dopiskiTury++) {
+    let ciag;
+    /* Nieudane dokończenie (np. „prompt too long” przy małym oknie) nie może
+       skasować tego, co już stoi na ekranie: błąd niesie napisany tekst,
+       a obsługa błędu go zachowuje (zespół IT, runda 7). */
+    try { ciag = await streamOnce(conv, {
       dodatkowe: [
         { role: 'assistant', content: pelny },
         { role: 'user', content: 'Twoja odpowiedź urwała się, bo skończył się '
@@ -2354,7 +2411,18 @@ async function dokoncz(conv, tekst) {
           + 'wstępu, bez przepraszania. Jeśli urwało się w połowie słowa albo '
           + 'adresu, dokończ to słowo. Doprowadź odpowiedź do końca.' },
       ],
-    });
+    }); } catch (err) {
+      // Człowiek przerwał – to nie awaria, obsługa przerwania zna napisany tekst.
+      if (err.name === 'AbortError' || turaPrzerwana) { err.partial = doklejBezZakladki(pelny, err.partial || ''); throw err; }
+      /* Dostawca padł w trakcie dokańczania (529, 500, za długi kontekst).
+         Odpowiedź, którą człowiek już czyta, zostaje – z notą, że koniec się
+         urwał. Dawniej znikała cała i zostawał dymek błędu, a „Ponów” płacił
+         drugi raz za całość (zespół IT, runda 7). */
+      pelny = doklejBezZakladki(pelny, err.partial || '');
+      lastModelNote = [lastModelNote, t('model.dokonczenieUrwane')].filter(Boolean).join(' ');
+      lastFinish = 'blad-dokonczenia';
+      break;
+    }
     if (!ciag.trim()) break;
     // Bez spacji: ciąg dalszy potrafi zacząć się w środku wyrazu. A często
     // zaczyna od powtórzenia ostatnich słów – tę zakładkę zdejmujemy.
@@ -2382,9 +2450,10 @@ async function webSearch(query) {
     }
     // Treść strony (gdy serwer zdążył ją pobrać) jest tym, z czego model
     // faktycznie wyczyta odpowiedź – zajawka to zwykle sam opis serwisu.
-    const lines = data.results.map((r, i) =>
+    // Cudzy tekst z rozbrojonymi znacznikami – strona nie podsunie modelowi [AKCJA:] ani [SZUKAJ:].
+    const lines = data.results.map((r, i) => rozbrojZnaczniki(
       `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
-      + (r.text ? `\n   TREŚĆ STRONY:\n   ${r.text.replace(/\n/g, '\n   ')}` : ''));
+      + (r.text ? `\n   TREŚĆ STRONY:\n   ${r.text.replace(/\n/g, '\n   ')}` : '')));
     /* W trybie głosowym wynik NIE każe dopisywać sekcji „Źródła:” – jako
        najświeższa wiadomość wygrywał z instrukcją TRYB GŁOSOWY i lektor czytał
        „Źródła. IMGW.” (agencja, runda 6). */
@@ -2402,6 +2471,7 @@ const {
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
   scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel, adresDoOtwarcia, czyOtworz, liczbyNaGlos,
+  adresPrywatny, rozbrojZnaczniki,
 } = utworzProtokol();
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
@@ -2424,7 +2494,10 @@ function dodajWynikNarzedzia(conv, tresc, etykieta) {
 const NARZEDZIA = utworzNarzedzia({
   t,
   saveConversations,
-  renderMessages,
+  /* Siatki zdjęć przychodzą jedna po drugiej. Domyślne „przewiń na dół”
+     ściągało czytającego z połowy planu na koniec przy każdej z szesnastu
+     (zespół IT, runda 7) – na dół tylko ten, kto już tam jest. */
+  renderMessages: (o) => renderMessages({ przewin: sledzeDol, ...(o || {}) }),
   dodajWynikNarzedzia,
   stripSearchMarker,
   readJsonSafe,
@@ -2446,6 +2519,8 @@ const NARZEDZIA = utworzNarzedzia({
   },
   PORCJA_ARCHIWUM,
   wstawTekstModelu,
+  tekstTury,
+  tenSamTekst: (...a) => tenSamTekst(...a),
   znakSilnika,
   WZORCE: {
     SZUKAJ: SEARCH_MARKER_RE,
@@ -2486,6 +2561,13 @@ const NARZEDZIA = utworzNarzedzia({
    narzędzia), więc podmiana niczego nie gubi – a rozmowa zostaje czytelna.
    Szukamy tylko wśród wypowiedzi z BIEŻĄCEJ tury: powtórzenie planu sprzed
    pół godziny jest odpowiedzią na nowe pytanie i ma prawo zostać. */
+/** Cały tekst modelu z bieżącej tury, sklejony z kawałków. */
+function tekstTury(conv, odKtorej = 0) {
+  return conv.messages.slice(odKtorej)
+    .filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status && !m.error)
+    .map((m) => m.content).join('\n\n');
+}
+
 function wstawTekstModelu(conv, tresc, odKtorej = 0) {
   const czysty = String(tresc || '');
   if (!czysty.trim()) return null;
@@ -2497,6 +2579,10 @@ function wstawTekstModelu(conv, tresc, odKtorej = 0) {
       return m;
     }
   }
+  /* Przepisana CAŁOŚĆ tury, która wcześniej stała w kawałkach (plan pokrojony
+     siatkami zdjęć). Żaden kawałek sam nie jest „tym samym tekstem", ale
+     wszystkie razem – tak. Kawałki już są na ekranie, drugi plan nie. */
+  if (tenSamTekst(tekstTury(conv, odKtorej), czysty)) return null;
   const wiadomosc = { role: 'assistant', content: czysty, ...znakSilnika() };
   conv.messages.push(wiadomosc);
   return wiadomosc;
@@ -2543,14 +2629,25 @@ async function domknijOdpowiedz(conv, surowe) {
     const typ = akcja[1].trim().toLowerCase();
     conv.messages.push({ role: 'assistant', content: widoczne || '…',
       think: lastThink, note: lastModelNote, ...znakSilnika() });
-    const karta = { role: 'action', actionType: typ, actionText: akcja[2].trim() };
+    // „otwórz stronę” to też otwarcie – karta dostaje jeden typ, a więc właściwą obsługę.
+    const karta = { role: 'action', actionType: czyOtworz(typ) ? 'otwórz' : typ, actionText: akcja[2].trim() };
+    /* Otwarcie bez adresu („[AKCJA: otwórz | adres]” przepisane z instrukcji)
+       dawało martwą kartę z przyciskiem, który nic nie robi. */
+    if (czyOtworz(typ) && !adresDoOtwarcia(karta.actionText)) {
+      saveConversations();
+      return widoczne;
+    }
     conv.messages.push(karta);
     /* „Otwórz onet.pl” – strona otwiera się od razu, bez zatwierdzania: to nic
        nie zapisuje i niczego nie wysyła. Przeglądarka może jednak zablokować
        okno otwierane bez kliknięcia – wtedy zostaje karta z „Otwórz”, a jej
        kliknięcie jest gestem, którego blokada nie dotyczy. */
     if (czyOtworz(typ)) {
-      const otwarte = otworzStrone(karta.actionText);
+      /* Sama otwiera się tylko strona, o którą człowiek poprosił W TEJ
+         wiadomości (jej nazwa albo adres w pytaniu), gdy w turze nie było
+         wyszukiwania ani czytania cudzych stron, i nigdy adres sieci domowej.
+         Każdy inny przypadek – karta z „Otwórz”, jak pozostałe akcje. */
+      const otwarte = mozeSamOtworzyc(conv, karta.actionText) && otworzStrone(karta.actionText);
       if (otwarte) karta.done = true;
       saveConversations();
       if (!voiceMode) return widoczne;
@@ -2577,6 +2674,7 @@ async function domknijOdpowiedz(conv, surowe) {
 async function runGeneration(conv, podpiecie = null) {
   isGenerating = true;
   turaPrzerwana = false;
+  dopiskiTury = 0;
   setGeneratingUI(true);
   if (voiceMode) setVoiceState('thinking');
   let finalText = '';
@@ -2616,10 +2714,17 @@ async function runGeneration(conv, podpiecie = null) {
       /* Długi plan ze zdjęciami potrafi skończyć budżet tokenów w połowie –
          w rozmowie o Sycylii ucięło „Źródła” na „travelplanet.pl/przew”, a zdjęcia
          poszły dalej, jakby odpowiedź była cała. Zdjęcia rozcinają tekst na
-         kawałki, więc dokończyć trzeba PRZED nimi, nie po. */
-      if (uzyte && uzyte.nazwa === 'grafiki' && lastFinish === 'length' && !turaPrzerwana) {
+         kawałki, więc dokończyć trzeba PRZED nimi, nie po. To samo bez
+         narzędzia: urwany w pół znacznik („[GRAFIKA: Etn”) nie pasuje do
+         niczego, a po dokończeniu staje się zwykłym wołaniem narzędzia –
+         dlatego po dokończeniu sprawdzamy narzędzia od nowa. */
+      if ((!uzyte || uzyte.nazwa === 'grafiki') && lastFinish === 'length' && !turaPrzerwana) {
         acc = await dokoncz(conv, acc);
-        dop = uzyte.dopasuj(acc);
+        uzyte = null; dop = null;
+        for (const narzedzie of NARZEDZIA) {
+          const m = narzedzie.dopasuj(acc);
+          if (m) { uzyte = narzedzie; dop = m; break; }
+        }
       }
 
       if (!uzyte) {
@@ -2778,6 +2883,14 @@ async function runGeneration(conv, podpiecie = null) {
        żeby czytać – tak było: 5600 px lotu w dół w chwili zakończenia. */
     renderMessages({ przewin: sledzeDol });
     if (voiceMode) {
+      /* Tura ze zdjęciami: plan stoi w kawałkach między siatkami, a „finalText”
+         to tylko domknięcie z ostatniej rundy – często puste. Głos milczał
+         wtedy albo mówił samo „Miłej podróży!” (agencja, runda 7). Czytamy
+         cały tekst tury i mówimy, że zdjęcia są na ekranie. */
+      const tura = conv.messages.slice(conv.__turaOd || 0);
+      if (tura.some((m) => msgPhotos(m).length)) {
+        finalText = [tekstTury(conv, conv.__turaOd || 0) || finalText, t('voice.photosOnScreen')].filter(Boolean).join('\n\n');
+      }
       if (finalText) {
         el.voiceAnswer.textContent = stripForSpeech(finalText);
         setVoiceState('speaking');
@@ -3555,7 +3668,20 @@ function wykonajGest(g) {
     body: JSON.stringify({ type: 'dlonie', summary: `gest „${g.nazwa}”${g.znaczenie ? ` – ${g.znaczenie}` : ''}` }),
   }).catch(() => {});
   // Przewija się pojemnik rozmowy (el.chatScroll), nie sama lista wiadomości.
-  const krok = () => Math.round(el.chatScroll.clientHeight * 0.7);
+  /* Krok z WIDOCZNEJ części rozmowy: na telefonie panel kamery zasłania
+     większość ekranu i krok 70% wysokości przewijał tekst, którego nikt nie
+     widział (zespół IT, runda 7). */
+  const krok = () => {
+    const r = el.chatScroll.getBoundingClientRect();
+    let dol = r.bottom;
+    const panel = $('live-panel');
+    if (panel && panel.style.display !== 'none') {
+      const p = panel.getBoundingClientRect();
+      const zachodzi = p.left < r.right && p.right > r.left && p.top < r.bottom && p.bottom > r.top;
+      if (zachodzi && p.top > r.top) dol = Math.min(dol, p.top);
+    }
+    return Math.max(80, Math.round((dol - r.top) * 0.8));
+  };
   switch (g.czynnosc) {
     case 'przewin-gora': el.chatScroll.scrollBy({ top: -krok(), behavior: 'smooth' }); break;
     case 'przewin-dol': el.chatScroll.scrollBy({ top: krok(), behavior: 'smooth' }); break;
@@ -3570,12 +3696,15 @@ function wykonajGest(g) {
       el.input.value = g.parametr;
       sendMessage();
       break;
-    case 'otworz': otworzStrone(g.parametr); break;
+    case 'otworz':
+      // Okno bez kliknięcia przeglądarka potrafi zablokować – mówimy to, zamiast milczeć.
+      if (!otworzStrone(g.parametr)) ustawStatusKamery(t('gest.otworzZablokowane', { nazwa: g.nazwa }));
+      break;
     default: break;   // „znaczenie” – samo zdarzenie w kontekście
   }
 }
 
-const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta } = utworzKamere({
+const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery } = utworzKamere({
   settings: () => settings, senses: () => senses, cameraFacing: () => cameraFacing, odswiezPlan: () => odswiezPlan,
   $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
   onGest: (g) => wykonajGest(g),
@@ -4036,12 +4165,13 @@ const WAKE_RE = window.SLOWO_BUDZACE;
    `doklej`, czyli scalanie kolejnych rozpoznań bez powtórzeń. */
 const {
   doklej: doklejRozpoznane, odciskWyniku, bezSlowaBudzacego, toSamoZdanie,
-  przepisanie, doklejBezZakladki,
+  przepisanie, doklejBezZakladki, tenSamTekst,
 } = utworzMowe({ WAKE_RE });
-const END_RE = /\b(koniec|zako[nń]cz|do widzenia|dobranoc|stop|end|goodbye|bye|that's all)\b/i;
+// Koniec rozmowy i pytania o obraz: public/mowa.js (KONIEC_ROZMOWY, PYTANIE_O_OBRAZ).
+const END_RE = window.KONIEC_ROZMOWY;
 /* „Ile palców pokazuję?” nie pasowało do żadnego słowa i klatka w ogóle nie
    szła. Stąd palce, gesty, dłonie i „pokazuję”. */
-const VISUAL_RE = /(co (mam|trzymam|widzisz|to jest)|jak wygl[ąa]da|sp[oó]jrz|popatrz|zobacz|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj|pokazuj|palc|palec|gest|d[łl]o[nń]|r[ęe]k[ęaie]|what (am i|do you see)|how many fingers|showing)/i;
+const VISUAL_RE = window.PYTANIE_O_OBRAZ;
 
 function getSR() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -4292,13 +4422,23 @@ async function startVoiceCamera() {
   if (voiceCameraStream || voiceKinectStop) return true;
   const zrodlo = localStorage.getItem('cosmos.liveSource') || 'camera';
   if (zrodlo.startsWith('kinect') && kinectDostepny()) return startVoiceKinect();
+  let strumien;
   try {
-    voiceCameraStream = await getMedia(videoConstraints(cameraFacing));
+    strumien = await getMedia(videoConstraints(cameraFacing));
   } catch {
-    // Komputer bez kamery, za to z Kinectem – bierzemy Kinecta.
-    if (kinectDostepny()) return startVoiceKinect();
+    // Komputer bez kamery, za to z Kinectem – bierzemy Kinecta. Ale nie po
+    // wyjściu z trybu głosowego w trakcie czekania na zgodę.
+    if (voiceMode && kinectDostepny()) return startVoiceKinect();
     return false;                     // tryb głosowy działa też bez kamery
   }
+  /* Zgoda na kamerę przyszła, gdy trybu głosowego już nie było (albo kamera
+     w nim zdążyła wstać drugą drogą). Bez tego kamera zostawała włączona
+     w tle, z zapaloną diodą i bez podglądu (agencja, runda 7). */
+  if (!voiceMode || voiceCameraStream || voiceKinectStop) {
+    strumien.getTracks().forEach((tr) => tr.stop());
+    return Boolean(voiceCameraStream || voiceKinectStop);
+  }
+  voiceCameraStream = strumien;
   $('voice-kinect').hidden = true;
   el.voiceCamera.hidden = false;
   el.voiceCamera.srcObject = voiceCameraStream;
@@ -4324,6 +4464,8 @@ function updateVoiceCamButton() {
   const btn = $('voice-cam-btn');
   btn.classList.toggle('active', on);
   btn.title = t(on ? 'voice.camOff' : 'voice.camOn');
+  btn.setAttribute('aria-label', btn.title);
+  btn.setAttribute('aria-pressed', String(on));
 }
 
 $('voice-cam-btn').addEventListener('click', async () => {
@@ -5049,7 +5191,7 @@ async function handleVoiceQuery(text) {
   }
 
   const conv = ensureConversation(text);
-  const content = frame ? { text, images: [frame] } : text;
+  const content = frame ? { text, images: [frame], klatka: true } : text;
   conv.messages.push({ role: 'user', content });
   saveConversations();
   renderSidebar();
@@ -5184,7 +5326,11 @@ document.addEventListener('keydown', (e) => {
    obserwujemy, która jest na wierzchu – reszta strony dostaje `inert`,
    fokus wchodzi do środka, a po zamknięciu wraca tam, skąd przyszedł. */
 {
-  const elementy = ['img-viewer', 'voice-overlay', 'camera-modal', 'live-panel', 'gallery-modal',
+  /* Bez 'live-panel': to pływający panel OBOK rozmowy, nie okno modalne.
+     Z pułapką fokusu otwarta kamera blokowała pisanie i przewijanie rozmowy
+     – a gesty „przewiń” i „wyślij” działają właśnie przy otwartym panelu
+     (zespół IT, runda 7). */
+  const elementy = ['img-viewer', 'voice-overlay', 'camera-modal', 'gallery-modal',
     'timeline-modal', 'learn-modal', 'kb-modal', 'studio-modal', 'plener-modal', 'settings-modal']
     .map((id) => $(id)).filter(Boolean);
   const widoczna = (w) => w.style.display !== 'none' && !w.hidden;
@@ -5319,7 +5465,7 @@ $('summarize-btn').addEventListener('click', async () => {
   const utrwal = () => {
     if (activeConversation && activeConversation.id === conv.id) { saveConversations(); renderMessages({ przewin: sledzeDol }); return; }
     conv.updatedAt = Date.now();
-    try { localStorage.setItem('cosmos.conv.' + conv.id, JSON.stringify(conv)); } catch { /* limit */ }
+    try { localStorage.setItem('cosmos.conv.' + conv.id, JSON.stringify(doZapisu(conv))); } catch { /* limit */ }
     zapiszNaSerwerze(conv.id, conv);
   };
   try {

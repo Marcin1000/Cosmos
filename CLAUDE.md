@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 138 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 139 zestawów + 9 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -153,6 +153,16 @@ robi większość szybkich zestawów.
 
 Dwa ostatnie **dopisują się do `ENDPOINTS` dopiero, gdy klucz jest ustawiony** – bez klucza
 nie ma zakładki w UI. `pickEndpoint()` przy nieznanej nazwie schodzi na `cloud`.
+
+Każde zapytanie do modelu przechodzi przez `zapytajModel` (`lib/model.js`), a ono przez
+`ujednolicRole`: jeden system na początku, role na przemian, pierwsza po system to
+wypowiedź człowieka. Szablony Jinja (Gemma 3, Mistral Nemo na vLLM/llama.cpp/NIM) rzucały
+400 na kilka wiadomości system i na kawałki odpowiedzi z kaskady; Ollama to ukrywała.
+Nowe wywołanie modelu idzie przez `zapytajModel`, nie przez własny `fetch`.
+
+Płatne wyszukiwarki (Serper, Brave – `lib/wyszukiwarki.js`) to klucz właściciela: członek
+korzysta z nich tylko z przyznania `szukanie` (panel Dostęp) i do limitu na minutę i dobę;
+wyniki są wspólne przez 15 minut, Brave jest zapasem Serpera, nie drugim zapytaniem.
 
 ### Sedno: składanie kontekstu w `lib/czat.js` (`zlozKontekst()`)
 
@@ -292,6 +302,10 @@ Zasady, których nie wolno łamać:
    (trasa → 403, wyciąganie tekstu → pusty wynik). Adres domu (`SENSES_URL`,
    `LOCAL_BASE_URL`) i ścieżki serwera nie trafiają do członka ani w `/api/config`,
    ani w komunikatach błędów.
+
+9. **Wersja agenta zmysłów to skrót całego zestawu plików** – lista `PLIKI_AGENTA`
+   w `lib/agent-zmyslow.js` i `PLIKI_WERSJI` w `senses/agent.py` musi być ta sama. Nowy plik
+   zmysłów dopisujesz w obu, inaczej „Aktualizuj agenta” świeci się na zawsze.
 
 Pilnują tego zestawy `izolacja-osob`, `konta-i-logowanie`, `konta-w-przegladarce`,
 `agent-zmyslow`.

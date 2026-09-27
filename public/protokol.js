@@ -71,6 +71,8 @@ function utworzProtokol() {
        (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes). Cosmos go nie
        wykonuje, a stało na ekranie jako JSON. Urwane na końcu też znika. */
     out = out.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)|<\/tool_call>/gi, '');
+    // Akcja z odnośnikiem Markdown w treści – ogólny wzorzec niżej urwałby ją na „]” linku.
+    out = out.replace(new RegExp(`${OTW}AKCJA${DWUKROPEK}(?:${LINK_MD}|${TRESC})*?${LINK_MD}(?:${LINK_MD}|${TRESC})*${ZAM}`, 'gi'), '');
     for (const z of ZNACZNIKI) {
       /* Znacznik = nazwa, a zaraz po niej „:" albo „]" – i NIGDY odnośnik
          Markdown. Z dwukropkiem opcjonalnym „[Planty](…)", „[Archiwum
@@ -251,7 +253,12 @@ function utworzProtokol() {
   // Dwukropek obowiązkowy i nigdy odnośnik – „[Archiwum Narodowe](…)" to link.
   const ARCHIVE_RE = znacznik('ARCHIWUM', `(${TRESC}*?)`);
   const PLAN_RE = znacznik('PLAN', `(${TRESC}*?)`);
-  const ACTION_RE = new RegExp(`${OTW}AKCJA${DWUKROPEK}([^|\\]】]+)\\|\\s*([^\\]】]+?)${ZAM}`, 'i');
+  /* Formy akcji z małych modeli (zespół IT, runda 7): kreska pełnej szerokości
+     „｜”, dwukropek albo półpauza zamiast „|”, a w treści odnośnik Markdown
+     „[onet.pl](https://onet.pl)”. Dawniej akcja się nie wykonywała, a znacznik
+     i tak znikał – człowiek dostawał pustą odpowiedź. */
+  const LINK_MD = '\\[[^\\]\\n]*\\]\\([^)\\n]*\\)';
+  const ACTION_RE = new RegExp(`${OTW}AKCJA${DWUKROPEK}([^|｜\\]】:：–\\n]+?)\\s*(?:[|｜:：–]|\\s-\\s)\\s*((?:${LINK_MD}|${TRESC})+?)${ZAM}`, 'i');
 
   /* „Katedra La Seu" i „katedra la seu" to to samo pytanie o zdjęcia. Bez
      ujednolicenia model prosiłby o tę samą rzecz raz po raz, tylko inaczej
@@ -560,12 +567,15 @@ function utworzProtokol() {
   const PRZYIMKI_DOP = '(?:od|do|około|ok\\.|koło|powyżej|poniżej|bez|dla|wśród|spośród|zamiast|blisko|niespełna|u)';
   const ZENSKIE = '(?:godzin|minut|sekund|osob|osób|dob|noc|złotów|sztuk|wycieczk|atrakcj|plaż|gwiazdk|klatk|stacj|ulic|lini|kaw|szklank|łyżk|porcj|butelk|tabletk|stron|książk|lekcj|częśc|wersj|opcj|propozycj|restauracj|wysp|tras|rzecz|kobiet|córk|mil|nagrod|dzielnic|wiosk|miejscowośc|ścieżk|drog|trasy)';
 
+  // Odstęp tysięcy („36 000”, „1 500 zł”) – taka liczba to jedna liczba, nie „trzydzieści sześć” i „000”.
+  const NIE_TYSIACE = '(?![ \\u00a0\\u202f]\\d{3}(?!\\d))';
+
   function liczbyNaGlos(tekst) {
     let t = String(tekst || '');
-    const bezCyfry = '(?<![\\p{L}\\p{N}.,:/])';
+    const bezCyfry = '(?<![\\p{L}\\p{N}.,:/]|\\d[ \\u00a0\\u202f])';
 
-    // 1. Godziny „17:30”, z przypadkiem od słowa przed nimi.
-    t = t.replace(new RegExp(`(?:(\\p{L}+\\.?)\\s+)?${bezCyfry}([01]?\\d|2[0-4]):([0-5]\\d)(?![\\p{N}:])`, 'gu'), (cale, slowo, h, m, offset, calosc) => {
+    // 1. Godziny „17:30”, z przypadkiem od słowa przed nimi. „1:25 000” to skala mapy, nie godzina.
+    t = t.replace(new RegExp(`(?:(\\p{L}+\\.?)\\s+)?${bezCyfry}([01]?\\d|2[0-4]):([0-5]\\d)(?![\\p{N}:])${NIE_TYSIACE}`, 'gu'), (cale, slowo, h, m, offset, calosc) => {
       const s = (slowo || '').toLowerCase();
       // „między 7:00 a 9:00” – drugi koniec po „a” też w narzędniku.
       const poMiedzy = s === 'a' && /(?:po)?między\s+\S+(?:\s+\S+)?\s*$/i.test(calosc.slice(Math.max(0, offset - 40), offset));
@@ -576,7 +586,14 @@ function utworzProtokol() {
       return `${slowo ? `${slowo} ` : ''}${godz}${min ? ` ${min}` : ''}`;
     });
 
-    // 2. Rok: „2027 r.”, „2027 roku”, „września 2027”.
+    // 1b. Godziny bez dwukropka w zakresie: „czynne od 9 do 17.” → „od dziewiątej do siedemnastej”.
+    //     Tylko gdy po zakresie nie stoi jednostka ani rzeczownik („od 9 do 17 stopni” zostaje liczbą).
+    t = t.replace(/(^|[^\p{L}])([Oo]d)\s+([01]?\d|2[0-4])\s+do\s+([01]?\d|2[0-4])(?=\s*(?:[.,;:!?)]|$|godz|h(?!\p{L})))/gu,
+      (_, przed, od, a, b2) => `${przed}${od} ${godzinaSlownie(Number(a), 'd')} do ${godzinaSlownie(Number(b2), 'd')}`);
+
+    // 2. Rok: „2027 r.”, „2027 roku”, „2019–2023 roku”, „od 2019 do 2023 r.”, „września 2027”.
+    t = t.replace(new RegExp(`${bezCyfry}([12]\\d{3})\\s*(?:[–-]|\\s+do\\s+)\\s*([12]\\d{3})\\s*(?:r\\.|roku\\b)`, 'gu'),
+      (_, a, b2) => `${rokSlownie(Number(a))} do ${rokSlownie(Number(b2))} roku`);
     t = t.replace(new RegExp(`${bezCyfry}([12]\\d{3})\\s*(?:r\\.|roku\\b)`, 'gu'), (_, y) => `${rokSlownie(Number(y))} roku`);
     t = t.replace(new RegExp(`(${MIESIACE.join('|')}|${MIESIACE_MSC.join('|')})\\s+([12]\\d{3})(?![\\p{N}])`, 'gu'), (_, mies, y) => `${mies} ${rokSlownie(Number(y))}`);
 
@@ -593,20 +610,40 @@ function utworzProtokol() {
 
     // 4. Po przyimku z dopełniaczem: „do 21 stopni” → „do dwudziestu jeden stopni”.
     //    Liczba z częścią ułamkową („do 2,5 km”) zostaje – nie zgadujemy.
-    // „ok. 3 tysiące” – liczba przed „tysiące/mln” to część większej liczby, nie ruszamy.
-    t = t.replace(new RegExp(`(^|[^\\p{L}])(${PRZYIMKI_DOP})\\s+(\\d{1,6})(?![\\p{N}.,:/]?\\d)(?![.,:]\\d)(?!\\s*(?:tys|mln|mld|milion|miliard))`, 'giu'), (cale, przed, przyimek, n) => {
-      const slowo = liczbaSlownie(Number(n), 'd');
-      return slowo ? `${przed}${przyimek} ${slowo}` : cale;
-    });
-    // „od dwudziestu do 25 stopni” – drugi koniec zakresu po „do” już złapany wyżej;
-    // „10 do 20” bez „od” też: liczba po „do” ma dopełniacz niezależnie od początku.
+    //    „ok. 3 tysiące” – liczba przed „tysiące/mln” to część większej liczby, nie ruszamy.
+    t = t.replace(new RegExp(`(^|[^\\p{L}])(${PRZYIMKI_DOP})\\s+(\\d{1,6})(?![\\p{N}.,:/]?\\d)(?![.,:]\\d)${NIE_TYSIACE}(?!\\s*(?:tys|mln|mld|milion|miliard))`, 'giu'),
+      (cale, przed, przyimek, n, offset, calosc) => {
+        const x = Number(n);
+        const dalej = calosc.slice(offset + cale.length);
+        const slowoDalej = (dalej.match(/^\s+(\p{L}+)/u) || [])[1] || '';
+        // Rok po przyimku („działa od 2019”) – porządkowo, gdy nie stoi za nim rzeczownik.
+        if (x >= 1900 && x <= 2099 && !slowoDalej) return `${przed}${przyimek} ${rokSlownie(x)}`;
+        // „około 2 godziny” – rzeczownik w mianowniku: przyimek nie rządzi, zostawiamy krokowi 5.
+        if (new RegExp(`^${ZENSKIE}\\p{L}*[ye]$`, 'iu').test(slowoDalej) && /^(około|ok\.)$/i.test(przyimek)) return cale;
+        // „dla 1 osoby” → „dla jednej osoby”.
+        if (x === 1 && new RegExp(`^${ZENSKIE}`, 'iu').test(slowoDalej)) return `${przed}${przyimek} jednej`;
+        const slowo = liczbaSlownie(x, 'd');
+        return slowo ? `${przed}${przyimek} ${slowo}` : cale;
+      });
 
-    // 5. Rodzaj żeński: „2 godziny” → „dwie godziny”, „1 osoba” → „jedna osoba”.
-    t = t.replace(new RegExp(`${bezCyfry}(\\d{1,6})(?=\\s+${ZENSKIE})`, 'giu'), (cale, n) => {
+    // 5. Rodzaj żeński, przypadek z końcówki rzeczownika:
+    //    „2 godziny” → „dwie”, „1 osoba” → „jedna”, „za 1 minutę” → „jedną”,
+    //    „po 2 godzinach” → „dwóch”, „z 2 osobami” → „dwiema”. Nieznana końcówka – cyfra zostaje.
+    t = t.replace(new RegExp(`${bezCyfry}(\\d{1,6})${NIE_TYSIACE}(?=\\s+(${ZENSKIE}\\p{L}*))`, 'giu'), (cale, n, rzecz) => {
       const x = Number(n);
       const j = x % 10, dz = Math.floor((x % 100) / 10);
-      if (!((j === 2 && dz !== 1) || x === 1)) return cale;
-      return liczbaSlownie(x, 'm', true) || cale;
+      const r = rzecz.toLowerCase();
+      if (x === 1) {
+        if (/[ęą]$/.test(r)) return 'jedną';
+        if (/a$/.test(r) || /^(noc|rzecz|część|miejscowość)$/.test(r)) return 'jedna';
+        return cale;
+      }
+      if (!(j === 2 && dz !== 1)) return cale;
+      if (x === 2 && /ach$/.test(r)) return 'dwóch';
+      if (x === 2 && /ami$/.test(r)) return 'dwiema';
+      if (x === 2 && /om$/.test(r)) return 'dwóm';
+      if (/[yie]$/.test(r)) return liczbaSlownie(x, 'm', true) || cale;
+      return cale;
     });
     return t;
   }
@@ -651,22 +688,57 @@ function utworzProtokol() {
    *  wyłącznie http(s) – `javascript:`, `data:` czy `file:` z odpowiedzi modelu
    *  (albo z wstrzykniętej strony, którą przeczytał) nie mogą niczego uruchomić. */
   function adresDoOtwarcia(tekst) {
-    let a = String(tekst || '').trim().replace(/^<|>$/g, '').replace(/[.,;:!?)\]]+$/, '').trim();
+    let a = String(tekst || '').trim();
+    // Odnośnik Markdown: „[onet.pl](https://onet.pl)” – adresem jest to, co w nawiasie.
+    const link = a.match(/^\[[^\]]*\]\(([^)\s]+)\)$/);
+    if (link) a = link[1];
+    // Adres w cudzysłowie albo w `kodzie`.
+    a = a.replace(/^[„“"'`«]+|[”“"'`»]+$/g, '').trim();
+    a = a.replace(/^<|>$/g, '').replace(/[.,;:!?\]]+$/, '').trim();
+    /* Nawias zamykający na końcu zdejmujemy tylko wtedy, gdy nie ma pary –
+       „…/wiki/Etna_(vulcano)” to cały adres, „(onet.pl)” to nawias zdania. */
+    if (/^\(.*\)$/.test(a)) a = a.slice(1, -1);                 // cały adres w nawiasie: „(onet.pl)”
+    while (a.endsWith(')') && (a.match(/\(/g) || []).length < (a.match(/\)/g) || []).length) a = a.slice(0, -1);
+    while (a.startsWith('(') && (a.match(/\(/g) || []).length > (a.match(/\)/g) || []).length) a = a.slice(1);
     if (!a || /\s/.test(a)) return '';
     if (/^[a-z][a-z0-9+.-]*:/i.test(a) && !/^https?:\/\//i.test(a)) return '';
     if (!/^https?:\/\//i.test(a)) a = `https://${a.replace(/^\/+/, '')}`;
     try {
       const u = new URL(a);
-      if (!/^https?:$/.test(u.protocol) || !/\./.test(u.hostname) || u.username || u.password) return '';
+      // Nazwa hosta tylko z liter, cyfr, kropek i kresek (URL sam zamienia polskie litery na punycode).
+      if (!/^https?:$/.test(u.protocol) || !/\./.test(u.hostname) || !/^[a-z0-9.-]+$/i.test(u.hostname.replace(/^\[.*\]$/, 'ipv6')) || u.username || u.password) return '';
       return u.href;
     } catch { return ''; }
   }
-  const czyOtworz = (typ) => /^(otw[oó]rz|open)$/i.test(String(typ || '').trim());
+  /** Czy adres prowadzi do sieci domowej albo samego komputera – takich nigdy
+   *  nie otwieramy bez kliknięcia (router, panel NAS-a, sam Cosmos). */
+  function adresPrywatny(adres) {
+    let u;
+    try { u = new URL(adres); } catch { return true; }
+    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!h.includes('.') || /\.(local|lan|internal|home|localhost)$/.test(h) || h === 'localhost') return true;
+    if (h.includes(':')) return true;                                 // IPv6 – zawsze przez kartę
+    const ip = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);        // URL sam zamienia 2130706433 na 127.0.0.1
+    return Boolean(ip);                                               // adres IP zamiast nazwy – przez kartę
+  }
+
+  /** Rozbrój znaczniki narzędzi w CUDZYM tekście (wyniki wyszukiwania, treść
+   *  stron), zanim trafi do modelu. Strona z „[AKCJA: otwórz | …/login]”
+   *  w treści podsuwała modelowi polecenie, które mógł powtórzyć – i Cosmos
+   *  otwierał kartę bez prośby człowieka (agencja, runda 7). */
+  function rozbrojZnaczniki(tekst) {
+    return String(tekst || '').replace(/[[【]\s*(SZUKAJ|SEARCH|GRAFIKA|PLAN|ARCHIWUM|OBRAZ|AKCJA)(\s*[:：])/gi, '($1$2');
+  }
+
+  // „otwórz stronę”, „open page” – typ zaczynający się od słowa „otwórz” też jest otwarciem.
+  const czyOtworz = (typ) => /^(otw[oó]rz|open)(?!\p{L})/iu.test(String(typ || '').trim());
 
   return {
     liczbyNaGlos,
     liczbaSlownie,
     adresDoOtwarcia,
+    adresPrywatny,
+    rozbrojZnaczniki,
     czyOtworz,
     SEARCH_MARKER_RE,
     IMAGE_MARKER_RE,

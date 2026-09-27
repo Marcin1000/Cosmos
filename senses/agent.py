@@ -33,6 +33,7 @@ import io
 import json
 import os
 import platform
+import select
 import shutil
 import signal
 import socket
@@ -142,11 +143,48 @@ def _bez_posrednika(schemat):
     return schemat not in _POSREDNICY
 
 
-def _wez_polaczenie(adres, czas):
+def _zerwane(p):
+    """Czy serwer zamknął już to połączenie (bezczynne za długo)? Zamknięte
+    gniazdo jest „gotowe do czytania” (koniec strumienia) – sprawdzamy to przed
+    wysłaniem, bo po wysłaniu nie wiadomo, czy serwer zapytanie przyjął."""
+    if p.sock is None:
+        return False
+    try:
+        gotowe, _, _ = select.select([p.sock], [], [], 0)
+    except (OSError, ValueError):
+        return True
+    return bool(gotowe)
+
+
+# Połączenie bezczynne dłużej niż tyle sekund nie wraca z puli: brzeg
+# Cloudflare i serwery zamykają bezczynne połączenia po kilku sekundach,
+# a martwe gniazdo z puli gubiło wynik (SSLEOFError, Broken pipe – zespół IT,
+# runda 7).
+BEZCZYNNE_MAKS_S = 4.0
+
+
+def _wez_polaczenie(adres, czas, swieze=False):
+    """Połączenie z puli albo nowe. `swieze` – druga próba po błędzie: pula
+    dla tego adresu idzie do kosza (leżą w niej zwykle tak samo martwe
+    połączenia), a zapytanie idzie nowym."""
     klucz = (adres.scheme, adres.netloc)
+    p = None
     with _pula_zamek:
         wolne = _pula.setdefault(klucz, [])
-        p = wolne.pop() if wolne else None
+        if swieze:
+            stare, wolne[:] = list(wolne), []
+        else:
+            stare = []
+            while wolne and p is None:
+                kandydat, oddane = wolne.pop()
+                if time.monotonic() - oddane > BEZCZYNNE_MAKS_S:
+                    stare.append((kandydat, oddane))
+                else:
+                    p = kandydat
+    for q, _ in stare:
+        q.close()
+    if p is not None and _zerwane(p):
+        p.close()
     if p is None:
         if adres.scheme == "https":
             p = http.client.HTTPSConnection(adres.netloc, timeout=czas, context=ssl.create_default_context())
@@ -162,9 +200,19 @@ def _oddaj_polaczenie(klucz, p):
     with _pula_zamek:
         wolne = _pula.setdefault(klucz, [])
         if len(wolne) < 6:
-            wolne.append(p)
+            wolne.append((p, time.monotonic()))
             return
     p.close()
+
+
+# Ponawiamy tylko wtedy, gdy wiadomo, że serwer zapytania nie wykonał:
+# błąd przy nawiązywaniu połączenia albo przy wysyłaniu. Zerwanie PO wysłaniu
+# (brak odpowiedzi) ponawiamy tylko dla GET – POST mógł zostać przyjęty
+# i drugi raz dałby zdublowane zdarzenie albo wynik wysłany dwa razy.
+_BLEDY_POLACZENIA = (ssl.SSLError, ConnectionResetError, ConnectionAbortedError)
+_BLEDY_WYSYLANIA = (http.client.CannotSendRequest, BrokenPipeError, ConnectionResetError,
+                    ConnectionAbortedError, ssl.SSLError)
+_BEZPIECZNE_METODY = ("GET", "HEAD")
 
 
 def _zapytanie_stale(url, metoda, cialo, naglowki, czas):
@@ -174,16 +222,37 @@ def _zapytanie_stale(url, metoda, cialo, naglowki, czas):
         return None
     cel = adres.path + ("?" + adres.query if adres.query else "")
     for proba in (1, 2):
-        klucz, p = _wez_polaczenie(adres, czas)
+        ostatnia = proba == 2
+        klucz, p = _wez_polaczenie(adres, czas, swieze=ostatnia)
+        try:
+            if p.sock is None:
+                p.connect()
+        except _BLEDY_POLACZENIA:
+            p.close()
+            if ostatnia:
+                raise
+            continue
+        except Exception:
+            p.close()
+            raise
         try:
             p.request(metoda, cel, body=cialo, headers=naglowki)
+        except _BLEDY_WYSYLANIA:
+            # Serwer albo Cloudflare zamknął połączenie, zanim zapytanie doszło.
+            p.close()
+            if ostatnia:
+                raise
+            continue
+        except Exception:
+            p.close()
+            raise
+        try:
             r = p.getresponse()
             tresc = r.read()
-        except (http.client.RemoteDisconnected, http.client.CannotSendRequest,
-                BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-            # Serwer albo Cloudflare zamknął bezczynne połączenie – raz od nowa.
+        except (ConnectionResetError, ConnectionAbortedError, ssl.SSLError):
+            # RemoteDisconnected też tu trafia (to podklasa ConnectionResetError).
             p.close()
-            if proba == 2:
+            if ostatnia or metoda not in _BEZPIECZNE_METODY:
                 raise
             continue
         except Exception:
@@ -196,6 +265,38 @@ def _zapytanie_stale(url, metoda, cialo, naglowki, czas):
         return r.status, r.headers, tresc
 
 
+_PRZEKIEROWANIA = (301, 302, 303, 307, 308)
+_MAKS_PRZEKIEROWAN = 3
+
+
+def _cel_przekierowania(url, status, nagl, metoda):
+    """Adres, pod który iść po 3xx, albo "" (nie idziemy – błąd HTTP).
+
+    Tylko ten sam host: token agenta nie może polecieć gdzie indziej. Schemat
+    ten sam albo podniesiony z http na https (Cloudflare „Always HTTPS” przy
+    adresie serwera wpisanym z http://) – nigdy w dół. POST idzie dalej tylko
+    przy 307/308, które każą powtórzyć go z ciałem; 301/302/303 zamieniłyby go
+    na GET bez ciała i wynik przepadłby po cichu."""
+    if status not in _PRZEKIEROWANIA:
+        return ""
+    if metoda not in _BEZPIECZNE_METODY and status not in (307, 308):
+        return ""
+    miejsce = nagl.get("Location") or ""
+    if not miejsce:
+        return ""
+    stary = urllib.parse.urlsplit(url)
+    nowy_url = urllib.parse.urljoin(url, miejsce)
+    nowy = urllib.parse.urlsplit(nowy_url)
+    if nowy.hostname != stary.hostname:
+        return ""
+    if nowy.scheme == stary.scheme:
+        if nowy.port != stary.port:
+            return ""
+    elif not (stary.scheme == "http" and nowy.scheme == "https"):
+        return ""
+    return nowy_url
+
+
 def zapytanie(serwer, sciezka, metoda="GET", dane=None, token="", czas=30, surowe=False,
               cialo=None, naglowki_dodatkowe=None):
     naglowki = {"User-Agent": "cosmos-agent", "X-Sesja": SESJA}
@@ -206,17 +307,27 @@ def zapytanie(serwer, sciezka, metoda="GET", dane=None, token="", czas=30, surow
         naglowki["Authorization"] = "Bearer " + token
     naglowki.update(naglowki_dodatkowe or {})
     url = serwer + sciezka
-    wynik = _zapytanie_stale(url, metoda, cialo, naglowki, czas)
-    if wynik is not None and not (300 <= wynik[0] < 400):
+    # Przekierowanie obsługujemy sami, po tym samym połączeniu: wcześniej
+    # odpowiedź 3xx oddawaliśmy urllib, który wysyłał zapytanie JESZCZE RAZ
+    # pod stary adres (z całym ciałem) i dopiero potem szedł dalej.
+    for krok in range(_MAKS_PRZEKIEROWAN + 1):
+        wynik = _zapytanie_stale(url, metoda, cialo, naglowki, czas)
+        if wynik is None:
+            # Pośrednik HTTP – urllib wie, co z nim zrobić.
+            req = urllib.request.Request(url, data=cialo, method=metoda, headers=naglowki)
+            with urllib.request.urlopen(req, timeout=czas) as r:
+                status, tresc = r.status, r.read()
+            break
         status, nagl, tresc = wynik
-        if status >= 400:
-            # Jak urllib: błąd HTTP jako wyjątek, z treścią do przeczytania.
+        nowy = _cel_przekierowania(url, status, nagl, metoda) if krok < _MAKS_PRZEKIEROWAN else ""
+        if nowy:
+            url = nowy
+            continue
+        if status >= 300:
+            # Jak urllib: błąd HTTP (i przekierowanie, za którym nie idziemy)
+            # jako wyjątek, z treścią do przeczytania.
             raise urllib.error.HTTPError(url, status, nagl.get("X-Blad", "") or str(status), nagl, io.BytesIO(tresc))
-    else:
-        # Przekierowanie albo pośrednik – urllib wie, co z nimi zrobić.
-        req = urllib.request.Request(url, data=cialo, method=metoda, headers=naglowki)
-        with urllib.request.urlopen(req, timeout=czas) as r:
-            status, tresc = r.status, r.read()
+        break
     if surowe:
         return status, tresc
     return status, (json.loads(tresc.decode("utf-8")) if tresc else {})
@@ -420,6 +531,11 @@ class Agent:
         self.wersja = ""
         self.krotkie = threading.Semaphore(4)
         self.dlugie = threading.Semaphore(2)
+        # Osobne miejsca dla podglądu i dłoni: wolne YOLO (do 15 s na klatkę)
+        # zajmowało całą wspólną pulę i podgląd Kinecta stawał na zero klatek
+        # (zespół IT, runda 7).
+        self.pule = {"/kinect/": threading.Semaphore(2), "/dlonie": threading.Semaphore(1),
+                     "/pose": threading.Semaphore(1), "/detect": threading.Semaphore(1)}
         self.zamek_instalacji = threading.Lock()
 
     # --- stan dla serwera
@@ -539,18 +655,24 @@ class Agent:
         sciezka = str(zad.get("sciezka", ""))
         if not sciezka.startswith(DOZWOLONE):
             return self.odeslij(id_, 403, "application/json", json.dumps({"error": "Ścieżka niedozwolona."}).encode())
-        pula = self.dlugie if sciezka.startswith(DLUGIE) else self.krotkie
+        dlugie = sciezka.startswith(DLUGIE)
+        pula = self.dlugie if dlugie else next(
+            (sem for przedrostek, sem in self.pule.items() if sciezka.startswith(przedrostek)), self.krotkie)
+        # Krótkie zlecenia serwer porzuca po 15–90 s – dłużej nie ma na co czekać.
+        czas = 900 if dlugie else 100
         with pula:
             req = urllib.request.Request(f"http://127.0.0.1:{PORT_ZMYSLOW}{sciezka}", data=cialo or None,
                                          method=zad.get("metoda", "GET"), headers=zad.get("naglowki") or {})
             try:
-                with urllib.request.urlopen(req, timeout=900) as r:
-                    return self.odeslij(id_, r.status, r.headers.get("content-type", ""), r.read())
+                with urllib.request.urlopen(req, timeout=czas) as r:
+                    wynik = (r.status, r.headers.get("content-type", ""), r.read())
             except urllib.error.HTTPError as e:
-                return self.odeslij(id_, e.code, e.headers.get("content-type", ""), e.read())
+                wynik = (e.code, e.headers.get("content-type", ""), e.read())
             except Exception:
                 blad = {"error": "Zmysły na tym komputerze są wyłączone – włącz je w Ustawieniach → Zmysły."}
-                return self.odeslij(id_, 503, "application/json", json.dumps(blad).encode())
+                wynik = (503, "application/json", json.dumps(blad).encode())
+        # Wysyłka wyniku już poza pulą: duży wynik nie trzyma miejsca kolejnym zleceniom.
+        return self.odeslij(id_, *wynik)
 
     def _potwierdz(self, id_):
         try:
@@ -580,7 +702,7 @@ class Agent:
         elif polecenie == "instaluj":
             self.instaluj([p for p in zad.get("pakiety") or [] if p in PAKIETY])
         elif polecenie == "aktualizuj":
-            if self.aktualizuj_pliki():
+            if self.aktualizuj_pliki(restartuj_skladniki=True):
                 self.restart()
         elif polecenie == "autostart":
             if zad.get("wlacz", True):
@@ -691,11 +813,14 @@ class Agent:
         return ok
 
     # --- pliki
-    def aktualizuj_pliki(self):
-        """Dociągnij pliki zmysłów, które różnią się od serwera. True = zmienił się agent."""
+    def aktualizuj_pliki(self, restartuj_skladniki=False):
+        """Dociągnij pliki zmysłów, które różnią się od serwera. True = zmienił się agent.
+        Zmieniony skrypt składnika (service.py, watcher.py…) – działające
+        składniki startują od nowa na nowym kodzie."""
         PLIKI.mkdir(parents=True, exist_ok=True)
         _, odp = zapytanie(self.serwer, "/api/agent/pliki", token=self.token)
         zmieniony_agent = False
+        zmienione = []
         for f in odp.get("pliki", []):
             nazwa = os.path.basename(str(f.get("nazwa", "")))
             if nazwa != f.get("nazwa") or not nazwa:
@@ -716,7 +841,15 @@ class Agent:
             os.replace(tmp, cel)
             log(f"zaktualizowano {nazwa}")
             zmieniony_agent = zmieniony_agent or nazwa == "agent.py"
+            zmienione.append(nazwa)
         self.wersja = wersja_wlasna()
+        if restartuj_skladniki and zmienione and not zmieniony_agent and nazwa_skryptow_zmienione(zmienione):
+            try:
+                self.skladniki.zatrzymaj_wszystko()
+                self.skladniki.uzgodnij(self.chce)
+                log("składniki uruchomione ponownie na nowym kodzie")
+            except Exception as e:
+                log(f"ponowne uruchomienie składników: {e}")
         return zmieniony_agent
 
     def restart(self):
@@ -752,11 +885,28 @@ class Agent:
             self.skladniki.zatrzymaj_wszystko()
 
 
+def nazwa_skryptow_zmienione(nazwy):
+    """Czy wśród zmienionych plików jest skrypt, który chodzi jako składnik."""
+    return any(n.endswith(".py") and n != "agent.py" for n in nazwy)
+
+
+# Te same pliki co PLIKI_AGENTA w lib/agent-zmyslow.js – wersja to skrót
+# całego zestawu, nie samego agent.py (poprawka w service.py też ma dotrzeć).
+PLIKI_WERSJI = ["agent.py", "service.py", "watcher.py", "kinect_watcher.py", "kinect_win.py",
+                "kinect_usluga.py", "requirements.txt"]
+
+
 def wersja_wlasna():
-    try:
-        return hashlib.sha256(Path(__file__).resolve().read_bytes()).hexdigest()[:12]
-    except OSError:
+    opis = []
+    for nazwa in PLIKI_WERSJI:
+        cel = Path(__file__).resolve() if nazwa == "agent.py" else PLIKI / nazwa
+        try:
+            opis.append(f"{nazwa}:{hashlib.sha256(cel.read_bytes()).hexdigest()}")
+        except OSError:
+            continue
+    if not opis:
         return ""
+    return hashlib.sha256("\n".join(sorted(opis)).encode("utf-8")).hexdigest()[:12]
 
 
 def bez_karty_nvidia():

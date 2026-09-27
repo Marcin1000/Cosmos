@@ -22,7 +22,7 @@ const path = require('node:path');
 const { utworzNarzedzia } = require(path.join(__dirname, '..', '..', 'public', 'narzedzia.js'));
 const { utworzMowe } = require(path.join(__dirname, '..', '..', 'public', 'mowa.js'));
 
-const { tenSamTekst } = utworzMowe({ WAKE_RE: /\bhej kosmos/i });
+const { tenSamTekst, przepisanie } = utworzMowe({ WAKE_RE: /\bhej kosmos/i });
 
 const fail = [];
 
@@ -82,13 +82,19 @@ function stanowisko({ odpowiedzi = {} } = {}) {
       for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
         const m = conv.messages[i];
         if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
-        if (tenSamTekst(m.content, czysty)) { m.content = czysty; return m; }
+        // Ta sama reguła co wstawTekstModelu w app.js: przepisanie = ten sam tekst albo ten sam początek.
+        if (przepisanie(m.content, czysty)) { m.content = czysty; return m; }
       }
       const w = { role: 'assistant', content: czysty };
       conv.messages.push(w);
       return w;
     },
     WZORCE,
+    // Zapora na całej turze – prawdziwe porównanie z mowa.js, jak w app.js.
+    tekstTury: (c, od = 0) => c.messages.slice(od)
+      .filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status)
+      .map((m) => m.content).join('\n\n'),
+    tenSamTekst,
   });
 
   const poNazwie = Object.fromEntries(narzedzia.map((n) => [n.nazwa, n]));
@@ -390,7 +396,8 @@ async function uruchom(st, nazwa, acc, stan) {
       for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
         const m = conv.messages[i];
         if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
-        if (tenSamTekst(m.content, czysty)) { m.content = czysty; return m; }
+        // Ta sama reguła co wstawTekstModelu w app.js: przepisanie = ten sam tekst albo ten sam początek.
+        if (przepisanie(m.content, czysty)) { m.content = czysty; return m; }
       }
       const w = { role: 'assistant', content: czysty };
       conv.messages.push(w);
@@ -664,6 +671,44 @@ async function uruchom(st, nazwa, acc, stan) {
     if (!/Wawel\./.test(bloki[gdzie('Wawel Kraków')] || '')) fail.push('zdjęcia Wawelu nie stoją pod akapitem o Wawelu');
     if (!/Kazimierz\./.test(bloki[gdzie('Kazimierz Kraków ulica Szeroka')] || '')) fail.push('zdjęcia Kazimierza nie stoją pod akapitem o Kazimierzu');
     if (wynik.replace(/\n\[GRAFIKA: [^\]]*\]/g, '') !== plan) fail.push('wstawianie znaczników zmieniło treść odpowiedzi');
+  }
+
+  /* --- 13. Kawałki planu nie podmieniają się nawzajem; przepisany plan nie wchodzi drugi raz ---
+     Agencja, runda 7: kawałki szły przez zaporę przed powtórką, która przy
+     podobnym początku PODMIENIA wypowiedź. Dwa dni zaczynające się tym samym
+     zdaniem („Dzień w Palermo zaczynamy o świcie…”) – drugi nadpisywał
+     pierwszy i pół planu znikało. A gdy model po zdjęciach przepisał CAŁY
+     plan od nowa, stawał on drugi raz, bo żaden kawałek sam nie był „tym
+     samym tekstem”. */
+  {
+    const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: 't1', full: 'f1' }, { thumb: 't2', full: 'f2' }] } } });
+    // Wstęp dłuższy niż 160 znaków: zapora uznaje wtedy drugi kawałek za „przepisanie” pierwszego.
+    const wstep = 'Dzień zaczynamy o świcie przy katedrze, zanim zjadą się autokary z turystami, a światło '
+      + 'jest jeszcze miękkie i złote; statyw rozstawiamy po zachodniej stronie placu, przy fontannie.';
+    const acc = `${wstep} Potem targ Ballarò i ulica Maqueda.\n[GRAFIKA: Katedra Palermo]\n`
+      + `${wstep} Potem Monreale i widok na Conca d'Oro.\n[GRAFIKA: Monreale]\nMiłej podróży.`;
+    await uruchom(st, 'grafiki', acc);
+    const teksty = st.conv.messages.filter((m) => m.role === 'assistant' && typeof m.content === 'string').map((m) => m.content);
+    console.log(`13a. kawałki z tym samym początkiem → ${teksty.length} wypowiedzi tekstu`);
+    if (!teksty.some((x) => /Ballarò/.test(x)) || !teksty.some((x) => /Monreale i widok/.test(x))) {
+      fail.push('kawałek planu z tym samym początkiem nadpisał poprzedni – część odpowiedzi zniknęła');
+    }
+
+    // Tura ma już plan w kawałkach; model przepisuje całość z nowym miejscem.
+    const dzien = (n, miejsce) => `**Dzień ${n} – ${miejsce}.** Rano spacer po starym mieście, w południe przerwa na granitę `
+      + `w kawiarni przy placu, po południu punkt widokowy nad zatoką i zachód słońca z tarasu. Wieczorem kolacja w trattorii.`;
+    const st2 = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: 'x1', full: 'y1' }] } } });
+    const pierwszy = `${dzien(1, 'Palermo')}\n[GRAFIKA: Palermo]\n${dzien(2, 'Cefalù')}\n[GRAFIKA: Cefalù]\n${dzien(3, 'Taormina')}`;
+    const stan = { archiwum: new Set(), grafiki: new Set(), plan: new Set() };
+    await uruchom(st2, 'grafiki', pierwszy, stan);
+    const ileTekstu = () => st2.conv.messages.filter((m) => m.role === 'assistant' && typeof m.content === 'string').length;
+    const przed = ileTekstu();
+    const przepisany = `${dzien(1, 'Palermo')}\n${dzien(2, 'Cefalù')}\n${dzien(3, 'Taormina')}\n[GRAFIKA: Taormina teatr grecki]`;
+    await uruchom(st2, 'grafiki', przepisany, stan);
+    const siatki = st2.conv.messages.filter((m) => m.content && typeof m.content === 'object' && (m.content.photos || []).length).length;
+    console.log(`13b. plan przepisany od nowa → tekstu ${przed} → ${ileTekstu()}, siatek ${siatki}`);
+    if (ileTekstu() !== przed) fail.push('przepisany od nowa plan stanął w rozmowie drugi raz');
+    if (siatki !== 3) fail.push(`zdjęcia nowego miejsca nie doszły pod istniejący plan (siatek: ${siatki})`);
   }
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');

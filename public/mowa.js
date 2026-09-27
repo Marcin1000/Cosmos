@@ -99,8 +99,10 @@ function utworzMowe(z) {
    *  ciągłym nasłuchu „Hej Kosmos" bywa rozpoznane kilka razy pod rząd. */
   function bezSlowaBudzacego(tekst) {
     const wejscie = String(tekst);
-    const bylo = new RegExp(WAKE_RE.source, 'i').test(wejscie);
-    let out = wejscie.replace(new RegExp(WAKE_RE.source, 'gi'), ' ')
+    // Flagi wzorca zostają (u – klasy \p{L}), dokładamy tylko g.
+    const flagi = WAKE_RE.flags.replace('g', '');
+    const bylo = new RegExp(WAKE_RE.source, flagi).test(wejscie);
+    let out = wejscie.replace(new RegExp(WAKE_RE.source, `${flagi}g`), ' ')
       .replace(/\s{2,}/g, ' ').trim();
 
     /* Sieroty po wyciętej frazie – ale TYLKO wtedy, gdy fraza naprawdę tu
@@ -109,8 +111,10 @@ function utworzMowe(z) {
        nie istnieje, wzorzec łapie jedno wystąpienie, a drugie zostaje
        w kawałkach. Warunek `bylo` jest tu istotny: bez niego pytanie
        „Kosmos jest wielki, prawda?" straciłoby pierwsze słowo. */
-    out = out.replace(/^(?:(?:hej|hey|ok(?:ej)?)[\s,.!]+)+(?=\S)/i, '');
+    // „Hej” bez nazwy to resztka rozbitego wołania; „Ok, …” w zwykłym zdaniu zostaje.
+    out = out.replace(/^(?:(?:hej|hey)[\s,.!]+)+(?=\S)/i, '');
     if (bylo) {
+      out = out.replace(/^(?:(?:hej|hey|ok(?:ej)?)[\s,.!]+)+(?=\S)/i, '');
       out = out.replace(/^(?:(?:hej|hey|ok(?:ej)?|kosmos|cosmos)[\s,.!]*)+(?=\S)/i, '');
     }
     /* I na koniec interpunkcja, która została po wyciętej frazie.
@@ -192,6 +196,14 @@ function utworzMowe(z) {
       const i = ciag.indexOf(wsp);
       if (i >= 0 && i < 200) return pelny.slice(0, pelny.length - wsp.length) + ciag.slice(i);
     }
+    /* Urwane słowo, które ciąg dalszy pisze od początku: „…/przew” +
+       „przewodnik/…” dawało „…/przewprzewodnik/…” – zepsuty link z rozmowy
+       o Sycylii, a „E” + „Etna” – „EEtna” (zespół IT, runda 7). */
+    const kikut = pelny.match(/[\p{L}\p{N}_-]+$/u);
+    const slowo = ciag.match(/^[\p{L}\p{N}_-]+/u);
+    if (kikut && slowo && slowo[0].length > kikut[0].length && slowo[0].startsWith(kikut[0])) {
+      return pelny.slice(0, pelny.length - kikut[0].length) + ciag;
+    }
     return pelny + ciag;
   }
 
@@ -202,15 +214,41 @@ function utworzMowe(z) {
    sprawdzał TEN wzorzec, a nie własną kopię (tak było i kopia się rozjechała).
 
    Whisper pisze nazwę różnie: „Hej, Kosmos”, „Hej Cosmo!”, „Hejka kosmos”,
-   „Ej, Cosmos”, „Okej Kosmos”, a sama nazwa na początku wypowiedzi
-   („Cosmos, która godzina?”) też jest wołaniem. Wzorzec sprzed tej zmiany
-   znał tylko hej/hey/ok + kosmos/cosmos i część wołań przepadała bez śladu
-   (Marcin: „albo nic nie robi, albo łapie po długim czasie”).
+   „Ej, Cosmos”, „Okej Kosmos”, „Hej – Kosmos”, „Cześć Kosmos”, a sama nazwa
+   na początku wypowiedzi („Cosmos, która godzina?”) też jest wołaniem.
 
-   Bez `\b` po nazwie – przy sklejonych rozpoznaniach („Hej kosmosHej kosmos
-   co widzisz”) granica słowa po „kosmos” nie istniała. Gołe „kosmos” w środku
-   zdania NIE budzi: trzeba przed nim wołacza albo początku wypowiedzi. */
-const SLOWO_BUDZACE = /(?:\b(?:he[jy](?:ka|że)?|ej|ey|hi|hal+o|ok(?:ej|ay|e)?)[\s,.!…-]*[kc]o[sz]mo(?:s|sie|su|sa)?|^\s*[kc]o[sz]mos[,!.])/i;
+   Straże po obu stronach (agencja, runda 7):
+   – przed wołaczem nie może stać litera – `\b` bez flagi u nie uznaje „ł”
+     za literę, więc „całej kosmologii” traciło środek,
+   – po nazwie nie może stać MAŁA litera: „kosmologii”, „kosmonauci” to nie
+     wołanie; wielka litera może („Hej kosmosHej kosmos co widzisz” – sklejone
+     rozpoznania, każde wołanie osobno),
+   – dłuższe końcówki pierwsze: w „Hej Kosmosie” wygrywało „s” i do modelu
+     szło „ie, co dziś robimy?”.
+   Gołe „kosmos” w środku zdania NIE budzi. */
+const bezWielkosci = (s) => s.replace(/\p{L}/gu, (c) => {
+  const u = c.toUpperCase(), l = c.toLowerCase();
+  return u === l ? c : `[${l}${u}]`;
+});
+const WOLACZE = ['hejka', 'hejże', 'hej', 'hey', 'hallo', 'halo', 'okej', 'okay', 'oke', 'ok', 'ej', 'ey', 'hi', 'cześć', 'dzień dobry']
+  .map((w) => bezWielkosci(w).replace(' ', '\\s+'));
+const NAZWA = `[kKcCgG][oO][sSzZ][mM][oOuU](?:${['sie', 'su', 'sa', 's'].map(bezWielkosci).join('|')})?`;
+const SLOWO_BUDZACE = new RegExp(
+  `(?:(?<!\\p{L})(?:${WOLACZE.join('|')})[\\s,.!…–\\u2014-]*${NAZWA}|^\\s*[kKcC][oO][sSzZ][mM][oO][sS][,!?])(?!\\p{Ll})`,
+  'u');
 
-if (typeof window !== 'undefined') { window.utworzMowe = utworzMowe; window.SLOWO_BUDZACE = SLOWO_BUDZACE; }
-if (typeof module !== 'undefined') module.exports = { utworzMowe, SLOWO_BUDZACE };
+
+/* Koniec rozmowy głosowej to CAŁA krótka wypowiedź („koniec”, „dobranoc”),
+   a nie słowo w pytaniu: „Jaki jest koniec filmu?” kończyło tryb głosowy. */
+const KONIEC_ROZMOWY = /^[\s,.!]*(?:dobra[,\s]+)?(koniec|zako[nń]cz(?:\s+rozmow[eę])?|do widzenia|dobranoc|stop|end|goodbye|bye|that's all|to wszystko)[\s,.!]*$/i;
+
+/* Pytanie o to, co jest przed kamerą – wtedy do pytania idzie klatka.
+   Całe słowa (straże \p{L} z flagą u), nie kawałki: „sugestie” łapało „gest”,
+   „rekiny” – „ręk”, a „Co warto zobaczyć na Sycylii?” wysyłało modelowi
+   zdjęcie pokoju (agencja, runda 7). */
+const PYTANIE_O_OBRAZ = /(?<!\p{L})(co (mam|trzymam|widzisz|to jest)|jak (wygl[ąa]dam|to wygl[ąa]da)|sp[oó]jrz|popatrz|zobacz(?!\p{L})|przyjrzyj|w r[ęe]ku|w d[łl]oni|przed kamer[ąa]|na biurku|w kadrze|rozpoznaj|pokazuję|pokazuje(?=\s*(?:ci|teraz)?\s*[?.!]?\s*$)|palc[eóoa]\p{L}*|palec|gest(?:y|em|u|ów)?|d[łl]o[nń]|r[ęe]k[ęaią]|what (am i|do you see)|how many fingers|am i showing)(?!\p{L})/iu;
+
+if (typeof window !== 'undefined') {
+  Object.assign(window, { utworzMowe, SLOWO_BUDZACE, KONIEC_ROZMOWY, PYTANIE_O_OBRAZ });
+}
+if (typeof module !== 'undefined') module.exports = { utworzMowe, SLOWO_BUDZACE, KONIEC_ROZMOWY, PYTANIE_O_OBRAZ };

@@ -45,6 +45,17 @@ const PRZYPADKI = [
   ['Przejazd trwa 2 godziny.', 'Przejazd trwa dwie godziny.'],
   ['Potem 22 minuty spaceru.', 'Potem dwadzieścia dwie minuty spaceru.'],
   ['1 osoba płaci, 2 noce w hotelu.', 'jedna osoba płaci, dwie noce w hotelu.'],
+  // Runda 7 (agencja-rozmowa): przypadek z końcówki rzeczownika, godziny bez dwukropka, lata po przyimku.
+  ['Po 2 godzinach wracamy.', 'Po dwóch godzinach wracamy.'],
+  ['Z 2 osobami.', 'Z dwiema osobami.'],
+  ['Za 1 minutę.', 'Za jedną minutę.'],
+  ['Dla 1 osoby.', 'Dla jednej osoby.'],
+  ['Około 2 godziny jazdy.', 'Około dwie godziny jazdy.'],
+  ['Czynne od 9 do 17.', 'Czynne od dziewiątej do siedemnastej.'],
+  ['Od 2019 do 2023 roku.', 'Od dwa tysiące dziewiętnastego do dwa tysiące dwudziestego trzeciego roku.'],
+  ['Działa od 2019.', 'Działa od dwa tysiące dziewiętnastego.'],
+  ['Do 2000 metrów.', 'Do dwóch tysięcy metrów.'],
+  ['Od 9 do 17 stopni to za mało.', 'Od dziewięciu do siedemnastu stopni to za mało.'],
 ];
 const ZOSTAJE = [
   'Zostało 12 godzin i 5 dni.',
@@ -54,6 +65,10 @@ const ZOSTAJE = [
   'Dom ma numer 12, a mieszkanie 4.',
   'Kup 2 bilety.',
   '21 osób i 12 minut.',
+  // Odstęp tysięcy to jedna liczba – nie „około jednego 500 zł”.
+  'ok. 1 500 zł',
+  'Przyjdzie 36 000 osób.',
+  'Skala 1:25 000.',
 ];
 
 for (const [wej, oczek] of PRZYPADKI) {

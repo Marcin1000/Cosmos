@@ -85,6 +85,11 @@ function makeMock(port, name) {
           text = 'Rozpoznaję smartfon Samsunga – sprawdzę dokładny model.\n\n[SZUKAJ: Samsung Galaxy S24 specyfikacja cena]';
         } else if (/wygeneruj.*(grafik|obraz|logo)/i.test(lastText)) {
           text = 'Jasne, generuję!\n\n[OBRAZ: a majestic cosmic bear astronaut floating in a nebula, cinematic lighting]';
+        } else if (/wiadomo[sś]ci dnia/i.test(lastText)) {
+          // Akcja „otwórz”, o którą człowiek NIE prosił – ma zostać karta z przyciskiem.
+          text = 'Najświeższe są na Onecie.\n\n[AKCJA: otwórz | onet.pl]';
+        } else if (/otw[oó]rz stron[eę] routera/i.test(lastText)) {
+          text = 'Otwieram panel routera.\n\n[AKCJA: otwórz | 192.168.1.1]';
         } else if (/otw[oó]rz stron/i.test(lastText)) {
           text = 'Otwieram Onet.\n\n[AKCJA: otwórz | onet.pl]';
         } else if (/zapami[eę]taj|zapisz/i.test(lastText)) {

@@ -134,7 +134,7 @@
     'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
     'cta.h': 'Your Cosmos is ready.',
     'cta.p': 'Sign in and pick up the conversation exactly where it left off – on your computer, your phone or by voice.',
-    'cta.zapr': 'Access is by invitation. <a href="https://www.linkedin.com/in/marcinprzybylski/" target="_blank" rel="noopener">Write to me</a> and I’ll send you a link.',
+    'cta.zapr': 'Access is by invitation. <a href="https://www.linkedin.com/in/marcinprzybylski/" target="_blank" rel="noopener">Write to me<span class="sr"> (opens LinkedIn in a new tab)</span></a> and I’ll send you a link.',
     'stopka.opis': 'A personal, hybrid AI system.',
   };
 
@@ -561,10 +561,31 @@
   // Ruter silników: kolejny silnik co chwilę przejmuje rozmowę
   // -------------------------------------------------------------------------
 
+  /* Ruter i pierścień w CTA grają tylko na ekranie (poza nim klasa .stoi).
+     Dawniej pakiety malowały się 60 razy na sekundę także poza ekranem, a interwał
+     przełączał silniki nikomu – na telefonie już na pierwszym ekranie. */
   const router = $('.router');
   let akt = 0;
+  let zegarRutera = null;
   router.dataset.akt = '0';
-  if (!ruchOgraniczony) setInterval(() => { if (!document.hidden) router.dataset.akt = String(akt = (akt + 1) % 4); }, 1800);
+  const grajRuter = (tak) => {
+    router.classList.toggle('stoi', !tak);
+    if (tak && !zegarRutera && !ruchOgraniczony) {
+      zegarRutera = setInterval(() => { if (!document.hidden) router.dataset.akt = String(akt = (akt + 1) % 4); }, 1800);
+    } else if (!tak && zegarRutera) {
+      clearInterval(zegarRutera);
+      zegarRutera = null;
+    }
+  };
+  const naEkranie = new IntersectionObserver((wpisy) => {
+    wpisy.forEach((w) => {
+      if (w.target === router) grajRuter(w.isIntersecting);
+      else w.target.classList.toggle('stoi', !w.isIntersecting);
+    });
+  });
+  naEkranie.observe(router);
+  const znakCta = $('.cta-znak');
+  if (znakCta) naEkranie.observe(znakCta);
 
   // -------------------------------------------------------------------------
   // Przewijanie: pasek postępu, nić, plener, przekrój, aktywny link
@@ -778,6 +799,10 @@
   const przewin = () => { if (!czeka) { czeka = true; requestAnimationFrame(klatka); } };
   addEventListener('scroll', przewin, { passive: true });
   addEventListener('resize', przewin);
+  /* Sekcje z content-visibility zmieniają wysokość treści po narysowaniu
+     (szacunek 1100 px → prawdziwa), a zdarzenie scroll już wtedy nie przychodzi –
+     nić i głowica liczą się od nowa z nowej wysokości. */
+  if (typeof ResizeObserver === 'function') new ResizeObserver(przewin).observe(glowna);
 
   // -------------------------------------------------------------------------
   // Kursor: światło na kartach, magnetyczne przyciski, pochylenie czatu

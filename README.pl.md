@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="138 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-138-5E9E3A?style=flat-square">
+  <img alt="139 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-139-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 138 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 139 zestawów plus 9 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 138 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 139 zestawów + 9 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -280,17 +280,25 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   wyszukiwarek, a zdjęcia miejsc przeplatają się z Wikimedia Commons. Bez klucza –
   jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia w odpowiedzi nie zasłaniają planu:
   tekst stoi, a siatki wskakują pod swoje punkty, gdy przychodzą; „pokaż inne zdjęcia”
-  daje zdjęcia, których w rozmowie jeszcze nie było
+  daje zdjęcia, których w rozmowie jeszcze nie było. Klucz płacisz Ty: członek korzysta
+  z Serpera i Brave'a tylko z przyznaniem **Wyszukiwarki (Google)** w panelu Dostęp i do
+  limitu (`COSMOS_SZUKANIE_NA_MINUTE`, `COSMOS_SZUKANIE_NA_DOBE`); bez przyznania ma
+  darmowe źródła. To samo pytanie przez kwadrans nie kosztuje drugi raz, a Brave przy
+  obu kluczach jest tylko zapasem Serpera
 - 🤚 **Własne gesty** – w panelu kamery „Własne gesty”: nazwij gest, wybierz, co ma
   zrobić (przewinąć rozmowę w górę albo w dół, zrobić migawkę, włączyć tryb głosowy,
   przerwać odpowiedź, wysłać tekst do Cosmosa, otworzyć stronę albo tylko przekazać
   znaczenie), naciśnij **Nagraj gest** i po odliczaniu pokaż go przez 2,5 s. Cosmos
   zapamiętuje palce, kształt dłoni i ruch („dwa palce w górę”), a potem, gdy pokażesz
   gest przy otwartym podglądzie, wykonuje czynność i mówi o tym modelowi. Gesty są
-  Twoje – każda osoba ma własne
+  Twoje – każda osoba ma własne. Gest „otwórz stronę” przyjmuje tylko publiczny adres
+  (nie router ani inny adres z sieci domowej). Rozpoznawanie musi być włączone
 - 🌐 **Otwieranie stron** – „otwórz onet.pl”, „wejdź na YouTube”: strona otwiera się
   w nowej karcie od razu. Gdy przeglądarka zablokuje okno otwierane bez kliknięcia,
-  zostaje karta z przyciskiem **Otwórz** (albo zezwól tej stronie na wyskakujące okna)
+  zostaje karta z przyciskiem **Otwórz** (albo zezwól tej stronie na wyskakujące okna).
+  Sama otwiera się tylko strona, o którą prosisz w tej wiadomości, bez parametrów
+  w adresie i nigdy adres z sieci domowej. Każda inna propozycja modelu – na przykład
+  z wyników wyszukiwania – czeka na Twoje kliknięcie
 - 📷 **Plener** – foto i wideo w jednym oknie: sprzęt, plan zdjęciowy dla dowolnego
   miejsca i dowolnej godziny, lista ujęć do nakręcenia dobrana do tematu i sprzętu,
   Canon po Wi-Fi (CCAPI), misja waypointowa dla drona jako `.kmz` i archiwum materiału.
@@ -745,7 +753,8 @@ komputerze właściciela. Każda osoba podłącza swój komputer w **Ustawienia 
 3. Resztą sterujesz z aplikacji: przełączniki **Zmysły**, **Obserwator kamery**,
    **Kinect** uruchamiają i zatrzymują programy na tym komputerze; „Zainstaluj
    zalecane” instaluje pakiety do osobnego środowiska `~/.cosmos/venv`; „Aktualizuj
-   agenta”, autostart, „Odłącz”. Gdy składnik padnie (brak pakietu, brak kamery),
+   agenta” (pojawia się po każdej zmianie któregokolwiek pliku zmysłów na serwerze, nie
+   tylko `agent.py`, i uruchamia składniki od nowa na nowym kodzie), autostart, „Odłącz”. Gdy składnik padnie (brak pakietu, brak kamery),
    w aplikacji widać „Nie wystartował” z końcówką dziennika.
 
 Połączenie jest **wychodzące**: agent sam pyta serwer o zlecenia (długie
@@ -1369,7 +1378,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 138 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 139 zestawów + 9 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

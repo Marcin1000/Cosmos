@@ -5,7 +5,8 @@ import sys, types, io, os, tempfile
 src = open("/home/user/Bear/senses/service.py", encoding="utf-8").read()
 start = src.index("def _load_whisper")
 end = src.index("\ndef get_piper")
-ns = {"os": os}
+import threading
+ns = {"os": os, "threading": threading}
 exec(src[start:end], ns)
 
 calls = {"gpu": 0, "cpu": 0}

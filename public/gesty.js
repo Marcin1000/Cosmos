@@ -114,9 +114,10 @@ function utworzGesty() {
   }
 
   /** Opis wzorca dla człowieka: „2 palce (wskazujący, środkowy), ruch w górę”. */
-  function opisWzorca(w, t = (k) => k) {
+  function opisWzorca(w, t = (k) => (k.startsWith('gest.p.') ? k.slice(7) : k)) {
     const n = (w.palce || []).length;
-    const palce = n ? `${n} ${t(n === 1 ? 'gest.palec' : n < 5 ? 'gest.palce' : 'gest.palcow')} (${w.palce.join(', ')})` : t('gest.piesc');
+    const nazwy = w.palce.map((p) => t(`gest.p.${p}`));
+    const palce = n ? `${n} ${t(n === 1 ? 'gest.palec' : n < 5 ? 'gest.palce' : 'gest.palcow')} (${nazwy.join(', ')})` : t('gest.piesc');
     return w.ruch && w.ruch !== 'brak' ? `${palce}, ${t(`gest.ruch.${w.ruch}`)}` : palce;
   }
 

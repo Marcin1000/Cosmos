@@ -1098,7 +1098,7 @@
       </select>
       <button type="button" class="live-rozpoznawanie mono" id="live-rozpoznawanie" aria-pressed="true"
               data-i18n="live.rozpoznawanie" data-i18n-title="live.rozpoznawanieTytul"
-              title="Ramki wokół rozpoznanych rzeczy i ludzi">Rozpoznawanie</button>
+              title="Ramki, dłonie i gesty – włącz albo wyłącz rozpoznawanie">Rozpoznawanie</button>
     </div>
     <div class="live-stage" id="live-stage">
       <video id="live-video" autoplay playsinline muted></video>
@@ -1133,13 +1133,13 @@
           <option value="otworz" data-i18n="gest.cz.otworz">Otwórz stronę</option>
           <option value="znaczenie" data-i18n="gest.cz.znaczenie">Tylko znaczenie dla Cosmosa</option>
         </select>
-        <input id="gest-parametr" maxlength="300" hidden>
+        <input id="gest-parametr" maxlength="300" data-i18n-aria="gest.parametrTekst" aria-label="Tekst, który ma pójść do Cosmosa" hidden>
         <input id="gest-znaczenie" maxlength="200" data-i18n-ph="gest.znaczeniePh" placeholder="Co znaczy – Cosmos dostanie to w rozmowie">
         <div class="gest-przyciski">
           <button type="button" class="btn-secondary" id="gest-nagraj" data-i18n="gest.nagraj">Nagraj gest</button>
           <button type="button" class="btn-primary" id="gest-zapisz" data-i18n="gest.zapisz" disabled>Zapisz</button>
         </div>
-        <p class="field-hint" id="gest-stan" aria-live="polite"></p>
+        <p class="field-hint" id="gest-stan" role="status" aria-live="polite"></p>
       </div>
     </details>
 

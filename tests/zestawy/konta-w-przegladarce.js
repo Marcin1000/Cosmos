@@ -91,7 +91,8 @@ function magazyn(poczatek = {}) {
   ok(lista.textContent.includes(ZLE_IMIE), 'imię gościa stoi w panelu jako zwykły tekst, znak po znaku');
   ok(zapr.textContent.includes(ZLE_IMIE), 'imię z zaproszenia też jako tekst');
   const przelaczniki = lista.children[1].poKlasie('osoba-silnik');
-  ok(przelaczniki.length === 4, 'członek ma cztery przełączniki silników');
+  // Lokalny GPU, OpenAI, Claude, Studio i płatne wyszukiwarki (runda 7).
+  ok(przelaczniki.length === 5, `członek ma pięć przełączników: silniki, Studio, wyszukiwarki (${przelaczniki.length})`);
 
   // Członek nie widzi panelu Dostęp
   k.zastosujRole({ id: 'u-1', rola: 'czlonek' });

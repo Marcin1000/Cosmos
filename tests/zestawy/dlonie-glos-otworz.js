@@ -19,7 +19,8 @@
      4. pytanie głosowe „ile palców pokazuję?” najpierw liczy palce na klatce
         i wysyła zdarzenie, dopiero potem idzie do modelu,
      5. „otwórz stronę” otwiera kartę od razu; przy zablokowanym oknie zostaje
-        przycisk „Otwórz”, który otwiera ją kliknięciem,
+        przycisk „Otwórz”, który otwiera ją kliknięciem; akcja, o którą
+        człowiek nie prosił, i adres z sieci domowej – tylko kliknięciem,
      6. komunikat błędu w trybie głosowym nie ma dymka wypowiedzi.
 */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
@@ -146,6 +147,17 @@ if (!maPrzegladarke()) {
     await p.waitForTimeout(300);
     const otwarte2 = await p.evaluate(() => window.__otwarte.slice());
     ok(otwarte2.length === 2 && otwarte2[1] === 'https://onet.pl/', `5. kliknięcie „Otwórz” otwiera stronę (${JSON.stringify(otwarte2)})`);
+
+    /* 5b/5c. Bez kliknięcia otwiera się tylko to, o co człowiek poprosił, i nigdy
+       adres z sieci domowej (zespół IT, runda 7: wynik wyszukiwania z poleceniem
+       „[AKCJA: otwórz | …?d=<dane>]” wyprowadzał dane bez żadnego kliknięcia). */
+    await p.evaluate(() => { window.__otwarte = []; });
+    await wyslij('jakie są wiadomości dnia?');
+    const karta5b = await p.evaluate(() => { const k = [...document.querySelectorAll('.msg-action-card')].pop(); return k ? Boolean(k.querySelector('.act-do')) : false; });
+    ok((await p.evaluate(() => window.__otwarte.length)) === 0 && karta5b, '5b. akcja „otwórz” bez prośby człowieka: nic się nie otwiera samo, zostaje przycisk');
+    await wyslij('otwórz stronę routera');
+    const karta5c = await p.evaluate(() => { const k = [...document.querySelectorAll('.msg-action-card')].pop(); return k ? Boolean(k.querySelector('.act-do')) : false; });
+    ok((await p.evaluate(() => window.__otwarte.length)) === 0 && karta5c, '5c. adres z sieci domowej (192.168.1.1) nie otwiera się sam nawet na prośbę');
 
     /* ---- 6. Komunikat bez dymka ---- */
     const kom = await p.evaluate(() => {

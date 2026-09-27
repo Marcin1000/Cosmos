@@ -124,6 +124,8 @@ function utworzNarzedzia(z) {
     naKafelek, naKontekst, bezOgonkowKlient, zebranyMaterial,
     zastosujZmianePlotna, pokazPlotno, mowGlosem, PORCJA_ARCHIWUM, WZORCE,
     wstawTekstModelu,
+    // cały tekst tury i porównanie „to ten sam tekst” (opcjonalne w testach)
+    tekstTury = null, tenSamTekst = null,
     // silnik tury – pasek postępu dostaje kropkę w jego kolorze (opcjonalne w testach)
     znakSilnika = null,
   } = z;
@@ -544,14 +546,24 @@ function utworzNarzedzia(z) {
         for (const f of fotki) juzPokazane.add(f.full || f.thumb);
       }
       const miejsca = new Map();
-      const dodajTekst = (tresc) => {
-        const czysty = stripSearchMarker(tresc)
-          // Punkt listy, po którym nic nie zostało – na końcu i w środku.
-          .replace(/^[ \t]*[-*•]\s*$/gm, '')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
-        if (!/\p{L}|\p{N}/u.test(czysty)) return;
-        wstawTekstModelu(k.conv, czysty, k.conv.__turaOd || 0);
+      const oczyscKawalek = (tresc) => stripSearchMarker(tresc)
+        // Punkt listy, po którym nic nie zostało – na końcu i w środku.
+        .replace(/^[ \t]*[-*•]\s*$/gm, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      /* Kawałki planu idą do rozmowy WPROST, nie przez zaporę przed powtórką.
+         Zapora porównuje z każdą wypowiedzią tury i przy podobnym początku
+         PODMIENIA starą – kawałek planu nadpisywał wtedy poprzedni kawałek
+         i część odpowiedzi znikała (agencja, runda 7). Powtórkę całego planu
+         łapiemy raz, na całości: plan przepisany od nowa nie wchodzi drugi raz,
+         a siatki dla nowych miejsc stają pod tym, co już jest na ekranie. */
+      const kawalki = [...segmenty.map((s) => oczyscKawalek(s.tekst)), oczyscKawalek(ogon)];
+      const calosc = kawalki.filter(Boolean).join('\n\n');
+      const planJuzJest = Boolean(tekstTury && tenSamTekst
+        && tenSamTekst(tekstTury(k.conv, k.conv.__turaOd || 0), calosc));
+      const dodajTekst = (czysty) => {
+        if (planJuzJest || !/\p{L}|\p{N}/u.test(czysty)) return;
+        k.conv.messages.push({ role: 'assistant', content: czysty, ...(znakSilnika ? znakSilnika() : {}) });
       };
       /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
          Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
@@ -559,23 +571,35 @@ function utworzNarzedzia(z) {
          cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
          dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
          wstawiamy kawałków, w których nie została ani jedna litera. */
-      for (const seg of segmenty) {
-        dodajTekst(seg.tekst);
+      segmenty.forEach((seg, i) => {
+        dodajTekst(kawalki[i]);
         for (const q of seg.zapytania) {
           /* Podpis nad siatką zostaje ZAWSZE, także przy jednym zestawie.
              To on wiąże zdjęcia z punktem planu, pod którym stoją. */
-          const w = { role: 'assistant', content: { text: q, photos: [], szukam: true } };
+          const w = { role: 'assistant', content: { text: q, photos: [], szukam: true }, ...(znakSilnika ? znakSilnika() : {}) };
           k.conv.messages.push(w);
           miejsca.set(bezOgonkowKlient(q), w);
         }
-      }
-      dodajTekst(ogon);
+      });
+      dodajTekst(kawalki[kawalki.length - 1]);
       saveConversations();
       renderMessages();
 
       // Równolegle – inaczej trzy zapytania to trzy razy dłuższe czekanie.
       // Każda siatka wskakuje na swoje miejsce, gdy tylko przyjdzie.
+      /* …ale najwyżej cztery naraz. Dwadzieścia cztery zapytania z jednej
+         odpowiedzi to było 144 równoległe żądania z serwera: Brave odrzucał
+         23 z 24, a pięć osób naraz stawiało pętlę zdarzeń (zespół IT, runda 7). */
+      const NARAZ = 4;
+      let wolne = NARAZ;
+      const kolejka = [];
+      const wezMiejsce = () => (wolne > 0 ? (wolne--, Promise.resolve()) : new Promise((r) => kolejka.push(r)));
+      const oddajMiejsce = () => { const nast = kolejka.shift(); if (nast) nast(); else wolne++; };
       const zestawy = await Promise.all(wszystkie.map(async (q) => {
+        await wezMiejsce();
+        try { return await jednaSiatka(q); } finally { oddajMiejsce(); }
+      }));
+      async function jednaSiatka(q) {
         const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}&ile=16`);
         const nowe = (d.results || []).filter((f) => !juzPokazane.has(f.full || f.thumb));
         const photos = (nowe.length ? nowe : (d.results || [])).slice(0, 8);
@@ -587,7 +611,7 @@ function utworzNarzedzia(z) {
         }
         renderMessages();
         return { q, photos, error: d.error || '' };
-      }));
+      }
       const znalezione = zestawy.filter((x) => x.photos.length);
       saveConversations();
       const uwagaPominiete = pominiete.length

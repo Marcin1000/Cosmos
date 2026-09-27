@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="138 test suites" src="https://img.shields.io/badge/test%20suites-138-5E9E3A?style=flat-square">
+  <img alt="139 test suites" src="https://img.shields.io/badge/test%20suites-139-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 138 suites plus 9 Python
+**Tests measure behaviour, never source text.** 139 suites plus 9 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -164,10 +164,18 @@ request made the preview crawl at two frames a second. Hands get their own faste
 loop: MediaPipe gives 21 points per hand, Cosmos counts extended fingers from the
 geometry and puts "right hand: 2 fingers, V sign" into the perception context, because
 the Kinect skeleton has the hand as a single joint and the model could only apologise.
-The assistant can also open web pages; a blocked pop-up falls back to a one-click card. With a Serper
+The assistant can also open web pages; a blocked pop-up falls back to a one-click card.
+Only a page the person asked for in that very message opens by itself – never a private
+address, never one with query parameters – because a search result can carry an
+`[AKCJA: otwórz | …?d=<data>]` line and the model may obey it. With a Serper
 (Google results) or Brave Search key, web and image search go through them first and
-fall back to DuckDuckGo, Commons and Openverse; photo grids fill in under the plan's
-points as they arrive instead of replacing the answer while they load. Custom gestures
+fall back to DuckDuckGo, Commons and Openverse; Brave is only Serper's fallback, results
+are shared for fifteen minutes, and members use the owner's paid keys only with a grant
+and within a per-person rate limit. Photo grids fill in under the plan's
+points as they arrive instead of replacing the answer while they load. Before any
+request leaves, messages are normalised to one leading system message and strictly
+alternating roles: Gemma 3 and Mistral Nemo chat templates on vLLM rejected the very
+first "hi" otherwise, while Ollama's Go templates had hidden the problem. Custom gestures
 are recorded from the same hand loop – which fingers are up, the normalised hand shape and
 the direction of movement – and replayed as actions ("two fingers moving up" scrolls the
 chat), with the person's own meaning passed to the model.
@@ -260,7 +268,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 138 suites + 9 Python selftests (~20 min)
+npm test                  # 139 suites + 9 Python selftests (~20 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -316,7 +324,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               138 behaviour suites, mock upstreams, fake DOM
+tests/               139 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 

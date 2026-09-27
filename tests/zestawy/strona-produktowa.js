@@ -39,7 +39,14 @@
  *  18. „Cztery warstwy”: przy przewijaniu każda warstwa się podświetla, a jej
  *      płyta i opis są wtedy na ekranie razem (telefon i komputer).
  *  19. Pas znaczników leży NAD pionową nicią wątku (Marcin: „poziomy pasek
- *      wchodzi pod pasek pionowy”) – w punkcie przecięcia na wierzchu jest pas. */
+ *      wchodzi pod pasek pionowy”) – w punkcie przecięcia na wierzchu jest pas,
+ *      a na zrzucie piksel pasa na linii nici jest taki sam jak 40 px obok
+ *      (1366 i 1440 px, oba motywy). elementFromPoint nie widzi maski ani
+ *      przezroczystego tła: maska krawędzi pasa pokazywała nić na 1320–1511 px.
+ *  20. Kolor mieszany z var() (color-mix, gradient „in oklch”) stoi w @supports.
+ *      Zapas „najpierw stara wartość, potem nowa” nie działa, gdy nowa ma var():
+ *      stara przeglądarka (m.in. Firefox ESR 115) odrzuca ją dopiero przy
+ *      liczeniu i bierze wartość początkową – „Każdy model.” w hero znikał. */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -426,14 +433,100 @@ const { srodowisko, przegladarka } = require('../pomoc');
       if (!nic || getComputedStyle(nic).display === 'none') return { brakNici: true };
       // Nić ma pointer-events: none – bez tego elementFromPoint patrzyłby przez nią
       // i test przechodziłby bez względu na to, co jest narysowane na wierzchu.
-      for (const e of [nic, ...nic.querySelectorAll('*')]) e.style.pointerEvents = 'auto';
+      // Głowica celowo jedzie NAD pasem (środek okna), więc patrzymy obok niej.
+      for (const e of [nic, ...nic.querySelectorAll('*')]) if (!e.matches('.watek-glowa')) e.style.pointerEvents = 'auto';
       const n = nic.getBoundingClientRect();
+      const gl = document.querySelector('.watek-glowa').getBoundingClientRect();
       const x = n.left + n.width / 2;
-      const y = pas.top + pas.height / 2;
+      const y = Math.abs(pas.top + 4 - (gl.top + gl.height / 2)) > 12 ? pas.top + 4 : pas.bottom - 4;
       const el = document.elementFromPoint(x, y);
       return { naWierzchu: el ? (el.closest('.pas') ? 'pas' : (el.closest('.watek') ? 'nic' : el.className || el.tagName)) : '–' };
     });
     ok(!wynik.brakNici && wynik.naWierzchu === 'pas', `19. w przecięciu z nicią wątku na wierzchu jest pas znaczników (${wynik.naWierzchu || 'brak nici'})`);
+    await ctx.close();
+  }
+  /* To, co NARYSOWANE: piksel pasa na linii nici i 40 px obok. Pas w górnej
+     części okna (głowica jedzie środkiem i celowo leży nad pasem), próbka
+     w odstępie nad tekstem, ziarno tła wyłączone. Nad pasem ta sama para
+     pikseli MUSI się różnić – inaczej test nie widziałby nici w ogóle. */
+  for (const motyw of ['light', 'dark']) {
+    for (const szer of [1366, 1440]) {
+      const { ctx, p } = await nowaStrona({ viewport: { width: szer, height: 900 }, colorScheme: motyw });
+      await p.goto(`${env.adres}/`, { waitUntil: 'load' });
+      await p.addStyleTag({ content: 'body::after { display: none !important; } .pas-tor { animation-play-state: paused !important; }' });
+      await p.evaluate(() => {
+        const r = document.querySelector('.pas').getBoundingClientRect();
+        scrollBy({ top: r.top + r.height / 2 - innerHeight * 0.3, behavior: 'instant' });
+      });
+      await p.waitForTimeout(500);
+      const g = await p.evaluate(() => {
+        const r = document.querySelector('.pas').getBoundingClientRect();
+        const n = document.querySelector('.watek').getBoundingClientRect();
+        return { x: Math.round(n.left + n.width / 2), top: Math.round(r.top), h: Math.round(r.height) };
+      });
+      const zrzut = await p.screenshot({ clip: { x: g.x - 2, y: g.top - 20, width: 50, height: g.h + 40 } });
+      const px = await p.evaluate(async ({ src, wPasie }) => {
+        const img = new Image();
+        img.src = src;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const k = c.getContext('2d');
+        k.drawImage(img, 0, 0);
+        const piksel = (x, y) => Array.from(k.getImageData(x, y, 1, 1).data.slice(0, 3));
+        const roznica = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+        return { wPasie: roznica(piksel(2, wPasie), piksel(42, wPasie)), nadPasem: roznica(piksel(2, 10), piksel(42, 10)) };
+      }, { src: 'data:image/png;base64,' + zrzut.toString('base64'), wPasie: 20 + 7 });
+      ok(px.nadPasem > 30 && px.wPasie <= 8,
+        `19. ${szer} px (${motyw}): nić nie prześwituje przez pas (różnica pikseli na nici i obok: ${px.wPasie} ≤ 8; nad pasem nić widać: ${px.nadPasem})`);
+      await ctx.close();
+    }
+  }
+
+  // --- 20. kolory mieszane z var() tylko za @supports -----------------------
+  {
+    const { ctx, p } = await nowaStrona({ viewport: { width: 1440, height: 900 } });
+    await p.goto(`${env.adres}/`, { waitUntil: 'load' });
+    const wynik = await p.evaluate(() => {
+      const zle = [];
+      // Deklaracje reguły, dzielone średnikiem poza nawiasami i cudzysłowami (data: URL).
+      const deklaracje = (tekst) => {
+        const wynik = [];
+        let glebokosc = 0, cudzyslow = null, biezaca = '';
+        for (const z of tekst) {
+          if (cudzyslow) { biezaca += z; if (z === cudzyslow) cudzyslow = null; continue; }
+          if (z === '"' || z === "'") { cudzyslow = z; biezaca += z; continue; }
+          if (z === '(') glebokosc++;
+          else if (z === ')') glebokosc--;
+          if (z === ';' && glebokosc === 0) { wynik.push(biezaca.trim()); biezaca = ''; } else biezaca += z;
+        }
+        if (biezaca.trim()) wynik.push(biezaca.trim());
+        return wynik;
+      };
+      const przejdz = (reguly, warunki) => {
+        for (const r of reguly) {
+          const w = r instanceof CSSSupportsRule ? `${warunki} ${r.conditionText}` : warunki;
+          if (r.style) {
+            for (const d of deklaracje(r.style.cssText)) {
+              if (!/var\(/.test(d)) continue;
+              const brak = (/color-mix\(/i.test(d) && !/color-mix/.test(w)) || (/\bin\s+oklch\b/i.test(d) && !/oklch/.test(w));
+              if (brak) zle.push(`${r.selectorText || r.keyText || '?'} { ${d.slice(0, 60)}… }`);
+            }
+          }
+          if (r.cssRules) przejdz(r.cssRules, w);
+        }
+      };
+      let arkuszy = 0;
+      for (const a of document.styleSheets) {
+        let reguly;
+        try { reguly = a.cssRules; } catch { continue; }
+        arkuszy++;
+        przejdz(reguly, '');
+      }
+      return { arkuszy, zle };
+    });
+    ok(wynik.arkuszy >= 2 && wynik.zle.length === 0,
+      `20. każdy kolor mieszany z var() stoi w @supports (arkuszy: ${wynik.arkuszy}${wynik.zle.length ? '; poza @supports: ' + wynik.zle.slice(0, 5).join(' | ') : ''})`);
     await ctx.close();
   }
 
