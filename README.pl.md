@@ -1393,5 +1393,4 @@ i przekazywać dalej – do użytku osobistego, nauki, badań, projektów hobbys
 w szkołach, organizacjach pożytku publicznego i instytucjach publicznych. Sprzedaż, płatna
 usługa albo użycie w firmie wymagają osobnej zgody – zapytaj przez zgłoszenie na GitHubie.
 
-Wersje opublikowane przed 26 września 2026 były na licencji MIT i zostają na niej dla
-każdego, kto już je ma. Tekst licencji jest po angielsku i tylko on jest wiążący.
+Tekst licencji jest po angielsku i tylko on jest wiążący.

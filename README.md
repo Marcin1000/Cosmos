@@ -332,9 +332,6 @@ share it – for personal use, study, research, hobby projects, schools, chariti
 public institutions. Selling it, running it as a paid service or using it inside a
 company needs a separate agreement; open an issue on GitHub to ask.
 
-Versions published before 26 September 2026 were MIT-licensed and stay that way for
-anyone who already has them.
-
 ---
 
 <p align="center">
