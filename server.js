@@ -95,7 +95,7 @@ const zadania_ = require('./lib/zadania.js').utworzZadania();
 // Limit miejsca na osobę i 507 zamiast „ok", gdy zapis się nie udał.
 const miejsce_ = require('./lib/miejsce.js');
 const bladZapisu = (res, err) => miejsce_.odpowiedzBledemZapisu(res, sendJson, err);
-const { llmComplete } = require('./lib/model.js');
+const { llmComplete, parametryDla } = require('./lib/model.js');
 // Pliki statyczne (strona, aplikacja, czcionki, ikony) i CSP aplikacji – lib/statyka.js.
 const { serveStatic } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
 
@@ -884,6 +884,8 @@ function scrubSecrets(msg) {
     .replace(/(for account\s+)'[^']+'/gi, "$1'(ukryte)'")
     .replace(/\bnvapi-[A-Za-z0-9_-]+/g, 'nvapi-(ukryte)')
     .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, 'sk-(ukryte)')
+    // OpenAI przy złym kluczu cytuje jego początek i koniec: „sk-abc***xyz".
+    .replace(/\b(sk|nvapi)-[A-Za-z0-9_-]*\*+[A-Za-z0-9_-]*/g, '$1-(ukryte)')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -894,6 +896,19 @@ const PROBE_TIMEOUT_MS = 75000;
    dwie sondy po 75 s z ponowieniem potrafiły trwać 300 s. */
 const BUDZET_SPRAWDZENIA_MS = 88_000;
 
+/* Sonda idzie przez te same poprawki parametrów co czat (parametryDla):
+   surowe `max_tokens: 1` modele rozumujące OpenAI odrzucały, więc „Sprawdź
+   wszystkie" oznaczało gpt-5, o3 i o4-mini jako niedostępne, choć w rozmowie
+   działały (zespół IT, runda 5). Limit zostaje mały – to tylko „czy odpowie". */
+function cialoSondy(ep, model, content) {
+  const b = parametryDla(ep, { model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false });
+  for (const k of ['max_tokens', 'max_completion_tokens']) if (typeof b[k] === 'number') b[k] = Math.min(b[k], 32);
+  return b;
+}
+/* Odmowa „skończył się limit tokenów" znaczy, że model JEST i odpowiada –
+   przy tak małym limicie część dostawców woli 400 niż uciętą odpowiedź. */
+const ODMOWA_LIMITU_SONDY = /max_tokens|max_completion_tokens|output limit was reached|could not finish the message/i;
+
 async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
   const content = withImage
     ? [{ type: 'image_url', image_url: { url: PROBE_PNG } }, { type: 'text', text: 'hi' }]
@@ -902,41 +917,72 @@ async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
     const r = await fetch(`${ep.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: authHeaders(ep),
-      body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false }),
+      body: JSON.stringify(cialoSondy(ep, model, content)),
       signal: AbortSignal.timeout(czasMs),
     });
     if (r.ok) return { ok: true };
     let detail = '';
     try { detail = await r.text(); } catch { /* bez treści */ }
+    if (r.status === 400 && ODMOWA_LIMITU_SONDY.test(detail) && !withImage) return { ok: true };
     let msg = `HTTP ${r.status}`;
     try {
       const j = JSON.parse(detail);
       msg = j?.error?.message || j?.message || j?.detail || j?.title || msg;
       if (typeof msg !== 'string') msg = JSON.stringify(msg);
-    } catch { if (detail) msg = detail.slice(0, 200); }
-    return { ok: false, status: r.status, error: scrubSecrets(msg) };
+    } catch { if (detail) msg = toStronaHtml(detail) ? `HTTP ${r.status}` : detail.slice(0, 200); }
+    const poSekundach = Math.min(10, Math.max(1, Number(r.headers.get('retry-after')) || 3));
+    return { ok: false, status: r.status, error: scrubSecrets(msg), ...(r.status === 429 ? { limit: true, poSekundach } : {}) };
   } catch (e) {
     // Rozróżniamy „nie masz dostępu" od „nie zdążył odpowiedzieć" – to drugie
     // przy modelach ładowanych na żądanie znaczy zwykle tylko tyle, że model
     // wstawał z zimnego startu.
     const timeout = e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message);
     /* Brak połączenia to NIE „niedostępny na Twoim koncie”. Przy uśpionym domu
-       „Sprawdź” twierdziło to drugie (agencja, runda 5). */
-    return { ok: false, status: 0, timeout, siec: !timeout, error: scrubSecrets(timeout ? e.message : opisBleduSieci(e, ep.label)) };
+       „Sprawdź” twierdziło to drugie (agencja, runda 5). Komunikat przeglądarki
+       („The operation was aborted due to timeout") zamieniamy na zdanie. */
+    const kodSieci = e.cause?.code || e.code || '';
+    return { ok: false, status: 0, timeout, siec: !timeout, kodSieci,
+      error: timeout ? `Brak odpowiedzi w ${Math.round(czasMs / 1000)} s.` : scrubSecrets(opisBleduSieci(e, ep.label)) };
   }
 }
 
-/** Sonda z jedną ponowną próbą po przekroczeniu czasu.
+/** Sonda z jedną ponowną próbą po przekroczeniu czasu albo po limicie zapytań.
  *  Pierwsze żądanie do modelu, którego dostawca nie trzyma rozgrzanego,
  *  potrafi trwać dłużej niż każde następne – jedna odmowa to za mało, żeby
- *  napisać komuś „ten model nie działa". */
+ *  napisać komuś „ten model nie działa". Limit zapytań (429) to też nie
+ *  „niedostępny": darmowe konto NVIDII przy „Sprawdź wszystkie" dostawało
+ *  429 co kilka modeli i działające modele lądowały w „Niedostępne". */
 async function probeModel(ep, model, withImage, doKiedy = Date.now() + BUDZET_SPRAWDZENIA_MS) {
   const zostalo = () => doKiedy - Date.now();
   if (zostalo() < 3000) return { ok: false, status: 0, timeout: true, error: 'Zabrakło czasu na to sprawdzenie.' };
   const first = await probeOnce(ep, model, withImage, Math.min(PROBE_TIMEOUT_MS, zostalo()));
+  if (first.limit && zostalo() > first.poSekundach * 1000 + 5000) {
+    await new Promise((r) => setTimeout(r, first.poSekundach * 1000));
+    return probeOnce(ep, model, withImage, Math.min(PROBE_TIMEOUT_MS, zostalo()));
+  }
   if (first.ok || !first.timeout || zostalo() < 5000) return first;
   const second = await probeOnce(ep, model, withImage, Math.min(PROBE_TIMEOUT_MS, zostalo()));
   return second.timeout ? { ...second, timeout: true } : second;
+}
+
+/** Co powiedzieć człowiekowi, gdy sprawdzenie się nie udało. Trzy różne
+ *  sytuacje dawały dotąd to samo „niedostępny na Twoim koncie". */
+function podpowiedzSprawdzenia(ep, nazwa, model, wynik) {
+  const local = ep === ENDPOINTS.local;
+  if (wynik.siec) {
+    if (!local) return 'To nie sprawa konta ani modelu: serwer Cosmosa nie połączył się z dostawcą. Spróbuj za chwilę.';
+    if (!czyWlasciciel()) return 'Komputer właściciela z lokalnym modelem teraz nie odpowiada.';
+    return wynik.kodSieci === 'ECONNREFUSED'
+      ? 'Komputer domowy odpowiada, ale Ollama nie przyjmuje połączeń – uruchom ją albo ustaw OLLAMA_HOST=0.0.0.0 (Ustawienia → „Pobierz listę" podpowie więcej).'
+      : 'To nie sprawa konta ani modelu: komputer domowy nie odpowiada (wyłączony, uśpiony, poza Tailscale albo blokuje go Zapora Windows).';
+  }
+  if (wynik.timeout) {
+    return local
+      ? 'Połączenie jest, ale model się nie odezwał: Ollama ładuje go z dysku do pamięci karty (zimny start – spróbuj za minutę) albo się zawiesiła. Na stałe pomaga OLLAMA_KEEP_ALIVE=24h.'
+      : 'Dostawca przyjął pytanie, ale nie odpowiedział na czas – bywa tak przy modelach ładowanych na żądanie. Spróbuj za kilka minut.';
+  }
+  if (wynik.limit) return 'Dostawca ograniczył liczbę zapytań (limit na minutę). To nie znaczy, że model nie działa – sprawdź go ponownie za minutę.';
+  return modelErrorHint(nazwa, model, wynik.status, { tresc: wynik.error, baseUrl: ep.baseUrl }).trim();
 }
 
 async function handleModelCheck(req, res) {
@@ -981,19 +1027,13 @@ async function handleModelCheck(req, res) {
     silnik: ep.label,
     rozmowa: text.ok,
     obrazy: vision.ok,
-    // „Nie zdążył odpowiedzieć" to nie to samo, co „nie masz dostępu”.
-    niepewne: Boolean(text.timeout),
+    // „Nie zdążył odpowiedzieć" i „limit zapytań" to nie to samo, co „nie masz dostępu”.
+    niepewne: Boolean(text.timeout || text.limit),
     siec: Boolean(text.siec),
+    rodzaj: text.ok ? null : text.siec ? 'siec' : text.timeout ? 'czas' : text.limit ? 'limit' : 'odmowa',
     blad: text.ok ? null : text.error,
     // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
-    podpowiedz: text.ok ? null
-      : text.siec ? (ep === ENDPOINTS.local
-        ? 'To nie sprawa konta ani modelu: komputer domowy albo Ollama nie odpowiada. Sprawdź, czy komputer jest włączony i Ollama działa.'
-        : 'To nie sprawa konta ani modelu: serwer Cosmosa nie połączył się z dostawcą. Spróbuj za chwilę.')
-      : (text.timeout
-        ? 'Model nie odpowiedział na czas – u dostawcy wstaje z zimnego startu. '
-          + 'Spróbuj go sprawdzić pojedynczo przyciskiem „Sprawdź”.'
-        : modelErrorHint(data.endpoint, model, text.status, { tresc: text.error, baseUrl: ep.baseUrl }).trim()),
+    podpowiedz: text.ok ? null : podpowiedzSprawdzenia(ep, data.endpoint, model, text),
     bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
   });
 }
@@ -1006,24 +1046,40 @@ async function handleModels(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const ep = pickEndpoint(url.searchParams.get('endpoint'));
   try {
-    const upstream = await fetch(`${ep.baseUrl}/models`, {
+    // Anthropic oddaje domyślnie 20 modeli na stronę – przy kolejnych premierach lista by się ucinała.
+    const upstream = await fetch(`${ep.baseUrl}/models${ep.anthropic ? '?limit=1000' : ''}`, {
       headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
       signal: AbortSignal.timeout(15000),
     });
     const tekst = await upstream.text();
     let data = null;
     try { data = JSON.parse(tekst); } catch { /* HTML albo pusto */ }
-    if (upstream.ok && data) return sendJson(res, 200, data);
+    if (upstream.ok && data) {
+      /* Członek na silniku PRZYZNANYM może użyć tylko modeli z listy właściciela
+         (lib/silniki.js → granice). Cały katalog na liście kusił wyborem, który
+         serwer i tak podmieniał – a podpis odpowiedzi kłamał (zespół IT, runda 5). */
+      const g = silniki.granice(url.searchParams.get('endpoint') || 'cloud');
+      if (g && g.modele.length && Array.isArray(data.data)) {
+        data = { ...data, data: data.data.filter((m) => g.modele.includes(m.id)), przycieta: true };
+        for (const id of g.modele) if (!data.data.some((m) => m.id === id)) data.data.push({ id });
+      }
+      return sendJson(res, 200, data);
+    }
     /* Dostawca odmówił. Surowe ciało (`{error:{message,type}}`) dawało na
        ekranie „[object Object]” (agencja, runda 5). Jedno zdanie po ludzku. */
     const powod = data && (data.error?.message || (typeof data.error === 'string' && data.error) || data.message);
     const klucz = upstream.status === 401 || upstream.status === 403;
+    const czlonek = !czyWlasciciel();
     return sendJson(res, 502, {
       error: klucz
-        ? `${ep.label} odrzuca klucz API (HTTP ${upstream.status}). Sprawdź klucz w .env serwera albo własny klucz w Ustawieniach → Twoje konto.`
-        : toStronaHtml(tekst) || !powod
-          ? `${ep.label} nie oddał listy modeli (HTTP ${upstream.status}). Spróbuj za chwilę.`
-          : `${ep.label}: ${String(powod).slice(0, 200)} (HTTP ${upstream.status})`,
+        ? (czlonek
+          ? `${ep.label} odrzuca klucz API. Jeśli to Twój własny klucz – popraw go w Ustawieniach → Twoje konto; jeśli klucz właściciela – daj mu znać.`
+          : `${ep.label} odrzuca klucz API (HTTP ${upstream.status}). Sprawdź klucz w .env serwera albo własny klucz w Ustawieniach → Twoje konto.`)
+        : upstream.ok
+          ? `Nie udało się odczytać listy modeli z: ${ep.label} – odpowiedź nie jest listą. Sprawdź adres silnika.`
+          : toStronaHtml(tekst) || !powod
+            ? `Nie udało się pobrać listy modeli z: ${ep.label} (HTTP ${upstream.status}). Spróbuj za chwilę.`
+            : `${ep.label}: ${String(powod).slice(0, 200)} (HTTP ${upstream.status})`,
     });
   } catch (err) {
     const local = ep === ENDPOINTS.local;
@@ -1037,11 +1093,22 @@ async function handleModels(req, res) {
        różne sytuacje: komputer odpowiada, ale Ollama nie przyjmuje połączeń
        (odmowa), albo komputera w ogóle nie ma w sieci (cisza, brak trasy).
        Zgłoszenie Marcina ze zrzutem: trzy podpowiedzi naraz i żadnej pewnej. */
-    const kod = err.cause?.code || err.code || (err.name === 'TimeoutError' ? 'ETIMEDOUT' : '');
+    /* TimeoutError (15 s) przychodzi dopiero PO połączeniu – uśpiony komputer
+       odpada wcześniej, na limicie łączenia. Wtedy komputer jest, a milczy
+       Ollama. Kod „23" z tego błędu to numer wyjątku przeglądarkowego, nie sieci. */
+    const zawieszona = err.name === 'TimeoutError';
+    const kod = zawieszona ? '' : (err.cause?.code || err.code || '');
     const odmowa = kod === 'ECONNREFUSED';
+    if (zawieszona) {
+      return sendJson(res, 502, {
+        error: 'Komputer domowy przyjął połączenie, ale Ollama nie odpowiedziała w 15 s – ładuje duży model albo się zawiesiła.'
+          + '\n\nCo zrobić: poczekaj minutę i spróbuj ponownie; jeśli dalej cisza, zamknij Ollamę z zasobnika i uruchom ją jeszcze raz.'
+          + `\n\nAdres: ${ep.baseUrl}`,
+      });
+    }
     const pierwsze = odmowa
       ? 'Komputer domowy odpowiada, ale Ollama nie przyjmuje połączeń.'
-      : 'Komputer domowy nie odpowiada: jest wyłączony, uśpiony albo poza Tailscale.';
+      : 'Komputer domowy nie odpowiada: jest wyłączony, uśpiony, poza Tailscale albo blokuje go Zapora Windows.';
     const coZrobic = odmowa
       ? `\n\nCo zrobić na komputerze domowym:\n`
         + `• Uruchom Ollamę (ikona w zasobniku albo \`ollama serve\`).\n`
@@ -1049,6 +1116,7 @@ async function handleModels(req, res) {
         + `potem zamknij Ollamę z zasobnika i uruchom ponownie.`
       : `\n\nCo zrobić:\n`
         + `• Włącz albo obudź komputer domowy i sprawdź, czy Tailscale jest połączony.\n`
+        + `• Zapora Windows: zezwól Ollamie na połączenia przychodzące (port 11434) w sieci prywatnej.\n`
         + `• Uśpiony komputer nie odbiera połączeń; w opcjach zasilania Windows ustaw `
         + `„Uśpij: nigdy” na zasilaniu sieciowym, jeśli ma być dostępny zawsze.`;
     sendJson(res, 502, {

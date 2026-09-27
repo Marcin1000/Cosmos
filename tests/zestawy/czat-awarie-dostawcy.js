@@ -18,7 +18,7 @@
  *  13. zdjęcie odrzucone kodem 500 (Ollama) → ponowienie z modelem wizyjnym,
  *  14. model myślący po cichu → dłuższy limit do pierwszej treści, z pulsem,
  *  15. restart serwera w trakcie odpowiedzi → odpowiedź dokończona i zapisana,
- *  16. uśpiony komputer domowy → nazwana przyczyna i bezpiecznik 30 s,
+ *  16. uśpiony komputer domowy → nazwana przyczyna i bezpiecznik 30 s (z szybką sondą),
  *  17. „Stop" w trakcie składania kontekstu (embeddingi czekają na śpiące zmysły)
  *      → nic nie idzie do dostawcy; dawniej rejestr stał PO składaniu,
  *  19. odmowa FORMATU obrazu → „dostawca nie przyjmuje tego formatu", a nie
@@ -319,7 +319,9 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   const l1 = await czat('uspiony', { adres: S2, dodatki: { endpoint: 'local' } });
   ok(l1.status === 502 && /uśpiony|poza Tailscale/.test(l1.json.error || ''), `16. uśpiony komputer → nazwana przyczyna (${l1.czas} ms: ${(l1.json.error || '').slice(0, 60)}…)`);
   const l2 = await czat('uspiony', { adres: S2, dodatki: { endpoint: 'local' } });
-  ok(l2.status === 502 && l2.czas < 1000 && /przed chwilą/.test(l2.json.error || ''), `16. druga wiadomość bez czekania – bezpiecznik (${l2.czas} ms)`);
+  /* Bezpiecznik nie odmawia na ślepo: robi szybką sondę (1,5 s), żeby komputer
+     obudzony przed chwilą nie dostawał „uśpiony" jeszcze przez pół minuty. */
+  ok(l2.status === 502 && l2.czas < 2500 && l2.json.rodzaj === 'uspiony', `16. druga wiadomość bez 10 s czekania – bezpiecznik z szybką sondą (${l2.czas} ms, ${l2.json.rodzaj})`);
   zabij(srv2);
 
   zabij(srv); atrapa.close();

@@ -5,8 +5,11 @@
    lekarstwo:
      1. Komputer jest w sieci, ale na porcie Ollamy nic nie słucha (odmowa
         połączenia) → uruchom Ollamę albo ustaw OLLAMA_HOST.
-     2. Komputera nie ma w sieci (cisza, brak trasy) → obudź go, sprawdź
-        Tailscale. Tu podpowiedź o OLLAMA_HOST tylko myli.
+     2. Komputer przyjął połączenie, ale Ollama milczy (ładuje model albo się
+        zawiesiła) → poczekaj albo uruchom ją ponownie. Dawniej ten stan dostawał
+        „komputer wyłączony albo uśpiony" z kodem „(23)" – numerem wyjątku
+        przeglądarkowego, nie sieci (zespół IT, runda 5). Uśpiony komputer za
+        Tailscale odpada wcześniej, na limicie łączenia.
 */
 const path = require('node:path');
 const os = require('node:os');
@@ -43,17 +46,18 @@ async function zapytaj(port, localUrl) {
   if (!/OLLAMA_HOST/.test(a.error)) fail.push('przy odmowie brak podpowiedzi o OLLAMA_HOST');
   if (/uśpiony/.test(a.error)) fail.push('przy odmowie podpowiedź o uśpionym komputerze myli');
 
-  /* 2. Cisza: połączenie przyjęte, odpowiedź nie przychodzi nigdy. Tak wygląda
-        uśpiony komputer za Tailscale; adres spoza sieci w piaskownicy testów
-        dostaje od razu odmowę, więc ciszę robimy sami. */
+  /* 2. Cisza: połączenie przyjęte, odpowiedź nie przychodzi nigdy – zawieszona
+        albo ładująca się Ollama. */
   const cisza = net.createServer(() => { /* trzymaj połączenie, nic nie mów */ });
   await new Promise((r) => cisza.listen(7123, r));
   const b = await zapytaj(3472, 'http://127.0.0.1:7123/v1');
   cisza.close();
-  console.log(`2. brak komputera → HTTP ${b.status}: ${b.error.split('\n')[0]}`);
-  if (b.status !== 502) fail.push(`brak komputera: HTTP ${b.status} zamiast 502`);
-  if (!/nie odpowiada/.test(b.error)) fail.push('brak komputera nie mówi, że komputer nie odpowiada');
-  if (/OLLAMA_HOST/.test(b.error)) fail.push('przy braku komputera podpowiedź o OLLAMA_HOST myli');
+  console.log(`2. Ollama milczy → HTTP ${b.status}: ${b.error.split('\n')[0]}`);
+  if (b.status !== 502) fail.push(`Ollama milczy: HTTP ${b.status} zamiast 502`);
+  if (!/Ollama nie odpowiedziała/.test(b.error)) fail.push('milcząca Ollama nie jest nazwana po imieniu');
+  if (/uśpiony|wyłączony/.test(b.error)) fail.push('przy milczącej Ollamie podpowiedź o uśpionym komputerze myli');
+  if (/\(\d+\)/.test(b.error)) fail.push(`w komunikacie numer wyjątku zamiast przyczyny: ${b.error}`);
+  if (/OLLAMA_HOST/.test(b.error)) fail.push('przy milczącej Ollamie podpowiedź o OLLAMA_HOST myli');
   if (/fetch failed/.test(a.error + b.error)) fail.push('surowe „fetch failed" nadal wycieka');
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nLISTA MODELI LOKALNYCH OK');
