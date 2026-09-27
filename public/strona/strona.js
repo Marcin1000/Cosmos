@@ -134,6 +134,7 @@
     'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
     'cta.h': 'Your Cosmos is ready.',
     'cta.p': 'Sign in and pick up the conversation exactly where it left off – on your computer, your phone or by voice.',
+    'cta.zapr': 'Access is by invitation. Write to me and I’ll send you a link.',
     'stopka.opis': 'A personal, hybrid AI system.',
   };
 
