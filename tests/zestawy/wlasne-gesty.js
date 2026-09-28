@@ -151,17 +151,31 @@ ok(oczysc({ ...baza, czynnosc: 'migawka', ruch: 'po-skosie' })[0].ruch === 'brak
       m.scrollTop = m.scrollHeight;
     });
     await p.waitForTimeout(300);
+    /* Na pełnym ekranie rozmowy nie widać – gest nie przewija, pigułka na kadrze
+       mówi, że działa w okienku (Marcin, runda 8). */
+    const przedPelny = await p.evaluate(() => document.getElementById('chat-scroll').scrollTop);
+    tryb = 'gora'; krok = 0;
+    await p.waitForFunction(() => /okienku|small camera window/.test(document.getElementById('live-status').textContent), null, { timeout: 8000 }).catch(() => {});
+    tryb = 'brak';
+    const naPelnym = await p.evaluate(() => ({ top: document.getElementById('chat-scroll').scrollTop, pig: document.getElementById('live-status').textContent }));
+    ok(naPelnym.top === przedPelny && /okienku|small camera window/.test(naPelnym.pig),
+      `7. na pełnym ekranie gest nie przewija rozmowy i mówi, gdzie działa („${naPelnym.pig}”, ${przedPelny} → ${naPelnym.top})`);
+    await p.waitForTimeout(1500);   // gest nie odpala się od razu drugi raz
+    await p.click('#live-do-okienka');
+    await p.waitForTimeout(300);
     const przed = await p.evaluate(() => document.getElementById('chat-scroll').scrollTop);
     const od7 = Date.now();
     tryb = 'gora'; krok = 0;
     await p.waitForFunction((przed) => document.getElementById('chat-scroll').scrollTop < przed - 50, przed, { timeout: 8000 }).catch(() => {});
     tryb = 'brak';
     const po = await p.evaluate(() => document.getElementById('chat-scroll').scrollTop);
-    ok(po < przed - 50, `7. gest „dwa palce w górę” przewinął rozmowę w górę (${przed} → ${po})`);
+    ok(po < przed - 50, `7. w okienku gest „dwa palce w górę” przewinął rozmowę w górę (${przed} → ${po})`);
     const zd = zapytania.filter(([t, a, d]) => t >= od7 && a === '/api/events' && /gest „Dwa palce/.test(d));
     ok(zd.length >= 1 && /przewiń do góry/.test(zd[0][2]), '7. model dostaje zdarzenie z nazwą i znaczeniem gestu');
 
     /* ---- 9. Usunięcie ---- */
+    await p.click('#live-na-pelny');   // lista gestów jest w widoku na cały ekran
+    await p.evaluate(() => { document.getElementById('live-gesty').open = true; });
     await p.click('#gesty-lista .gest-usun');
     await p.waitForFunction(() => document.querySelectorAll('#gesty-lista li').length === 0, null, { timeout: 5000 }).catch(() => {});
     const poUsunieciu = await p.evaluate(async () => (await (await fetch('/api/gesty')).json()).gesty.length);

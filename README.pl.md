@@ -613,6 +613,10 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   (`PTAKI_NARAZ`, `PTAKI_KOLEJKA`), ponad to od razu „spróbuj za chwilę”. Zaproszona
   osoba potrzebuje przyznania **Ptaki na serwerze** w panelu Dostęp. Nagranie zrobione
   bez zasięgu czeka w telefonie i rozpozna się samo, gdy sieć wróci,
+- ☁ gdy silnik **Lokalnie** nie odpowiada (komputer w domu śpi albo Ollama nie działa), pod
+  błędem obok „Ponów” stoi **„Wyślij przez Chmurę”**: jedno kliknięcie wysyła to samo pytanie
+  do modelu NVIDIA i przełącza zakładkę na Chmurę. Samo się nie przełącza – chmura to inny
+  koszt i inna prywatność, więc decyzja jest Twoja,
 - 🎙 **nagranie w bazie wiedzy** przepisuje się także bez komputera w domu – tą samą drogą co
   rozmowa (własny serwer rozpoznawania albo OpenAI, do 25 MB, popularne formaty). Gdy klucz
   do rozpoznawania w chmurze jest nieważny albo skończyły się środki, tryb głosowy od razu
@@ -826,6 +830,9 @@ wysokość i przyciski na szynie po prawej jak w aparacie, komputer – obraz po
 obok. „Wstecz” na Androidzie i Esc zamykają kamerę. **Okienko** to sam obraz nad polem
 wiadomości – do gestów przy rozmowie (tylko ono nie blokuje czatu); ikona kamery w pasku ma
 wtedy czerwoną kropkę, a jej dotknięcie wraca na pełny ekran. Ostatni wybór jest zapamiętany.
+Gesty „przewiń rozmowę” działają **tylko w okienku** – na pełnym ekranie rozmowy nie widać,
+więc gest zamiast przewijać mówi na kadrze, gdzie działa. Pozostałe gesty (migawka, wyślij
+tekst, tryb głosowy, stop, otwórz stronę) działają w obu widokach.
 
 Obraz leci strumieniem MJPEG (jedno połączenie, klatki jedna za drugą), więc podgląd jest
 płynny także przez Tailscale. Detekcja YOLO działa na obu źródłach tak samo. **Rozpoznawanie**

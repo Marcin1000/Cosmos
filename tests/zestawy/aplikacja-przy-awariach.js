@@ -152,6 +152,31 @@ const sse = (tekst) => `data: ${JSON.stringify({ choices: [{ delta: { content: t
   ok(sprawdzen === 1 && !/0 z 4|0 of 4/.test(s5) && /nie odpowiada/.test(s5),
     `5. brak połączenia przerywa „Sprawdź wszystkie” po pierwszym (${sprawdzen} zapytań; „${s5.slice(0, 70)}”)`);
 
+  /* ---- 6. Komputer w domu nie odpowiada → „Wyślij przez Chmurę” ----
+     Prawdziwy serwer z martwym LOCAL_BASE_URL oddaje „lokalny-niedostepny”.
+     Pod błędem jest jedno kliknięcie do chmury – bez samoczynnego przełączania
+     (Marcin, runda 8). */
+  const silniki6 = [];
+  await p.route('**/api/chat', (r) => {
+    const ep = JSON.parse(r.request().postData() || '{}').endpoint;
+    silniki6.push(ep);
+    if (ep === 'local') return r.continue();
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body: `${sse('Odpowiedź z chmury.')}data: [DONE]\n\n` });
+  });
+  await p.evaluate(() => { newConversation(); setEndpoint('local'); });
+  await wyslij('pytanie przy uśpionym komputerze');
+  await czekajNaKoniec();
+  const przycisk6 = await p.evaluate(() => (document.querySelector('.msg-error .msg-przez-chmure') || {}).textContent || '');
+  ok(/Chmur|Cloud/.test(przycisk6) && silniki6.join() === 'local',
+    `6. pod „komputer nie odpowiada” jest „Wyślij przez Chmurę”, nic nie poszło samo (${silniki6.join()}; „${przycisk6}”)`);
+  await p.click('.msg-error .msg-przez-chmure');
+  await czekajNaKoniec();
+  await p.waitForFunction(() => /Odpowiedź z chmury/.test(document.getElementById('messages').textContent), null, { timeout: 8000 }).catch(() => {});
+  const s6 = await p.evaluate(() => ({ tekst: document.getElementById('messages').textContent, silnik: endpoint, bledy: document.querySelectorAll('.msg-error').length }));
+  ok(silniki6.join() === 'local,cloud' && /Odpowiedź z chmury/.test(s6.tekst) && s6.bledy === 0 && s6.silnik === 'cloud',
+    `6. kliknięcie wysyła to samo pytanie do chmury i przełącza zakładkę (${silniki6.join()}, zakładka ${s6.silnik}, błędów ${s6.bledy})`);
+  await p.unroute('**/api/chat');
+
   ok(!bledy.length, `błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   await b.close();
   zabij(srv);

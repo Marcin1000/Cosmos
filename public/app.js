@@ -857,6 +857,15 @@ function messageElement(m, idx = -1) {
         ponow.addEventListener('click', () => regenerateFrom(idx));
       }
       body.appendChild(ponow);
+      if (m.zapas === 'cloud') {
+        const chmura = document.createElement('button');
+        chmura.className = 'msg-action-btn msg-ponow msg-przez-chmure';
+        chmura.textContent = '☁ ' + t('chat.przezChmure');
+        chmura.title = t('chat.przezChmureTytul');
+        // Przełącza zakładkę na Chmurę jawnie – kolejne pytania też pójdą tam, co widać u góry.
+        chmura.addEventListener('click', () => { setEndpoint('cloud'); regenerateFrom(idx); });
+        body.appendChild(chmura);
+      }
     }
     return msg;
   }
@@ -2851,7 +2860,12 @@ async function runGeneration(conv, podpiecie = null) {
          razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
       const czesc = stripSearchMarker(err.partial || '');
       if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
-      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true, ...(err.trwaly ? { trwaly: true } : {}) });
+      /* Komputer domowy nie odpowiada: pod błędem przycisk „Wyślij przez Chmurę”.
+         Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
+         więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
+      const zapasChmura = err.kod === 'lokalny-niedostepny' && epConfig('cloud').hasApiKey;
+      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true,
+        ...(err.trwaly ? { trwaly: true } : {}), ...(zapasChmura ? { zapas: 'cloud' } : {}) });
       saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
          powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
@@ -3699,6 +3713,15 @@ function wykonajGest(g) {
     }
     return Math.max(80, Math.round((dol - r.top) * 0.8));
   };
+  /* Przewijanie rozmowy tylko w okienku kamery – na pełnym ekranie rozmowy
+     nie widać, więc przewijałby się tekst, na który nikt nie patrzy (Marcin,
+     runda 8). Zamiast tego pigułka na kadrze mówi, gdzie ten gest działa. */
+  const panel = $('live-panel');
+  const pelnyEkran = panel && panel.style.display !== 'none' && panel.dataset.tryb === 'pelny';
+  if (pelnyEkran && (g.czynnosc === 'przewin-gora' || g.czynnosc === 'przewin-dol')) {
+    ustawStatusKamery(t('gest.przewinWOkienku', { nazwa: g.nazwa }), $('live-wyjasnienie')?.textContent || '');
+    return false;
+  }
   switch (g.czynnosc) {
     case 'przewin-gora': el.chatScroll.scrollBy({ top: -krok(), behavior: 'smooth' }); break;
     case 'przewin-dol': el.chatScroll.scrollBy({ top: krok(), behavior: 'smooth' }); break;

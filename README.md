@@ -195,13 +195,20 @@ sent in headers, never in the URL. Members need an explicit grant, and a failure
 shows them a path from someone else's disk. A recording made with no signal waits in
 the phone and is recognised when the connection comes back.
 
+**Falling back is a choice, not a surprise.** When the home GPU is asleep, the error under
+the question offers "Send via Cloud" next to "Retry" – one click resends the same question
+to NVIDIA's cloud and switches the tab, so the change is visible. It never happens on its own:
+the cloud has a different cost and a different privacy story, and that decision belongs to
+the person asking.
+
 **Layout that is reasoned about, not patched.** The live camera used to be a floating
 panel whose width was computed from its own measured height, with separate rules for an
 "expanded" mode, for landscape phones and for the message composer – seven layers, each
 fixing one screen size and breaking another (a title on three lines, "Cam…" instead of the
 source, ISO outside the frame). It is now a full-screen scene like voice mode, three CSS
 grids (phone portrait, phone landscape with a camera-style rail, desktop with a side panel)
-and a small picture-in-picture window beside the chat for gestures. The suite that guards
+and a small picture-in-picture window beside the chat for gestures (scroll gestures work
+only there – full screen hides the chat, so the gesture says where it works instead). The suite that guards
 it drives real 9:16 and 16:9 canvas streams on the phone sizes the owner actually has
 (360 px wide with enlarged text, 740×313 in landscape) and checks that every control is on
 screen and unobstructed without scrolling. Settings got real tabs for the same reason: the
