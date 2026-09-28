@@ -582,7 +582,9 @@ async function capabilityManifest() {
   const missing = [];
   if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA – ustaw NVIDIA_API_KEY w .env');
   if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX – uruchom Ollamę i ustaw LOCAL_MODEL');
-  if (!senses.online) missing.push('zmysły (mowa, wzrok) – uruchom python senses/service.py');
+  /* Nie „wzrok”: zdjęcie i klatka z kamery idą do modelu wizyjnego bez zmysłów.
+     Po słowie „wzrok” model odmawiał opisania obrazu, który miał przed sobą. */
+  if (!senses.online) missing.push('zmysły na komputerze (Whisper, rozpoznawanie obiektów YOLO) – uruchom python senses/service.py; obrazy i klatki z kamery widzisz bez nich przez model wizyjny');
   if (!embedStatus(senses.caps && senses.caps.embed).provider) {
     missing.push('wyszukiwanie semantyczne – uruchom zmysły albo ustaw NVIDIA_API_KEY '
       + '(embeddingi z chmury działają też przy wyłączonym komputerze domowym)');
@@ -650,7 +652,7 @@ function capabilityText(m) {
     '',
     'Mózgi: ' + m.mozgi.map((b) => `${b.id}=${b.model}${b.gotowy ? '' : ' (niegotowy)'}`).join(', '),
     `Zmysły: ${z.online ? 'online' : 'offline'} – mowa(Whisper)=${yes(z.whisper)}, `
-      + `głos(Piper)=${yes(z.piper)}, wzrok(YOLO)=${yes(z.yolo)}, `
+      + `głos(Piper)=${yes(z.piper)}, rozpoznawanie obiektów na komputerze (YOLO)=${yes(z.yolo)}, `
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
     // MediaPipe bywa zainstalowany, ale żadna funkcja interfejsu go nie wywołuje.
     // Bez tego zastrzeżenia model obiecywał odczyt sylwetki, którego nie ma.

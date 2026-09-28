@@ -613,6 +613,13 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   (`PTAKI_NARAZ`, `PTAKI_KOLEJKA`), ponad to od razu „spróbuj za chwilę”. Zaproszona
   osoba potrzebuje przyznania **Ptaki na serwerze** w panelu Dostęp. Nagranie zrobione
   bez zasięgu czeka w telefonie i rozpozna się samo, gdy sieć wróci,
+- 👁 **zdjęcie i klatka z kamery** idą do modelu wizyjnego także bez zmysłów – model dostaje
+  wprost, że obraz ma przed sobą (dawniej manifest „zmysły offline” sprawiał, że odpowiadał
+  „nie mam dostępu do kamery”, choć klatkę widział),
+- 🔁 gdy chmura przerwie odpowiedź, zanim napisze pierwsze słowo („Service temporarily
+  overloaded”), Cosmos po cichu ponawia raz; komunikat o błędzie jest po polsku, bez surowego
+  angielskiego tekstu dostawcy. Lektor czyta zakresy „około 8–9 °C” jako „około ośmiu do
+  dziewięciu stopni”, przy każdym rodzaju kreski, jaką pisze model,
 - ☁ gdy silnik **Lokalnie** nie odpowiada (komputer w domu śpi albo Ollama nie działa), pod
   błędem obok „Ponów” stoi **„Wyślij przez Chmurę”**: jedno kliknięcie wysyła to samo pytanie
   do modelu NVIDIA i przełącza zakładkę na Chmurę. Samo się nie przełącza – chmura to inny

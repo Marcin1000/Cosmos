@@ -195,6 +195,12 @@ sent in headers, never in the URL. Members need an explicit grant, and a failure
 shows them a path from someone else's disk. A recording made with no signal waits in
 the phone and is recognised when the connection comes back.
 
+**Tell the model what it actually has.** A vision model received the camera frame and
+still answered "I have no access to the camera" – because the capability manifest said
+"senses: offline" and "never promise what is unavailable". The image path had no bug; the
+instructions contradicted the input. Now a turn that carries an image ends the instructions
+with one plain sentence: the image is in front of you.
+
 **Falling back is a choice, not a surprise.** When the home GPU is asleep, the error under
 the question offers "Send via Cloud" next to "Retry" – one click resends the same question
 to NVIDIA's cloud and switches the tab, so the change is visible. It never happens on its own:

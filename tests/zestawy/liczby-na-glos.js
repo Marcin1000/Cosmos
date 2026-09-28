@@ -84,6 +84,13 @@ for (const zdanie of ZOSTAJE) {
 const razem = (x) => liczbyNaGlos(jednostkiNaGlos(x, 'pl'));
 const R = [
   ['Jutro 20–28 °C.', /od dwudziestu do dwudziestu ośmiu stopni/],
+  /* Zakresy „około 8–9” (runda 8, zrzut z trybu głosowego: „około ośmiu-9
+     stopni”, „dwunastu-15 kilometrów”) – każdy łącznik, jaki piszą modele. */
+  ['W nocy spadnie do około 8-9 °C.', /^W nocy spadnie do około ośmiu do dziewięciu stopni Celsjusza\.$/],
+  ['Wiatr około 12\u201115 km/h.', /^Wiatr około dwunastu do piętnastu kilometrów na godzinę\.$/],
+  ['Około 8\u20139 stopni w nocy.', /^Około ośmiu do dziewięciu stopni w nocy\.$/],
+  ['Temperatura 8\u22129 °C.', /^Temperatura od ośmiu do dziewięciu stopni Celsjusza\.$/],
+  ['Test COVID-19 jutro.', /^Test COVID-19 jutro\.$/],
   ['Do 21 °C w południe.', /Do dwudziestu jeden stopni/],
   ['Przejazd ok. 2 h.', /(około|ok\.) dwóch godzin|około 2 godzin|dwie godziny/],
 ];

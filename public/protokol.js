@@ -431,8 +431,18 @@ function utworzProtokol() {
 
     const odDo = (slowo, a, b) => {
       const maOd = /^(?:od|from)\s+$/i.test(slowo);   // „od 10–20 °C” nie dostaje drugiego „od”
-      return `${slowo}${maOd ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
+      // „około 8–9 °C” → „około ośmiu do dziewięciu”, nie „około od ośmiu do dziewięciu” (runda 8).
+      const przyblizenie = /^(?:około|ok\.|about|around)\s+$/i.test(slowo);
+      return `${slowo}${maOd || przyblizenie ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
     };
+    /* Łącznik zakresu to nie tylko „-” i „–”: modele piszą też łącznik
+       niełamiący (U+2011), minus (U+2212) i kreskę cyfrową (U+2012). Z nimi
+       zakres nie był rozpoznany i lektor czytał „około ośmiu-9 stopni”
+       (Marcin, runda 8). */
+    t = t.replace(/(\d)\s*[\u2010\u2011\u2012\u2212]\s*(?=\d)/g, '$1–');
+    // Zakres przed słowem po „około”: „około 8–9 stopni” → „około 8 do 9 stopni” (odmienia liczbyNaGlos).
+    t = t.replace(/(?<![\p{L}])((?:około|ok\.|about|around)\s+)(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)(?=\s+\p{L})/giu,
+      (_, slowo, a, b) => odDo(slowo, a, b));
     // Zakres godzin „6:41–7:25”: „od 6:41 do 7:25”.
     t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–\u2014-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
       (_, slowo = '', a, b) => odDo(slowo, a, b));

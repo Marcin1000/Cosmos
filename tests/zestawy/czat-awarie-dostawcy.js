@@ -13,7 +13,8 @@
  *   8. przeciążenie (529) ponowione – oficjalne SDK robią to samo,
  *   9. brak środków (insufficient_quota) NIE ponawiany, z podpowiedzią po polsku,
  *  10. Retry-After dłuższy niż cierpliwość → błąd od razu, bez czekania,
- *  11. błąd dostawcy w środku strumienia → nazwana przyczyna, fragment zostaje,
+ *  11. błąd dostawcy w środku strumienia → nazwana przyczyna po polsku, fragment zostaje;
+ *      przed pierwszym słowem → jedno ciche ponowienie (runda 8),
  *  12. za długi kontekst → jedna próba z mniejszym limitem odpowiedzi,
  *  13. zdjęcie odrzucone kodem 500 (Ollama) → ponowienie z modelem wizyjnym,
  *  14. model myślący po cichu → dłuższy limit do pierwszej treści, z pulsem,
@@ -49,7 +50,7 @@ const atrapa = http.createServer((req, res) => {
     let d = {}; try { d = JSON.parse(b); } catch { /* puste */ }
     const ost = [...(d.messages || [])].reverse().find((m) => m.role === 'user') || { content: '' };
     const t = typeof ost.content === 'string' ? ost.content : JSON.stringify(ost.content);
-    const slowo = (t.match(/przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat/) || [''])[0];
+    const slowo = (t.match(/przedpierwszym|przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat/) || [''])[0];
     if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; }
     if (slowo === 'przeciazony' && proby[slowo] < 3) {
       return blad(res, 529, { error: { message: 'Overloaded', type: 'overloaded_error' } }, { 'retry-after': '0.2' });
@@ -68,6 +69,12 @@ const atrapa = http.createServer((req, res) => {
     }
     if (slowo === 'zdjecie' && d.model !== 'wizja-model') {
       return blad(res, 500, { error: 'this model is missing data required for image input' });
+    }
+    // NVIDIA po 200: od razu blok błędu, bez słowa treści – za drugim razem działa (zrzut Marcina, runda 8).
+    if (slowo === 'przedpierwszym') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      if (proby[slowo] === 1) return res.end(`data: ${JSON.stringify({ error: { message: 'Service temporarily overloaded', type: 'overloaded_error' } })}\n\n`);
+      return res.end(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Jutro słonecznie.' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`);
     }
     if (slowo === 'bladwtrakcie') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -221,13 +228,18 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   // --- 11: błąd po 200, w środku strumienia
   nowa('rozmowabled');
   w = await czat('bladwtrakcie', { rozmowa: 'rozmowabled' });
-  ok(w.koniec && /Dostawca przerwał/.test(w.koniec.blad || '') && /przeciążony/.test(w.koniec.blad || ''),
-    `11. błąd w trakcie → nazwana przyczyna (${(w.koniec && w.koniec.blad || '').slice(0, 70)}…)`);
+  ok(w.koniec && /przerwan|przerwał/.test(w.koniec.blad || '') && /przeciążony/.test(w.koniec.blad || '') && !/Overloaded/.test(w.koniec.blad || ''),
+    `11. błąd w trakcie → nazwana przyczyna po polsku, bez surowego „Overloaded” (${(w.koniec && w.koniec.blad || '').slice(0, 70)}…)`);
   ok(/Połowa odpowiedzi/.test(w.txt) && !/overloaded_error/.test(w.txt), '11. napisany fragment doszedł, a surowy blok błędu nie trafił do przeglądarki');
   await spij(1500);
   const zBledem = zPliku('rozmowabled').messages.find((m) => m.role === 'assistant');
   ok(zBledem && /Połowa odpowiedzi/.test(zBledem.content) && /⚠/.test(zBledem.content),
     `11. w rozmowie zostaje fragment i pod nim przyczyna (${zBledem && JSON.stringify(zBledem.content).slice(0, 70)})`);
+
+  // --- 11b: przeciążenie przed pierwszym słowem → jedno ciche ponowienie
+  w = await czat('przedpierwszym');
+  ok(w.koniec && !w.koniec.blad && /Jutro słonecznie/.test(w.txt) && proby.przedpierwszym === 2,
+    `11b. błąd przed pierwszym słowem → ciche ponowienie i odpowiedź (${proby.przedpierwszym} żądania, błąd: ${w.koniec && w.koniec.blad || 'brak'})`);
 
   // --- 12: kontekst
   w = await czat('zadlugo');
@@ -241,6 +253,12 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   ok(w.koniec && !w.koniec.blad && decodeURIComponent(w.naglowki.get('x-cosmos-model') || '') === 'wizja-model'
     && decodeURIComponent(w.naglowki.get('x-cosmos-model-swapped-from') || '') === 'slepy-model-spoza-katalogu',
   `13. odmowa obrazu (500) → ponowienie z modelem wizyjnym, jawnie (${w.naglowki && w.naglowki.get('x-cosmos-model')})`);
+  /* Model wizyjny dostaje obraz i zdanie, że go ma – bez niego, przy manifeście
+     „zmysły offline”, odpowiadał „nie mam dostępu do kamery” (Marcin, runda 8). */
+  const doWizji = ostatnie.zdjecie && ostatnie.zdjecie.messages || [];
+  const instrWizji = doWizji.filter((m) => m.role === 'system').map((m) => String(m.content)).join('\n');
+  ok(/OBRAZ W PYTANIU/.test(instrWizji) && JSON.stringify(doWizji).includes('image_url'),
+    '13. model wizyjny dostaje obraz i zdanie, że ma go przed sobą');
 
   // --- 14: myślenie po cichu
   w = await czat('myslipocichu', { dodatki: { model: 'claude-sonnet-5' } });

@@ -70,6 +70,14 @@ const KORZEN = path.join(__dirname, '..', '..');
   const bezKlatki = bezObrazow(kaskada);
   ok(!JSON.stringify(bezKlatki).includes('image_url') && /co to\?/.test(JSON.stringify(bezKlatki)), '2. klatka zdjęta, pytanie zostaje');
   ok(bezKlatki.some((m) => m.role === 'system' && /nie widzi/.test(m.content)), '2. model dostaje zdanie, dlaczego nie ma obrazu');
+  /* Model wizyjny z klatką i manifestem „zmysły offline” odpowiadał „nie widzę
+     nic, bo nie mam dostępu do kamery” (Marcin, runda 8). Po ujednoliceniu ról
+     zdanie o obrazie stoi NA KOŃCU instrukcji, a obraz zostaje w pytaniu. */
+  const { zObrazemWidzisz } = require(path.join(KORZEN, 'lib', 'czat.js'));
+  const zKlatka = ujednolicRole(zObrazemWidzisz([{ role: 'system', content: 'Zmysły: offline. Nie obiecuj rzeczy niedostępnych.' }, kaskada[1]], { klatkaKamery: true }));
+  const instr = String(zKlatka[0].content);
+  ok(zKlatka[0].role === 'system' && /OBRAZ Z KAMERY/.test(instr) && instr.lastIndexOf('OBRAZ Z KAMERY') > instr.indexOf('Zmysły: offline')
+    && JSON.stringify(zKlatka[1].content).includes('image_url'), '2. z klatką model słyszy na końcu instrukcji, że ma ją przed sobą');
 
   /* ---- 3. Dokańczanie urwanego słowa ---- */
   const { utworzMowe, SLOWO_BUDZACE, KONIEC_ROZMOWY, PYTANIE_O_OBRAZ } = require(path.join(KORZEN, 'public', 'mowa.js'));
