@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 140 zestawów + 10 selftestów Pythona, ~12 min
+npm test                  # 141 zestawów + 10 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -414,11 +414,13 @@ kolorze – nowe miejsce, które dopisuje odpowiedź do rozmowy, musi dołożyć
 `...znakSilnika()`, inaczej wiadomość dostanie neutralną szarą kreskę.
 
 **Service worker:** `public/sw.js` cache'uje statykę strategią cache-first i przy aktywacji
-kasuje cache o innej nazwie niż `CACHE`. Po zmianie czegokolwiek w `STATIC_ASSETS`
-**podnieś wersję** w `const CACHE = 'cosmos-vNN'` – inaczej użytkownicy z zainstalowaną PWA
-dostaną starą wersję. **Nowy skrypt w `public/` to trzy miejsca naraz:** `index.html`
-(tag `<script>`), `sw.js` (`STATIC_ASSETS`) i podniesiona wersja cache'a. Pominięcie
-`sw.js` daje najgorszy możliwy objaw: działa u ciebie, nie działa na telefonie Marcina.
+kasuje cache o innej nazwie niż `CACHE`. Serwer (`lib/statyka.js`) **sam dopisuje do nazwy
+skrót treści** plików z `STATIC_ASSETS` (`cosmos-vNN-<skrót>`), więc każda zmiana statyki
+daje nowy service worker i pasek „Jest nowa wersja” – pilnuje tego zestaw `pamiec-pwa`.
+Ręczne `vNN` zostaje jako czytelny przedrostek. **Nowy skrypt w `public/` to dwa miejsca
+naraz:** `index.html` (tag `<script>`) i `sw.js` (`STATIC_ASSETS`). Pominięcie `sw.js` daje
+najgorszy możliwy objaw: działa u ciebie, nie działa na telefonie Marcina. Commit i nazwę
+pamięci widać w Ustawienia → Konto (linia wersji).
 
 ### Strona produktowa (`public/strona/`) i adres `/app`
 

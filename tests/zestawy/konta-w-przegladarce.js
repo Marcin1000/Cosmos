@@ -53,6 +53,7 @@ function magazyn(poczatek = {}) {
   const m = magazyn({
     'cosmos.conv.abc': '{"title":"rozmowa Marcina"}', 'cosmos.convIndex': '[{"id":"abc"}]',
     'cosmos.kbSelected': '["x"]', 'cosmos.lang': 'pl', 'cosmos.micId': 'kinect',
+    'cosmos.liveSource': 'kinect-color', 'cosmos.settings': '{"speak":true,"temperature":0.4}',
   });
   ok(k.pilnujWlascicielaPamieci({ id: 'wlasciciel' }, m) === false, 'pierwsze logowanie niczego nie czyści');
   ok(m.getItem('cosmos.conv.abc') !== null, 'kopia właściciela zostaje, dopóki loguje się właściciel');
@@ -61,6 +62,12 @@ function magazyn(poczatek = {}) {
   ok(m.getItem('cosmos.conv.abc') === null && m.getItem('cosmos.convIndex') === null,
     'po zmianie osoby kopia rozmów poprzedniej zniknęła');
   ok(m.getItem('cosmos.kbSelected') === null, 'zaznaczenia w bazie wiedzy poprzedniej osoby też zniknęły');
+  /* Wspólny telefon (runda 8): „Kinect” właściciela i czytanie na głos nie
+     przechodzą na gościa – u niego kamera odpytywałaby 403 bez końca,
+     a odpowiedzi czytałyby się na głos w pociągu. */
+  ok(m.getItem('cosmos.liveSource') === null, 'źródło kamery poprzedniej osoby zniknęło');
+  const ustPo = JSON.parse(m.getItem('cosmos.settings') || '{}');
+  ok(ustPo.speak !== true && ustPo.temperature === 0.4, 'czytanie na głos wyłączone dla nowej osoby, reszta ustawień urządzenia została');
   ok(m.getItem('cosmos.lang') === 'pl' && m.getItem('cosmos.micId') === 'kinect',
     'ustawienia urządzenia (język, mikrofon) zostały');
   ok(m.getItem('cosmos.kto') === 'u-ania', 'przeglądarka pamięta, czyja jest teraz kopia');

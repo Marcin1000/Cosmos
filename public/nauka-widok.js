@@ -45,8 +45,11 @@ function utworzNaukeWidok(z) {
     stopLearnCam();
   }
   function switchLearnTab(tab) {
-    document.querySelectorAll('#learn-modal [data-learn-tab]').forEach((b) =>
-      b.classList.toggle('active', b.dataset.learnTab === tab));
+    // Stan także dla czytnika ekranu, nie tylko kolorem podkreślenia.
+    document.querySelectorAll('#learn-modal [data-learn-tab]').forEach((b) => {
+      b.classList.toggle('active', b.dataset.learnTab === tab);
+      b.setAttribute('aria-selected', String(b.dataset.learnTab === tab));
+    });
     $('learn-pane-recog').style.display = tab === 'recog' ? '' : 'none';
     $('learn-pane-proc').style.display = tab === 'proc' ? '' : 'none';
     $('learn-pane-routine').style.display = tab === 'routine' ? '' : 'none';

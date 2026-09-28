@@ -101,7 +101,7 @@ const miejsce_ = require('./lib/miejsce.js');
 const bladZapisu = (res, err) => miejsce_.odpowiedzBledemZapisu(res, sendJson, err);
 const { llmComplete, parametryDla } = require('./lib/model.js');
 // Pliki statyczne (strona, aplikacja, czcionki, ikony) i CSP aplikacji – lib/statyka.js.
-const { serveStatic } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
+const { serveStatic, wersja: wersjaAplikacji } = require('./lib/statyka.js').utworz({ PUBLIC_DIR });
 
 
 // ---------------------------------------------------------------------------
@@ -142,6 +142,7 @@ const { convPath } = rozmowy_;
 const kb_ = require('./lib/baza-wiedzy.js').utworz({
   U, readJson, readBodyBuffer, sendJson, bladZapisu, addEvent, embedTexts, stripTags, czytelnyTekst, SENSES_URL,
   fetchZmyslow: agent.fetchZmyslow, zmyslyDostepne: () => agent.zmyslyDostepne(),
+  przepiszMowe: (...a) => glos.przepisz(...a),
 });
 const { kbPliki: KB_FILES, saveKb, kbAddFile, kbItemMeta, kbSearch, obrazDlaModelu, extractKbText, extOf, wymagaTranskrypcji } = kb_;
 
@@ -812,6 +813,8 @@ function handleConfig(res) {
     endpoints,
     senses: wlasciciel ? { baseUrl: SENSES_URL } : {},
     uzytkownik: kto(),
+    // Commit i nazwa pamięci PWA – żeby po wdrożeniu dało się sprawdzić, co działa na telefonie.
+    wersja: wersjaAplikacji(),
     glos: glos.mozliwosci(),
     studio: {
       dozwolone: silniki.studioDozwolone(),

@@ -2410,9 +2410,10 @@ body::after {
   align-items: center;
   justify-content: center;
   gap: 26px;
-  padding: 24px;
-  /* Miejsce na podpowiedź przyklejoną do dołu – bez tego treść wjeżdża pod nią. */
-  padding-bottom: 64px;
+  /* PWA z viewport-fit=cover: nic nie wchodzi pod wcięcie ani pasek gestów
+     (zespół IT, runda 8). Dół: miejsce na podpowiedź przyklejoną do dołu. */
+  padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+    calc(64px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
   overflow: hidden;
 }
 
@@ -2429,13 +2430,13 @@ body::after {
   background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .1);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-.voice-close { position: absolute; top: 18px; right: 18px; }
-.voice-cam-btn { position: absolute; top: 18px; right: 66px; color: var(--text-faint); }
+.voice-close { position: absolute; top: calc(18px + env(safe-area-inset-top)); right: calc(18px + env(safe-area-inset-right)); }
+.voice-cam-btn { position: absolute; top: calc(18px + env(safe-area-inset-top)); right: calc(66px + env(safe-area-inset-right)); color: var(--text-faint); }
 .voice-cam-btn.active { color: var(--accent); }
 /* Trzeci przycisk w rzędzie. Był emoji „🐦” – na scenie głosu wyglądał jak
    logo Twittera, a nie jak funkcja. Teraz liniowy ptak jak reszta ikon
    (ik-ptak), kolor i rozmiar jak kamera obok. */
-.voice-bird-btn { position: absolute; top: 18px; right: 114px; color: var(--text-faint); }
+.voice-bird-btn { position: absolute; top: calc(18px + env(safe-area-inset-top)); right: calc(114px + env(safe-area-inset-right)); color: var(--text-faint); }
 .voice-bird-btn:hover, .voice-cam-btn:hover { color: var(--text); }
 
 /* Wiersz aparatu w panelu planu. Nastawy z aparatu i przycisk obok siebie,
@@ -2867,7 +2868,7 @@ body::after {
 
 .voice-hint {
   position: absolute;
-  bottom: 22px;
+  bottom: calc(22px + env(safe-area-inset-bottom));
   left: 24px;
   right: 24px;
   text-align: center;

@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="140 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-140-5E9E3A?style=flat-square">
+  <img alt="141 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-141-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 140 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 141 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 140 zestawów + 10 selftestów Pythona (~16 min)
+npm test                  # 141 zestawów + 10 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -613,6 +613,10 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   (`PTAKI_NARAZ`, `PTAKI_KOLEJKA`), ponad to od razu „spróbuj za chwilę”. Zaproszona
   osoba potrzebuje przyznania **Ptaki na serwerze** w panelu Dostęp. Nagranie zrobione
   bez zasięgu czeka w telefonie i rozpozna się samo, gdy sieć wróci,
+- 🎙 **nagranie w bazie wiedzy** przepisuje się także bez komputera w domu – tą samą drogą co
+  rozmowa (własny serwer rozpoznawania albo OpenAI, do 25 MB, popularne formaty). Gdy klucz
+  do rozpoznawania w chmurze jest nieważny albo skończyły się środki, tryb głosowy od razu
+  przechodzi na rozpoznawanie w przeglądarce i mówi dlaczego (dawniej gubił trzy wypowiedzi),
 - ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) – przepisuje
   podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
   porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
@@ -833,7 +837,12 @@ odpowiadają – wtedy działa sam podgląd i nastawy, a na kadrze stoi „Sam p
 tylko wybraną; na telefonie w jednym przewijanym wierszu, na komputerze i w poziomie jako
 lista po lewej. Każda zakładka to sekcje z nagłówkiem, a przełączniki działają od razu.
 **Głośnik** w pasku górnym to jedyny przełącznik w pasku: przekreślony = odpowiedzi nie są
-czytane na głos; ten sam przełącznik jest w Ustawienia → Głos → „Czytanie na głos”.
+czytane na głos; ten sam przełącznik jest w Ustawienia → Głos → „Czytanie na głos”. Na
+wspólnym telefonie czytanie i źródło kamery (Kinect) nie przechodzą na następną osobę.
+Na dole Ustawienia → Konto stoi **linia wersji**: commit serwera i nazwa pamięci aplikacji
+na tym telefonie – gdy są różne, wystarczy odświeżyć stronę. Pamięć aplikacji zmienia nazwę
+sama przy każdej zmianie plików, więc po `git pull` i restarcie telefon od razu dostaje pasek
+„Jest nowa wersja”.
 
 Przez agenta zmysłów strumienia nie ma, więc klatki idą pojedynczo – ale po dwie naraz,
 a agent trzyma z serwerem stałe połączenia zamiast otwierać nowe przy każdej klatce.
@@ -1401,7 +1410,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 140 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 141 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

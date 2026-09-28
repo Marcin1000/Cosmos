@@ -15,7 +15,10 @@
  *   5. zmysły z Whisperem mają pierwszeństwo przed chmurą (lokalnie, za darmo),
  *   6. własny serwer rozpoznawania (STT_BASE_URL): w internecie nie dostaje
  *      nasłuchu otoczenia, a gość bez przyznań nie korzysta z niego na klucz
- *      właściciela. */
+ *      właściciela,
+ *   7. koniec środków / zły klucz → kod `stt-trwaly` (przeglądarka od razu na
+ *      własne rozpoznawanie, zamiast gubić trzy wypowiedzi),
+ *   8. `przepisz()` – ten sam łańcuch dla nagrań w bazie wiedzy bez zmysłów. */
 const http = require('node:http');
 const { utworz } = require('../../lib/glos.js');
 const { sendJson, readBodyBuffer, readJson } = require('../../lib/rdzen.js');
@@ -31,6 +34,7 @@ const ok = (warunek, opis) => {
 const wywolania = [];
 let elevenPada = false;
 let zmyslyZywe = false;
+let oaBrakSrodkow = false;
 const atrapa = http.createServer((req, res) => {
   const cialo = [];
   req.on('data', (c) => cialo.push(c));
@@ -38,6 +42,10 @@ const atrapa = http.createServer((req, res) => {
     const tresc = Buffer.concat(cialo);
     wywolania.push({ url: req.url, auth: req.headers.authorization || req.headers['xi-api-key'] || '', tresc: tresc.toString('latin1') });
     if (req.url === '/oa/v1/audio/transcriptions') {
+      if (oaBrakSrodkow) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'You exceeded your current quota, please check your plan and billing details.', code: 'insufficient_quota' } }));
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ text: 'Hej, Cosmos, jaka jutro pogoda?' }));
     }
@@ -196,6 +204,24 @@ const atrapa = http.createServer((req, res) => {
   ok(nasl && !/name="prompt"/.test(nasl.tresc), 'własny lokalny serwer: nasłuch słowa budzącego BEZ podpowiedzi');
   ok(pyt && /name="prompt"/.test(pyt.tresc), 'własny lokalny serwer: pytanie z podpowiedzią');
   s5.close();
+
+  // --- 7. koniec środków na koncie OpenAI: błąd trwały, nie „spróbuj jeszcze raz”
+  ktoTeraz = wlasciciel;
+  zmyslyZywe = false;
+  oaBrakSrodkow = true;
+  r = await stt('?jezyk=pl&tryb=pytanie');
+  d = await r.json();
+  ok(r.status === 502 && d.kod === 'stt-trwaly', `brak środków OpenAI → kod stt-trwaly, przeglądarka przechodzi od razu (${r.status}, ${d.kod})`);
+  ok(!/sk-|klucz-oa|quota/i.test(d.error || ''), 'komunikat bez klucza i surowej treści dostawcy');
+  oaBrakSrodkow = false;
+
+  // --- 8. nagranie w bazie wiedzy bez zmysłów: ten sam łańcuch (przepisz)
+  wywolania.length = 0;
+  const pr = await glos.przepisz(wlasciciel, Buffer.from('ID3 nagranie z lasu'), 'audio/mpeg', { pominZmysly: true, tryb: 'plik' });
+  ok(pr.text === 'Hej, Cosmos, jaka jutro pogoda?' && pr.zrodlo === 'openai', `przepisz() bez zmysłów → OpenAI (${pr.zrodlo})`);
+  ok(!wywolania.some((w) => w.url.startsWith('/zm/')), 'przepisz({pominZmysly}) nie pyta zmysłów');
+  const zGosciem = await glos.przepisz(gosc, wav, 'audio/wav', { pominZmysly: true }).then(() => 'ok', (e) => e.kod);
+  ok(zGosciem === 'brak', `gość bez przyznań: przepisz() nie sięga po klucz właściciela (${zGosciem})`);
 
   atrapa.close(); serwer.close(); serwer2.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nGŁOS SERWERA OK');

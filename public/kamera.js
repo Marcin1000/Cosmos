@@ -258,6 +258,8 @@ function utworzKamere(z) {
         }
         if (!r.ok) {
           const d = await r.json().catch(() => ({}));
+          // 403/404 to stan konta albo trasy, nie chwilowa czkawka – dalsze pytanie co 2 s nic nie zmieni.
+          if (r.status === 403 || r.status === 404) dziala = false;
           throw new Error(d.error || `HTTP ${r.status}`);
         }
         const url = URL.createObjectURL(await r.blob());
@@ -272,9 +274,10 @@ function utworzKamere(z) {
         }
         przerwa = Math.max(0, odstep - (performance.now() - start));
       } catch (e) {
-        if (!aktualne()) return;
+        if (!zewn()) return;
         img.style.visibility = 'hidden';   // bez ikony zepsutego obrazka
         onBlad(e);
+        if (!dziala) return;
         przerwa = 2000;
       }
       if (aktualne()) setTimeout(petla, przerwa);
@@ -352,7 +355,21 @@ function utworzKamere(z) {
     if ($('live-panel').style.display !== 'none' && $('live-panel').dataset.tryb === 'pelny') stopLive();
   });
 
+  /** Zapamiętany „Kinect” bez Kinecta u tej osoby (inny komputer, gość na
+   *  wspólnym telefonie) → kamera przeglądarki. Tylko przy ZNANYM stanie
+   *  zmysłów – zanim przyjdzie /api/status, nie wiemy nic i nic nie zmieniamy. */
+  function poprawZrodlo() {
+    const s = senses();
+    if (!s || !s.znany || !liveIsKinect() || (s.online && s.caps && s.caps.kinect)) return false;
+    liveSource = 'camera';
+    try { localStorage.setItem('cosmos.liveSource', 'camera'); } catch { /* bez pamięci */ }
+    const sel = $('live-source');
+    if (sel) sel.value = 'camera';
+    return true;
+  }
+
   async function startLive(tryb) {
+    poprawZrodlo();
     $('live-source').value = liveSource;
     const video = $('live-video');
     const img = $('live-image');
@@ -432,6 +449,7 @@ function utworzKamere(z) {
      nakładało zlecenia, zajmowało całą pulę agenta i zatrzymywało podgląd
      Kinecta i dłonie do zera klatek (zespół IT, runda 7). */
   let detekcjaWToku = false;
+  let plotnoDetekcji = null;
   async function liveDetect() {
     if (detekcjaWToku) return;
     detekcjaWToku = true;
@@ -448,9 +466,15 @@ function utworzKamere(z) {
     const octx = overlay.getContext('2d');
     octx.clearRect(0, 0, overlay.width, overlay.height);
 
-    const cap = document.createElement('canvas');
-    cap.width = w; cap.height = h;
-    cap.getContext('2d').drawImage(media, 0, 0);
+    /* Klatka do rozpoznawania zmniejszona do 640 px dłuższego boku, na jednym
+       płótnie wielokrotnego użytku – YOLO i tak liczy w 640. Kodowanie pełnych
+       720×1280 do JPEG co 3 s zjadało z pozostałymi pętlami 66 % głównego wątku
+       telefonu (INP 456 ms przy pisaniu, zespół IT, runda 8). Ramki wracają
+       w skali tej klatki – przeliczamy je z powrotem przez `skala`. */
+    const skala = Math.min(1, 640 / Math.max(w, h));
+    const cap = plotnoDetekcji || (plotnoDetekcji = document.createElement('canvas'));
+    cap.width = Math.round(w * skala); cap.height = Math.round(h * skala);
+    cap.getContext('2d').drawImage(media, 0, 0, cap.width, cap.height);
 
     /* NASTAWY LICZĄ SIĘ BEZ ZMYSŁÓW. Wcześniej ten blok stał POD wyjściem
        „brak YOLO", więc przy wyłączonym komputerze domowym plan nigdy się nie
@@ -477,7 +501,7 @@ function utworzKamere(z) {
     } catch { return; }
     if (!liveRozpoznawanie) return;   // wyłączone w trakcie – nie rysuj spóźnionych ramek
 
-    const objs = data.objects || [];
+    const objs = (data.objects || []).map((o) => ({ ...o, box: (o.box || [0, 0, 0, 0]).map((v) => v / skala) }));
     liveLastObjects = objs.map((o) => o.label);
     octx.strokeStyle = '#9db9ff'; octx.lineWidth = Math.max(2, overlay.width / 300);
     octx.font = `${Math.max(14, overlay.width / 40)}px sans-serif`; octx.fillStyle = '#9db9ff';
@@ -953,7 +977,7 @@ function utworzKamere(z) {
     }, 1400);
   });
 
-  return { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery };
+  return { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery, poprawZrodlo };
 }
 
 if (typeof window !== 'undefined') window.utworzKamere = utworzKamere;

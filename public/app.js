@@ -3166,16 +3166,21 @@ function porcjeGlosu(tekst) {
 /** Zagraj nagranie i poczekaj na koniec – także gdy ktoś je przerwie.
  *  Bez `onpause` przerwane czytanie zostawiało wiszącą obietnicę, a tryb
  *  głosowy czekał na koniec wypowiedzi, która już nigdy się nie skończy. */
+/** Zagraj nagranie; `false`, gdy przeglądarka nie pozwoliła go odtworzyć
+ *  (telefon blokuje dźwięk bez świeżego dotknięcia). Dawniej porażka była
+ *  cicha – liczyła się jako zagrana porcja i głos systemowy nie wchodził. */
 function grajNagranie(blob) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     currentAudio = audio;
-    const koniec = () => { URL.revokeObjectURL(url); if (currentAudio === audio) currentAudio = null; resolve(); };
-    audio.onended = koniec;
-    audio.onerror = koniec;
-    audio.onpause = koniec;
-    audio.play().catch(koniec);
+    let zagrane = false;
+    const koniec = (wynik) => { URL.revokeObjectURL(url); if (currentAudio === audio) currentAudio = null; resolve(wynik); };
+    audio.onplaying = () => { zagrane = true; };
+    audio.onended = () => koniec(true);
+    audio.onerror = () => koniec(zagrane);
+    audio.onpause = () => koniec(zagrane);
+    audio.play().then(() => { zagrane = true; }, () => koniec(false));
   });
 }
 
@@ -3207,7 +3212,7 @@ async function speakText(text) {
       if (speakSerial !== mine) return;
       // Następną porcję pobieramy, zanim ta się skończy – bez przerw między zdaniami.
       if (i + 1 < porcje.length) { nastepna = pobierz(porcje[i + 1]); nastepna.catch(() => {}); }
-      await grajNagranie(blob);
+      if (!(await grajNagranie(blob))) break;   // zablokowane – niżej głos systemowy
       zagrane++;
       if (speakSerial !== mine) return;
     }
@@ -3716,11 +3721,12 @@ function wykonajGest(g) {
   }
 }
 
-const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery } = utworzKamere({
+const kamera_ = utworzKamere({
   settings: () => settings, senses: () => senses, cameraFacing: () => cameraFacing, odswiezPlan: () => odswiezPlan,
   $, readJsonSafe, getMedia, videoConstraints, hasMultipleCameras, swapStream,
   onGest: (g) => wykonajGest(g),
 });
+const { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery } = kamera_;
 
 /* Plan zdjęciowy, karty ujęć i misja drona mieszkają w `public/plener.js`
    – patrz nagłówek tamtego pliku. Wywołanie rejestruje nasłuchy przycisków,
@@ -3875,7 +3881,10 @@ $('gallery-filters').addEventListener('click', (e) => {
   const btn = e.target.closest('.gallery-filter');
   if (!btn) return;
   galleryFilter = btn.dataset.filter;
-  $('gallery-filters').querySelectorAll('.gallery-filter').forEach((f) => f.classList.toggle('active', f === btn));
+  $('gallery-filters').querySelectorAll('.gallery-filter').forEach((f) => {
+    f.classList.toggle('active', f === btn);
+    f.setAttribute('aria-pressed', String(f === btn));
+  });
   renderGallery();
 });
 
@@ -4849,7 +4858,10 @@ function startNasluchWlasny() {
          przejście na przeglądarkę OD RAZU. Dawniej 10 s „Rozpoznaję…”, dwa
          błędy i zmiana dopiero po trzecim – pytanie przepadało (zespół IT, runda 5). */
       const offline = err.kod === 'zmysly-offline';
-      if (!offline) {
+      /* Klucz odrzucony albo koniec środków (serwer: „stt-trwaly”) – ponawianie
+         da to samo, więc też od razu, z własnym zdaniem (zespół IT, runda 8). */
+      const trwaly = err.kod === 'stt-trwaly';
+      if (!offline && !trwaly) {
         /* Przy nasłuchu słowa budzącego błąd dotyczy dźwięku z pokoju, o który
            nikt nie pytał – nie ma czego komunikować. Liczymy go tylko. */
         if (voiceState !== 'wake') {
@@ -4865,7 +4877,7 @@ function startNasluchWlasny() {
       sttSerweraPadl = true;
       silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
-      komunikatGlosu(t(offline ? 'voice.sttOfflineSwitch' : 'voice.sttFallback'));
+      komunikatGlosu(t(offline ? 'voice.sttOfflineSwitch' : trwaly ? 'voice.sttKluczSwitch' : 'voice.sttFallback'));
       // Człowiek nie patrzy na ekran – zmianę mówimy głosem systemowym, krótko.
       if (offline && voiceMode && 'speechSynthesis' in window) {
         try {
@@ -5791,6 +5803,22 @@ function openSettings(karta) {
   $('brief-time').value = settings.briefTime || '08:00';
   el.settingsModal.style.display = '';
   if (typeof karta === 'string') kartyUstawien.pokaz(karta);
+  pokazWersje();
+}
+
+/* Wersja kodu i pamięci aplikacji – po wdrożeniu widać, czy telefon ma już
+   nową (zespół IT, runda 8: po „git pull” nikt nie wiedział, co działa). */
+async function pokazWersje() {
+  const pole = $('set-wersja');
+  if (!pole) return;
+  const w = serverConfig.wersja || {};
+  let naTymUrzadzeniu = '';
+  try { naTymUrzadzeniu = (await caches.keys()).find((k) => /^cosmos-/.test(k)) || ''; } catch { /* bez pamięci PWA */ }
+  const nieaktualna = naTymUrzadzeniu && w.pamiec && naTymUrzadzeniu !== w.pamiec;
+  pole.textContent = [
+    w.commit ? t('set.wersja', { kod: w.commit }) : '',
+    naTymUrzadzeniu ? t(nieaktualna ? 'set.wersjaStara' : 'set.wersjaPamiec', { nazwa: naTymUrzadzeniu }) : '',
+  ].filter(Boolean).join(' · ');
 }
 
 async function loadStats() {
@@ -6778,9 +6806,13 @@ async function refreshStatusWlasciwe() {
     };
     updateModelBadge();
     // `tylkoWlasciciel`: zmysły działają, ale nie dla tej osoby – inne zdanie niż „komputer nie odpowiada”.
-    senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true };
+    senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true, znany: true };
     // Ptaki mają własną drogę (komputer osoby → serwer → dom) – osobny stan.
     stanPtakow = { dostepne: st.ptaki?.ok === true, znany: Boolean(st.ptaki) };
+    /* Kinect to cecha komputera osoby (jej agent albo dom z przyznaniem), nie roli:
+       opcje widać wtedy, gdy zmysły tej osoby go mają (zespół IT, runda 8). */
+    for (const o of document.querySelectorAll('#live-source option[data-kinect]')) o.hidden = !kinectDostepny();
+    kamera_.poprawZrodlo?.();
     if (senses.online) {
       /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
          (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i

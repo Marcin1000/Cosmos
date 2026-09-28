@@ -49,8 +49,12 @@ function utworzKonta({ $, t, zmienJezyk }) {
      pola OSOBY (instrukcja, modele); ustawienia urządzenia zostają. */
   const PAMIEC_OSOBY = [/^cosmos\.conv\./, /^cosmos\.convIndex$/, /^cosmos\.kbSelected$/, /^cosmos\.promptTemplates$/,
     /^cosmos\.zakladki$/, /^cosmos\.ujecia\./, /^cosmos\.videoFrame$/, /^cosmos\.bieg$/, /^cosmos\.conversations$/,
-    /^cosmos\.niezapisane$/, /^cosmos\.modeleSerwera$/];
-  const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*)$/;
+    /^cosmos\.niezapisane$/, /^cosmos\.modeleSerwera$/,
+    // Źródło kamery to cecha osoby i JEJ komputera – „Kinect” właściciela nie może zostać dla gościa (runda 8).
+    /^cosmos\.liveSource$/];
+  /* `speak`: na wspólnym telefonie odpowiedzi NASTĘPNEJ osoby czytałyby się na głos
+     (np. w pociągu), choć ona tego nie włączała (zespół IT, runda 8). */
+  const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*|speak)$/;
   function wyczyscPamiecOsoby(magazyn = (typeof localStorage !== 'undefined' ? localStorage : null)) {
     if (!magazyn) return 0;
     const klucze = [];

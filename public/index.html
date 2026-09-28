@@ -392,6 +392,7 @@
                 </div>
               </details>
               <p class="field-hint konto-komunikat" id="konto-komunikat" role="status"></p>
+            <p class="field-hint mono set-wersja" id="set-wersja"></p>
             </section>
             <section class="set-sekcja field konto-blok tylko-wlasciciel" data-karta="konto" id="dostep-blok" hidden>
               <h3 data-i18n="set.sek.dostep">Dostęp</h3>
@@ -831,10 +832,10 @@
       </div>
       <div class="modal-body">
         <div class="studio-tabs" role="tablist">
-          <button class="studio-tab active" data-learn-tab="recog" data-i18n="learn.tabRecog">Rozpoznawanie</button>
-          <button class="studio-tab" data-learn-tab="proc" data-i18n="learn.tabProc">Procedury</button>
-          <button class="studio-tab" data-learn-tab="routine" data-i18n="learn.tabRoutine">Rutyny</button>
-          <button class="studio-tab" data-learn-tab="ideas" data-i18n="imp.tab">Pomysły</button>
+          <button class="studio-tab active" role="tab" aria-selected="true" data-learn-tab="recog" data-i18n="learn.tabRecog">Pokaż i nazwij</button>
+          <button class="studio-tab" role="tab" aria-selected="false" data-learn-tab="proc" data-i18n="learn.tabProc">Procedury</button>
+          <button class="studio-tab" role="tab" aria-selected="false" data-learn-tab="routine" data-i18n="learn.tabRoutine">Rutyny</button>
+          <button class="studio-tab" role="tab" aria-selected="false" data-learn-tab="ideas" data-i18n="imp.tab">Pomysły</button>
         </div>
 
         <!-- Rozpoznawanie -->
@@ -1128,8 +1129,8 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
         <select id="live-source" data-i18n-aria="live.source" aria-label="Źródło obrazu">
           <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
-          <option value="kinect-color" class="tylko-wlasciciel" data-i18n="live.srcKinectColor">Kinect – obraz</option>
-          <option value="kinect-depth" class="tylko-wlasciciel" data-i18n="live.srcKinectDepth">Kinect – głębia</option>
+          <option value="kinect-color" data-kinect hidden data-i18n="live.srcKinectColor">Kinect – obraz</option>
+          <option value="kinect-depth" data-kinect hidden data-i18n="live.srcKinectDepth">Kinect – głębia</option>
         </select>
       </label>
       <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
@@ -1273,10 +1274,10 @@
       <div class="modal-body">
         <div class="gallery-note" id="gallery-note" role="status" hidden></div>
         <div class="gallery-filters" id="gallery-filters">
-          <button class="gallery-filter active" data-filter="all" data-i18n="gallery.all">Wszystko</button>
-          <button class="gallery-filter" data-filter="image" data-i18n="gallery.images">Obrazy</button>
-          <button class="gallery-filter" data-filter="audio" data-i18n="gallery.audio">Dźwięk</button>
-          <button class="gallery-filter" data-filter="video" data-i18n="gallery.video">Wideo</button>
+          <button class="gallery-filter active" aria-pressed="true" data-filter="all" data-i18n="gallery.all">Wszystko</button>
+          <button class="gallery-filter" aria-pressed="false" data-filter="image" data-i18n="gallery.images">Obrazy</button>
+          <button class="gallery-filter" aria-pressed="false" data-filter="audio" data-i18n="gallery.audio">Dźwięk</button>
+          <button class="gallery-filter" aria-pressed="false" data-filter="video" data-i18n="gallery.video">Wideo</button>
         </div>
         <div class="gallery-grid" id="gallery-grid"></div>
       </div>
@@ -1312,7 +1313,7 @@
       <img id="voice-kinect" alt="" hidden>
       <span class="voice-camera-label mono ik ik-oko" data-i18n="voice.camLabel">podgląd</span>
     </div>
-    <p class="voice-hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>
+    <p class="voice-hint" data-i18n="voice.hint">Powiedz „koniec”, aby wrócić do nasłuchu · „Hej, Cosmos” budzi asystenta</p>
   </div>
 
   <!-- ============ PODGLĄD OBRAZU (pełny ekran) ============ -->
