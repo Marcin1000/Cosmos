@@ -195,6 +195,19 @@ sent in headers, never in the URL. Members need an explicit grant, and a failure
 shows them a path from someone else's disk. A recording made with no signal waits in
 the phone and is recognised when the connection comes back.
 
+**Layout that is reasoned about, not patched.** The live camera used to be a floating
+panel whose width was computed from its own measured height, with separate rules for an
+"expanded" mode, for landscape phones and for the message composer – seven layers, each
+fixing one screen size and breaking another (a title on three lines, "Cam…" instead of the
+source, ISO outside the frame). It is now a full-screen scene like voice mode, three CSS
+grids (phone portrait, phone landscape with a camera-style rail, desktop with a side panel)
+and a small picture-in-picture window beside the chat for gestures. The suite that guards
+it drives real 9:16 and 16:9 canvas streams on the phone sizes the owner actually has
+(360 px wide with enlarged text, 740×313 in landscape) and checks that every control is on
+screen and unobstructed without scrolling. Settings got real tabs for the same reason: the
+old tabs scrolled one long list whose groups were interleaved in the HTML, so the highlight
+jumped "out of order".
+
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
 a genuine limitation for outside readers – the reasoning is dense and it is all

@@ -45,10 +45,12 @@ if (!maPrzegladarke()) {
   ] });
 
   for (const [nazwa, viewport] of [
-    ['telefon 390×844', { width: 390, height: 844 }],
+    ['telefon 360×700', { width: 360, height: 700 }],
+    ['telefon poziomo 740×313', { width: 740, height: 313 }],
     ['desktop 1440×900', { width: 1440, height: 900 }],
   ]) {
-    const ctx = await br.newContext({ viewport, permissions: ['camera'] });
+    const tel = viewport.width < 800;
+    const ctx = await br.newContext({ viewport, permissions: ['camera'], isMobile: tel, hasTouch: tel });
     const pg = await ctx.newPage();
     await pg.goto(env.adres + '/app', { waitUntil: 'domcontentloaded' });
     await pg.waitForTimeout(1200);
@@ -73,18 +75,8 @@ if (!maPrzegladarke()) {
     });
 
     const mediaProporcja = r.mediaH ? r.mediaW / r.mediaH : 0;
-    /* Ile szerokości sceny zajmuje czerń. Przy `object-fit: contain` obraz
-       węższy od sceny zostawia pasy po bokach – i to jest liczba, na którą
-       Marcin patrzył, a nie żadna proporcja w konsoli. */
-    const pasyProc = mediaProporcja && r.scenaProporcja > mediaProporcja
-      ? Math.round((1 - mediaProporcja / r.scenaProporcja) * 100)
-      : 0;
-
     console.log(`\n${nazwa}  (status: „${r.status}…")`);
-    console.log(`   strumień ${r.mediaW}×${r.mediaH} (${mediaProporcja.toFixed(2)}), `
-      + `scena ${r.scenaW}×${r.scenaH} (${r.scenaProporcja.toFixed(2)})`);
-    console.log(`   --live-arn ustawione przez kod: ${r.ustawione || 'NIE'}, `
-      + `czarne pasy: ${pasyProc}% szerokości`);
+    console.log(`   strumień ${r.mediaW}×${r.mediaH} (${mediaProporcja.toFixed(2)}), --live-arn ustawione przez kod: ${r.ustawione || 'NIE'}`);
 
     if (!r.mediaW || !r.mediaH) {
       fail.push(`${nazwa}: atrapa kamery nie podała wymiarów – zestaw nic nie mierzy`);
@@ -94,107 +86,60 @@ if (!maPrzegladarke()) {
     /* Sedno. Bez tego sprawdzenia zestaw przechodziłby na atrapie Chromium,
        która akurat jest 4:3 – czyli przypadkiem taka jak wartość domyślna. */
     if (!r.ustawione) {
-      fail.push(`${nazwa}: kod nie ustawił \`--live-arn\` – scena stoi na domyślnym 4:3 `
+      fail.push(`${nazwa}: kod nie ustawił \`--live-arn\` – okienko stoi na domyślnym 4:3 `
         + 'z CSS, więc kadr pionowy dostanie czarne pasy (zmysły są wyłączone)');
     }
-    if (pasyProc > 5) {
-      fail.push(`${nazwa}: czarne pasy zajmują ${pasyProc}% szerokości sceny `
-        + `(strumień ${mediaProporcja.toFixed(2)}, scena ${r.scenaProporcja.toFixed(2)})`);
-    }
-    /* --- WYJAŚNIENIE POD ⓘ, A NIE NAD PODGLĄDEM ----------------------
-     *
-     *  Marcin: „ten tekst »Podgląd działa, ale…« wchodzi nieładnie pod
-     *  Nastawy" – a potem: „to ⓘ umieśćmy gdzieś w rogu po prostu.
-     *  To nam wykluczy chyba problem."
-     *
-     *  Miał rację i to jest inne rozwiązanie niż lepsze mieszczenie tekstu.
-     *  Dopóki sześciowierszowe wyjaśnienie stało w kolumnie nad podglądem,
-     *  każda jego długość była czyimś problemem: kłóciło się o wysokość
-     *  z obrazem i z nastawami, a kolejne poprawki tylko przesuwały ten spór.
-     *  W rogu nagłówka nie kłóci się o nic.
-     *
-     *  Zestaw sprawdza więc WŁAŚCIWOŚĆ, nie wygląd: pokazanie wyjaśnienia
-     *  nie ma prawa przesunąć ani obrazu, ani wysokości panelu. Ten komunikat
-     *  istnieje tylko przy wyłączonych zmysłach, czyli w tym środowisku. */
-    await pg.evaluate(() => {
-      const box = document.getElementById('plan-box');
-      if (box) box.open = true;
-    });
-    await pg.waitForTimeout(900);
 
-    const przed = await pg.evaluate(() => {
-      const panel = document.getElementById('live-panel');
-      const scena = document.getElementById('live-stage');
-      const status = document.getElementById('live-status');
-      const info = document.getElementById('live-info');
+    /* --- WYJAŚNIENIE OBOK OBRAZU, NIGDY NA NIM ----------------------
+     *  Dawniej sześciowierszowe wyjaśnienie („Podgląd działa, ale…”) stało
+     *  nad podglądem, potem w dymku ⓘ, który zasłaniał pół kadru (runda 8,
+     *  zrzut 18). Teraz na kadrze stoi krótka pigułka stanu, a wyjaśnienie –
+     *  pod obrazem (telefon) albo w panelu obok (komputer). Gwarancja: jest
+     *  widoczne bez dotykania i nie zachodzi na obraz ani na przyciski. */
+    await pg.evaluate(() => { const box = document.getElementById('plan-box'); if (box) box.open = true; });
+    await pg.waitForTimeout(600);
+    const w = await pg.evaluate(() => {
+      const pr = (id) => document.getElementById(id).getBoundingClientRect();
+      const tnie = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const wyj = document.getElementById('live-wyjasnienie');
+      const wr = wyj.getBoundingClientRect();
+      const pig = document.getElementById('live-status');
       return {
-        panelH: Math.round(panel.getBoundingClientRect().height),
-        scenaH: Math.round(scena.getBoundingClientRect().height),
-        statusWidoczny: !status.hidden && status.getBoundingClientRect().height > 0,
-        infoWidoczny: !info.hidden && info.getBoundingClientRect().width > 0,
-        dymekWidoczny: !document.getElementById('live-info-box').hidden,
+        tekst: (wyj.textContent || '').slice(0, 40),
+        widoczne: !wyj.hidden && wr.height > 0 && wr.bottom <= innerHeight + 1,
+        naObrazie: tnie(wr, pr('live-stage')),
+        naPrzyciskach: ['live-snapshot', 'live-rozpoznawanie', 'live-close'].filter((id) => tnie(wr, pr(id))),
+        pigulka: pig.hidden ? '' : pig.textContent,
+        stan: document.getElementById('live-rozp-stan').textContent,
       };
     });
-    console.log(`   pasek statusu widoczny: ${przed.statusWidoczny}, `
-      + `ⓘ w nagłówku: ${przed.infoWidoczny}, dymek otwarty: ${przed.dymekWidoczny}`);
+    console.log(`   wyjaśnienie: „${w.tekst}…", widoczne=${w.widoczne}, na obrazie=${w.naObrazie}; pigułka „${w.pigulka}”, stan przycisku „${w.stan}”`);
+    // W poziomie telefonu (~313 px) wyjaśnienie celowo znika – mówi to pigułka na kadrze.
+    const poziom = viewport.height < 400;
+    if (poziom) {
+      if (!/Sam podgląd|Preview only/.test(w.pigulka)) fail.push(`${nazwa}: w poziomie pigułka na kadrze nie mówi, że to sam podgląd („${w.pigulka}”)`);
+    } else if (!w.widoczne) fail.push(`${nazwa}: wyjaśnienie o wyłączonym rozpoznawaniu nie jest widoczne`);
+    if (!/nie odpowiada|not responding/i.test(w.tekst)) fail.push(`${nazwa}: wyjaśnienie nie mówi, że komputer ze zmysłami nie odpowiada („${w.tekst}”)`);
+    if (w.naObrazie) fail.push(`${nazwa}: wyjaśnienie zasłania obraz`);
+    if (w.naPrzyciskach.length) fail.push(`${nazwa}: wyjaśnienie zasłania ${w.naPrzyciskach.join(', ')}`);
+    if (w.pigulka.length > 60) fail.push(`${nazwa}: na kadrze stoi długi tekst zamiast krótkiego stanu (${w.pigulka.length} znaków)`);
+    if (!/czeka|waiting/i.test(w.stan)) fail.push(`${nazwa}: przycisk rozpoznawania nie mówi, że czeka („${w.stan}”)`);
 
-    if (przed.statusWidoczny) {
-      fail.push(`${nazwa}: pasek statusu zajmuje miejsce, choć nie ma bieżącego stanu `
-        + 'do pokazania – wyjaśnienie ma być pod ⓘ');
-    }
-    if (!przed.infoWidoczny) {
-      fail.push(`${nazwa}: brak ⓘ w nagłówku, a jest co wyjaśnić `
-        + '(zmysły wyłączone) – treść stała się nieosiągalna');
-    }
-    if (przed.dymekWidoczny) fail.push(`${nazwa}: dymek ⓘ jest otwarty sam z siebie`);
-
-    // Dotknięcie ⓘ – tak, jak robi to Marcin na telefonie.
-    await pg.click('#live-info');
-    await pg.waitForTimeout(400);
-    const po = await pg.evaluate(() => {
-      const panel = document.getElementById('live-panel');
-      const scena = document.getElementById('live-stage');
-      const dymek = document.getElementById('live-info-box');
-      const body = document.getElementById('live-body');
-      const dr = dymek.getBoundingClientRect();
-      const pr = panel.getBoundingClientRect();
-      return {
-        panelH: Math.round(pr.height),
-        scenaH: Math.round(scena.getBoundingClientRect().height),
-        widoczny: !dymek.hidden && dr.height > 0,
-        tresc: (dymek.textContent || '').slice(0, 30),
-        pelnaTresc: dymek.scrollHeight <= dymek.clientHeight + 1,
-        wPanelu: dr.left >= pr.left - 1 && dr.right <= pr.right + 1
-          && dr.top >= pr.top - 1 && dr.bottom <= pr.bottom + 1,
-        zaSzeroko: body ? body.scrollWidth - body.clientWidth : 0,
-      };
+    /* --- OKIENKO MA KSZTAŁT KADRU ------------------------------------
+     *  Na pełnym ekranie obraz jest cały (contain) w polu sceny. Okienko
+     *  przy rozmowie jest małe – tam czarne pasy byłyby połową podglądu,
+     *  więc ma dokładnie proporcję strumienia. */
+    await pg.click('#live-do-okienka');
+    await pg.waitForTimeout(500);
+    const m = await pg.evaluate(() => {
+      const sr = document.getElementById('live-stage').getBoundingClientRect();
+      return { p: sr.width / sr.height, w: Math.round(sr.width), h: Math.round(sr.height) };
     });
-    console.log(`   po dotknięciu ⓘ: „${po.tresc}…", panel ${przed.panelH}→${po.panelH} px, `
-      + `obraz ${przed.scenaH}→${po.scenaH} px, w panelu: ${po.wPanelu}`);
-
-    if (!po.widoczny) fail.push(`${nazwa}: dotknięcie ⓘ nie pokazało wyjaśnienia`);
-    if (!/Podgl/.test(po.tresc)) {
-      fail.push(`${nazwa}: dymek ⓘ nie zawiera komunikatu o wyłączonym rozpoznawaniu `
-        + `(jest „${po.tresc}")`);
-    }
-    /* SEDNO CAŁEJ ZMIANY. Wyjaśnienie ma nie kosztować układu ani piksela –
-       dlatego dymek leży NAD treścią, a nie w kolumnie. */
-    if (po.panelH !== przed.panelH) {
-      fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość panelu `
-        + `${przed.panelH} → ${po.panelH} px – dymek przesuwa układ`);
-    }
-    if (po.scenaH !== przed.scenaH) {
-      fail.push(`${nazwa}: pokazanie ⓘ zmieniło wysokość obrazu `
-        + `${przed.scenaH} → ${po.scenaH} px`);
-    }
-    if (!po.wPanelu) fail.push(`${nazwa}: dymek ⓘ wychodzi poza panel`);
-    if (!po.pelnaTresc) {
-      fail.push(`${nazwa}: treść nie mieści się w dymku i nie da się jej doczytać`);
-    }
-    if (po.zaSzeroko > 1) {
-      fail.push(`${nazwa}: dolna część jest o ${po.zaSzeroko} px szersza niż panel `
-        + '– poziomy rozjazd');
-    }
+    const pasyProc = mediaProporcja && m.p > mediaProporcja
+      ? Math.round((1 - mediaProporcja / m.p) * 100)
+      : Math.round((1 - m.p / mediaProporcja) * 100);
+    console.log(`   okienko ${m.w}×${m.h} (${m.p.toFixed(2)}), czarne pasy: ${pasyProc}%`);
+    if (pasyProc > 5) fail.push(`${nazwa}: okienko ma inną proporcję niż strumień – czarne pasy ${pasyProc}%`);
 
     await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/proporcja-bez-zmyslow-${viewport.width}.png` });
     await ctx.close();

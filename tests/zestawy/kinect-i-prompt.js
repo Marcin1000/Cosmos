@@ -1,5 +1,5 @@
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
-// Trzy nowe funkcje: powiększenie podglądu, wybór mikrofonu, dopracowanie promptu
+// Trzy funkcje: kamera na pełnym ekranie i w okienku, wybór mikrofonu, dopracowanie promptu
 
 (async () => {
   const env = await srodowisko('rozumujacy');
@@ -16,45 +16,37 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
-  // ---- 1. powiększenie podglądu ----
+  // ---- 1. kamera: pełny ekran i okienko (runda 8 – zamiast „powiększ”) ----
   await page.evaluate(() => { localStorage.setItem('cosmos.liveSource', 'kinect-color'); });
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
   await page.click('#live-btn');
   await page.waitForTimeout(1200);
 
-  const small = await page.evaluate(() => {
-    const p = document.getElementById('live-panel');
-    return { w: p.getBoundingClientRect().width, exp: p.classList.contains('expanded') };
-  });
-  await page.click('#live-expand');
-  await page.waitForTimeout(400);
-  const big = await page.evaluate(() => {
+  const stan = () => page.evaluate(() => {
     const p = document.getElementById('live-panel');
     const r = p.getBoundingClientRect();
-    const st = document.getElementById('live-stage') || p.querySelector('.live-stage');
-    const sr = st.getBoundingClientRect();
     return {
-      w: r.width, exp: p.classList.contains('expanded'),
-      cx: Math.round(r.left + r.width / 2), pageCx: Math.round(window.innerWidth / 2),
-      overflowY: document.documentElement.scrollHeight > window.innerHeight + 2,
-      offRight: r.right > window.innerWidth + 1, offTop: r.top < -1,
-      stageH: Math.round(sr.height), stageW: Math.round(sr.width),
-      stageBottom: Math.round(sr.bottom), vh: window.innerHeight,
-      saved: localStorage.getItem('cosmos.liveExpanded'),
+      tryb: p.dataset.tryb, w: Math.round(r.width), h: Math.round(r.height),
+      modalny: document.querySelector('.app') ? document.querySelector('.app').inert : null,
+      kropka: document.getElementById('live-btn').classList.contains('na-zywo'),
+      saved: localStorage.getItem('cosmos.kameraTryb'),
     };
   });
-  console.log(`1. panel: ${Math.round(small.w)}px → ${Math.round(big.w)}px, wyśrodkowany: ${big.cx} vs ${big.pageCx}`);
-  const ratio = big.stageW / big.stageH;
-  console.log(`   scena ${big.stageW}×${big.stageH} (${ratio.toFixed(2)}:1), zapamiętane=${big.saved}, `
-    + `poza ekranem: prawo=${big.offRight} góra=${big.offTop} dół=${big.stageBottom > big.vh}`);
-  if (Math.abs(ratio - 4 / 3) > 0.02) fail.push(`scena nie 4:3 (${ratio.toFixed(2)}) – czarne pasy`);
-  if (small.exp) fail.push('panel startuje powiększony');
-  if (!big.exp) fail.push('klasa expanded nie doszła');
-  if (big.w <= small.w + 100) fail.push('panel się nie powiększył');
-  if (Math.abs(big.cx - big.pageCx) > 3) fail.push('panel nie jest wyśrodkowany');
-  if (big.offRight || big.offTop) fail.push('powiększony panel wychodzi poza ekran');
-  if (big.saved !== '1') fail.push('powiększenie nie zapamiętane');
+  const pelny = await stan();
+  console.log(`1. otwarta: tryb=${pelny.tryb}, ${pelny.w}×${pelny.h}, reszta nieaktywna=${pelny.modalny}`);
+  if (pelny.tryb !== 'pelny') fail.push(`kamera nie startuje na pełnym ekranie (${pelny.tryb})`);
+  if (pelny.w < 1190 || pelny.h < 890) fail.push(`pełny ekran nie zajmuje okna (${pelny.w}×${pelny.h})`);
+  if (pelny.modalny !== true) fail.push('pełny ekran nie jest modalny – rozmowa pod spodem dalej przyjmuje fokus');
+
+  await page.click('#live-do-okienka');
+  await page.waitForTimeout(400);
+  const mini = await stan();
+  console.log(`   okienko: ${mini.w}×${mini.h}, zapamiętane=${mini.saved}, kropka na ikonie=${mini.kropka}, rozmowa aktywna=${!mini.modalny}`);
+  if (mini.tryb !== 'mini' || mini.w > 260) fail.push(`„do okienka” nie zmniejsza (${mini.tryb}, ${mini.w} px)`);
+  if (mini.modalny) fail.push('okienko blokuje rozmowę (inert)');
+  if (!mini.kropka) fail.push('ikona kamery nie mówi, że kamera działa w okienku');
+  if (mini.saved !== 'mini') fail.push('tryb okienka nie zapamiętany');
 
   // przetrwa przeładowanie
   await page.reload({ waitUntil: 'load' });
@@ -64,26 +56,24 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   const after = await page.evaluate(() => {
     const p = document.getElementById('live-panel');
     const img = document.getElementById('live-image');
-    return { exp: p.classList.contains('expanded'), w: img.naturalWidth, src: img.getAttribute('src') || '' };
+    return { tryb: p.dataset.tryb, w: img.naturalWidth, src: img.getAttribute('src') || '' };
   });
-  console.log(`2. po przeładowaniu: expanded=${after.exp}, klatka ${after.w}px, src=${after.src.slice(0, 46)}`);
-  if (!after.exp) fail.push('powiększenie nie przetrwało przeładowania');
+  console.log(`2. po przeładowaniu: tryb=${after.tryb}, klatka ${after.w}px, src=${after.src.slice(0, 46)}`);
+  if (after.tryb !== 'mini') fail.push('okienko nie przetrwało przeładowania');
   if (!after.w) fail.push('brak klatki po przeładowaniu');
   if (!/\/api\/kinect\/stream/.test(after.src)) fail.push('nie użyto MJPEG');
 
-  await page.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-expanded.png' });
-
-  // zwiń z powrotem
-  await page.click('#live-expand');
+  // z okienka ikona w pasku wraca na pełny ekran, „×” zamyka
+  await page.click('#live-btn');
   await page.waitForTimeout(300);
-  const back = await page.evaluate(() => ({
-    exp: document.getElementById('live-panel').classList.contains('expanded'),
-    saved: localStorage.getItem('cosmos.liveExpanded'),
-  }));
-  console.log(`3. zwinięcie: expanded=${back.exp}, zapamiętane=${back.saved}`);
-  if (back.exp || back.saved !== '0') fail.push('zwijanie nie działa');
+  const znow = await stan();
+  console.log(`3. ikona z okienka: tryb=${znow.tryb}`);
+  if (znow.tryb !== 'pelny') fail.push('ikona kamery z okienka nie wraca na pełny ekran');
+  await page.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-expanded.png' });
   await page.click('#live-close');
   await page.waitForTimeout(300);
+  const zamkniete = await page.evaluate(() => document.getElementById('live-panel').style.display);
+  if (zamkniete !== 'none') fail.push('„×” nie zamyka kamery');
 
   // ---- 2. wybór mikrofonu w ustawieniach ----
   await page.click('#settings-btn');
@@ -176,12 +166,12 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   if (mob.btnW < 28 || mob.btnH < 28) fail.push('przycisk za mały pod palec');
   await m.screenshot({ path: require('../pomoc').KATALOG_ZRZUTOW + '/feat3-mobile.png' });
 
-  // ---- 5. powiększony podgląd na małych/niskich ekranach ----
+  // ---- 5. kamera na małych/niskich ekranach: pełny ekran się mieści, okienko ma kształt kadru ----
   for (const vp of [{ width: 360, height: 740, n: 'telefon' }, { width: 1280, height: 640, n: 'niski laptop' }]) {
     await m.setViewportSize({ width: vp.width, height: vp.height });
     await m.evaluate(() => {
       localStorage.setItem('cosmos.liveSource', 'kinect-color');
-      localStorage.setItem('cosmos.liveExpanded', '1');
+      localStorage.setItem('cosmos.kameraTryb', 'pelny');
     });
     await m.reload({ waitUntil: 'load' });
     await m.waitForTimeout(400);
@@ -198,10 +188,15 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
       };
     });
     const fits = r.l >= -1 && r.t >= -1 && r.r <= r.vw + 1 && r.b <= r.vh + 1;
+    // Klatka Kinecta jest 4:3 – okienko przy rozmowie ma dokładnie ten kształt.
+    await m.click('#live-do-okienka');
+    await m.waitForTimeout(400);
+    r.ratio = await m.evaluate(() => { const s = document.querySelector('.live-stage').getBoundingClientRect(); return s.width / s.height; });
+    await m.click('#live-na-pelny');
     console.log(`11. ${vp.n} ${vp.width}×${vp.height}: panel [${r.l},${r.t}]–[${r.r},${r.b}] `
       + `mieści się=${fits}, scena ${r.sw}px ${r.ratio.toFixed(2)}:1, scroll X=${r.overflowX}`);
-    if (!fits) fail.push(`powiększony panel nie mieści się na ${vp.n}`);
-    if (Math.abs(r.ratio - 4 / 3) > 0.03) fail.push(`scena nie 4:3 na ${vp.n} (${r.ratio.toFixed(2)})`);
+    if (!fits) fail.push(`kamera na pełnym ekranie nie mieści się na ${vp.n}`);
+    if (Math.abs(r.ratio - 4 / 3) > 0.03) fail.push(`okienko nie 4:3 na ${vp.n} (${r.ratio.toFixed(2)})`);
     if (r.overflowX) fail.push(`poziomy scroll na ${vp.n}`);
     await m.screenshot({ path: `${require("../pomoc").KATALOG_ZRZUTOW}/feat3-exp-${vp.width}x${vp.height}.png` });
     await m.click('#live-close');

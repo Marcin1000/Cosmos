@@ -813,11 +813,27 @@ przez `ctypes` – bez C# i bez C++. Potwierdzone na sprzęcie:
 Zanim podłączysz czujnik: `python kinect_win.py selftest` sprawdza układ struktur
 i logikę **bez sprzętu** (22 kontrole).
 
-**W interfejsie Cosmosa** panel „Kamera na żywo" ma wybór źródła: kamera przeglądarki,
-**Kinect – obraz**, **Kinect – głębia**. Obraz leci strumieniem MJPEG (jedno połączenie,
-klatki jedna za drugą), więc podgląd jest płynny także przez Tailscale. Detekcja YOLO
-działa na obu źródłach tak samo, a przycisk **Rozpoznawanie** obok wyboru źródła
-wyłącza ją razem z ramkami i opisem (wybór zostaje zapamiętany) – gdy chcesz sam obraz.
+**W interfejsie Cosmosa** „Kamera na żywo” otwiera się **na cały ekran**, jak tryb głosowy
+(ciemna scena, obraz w całości): u góry zamknięcie, wybór źródła – kamera przeglądarki,
+**Kinect – obraz**, **Kinect – głębia** – przód/tył i „zmniejsz do okienka”; pod obrazem
+**nastawy kadru** w jednej linii (dotknięcie rozwija sprzęt, tryb i zachmurzenie) i własne
+gesty; na dole **Rozpoznawanie**, migawka i **Gesty**. Telefon w poziomie dostaje obraz na całą
+wysokość i przyciski na szynie po prawej jak w aparacie, komputer – obraz po lewej i sekcje
+obok. „Wstecz” na Androidzie i Esc zamykają kamerę. **Okienko** to sam obraz nad polem
+wiadomości – do gestów przy rozmowie (tylko ono nie blokuje czatu); ikona kamery w pasku ma
+wtedy czerwoną kropkę, a jej dotknięcie wraca na pełny ekran. Ostatni wybór jest zapamiętany.
+
+Obraz leci strumieniem MJPEG (jedno połączenie, klatki jedna za drugą), więc podgląd jest
+płynny także przez Tailscale. Detekcja YOLO działa na obu źródłach tak samo. **Rozpoznawanie**
+mówi pod przyciskiem słowami, co robi: „wł. · zaznacza”, „czeka na komputer” (zmysły nie
+odpowiadają – wtedy działa sam podgląd i nastawy, a na kadrze stoi „Sam podgląd”),
+„wył. · sam podgląd” albo „niedostępne” (konto bez zmysłów). Wyłączone nie wysyła klatek.
+
+**Ustawienia** mają zakładki (Konto, Zmysły, Silniki, Głos, Pamięć, Dom, Dane) – widać
+tylko wybraną; na telefonie w jednym przewijanym wierszu, na komputerze i w poziomie jako
+lista po lewej. Każda zakładka to sekcje z nagłówkiem, a przełączniki działają od razu.
+**Głośnik** w pasku górnym to jedyny przełącznik w pasku: przekreślony = odpowiedzi nie są
+czytane na głos; ten sam przełącznik jest w Ustawienia → Głos → „Czytanie na głos”.
 
 Przez agenta zmysłów strumienia nie ma, więc klatki idą pojedynczo – ale po dwie naraz,
 a agent trzyma z serwerem stałe połączenia zamiast otwierać nowe przy każdej klatce.

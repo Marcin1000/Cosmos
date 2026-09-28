@@ -246,9 +246,11 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   await m.waitForTimeout(1500);
   const st = await m.evaluate(() => {
     const modal = document.querySelector('#settings-modal .modal') || document.querySelector('#settings-modal');
+    // Pasek kart przewija się w bok celowo – karta za krawędzią jest w zasięgu przewinięcia, nie „wystaje”.
+    const wPrzewijanym = (n) => { for (let x = n.parentElement; x && x !== modal; x = x.parentElement) { if (/auto|scroll/.test(getComputedStyle(x).overflowX)) return true; } return false; };
     const over = [...modal.querySelectorAll('*')].filter((n) => {
       const r = n.getBoundingClientRect();
-      return r.width > 0 && r.right > window.innerWidth + 1;
+      return r.width > 0 && r.right > window.innerWidth + 1 && !wPrzewijanym(n);
     }).map((n) => (n.id || n.className || n.tagName).toString().slice(0, 30));
     return { overflowX: document.documentElement.scrollWidth > window.innerWidth + 1, over: over.slice(0, 5) };
   });

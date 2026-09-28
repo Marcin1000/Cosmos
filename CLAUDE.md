@@ -375,7 +375,7 @@ z pozostałych.
 | `studio-widok.js` | widok Studia: obraz, szablony, storyboard, edycja, dźwięk, wideo; zadania w tle |
 | `pwa.js` | service worker i pasek „Jest nowa wersja” |
 | `wysylka.js` | wysyłka pliku do bazy wiedzy z postępem; podgląd zdjęcia dla modelu |
-| `kamera.js` | kamera na żywo: podgląd, Kinect, detekcja, sylwetka, dopasowanie panelu |
+| `kamera.js` | kamera na żywo: widok na cały ekran i okienko przy rozmowie, Kinect, detekcja, sylwetka, stan rozpoznawania |
 | `nauka-widok.js` | panel Nauka: rozpoznawanie, procedury, rutyny, runner z potwierdzeniem |
 | `zmysly-widok.js` | Ustawienia → Zmysły: kreator „Podłącz komputer”, przełączniki składników, pakiety |
 | `gesty.js` | własne gesty: kształt dłoni, ruch, dopasowanie – czyste funkcje; nagrywanie i rozpoznawanie woła `kamera.js` |

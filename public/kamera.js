@@ -105,95 +105,24 @@ function utworzKamere(z) {
         panel.style.setProperty('--live-arn', String(r.w / r.h));
       }
     }
-    dopasujPanelKamery();
     return r;
   }
 
-  /** Podaj CSS-owi ZMIERZONĄ wysokość wszystkiego poza obrazem.
-   *
-   *  Szerokość powiększonego panelu liczy się z dostępnej wysokości, więc
-   *  trzeba wiedzieć, ile tej wysokości zabierają paski: nagłówek, wybór
-   *  źródła, status, pudełko nastaw i przycisk migawki. Wcześniej stała tam
-   *  liczba 220 wpisana w CSS – i zestarzała się przy pierwszej nowej rzeczy
-   *  w panelu. Zmierzone nie starzeje się nigdy.
-   *
-   *  Pomiar jest sprzężony: szerokość zależy od wysokości pasków, a wysokość
-   *  pasków od szerokości (status się zawija). Nie rozwiązujemy tego układu –
-   *  po prostu mierzymy ponownie przy każdej zmianie, a że zmiany są rzadkie
-   *  i drobne, dochodzi do swojego miejsca po jednym, najwyżej dwóch krokach.
-   */
-  function dopasujPanelKamery(krok) {
-    const runda = typeof krok === 'number' ? krok : 0;   // z `resize` przychodzi Event
-    const panel = $('live-panel');
-    const scena = $('live-stage');
-    const dol = $('live-body');
-    if (!panel || !scena || panel.style.display === 'none') return;
-    // Ile od dołu ekranu zajmuje pole wiadomości – na telefonie panel stoi nad nim (style.css).
+  /** Okienko kamery stoi NAD polem wiadomości – CSS dostaje jego wysokość
+   *  od dołu ekranu (--composer-h). Liczone z visualViewport, bo na telefonie
+   *  klawiatura zmniejsza widok, a nie okno. Cała reszta układu to czysty CSS
+   *  (runda 8: pływający panel z mierzeniem pasków i sześcioma rundami
+   *  przeliczeń ustąpił widokowi na cały ekran). */
+  function dopasujPanelKamery() {
     const pole = $('composer');
-    if (pole) {
-      const odDolu = Math.max(0, window.innerHeight - pole.getBoundingClientRect().top);
-      document.documentElement.style.setProperty('--composer-h', `${Math.round(odDolu)}px`);
-    }
-    const przed = panel.style.getPropertyValue('--live-chrome');
-    let paski = panel.getBoundingClientRect().height - scena.getBoundingClientRect().height;
-    /* DOLICZ TO, CO JUŻ NIE MIEŚCI SIĘ W DOLNEJ CZĘŚCI.
-     *
-     *  Bez tego pomiar zjadał własny ogon. `.live-body` kurczy się i przewija,
-     *  więc gdy panel dobijał do wysokości okna, mierzyliśmy dół JUŻ ŚCIŚNIĘTY.
-     *  Wychodziło z tego, że paski są niskie, więc obrazowi wolno być duży,
-     *  więc dół musi się ścisnąć jeszcze bardziej – i układ zastygał dokładnie
-     *  w tym, co Marcin opisał: „okno podglądu jest duże, a pod nim małe
-     *  okienko przesuwalne. To nie wygląda dobrze i nie jest użyteczne".
-     *
-     *  `scrollHeight - clientHeight` to wysokość schowana za paskiem przewijania,
-     *  czyli różnica między tym, ile dół ZAJMUJE, a ile POTRZEBUJE. Dopiero
-     *  potrzeba jest właściwą liczbą do liczenia szerokości panelu. */
-    /* Rozwinięte „Własne gesty” to formularz na chwilę – ma się przewinąć
-       w dolnej części, a nie ścisnąć obraz do znaczka pocztowego, na którym
-       nie widać dłoni, którą właśnie się nagrywa (agencja, runda 7). */
-    const gesty = $('live-gesty');
-    const naGesty = gesty && gesty.open ? gesty.getBoundingClientRect().height : 0;
-    if (dol) paski += Math.max(0, dol.scrollHeight - dol.clientHeight - naGesty);
-    if (paski > 0) panel.style.setProperty('--live-chrome', `${Math.round(paski)}px`);
-
-    /* Osobno to, co leży NAD obrazem: nagłówek i wybór źródła. W układzie
-       dwukolumnowym (powiększony panel na szerokim ekranie) tylko te dwa paski
-       zabierają obrazowi wysokość – reszta stoi w kolumnie obok. Liczenie tam
-       z pełnego `--live-chrome` ścinałoby obraz o wysokość czegoś, co go już
-       nie dotyka. */
-    let gora = 0;
-    for (const el of panel.querySelectorAll('.live-head, .live-source')) {
-      gora += el.getBoundingClientRect().height;
-    }
-    if (gora > 0) panel.style.setProperty('--live-chrome-gora', `${Math.round(gora)}px`);
-
-    /* JEDEN POMIAR NIE WYSTARCZA, gdy układ zmienia się skokowo.
-     *
-     *  Szerokość zależy od wysokości pasków, a wysokość pasków od szerokości
-     *  (status i opisy się zawijają). Przy drobnej zmianie jedno przejście
-     *  trafia dostatecznie blisko, ale przy przejściu między układem
-     *  jedno- i dwukolumnowym skacze wszystko naraz: dolna część przenosi się
-     *  spod obrazu na bok albo z powrotem. Pierwsza runda mierzy wtedy stan
-     *  sprzed przebudowy i panel zastyga w połowie drogi – złapał to zestaw
-     *  `panel-kamery-miesci` na zwinięciu powiększonego panelu z powrotem
-     *  do rogu.
-     *
-     *  Więc powtarzamy, dopóki liczba się zmienia. Zbieżne jest to dlatego,
-     *  że każda kolejna runda startuje z układu bliższego docelowemu; limit
-     *  rund jest bezpiecznikiem na wypadek układu, który oscyluje.
-     *
-     *  Rund jest sześć, nie trzy. Przy trzech zestaw złapał układ zatrzymany
-     *  w pół drogi: panel 1440×700 z rozwiniętymi nastawami kończył z dolną
-     *  częścią wystającą o 50 px, choć miał jeszcze 111 px szerokości do
-     *  oddania. Każda runda zwęża panel, przez co tekst zawija się na więcej
-     *  wierszy i paski rosną – a więc trzeba jeszcze jednej rundy. Sześć
-     *  wystarcza z zapasem, a kosztuje kilka klatek przy zdarzeniu, które
-     *  zdarza się przy otwarciu panelu i przy zmianie rozmiaru okna. */
-    if (runda < 6 && panel.style.getPropertyValue('--live-chrome') !== przed) {
-      requestAnimationFrame(() => dopasujPanelKamery(runda + 1));
-    }
+    if (!pole) return;
+    const vv = window.visualViewport;
+    const dol = vv ? vv.height + vv.offsetTop : window.innerHeight;
+    const odDolu = Math.max(0, dol - pole.getBoundingClientRect().top);
+    document.documentElement.style.setProperty('--composer-h', `${Math.round(odDolu)}px`);
   }
   window.addEventListener('resize', dopasujPanelKamery);
+  window.visualViewport?.addEventListener('resize', dopasujPanelKamery);
 
   /* Aktualna treść paska statusu. Trzymana w zmiennej, a nie odczytywana
      z DOM-u, bo pasek bywa UKRYTY – a wtedy `textContent` mówiłby o elemencie,
@@ -201,20 +130,16 @@ function utworzKamere(z) {
      się do tej wartości. */
   let statusKamery = '';
 
-  /** Ustaw pasek statusu pod obrazem i to, co chowa się pod ⓘ w nagłówku.
+  /** Ustaw pigułkę wyniku na kadrze i wyjaśnienie pod obrazem.
    *
-   *  PODZIAŁ JEST NA STAN I NA WYJAŚNIENIE, nie na krótkie i długie.
-   *  W pasku stoi to, co zmienia się na bieżąco i po co się na niego patrzy –
-   *  „person po lewej", „nic nie wykryto". Wyjaśnienia w rodzaju „uruchom
-   *  `python service.py` na komputerze z GPU" to instrukcja do przeczytania
-   *  raz w życiu; wisząc nad podglądem zabierała jedną trzecią panelu
-   *  na telefonie. Idzie więc pod ⓘ w rogu nagłówka, gdzie nie kosztuje
-   *  ani jednej linijki.
+   *  PODZIAŁ JEST NA STAN I NA WYJAŚNIENIE. Na kadrze stoi to, co zmienia
+   *  się na bieżąco („Widzę: człowiek po lewej”). Wyjaśnienie („komputer ze
+   *  zmysłami nie odpowiada…”) idzie do treści pod obrazem (na komputerze –
+   *  do panelu obok), a nie do dymku nad obrazem: dymek ⓘ zasłaniał pół
+   *  kadru (runda 8, zrzut 18).
    *
-   *  Pusty `tekst` UKRYWA pasek zamiast zostawiać pustą ramkę z obramowaniem.
-   *
-   *  @param {string} tekst  bieżący stan; pusty = pasek znika
-   *  @param {string} [szczegoly] wyjaśnienie chowane pod ⓘ; puste = ⓘ znika
+   *  @param {string} tekst  bieżący stan; pusty = pigułka znika
+   *  @param {string} [szczegoly] wyjaśnienie; puste = znika
    */
   function ustawStatusKamery(tekst, szczegoly = '') {
     statusKamery = String(tekst || '');
@@ -223,14 +148,11 @@ function utworzKamere(z) {
       el.textContent = statusKamery;
       el.hidden = !statusKamery;
     }
-    const info = $('live-info');
-    const dymek = $('live-info-box');
-    if (info && dymek) {
-      info.hidden = !szczegoly;
-      dymek.textContent = szczegoly;
-      if (!szczegoly) pokazDymekKamery(false);
+    const wyj = $('live-wyjasnienie');
+    if (wyj) {
+      wyj.textContent = szczegoly;
+      wyj.hidden = !szczegoly;
     }
-    dopasujPanelKamery();
   }
 
   /** Status „nic się jeszcze nie wydarzyło" – jeden dla wszystkich miejsc,
@@ -248,57 +170,9 @@ function utworzKamere(z) {
     // nic nie przyjdzie, więc samotny wielokropek wisiał pod obrazem bez końca.
     const zmyslyDzialaja = senses().online && senses().caps.yolo && liveRozpoznawanie;
     // Członek bez zgody na zmysły: komputer działa, tylko nie dla niego (zespół IT, runda 5).
-    ustawStatusKamery(zmyslyDzialaja ? '…' : '', zmyslyDzialaja || (liveRozpoznawanie === false && senses().online) ? '' : t(senses().tylkoWlasciciel ? 'liveNotForYou' : 'liveNoSenses'));
-  }
-
-  /** Pokaż albo schowaj dymek ⓘ. Dymek leży NAD treścią panelu, więc jego
-   *  pojawienie się niczego nie przesuwa – o to w tej zmianie chodziło. */
-  function pokazDymekKamery(widoczny) {
-    const info = $('live-info');
-    const dymek = $('live-info-box');
-    if (!info || !dymek) return;
-    dymek.hidden = !widoczny;
-    info.setAttribute('aria-expanded', widoczny ? 'true' : 'false');
-    info.classList.toggle('aktywny', widoczny);
-  }
-
-  {
-    const info = $('live-info');
-    const dymek = $('live-info-box');
-    if (info && dymek) {
-      /* Dotknięcie PRZEŁĄCZA na stałe, najechanie tylko podgląda.
-         Na telefonie nie ma najeżdżania, więc samo `:hover` zostawiłoby
-         treść nieosiągalną; na desktopie samo klikanie byłoby zbędnym
-         krokiem, skoro kursor i tak tam jest. Dlatego oba, a `przypiety`
-         pilnuje, żeby zjechanie kursorem nie zamknęło czegoś, co użytkownik
-         otworzył celowo. */
-      let przypiety = false;
-      info.addEventListener('click', (e) => {
-        e.stopPropagation();
-        /* Przełączamy WŁASNY stan, a nie widoczność dymka. Pierwsza wersja
-           czytała `dymek.hidden` – i wywracała się na tym, że kliknięcie myszą
-           poprzedza `mouseenter`, który dymek już pokazał. Klik odczytywał więc
-           „otwarty" i natychmiast go zamykał. Na telefonie działałoby (nie ma
-           najeżdżania), na myszy nie – czyli usterka widoczna tylko na jednym
-           z dwóch sposobów obsługi. */
-        przypiety = !przypiety;
-        pokazDymekKamery(przypiety);
-      });
-      info.addEventListener('mouseenter', () => pokazDymekKamery(true));
-      info.addEventListener('mouseleave', () => { if (!przypiety) pokazDymekKamery(false); });
-      // Kliknięcie gdziekolwiek indziej zamyka – tak jak każdy inny dymek.
-      document.addEventListener('click', () => {
-        if (!przypiety) return;
-        przypiety = false;
-        pokazDymekKamery(false);
-      });
-      dymek.addEventListener('click', (e) => e.stopPropagation());
-      info.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        przypiety = false;
-        pokazDymekKamery(false);
-      });
-    }
+    const wyjasnienie = zmyslyDzialaja || !liveRozpoznawanie ? '' : t(senses().tylkoWlasciciel ? 'liveNotForYou' : 'liveNoSenses');
+    ustawStatusKamery(zmyslyDzialaja ? '…' : (liveRozpoznawanie && !senses().tylkoWlasciciel ? t('live.samPodglad') : ''), wyjasnienie);
+    pokazRozpoznawanie();
   }
 
   /* Wymiary strumienia bywają gotowe dopiero po chwili od podłączenia, więc
@@ -442,7 +316,43 @@ function utworzKamere(z) {
     img.src = `/api/kinect/stream?stream=${stream}&fps=${liveFps}&t=${Date.now()}`;
   }
 
-  async function startLive() {
+  /* Widok na cały ekran albo okienko przy rozmowie; ostatni wybór zostaje
+     zapamiętany. Pełny ekran jest modalny (fokus w środku, Esc i „wstecz”
+     Androida zamykają – dlatego wpis w historii), okienko nie: przy nim
+     działają gesty przewijania i wysyłania do rozmowy. */
+  let wpisHistorii = false;
+  /* history.back() dochodzi jako popstate ASYNCHRONICZNIE – przy zmianie
+     źródła (zamknij + otwórz) docierał już po ponownym otwarciu i zamykał
+     nowy podgląd. Własne cofnięcia liczymy i ich popstate pomijamy. */
+  let wlasneCofniecia = 0;
+  function cofnijWpis() {
+    if (!wpisHistorii) return;
+    wpisHistorii = false;
+    wlasneCofniecia++;
+    try { history.back(); } catch { wlasneCofniecia--; }
+  }
+  function trybKamery() {
+    try { return localStorage.getItem('cosmos.kameraTryb') === 'mini' ? 'mini' : 'pelny'; } catch { return 'pelny'; }
+  }
+  function ustawTryb(tryb) {
+    const panel = $('live-panel');
+    panel.dataset.tryb = tryb;
+    try { localStorage.setItem('cosmos.kameraTryb', tryb); } catch { /* bez pamięci */ }
+    $('live-btn')?.classList.toggle('na-zywo', tryb === 'mini' && panel.style.display !== 'none');
+    if (tryb === 'pelny' && !wpisHistorii && panel.style.display !== 'none') {
+      try { history.pushState({ kamera: 1 }, ''); wpisHistorii = true; } catch { /* bez historii */ }
+    }
+    if (tryb === 'mini') cofnijWpis();
+    dopasujPanelKamery();
+  }
+  window.addEventListener('popstate', () => {
+    if (wlasneCofniecia > 0) { wlasneCofniecia--; return; }
+    if (!wpisHistorii) return;
+    wpisHistorii = false;
+    if ($('live-panel').style.display !== 'none' && $('live-panel').dataset.tryb === 'pelny') stopLive();
+  });
+
+  async function startLive(tryb) {
     $('live-source').value = liveSource;
     const video = $('live-video');
     const img = $('live-image');
@@ -451,12 +361,12 @@ function utworzKamere(z) {
     // niedostępnej kamerze nie dałoby się dosięgnąć listy źródeł – a to właśnie
     // tam jest Kinect, który kamery przeglądarki w ogóle nie potrzebuje.
     $('live-panel').style.display = '';
+    ustawTryb(tryb === 'mini' || tryb === 'pelny' ? tryb : trybKamery());
     // Plan pokazujemy tylko wtedy, gdy wiemy GDZIE – bez współrzędnych
     // nie ma z czego policzyć pozycji Słońca, a pusty panel myli.
     fetch('/api/location').then((r) => r.json())
       .then((d) => { $('plan-box').hidden = !(d.wspolrzedne && d.wspolrzedne.lat); })
       .catch(() => {});
-    applyLiveExpanded();
     updateLiveRec();
 
     if (liveIsKinect()) {
@@ -501,7 +411,9 @@ function utworzKamere(z) {
     startDlonie();
   }
 
-  function stopLive() {
+  /** @param {boolean} [naChwile] zamknięcie przed ponownym otwarciem (zmiana
+   *  źródła) – wpis w historii zostaje, „wstecz” dalej zamyka kamerę. */
+  function stopLive(naChwile) {
     clearInterval(liveTimer); liveTimer = null;
     stopDlonie();
     stopKinectStream();
@@ -509,8 +421,9 @@ function utworzKamere(z) {
     $('live-video').srcObject = null;
     $('live-panel').style.display = 'none';
     $('plan-box').hidden = true;
-    // Dymek ⓘ nie może przetrwać zamknięcia panelu – przy następnym otwarciu
-    // wisiałby otwarty nad obrazem, opisując stan sprzed kilku godzin.
+    $('live-btn')?.classList.remove('na-zywo');
+    if (naChwile !== true) cofnijWpis();
+    // Wyjaśnienie sprzed godzin nie może czekać na następne otwarcie.
     ustawStatusKamery('');
     livePrevObjects = '';
   }
@@ -525,6 +438,7 @@ function utworzKamere(z) {
     try { await liveDetectKrok(); } finally { detekcjaWToku = false; }
   }
   async function liveDetectKrok() {
+    pokazRozpoznawanie();   // stan komputera ze zmysłami zmienia się w tle
     const media = liveMedia();
     const { w, h } = liveMediaSize();
     if (!w || !h) return;
@@ -835,6 +749,8 @@ function utworzKamere(z) {
   const krotkiAdres = (adres) => { try { return new URL(adres).hostname.replace(/^www\./, ''); } catch { return String(adres || ''); } };
 
   function pokazGesty() {
+    const ile = $('live-gesty-ile');
+    if (ile) ile.textContent = wzorceGestow.length ? t('live.gestyIle', { n: wzorceGestow.length }) : '';
     const lista = $('gesty-lista');
     if (!lista) return;
     lista.replaceChildren();
@@ -937,21 +853,26 @@ function utworzKamere(z) {
 
   // O tym, czy panel jest otwarty, decyduje jego widoczność – nie obecność
   // strumienia. Przy źródle Kinect strumienia z kamery nie ma wcale.
+  // Ikona w pasku: zamknięta kamera → otwórz (w zapamiętanym trybie);
+  // okienko → pełny ekran. Pełny ekran zasłania pasek, zamyka go „×”.
   $('live-btn').addEventListener('click', () => {
-    const open = $('live-panel').style.display !== 'none';
-    open ? stopLive() : startLive();
+    const panel = $('live-panel');
+    if (panel.style.display === 'none') startLive();
+    else if (panel.dataset.tryb === 'mini') ustawTryb('pelny');
+    else stopLive();
   });
   $('live-close').addEventListener('click', stopLive);
-
-  // Powiększenie zapamiętujemy – kto raz chce duży podgląd, zwykle chce go zawsze.
-  function applyLiveExpanded() {
-    const on = localStorage.getItem('cosmos.liveExpanded') === '1';
-    $('live-panel').classList.toggle('expanded', on);
-    $('live-expand').title = t(on ? 'live.shrink' : 'live.expand');
-    // Powiększenie zmienia szerokość, ta zmienia zawijanie statusu, a to
-    // wysokość pasków – czyli dokładnie liczbę, z której liczy się szerokość.
-    dopasujPanelKamery();
-  }
+  $('live-zamknij-mini').addEventListener('click', stopLive);
+  $('live-do-okienka').addEventListener('click', () => ustawTryb('mini'));
+  $('live-na-pelny').addEventListener('click', () => ustawTryb('pelny'));
+  $('live-gesty-btn').addEventListener('click', () => {
+    const g = $('live-gesty');
+    g.open = !g.open;
+    $('live-gesty-btn').setAttribute('aria-expanded', String(g.open));
+    if (g.open) g.scrollIntoView({ block: 'nearest' });
+  });
+  $('live-wyjasnienie').addEventListener('click', (e) => e.currentTarget.classList.toggle('rozwiniete'));
+  $('live-gesty').addEventListener('toggle', () => $('live-gesty-btn').setAttribute('aria-expanded', String($('live-gesty').open)));
   $('live-flip').addEventListener('click', async () => {
     const next = cameraFacing() === 'environment' ? 'user' : 'environment';
     const video = $('live-video');
@@ -963,16 +884,27 @@ function utworzKamere(z) {
     if (r.ok) ustawStatusSpoczynkowy();
     else ustawStatusKamery(bladKamery(r.error));
   });
-  $('live-expand').addEventListener('click', () => {
-    const on = $('live-panel').classList.contains('expanded');
-    localStorage.setItem('cosmos.liveExpanded', on ? '0' : '1');
-    applyLiveExpanded();
-  });
+  /** Rozpoznawanie ma trzy stany widoczne SŁOWAMI, nie tylko kolorem kropki:
+   *  wł. (zaznacza), czeka (komputer ze zmysłami nie odpowiada), wył. (sam
+   *  podgląd) – oraz „niedostępne”, gdy konto nie ma zmysłów. Dawniej przycisk
+   *  świecił „włączony”, a nic nie robił (runda 8). */
   function pokazRozpoznawanie() {
-    $('live-rozpoznawanie').setAttribute('aria-pressed', String(liveRozpoznawanie));
+    const b = $('live-rozpoznawanie');
+    const stan = $('live-rozp-stan');
+    if (!b || !stan) return;
+    const brak = Boolean(senses().tylkoWlasciciel);
+    const dziala = senses().online && senses().caps && senses().caps.yolo;
+    const klucz = brak ? 'live.stanBrak' : !liveRozpoznawanie ? 'live.stanWyl' : dziala ? 'live.stanWl' : 'live.stanCzeka';
+    b.setAttribute('aria-pressed', String(liveRozpoznawanie && !brak));
+    if (brak) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+    stan.textContent = t(klucz);
+    stan.classList.toggle('czeka', klucz === 'live.stanCzeka');
+    b.title = t(brak ? 'liveNotForYou' : 'live.rozpoznawanieTytul');
   }
   pokazRozpoznawanie();
   $('live-rozpoznawanie').addEventListener('click', () => {
+    // Bez zmysłów na koncie przełączanie nic nie da – pokaż dlaczego.
+    if (senses().tylkoWlasciciel) { ustawStatusKamery(statusKamery, t('liveNotForYou')); return; }
     liveRozpoznawanie = !liveRozpoznawanie;
     try { localStorage.setItem('cosmos.liveRozpoznawanie', liveRozpoznawanie ? '1' : '0'); } catch { /* tryb prywatny */ }
     pokazRozpoznawanie();
@@ -997,8 +929,9 @@ function utworzKamere(z) {
     // Przełączenie źródła to zamknięcie jednego strumienia i otwarcie drugiego –
     // inaczej kamera zostałaby zajęta albo Kinect odpytywany w tle.
     const wasOpen = $('live-panel').style.display !== 'none';
-    stopLive();
-    if (wasOpen) await startLive();
+    const tryb = $('live-panel').dataset.tryb;
+    stopLive(true);
+    if (wasOpen) await startLive(tryb);
   });
 
   /** Zatrzymaj cykliczne wykrywanie (YOLO co 3 s), zostawiając podgląd.
@@ -1007,11 +940,17 @@ function utworzKamere(z) {
 
   // ręczna migawka do osi czasu (Digital Time Machine)
   $('live-snapshot').addEventListener('click', async () => {
-    const btn = $('live-snapshot'); const prev = btn.textContent;
+    const btn = $('live-snapshot');
     btn.disabled = true;
     const ok = await captureTimelineSnapshot();
-    btn.textContent = ok ? t('tm.saved') : prev;
-    setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1400);
+    btn.classList.toggle('zapisano', ok);
+    btn.setAttribute('aria-label', t(ok ? 'tm.saved' : 'tm.snapshot'));
+    if (ok) ustawStatusKamery(t('tm.saved'), $('live-wyjasnienie')?.textContent || '');
+    setTimeout(() => {
+      btn.classList.remove('zapisano');
+      btn.setAttribute('aria-label', t('tm.snapshot'));
+      btn.disabled = false;
+    }, 1400);
   });
 
   return { updateLiveRec, dopasujPanelKamery, startLive, stopLive, wstrzymajWykrywanie, klatkiKinecta, ustawStatusKamery };

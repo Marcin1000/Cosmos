@@ -227,7 +227,7 @@
         <button class="icon-btn tts-toggle" id="tts-toggle" data-i18n-title="ttsRead" title="Czytaj odpowiedzi na głos" aria-label="Czytaj odpowiedzi na głos" aria-pressed="false">
           <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9.5 9.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-waves"/><path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="tts-skos"/></svg>
         </button>
-        <button class="icon-btn" id="live-btn" data-i18n-title="liveView" title="Podgląd kamery na żywo" aria-label="Podgląd kamery na żywo">
+        <button class="icon-btn" id="live-btn" data-i18n-title="liveView" data-i18n-aria="liveView" title="Kamera na żywo" aria-label="Kamera na żywo">
           <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
         </button>
         <button class="icon-btn" id="summarize-btn" data-i18n-title="summarize" title="Streść rozmowę" aria-label="Streść" style="display:none">
@@ -991,11 +991,11 @@
               <option value="zdjecie" data-i18n="opt.photo">Zdjęcie</option>
             </select>
             <select id="fp-sky" class="mono" data-i18n-aria="pl.skyAria" aria-label="Zachmurzenie">
-              <option value="" data-i18n="opt.skyForecast">🌦 Z prognozy</option>
-              <option value="bezchmurnie" data-i18n="opt.skyClear">☀ Bezchmurnie</option>
-              <option value="lekkie" data-i18n="opt.skyLight">🌤 Lekkie</option>
-              <option value="pochmurno" data-i18n="opt.skyCloudy">☁ Pochmurno</option>
-              <option value="deszcz" data-i18n="opt.skyRain">🌧 Deszcz</option>
+              <option value="" data-i18n="opt.skyForecast">Z prognozy</option>
+              <option value="bezchmurnie" data-i18n="opt.skyClear">Bezchmurnie</option>
+              <option value="lekkie" data-i18n="opt.skyLight">Lekkie chmury</option>
+              <option value="pochmurno" data-i18n="opt.skyCloudy">Pochmurno</option>
+              <option value="deszcz" data-i18n="opt.skyRain">Deszcz</option>
             </select>
           </div>
           <div class="plener-grid3">
@@ -1110,135 +1110,139 @@
   </div>
 
   <!-- ================= PANEL: KAMERA NA ŻYWO ================= -->
-  <div class="live-panel" id="live-panel" style="display:none" role="region" data-i18n-aria="liveTitle" aria-label="Kamera na żywo">
-    <div class="live-head">
-      <span class="live-title mono" data-i18n="liveTitle">Kamera na żywo</span>
+  <!-- KAMERA NA ŻYWO – widok na cały ekran albo okienko przy rozmowie.
+       Marcin (runda 8): pływający panel „kiepsko wyglądał i źle składał się
+       z resztą”, w przeglądarce nie było widać nastaw, a w poziomie wyglądał
+       „tragicznie”. Teraz jak tryb głosowy: własna, ciemna scena na cały ekran
+       (data-tryb="pelny") albo sam obraz w okienku nad polem wiadomości
+       (data-tryb="mini") – do gestów przy rozmowie. Jeden HTML, układ robi CSS:
+       telefon pion, telefon poziom (szyna po prawej), komputer (panel obok). -->
+  <div class="live-panel kam" id="live-panel" style="display:none" data-tryb="pelny" role="dialog"
+       data-i18n-aria="liveTitle" aria-label="Kamera na żywo">
+    <div class="kam-gora">
+      <button type="button" class="kam-ikona" id="live-close" data-i18n-aria="close" data-i18n-title="close" title="Zamknij" aria-label="Zamknij">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <span class="kam-tytul mono" data-i18n="liveTitle">Kamera na żywo</span>
+      <label class="kam-zrodlo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+        <select id="live-source" data-i18n-aria="live.source" aria-label="Źródło obrazu">
+          <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
+          <option value="kinect-color" class="tylko-wlasciciel" data-i18n="live.srcKinectColor">Kinect – obraz</option>
+          <option value="kinect-depth" class="tylko-wlasciciel" data-i18n="live.srcKinectDepth">Kinect – głębia</option>
+        </select>
+      </label>
       <span class="live-rec mono" id="live-rec" style="display:none"><span class="live-rec-dot"></span><span data-i18n="tm.rec">ZAPIS</span></span>
-      <button class="icon-btn" id="live-flip" data-i18n-title="cam.flip" title="Przełącz kamerę" aria-label="Przełącz kamerę" hidden>
-        <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-13.7-5.3L4 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <button type="button" class="kam-ikona" id="live-flip" data-i18n-title="cam.flip" data-i18n-aria="cam.flip" title="Przełącz kamerę" aria-label="Przełącz kamerę" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-13.7-5.3L4 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 13.7 5.3L20 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <!-- ⓘ W ROGU, RAZEM Z POZOSTAŁYMI IKONAMI.
-           Wyjaśnienia bywają na sześć wierszy i wiszące nad podglądem
-           zabierały jedną trzecią panelu. Tutaj nie kosztują ani jednej
-           linijki, a pojawiają się dopiero wtedy, gdy jest co wyjaśnić:
-           przycisk stoi ukryty, dopóki nie ma treści. -->
-      <button class="icon-btn live-info" id="live-info" hidden
-              aria-expanded="false" aria-controls="live-info-box"
-              data-i18n-title="live.infoTitle" data-i18n-aria="live.infoTitle"
-              title="Dlaczego bez rozpoznawania?" aria-label="Dlaczego bez rozpoznawania?">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor"/></svg>
-      </button>
-      <button class="icon-btn" id="live-expand" data-i18n-title="live.expand" title="Powiększ" aria-label="Powiększ">
-        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="icon-btn" id="live-close" data-i18n-aria="close" aria-label="Zamknij">
-        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <button type="button" class="kam-ikona" id="live-do-okienka" data-i18n-title="live.doOkienka" data-i18n-aria="live.doOkienka" title="Zmniejsz do okienka" aria-label="Zmniejsz do okienka">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="12" y="12" width="6.5" height="4.5" rx="1" fill="currentColor"/></svg>
       </button>
     </div>
-    <!-- Dymek ⓘ. Leży NAD treścią panelu (`position: absolute`), więc jego
-         pojawienie się niczego nie przesuwa i nie zmienia wysokości panelu –
-         a to właśnie przesuwanie było pierwotnym problemem. -->
-    <div class="live-info-box mono" id="live-info-box" role="note" hidden></div>
-    <div class="live-source">
-      <select id="live-source" class="mono" data-i18n-aria="live.source" aria-label="Źródło obrazu">
-        <option value="camera" data-i18n="live.srcCamera">Kamera przeglądarki</option>
-        <option value="kinect-color" class="tylko-wlasciciel" data-i18n="live.srcKinectColor">Kinect – obraz</option>
-        <option value="kinect-depth" class="tylko-wlasciciel" data-i18n="live.srcKinectDepth">Kinect – głębia</option>
-      </select>
-      <button type="button" class="live-rozpoznawanie mono" id="live-rozpoznawanie" aria-pressed="true"
-              data-i18n="live.rozpoznawanie" data-i18n-title="live.rozpoznawanieTytul"
-              title="Ramki, dłonie i gesty – włącz albo wyłącz rozpoznawanie">Rozpoznawanie</button>
-    </div>
+
     <div class="live-stage" id="live-stage">
       <video id="live-video" autoplay playsinline muted></video>
       <img id="live-image" alt="" hidden>
       <canvas id="live-overlay"></canvas>
       <canvas id="live-dlonie"></canvas>
+      <!-- Jedna pigułka wyniku na kadrze („Widzę: …”); pusta = znika. -->
+      <div class="live-status mono" id="live-status" role="status" hidden>–</div>
+      <!-- Okienko: tylko dwa przyciski, zero sterowania. -->
+      <div class="kam-mini-przyciski">
+        <button type="button" class="kam-ikona" id="live-na-pelny" data-i18n-title="live.naPelny" data-i18n-aria="live.naPelny" title="Pełny ekran" aria-label="Pełny ekran">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="kam-ikona" id="live-zamknij-mini" data-i18n-title="close" data-i18n-aria="close" title="Zamknij" aria-label="Zamknij">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <span class="kam-mini-etykieta mono" data-i18n="live.miniGesty">gesty</span>
     </div>
-    <!-- Wszystko pod obrazem PRZEWIJA SIĘ. Panel miał `overflow: hidden`,
-         więc gdy treść nie mieściła się w oknie, przycisk migawki po prostu
-         znikał poza krawędzią i nie dało się do niego dojechać. -->
+
+    <!-- Treść obok (komputer) albo pod obrazem (telefon): wyjaśnienie,
+         nastawy kadru i własne gesty. Na telefonie przewija się sama,
+         obraz i przyciski na dole zostają na miejscu. -->
     <div class="live-body" id="live-body">
-    <!-- STATUS ZNIKA, GDY NIE MA CO POWIEDZIEĆ.
-         Zostaje na żywe wyniki rozpoznawania („person po lewej"), a długie
-         wyjaśnienia – jak to o wyłączonym GPU – idą pod ⓘ w nagłówku panelu,
-         gdzie nie zabierają ani jednej linijki. -->
-    <div class="live-status mono" id="live-status" hidden>–</div>
-
-    <!-- Własne gesty: nagraj dłoń, nazwij, przypisz czynność (public/gesty.js,
-         nagrywanie i rozpoznawanie w pętli dłoni w kamera.js). -->
-    <details class="live-gesty" id="live-gesty">
-      <summary data-i18n="gest.tytul">Własne gesty</summary>
-      <ul class="gesty-lista" id="gesty-lista"></ul>
-      <div class="gest-nowy">
-        <input id="gest-nazwa" maxlength="40" data-i18n-ph="gest.nazwaPh" placeholder="Nazwa, np. Dwa palce w górę">
-        <select id="gest-czynnosc" data-i18n-aria="gest.czynnosc" aria-label="Co ma zrobić">
-          <option value="przewin-gora" data-i18n="gest.cz.przewin-gora">Przewiń rozmowę w górę</option>
-          <option value="przewin-dol" data-i18n="gest.cz.przewin-dol">Przewiń rozmowę w dół</option>
-          <option value="migawka" data-i18n="gest.cz.migawka">Zrób migawkę</option>
-          <option value="glos" data-i18n="gest.cz.glos">Włącz albo wyłącz tryb głosowy</option>
-          <option value="stop" data-i18n="gest.cz.stop">Przerwij odpowiedź i czytanie</option>
-          <option value="wyslij" data-i18n="gest.cz.wyslij">Wyślij tekst do Cosmosa</option>
-          <option value="otworz" data-i18n="gest.cz.otworz">Otwórz stronę</option>
-          <option value="znaczenie" data-i18n="gest.cz.znaczenie">Tylko znaczenie dla Cosmosa</option>
-        </select>
-        <input id="gest-parametr" maxlength="300" data-i18n-aria="gest.parametrTekst" aria-label="Tekst, który ma pójść do Cosmosa" hidden>
-        <input id="gest-znaczenie" maxlength="200" data-i18n-ph="gest.znaczeniePh" placeholder="Co znaczy – Cosmos dostanie to w rozmowie">
-        <div class="gest-przyciski">
-          <button type="button" class="btn-secondary" id="gest-nagraj" data-i18n="gest.nagraj">Nagraj gest</button>
-          <button type="button" class="btn-primary" id="gest-zapisz" data-i18n="gest.zapisz" disabled>Zapisz</button>
+      <section class="kam-sekcja kam-sekcja-rozp">
+        <h3 data-i18n="live.rozpoznawanieSekcja">Rozpoznawanie obrazu</h3>
+        <p class="kam-opis" data-i18n="live.rozpoznawanieOpis">Cosmos zaznacza na obrazie przedmioty, osoby, dłonie i gesty i wie o nich w rozmowie. Liczy to komputer ze zmysłami – bez niego działa sam podgląd i nastawy.</p>
+      </section>
+      <p class="kam-wyjasnienie" id="live-wyjasnienie" role="note" hidden></p>
+      <details class="plan-box" id="plan-box" hidden>
+        <summary class="plan-box-head" data-i18n-title="live.planTitle" data-i18n-aria="live.planTitle"
+                 title="Nastawy kadru" aria-label="Nastawy kadru">
+          <span class="plan-box-title mono" data-i18n="live.planTitle">Nastawy kadru</span>
+          <span class="plan-shot mono" id="plan-shot">–</span>
+          <svg class="plan-box-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </summary>
+        <div class="plan-row">
+          <select id="plan-gear" data-i18n-aria="live.planGear" aria-label="Sprzęt">
+            <option value="canon-r6ii" data-i18n="opt.fullFrame">Aparat pełnoklatkowy</option>
+            <option value="mavic-3" data-i18n="opt.drone">Dron</option>
+            <option value="telefon" data-i18n="opt.phone">Telefon</option>
+          </select>
+          <select id="plan-mode" data-i18n-aria="live.planMode" aria-label="Tryb">
+            <option value="wideo" data-i18n="opt.video25">Wideo 25</option>
+            <option value="wideo50" data-i18n="opt.video50">Wideo 50</option>
+            <option value="zdjecie" data-i18n="opt.photo">Zdjęcie</option>
+          </select>
+          <select id="plan-sky" data-i18n-aria="live.planSky" aria-label="Zachmurzenie">
+            <option value="" data-i18n="opt.skyForecast">Z prognozy</option>
+            <option value="bezchmurnie" data-i18n="opt.skyClear">Bezchmurnie</option>
+            <option value="lekkie" data-i18n="opt.skyLight">Lekkie chmury</option>
+            <option value="pochmurno" data-i18n="opt.skyCloudy">Pochmurno</option>
+            <option value="deszcz" data-i18n="opt.skyRain">Deszcz</option>
+            <option value="wnetrze" data-i18n="opt.skyIndoor">W pomieszczeniu</option>
+          </select>
         </div>
-        <p class="field-hint" id="gest-stan" role="status" aria-live="polite"></p>
-      </div>
-    </details>
+        <div class="plan-light mono" id="plan-light"></div>
+        <div class="plan-why" id="plan-why"></div>
+        <!-- Sterowanie aparatem po Wi-Fi jest w Plenerze, nie tutaj. Tu patrzy
+             się na kadr; zmiana nastaw w aparacie to osobna, świadoma czynność
+             i nie powinna dzielić miejsca z podglądem. -->
+      </details>
+      <details class="live-gesty" id="live-gesty">
+        <summary data-i18n="gest.tytul">Własne gesty</summary>
+        <ul class="gesty-lista" id="gesty-lista"></ul>
+        <div class="gest-nowy">
+          <input id="gest-nazwa" maxlength="40" data-i18n-ph="gest.nazwaPh" placeholder="Nazwa, np. Dwa palce w górę">
+          <select id="gest-czynnosc" data-i18n-aria="gest.czynnosc" aria-label="Co ma zrobić">
+            <option value="przewin-gora" data-i18n="gest.cz.przewin-gora">Przewiń rozmowę w górę</option>
+            <option value="przewin-dol" data-i18n="gest.cz.przewin-dol">Przewiń rozmowę w dół</option>
+            <option value="migawka" data-i18n="gest.cz.migawka">Zrób migawkę</option>
+            <option value="glos" data-i18n="gest.cz.glos">Włącz albo wyłącz tryb głosowy</option>
+            <option value="stop" data-i18n="gest.cz.stop">Przerwij odpowiedź i czytanie</option>
+            <option value="wyslij" data-i18n="gest.cz.wyslij">Wyślij tekst do Cosmosa</option>
+            <option value="otworz" data-i18n="gest.cz.otworz">Otwórz stronę</option>
+            <option value="znaczenie" data-i18n="gest.cz.znaczenie">Tylko znaczenie dla Cosmosa</option>
+          </select>
+          <input id="gest-parametr" maxlength="300" data-i18n-aria="gest.parametrTekst" aria-label="Tekst, który ma pójść do Cosmosa" hidden>
+          <input id="gest-znaczenie" maxlength="200" data-i18n-ph="gest.znaczeniePh" placeholder="Co znaczy – Cosmos dostanie to w rozmowie">
+          <div class="gest-przyciski">
+            <button type="button" class="btn-secondary" id="gest-nagraj" data-i18n="gest.nagraj">Nagraj gest</button>
+            <button type="button" class="btn-primary" id="gest-zapisz" data-i18n="gest.zapisz" disabled>Zapisz</button>
+          </div>
+          <p class="field-hint" id="gest-stan" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+    </div>
 
-    <!-- Plan zdjęciowy: kadr, światło i nastawy. Liczone dla miejsca,
-         w którym stoisz, więc działa w terenie z telefonu. -->
-    <!-- ZWINIĘTE DOMYŚLNIE. Rozwinięte pudełko zajmowało na telefonie ponad
-         jedną trzecią panelu, a panel i tak bierze 743 z 844 px ekranu.
-         W jednej linijce zostaje to, po co się tu patrzy – czas, przysłona
-         i ISO; listy i uzasadnienie są o jedno dotknięcie dalej.
-
-         `<details>`, a nie własny przełącznik: klawiatura, czytnik ekranu
-         i „znajdź na stronie" działają wtedy same z siebie.
-
-         Tytuł jest inny niż w Plenerze („Plan zdjęciowy”), bo i rzecz jest
-         inna: tam liczy się dla miejsca i godziny, tu dla JASNOŚCI TEGO
-         KADRU, na który patrzysz. -->
-    <details class="plan-box" id="plan-box" hidden>
-      <summary class="plan-box-head" data-i18n-title="live.planTitle" data-i18n-aria="live.planTitle"
-               title="Nastawy kadru" aria-label="Nastawy kadru">
-        <span class="plan-box-title mono" data-i18n="live.planTitle">Nastawy kadru</span>
-        <span class="plan-shot mono" id="plan-shot">–</span>
-        <svg class="plan-box-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </summary>
-      <div class="plan-row">
-        <select id="plan-gear" class="mono" aria-label="Sprzęt">
-          <option value="canon-r6ii" data-i18n="opt.fullFrame">Aparat pełnoklatkowy</option>
-          <option value="mavic-3" data-i18n="opt.drone">Dron</option>
-          <option value="telefon" data-i18n="opt.phone">Telefon</option>
-        </select>
-        <select id="plan-mode" class="mono" aria-label="Tryb">
-          <option value="wideo" data-i18n="opt.video25">Wideo 25</option>
-          <option value="wideo50" data-i18n="opt.video50">Wideo 50</option>
-          <option value="zdjecie" data-i18n="opt.photo">Zdjęcie</option>
-        </select>
-        <select id="plan-sky" class="mono" aria-label="Zachmurzenie">
-          <option value="" data-i18n="opt.skyForecast">🌦 Z prognozy</option>
-          <option value="bezchmurnie" data-i18n="opt.skyClear">☀ Bezchmurnie</option>
-          <option value="lekkie" data-i18n="opt.skyLight">🌤 Lekkie</option>
-          <option value="pochmurno" data-i18n="opt.skyCloudy">☁ Pochmurno</option>
-          <option value="deszcz" data-i18n="opt.skyRain">🌧 Deszcz</option>
-          <option value="wnetrze" data-i18n="opt.skyIndoor">🏠 W pomieszczeniu</option>
-        </select>
-      </div>
-      <div class="plan-light mono" id="plan-light"></div>
-      <div class="plan-why" id="plan-why"></div>
-      <!-- Sterowanie aparatem po Wi-Fi jest w Plenerze, nie tutaj. Tu patrzy
-           się na kadr; zmiana nastaw w aparacie to osobna, świadoma czynność
-           i nie powinna dzielić miejsca z podglądem. -->
-    </details>
-    <button class="btn-secondary" id="live-snapshot" data-i18n="tm.snapshot" style="margin:8px 14px 12px;width:calc(100% - 28px)">Zrób migawkę</button>
+    <div class="kam-ster">
+      <button type="button" class="kam-przel" id="live-rozpoznawanie" aria-pressed="true"
+              data-i18n-title="live.rozpoznawanieTytul" title="Zaznaczaj na obrazie przedmioty, osoby, dłonie i gesty">
+        <span class="kam-przel-ikona"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span>
+        <span class="kam-przel-nazwa" data-i18n="live.rozpoznawanie">Rozpoznawanie</span>
+        <span class="kam-przel-stan mono" id="live-rozp-stan"></span>
+      </button>
+      <button type="button" class="kam-migawka" id="live-snapshot" data-i18n-aria="tm.snapshot" aria-label="Zrób migawkę">
+        <i aria-hidden="true"></i><span class="kam-migawka-tekst" data-i18n="tm.snapshot">Zrób migawkę</span>
+      </button>
+      <button type="button" class="kam-przel" id="live-gesty-btn" aria-expanded="false" aria-controls="live-gesty">
+        <span class="kam-przel-ikona"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7-2.6 0-4.2-1.3-5.4-3.4L3.9 13.6a1.4 1.4 0 0 1 2.3-1.6L8 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="kam-przel-nazwa" data-i18n="live.gesty">Gesty</span>
+        <span class="kam-przel-stan mono" id="live-gesty-ile"></span>
+      </button>
     </div>
   </div>
 

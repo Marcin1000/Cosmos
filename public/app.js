@@ -5485,14 +5485,13 @@ $('set-speak').addEventListener('change', (e) => {
    obserwujemy, która jest na wierzchu – reszta strony dostaje `inert`,
    fokus wchodzi do środka, a po zamknięciu wraca tam, skąd przyszedł. */
 {
-  /* Bez 'live-panel': to pływający panel OBOK rozmowy, nie okno modalne.
-     Z pułapką fokusu otwarta kamera blokowała pisanie i przewijanie rozmowy
-     – a gesty „przewiń” i „wyślij” działają właśnie przy otwartym panelu
-     (zespół IT, runda 7). */
-  const elementy = ['img-viewer', 'voice-overlay', 'camera-modal', 'gallery-modal',
+  /* Kamera jest modalna tylko na pełnym ekranie. W okienku (data-tryb="mini")
+     stoi OBOK rozmowy: z pułapką fokusu blokowałaby pisanie i przewijanie,
+     a gesty „przewiń” i „wyślij” działają właśnie wtedy (zespół IT, runda 7). */
+  const elementy = ['img-viewer', 'voice-overlay', 'live-panel', 'camera-modal', 'gallery-modal',
     'timeline-modal', 'learn-modal', 'kb-modal', 'studio-modal', 'plener-modal', 'settings-modal']
     .map((id) => $(id)).filter(Boolean);
-  const widoczna = (w) => w.style.display !== 'none' && !w.hidden;
+  const widoczna = (w) => w.style.display !== 'none' && !w.hidden && !(w.id === 'live-panel' && w.dataset.tryb === 'mini');
   const skad = new Map();
   let poprzednio = new Set();
   const FOKUSOWALNE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), '
@@ -5522,9 +5521,12 @@ $('set-speak').addEventListener('change', (e) => {
       if (!otwarte.length && wroc && document.contains(wroc) && typeof wroc.focus === 'function') wroc.focus({ preventScroll: true });
     }
     poprzednio = new Set(otwarte);
+    // Okienko kamery to nie okno dialogowe – czytnik ekranu nie może go tak ogłaszać.
+    const kam = $('live-panel');
+    if (kam && !otwarte.includes(kam)) kam.removeAttribute('aria-modal');
   };
   const obserwator = new MutationObserver(przelicz);
-  for (const w of elementy) obserwator.observe(w, { attributes: true, attributeFilter: ['style', 'hidden'] });
+  for (const w of elementy) obserwator.observe(w, { attributes: true, attributeFilter: ['style', 'hidden', 'data-tryb'] });
 }
 
 // ----------------------------------------------------------------
