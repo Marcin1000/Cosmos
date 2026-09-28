@@ -37,7 +37,9 @@ const ok = (warunek, opis) => { console.log(`${warunek ? 'OK ' : 'ZLE'} ${opis}`
   k.wyczyscPamiecOsoby(magazyn);
   const ust = JSON.parse(dane.get('cosmos.settings'));
   ok(!ust.systemPrompt && !ust.modelOpenai, `6. po zmianie osoby instrukcja i modele poprzedniej znikają (${JSON.stringify(ust)})`);
-  ok(ust.lang === 'pl' && ust.speak === true && dane.get('cosmos.micId') === 'mikrofon-1', '6. ustawienia urządzenia (język, lektor, mikrofon) zostają');
+  ok(ust.lang === 'pl' && dane.get('cosmos.micId') === 'mikrofon-1', '6. ustawienia urządzenia (język, mikrofon) zostają');
+  // Runda 8: czytanie na głos NIE zostaje – odpowiedzi nowej osoby czytałyby się na głos bez jej wiedzy.
+  ok(ust.speak !== true, '6. czytanie na głos poprzedniej osoby wyłączone');
   ok(!dane.has('cosmos.ujecia.x') && !dane.has('cosmos.bieg'), '6. kadry i bieg poprzedniej osoby wyczyszczone');
 }
 
