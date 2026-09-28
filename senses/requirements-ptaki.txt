@@ -1,0 +1,24 @@
+# Sam BirdNET (rozpoznawanie ptaków) na serwerze bez GPU – dla scripts/instaluj-ptaki.sh.
+# Pełne zmysły domowe: senses/requirements.txt.
+#
+# Interpreter: ai-edge-litert (następca tflite-runtime; koła dla Pythona 3.10–3.14
+# i numpy 2). tflite-runtime kończy się na Pythonie 3.11 i pada z numpy 2, a pełny
+# tensorflow to ~600 MB. birdnetlib szuka tflite_runtime – podmienia go
+# senses/zgodnosc_litert.py. Model BirdNET V2.4 (51,7 MB) jest w kole birdnetlib.
+#
+# Przypięte to, od czego zależy wynik (model, interpreter); reszta w zakresach,
+# bo numpy 2.5 wymaga już Pythona 3.12 (Debian 12 ma 3.11 i dostaje 2.4).
+# Sprawdzone: 3.11 → numpy 2.4.6 + librosa 0.11.0; 3.12 i 3.13 → numpy 2.5.3 + librosa 1.0.0;
+# resampy 0.4.3, fastapi 0.141.1, uvicorn 0.54.0 (venv ok. 740–770 MB).
+birdnetlib==0.18.1
+ai-edge-litert==2.2.0
+numpy>=2.0,<3
+librosa>=0.10,<2
+resampy>=0.4,<1
+# birdnetlib/main.py importuje audioread, a nowy librosa już go nie dociąga.
+audioread>=3.0
+# pydub (zależność birdnetlib) potrzebuje audioop, usuniętego z Pythona 3.13.
+audioop-lts>=0.2; python_version >= "3.13"
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

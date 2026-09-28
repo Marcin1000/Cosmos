@@ -14,6 +14,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto(`${ADRES}/app`);
   await pg.click('#settings-btn');
+  await pg.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await pg.waitForTimeout(400);
 
   await pg.click('#fetch-models-cloud');
@@ -52,6 +53,7 @@ const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
   });
   await pg2.goto(`${ADRES}/app`);
   await pg2.click('#settings-btn');
+  await pg2.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await pg2.waitForTimeout(300);
   await pg2.click('#fetch-models-cloud');
   await pg2.waitForSelector('#check-all-cloud', { timeout: 15000 });

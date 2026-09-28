@@ -29,7 +29,7 @@ zadziała na Twoim sprzęcie albo nie ma jeszcze odbiorcy po stronie aplikacji.
 | Pamięć – `/embed` (bge-m3) | ✅ działa | wyszukiwanie w bazie wiedzy |
 | Dokumenty – `/extract` | ✅ działa | PDF/DOCX/XLSX/PPTX wrzucane do bazy wiedzy. Z `docling` albo `markitdown` czyta też SKANY (OCR) i zachowuje tabele oraz kolumny – bez nich pypdf oddaje ciąg luźnych liczb |
 | Powiększanie – `/upscale` | ✅ działa | przycisk ⤢ w Galerii; dodatkowo `pip install realesrgan basicsr` |
-| Ptaki – `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania. Współrzędne dokłada serwer – bez nich BirdNET szuka wśród gatunków całego świata |
+| Ptaki – `/ptak` (BirdNET) | ✅ działa | przycisk 🐦 w trybie głosowym; gatunek z 8 s nagrania, nazwa po polsku. Współrzędne dokłada serwer – bez nich BirdNET szuka wśród gatunków całego świata. Może też działać na samym serwerze, bez komputera w domu – patrz „Ptaki na serwerze” |
 | Sylwetka – `/pose` (MediaPipe) | ✅ działa | panel kamery pyta o postawę, gdy w kadrze jest osoba; mediapipe bez `solutions` idzie przez Tasks API |
 | Dłonie – `/dlonie` (MediaPipe) | ✅ działa | 21 punktów na dłoń, liczba i nazwy wyprostowanych palców, gest (pięść, znak V, kciuk…); model `gesture_recognizer.task` pobiera się sam |
 | `watcher.py` – ciągła percepcja | ✅ działa | webcam, telefon, aparat – a bez zwykłej kamery sam bierze obraz z Kinecta |
@@ -80,7 +80,7 @@ pip install piper-tts                                 # + głos (patrz niżej)
 pip install ultralytics opencv-python                 # + wzrok (rozpoznawanie obiektów)
 pip install mediapipe                                 # + sylwetka i gesty (model pobiera się przy pierwszej sylwetce)
 pip install sentence-transformers                     # + pamięć (wyszukiwanie semantyczne)
-pip install birdnetlib librosa resampy tensorflow      # + ptaki (gatunek z głosu, BirdNET)
+pip install -r requirements-ptaki.txt                 # + ptaki (gatunek z głosu, BirdNET, bez tensorflow)
 pip install pypdf python-docx openpyxl python-pptx    # + czytanie dokumentów do bazy wiedzy
 pip install docling                                   # + LEPSZE czytanie: skany (OCR), tabele, kolumny
 #   lżejsza alternatywa: pip install markitdown  (bez OCR, ale szybka i mała)
@@ -488,6 +488,7 @@ Wymaga `gphoto2` (Linux/macOS; na Windows przez WSL albo Canon EOS SDK).
 | `GET /kinect/status` | – | czy czujnik jest dostępny |
 | `GET /kinect/frame` | `?stream=color\|depth` | pojedyncza klatka JPEG |
 | `GET /kinect/stream` | `?stream=color\|depth&fps=15&quality=70` | strumień MJPEG – tego używa podgląd w Cosmosie |
+| `POST /ptak` | nagranie (WAV/MP3/FLAC) w ciele; nagłówki `X-Cosmos-Lat`, `X-Cosmos-Lon` (albo `?lat=&lon=`), `?jezyk=en` | `{gatunki: [{nazwa, nazwaEn, lacinska, pewnosc, odS, doS}], wykryc, zMiejscem}` |
 
 `/upscale` wymaga dodatkowo `pip install realesrgan basicsr` (i GPU dla sensownej
 szybkości); bez tego zwraca 501 z podpowiedzią. Pozostałe endpointy odpowiadają
@@ -513,6 +514,52 @@ stałe w zmiennych środowiskowych Windowsa.
 | `POSE_MODEL` | pobierany | model sylwetki dla mediapipe 0.10.30+ (`pose_landmarker_lite.task`); bez niego pobiera się sam przy pierwszej sylwetce |
 | `COSMOS_AGENT_DIR` | `~/.cosmos` | katalog agenta zmysłów: środowisko, dzienniki, głosy i pobrane modele (`modele/`) |
 | `COSMOS_RECORD_OUT` | – | folder na nagrania z `tether.py` (sterowanie aparatem) |
+| `SENSES_HOST` | `0.0.0.0` | adres nasłuchu; agent zmysłów i usługa ptaków na serwerze ustawiają `127.0.0.1` (usługa nie ma hasła) |
+| `COSMOS_ZMYSLY_TYLKO` | – | lista zmysłów, np. `ptak`: usługa odpowiada tylko na te trasy i `/health`, reszta 404, a `/health` nie zgłasza innych zmysłów. Tak działa usługa ptaków na serwerze |
+| `BIRDNET_ROZGRZEJ` | `1` | `0` wyłącza ładowanie BirdNET zaraz po starcie (w tle); `/health` ma pole `birdnet_gotowy`, prawdziwe dopiero po udanej rozgrzewce albo pierwszym nagraniu |
+| `PTAKI_NAZWY_PL` | `senses/nazwy_ptakow_pl.txt` | plik z polskimi nazwami gatunków (`Łacina_nazwa`, jak etykiety BirdNET) |
+
+## Ptaki na serwerze (bez komputera w domu)
+
+Rozpoznawanie ptaków nie potrzebuje karty graficznej: BirdNET liczy 8 s nagrania
+w 0,3–1 s na jednym rdzeniu zwykłego serwera. Dlatego może działać na samym VPS-ie
+i telefon w lesie nie zależy od tego, czy komputer w domu jest włączony. Instalacja
+to jedno polecenie na serwerze (szczegóły: `docs/START-TUTAJ.md`, KROK 6b):
+
+```bash
+sudo bash /opt/cosmos/scripts/instaluj-ptaki.sh
+```
+
+Skrypt sprawdza pamięć (≥ 700 MB dostępnej) i dysk (≥ 1,5 GB), zakłada środowisko
+w `/opt/cosmos-ptaki` (poza repozytorium), instaluje `requirements-ptaki.txt`,
+rozgrzewa model i zakłada usługę `cosmos-ptaki`: ta sama `service.py`, ale
+`COSMOS_ZMYSLY_TYLKO=ptak` (inne trasy odpowiadają 404), tylko `127.0.0.1:7061`,
+limit pamięci 900 MB i niższy priorytet niż Cosmos. Na koniec dopisuje
+`PTAKI_URL=http://127.0.0.1:7061` do `.env`. Próba bez roota i bez systemd:
+`BEZ_SYSTEMD=1 PREFIKS=/tmp/ptaki bash scripts/instaluj-ptaki.sh`.
+
+Kilka rzeczy, które wyszły przy przeglądzie i są teraz pilnowane:
+
+- **Zamek na całą analizę.** Jeden model w pamięci dla wszystkich osób, ale nigdy dwie
+  analizy naraz – interpreter TFLite nie jest wielowątkowy, a BirdNET trzyma wyniki
+  i sito gatunków między nagraniami. Bez zamka dwie osoby naraz dostawały błąd albo
+  cudze gatunki. Pilnuje tego `tests/atrapy/ptaki_zamek_test.py`.
+- **Sito miejsca zerowane przed każdym nagraniem** – nagranie bez współrzędnych nie
+  dostaje sita z poprzedniego nagrania (np. Biebrzy).
+- **Współrzędne w nagłówkach** `X-Cosmos-Lat` / `X-Cosmos-Lon` (adres `?lat=&lon=`
+  działa dalej), zaokrąglone do 0,1°; usługa nie prowadzi logu dostępu.
+- **Interpreter:** `ai-edge-litert` zamiast `tflite-runtime` (ten kończy się na
+  Pythonie 3.11 i pada z numpy 2) i zamiast pełnego tensorflow (~600 MB).
+  `zgodnosc_litert.py` podstawia go bibliotece birdnetlib. `/health` zgłasza
+  `birdnet` dopiero, gdy interpreter się wczytał.
+
+**Polskie nazwy.** `nazwa` jest po polsku („puszczyk”, „bogatka”), obok `nazwaEn`
+i `lacinska`. Źródło: oficjalne etykiety BirdNET V2.4 po polsku
+(`nazwy_ptakow_pl.txt`, 6522 gatunki); bez pliku usługa zna polskie nazwy
+kilkudziesięciu najczęstszych gatunków, a resztę podaje po angielsku.
+`?jezyk=en` (albo nagłówek `X-Cosmos-Jezyk: en`) – nazwa po angielsku.
+
+Licencja modelu BirdNET: CC BY-NC-SA 4.0 – użytek osobisty i niekomercyjny.
 
 ## Wydajność na RTX 3080
 

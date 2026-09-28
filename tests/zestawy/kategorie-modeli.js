@@ -110,6 +110,7 @@ up.listen(0, async () => {
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto('http://127.0.0.1:3060/app');
   await pg.evaluate(() => document.getElementById('settings-btn').click());
+  await pg.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await pg.waitForTimeout(400);
   await pg.evaluate(() => document.getElementById('fetch-models-cloud').click());
   await pg.waitForSelector('#check-all-cloud', { timeout: 15000 });

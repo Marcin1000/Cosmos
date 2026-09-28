@@ -264,7 +264,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
 
   const SILNIKI = [
     ['local', 'acc.engLocal'], ['openai', 'acc.engOpenai'], ['claude', 'acc.engClaude'], ['studio', 'acc.engStudio'],
-    ['szukanie', 'acc.engSzukanie'],
+    ['szukanie', 'acc.engSzukanie'], ['ptaki', 'acc.engPtaki'],
   ];
 
   function wierszOsoby(u) {

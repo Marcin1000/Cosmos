@@ -37,6 +37,7 @@ const { stan, naUzytkownika, istniejacy, wKontekscie, kto, czyWlasciciel, katalo
   zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
 const konta = require('./lib/konta.js');
 const agent = require('./lib/agent-zmyslow.js');
+const zmyslySerwera = require('./lib/zmysly-serwera.js');
 const silniki = require('./lib/silniki.js');
 ustawStraznikaSilnikow(silniki.wybierz);
 const { stanOsoby } = require('./lib/stan-osoby.js');
@@ -559,6 +560,9 @@ function sensesState() {
   return sensesCache.at ? sensesCache : sensesOdswiezanie.then(() => sensesCache);
 }
 
+// Łańcuch źródeł (ptaki) pomija dom znany jako offline – bez 10 s czekania na połączenie.
+agent.znajStanDomu(() => sensesCache);
+
 function moduleExists(...parts) {
   return fs.existsSync(path.join(__dirname, ...parts));
 }
@@ -858,6 +862,12 @@ async function handleStatus(req, res) {
   /* Bez zgody na zmysły przeglądarka nie może ich zobaczyć jako „online" –
      inaczej kierowałaby do nich mowę i wykrywanie, a dostawała 403. */
   if (!zmysly) results.senses = { online: false, caps: {}, tylkoWlasciciel: true };
+  /* Ptaki mają własną drogę (agent → serwer → dom): przycisk w przeglądarce
+     pyta o nią, a nie o zmysły domu – inaczej odmawiał, zanim cokolwiek
+     wysłał, choć serwer by rozpoznał (runda 8). Bez adresów. */
+  await zmyslySerwera.stanSerwera().catch(() => null);
+  const zrodlaPtakow = agent.zrodlaDla(kto(), '/ptak');
+  results.ptaki = { ok: zrodlaPtakow.length > 0, zrodlo: zrodlaPtakow[0] || '' };
   sendJson(res, 200, results);
 }
 

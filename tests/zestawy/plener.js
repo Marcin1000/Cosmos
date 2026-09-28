@@ -383,6 +383,7 @@ print('ZIP OK, punktow: %d' % n)
   await pg.keyboard.press('Escape');
   await pg.waitForTimeout(300);
   await pg.click('#settings-btn');
+  await pg.evaluate(() => document.querySelector('#settings-modal [data-cel="pamiec"]').click());   // Ustawienia to zakładki
   await pg.waitForTimeout(600);
   const wUstawieniach = await pg.evaluate(() => ({
     staryKorpus: Boolean(document.getElementById('set-body')),

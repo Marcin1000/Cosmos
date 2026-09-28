@@ -63,7 +63,7 @@ function lista(online) {
     await p.route('**/api/agent/polecenie?*', (r) => { polecen++; setTimeout(() => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }), 300); });
     await p.goto(`${S}/app`, { waitUntil: 'load' });
     await p.waitForFunction(() => document.querySelector('.app.gotowa') && typeof openSettings === 'function');
-    await p.evaluate(() => openSettings());
+    await p.evaluate(() => openSettings('zmysly'));
     await p.waitForSelector('.zm-komputer');
 
     /* ---- 1. Ludzkie zdanie przy upadku ---- */
@@ -103,14 +103,21 @@ function lista(online) {
     const offline = await p.evaluate(() => {
       const zd = document.querySelector('.zm-offline-zdanie');
       const nachodzi = [...document.querySelectorAll('.zm-skladnik')].some((w) => {
+        const st = w.querySelector('.zm-stan');
+        if (!st) return false;
         const a = w.querySelector('.zm-etykieta').getBoundingClientRect();
-        const s = w.querySelector('.zm-stan').getBoundingClientRect();
+        const s = st.getBoundingClientRect();
         return a.left < s.right && s.left < a.right && a.top < s.bottom && s.top < a.bottom;
       });
-      return { zdanie: zd ? zd.textContent : '', nachodzi };
+      // Jedno zdanie o niepołączonym komputerze na górze karty, nie pod każdym przełącznikiem (runda 8).
+      const karta = document.querySelector('.zm-komputer.offline');
+      const stany = [...karta.querySelectorAll('.zm-stan')].filter((x) => x.textContent.trim()).length;
+      const banery = karta.querySelectorAll('.zm-offline-zdanie').length;
+      return { zdanie: zd ? zd.textContent : '', nachodzi, stany, banery };
     });
     ok(/wyłączony|śpi|uśpiony|asleep|off/i.test(offline.zdanie), `5. niepołączony komputer: zdanie, co to znaczy („${offline.zdanie}”)`);
     ok(!offline.nachodzi, '5. na 360 px stan składnika nie nachodzi na jego etykietę');
+    ok(offline.banery === 1 && offline.stany === 0, `5. niepołączony: jeden baner, bez stanu pod każdym przełącznikiem (banerów ${offline.banery}, stanów ${offline.stany})`);
 
     ok(!bledy.length, `błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   } catch (e) {

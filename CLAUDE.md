@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 139 zestawów + 9 selftestów Pythona, ~12 min
+npm test                  # 140 zestawów + 10 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -141,6 +141,7 @@ robi większość szybkich zestawów.
 | `plener-trasy.js` | plan zdjęciowy, misja drona (KMZ), Canon, zestaw sprzętu |
 | `zmysly-proxy.js` | pośrednik do usługi zmysłów: ptak, wykrywanie, poza, Kinect |
 | `agent-zmyslow.js` | zmysły na komputerze KAŻDEJ osoby: parowanie kodem, długie odpytywanie, przełączniki, **`fetchZmyslow()` – jedyna droga do zmysłów** |
+| `zmysly-serwera.js` | zmysły na procesorze serwera – dziś tylko `/ptak` (BirdNET pod `PTAKI_URL`): biała lista tras, kolejka, jedno nagranie na osobę; trzecie źródło w `fetchZmyslow()` |
 | `os-czasu.js` | oś czasu migawek otoczenia |
 
 Źródła inteligencji za wspólnym interfejsem OpenAI-compatible:
@@ -298,7 +299,8 @@ Zasady, których nie wolno łamać:
 8. **Zmysły idą wyłącznie przez `fetchZmyslow()` z `lib/agent-zmyslow.js`** – nigdy
    `fetch(`${SENSES_URL}…`)` w nowym kodzie. Ona wybiera źródło dla bieżącej osoby: jej
    własny komputer (agent zmysłów) → domowe GPU właściciela, gdy `silniki.zmyslyDozwolone()`
-   → wyjątek `zmysly-niedostepne`. Czy osoba w ogóle ma zmysły: `zmyslyDostepne()`
+   → wyjątek `zmysly-niedostepne`. Dla `/ptak` łańcuch jest inny: jej komputer (z BirdNET)
+   → serwer (`lib/zmysly-serwera.js`, przyznanie `ptaki`) → dom. Czy osoba w ogóle ma zmysły: `zmyslyDostepne()`
    (trasa → 403, wyciąganie tekstu → pusty wynik). Adres domu (`SENSES_URL`,
    `LOCAL_BASE_URL`) i ścieżki serwera nie trafiają do członka ani w `/api/config`,
    ani w komunikatach błędów.

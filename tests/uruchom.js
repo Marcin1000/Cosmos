@@ -80,7 +80,7 @@ function selftestyPythona() {
       wyniki.push({ nazwa, kod: 1, wyjscie: (e.stdout || e.message || '').toString().trim().split('\n').pop() });
     }
   }
-  for (const f of ['piper_test.py', 'whisper_test.py']) {
+  for (const f of ['piper_test.py', 'whisper_test.py', 'ptaki_zamek_test.py']) {
     const p = path.join(__dirname, 'atrapy', f);
     if (!fs.existsSync(p)) continue;
     try {

@@ -112,7 +112,7 @@ if (!maPrzegladarke()) {
     ok(pom.samouczek && pom.samouczek.pominiety === true, '5. „Pomiń samouczek” zapamiętane');
 
     /* ---- 6. Kreator w Ustawieniach → Zmysły ---- */
-    await p.evaluate(() => openSettings());
+    await p.evaluate(() => openSettings('zmysly'));
     await p.waitForSelector('#zm-kreator .zm-podlacz');
     await p.evaluate(() => document.querySelector('#zm-kreator .zm-podlacz').click());
     await p.waitForSelector('#zm-kreator .zm-polecenie');

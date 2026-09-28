@@ -1,0 +1,173 @@
+/* Ptaki na serwerze – rozpoznawanie bez komputera w domu.
+
+   Marcin: „rozpoznawanie ptaków powinno działać bez komputera stacjonarnego
+   i lokalnego GPU. Masz telefon w lesie i chcesz, żeby wyszukał, jaki to
+   ptak, nie myśląc o tym, czy komputer w domu jest włączony”. Dziś dostawał
+   „działa na komputerze domowym, a ten teraz nie odpowiada”.
+
+   Prawdziwy serwer Cosmosa w trybie z kontami; komputer domowy (SENSES_URL)
+   martwy; usługę ptaków na serwerze (PTAKI_URL) udaje atrapa w tym procesie,
+   która odsyła skrót nagrania – dzięki temu widać, czy ktoś nie dostał
+   cudzego wyniku:
+     1. ptak działa bez domu: 200, polska nazwa, /api/status mówi „ptaki są”,
+     2. biała lista: /api/detect nie trafia na serwer (tylko /ptak),
+     3. kolejka: jedna analiza naraz, trzy czekają, reszta od razu 503 –
+        i każda osoba dostaje SWÓJ wynik,
+     4. ta sama osoba dwa nagrania naraz → drugie 429,
+     5. członek bez przyznania „Ptaki na serwerze” → 403, z przyznaniem → 200,
+     6. błąd usługi ze ścieżką z dysku (C:\Users\Marcin…) – członek dostaje
+        ogólne zdanie, bez ścieżki i bez adresu,
+     7. usługa padła → członek dostaje 503 w < 2 s, bez adresu,
+     8. nagranie większe niż 4 MB → 413 bez czytania,
+     9. współrzędne idą do usługi zaokrąglone do 0,1°, w nagłówkach, nie w adresie.
+*/
+const http = require('node:http');
+const crypto = require('node:crypto');
+const { serwerCosmosa, czekajNa, zabij } = require('../pomoc');
+
+const fail = [];
+const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) fail.push(opis); };
+
+const PORT = 3543;
+const PORT_PTAKOW = 7476;
+const ADRES = `http://127.0.0.1:${PORT}`;
+const HASLO = 'haslo-wlasciciela-ptaki';
+
+const wywolania = [];
+let tryb = 'ok';
+const atrapa = http.createServer((req, res) => {
+  const u = new URL(req.url, 'http://x');
+  const cialo = [];
+  req.on('data', (c) => cialo.push(c));
+  req.on('end', () => {
+    const json = (kod, d) => { res.writeHead(kod, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
+    if (u.pathname === '/health') return json(200, { birdnet: true, birdnet_gotowy: true });
+    wywolania.push({ sciezka: u.pathname, q: u.searchParams, lat: req.headers['x-cosmos-lat'], lon: req.headers['x-cosmos-lon'] });
+    if (u.pathname !== '/ptak') return json(404, { error: 'tylko ptaki' });
+    if (tryb === 'blad') {
+      return json(500, { error: "Error opening 'C:\\Users\\Marcin\\AppData\\Local\\Temp\\tmpk3x9.wav': Format not recognised." });
+    }
+    const skrot = crypto.createHash('sha1').update(Buffer.concat(cialo)).digest('hex');
+    setTimeout(() => json(200, {
+      gatunki: [{ nazwa: 'puszczyk', nazwaEn: 'Tawny Owl', lacinska: 'Strix aluco', pewnosc: 0.97 }],
+      wykryc: 1, zMiejscem: Boolean(req.headers['x-cosmos-lat']), skrot,
+    }), tryb === 'wolno' ? 600 : 5);
+  });
+});
+
+function klient(ip) {
+  let ciastko = '';
+  return {
+    async zadaj(sciezka, { metoda = 'GET', dane, surowe, typ } = {}) {
+      const r = await fetch(`${ADRES}${sciezka}`, {
+        method: metoda,
+        headers: {
+          'Content-Type': typ || 'application/json', 'CF-Connecting-IP': ip,
+          ...(ciastko ? { Cookie: ciastko } : {}),
+        },
+        body: surowe !== undefined ? surowe : (dane === undefined ? undefined : JSON.stringify(dane)),
+      });
+      const sc = r.headers.get('set-cookie');
+      if (sc) ciastko = sc.split(';')[0];
+      const tekst = await r.text();
+      let json = {};
+      try { json = JSON.parse(tekst); } catch { /* tekst */ }
+      return { kod: r.status, json, tekst };
+    },
+  };
+}
+const nagranie = (znak) => Buffer.from(`RIFF-atrapa-wav-${znak}`.repeat(200));
+const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagranie(znak), typ: 'audio/wav' });
+
+(async () => {
+  await new Promise((r) => atrapa.listen(PORT_PTAKOW, '127.0.0.1', r));
+  const srv = serwerCosmosa(PORT, {
+    COSMOS_PASSWORD: HASLO, COSMOS_LOGIN: 'marcin',
+    SENSES_URL: 'http://127.0.0.1:1',            // dom wyłączony
+    PTAKI_URL: `http://127.0.0.1:${PORT_PTAKOW}`,
+    PTAKI_NARAZ: '1', PTAKI_KOLEJKA: '3',
+  });
+  try {
+    if (!(await czekajNa(`${ADRES}/api/auth`))) throw new Error('serwer nie wstał');
+    const marcin = klient('10.9.0.1');
+    await marcin.zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
+    await marcin.zadaj('/api/location', { metoda: 'POST', dane: { location: 'Biebrza', lat: 53.4567, lon: 22.6789 } });
+
+    /* ---- 1. Bez domu ---- */
+    const r1 = await ptak(marcin, 'w1');
+    const st = (await marcin.zadaj('/api/status')).json;
+    ok(r1.kod === 200 && (r1.json.gatunki || [])[0]?.nazwa === 'puszczyk', `1. ptak bez domu: ${r1.kod}, ${(r1.json.gatunki || [])[0]?.nazwa || r1.tekst.slice(0, 80)}`);
+    ok(st.ptaki && st.ptaki.ok === true && !JSON.stringify(st.ptaki).includes('127.0.0.1'), `1. /api/status: ptaki dostępne, bez adresu (${JSON.stringify(st.ptaki)})`);
+
+    /* ---- 9. Współrzędne zaokrąglone ---- */
+    const ostatni = wywolania.filter((w) => w.sciezka === '/ptak').pop();
+    ok(ostatni && ostatni.lat === '53.5' && ostatni.lon === '22.7', `9. współrzędne do 0,1° (${ostatni && `${ostatni.lat},${ostatni.lon}`})`);
+    ok(ostatni && !ostatni.q.has('lat') && !ostatni.q.has('lon'), `9. współrzędnych nie ma w adresie (${ostatni && ostatni.q.toString()})`);
+
+    /* ---- 2. Biała lista ---- */
+    wywolania.length = 0;
+    await marcin.zadaj('/api/detect', { metoda: 'POST', dane: { image: 'data:image/jpeg;base64,AAAA' } });
+    ok(!wywolania.some((w) => w.sciezka !== '/ptak'), `2. /api/detect nie trafia na serwer (${wywolania.map((w) => w.sciezka).join(',') || 'brak wywołań'})`);
+
+    /* ---- członkowie ---- */
+    const czlonkowie = [];
+    for (let i = 0; i < 8; i++) {
+      const zap = await marcin.zadaj('/api/konta/zaproszenia', { metoda: 'POST', dane: { nazwa: `Osoba ${i}` } });
+      const k = klient(`10.9.1.${i + 2}`);
+      const przyj = await k.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token: zap.json.token, login: `osoba${i}`, haslo: `haslo-osoby-${i}-12345` } });
+      if (przyj.kod !== 200) throw new Error(`członek ${i}: ${przyj.tekst}`);
+      czlonkowie.push({ k, id: przyj.json.uzytkownik.id });
+    }
+
+    /* ---- 5. Przyznanie ---- */
+    const bez = await ptak(czlonkowie[0].k, 'bez');
+    const stBez = (await czlonkowie[0].k.zadaj('/api/status')).json;
+    ok(bez.kod === 403 && bez.json.kod === 'ptaki-niedostepne' && !/komputer|GPU/i.test(bez.json.error || ''), `5. członek bez przyznania: ${bez.kod} „${bez.json.error}”`);
+    ok(stBez.ptaki && stBez.ptaki.ok === false, '5. /api/status członka bez przyznania: ptaków nie ma');
+    for (const c of czlonkowie) await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: c.id, silniki: { ptaki: true } } });
+    const zPrzyznaniem = await ptak(czlonkowie[0].k, 'z');
+    ok(zPrzyznaniem.kod === 200, `5. z przyznaniem: ${zPrzyznaniem.kod}`);
+
+    /* ---- 3. Kolejka ---- */
+    tryb = 'wolno';
+    const start = Date.now();
+    const wyniki = await Promise.all(czlonkowie.map((c, i) => ptak(c.k, `osoba-${i}`).then((r) => ({ r, i, ms: Date.now() - start }))));
+    const udane = wyniki.filter((w) => w.r.kod === 200);
+    const odmowy = wyniki.filter((w) => w.r.kod === 503 && w.r.json.kod === 'kolejka-pelna');
+    const swoje = udane.every((w) => w.r.json.skrot === crypto.createHash('sha1').update(nagranie(`osoba-${w.i}`)).digest('hex'));
+    ok(udane.length === 4 && odmowy.length === 4, `3. 8 osób naraz przy 1 analizie + 3 w kolejce: ${udane.length}×200, ${odmowy.length}×503`);
+    ok(swoje, '3. każda osoba dostała wynik SWOJEGO nagrania');
+    ok(odmowy.every((w) => w.ms < 1500), `3. odmowa od razu, nie po czekaniu (${odmowy.map((w) => w.ms).join(', ')} ms)`);
+
+    /* ---- 4. Ta sama osoba dwa razy ---- */
+    const [a, b] = await Promise.all([ptak(czlonkowie[1].k, 'raz'), ptak(czlonkowie[1].k, 'dwa')]);
+    ok([a.kod, b.kod].sort().join(',') === '200,429', `4. ta sama osoba dwa nagrania naraz: ${a.kod}, ${b.kod}`);
+    tryb = 'ok';
+
+    /* ---- 6. Błąd ze ścieżką ---- */
+    tryb = 'blad';
+    const bl = await ptak(czlonkowie[2].k, 'blad');
+    ok(bl.kod >= 400 && !/C:\\\\Users|Marcin|AppData|127\.0\.0\.1/.test(bl.tekst), `6. członek nie widzi ścieżki z dysku (${bl.kod}: ${bl.tekst.slice(0, 90)})`);
+    tryb = 'ok';
+
+    /* ---- 8. Za duże nagranie ---- */
+    const duze = await czlonkowie[3].k.zadaj('/api/ptak', { metoda: 'POST', surowe: Buffer.alloc(5 * 1024 * 1024), typ: 'audio/wav' });
+    ok(duze.kod === 413, `8. nagranie 5 MB → ${duze.kod}`);
+
+    /* ---- 7. Usługa padła ---- */
+    await new Promise((r) => atrapa.close(r));
+    atrapa.closeAllConnections?.();
+    const t0 = Date.now();
+    const pad = await ptak(czlonkowie[4].k, 'pad');
+    const ms = Date.now() - t0;
+    ok([502, 503].includes(pad.kod) && ms < 2000 && !/127\.0\.0\.1|localhost|:7476/.test(pad.tekst), `7. usługa padła: ${pad.kod} po ${ms} ms, bez adresu („${pad.json.error}”)`);
+  } catch (e) {
+    fail.push(`wyjątek: ${e.message}`);
+    console.error(e);
+  } finally {
+    zabij(srv);
+    try { atrapa.close(); } catch { /* już zamknięta */ }
+  }
+  console.log(fail.length ? `\nDO POPRAWY:\n- ${fail.join('\n- ')}` : '\nPTAKI NA SERWERZE OK');
+  process.exit(fail.length ? 1 : 0);
+})();

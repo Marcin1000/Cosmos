@@ -10,6 +10,9 @@
  *      literówka.
  *   4. Wybór języka przeżywa przeładowanie i jest wspólny z aplikacją.
  *   5. Telefon: bez poziomego przewijania w obu językach, na całej długości.
+ *      Sam scrollWidth nie widzi elementu wystającego w lewo ani tekstu uciętego
+ *      z boku przez sekcję z overflow: clip, więc sprawdzamy też krawędzie
+ *      widocznych elementów.
  *   6. Ograniczony ruch: wszystko widać od razu, rozmowa pokazowa jest pełna.
  *   7. Przełącznik silników w rozmowie pokazowej naprawdę przełącza.
  *   8. Zero błędów w konsoli.
@@ -33,7 +36,7 @@
  *  16. /?lang=en w SUROWYM HTML-u jest angielska: lang, canonical, og:*, tytuł,
  *      opis. Roboty i podgląd linku nie uruchamiają skryptów. Obie wersje mają
  *      własny ETag, a powrót na polski przywraca polską głowę.
- *  17. 320 px: przycisk wejścia w nawigacji mieści się na ekranie; 1024 i 768 px:
+ *  17. 320 i 343 px: przycisk wejścia w nawigacji mieści się na ekranie; 1024 i 768 px:
  *      podpowiedź „Read in English” nie zasłania przełącznika silników,
  *      a nazwa modelu w pigułce nie jest ucięta.
  *  18. „Cztery warstwy”: przy przewijaniu każda warstwa się podświetla, a jej
@@ -46,7 +49,11 @@
  *  20. Kolor mieszany z var() (color-mix, gradient „in oklch”) stoi w @supports.
  *      Zapas „najpierw stara wartość, potem nowa” nie działa, gdy nowa ma var():
  *      stara przeglądarka (m.in. Firefox ESR 115) odrzuca ją dopiero przy
- *      liczeniu i bierze wartość początkową – „Każdy model.” w hero znikał. */
+ *      liczeniu i bierze wartość początkową – „Każdy model.” w hero znikał.
+ *  21. Ruter „Jedna rozmowa”: każda pastylka silnika cała w karcie i żadna nie
+ *      nachodzi na inną – każdy stan (aktywna ma scale), oba języki, telefon
+ *      320–560 px i szerszy, także z dłuższymi napisami. „Lokalny GPU” wychodził
+ *      za kartę przy ~343 px (zrzut Marcina: telefon z powiększonym tekstem). */
 const { srodowisko, przegladarka } = require('../pomoc');
 
 (async () => {
@@ -143,20 +150,65 @@ const { srodowisko, przegladarka } = require('../pomoc');
     await ctx.close();
   }
 
-  // --- 5. telefon: bez poziomego przewijania (17: także 320 px) --------------
-  for (const [szer, jezyk] of [[360, 'pl'], [360, 'en'], [320, 'pl'], [320, 'en']]) {
+  // --- 5. telefon: bez poziomego przewijania (17: także 320 i 343 px) -------
+  /* Sam scrollWidth przepuszcza dwie rzeczy: element wystający W LEWO (ujemny
+     nadmiar nie wydłuża przewijania) i tekst ucięty z boku przez sekcję
+     z overflow: clip (hero, karty) – nadmiaru nie ma, bo sekcja go zjada, a na
+     ekranie brakuje końcówki zdania. Dlatego patrzymy na krawędzie elementów:
+     - wystający poza ekran, chyba że obcina go przodek, który sam mieści się
+       na ekranie (zorza w hero, dekoracje kart; body się nie liczy – jego
+       overflow-x: clip niczego nie naprawia, tylko chowa),
+     - element z własnym tekstem wystający w bok poza obcinającego przodka
+       (poza pasem znaczników, który przesuwa się celowo). */
+  const wystajacePozaEkran = () => {
+    const vw = document.documentElement.clientWidth;
+    const obcina = (el) => { const cs = getComputedStyle(el); return cs.overflowX !== 'visible' || cs.overflowY !== 'visible'; };
+    const przewija = (el) => /auto|scroll/.test(getComputedStyle(el).overflowX);
+    const maTekst = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 1);
+    const opis = (el) => el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+    const zle = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (el.closest('svg') && el.tagName.toLowerCase() !== 'svg') continue;
+      if (zle.some((z) => z.el.contains(el))) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      let a = el.parentElement;
+      while (a && a !== document.body && !obcina(a)) a = a.parentElement;
+      const przodek = a && a !== document.body ? a : null;
+      if (przodek && maTekst(el) && !przewija(przodek) && !el.closest('.pas')) {
+        const ar = przodek.getBoundingClientRect(), ps = getComputedStyle(przodek);
+        const bok = Math.max(ar.left + parseFloat(ps.borderLeftWidth) - r.left, r.right - (ar.right - parseFloat(ps.borderRightWidth)));
+        if (bok > 1.5) { zle.push({ el, tekst: `${opis(el)} ucięty ${Math.round(bok)} px przez ${opis(przodek)}` }); continue; }
+      }
+      const wy = Math.max(r.right - vw, -r.left);
+      if (wy <= 1) continue;
+      let q = przodek, schowany = false;
+      while (q && q !== document.body) {
+        if (obcina(q)) { const qr = q.getBoundingClientRect(); if (qr.right <= vw + 1 && qr.left >= -1) { schowany = true; break; } }
+        q = q.parentElement;
+      }
+      if (!schowany) zle.push({ el, tekst: `${opis(el)} ${Math.round(wy)} px poza ekranem` });
+    }
+    return zle.map((z) => z.tekst);
+  };
+  for (const [szer, jezyk] of [[360, 'pl'], [360, 'en'], [343, 'pl'], [343, 'en'], [320, 'pl'], [320, 'en']]) {
     const { ctx, p } = await nowaStrona({ viewport: { width: szer, height: 780 }, isMobile: true, hasTouch: true, locale: jezyk === 'en' ? 'en-US' : 'pl-PL' });
     await p.goto(env.adres + (jezyk === 'en' ? '/?lang=en' : '/'), { waitUntil: 'load' });
     await p.waitForFunction((j) => document.documentElement.lang === j, jezyk, { timeout: 3000 }).catch(() => {});
     await p.waitForTimeout(400);
     const wysokosc = await p.evaluate(() => document.documentElement.scrollHeight);
     let najgorzej = 0;
+    const wystajace = new Set();
     for (let y = 0; y <= wysokosc; y += 600) {
       await p.evaluate((y) => scrollTo({ top: y, behavior: 'instant' }), y);
       await p.waitForTimeout(40);
       najgorzej = Math.max(najgorzej, await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth));
+      for (const w of await p.evaluate(`(${wystajacePozaEkran})()`)) wystajace.add(w);
     }
     ok(najgorzej <= 0, `telefon ${szer} px (${jezyk}): brak poziomego przewijania (nadmiar ${najgorzej} px)`);
+    ok(wystajace.size === 0, `telefon ${szer} px (${jezyk}): nic nie wystaje poza ekran ani nie jest ucięte z boku${wystajace.size ? ' – ' + [...wystajace].slice(0, 4).join('; ') : ''}`);
     await p.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));
     const przycisk = await p.evaluate(() => { const r = document.querySelector('.nav .js-wejscie').getBoundingClientRect(); return { l: r.left, p: r.right, w: document.documentElement.clientWidth }; });
     ok(przycisk.l >= 0 && przycisk.p <= przycisk.w, `telefon ${szer} px (${jezyk}): przycisk wejścia w nawigacji cały na ekranie (${Math.round(przycisk.l)}–${Math.round(przycisk.p)} z ${przycisk.w})`);
@@ -527,6 +579,43 @@ const { srodowisko, przegladarka } = require('../pomoc');
     });
     ok(wynik.arkuszy >= 2 && wynik.zle.length === 0,
       `20. każdy kolor mieszany z var() stoi w @supports (arkuszy: ${wynik.arkuszy}${wynik.zle.length ? '; poza @supports: ' + wynik.zle.slice(0, 5).join(' | ') : ''})`);
+    await ctx.close();
+  }
+
+  // --- 21. ruter „Jedna rozmowa”: każda pastylka cała w karcie ----------------
+  /* Węzeł środkowany na 83% szerokości wyjeżdżał za kartę (overflow: hidden) przy
+     ~343 px. Sprawdzamy KAŻDY stan data-akt (aktywny ma scale), oba języki
+     i podmienione dłuższe napisy – przyszły tekst nie może wypchnąć pastylki.
+     Ograniczony ruch, żeby nie mierzyć w połowie przejścia. */
+  for (const jezyk of ['pl', 'en']) for (const szer of [320, 343, 360, 390, 412, 430, 560, 600, 1440]) for (const dlugie of [false, true]) {
+    const telefon = szer <= 560;
+    const { ctx, p } = await nowaStrona({ viewport: { width: szer, height: 800 }, isMobile: telefon, hasTouch: telefon, reducedMotion: 'reduce' });
+    await p.goto(`${env.adres}/?lang=${jezyk}`, { waitUntil: 'load' });
+    await p.evaluate(() => document.fonts.ready);
+    await p.addStyleTag({ content: '.router-wezel { transition: none !important; } .sekcja { content-visibility: visible !important; }' });
+    if (dlugie) await p.evaluate(() => {
+      const t = ['NVIDIA Cloud Nemotron', 'Local GPU at home (Ollama)', 'Claude by Anthropic', 'OpenAI GPT-5 family'];
+      document.querySelectorAll('.router-wezel b').forEach((b, i) => { b.textContent = t[i]; });
+    });
+    const zle = await p.evaluate(() => {
+      const router = document.querySelector('.router'), karta = router.closest('.karta');
+      const k = karta.getBoundingClientRect(), bw = parseFloat(getComputedStyle(karta).borderLeftWidth);
+      const bledy = [];
+      for (const akt of ['0', '1', '2', '3']) {
+        router.dataset.akt = akt;
+        const w = [...router.querySelectorAll('.router-wezel')].map((e) => ({ n: e.querySelector('b').textContent, r: e.getBoundingClientRect() }));
+        for (const { n, r } of w) {
+          const wy = Math.max(k.left + bw - r.left, r.right - (k.right - bw), k.top + bw - r.top, r.bottom - (k.bottom - bw));
+          if (wy > 0.5) bledy.push(`akt ${akt}: „${n}” ${Math.round(wy)} px poza kartą`);
+        }
+        for (let i = 0; i < w.length; i++) for (let j = i + 1; j < w.length; j++) {
+          const a = w[i].r, b = w[j].r;
+          if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0) bledy.push(`akt ${akt}: „${w[i].n}” nachodzi na „${w[j].n}”`);
+        }
+      }
+      return bledy;
+    });
+    ok(zle.length === 0, `21. ${szer} px ${jezyk}${dlugie ? ' (długie napisy)' : ''}: pastylki rutera całe w karcie i bez nachodzenia${zle.length ? ' – ' + zle.slice(0, 3).join('; ') : ''}`);
     await ctx.close();
   }
 

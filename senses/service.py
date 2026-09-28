@@ -10,7 +10,7 @@ a /health mówi Cosmosowi, które zmysły są dostępne.
     wzrok    /detect  YOLO (ultralytics)           pip install ultralytics
     ciało    /pose    MediaPipe (sylwetka)         pip install mediapipe
     dłonie   /dlonie  MediaPipe (palce, gesty)     pip install mediapipe
-    ptaki    /ptak    BirdNET (gatunek z głosu)    pip install birdnetlib
+    ptaki    /ptak    BirdNET (gatunek z głosu)    pip install -r senses/requirements-ptaki.txt
 
 Uruchomienie:
     pip install fastapi uvicorn python-multipart
@@ -22,6 +22,9 @@ Konfiguracja przez zmienne środowiskowe:
     WHISPER_DEVICE   cuda | cpu                          (domyślnie auto)
     PIPER_VOICE      ścieżka do głosu .onnx, np. pl_PL-darkman-medium.onnx
     YOLO_MODEL       domyślnie yolo11n.pt (pobiera się automatycznie)
+    COSMOS_ZMYSLY_TYLKO  np. "ptak" – usługa odpowiada tylko na te trasy i /health
+                     (ptaki na serwerze: reszta zwraca 404)
+    BIRDNET_ROZGRZEJ 0 wyłącza ładowanie BirdNET w tle przy starcie
 """
 
 import base64
@@ -121,10 +124,21 @@ except ImportError:
 # BirdNET – gatunek ptaka z nagrania. Dla kogoś, kto fotografuje żurawie,
 # to nie ciekawostka: usłyszeć ptaka można znacznie dalej, niż go zobaczyć,
 # a wiedza „to derkacz, siedzi w tej łące" decyduje, gdzie postawić statyw.
+#
+# Sam `import birdnetlib` nie wystarczał jako dowód: birdnetlib wczytuje
+# interpreter TFLite dopiero w analyzer.py, więc usługa zgłaszała ptaki, a każde
+# /ptak kończyło się 500. Dlatego CAPS["birdnet"] dopiero po imporcie
+# interpretera (tflite-runtime albo ai-edge-litert przez zgodnosc_litert.py),
+# a rozgrzewka w tle (_rozgrzej_birdnet) i tak sprawdza całość na nagraniu ciszy.
+try:
+    import zgodnosc_litert  # noqa: F401  (tflite_runtime ← ai_edge_litert, gdy trzeba)
+except ImportError:
+    pass
 try:
     import birdnetlib  # noqa: F401
+    import birdnetlib.analyzer  # noqa: F401  (tu wczytuje się interpreter TFLite)
     CAPS["birdnet"] = True
-except ImportError:
+except Exception:  # noqa: BLE001 – zepsuty tflite (numpy 2 z tflite-runtime) rzuca nie tylko ImportError
     pass
 
 _whisper_model = None
@@ -359,6 +373,57 @@ def decode_image(payload: dict):
 
 
 # ---------------------------------------------------------------------------
+# Tylko wybrane zmysły (COSMOS_ZMYSLY_TYLKO) – ptaki na serwerze
+# ---------------------------------------------------------------------------
+# Na VPS-ie ta sama usługa liczy wyłącznie ptaki (cosmos-ptaki.service,
+# COSMOS_ZMYSLY_TYLKO=ptak). Wszystko spoza listy odpowiada 404, zanim dotknie
+# czegokolwiek, a /health nie zgłasza innych zmysłów – nawet gdyby w venv
+# przypadkiem leżał Whisper czy YOLO, Cosmos nie pośle tu nic poza nagraniem ptaka.
+# Nazwa zmysłu → (trasa, klucz w CAPS).
+ZMYSLY_TRASY = {
+    "ptak": ("/ptak", "birdnet"),
+    "stt": ("/stt", "whisper"),
+    "tts": ("/tts", "piper"),
+    "detect": ("/detect", "yolo"),
+    "pose": ("/pose", "mediapipe"),
+    "dlonie": ("/dlonie", "dlonie"),
+    "embed": ("/embed", "embed"),
+    "extract": ("/extract", "dokumenty"),
+    "upscale": ("/upscale", "upscale"),
+}
+ZMYSLY_TYLKO = [s.strip().lower() for s in os.environ.get("COSMOS_ZMYSLY_TYLKO", "").split(",") if s.strip()]
+
+
+class _TylkoWybraneTrasy:
+    """Czysty pośrednik ASGI (nie BaseHTTPMiddleware – ten potrafi zjeść ciało
+    żądania, a /ptak czyta nagranie z ciała w wątku)."""
+
+    def __init__(self, app, dozwolone):
+        self.app = app
+        self.dozwolone = dozwolone
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") not in self.dozwolone:
+            odp = JSONResponse({"error": "Tej trasy ta usługa nie obsługuje."}, status_code=404)
+            await odp(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+if ZMYSLY_TYLKO:
+    _nieznane = [s for s in ZMYSLY_TYLKO if s not in ZMYSLY_TRASY]
+    if _nieznane:
+        print(f"  ⚠ COSMOS_ZMYSLY_TYLKO: nieznane zmysły {', '.join(_nieznane)} (znane: {', '.join(ZMYSLY_TRASY)})",
+              flush=True)
+    _dozwolone_caps = {ZMYSLY_TRASY[s][1] for s in ZMYSLY_TYLKO if s in ZMYSLY_TRASY}
+    for _k in CAPS:
+        if _k not in _dozwolone_caps:
+            CAPS[_k] = False
+    app.add_middleware(_TylkoWybraneTrasy,
+                       dozwolone={"/health"} | {ZMYSLY_TRASY[s][0] for s in ZMYSLY_TYLKO if s in ZMYSLY_TRASY})
+
+
+# ---------------------------------------------------------------------------
 # Endpointy
 # ---------------------------------------------------------------------------
 
@@ -367,7 +432,10 @@ def decode_image(payload: dict):
 # i Cosmos brały wtedy zdrowe zmysły za wyłączone (zespół IT, runda 7).
 @app.get("/health")
 async def health():
-    return CAPS
+    # `birdnet_gotowy`: model załadowany i sprawdzony na nagraniu (rozgrzewka albo
+    # pierwsze /ptak). Do tej chwili Cosmos nie kieruje tu nagrań z serwera –
+    # pierwsza analiza po instalacji potrafi trwać kilkadziesiąt sekund.
+    return {**CAPS, "birdnet_gotowy": CAPS["birdnet"] is True and _birdnet_gotowy}
 
 
 @app.post("/stt")
@@ -435,6 +503,181 @@ def stt(request: Request):
         os.unlink(tmp)
 
 
+# --- ptaki: początek (blok czysty – selftest tests/atrapy/ptaki_zamek_test.py wykonuje go z atrapą birdnetlib)
+# Jeden Analyzer na proces (model ~450 MB w pamięci), ale NIGDY dwie analizy
+# naraz. Interpreter TFLite nie jest bezpieczny wielowątkowo, a Analyzer trzyma
+# stan między nagraniami: `results` i `custom_species_list` (sito gatunków po
+# położeniu). Bez zamka dwa /ptak naraz dawały 500 albo cudze gatunki, a nagranie
+# bez współrzędnych po nagraniu z Biebrzy dostawało sito Biebrzy (zespół IT,
+# runda 8). Zamek obejmuje ładowanie modelu, reset sita, analizę i odczyt wyników.
+PTAK_ZAMEK = threading.Lock()
+PTAK_CZEKAJ_S = 55  # dłużej nie czekamy na swoją kolej – Cosmos ma 60 s na całe zlecenie
+_birdnet_gotowy = False
+
+
+class PtakZajety(Exception):
+    """Inne nagranie liczy się za długo – odpowiadamy 503, Cosmos spróbuje innego źródła."""
+
+
+def _plik_nazw_pl():
+    return os.environ.get("PTAKI_NAZWY_PL") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "nazwy_ptakow_pl.txt")
+
+
+# Zapas, gdy pliku z nazwami nie ma (np. agent zmysłów ze starszym zestawem
+# plików): najczęstsze polskie gatunki, łacina → nazwa jak w etykietach BirdNET.
+NAZWY_PL_ZAPAS = {
+    "Parus major": "bogatka", "Cyanistes caeruleus": "modraszka", "Periparus ater": "sosnówka",
+    "Poecile palustris": "sikora uboga", "Aegithalos caudatus": "raniuszek", "Sitta europaea": "kowalik",
+    "Certhia familiaris": "pełzacz leśny", "Erithacus rubecula": "rudzik", "Turdus merula": "kos",
+    "Turdus philomelos": "śpiewak", "Fringilla coelebs": "zięba", "Chloris chloris": "dzwoniec",
+    "Carduelis carduelis": "szczygieł", "Passer domesticus": "wróbel", "Sturnus vulgaris": "szpak",
+    "Pica pica": "sroka", "Corvus cornix": "wrona siwa", "Garrulus glandarius": "sójka",
+    "Dendrocopos major": "dzięcioł duży", "Dryocopus martius": "dzięcioł czarny",
+    "Picus viridis": "dzięcioł zielony", "Sylvia atricapilla": "kapturka",
+    "Phylloscopus collybita": "pierwiosnek", "Phylloscopus trochilus": "piecuszek",
+    "Troglodytes troglodytes": "strzyżyk", "Luscinia megarhynchos": "słowik rdzawy",
+    "Luscinia luscinia": "słowik szary", "Cuculus canorus": "kukułka", "Oriolus oriolus": "wilga",
+    "Emberiza citrinella": "trznadel", "Alauda arvensis": "skowronek", "Hirundo rustica": "dymówka",
+    "Motacilla alba": "pliszka siwa", "Phoenicurus ochruros": "kopciuszek",
+    "Columba palumbus": "grzywacz", "Streptopelia decaocto": "sierpówka",
+    "Acrocephalus scirpaceus": "trzcinniczek", "Crex crex": "derkacz", "Grus grus": "żuraw",
+    "Vanellus vanellus": "czajka", "Gallinago gallinago": "kszyk", "Numenius arquata": "kulik wielki",
+    "Botaurus stellaris": "bąk", "Ciconia ciconia": "bocian biały", "Anser anser": "gęgawa",
+    "Cygnus olor": "łabędź niemy", "Anas platyrhynchos": "krzyżówka", "Buteo buteo": "myszołów",
+    "Strix aluco": "puszczyk", "Bubo bubo": "puchacz",
+}
+_nazwy_pl = None
+
+
+def nazwy_pl():
+    """Łacina → polska nazwa. Plik to oficjalne etykiety BirdNET V2.4 po polsku
+    (`Łacina_nazwa`, 6522 wiersze); bez niego – krótka lista wyżej."""
+    global _nazwy_pl
+    if _nazwy_pl is None:
+        nazwy = dict(NAZWY_PL_ZAPAS)
+        try:
+            with open(_plik_nazw_pl(), encoding="utf-8") as f:
+                for wiersz in f:
+                    lac, _, pl = wiersz.strip().partition("_")
+                    if lac and pl:
+                        nazwy[lac] = pl
+        except OSError:
+            pass
+        _nazwy_pl = nazwy
+    return _nazwy_pl
+
+
+def _wspolrzedna(tekst, granica):
+    """Liczba z zakresu ±granica zaokrąglona do 0,1° (ok. 11 km) albo None.
+    BirdNET i tak liczy sito z siatki zasięgów, a dokładna pozycja osoby nie
+    musi leżeć w pamięci usługi (cache list gatunków po współrzędnych)."""
+    try:
+        x = float(tekst)
+    except (TypeError, ValueError):
+        return None
+    if x != x or abs(x) > granica:  # NaN albo poza Ziemią
+        return None
+    return round(x, 1)
+
+
+def wspolrzedne_z_zadania(zapytanie, naglowki):
+    """(lat, lon) z nagłówków X-Cosmos-Lat / X-Cosmos-Lon, a gdy ich brak –
+    z adresu (?lat=&lon=, jak dotąd). Ciało to samo nagranie, więc nagłówek
+    jest jedynym miejscem poza adresem – a adres ląduje w logach pośredników."""
+    lat = _wspolrzedna(naglowki.get("x-cosmos-lat"), 90)
+    lon = _wspolrzedna(naglowki.get("x-cosmos-lon"), 180)
+    if lat is None or lon is None:
+        lat = _wspolrzedna(zapytanie.get("lat"), 90)
+        lon = _wspolrzedna(zapytanie.get("lon"), 180)
+    if lat is None or lon is None:
+        return None, None
+    return lat, lon
+
+
+def analizuj_ptaka(sciezka, lat=None, lon=None, min_conf=0.25, jezyk="pl", data=None):
+    """Nagranie z dysku → {"gatunki": [...], "wykryc", "zMiejscem"}. Rzuca przy błędzie."""
+    global _birdnet, _birdnet_gotowy
+    from birdnetlib import Recording
+    from birdnetlib.analyzer import Analyzer
+    if not PTAK_ZAMEK.acquire(timeout=PTAK_CZEKAJ_S):
+        raise PtakZajety()
+    try:
+        if _birdnet is None:
+            _birdnet = Analyzer()
+        # Sito z poprzedniego nagrania nie może przejść na to. Przy współrzędnych
+        # birdnetlib ustawi je od nowa (z własnej pamięci podręcznej), bez nich
+        # zostaje puste – cały świat, jak na świeżym procesie.
+        _birdnet.custom_species_list = []
+        kwargs = {"min_conf": min_conf}
+        z_miejscem = lat is not None and lon is not None
+        if z_miejscem:
+            kwargs.update(lat=lat, lon=lon, date=data or datetime.now())
+        rec = Recording(_birdnet, sciezka, **kwargs)
+        rec.analyze()
+        wykrycia = list(rec.detections)  # odczyt też pod zamkiem – detections czyta stan Analyzera
+        _birdnet_gotowy = True
+    finally:
+        PTAK_ZAMEK.release()
+
+    pl = nazwy_pl() if jezyk == "pl" else {}
+    gatunki = []
+    for d in wykrycia:
+        lac = d.get("scientific_name")
+        en = d.get("common_name")
+        gatunki.append({
+            # `nazwa` i `lacinska` czyta aplikacja (app.js) – zostają; `nazwa`
+            # jest teraz po polsku, angielska obok w `nazwaEn`.
+            "nazwa": pl.get(lac) or en,
+            "nazwaEn": en,
+            "lacinska": lac,
+            "pewnosc": round(float(d.get("confidence", 0)), 3),
+            "odS": d.get("start_time"),
+            "doS": d.get("end_time"),
+        })
+    # Ten sam ptak śpiewa zwykle w kilku oknach po 3 s. Zwracamy jedno
+    # wystąpienie na gatunek – to, w którym był najpewniejszy.
+    najlepsze = {}
+    for g in gatunki:
+        klucz = g["lacinska"] or g["nazwa"]
+        if klucz not in najlepsze or g["pewnosc"] > najlepsze[klucz]["pewnosc"]:
+            najlepsze[klucz] = g
+    wynik = sorted(najlepsze.values(), key=lambda g: -g["pewnosc"])
+    return {"gatunki": wynik[:5], "wykryc": len(gatunki), "zMiejscem": z_miejscem}
+
+
+def _rozgrzej_birdnet():
+    """Model, sito miejsca i (przy tflite-runtime) kompilacja numby – teraz, w tle,
+    a nie przy pierwszym ptaku w lesie. Pierwsza analiza po instalacji trwała do
+    34 s. Trzy sekundy ciszy przechodzą przez całą drogę: gdy tu coś pada
+    (np. tflite-runtime z numpy 2), usługa przestaje zgłaszać ptaki zamiast
+    oddawać 500 na każde nagranie."""
+    import struct
+    import time
+    import wave
+    fd, sciezka = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        with wave.open(sciezka, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(48000)
+            w.writeframes(struct.pack("<h", 0) * 48000 * 3)
+        t0 = time.time()
+        analizuj_ptaka(sciezka, 52.2, 21.0)  # z miejscem – ładuje też model zasięgów
+        analizuj_ptaka(sciezka)               # i bez – sito wraca do pustego
+        print(f"  ✓ BirdNET gotowy ({time.time() - t0:.1f} s)", flush=True)
+    except Exception as e:  # noqa: BLE001
+        CAPS["birdnet"] = False
+        print(f"  ⚠ BirdNET nie wstał przy starcie, ptaki wyłączone: {type(e).__name__}: {e}", flush=True)
+    finally:
+        try:
+            os.unlink(sciezka)
+        except OSError:
+            pass
+# --- ptaki: koniec
+
+
 @app.post("/ptak")
 def ptak(request: Request):
     """Nagranie (wav/mp3/flac) w body -> {"gatunki": [{...}]}  – BirdNET.
@@ -443,13 +686,16 @@ def ptak(request: Request):
     gatunków, które w danym tygodniu faktycznie występują pod danymi
     współrzędnymi – bez tego czajka z Biebrzy potrafi wyjść jako gatunek
     z Ameryki Południowej o podobnym głosie. Współrzędne przychodzą z
-    Cosmosa (te same, których używa plan zdjęciowy); bez nich analiza i tak
-    się wykona, tylko szerszym sitem.
+    Cosmosa (te same, których używa plan zdjęciowy) w nagłówkach
+    X-Cosmos-Lat / X-Cosmos-Lon albo, jak dawniej, w ?lat=&lon=; bez nich
+    analiza i tak się wykona, tylko szerszym sitem.
+
+    Gatunek: `nazwa` po polsku (?jezyk=en albo X-Cosmos-Jezyk: en – po
+    angielsku), `nazwaEn`, `lacinska`, `pewnosc`, `odS`, `doS`.
     """
     if not CAPS["birdnet"]:
         return JSONResponse(
-            {"error": "BirdNET niedostępny (pip install birdnetlib librosa "
-                      "resampy tensorflow)."},
+            {"error": "BirdNET niedostępny (pip install -r senses/requirements-ptaki.txt)."},
             status_code=501,
         )
     audio = anyio.from_thread.run(request.body)
@@ -457,16 +703,12 @@ def ptak(request: Request):
         return JSONResponse({"error": "Puste nagranie."}, status_code=400)
 
     q = request.query_params
-    def _f(name):
-        try:
-            return float(q[name])
-        except (KeyError, TypeError, ValueError):
-            return None
-    lat, lon = _f("lat"), _f("lon")
+    lat, lon = wspolrzedne_z_zadania(q, request.headers)
     try:
         min_conf = float(q.get("min", 0.25))
     except ValueError:
         min_conf = 0.25
+    jezyk = (q.get("jezyk") or request.headers.get("x-cosmos-jezyk") or "pl").lower()[:2]
 
     suffix = ".wav"
     ctype = request.headers.get("content-type", "")
@@ -474,40 +716,16 @@ def ptak(request: Request):
         if ext in ctype:
             suffix = "." + ext
             break
+    # Plik 0600 w katalogu tymczasowym (na serwerze: PrivateTmp usługi), kasowany
+    # zaraz po analizie – nagranie nie zostaje nigdzie.
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(audio)
         tmp = f.name
     try:
-        from birdnetlib import Recording
-        from birdnetlib.analyzer import Analyzer
-        global _birdnet
-        if _birdnet is None:
-            _birdnet = Analyzer()
-        kwargs = {"min_conf": min_conf}
-        if lat is not None and lon is not None:
-            kwargs.update(lat=lat, lon=lon, date=datetime.now())
-        rec = Recording(_birdnet, tmp, **kwargs)
-        rec.analyze()
-        gatunki = [
-            {
-                "nazwa": d.get("common_name"),
-                "lacinska": d.get("scientific_name"),
-                "pewnosc": round(float(d.get("confidence", 0)), 3),
-                "odS": d.get("start_time"),
-                "doS": d.get("end_time"),
-            }
-            for d in rec.detections
-        ]
-        # Ten sam ptak śpiewa zwykle w kilku oknach po 3 s. Zwracamy jedno
-        # wystąpienie na gatunek – to, w którym był najpewniejszy.
-        najlepsze = {}
-        for g in gatunki:
-            klucz = g["lacinska"] or g["nazwa"]
-            if klucz not in najlepsze or g["pewnosc"] > najlepsze[klucz]["pewnosc"]:
-                najlepsze[klucz] = g
-        wynik = sorted(najlepsze.values(), key=lambda g: -g["pewnosc"])
-        return {"gatunki": wynik[:5], "wykryc": len(gatunki),
-                "zMiejscem": lat is not None and lon is not None}
+        return analizuj_ptaka(tmp, lat, lon, min_conf, jezyk)
+    except PtakZajety:
+        return JSONResponse({"error": "Rozpoznawanie ptaków jest zajęte – spróbuj za chwilę.",
+                             "kod": "kolejka-pelna"}, status_code=503, headers={"Retry-After": "10"})
     except Exception as e:
         return JSONResponse({"error": f"BirdNET nie przeanalizował nagrania: {e}"},
                             status_code=500)
@@ -1228,8 +1446,14 @@ if __name__ == "__main__":
     port = int(os.environ.get("SENSES_PORT", 7060))
     if CAPS["whisper"] and os.environ.get("WHISPER_ROZGRZEJ", "1") != "0":
         threading.Thread(target=_rozgrzej_whispera, daemon=True).start()
-    active = ", ".join(k for k, v in CAPS.items() if v) or "brak (zainstaluj zależności)"
+    if CAPS["birdnet"] and os.environ.get("BIRDNET_ROZGRZEJ", "1") != "0":
+        threading.Thread(target=_rozgrzej_birdnet, daemon=True).start()
+    active =", ".join(k for k, v in CAPS.items() if v) or "brak (zainstaluj zależności)"
     print(f"\n  ✦ Cosmos Senses – port {port}\n  → aktywne zmysły: {active}\n")
     # Agent zmysłów ustawia SENSES_HOST=127.0.0.1: zlecenia przychodzą przez niego,
-    # więc usługa nie musi być widoczna w sieci lokalnej.
-    uvicorn.run(app, host=os.environ.get("SENSES_HOST", "0.0.0.0"), port=port, log_level="warning")
+    # więc usługa nie musi być widoczna w sieci lokalnej. Na serwerze (ptaki) –
+    # obowiązkowo 127.0.0.1, patrz scripts/instaluj-ptaki.sh.
+    # Bez logu dostępu: adres /ptak?lat=…&lon=… to pozycja osoby, a log trafia
+    # do dziennika systemu (journald) na długo.
+    uvicorn.run(app, host=os.environ.get("SENSES_HOST", "0.0.0.0"), port=port, log_level="warning",
+                access_log=False)

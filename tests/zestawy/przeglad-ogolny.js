@@ -50,6 +50,7 @@ const fs = require('fs');
 
   // 4. ustawienia + pobranie list modeli z obu endpointów
   await page.click('#settings-btn');
+  await page.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await page.click('#fetch-models-cloud');
   await page.waitForSelector('#model-select-cloud option', { state: 'attached', timeout: 5000 });
   await page.click('#fetch-models-local');

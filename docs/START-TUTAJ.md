@@ -422,7 +422,10 @@ wiedzy warte tych pieniędzy.
 
 ## KROK 1 – Załóż VPS
 
-1. U dostawcy utwórz nowy serwer z systemem **Ubuntu 24.04 LTS**.
+1. U dostawcy utwórz nowy serwer z systemem **Debian 12 / 13** albo **Ubuntu 24.04 LTS** –
+   polecenia niżej działają na każdym z nich (ptaki z KROKU 6b sprawdzone na Pythonie
+   3.11, 3.12 i 3.13 – tym, co mają te systemy). Bez preferencji – weź Debiana, na nim
+   stoi produkcyjny Cosmos.
    - Zaznacz **Primary IPv4** (patrz tabela wyżej – bez tego nie wejdziesz z telefonu).
    - Zaznacz **backupy** (+20% ceny). Przy Twojej bazie wiedzy warte tych pieniędzy.
    - Firewall dostawcy możesz zostawić wyłączony – dostęp zamykamy przez Tailscale w KROKU 5.
@@ -430,6 +433,11 @@ wiedzy warte tych pieniędzy.
 3. Połącz się z serwerem z komputera (w `cmd` na Windows):
    ```
    ssh root@ADRES-IP-SERWERA
+   ```
+4. **Tylko Debian:** obraz dostawcy bywa goły – bez `sudo` i `curl`, których używają
+   kolejne kroki. Doinstaluj je raz (jako `root`):
+   ```bash
+   apt-get update && apt-get install -y sudo curl
    ```
 
 ## KROK 2 – Zainstaluj Node.js i Gita na VPS
@@ -540,6 +548,51 @@ Aktualizacja wygląda wtedy tak: `cd /opt/cosmos && sudo -u cosmos git pull && s
 
 Masz już tę usługę ze starszej instrukcji? Wklej powyższy blok jeszcze raz
 i wykonaj `sudo systemctl daemon-reload && sudo systemctl restart cosmos`.
+
+## KROK 6b – Ptaki bez komputera w domu (opcjonalnie)
+
+Przycisk 🐦 w trybie głosowym rozpoznaje ptaka z 8 s nagrania. Domyślnie liczy to
+komputer ze zmysłami w domu – gdy jest wyłączony, w lesie nic nie rozpoznasz.
+BirdNET nie potrzebuje karty graficznej (8 s nagrania = ok. 0,3–1 s na jednym
+rdzeniu), więc może działać na samym VPS-ie. Kosztuje ok. 460 MB pamięci na stałe.
+
+1. Sprawdź, czy serwer ma miejsce:
+   ```bash
+   free -m
+   nproc
+   ```
+   Patrz na kolumnę **available** w wierszu `Mem:` – przy działającym Cosmosie
+   potrzeba **co najmniej 700** (MB). Mniej – nie instaluj (albo większy plan VPS).
+   `nproc` to liczba rdzeni: wystarczy 1, przy 2 i więcej Cosmos nie odczuje ptaków wcale.
+2. Zainstaluj jednym poleceniem (1–3 minuty, pobiera ok. 150 MB):
+   ```bash
+   sudo bash /opt/cosmos/scripts/instaluj-ptaki.sh
+   ```
+   Skrypt sam sprawdzi pamięć i dysk (1,5 GB), założy środowisko w `/opt/cosmos-ptaki`
+   (poza katalogiem Cosmosa – `git pull` go nie rusza), usługę `cosmos-ptaki`
+   (tylko `127.0.0.1:7061`, niewidoczną z sieci), dopisze `PTAKI_URL` do `.env`
+   i zrestartuje Cosmosa. Na końcu ma napisać „Gotowe”.
+3. Sprawdź:
+   ```bash
+   systemctl status cosmos-ptaki
+   ```
+   Ma być `active (running)`. W aplikacji: wyłącz komputer w domu, otwórz tryb
+   głosowy i dotknij 🐦 – nazwa ptaka ma przyjść po polsku.
+
+**Aktualizacja.** Zwykłe `git pull && sudo systemctl restart cosmos` restartuje też
+ptaki (nowa wersja usługi). Tylko gdy zmieni się `senses/requirements-ptaki.txt`,
+uruchom skrypt z punktu 2 jeszcze raz – drugi raz tylko aktualizuje pakiety.
+
+**Usunięcie:**
+```bash
+sudo systemctl disable --now cosmos-ptaki
+sudo rm /etc/systemd/system/cosmos-ptaki.service && sudo systemctl daemon-reload
+sudo rm -rf /opt/cosmos-ptaki
+sudo sed -i '/^PTAKI_URL=/d' /opt/cosmos/.env && sudo systemctl restart cosmos
+```
+
+> Coś nie działa? `journalctl -u cosmos-ptaki -n 50` pokazuje, co usługa napisała
+> przy starcie („BirdNET gotowy” albo powód, dla którego nie wstała).
 
 ## KROK 7 – Wejdź z telefonu i Surface Pro
 

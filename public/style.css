@@ -218,6 +218,12 @@ body::after {
   color: var(--text-faint);
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+/* Na dotyku :hover „przykleja się” po dotknięciu – głośnik wyglądał na włączony
+   po wyłączeniu (Marcin, runda 8). Tło z najechania tylko tam, gdzie jest mysz. */
+@media (hover: none), (pointer: coarse) {
+  .icon-btn:hover { background: transparent; color: var(--text-faint); }
+  .icon-btn.active:hover, .tts-toggle.active:hover { background: var(--accent-glow); color: var(--accent); }
+}
 
 .new-chat-btn {
   display: flex;
@@ -338,7 +344,7 @@ body::after {
 /* Na ekranie dotykowym `:hover` zostaje po dotknięciu i gaśnie dopiero przy
    dotknięciu czegoś innego – przez to przypnij/zmień nazwę/usuń pojawiały się
    pozornie losowo. Bez myszy pokazujemy je po prostu zawsze. */
-@media (hover: none) {
+@media (hover: none), (pointer: coarse) {
   .conv-item .conv-action,
   .conv-item .conv-delete { display: inline-flex; }
   .conv-title { padding-right: 4px; }
@@ -1279,7 +1285,7 @@ body::after {
    ostatnim (edycja ma sens przy bieżącym wątku; przy starszych byłby to
    rząd przycisków pod każdym dymkiem). Starsze pytanie: przytrzymanie
    i zaznaczenie tekstu działa jak dotąd. */
-@media (hover: none) {
+@media (hover: none), (pointer: coarse) {
   .msg-actions { opacity: 1; }
   .msg-user:has(~ .msg-user) .msg-actions { display: none; }
 }
@@ -1606,12 +1612,16 @@ body::after {
 /* `select` też musi się kurczyć. Nazwy urządzeń audio potrafią mieć po
    80 znaków, a bez `min-width: 0` element rozpychał wiersz i jego obrys
    wychodził poza okno – pole wyglądało wtedy na „rozjechane”. */
-.field-row input, .field-row select { flex: 1; min-width: 0; max-width: 100%; }
+.field-row input:not([type="checkbox"], [type="radio"]), .field-row select { flex: 1; min-width: 0; max-width: 100%; }
+/* Pole wyboru w wierszu to pole wyboru, nie pole tekstowe: dawniej ciągnęło się
+   na pół wiersza, a etykieta łamała się w trzech linijkach (runda 8, zrzut 20). */
+.field-row input:is([type="checkbox"], [type="radio"]) { flex: none; min-width: 0; width: auto; }
 
 .field input[type="text"], .field input[type="number"],
 .field input[type="time"], .field input[type="date"], .field input[type="password"],
 .konto-blok input[type="text"], .konto-blok input[type="password"],
 .field-row input[type="text"],
+.proc-step input:is(.ps-target, .ps-value, .ps-note),
 .field textarea, .field select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -1625,7 +1635,7 @@ body::after {
 }
 
 .field input.mono, .field select.mono, .konto-blok input.mono { font-family: var(--font-mono); font-size: 12.5px; }
-.field input:focus, .field textarea:focus, .field select:focus, .konto-blok input:focus, .field-row input[type="text"]:focus {
+.field input:focus, .field textarea:focus, .field select:focus, .konto-blok input:focus, .field-row input[type="text"]:focus, .proc-step input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
@@ -1727,6 +1737,10 @@ body::after {
   color: var(--accent);
   background: var(--accent-glow);
 }
+/* Wyłączony: przekreślony głośnik bez fal – stan widać bez dotykania. */
+.tts-toggle .tts-skos { display: none; }
+.tts-toggle:not(.active) .tts-waves { display: none; }
+.tts-toggle:not(.active) .tts-skos { display: inline; }
 
 #mic-btn.recording {
   color: #fff;
@@ -1804,7 +1818,7 @@ body::after {
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 .studio-section .field-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.studio-section .field-row select, .studio-section .field-row input { flex: 1; min-width: 140px; }
+.studio-section .field-row select, .studio-section .field-row input:not([type="checkbox"], [type="radio"]) { flex: 1; min-width: 140px; }
 
 .studio-out { display: none; flex-direction: column; gap: 8px; }
 .studio-out.show { display: flex; }
@@ -2367,7 +2381,19 @@ body::after {
 /* ============================ GALERIA ============================ */
 
 .gallery-modal { max-width: 820px; }
-.gallery-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.gallery-filters { display: flex; gap: 8px; margin-bottom: 4px; }
+/* Grupy przełączników w JEDNYM wierszu: zawinięte zostawiały „Wideo” samo
+   w drugiej linii (runda 8, zrzut 06). Gdy się nie mieszczą – przewijają się
+   w bok, a nie łamią. */
+.gallery-filters, .studio-tabs {
+  /* flex: none – przewijany kontener w kolumnie flex dostaje min-height 0
+     i przy długiej treści zapadał się do zera (karty Nauki znikały). */
+  flex: none;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.gallery-filters::-webkit-scrollbar, .studio-tabs::-webkit-scrollbar { display: none; }
+.gallery-filters > *, .studio-tabs > * { flex: none; white-space: nowrap; }
 .gallery-filter {
   padding: 6px 14px;
   border: 1px solid var(--border-strong);
@@ -2496,13 +2522,22 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  overflow: hidden;
+  /* Telefon w poziomie ma ~310 px wysokości: formularz się nie mieści, więc
+     ekran musi się przewijać. `margin: auto` na formularzu (nie samo
+     wyśrodkowanie flexem) – inaczej ucięłaby się jego GÓRA, bez przewijania. */
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.login-overlay > .login-box { margin: auto; flex: none; }
+@media (max-height: 480px) {
+  .login-box { padding: 20px 22px 18px; gap: 10px; }
+  .login-icon { width: 40px; height: 40px; }
 }
 /* Ta sama zorza z silników co w hero strony – wejście do Cosmosa ma wyglądać
    jak ciąg dalszy strony, nie jak inny produkt. */
 .login-overlay::before {
-  content: ""; position: absolute; inset: -20%; z-index: -1; pointer-events: none;
+  content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
   background:
     radial-gradient(28% 32% at 30% 30%, color-mix(in srgb, var(--k-nvidia) 30%, transparent), transparent 70%),
     radial-gradient(26% 30% at 70% 34%, color-mix(in srgb, var(--k-local) 26%, transparent), transparent 70%),
@@ -3055,19 +3090,28 @@ body::after {
   color: var(--text-faint);
 }
 
+.voice-overlay { isolation: isolate; }
+/* Podgląd kamery w trybie głosowym to przygaszone TŁO całego ekranu, nie
+   okienko w rogu: okienko wchodziło na dymek z odpowiedzią (runda 8, zrzut 14),
+   a na telefonie w poziomie nie miało gdzie stanąć. */
 .voice-camera-wrap {
   position: absolute;
-  bottom: 56px;
-  right: 24px;
-  width: 190px;
-  max-width: 40vw;          /* na telefonie podgląd ma być kontrolką, nie ekranem */
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
 }
-.voice-camera-wrap video, .voice-camera-wrap img { max-height: 30vh; object-fit: cover; }
 .voice-camera-wrap video, .voice-camera-wrap img {
   width: 100%;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
+  height: 100%;
+  object-fit: cover;
+  opacity: .32;
+  filter: saturate(.7);
   background: #000;
+}
+.voice-camera-wrap::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(60% 55% at 50% 42%, rgba(12, 13, 20, .55), rgba(12, 13, 20, .2) 70%, rgba(12, 13, 20, .7));
 }
 /* TELEFON TRZYMANY POZIOMO. Na wysokość zostaje ~360 px, a sama kula ma 150.
    Bez tego kadru mieści się kula i nic więcej – dokładnie tak, jak wyglądało
@@ -3084,8 +3128,9 @@ body::after {
 
 .voice-camera-label {
   position: absolute;
-  top: 6px;
-  left: 8px;
+  z-index: 1;
+  top: max(22px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
   font-size: 10px;
   color: #fff;
   background: rgba(0, 0, 0, .55);
@@ -3346,12 +3391,12 @@ body::after {
 
   /* „Pobierz listę" i podobne przyciski schodzą pod pole zamiast je zwężać */
   .field-row { flex-wrap: wrap; }
-  .field-row input { min-width: 180px; }
+  .field-row input:not([type="checkbox"], [type="radio"]) { min-width: 180px; }
 
   /* Listy w Studiu zawijają się na osobne wiersze, zamiast ucinać etykiety
      w rodzaju „1024 × 1024 (kwadrat)" w połowie słowa */
   .studio-section .field-row select,
-  .studio-section .field-row input { min-width: 190px; }
+  .studio-section .field-row input:not([type="checkbox"], [type="radio"]) { min-width: 190px; }
 
   .offline-bar { padding: 9px 12px; font-size: 12px; flex-wrap: wrap; }
   .offline-retry { margin-left: 0; }
@@ -3417,7 +3462,6 @@ body::after {
   gap: 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;
-  flex-wrap: wrap;
 }
 .studio-tab {
   background: none;
@@ -3450,7 +3494,7 @@ body::after {
 }
 /* w wierszach flex select i input dzielą szerokość równo (bez zgniatania inputu) */
 .learn-pane .field-row select,
-.learn-pane .field-row input { flex: 1; min-width: 0; width: auto; }
+.learn-pane .field-row input:not([type="checkbox"], [type="radio"]) { flex: 1; min-width: 0; width: auto; }
 .learn-pane textarea { resize: vertical; }
 
 .learn-capture {
@@ -3942,28 +3986,99 @@ select::-ms-expand { display: none; }
 .pusty-stan .ik::before { width: 30px; height: 30px; margin: 0; background: var(--text-faint); }
 .pusty-stan p { margin: 0; max-width: 34ch; font-size: 14px; line-height: 1.5; }
 
-/* Karty ustawień – przyklejone u góry, przewijają do grupy (niczego nie chowają). */
+/* ---- USTAWIENIA: zakładki i sekcje (runda 8) ----------------------------
+   Telefon: jeden wiersz kart przewijany w bok (nigdy dwa rzędy – „przeskakiwały
+   nie w kolejności”), pod nim tylko wybrana grupa. Komputer i telefon w poziomie:
+   pionowa lista po lewej, treść po prawej. Każda grupa to karty-sekcje
+   z nagłówkiem, a przełączniki stoją w wierszu: opis po lewej, suwak po prawej. */
 .set-karty {
-  position: sticky; top: -24px; z-index: 2; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  position: sticky; top: -24px; z-index: 2; display: flex; gap: 4px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
   flex: none; margin: -24px -24px 0; padding: 12px 24px 10px;
   background: var(--bg-elevated); border-bottom: 1px solid var(--border);
 }
 .set-karty::-webkit-scrollbar { display: none; }
 .set-karty button {
-  flex: none; font: inherit; font-size: 13px; color: var(--text-dim); background: none;
-  border: 1px solid transparent; border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  flex: none; font: inherit; font-size: 14px; color: var(--text-dim); background: none; white-space: nowrap;
+  border: 1px solid transparent; border-radius: 999px; padding: 7px 14px; min-height: 36px; cursor: pointer;
+  scroll-snap-align: start;
 }
-.set-karty button:hover { color: var(--text); background: var(--bg-hover); }
 .set-karty button.aktywna { color: var(--text); border-color: var(--border-strong, var(--border)); background: var(--bg); }
 .set-karty button[hidden] { display: none; }
-#settings-modal .modal-body { position: relative; }   /* offsetTop bloków liczony od okna ustawień */
+@media (hover: hover) and (pointer: fine) { .set-karty button:hover { color: var(--text); background: var(--bg-hover); } }
+.set-karty button:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+
+.set-panele { min-width: 0; }
+.set-panel { display: flex; flex-direction: column; gap: 16px; }
+.set-panel[hidden] { display: none; }
+
+.set-sekcja {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  padding: 14px 16px 16px; margin: 0;
+  border: 1px solid var(--border); border-radius: 16px; background: var(--bg);
+}
+.set-sekcja[hidden] { display: none; }
+.set-sekcja > h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+.set-sekcja-opis { margin: -6px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-dim); max-width: 60ch; }
+/* Konto ma własne tło bloku – w sekcji niepotrzebne drugie obramowanie. */
+.set-sekcja.konto-blok { margin-bottom: 0; background: var(--bg); border-color: var(--border); border-radius: 16px; }
+
+/* Wiersz z przełącznikiem: tekst po lewej, suwak po prawej, cały wiersz klikalny. */
+.set-wiersz {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px;
+  padding: 10px 0 0; border-top: 1px solid var(--border); min-height: 48px;
+}
+.set-sekcja > h3 + .set-wiersz, .set-sekcja > .set-sekcja-opis + .set-wiersz { border-top: 0; padding-top: 0; }
+.set-wiersz.zm-przelacznik { position: relative; font-size: 14px; }
+.set-wiersz-tekst { display: flex; flex-direction: column; gap: 3px; min-width: 0; color: var(--text); }
+.set-wiersz-tekst .field-hint { font-size: 12px; line-height: 1.45; color: var(--text-faint); }
+.set-szczegoly > summary { cursor: pointer; font-size: 13px; color: var(--text-dim); padding: 2px 0; }
+.set-szczegoly[open] > summary { margin-bottom: 8px; }
+.set-stan { font-size: 12.5px; color: var(--text-dim); }
+.set-stan:empty { display: none; }
+.set-licznik { font-size: 12px; color: var(--text-faint); margin-top: -8px; }
+.set-licznik:empty { display: none; }
+
+#settings-modal .modal-body { position: relative; }
 @media (max-width: 720px) { .set-karty { top: -16px; margin: -16px -16px 0; padding: 10px 16px 8px; } }
-/* Siedem kart (od „Zmysłów”) nie mieści się w 360 px: „Dane” chowało się za
-   krawędzią przewijanego paska i na telefonie nikt by go nie znalazł. Ciaśniej,
-   a gdyby i tak nie weszło – drugi rząd zamiast ukrytej karty. */
-@media (max-width: 480px) {
-  .set-karty { flex-wrap: wrap; gap: 2px; row-gap: 4px; }
-  .set-karty button { padding: 5px 8px; font-size: 12.5px; }
+/* Gdy kart nie widać wszystkich – prawa krawędź gaśnie, więc widać, że pasek jedzie dalej. */
+@media (max-width: 759px) {
+  .set-karty { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .set-sekcja { padding: 12px 14px 14px; }
+}
+
+/* Komputer: pionowa lista kart po lewej. */
+@media (min-width: 760px) {
+  #settings-modal .modal { max-width: 880px; }
+  #settings-modal .modal-body { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 24px; align-items: start; }
+  #settings-modal .set-karty {
+    position: sticky; top: 0; margin: 0; padding: 0; border: 0; background: none;
+    flex-direction: column; gap: 2px; overflow: visible;
+  }
+  #settings-modal .set-karty button { text-align: left; border-radius: 10px; padding: 8px 12px; }
+  #settings-modal .set-karty #set-tab-dom { margin-top: 10px; position: relative; }
+  #settings-modal .set-karty #set-tab-dom::before {
+    content: ""; position: absolute; left: 12px; right: 12px; top: -6px; border-top: 1px solid var(--border);
+  }
+}
+/* Telefon w poziomie (~313–412 px wysokości): okno na cały ekran, cienki
+   nagłówek i stopka, karty jako lista po lewej – na treść zostaje większość ekranu
+   zamiast 117 px (zrzut 07). */
+@media (orientation: landscape) and (max-height: 500px) {
+  #settings-modal.modal-overlay { padding: 0; }
+  #settings-modal .modal { max-width: none; width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
+  #settings-modal .modal-header { padding: 6px max(16px, env(safe-area-inset-right)) 6px max(16px, env(safe-area-inset-left)); min-height: 44px; }
+  #settings-modal .modal-header h2 { font-size: 16px; }
+  #settings-modal .modal-footer { padding: 6px max(16px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) 16px; }
+  #settings-modal .modal-body {
+    display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: start; flex: 1; min-height: 0;
+    padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  }
+  #settings-modal .set-karty {
+    position: sticky; top: 0; margin: 0; padding: 0; border: 0; background: none;
+    flex-direction: column; gap: 2px; overflow: visible; -webkit-mask-image: none; mask-image: none;
+  }
+  #settings-modal .set-karty button { text-align: left; border-radius: 10px; padding: 6px 10px; min-height: 32px; font-size: 13.5px; }
 }
 
 /* „Przywróć domyślne” uzbrojone: drugie kliknięcie kasuje ustawienia. */
@@ -4069,10 +4184,14 @@ select::-ms-expand { display: none; }
 .zm-log summary, .zm-pakiety summary, .zm-recznie summary { cursor: pointer; font-size: 12px; color: var(--text-dim); }
 .zm-pakiety-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; margin: 8px 0; }
 .zm-pakiet { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
-.zm-stopka { flex-wrap: wrap; align-items: center; }
-.zm-stopka .zm-auto { margin-left: 0; flex: 1 1 auto; }
-.zm-stopka .zm-auto input { flex: none; width: auto; }
-.zm-stopka .btn-ghost { margin-left: auto; }
+.zm-stopka { flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.zm-stopka .zm-odlacz { margin-left: auto; color: var(--danger); }
+/* Nazwa składnika w jednym wierszu, opis drobnym drukiem pod nią. */
+.zm-etykieta { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; color: var(--text); }
+.zm-opis { font-size: 12px; line-height: 1.4; color: var(--text-faint); }
+.zm-skladnik { padding: 6px 0; border-top: 1px solid var(--border); }
+.zm-skladnik:first-child { border-top: 0; }
+.zm-skladnik .zm-przelacznik { flex: 1 1 14rem; flex-direction: row-reverse; justify-content: space-between; gap: 16px; }
 .zm-kreator { margin-top: 10px; }
 .zm-kroki { display: flex; flex-direction: column; gap: 10px; }
 .zm-system { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; align-self: flex-start; }

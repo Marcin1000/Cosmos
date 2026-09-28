@@ -851,7 +851,7 @@ function messageElement(m, idx = -1) {
          zawsze skończy się tak samo – droga prowadzi do Ustawień. */
       if (m.trwaly) {
         ponow.textContent = '⚙ ' + t('chat.doUstawien');
-        ponow.addEventListener('click', () => openSettings());
+        ponow.addEventListener('click', () => openSettings('silniki'));
       } else {
         ponow.textContent = '↻ ' + t('chat.ponow');
         ponow.addEventListener('click', () => regenerateFrom(idx));
@@ -3272,10 +3272,22 @@ function stopSpeaking() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
 
+/** Głośnik w pasku: stan widać (przekreślenie, aria-pressed) i słychać w podpowiedzi. */
+function pokazGlosnik() {
+  const wl = Boolean(settings.speak);
+  el.ttsToggle.classList.toggle('active', wl);
+  el.ttsToggle.setAttribute('aria-pressed', String(wl));
+  const opis = `${t('ttsRead')} – ${t(wl ? 'ttsStanWl' : 'ttsStanWyl')}`;
+  el.ttsToggle.title = opis;
+  el.ttsToggle.setAttribute('aria-label', t('ttsRead'));
+  const wUstawieniach = $('set-speak');
+  if (wUstawieniach) wUstawieniach.checked = wl;
+}
+
 el.ttsToggle.addEventListener('click', () => {
   settings.speak = !settings.speak;
   saveSettings();
-  el.ttsToggle.classList.toggle('active', settings.speak);
+  pokazGlosnik();
   if (!settings.speak) stopSpeaking();
 });
 
@@ -4344,6 +4356,7 @@ function stopVoiceRecognizers() {
 }
 
 async function enterVoiceMode() {
+  rozpoznajOdlozonePtaki();
   // Dwa silniki, dwa różne wymagania. Brak Web Speech API nie przekreśla
   // trybu głosowego, jeśli działa własny nasłuch z Whisperem – a to właśnie
   // przypadek Firefoksa i Safari, gdzie rozpoznawania mowy po prostu nie ma.
@@ -4492,6 +4505,102 @@ const PTAK_SEKUND = 8;
 // Drugie kliknięcie w trakcie nagrania otwierałoby DRUGI strumień z tego samego
 // mikrofonu. Część urządzeń po prostu odmawia, reszta oddaje cichsze nagranie.
 let ptakTrwa = false;
+// Z /api/status: czy ptaki obsłuży KTÓREŚ źródło (także serwer, bez domu).
+let stanPtakow = { dostepne: false, znany: false };
+
+/* KOLEJKA BEZ ZASIĘGU. W lesie nagranie jest, a internetu nie ma – dawniej
+   przepadało. Teraz czeka w przeglądarce (IndexedDB) i rozpoznaje się samo,
+   gdy sieć wróci. Po jednym: serwer odpowiada 429 na drugie nagranie tej
+   samej osoby. Pamięć przeglądarki bywa niedostępna – wtedy po prostu mówimy,
+   że trzeba połączenia. */
+const ptakiOdlozone = {
+  otworz() {
+    return new Promise((ok, zle) => {
+      const r = indexedDB.open('cosmos-ptaki', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('nagrania', { keyPath: 'id', autoIncrement: true });
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => zle(r.error);
+    });
+  },
+  async dodaj(blob) {
+    const db = await this.otworz();
+    await new Promise((ok, zle) => {
+      const tx = db.transaction('nagrania', 'readwrite');
+      tx.objectStore('nagrania').add({ blob, kiedy: Date.now() });
+      tx.oncomplete = ok; tx.onerror = () => zle(tx.error);
+    });
+  },
+  async wszystkie() {
+    const db = await this.otworz();
+    return new Promise((ok, zle) => {
+      const r = db.transaction('nagrania').objectStore('nagrania').getAll();
+      r.onsuccess = () => ok(r.result || []); r.onerror = () => zle(r.error);
+    });
+  },
+  async usun(id) {
+    const db = await this.otworz();
+    await new Promise((ok) => {
+      const tx = db.transaction('nagrania', 'readwrite');
+      tx.objectStore('nagrania').delete(id);
+      tx.oncomplete = ok; tx.onerror = ok;
+    });
+  },
+};
+
+/** Opis wyniku BirdNET: ekran i głos osobno (nazwa po polsku, łacina drobnym drukiem). */
+function opisPtakow(lista) {
+  const pierwszy = lista[0];
+  const proc = Math.round((pierwszy.pewnosc || 0) * 100);
+  const nazwa = pierwszy.nazwa || pierwszy.lacinska;
+  return {
+    ekran: t('voice.birdFound', { nazwa, proc })
+      + (lista.length > 1 ? ` · ${lista.slice(1).map((g) => `${g.nazwa || g.lacinska} ${Math.round((g.pewnosc || 0) * 100)}%`).join(' · ')}` : ''),
+    glos: t('voice.birdFoundSpoken', { nazwa, proc }),
+    nazwa, proc,
+  };
+}
+
+async function wyslijPtaka(blob) {
+  const res = await fetch('/api/ptak', { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'X-Cosmos-Jezyk': getLang() }, body: blob });
+  const dane = await readJsonSafe(res);
+  if (!res.ok) throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { status: res.status, kod: dane.kod });
+  return Array.isArray(dane.gatunki) ? dane.gatunki : [];
+}
+
+/** Rozpoznaj nagrania odłożone bez zasięgu – po jednym, gdy wróci sieć. */
+let ptakiOdkladanie = false;
+async function rozpoznajOdlozonePtaki() {
+  if (ptakiOdkladanie || !navigator.onLine) return;
+  ptakiOdkladanie = true;
+  try {
+    const lista = await ptakiOdlozone.wszystkie().catch(() => []);
+    for (const w of lista) {
+      const godzina = new Date(w.kiedy).toLocaleTimeString(getLang() === 'en' ? 'en-GB' : 'pl-PL', { hour: '2-digit', minute: '2-digit' });
+      let gatunki;
+      try { gatunki = await wyslijPtaka(w.blob); } catch (err) {
+        if (err instanceof TypeError) break;          // sieć znowu zniknęła – spróbujemy później
+        await ptakiOdlozone.usun(w.id);               // błąd treści – nie ponawiamy w nieskończoność
+        continue;
+      }
+      await ptakiOdlozone.usun(w.id);
+      const tekst = gatunki.length
+        ? t('voice.birdLater', { godzina, ...(({ nazwa, proc }) => ({ nazwa, proc }))(opisPtakow(gatunki)) })
+        : t('voice.birdLaterNone', { godzina });
+      pokazKomunikatPtaka(tekst);
+    }
+  } finally {
+    ptakiOdkladanie = false;
+  }
+}
+/** Wynik odłożonego nagrania: w trybie głosowym na scenie, poza nim w rozmowie. */
+function pokazKomunikatPtaka(tekst) {
+  if (voiceMode) { el.voiceAnswer.textContent = tekst; return; }
+  if (!activeConversation) return;
+  activeConversation.messages.push({ role: 'assistant', content: tekst, komunikatCosmosa: true, ...znakSilnika() });
+  saveConversations();
+  renderMessages({ przewin: sledzeDol });
+}
+window.addEventListener('online', () => { rozpoznajOdlozonePtaki(); });
 
 async function rozpoznajPtaka() {
   if (ptakTrwa) return;
@@ -4499,8 +4608,12 @@ async function rozpoznajPtaka() {
     el.voiceAnswer.textContent = t('voice.birdNoAudio');
     return;
   }
-  if (!(senses.online && senses.caps.birdnet)) {
-    el.voiceAnswer.textContent = t(senses.tylkoWlasciciel ? 'voice.birdNotForYou' : 'voice.birdNoSenses');
+  /* Blokujemy tylko wtedy, gdy WIEMY, że ta osoba nie ma żadnej drogi do
+     ptaków. Stan sprzed 30 s nie może odmawiać za serwer – nagranie idzie,
+     a odpowiedź serwera mówi resztę (runda 8: przycisk odmawiał, zanim
+     cokolwiek wysłał, choć serwer by rozpoznał). */
+  if (stanPtakow.znany && !stanPtakow.dostepne && !(senses.online && senses.caps.birdnet) && senses.tylkoWlasciciel) {
+    el.voiceAnswer.textContent = t('voice.birdNotForYou');
     return;
   }
   // Mikrofon jest zajęty przez nasłuch ciągły – zwalniamy go na czas nagrania
@@ -4528,31 +4641,42 @@ async function rozpoznajPtaka() {
     }
 
     el.voiceAnswer.textContent = t('voice.birdThinking');
-    const res = await fetch('/api/ptak', {
-      method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob,
-    });
-    const dane = await readJsonSafe(res);
-    if (!res.ok) throw new Error(dane.error || `HTTP ${res.status}`);
-
-    const lista = Array.isArray(dane.gatunki) ? dane.gatunki : [];
+    const wolno = setTimeout(() => { el.voiceAnswer.textContent = t('voice.birdSlow'); }, 20000);
+    let lista;
+    try {
+      if (!navigator.onLine) throw new TypeError('offline');
+      lista = await wyslijPtaka(blob);
+    } catch (err) {
+      clearTimeout(wolno);
+      // Brak sieci: nagranie czeka w przeglądarce i rozpozna się po powrocie internetu.
+      if (err instanceof TypeError) {
+        let odlozone = false;
+        try { await ptakiOdlozone.dodaj(blob); odlozone = true; } catch { /* pamięć przeglądarki niedostępna */ }
+        el.voiceAnswer.textContent = t(odlozone ? 'voice.birdQueued' : 'voice.birdOffline');
+        return;
+      }
+      throw err;
+    }
+    clearTimeout(wolno);
     if (!lista.length) {
       el.voiceAnswer.textContent = t('voice.birdNone');
       setVoiceState('speaking');
       await speakText(t('voice.birdNone'));
     } else {
-      const opis = lista
-        .map((g) => `${g.nazwa || g.lacinska} – ${Math.round((g.pewnosc || 0) * 100)}%`)
-        .join(' · ');
-      el.voiceAnswer.textContent = opis;
+      const opis = opisPtakow(lista);
+      el.voiceAnswer.textContent = opis.ekran;
+      el.voiceAnswer.title = lista.map((g) => g.lacinska).filter(Boolean).join(' · ');
       setVoiceState('speaking');
-      const pierwszy = lista[0];
-      await speakText(t('voice.birdFound', {
-        nazwa: pierwszy.nazwa || pierwszy.lacinska,
-        proc: Math.round((pierwszy.pewnosc || 0) * 100),
-      }));
+      await speakText(opis.glos);
     }
   } catch (err) {
-    el.voiceAnswer.textContent = t('voice.birdErr', { msg: err.message });
+    /* Bez surowych błędów („HTTP 502”): zdanie serwera, gdy jest ludzkie,
+       a dla 403 – brak dostępu. Szczegół w podpowiedzi i w konsoli. */
+    console.warn('ptak:', err);
+    el.voiceAnswer.title = err.message || '';
+    el.voiceAnswer.textContent = err.status === 403 ? t('voice.birdNotForYou')
+      : [429, 503, 504].includes(err.status) && err.message && !/HTTP|\//.test(err.message) ? err.message
+        : err.status >= 500 ? t('voice.birdNoSenses') : t('voice.birdErr');
   } finally {
     ptakTrwa = false;
     if (voiceMode) {
@@ -5270,57 +5394,89 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---- KARTY USTAWIEŃ -------------------------------------------------------
-   Ustawienia to ~20 bloków w jednej kolumnie. Karty u góry PRZEWIJAJĄ do grupy
-   i podświetlają tę, w której jesteś – nic nie jest chowane, więc każde pole
-   zostaje tam, gdzie było (i tak samo dostępne z klawiatury czy z testu).
-   Karta bez widocznego bloku (np. „Dom" u zaproszonej osoby) znika. */
-{
-  const cialo = document.querySelector('#settings-modal .modal-body');
-  const karty = cialo ? [...cialo.querySelectorAll('.set-karty [data-cel]')] : [];
-  const widoczne = (g) => [...cialo.querySelectorAll(`[data-karta="${g}"]`)].filter((b) => b.offsetParent !== null);
-  const zaznacz = (g) => karty.forEach((k) => {
-    k.classList.toggle('aktywna', k.dataset.cel === g);
-    k.setAttribute('aria-current', k.dataset.cel === g ? 'true' : 'false');
-  });
-  const odswiez = () => {
-    for (const k of karty) k.hidden = !widoczne(k.dataset.cel).length;
-    const pasek = cialo.querySelector('.set-karty');
-    const odGory = cialo.getBoundingClientRect().top + (pasek ? pasek.offsetHeight : 0) + 24;
-    /* Świeci grupa bloku, który czytasz – najniższego z tych, które minęły
-       pasek. Grupy są w HTML-u przeplecione (głos między silnikami, pierwszy
-       blok „Dane" przed „Domem"), więc dawne „ostatnia karta, której pierwszy
-       blok minął górę" po kliknięciu „Dom" zapalało „Dane" – Dom nie świecił
-       nigdy. */
-    let biezaca = karty.find((k) => !k.hidden)?.dataset.cel;
-    let najnizej = -Infinity;
-    for (const b of cialo.querySelectorAll('[data-karta]')) {
-      if (b.offsetParent === null) continue;
-      const y = b.getBoundingClientRect().top;
-      if (y <= odGory && y > najnizej) { najnizej = y; biezaca = b.dataset.karta; }
-    }
-    if (biezaca) zaznacz(biezaca);
+   Prawdziwe zakładki (wzorzec WAI-ARIA Tabs): widać tylko wybraną grupę.
+   Dawniej karty przewijały jedną długą kolumnę, a bloki różnych grup były
+   w HTML-u przeplecione – podświetlenie skakało „nie w kolejności”, a pod
+   „Nasłuchem” stała „Instrukcja systemowa” (Marcin, runda 8). Karta bez
+   żadnej widocznej sekcji (np. „Dom” u zaproszonej osoby) znika. Ostatnia
+   karta zostaje zapamiętana na tym urządzeniu. */
+const kartyUstawien = (() => {
+  const modal = $('settings-modal');
+  const cialo = modal && modal.querySelector('.modal-body');
+  if (!cialo) return { odswiez() {}, pokaz() {} };
+  const karty = [...cialo.querySelectorAll('.set-karty [role="tab"]')];
+  const panel = (g) => $(`set-panel-${g}`);
+  /* Widoczność liczona od sekcji w górę do panelu – panel może być w tej
+     chwili ukryty, więc offsetParent nic tu nie powie. */
+  const widoczna = (sekcja, p) => {
+    for (let x = sekcja; x && x !== p; x = x.parentElement) if (getComputedStyle(x).display === 'none') return false;
+    return true;
   };
+  const maTresc = (g) => {
+    const p = panel(g);
+    return Boolean(p) && [...p.querySelectorAll('[data-karta]')].some((s) => widoczna(s, p));
+  };
+  let biezaca = null;
+  function pokaz(g, { fokus = false } = {}) {
+    const k = karty.find((x) => x.dataset.cel === g && !x.hidden) || karty.find((x) => !x.hidden);
+    if (!k) return;
+    biezaca = k.dataset.cel;
+    for (const x of karty) {
+      const tak = x === k;
+      x.classList.toggle('aktywna', tak);
+      x.setAttribute('aria-selected', String(tak));
+      x.tabIndex = tak ? 0 : -1;
+      const p = panel(x.dataset.cel);
+      if (p) p.hidden = !tak;
+    }
+    cialo.scrollTop = 0;
+    // Na telefonie pasek kart przewija się w bok – wybrana ma być w zasięgu.
+    k.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    if (fokus) k.focus();
+    try { localStorage.setItem('cosmos.kartaUstawien', biezaca); } catch { /* bez pamięci */ }
+  }
+  function odswiez() {
+    for (const k of karty) k.hidden = !maTresc(k.dataset.cel);
+    const zapamietana = (() => { try { return localStorage.getItem('cosmos.kartaUstawien'); } catch { return null; } })();
+    const cel = biezaca || zapamietana || 'konto';
+    const k = karty.find((x) => x.dataset.cel === cel);
+    if (!biezaca || !k || k.hidden) pokaz(cel);
+  }
   for (const k of karty) {
-    k.addEventListener('click', () => {
-      const pierwszy = widoczne(k.dataset.cel)[0];
-      if (!pierwszy) return;
-      const pasek = cialo.querySelector('.set-karty');
-      cialo.scrollTo({ top: pierwszy.offsetTop - (pasek ? pasek.offsetHeight + 8 : 0), behavior: 'smooth' });
-      zaznacz(k.dataset.cel);
+    k.addEventListener('click', () => pokaz(k.dataset.cel));
+    k.addEventListener('keydown', (e) => {
+      const widoczne = karty.filter((x) => !x.hidden);
+      const i = widoczne.indexOf(k);
+      const skok = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      let cel = null;
+      if (skok) cel = widoczne[(i + skok + widoczne.length) % widoczne.length];
+      else if (e.key === 'Home') cel = widoczne[0];
+      else if (e.key === 'End') cel = widoczne[widoczne.length - 1];
+      if (!cel) return;
+      e.preventDefault();
+      pokaz(cel.dataset.cel, { fokus: true });
     });
   }
-  if (cialo) {
-    cialo.addEventListener('scroll', () => requestAnimationFrame(odswiez), { passive: true });
-    new MutationObserver(() => { if ($('settings-modal').style.display !== 'none') requestAnimationFrame(odswiez); })
-      .observe($('settings-modal'), { attributes: true, attributeFilter: ['style'] });
-    /* Blok Konta odsłania się dopiero po odpowiedzi serwera – bez tego karta
-       „Konto” zostawała ukryta, a świeciły „Zmysły” (agencja, runda 6). */
-    new MutationObserver((zmiany) => {
-      // Karty same zmieniają swoje `hidden` – ich zmiany pomijamy, inaczej pętla.
-      if (zmiany.some((z) => !z.target.closest('.set-karty'))) requestAnimationFrame(odswiez);
-    }).observe(cialo, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
-  }
-}
+  new MutationObserver(() => { if (modal.style.display !== 'none') odswiez(); })
+    .observe(modal, { attributes: true, attributeFilter: ['style'] });
+  /* Sekcje Konta odsłaniają się dopiero po odpowiedzi serwera, a klasa roli
+     (członek/właściciel) przychodzi później niż samo okno. */
+  new MutationObserver((zmiany) => {
+    if (modal.style.display === 'none') return;
+    if (zmiany.some((z) => !z.target.closest('.set-karty') && !z.target.classList?.contains('set-panel'))) odswiez();
+  }).observe(cialo, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  return { odswiez, pokaz };
+})();
+
+/* Przełączniki w Ustawieniach działają od razu – nie czekają na „Zapisz”. */
+$('set-offline').addEventListener('change', (e) => { settings.offline = e.target.checked; saveSettings(); });
+$('set-timemachine').addEventListener('change', (e) => { settings.timeMachine = e.target.checked; saveSettings(); updateLiveRec(); });
+$('set-speak').addEventListener('change', (e) => {
+  settings.speak = e.target.checked;
+  saveSettings();
+  pokazGlosnik();
+  if (!settings.speak) stopSpeaking();
+});
 
 /* ---- FOKUS W NAKŁADKACH -------------------------------------------------
    Z klawiatury nakładki były nieużywalne: fokus nie wchodził do środka,
@@ -5552,6 +5708,7 @@ el.langBtn.addEventListener('click', () => {
   renderSidebar();
   renderMessages();
   refreshStatus();
+  pokazGlosnik();
 });
 
 const ENDPOINT_TABS = {
@@ -5606,7 +5763,8 @@ function setEndpoint(name) {
 // Ustawienia (modal)
 // ----------------------------------------------------------------
 
-function openSettings() {
+/** Otwiera Ustawienia; `karta` (np. 'silniki') od razu na właściwej zakładce. */
+function openSettings(karta) {
   konta_.odswiez().catch(() => { /* panel konta nie może zablokować Ustawień */ });
   for (const ep of SILNIKI_Z_MODELEM) $(`set-model-${ep}`).value = nadpisanieModelu(ep);
   el.setSystem.value = settings.systemPrompt;
@@ -5630,6 +5788,7 @@ function openSettings() {
   $('brief-auto').checked = Boolean(settings.briefAuto);
   $('brief-time').value = settings.briefTime || '08:00';
   el.settingsModal.style.display = '';
+  if (typeof karta === 'string') kartyUstawien.pokaz(karta);
 }
 
 async function loadStats() {
@@ -5693,7 +5852,7 @@ function renderConfigInfo() {
     `  ${t('cfg.model')} ${escapeHtml(l.model || t('set.cfgModelMissing'))}`;
 }
 
-el.settingsBtn.addEventListener('click', openSettings);
+el.settingsBtn.addEventListener('click', () => openSettings());
 el.settingsClose.addEventListener('click', closeSettings);
 el.settingsModal.addEventListener('click', (e) => {
   if (e.target === el.settingsModal) closeSettings();
@@ -6058,7 +6217,11 @@ async function loadMicList() {
       + mics.map((d, i) => `<option value="${escapeHtml(d.deviceId)}"${d.deviceId === saved ? ' selected' : ''}>`
         + escapeHtml(d.label || `${t('set.micUnnamed')} ${i + 1}`) + '</option>').join('');
   } catch (err) {
-    sel.innerHTML = `<option value="">${escapeHtml(err.message)}</option>`;
+    // Po ludzku i w języku interfejsu – surowe „Requested device not found” szło po angielsku.
+    const klucz = /NotFound|DevicesNotFound|OverConstrained/.test(err.name) ? 'set.micNone'
+      : /NotAllowed|Security|PermissionDenied/.test(err.name) ? 'set.micDenied' : 'set.micErr';
+    sel.innerHTML = `<option value="">${escapeHtml(t(klucz))}</option>`;
+    sel.title = err.message || '';
   }
 }
 
@@ -6382,7 +6545,7 @@ function odswiezWyborNasluchu() {
   sel.value = localStorage.getItem('cosmos.sttEngine') || 'auto';
   const silnik = silnikNasluchu() === 'whisper'
     ? t(sttLokalne() ? 'set.sttZrodloLokalne' : 'set.sttZrodloChmura')
-    : t('set.sttBrowser');
+    : t('set.sttZrodloPrzegladarka');
   $('set-stt-now').textContent = t('set.sttNow', { silnik });
 }
 for (const ep of SILNIKI_Z_MODELEM) {
@@ -6515,7 +6678,7 @@ async function otworzListeModeli() {
   doUst.type = 'button';
   doUst.className = 'model-lista-ustawienia';
   doUst.textContent = t('model.pickSettings');
-  doUst.addEventListener('click', () => { zamknijListeModeli(); openSettings(); });
+  doUst.addEventListener('click', () => { zamknijListeModeli(); openSettings('silniki'); });
   dol.push(doUst);
   lista.replaceChildren(naglowek, ...pozycje, ...dol);
   (lista.querySelector('.model-opcja.wybrany') || lista.querySelector('.model-opcja'))?.focus();
@@ -6614,12 +6777,15 @@ async function refreshStatusWlasciwe() {
     updateModelBadge();
     // `tylkoWlasciciel`: zmysły działają, ale nie dla tej osoby – inne zdanie niż „komputer nie odpowiada”.
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true };
+    // Ptaki mają własną drogę (komputer osoby → serwer → dom) – osobny stan.
+    stanPtakow = { dostepne: st.ptaki?.ok === true, znany: Boolean(st.ptaki) };
     if (senses.online) {
       /* Część zmysłów oddaje nie `true`, tylko NAZWĘ tego, co je obsługuje
          (np. dokumenty: "docling"). Dopisujemy ją, bo „dokumenty" i
          „dokumenty (docling)" to dwie różne jakości odczytu – z tym drugim
          Cosmos czyta skany i tabele, z pierwszym nie. */
-      const active = Object.entries(senses.caps).filter(([, v]) => v)
+      // `birdnet_gotowy` i podobne to stan zmysłu (model rozgrzany), nie osobny zmysł.
+      const active = Object.entries(senses.caps).filter(([k, v]) => v && !/_gotowy$/.test(k))
         .map(([k, v]) => (typeof v === 'string' ? `${k} (${v})` : k));
       setStatusRow(el.statusSenses, true, active.length ? t('stat.active', { n: active.length }) : t('stat.online'));
       el.statusSenses.title = active.length ? t('stat.sensesTip', { list: active.join(', ') }) : t('stat.online');
@@ -6788,7 +6954,7 @@ function startApp() {
   collapseSidebarOnMobile(); // na telefonie zacznij z ukrytym panelem, widoczny czat
   buildEndpointTabs(loadJson('cosmos.zakladki', null) || ['cloud']);
   setEndpoint(endpoint);
-  el.ttsToggle.classList.toggle('active', Boolean(settings.speak));
+  pokazGlosnik();
   updateKbBadge();
   /* Najpierw lista rozmów, dopiero potem powrót do odpowiedzi, która
      powstawała w tle – wznowienie musi mieć do czego wrócić. */

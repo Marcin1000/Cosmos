@@ -113,6 +113,7 @@ up.listen(7101, async () => {
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto('http://127.0.0.1:3021/app');
   await pg.click('#settings-btn');
+  await pg.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await pg.waitForTimeout(400);
 
   // 6. „Sprawdź" przy polu modelu

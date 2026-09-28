@@ -195,7 +195,10 @@ function utworzZmyslyWidok({ $, t }) {
   function opisSkladnika(a, k) {
     const s = (a.skladniki || {})[k] || {};
     const chce = Boolean((a.chce || {})[k]);
-    if (!a.online) return { tekst: chce ? t('zm.st.offlineOn') : t('zm.st.off'), klasa: '' };
+    /* Niepołączony: stan wiersza pusty – przełącznik sam mówi wł./wył., a co to
+       znaczy, mówi JEDEN baner na górze karty (dawniej „Włączy się, gdy komputer
+       się połączy” pod każdym przełącznikiem, runda 8). */
+    if (!a.online) return { tekst: '', klasa: '' };
     if (!chce) return { tekst: t('zm.st.off'), klasa: '' };
     if (s.zewnetrzny) return { tekst: t('zm.st.external'), klasa: 'zm-ok' };
     if (s.dziala) {
@@ -216,9 +219,9 @@ function utworzZmyslyWidok({ $, t }) {
     const meta = el('span', 'zm-meta mono', [a.system, a.online ? t('zm.online') : t('zm.offline')].filter(Boolean).join(' · '));
     glowa.append(kropka, nazwa, meta);
     karta.append(glowa);
-    if (!a.online) karta.append(el('p', 'field-hint zm-offline-zdanie', t(a.uspiony ? 'zm.asleep' : 'zm.offlineHint')));
+    if (!a.online) karta.append(el('p', 'zm-baner zm-offline-zdanie', t(a.uspiony ? 'zm.asleep' : 'zm.offlineHint')));
 
-    const caps = Object.entries(a.caps || {}).filter(([, v]) => v === true)
+    const caps = Object.entries(a.caps || {}).filter(([k, v]) => v === true && !/_gotowy$/.test(k))
       .map(([k]) => (k === 'extract' ? t('zm.cap.extract') : CAPS[k] || k));
     if (a.online && a.zmyslyDzialaja && caps.length) {
       karta.append(el('p', 'field-hint zm-caps', `${t('zm.caps')} ${[...new Set(caps)].join(', ')}`));
@@ -254,9 +257,12 @@ function utworzZmyslyWidok({ $, t }) {
         pole.disabled = false;
         setTimeout(() => odswiez(true), 700);
       });
-      etykieta.append(pole, el('span', 'zm-suwak'), el('span', 'zm-etykieta', t(`zm.s.${k}`)));
-      const stan = el('span', `zm-stan ${opis.klasa}`, opis.tekst);
-      wiersz.append(etykieta, stan);
+      // Krótka nazwa w jednym wierszu, co robi – drobnym drukiem pod spodem.
+      const tekst = el('span', 'zm-etykieta');
+      tekst.append(el('span', '', t(`zm.s.${k}`)), el('span', 'zm-opis', t(`zm.s.${k}Opis`)));
+      etykieta.append(pole, el('span', 'zm-suwak'), tekst);
+      wiersz.append(etykieta);
+      if (opis.tekst) wiersz.append(el('span', `zm-stan ${opis.klasa}`, opis.tekst));
       skl.append(wiersz);
       if (opis.log) {
         skl.append(el('p', 'field-hint zm-zle zm-dlaczego', dlaczego(opis.log)));
@@ -311,21 +317,28 @@ function utworzZmyslyWidok({ $, t }) {
       akt.addEventListener('click', () => polecenieAgenta(a.id, { polecenie: 'aktualizuj' }, akt));
       stopka.append(akt);
     }
-    const auto = el('label', 'ps-sens zm-auto');
+    // Autostart to taki sam przełącznik jak składniki – dawniej pole wyboru
+    // rozjeżdżało się na pół wiersza (runda 8, zrzut 20).
+    const auto = el('div', 'zm-skladnik zm-auto');
+    const autoLab = el('label', 'zm-przelacznik');
     const autoCb = el('input');
     autoCb.type = 'checkbox';
     autoCb.checked = Boolean(a.autostart);
     autoCb.disabled = !a.online;
     autoCb.dataset.autostart = '1';
     autoCb.addEventListener('change', () => polecenieAgenta(a.id, { polecenie: 'autostart', wlacz: autoCb.checked }));
-    auto.append(autoCb, el('span', '', t('zm.autostart')));
-    const odlacz = przycisk('btn-ghost', t('zm.disconnect'));
+    const autoTekst = el('span', 'zm-etykieta');
+    autoTekst.append(el('span', '', t('zm.autostart')), el('span', 'zm-opis', t('zm.autostartOpis')));
+    autoLab.append(autoCb, el('span', 'zm-suwak'), autoTekst);
+    auto.append(autoLab);
+    skl.append(auto);
+    const odlacz = przycisk('btn-ghost zm-odlacz', t('zm.disconnect'));
     odlacz.addEventListener('click', async () => {
       if (!confirm(t('zm.disconnectConfirm').replace('{nazwa}', a.nazwa))) return;
       await zadaj(`/api/agent?id=${encodeURIComponent(a.id)}`, { metoda: 'DELETE' });
       odswiez(true);
     });
-    stopka.append(auto, odlacz);
+    stopka.append(odlacz);
     karta.append(stopka);
     return karta;
   }

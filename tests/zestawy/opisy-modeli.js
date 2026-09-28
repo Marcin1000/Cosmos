@@ -13,6 +13,7 @@ const SHOT = require('../pomoc').KATALOG_ZRZUTOW;
   const fail = [];
 
   await page.click('#settings-btn');
+  await page.evaluate(() => document.querySelector('#settings-modal [data-cel="silniki"]').click());   // Ustawienia to zakładki
   await page.waitForTimeout(400);
 
   const read = () => page.evaluate(() => {

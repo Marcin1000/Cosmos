@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="139 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-139-5E9E3A?style=flat-square">
+  <img alt="140 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-140-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 139 zestawów plus 9 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 140 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 139 zestawów + 9 selftestów Pythona (~16 min)
+npm test                  # 140 zestawów + 10 selftestów Pythona (~16 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -598,14 +598,21 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** – wybierasz
   w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
   wybór jest zapamiętywany,
-- 🗣 **tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch"). *Własny
+- 🗣 **tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → Głos → „Rozmowa głosowa”). *Własny
   strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę i sam wycina wypowiedzi
   z sygnału: znika dźwięk podłączania sprzętu na Androidzie, słyszenie samego siebie
   i pętle. Wymaga zmysłów z Whisperem – bez nich Cosmos wraca do Web Speech API
   i mówi o tym wprost w Ustawieniach,
 - 🐦 przycisk **rozpoznawania ptaka** w nakładce głosowej – 8 s nagrania, gatunek
-  z BirdNET-a, czytany na głos. Współrzędne dokłada serwer, bo BirdNET zawęża listę
-  do gatunków, które w tym tygodniu naprawdę występują w tym miejscu,
+  z BirdNET-a (polska nazwa), czytany na głos. Współrzędne dokłada serwer, bo BirdNET
+  zawęża listę do gatunków, które w tym tygodniu naprawdę występują w tym miejscu
+  (zaokrąglone do 0,1°, w nagłówkach, nie w adresie). **Działa bez komputera w domu**:
+  kolejność źródeł to Twój komputer ze zmysłami → usługa ptaków na serwerze
+  (`scripts/instaluj-ptaki.sh`, KROK 6b w `docs/START-TUTAJ.md`, zmienna `PTAKI_URL`)
+  → komputer domowy właściciela. Na serwerze jedna analiza naraz i krótka kolejka
+  (`PTAKI_NARAZ`, `PTAKI_KOLEJKA`), ponad to od razu „spróbuj za chwilę”. Zaproszona
+  osoba potrzebuje przyznania **Ptaki na serwerze** w panelu Dostęp. Nagranie zrobione
+  bez zasięgu czeka w telefonie i rozpozna się samo, gdy sieć wróci,
 - ✦ „dopracuj prompt" (obok mikrofonu, pojawia się przy dłuższym tekście) – przepisuje
   podyktowaną wypowiedź na precyzyjny prompt: usuwa wypełniacze i powtórzenia,
   porządkuje wymagania w listę. Drugie kliknięcie przywraca Twoją wersję,
@@ -1085,7 +1092,7 @@ Ten sam wpis działa w Claude Desktop i Claude Code. Cosmos musi być uruchomion
 | `/api/canon/shutter` | POST | Zdalne wyzwolenie migawki (autofokus domyślnie wyłączony) |
 | `/api/profile` | GET/POST | Profil użytkownika (pamięć profilowa) |
 | `/api/document` | POST | Załącznik do rozmowy → tekst (PDF, DOCX, XLSX, PPTX, CSV) |
-| `/api/ptak` | POST | Nagranie → gatunek ptaka (BirdNET w zmysłach); współrzędne dokłada serwer |
+| `/api/ptak` | POST | Nagranie → gatunek ptaka (BirdNET: Twój komputer → serwer → dom); współrzędne dokłada serwer |
 | `/api/run` | POST | Uruchomienie programu napisanego przez model (liczenie na danych) |
 | `/api/plan` | POST | Plan zdjęciowy: pozycja Słońca, złota godzina, czas/przysłona/ISO |
 | `/api/plan/mission` | POST | Misja waypointowa dla DJI jako plik `.kmz` (WPML) – z listy punktów albo z siatki nalotu |
@@ -1378,7 +1385,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 139 zestawów + 9 selftestów Pythona (~12 min)
+npm test                 # 140 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

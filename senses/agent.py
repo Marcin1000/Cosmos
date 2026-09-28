@@ -893,7 +893,8 @@ def nazwa_skryptow_zmienione(nazwy):
 # Te same pliki co PLIKI_AGENTA w lib/agent-zmyslow.js – wersja to skrót
 # całego zestawu, nie samego agent.py (poprawka w service.py też ma dotrzeć).
 PLIKI_WERSJI = ["agent.py", "service.py", "watcher.py", "kinect_watcher.py", "kinect_win.py",
-                "kinect_usluga.py", "requirements.txt"]
+                "kinect_usluga.py", "requirements.txt", "zgodnosc_litert.py", "nazwy_ptakow_pl.txt",
+                "requirements-ptaki.txt"]
 
 
 def wersja_wlasna():
