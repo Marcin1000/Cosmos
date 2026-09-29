@@ -32,7 +32,9 @@
         składu nieznany dla płatnej roli bez szacunku, koszt tury z `faza`
         albo z ról, w notatkach i po odczycie; kod „budzet” roli zostaje;
    W15. `sklad.wymagaZgody` (true albo 'chmura') i silniki za zgodą – tylko
-        znane nazwy, bez lokalnego. */
+        znane nazwy, bez lokalnego;
+   W16. fotograf: miejsce i czas planu wracają ze składem od osoby; `powod`
+        roli jako lista kodów. */
 const fs = require('fs');
 const path = require('path');
 const Z = require('../../public/zespol-widok.js');
@@ -244,6 +246,19 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
   ok(s2.wymagaZgody === false && Z.wymagaZgodyZ('chmura') && Z.wymagaZgodyZ(true) && !Z.wymagaZgodyZ(null), 'W15b. bez pola – bez pytania; trasa planu: \'chmura\' = true');
 }
 
+// ------------------------------------------------------------------ W16
+{
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, miejsce: 'Łeba', kiedy: 'czwartek', role: [
+    { r: 'r1', rola: 'fotograf', silnik: 'local', model: 'q', zamiast: { silnik: 'claude', model: 'c' }, powod: 'budzet,wymaga-zgody' }] }, 0);
+  const o = Z.stanZWiadomosci(Z.wiadomoscNotatek(s, 5));
+  ok(s.miejsce === 'Łeba' && s.kiedy === 'czwartek' && o.miejsce === 'Łeba' && o.kiedy === 'czwartek',
+    'W16a. fotograf: miejsce i czas planu ze `sklad` przechodzą przez zapis (do „Zmień skład” i ponowienia)');
+  ok(Z.maPowod(s.role[0], 'budzet') && Z.maPowod(s.role[0], 'wymaga-zgody') && !Z.maPowod(s.role[0], 'uprawnienia')
+    && Z.skladZaZgoda(s.role)[0].silnik === 'claude',
+    'W16b. `powod` jako lista kodów („budzet,wymaga-zgody”) – oba rozpoznane, skład za zgodą wraca do chmury');
+}
+
 // ------------------------------------------------------------------ W10
 {
   const zrodla = ['public/zespol-widok.js', 'public/app.js', 'public/konta.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', '..', f), 'utf8')).join('\n');
@@ -255,7 +270,7 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
     ...['kod', 'wizja', 'rozumowanie', 'szybki', 'polski'].map((c) => `ag.wl.cecha.${c}`),
     ...['nazwa', 'cel'].flatMap((x) => [`ag.wl.pole.${x}`, `ag.wl.pole.${x}Hint`]), 'ag.wl.pole.instrukcja', 'ag.wl.pole.cechy', 'ag.wl.pole.cechyHint',
     'ag.wl.pole.fala', 'ag.wl.pole.obraz', 'ag.wl.pole.obrazHint', 'ag.wl.fala1', 'ag.wl.fala1Hint', 'ag.wl.fala2', 'ag.wl.fala2Hint',
-    'ag.odrzuconeBudzet', 'ag.odmowaBudzet', 'ag.glos.zgodaGrupa', 'ag.glos.tak', 'chat.doBudzetu', 'voice.errBudzet', 'voice.errBudzetChmura',
+    'ag.odrzuconeBudzet', 'ag.odmowaBudzet', 'ag.kosztOk', 'ag.wl.zleRole', 'ag.bud.zly', 'ag.glos.zgodaGrupa', 'ag.glos.tak', 'chat.doBudzetu', 'voice.errBudzet', 'voice.errBudzetChmura',
     ...['wylaczony', 'prosba', 'proponuj', 'sam'].flatMap((t) => [`ag.set.tryb.${t}`, `ag.set.tryb.${t}Hint`]),
     'narzedzie.zespol', 'set.k.agenci', 'ag.btn', 'ag.btnOn', 'ag.inputPh', 'ag.pokaz', 'ag.ukryj',
     'ag.odrzuconeZgoda', 'ag.odrzuconeUprawnienia', 'ag.odrzuconeLimit', 'ag.set.potwierdzaj', 'ag.set.zgodaStala',

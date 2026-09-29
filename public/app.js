@@ -2704,7 +2704,9 @@ function zespolDoWyslania(conv, prosba) {
   if (!cfg.dozwolony) return undefined;
   // „Bez agentów” (zgoda głosem: „nie” albo cisza) – ta tura bez zespołu, także bez planisty.
   if (prosba && prosba.bez) return undefined;
-  const baza = { modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) || Boolean(prosba && prosba.zgoda) } };
+  const baza = { modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) || Boolean(prosba && prosba.zgoda) },
+    // Fotograf: miejsce i czas z planu, gdy skład układa osoba (planista wtedy nie rusza).
+    ...(prosba && prosba.miejsce ? { miejsce: prosba.miejsce } : {}), ...(prosba && prosba.kiedy ? { kiedy: prosba.kiedy } : {}) };
   if (prosba && Array.isArray(prosba.sklad) && prosba.sklad.length) return { ...baza, sklad: prosba.sklad, uruchom: true };
   if (prosba && prosba.uruchom) return { ...baza, uruchom: true };
   /* Bez prośby – serwer sam decyduje (bramka 0 ms), czy pytanie warte jest
@@ -2734,7 +2736,8 @@ function zespolZdarzenie(zt, typ, surowe, miejsce) {
      nie ma czego kliknąć, więc bieg staje, ZANIM role ruszą, a Cosmos pyta
      głosem (pytajOZgodeWBiegu w runGeneration). */
   if (typ === 'sklad' && voiceMode && zt.st.wymagaZgody && !zt.zgodaGlos && !zgodaChmury(zt.conv)) {
-    zt.zgodaGlos = { role: zt.st.role.map((r) => ({ ...r })), odrzucone: zt.st.odrzucone.slice(), silniki: zt.st.silnikiZaZgoda.slice() };
+    zt.zgodaGlos = { role: zt.st.role.map((r) => ({ ...r })), odrzucone: zt.st.odrzucone.slice(), silniki: zt.st.silnikiZaZgoda.slice(),
+      miejsce: zt.st.miejsce, kiedy: zt.st.kiedy };
     stopGeneration();
     return;
   }
@@ -2870,7 +2873,8 @@ const platnyInny = (role, prowadzacy) => potwierdzajZespolu()
  * Skład do przejrzenia (bramka zgody, edycja) w miejscu elementu `zamiast`.
  * naWynik({sklad, zgoda}) – Start albo „Tylko lokalnie”; naWynik(null) – „Bez agentów”.
  */
-function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, szacunekZl, naWynik }) {
+function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, szacunekZl, miejsce = '', kiedy = '', naWynik }) {
+  const mk = { ...(miejsce ? { miejsce } : {}), ...(kiedy ? { kiedy } : {}) };
   const pytajOZgode = prowadzacy.silnik === 'local' && !zgodaChmury(conv);
   const lokalnieDomyslnie = pytajOZgode && serverConfig.endpoints && serverConfig.endpoints.local
     ? role.map((r) => ({ ...r, silnik: 'local', model: r.silnik === 'local' ? r.model : prowadzacy.model, auto: false })) : null;
@@ -2878,8 +2882,8 @@ function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, sza
     role, prowadzacy, pytajOZgode, lokalnie: lokalnie || lokalnieDomyslnie, szacunekZl,
     maxRol: cfgZespolu().maxRol || 3, katalog: katalogRol(conv),
     otworzEdytor: (r, btn, gotowe) => otworzEdytorRoli(r, btn, gotowe),
-    naStart: ({ role: r, zgoda }) => { if (zgoda) ustawZgode(conv); naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda }); },
-    naTylkoLokalnie: (r) => naWynik({ sklad: ZESPOL.skladDoWyslania(r) }),
+    naStart: ({ role: r, zgoda }) => { if (zgoda) ustawZgode(conv); naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda, ...mk }); },
+    naTylkoLokalnie: (r) => naWynik({ sklad: ZESPOL.skladDoWyslania(r), ...mk }),
     naBez: () => naWynik(null),
   });
   zamiast.replaceWith(p.el);
@@ -2893,7 +2897,7 @@ function zmienSkladTury(notIdx, st, blokEl) {
   if (!conv || isGenerating || !blokEl.isConnected) return;
   const prowadzacy = st.prowadzacy || { silnik: endpoint, model: currentModel() };
   pokazPropozycje(blokEl, {
-    conv, prowadzacy,
+    conv, prowadzacy, miejsce: st.miejsce, kiedy: st.kiedy,
     // Poprawka po recenzji (fala 3) nie jest rolą składu – serwer dokłada ją sam.
     role: st.role.filter((r) => r.fala !== 3).map((r) => ({ rola: r.rola, zadanie: '', silnik: r.silnik, model: r.model, ...(r.wlasna ? { wlasna: true, nazwa: r.nazwa } : {}) })),
     naWynik: (w) => (w ? ponowZespolem(notIdx, w) : renderMessages({ przewin: false })),
@@ -2941,25 +2945,27 @@ async function bramkaZespolu(conv) {
     // Planu nie ma – serwer ułoży skład sam, w biegu.
     if (!role.length) return { uruchom: true };
     const zaZgoda = ZESPOL.wymagaZgodyZ(plan.wymagaZgody) ? ZESPOL.skladZaZgoda(role) : null;
+    // Fotograf w składzie: miejsce i czas z planu idą razem ze składem.
+    const mkPlanu = { ...(plan.sklad.miejsce ? { miejsce: String(plan.sklad.miejsce) } : {}), ...(plan.sklad.kiedy ? { kiedy: String(plan.sklad.kiedy) } : {}) };
     const pytajOZgode = Boolean(zaZgoda && ZESPOL.silnikiChmury(zaZgoda).length);
     /* Tryb głosowy: bramki nie ma czego kliknąć w wątku – pytanie o chmurę
        idzie głosem (i trzema przyciskami na scenie). O płatny silnik głos nie
        pyta osobno: o zespół poproszono tu wprost, a koszt stoi w bloku. */
     if (voiceMode) {
-      if (!pytajOZgode) return { sklad: ZESPOL.skladDoWyslania(role) };
+      if (!pytajOZgode) return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
       const w = await pytajOZgodeGlosem(ZESPOL.silnikiChmury(zaZgoda), zaZgoda);
       if (ac.signal.aborted || turaPrzerwana) return 'stop';
-      if (w === 'tak') { ustawZgode(conv); return { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true }; }
-      if (w === 'lokalnie') return { sklad: ZESPOL.skladDoWyslania(role) };
+      if (w === 'tak') { ustawZgode(conv); return { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true, ...mkPlanu }; }
+      if (w === 'lokalnie') return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
       return null;
     }
-    if (!pytajOZgode && !platnyInny(role, prowadzacy)) return { sklad: ZESPOL.skladDoWyslania(role) };
+    if (!pytajOZgode && !platnyInny(role, prowadzacy)) return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
     return await new Promise((ok) => {
       ac.signal.addEventListener('abort', () => ok('stop'), { once: true });
       pokazPropozycje(dobieranie.el, {
         conv, prowadzacy, role: zaZgoda || role, lokalnie: pytajOZgode ? role : null,
         // Szacunek planu dotyczy składu z planu; za zgodą (inne silniki) liczy się z ról.
-        szacunekZl: zaZgoda ? undefined : plan.sklad.szacunekZl,
+        szacunekZl: zaZgoda ? undefined : plan.sklad.szacunekZl, ...mkPlanu,
         naWynik: (w) => ok(w),
       });
       scrollToBottom();
@@ -3050,16 +3056,17 @@ function pytajOZgodeGlosem(silniki, role) {
 async function pytajOZgodeWBiegu(conv, zg) {
   const zaZgoda = ZESPOL.skladZaZgoda(zg.role);
   const odpadly = zg.odrzucone.filter((o) => o.kod === 'wymaga-zgody');
+  const mk = { ...(zg.miejsce ? { miejsce: zg.miejsce } : {}), ...(zg.kiedy ? { kiedy: zg.kiedy } : {}) };
   const silniki = [...new Set([...(zg.silniki || []), ...ZESPOL.silnikiChmury(zaZgoda), ...odpadly.map((o) => o.silnik).filter((x) => x && x !== 'local')])];
   const w = await pytajOZgodeGlosem(silniki.length ? silniki : ['cloud'], [...zaZgoda, ...odpadly.map((o) => ({ rola: o.rola, nazwa: o.nazwa, silnik: o.silnik || 'cloud' }))]);
   if (activeConv() !== conv) return;
   let prosba;
   if (w === 'tak') {
     ustawZgode(conv);
-    prosba = odpadly.length ? { uruchom: true, zgoda: true } : { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true };
+    prosba = odpadly.length ? { uruchom: true, zgoda: true } : { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true, ...mk };
   } else if (w === 'lokalnie') {
-    const lokalne = zg.role.filter((r) => r.silnik === 'local' || !/wymaga-zgody/.test(r.powod || ''));
-    prosba = lokalne.length ? { sklad: ZESPOL.skladDoWyslania(lokalne) } : { bez: true };
+    const lokalne = zg.role.filter((r) => r.silnik === 'local' || !ZESPOL.maPowod(r, 'wymaga-zgody'));
+    prosba = lokalne.length ? { sklad: ZESPOL.skladDoWyslania(lokalne), ...mk } : { bez: true };
   } else prosba = { bez: true };
   zespolOdPytania(conv, prosba);
 }
@@ -3087,11 +3094,11 @@ function uruchomPropozycje(conv, p, prowadzacy, edycja, linijka) {
   if (isGenerating) return;
   const chmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && ZESPOL.silnikiChmury(p.role).length > 0;
   if (!edycja && !chmura && !platnyInny(p.role, prowadzacy)) {
-    zespolOdPytania(conv, { sklad: ZESPOL.skladDoWyslania(p.role) });
+    zespolOdPytania(conv, { sklad: ZESPOL.skladDoWyslania(p.role), ...(p.miejsce ? { miejsce: p.miejsce } : {}), ...(p.kiedy ? { kiedy: p.kiedy } : {}) });
     return;
   }
   pokazPropozycje(linijka, {
-    conv, prowadzacy, role: p.role.map((r) => ({ ...r })), szacunekZl: p.szacunekZl,
+    conv, prowadzacy, role: p.role.map((r) => ({ ...r })), szacunekZl: p.szacunekZl, miejsce: p.miejsce, kiedy: p.kiedy,
     naWynik: (w) => (w ? zespolOdPytania(conv, w) : renderMessages({ przewin: false })),
   });
 }
@@ -3211,7 +3218,11 @@ async function zmienUstawieniaZespolu(zmiana) {
         // Serwer bez pola `potwierdzaj` (starsza wersja) – ustawienie zostaje w przeglądarce jak dawniej.
         else { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); }
       }
-    } else wynik = { ok: false, error: (d && (d.error || d.blad)) || t('httpErr', { status: r.status }) };
+    } else {
+      // Stały kod od serwera → zdanie w języku interfejsu (serwer pisze po polsku).
+      const PO_KODZIE = { 'za-duzo-rol': t('ag.wl.limit', { max: 8 }), 'rola-bez-nazwy': t('ag.wl.brakNazwy'), 'zle-role': t('ag.wl.zleRole'), 'budzet-zly': t('ag.bud.zly') };
+      wynik = { ok: false, kod: (d && d.kod) || '', error: PO_KODZIE[d && d.kod] || (d && (d.error || d.blad)) || t('httpErr', { status: r.status }) };
+    }
   } catch {
     if ('potwierdzaj' in zmiana) { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); }
     wynik = { ok: false, error: t('ag.wl.bladZapisu') };

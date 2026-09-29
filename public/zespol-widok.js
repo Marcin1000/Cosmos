@@ -69,15 +69,21 @@ function dodatkiRoli(r) {
   if (r.fala === 3 && typeof r.poprawkaZ === 'string') o.poprawkaZ = r.poprawkaZ.slice(0, 20);
   if (kwota(r.szacunekZl) !== undefined) o.szacunekZl = kwota(r.szacunekZl);
   if (kwota(r.kosztZl) !== undefined) o.kosztZl = kwota(r.kosztZl);
+  if (r.kosztSzacowany === true) o.kosztSzacowany = true;
   return o;
 }
+/** `powod` z serwera bywa listą kodów po przecinku („budzet,wymaga-zgody”). */
+const maPowod = (r, kod) => String((r && r.powod) || '').split(',').map((x) => x.trim()).includes(kod);
+/** Miejsce i czas planu dla fotografa – idą z powrotem ze składem od osoby. */
+const miejsceIKiedy = (d) => ({ ...(typeof d.miejsce === 'string' && d.miejsce ? { miejsce: d.miejsce.slice(0, 120) } : {}),
+  ...(typeof d.kiedy === 'string' && d.kiedy ? { kiedy: d.kiedy.slice(0, 60) } : {}) });
 
 /** Pusty stan tury zespołu. */
 function nowyStanTury(teraz = Date.now()) {
   return {
     faza: '', start: teraz, zrodlo: '', prowadzacy: null, role: [], odrzucone: [], daneWyjdaDo: [],
     szukaj: '', notatki: '', czasRol: 0, czasFazy: 0, odmowa: null, propozycja: null, bylSklad: false,
-    wymagaZgody: false, silnikiZaZgoda: [], szacunekZl: undefined, kosztZl: undefined,
+    wymagaZgody: false, silnikiZaZgoda: [], szacunekZl: undefined, kosztZl: undefined, miejsce: '', kiedy: '',
   };
 }
 
@@ -127,6 +133,7 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
         prowadzacy: d.prowadzacy && typeof d.prowadzacy === 'object' ? { silnik: silnikZespolu(d.prowadzacy.silnik), model: napis(d.prowadzacy.model, 200) } : null,
         daneWyjdaDo: Array.isArray(d.daneWyjdaDo) ? d.daneWyjdaDo.map((x) => napis(x, 40)) : [],
         ...(kwota(d.szacunekZl) !== undefined ? { szacunekZl: kwota(d.szacunekZl) } : {}),
+        ...miejsceIKiedy(d),
       } : null;
       return ogl;
     }
@@ -142,6 +149,7 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     // Silniki, na które skład poszedłby za zgodą (do pytania głosem): tylko znane nazwy.
     st.silnikiZaZgoda = Array.isArray(d.silnikiZaZgoda) ? [...new Set(d.silnikiZaZgoda.filter((x) => SILNIKI_ZESPOLU.includes(x) && x !== 'local'))] : [];
     st.szacunekZl = kwota(d.szacunekZl);
+    Object.assign(st, { miejsce: '', kiedy: '' }, miejsceIKiedy(d));
     if (st.role.length) {
       st.faza = 'role';
       ogl.push({ klucz: 'ag.sr.start', role: st.role.map((r) => r.rola) });
@@ -161,6 +169,7 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     }
     if (!r) return ogl;
     if (kwota(d.kosztZl) !== undefined) r.kosztZl = kwota(d.kosztZl);
+    if (d.kosztSzacowany === true) r.kosztSzacowany = true;
     if (typeof d.d === 'string' && d.d) {
       r.tresc += d.d;
       if (r.stan === 'czeka' || r.stan === 'pracuje') r.stan = 'pisze';
@@ -239,6 +248,7 @@ function wiadomoscNotatek(st, teraz = Date.now()) {
       daneWyjdaDo: st.daneWyjdaDo,
       ...(st.szukaj ? { szukaj: st.szukaj } : {}),
       ...(kosztTury(st) !== undefined ? { kosztZl: kosztTury(st) } : {}),
+      ...miejsceIKiedy(st),
     },
   };
 }
@@ -275,6 +285,7 @@ function stanZWiadomosci(m) {
   st.czasRol = z.czas && Number(z.czas.role) || 0;
   st.notatki = typeof m.content === 'string' ? m.content : '';
   st.kosztZl = kwota(z.kosztZl);
+  Object.assign(st, miejsceIKiedy(z));
   return st;
 }
 
@@ -303,7 +314,7 @@ function silnikiChmury(role) {
  * Bramka pokazuje skład, jaki byłby ZA zgodą, a „Tylko lokalnie” – ten z planu.
  */
 function skladZaZgoda(role) {
-  return (role || []).map((r) => (r.zamiast && /wymaga-zgody/.test(r.powod || '') && r.zamiast.silnik !== 'local'
+  return (role || []).map((r) => (r.zamiast && maPowod(r, 'wymaga-zgody') && r.zamiast.silnik !== 'local'
     ? { ...r, silnik: r.zamiast.silnik, model: r.zamiast.model || '', zamiast: undefined, powod: undefined, wymagaZgody: true,
       // Szacunek z planu dotyczył silnika lokalnego (0 zł); za zgodą koszt płatnego silnika jest nieznany.
       szacunekZl: PLATNE_ZESPOLU.includes(r.zamiast.silnik) ? undefined : 0 }
@@ -570,7 +581,7 @@ function utworzZespolWidok(z) {
       const koszt = kwota(r.kosztZl) > 0 ? ` · ${zl(r.kosztZl)}` : '';
       w.wiersz.setAttribute('aria-label', `${t('ag.pokazWklad', { rola: nazwa })}${czyWlasnaRola(r) ? ` (${t('ag.wlasna')})` : ''} · ${sil} ${m} · ${stanTxt}${koszt}`);
       // Zastępstwo z planu albo zapas po awarii – osobna linijka; budżet mówi, czemu tańszy silnik.
-      const kluczZamiast = r.powod === 'budzet' ? 'ag.zamiastBudzet' : 'ag.zamiast';
+      const kluczZamiast = maPowod(r, 'budzet') ? 'ag.zamiastBudzet' : 'ag.zamiast';
       const uwaga = r.zapas && r.zapas.po && r.zapas.po.model ? t('ag.zapasPo', { model: krotkiModel(r.zapas.po.model) })
         : r.zamiast && r.zamiast.model && r.zamiast.model !== r.model ? t(kluczZamiast, { model: krotkiModel(r.zamiast.model) })
           : r.zamiast && r.zamiast.silnik !== r.silnik ? t(kluczZamiast, { model: nazwaSilnika(r.zamiast.silnik) }) : '';
@@ -668,7 +679,9 @@ function utworzZespolWidok(z) {
         stopka.append(przycisk('zespol-link', t('ag.zmienSklad'), () => o.naZmienSklad()));
       }
       const koszt = !o.zywy ? kosztTury(st) : undefined;
-      if (koszt > 0) stopka.append(h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle'), tekst: t('ag.koszt', { zl: zl(koszt) }) }));
+      // Bez `usage` od dostawcy koszt roli jest szacunkiem – mówimy „ok.”.
+      const szacowany = st.role.some((r) => r.kosztSzacowany);
+      if (koszt > 0) stopka.append(h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle'), tekst: t(szacowany ? 'ag.kosztOk' : 'ag.koszt', { zl: zl(koszt) }) }));
       stopka.hidden = !stopka.firstChild;
     }
 
@@ -1043,6 +1056,8 @@ function utworzZespolWidok(z) {
     return Number.isFinite(n) && n >= 0 && n <= 100000 ? Math.round(n * 100) / 100 : null;
   };
 
+  // Odmowa zapisu limitu (zła kwota) – zostaje pod polami po przebudowie panelu.
+  let bladBudzetu = '';
   function sekcjaBudzetu(k) {
     const us = k.budzet || { dzien: 0, miesiac: 0 };
     const sb = k.stanBudzetu || {};
@@ -1055,16 +1070,19 @@ function utworzZespolWidok(z) {
       input.value = us[klucz] > 0 ? String(us[klucz]).replace('.', jezyk() === 'en' ? '.' : ',') : '';
       input.addEventListener('change', async () => {
         const n = zlZPola(input.value);
-        if (n === null) { input.setAttribute('aria-invalid', 'true'); return; }
+        if (n === null) { input.setAttribute('aria-invalid', 'true'); input.title = t('ag.bud.zly'); return; }
         input.removeAttribute('aria-invalid');
         const nowy = { dzien: us.dzien || 0, miesiac: us.miesiac || 0, [klucz]: n };
-        await k.naZmiane({ budzetZl: nowy });
+        bladBudzetu = '';
+        const w = await k.naZmiane({ budzetZl: nowy });
+        if (w && w.ok === false) { bladBudzetu = w.error || t('ag.bud.zly'); k.odswiez && k.odswiez({ fokus: `[data-pole="budzet-${klucz}"]` }); }
       });
       return h('label', { klasa: 'field ag-budzet-pole' }, h('span', { klasa: 'field-label', tekst: etykieta }),
         h('span', { klasa: 'ag-budzet-wejscie' }, input, h('span', { klasa: 'ag-budzet-zl', 'aria-hidden': 'true', tekst: jezyk() === 'en' ? 'PLN' : 'zł' })));
     };
     pola.append(pole('dzien', t('ag.bud.dzien')), pole('miesiac', t('ag.bud.miesiac')));
     sekcja.append(pola);
+    if (bladBudzetu) sekcja.append(h('p', { klasa: 'ag-wl-blad', role: 'alert', tekst: bladBudzetu }));
     const stan = [];
     if (kwota(sb.wydanoDzis) !== undefined) stan.push(t('ag.bud.wydanoDzis', { zl: zl(sb.wydanoDzis) }));
     if (kwota(sb.wydanoMiesiac) !== undefined) stan.push(t('ag.bud.wydanoMiesiac', { zl: zl(sb.wydanoMiesiac) }));
@@ -1239,7 +1257,7 @@ function utworzZespolWidok(z) {
 const CZYSTE_ZESPOLU = {
   stanWidoku, nowyStanTury, zjedzZdarzenieZespolu, wiadomoscNotatek, stanZWiadomosci, roleBezWkladu,
   skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
-  rozpoznajZgode, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, PLATNE_ZESPOLU,
+  rozpoznajZgode, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, maPowod, PLATNE_ZESPOLU,
 };
 
 if (typeof window !== 'undefined') Object.assign(window, { utworzZespolWidok, ZESPOL: CZYSTE_ZESPOLU });
