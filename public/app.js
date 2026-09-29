@@ -5629,7 +5629,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // Okienko kamery zamyka Esc tylko wtedy, gdy człowiek jest w nim (fokus na jego przycisku).
-  if ($('live-panel').style.display !== 'none') {
+  if ($('live-panel').style.display !== 'none' && $('live-panel').contains(document.activeElement)) {
     e.preventDefault();
     stopLive();
     return;
