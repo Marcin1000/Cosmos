@@ -5467,7 +5467,11 @@ const overlays = [
   { id: 'img-viewer', close: closeImageViewer },
   { open: () => voiceMode, close: exitVoiceMode },
   { id: 'camera-modal', close: closeCamera },
-  { id: 'live-panel', close: stopLive },
+  /* Okienko kamery (tryb „mini”) nie jest modalne: nie przechwytuje Esc,
+     gdy otwarte jest inne okno (Esc zamykał kamerę, a Ustawienia zostawały)
+     ani gdy fokus jest poza nim (Esc w polu wiadomości zamykał kamerę) –
+     obsługa na końcu listy niżej (agencja, runda 9). */
+  { open: () => $('live-panel').style.display !== 'none' && $('live-panel').dataset.tryb !== 'mini', close: stopLive },
   { id: 'gallery-modal', close: closeGallery },
   { id: 'timeline-modal', close: () => { $('timeline-modal').style.display = 'none'; } },
   { id: 'learn-modal', close: () => closeLearn() },   // public/nauka-widok.js, powstaje niżej
@@ -5483,6 +5487,12 @@ document.addEventListener('keydown', (e) => {
   if (top) {
     e.preventDefault();
     top.close();
+    return;
+  }
+  // Okienko kamery zamyka Esc tylko wtedy, gdy człowiek jest w nim (fokus na jego przycisku).
+  if ($('live-panel').style.display !== 'none' && $('live-panel').contains(document.activeElement)) {
+    e.preventDefault();
+    stopLive();
     return;
   }
   // Płótno nie jest nakładką (stoi obok rozmowy), ale Escape też je zamyka.
@@ -5620,6 +5630,14 @@ $('set-speak').addEventListener('change', (e) => {
     // Okienko kamery to nie okno dialogowe – czytnik ekranu nie może go tak ogłaszać.
     const kam = $('live-panel');
     if (kam && !otwarte.includes(kam)) kam.removeAttribute('aria-modal');
+    // Okienko to obszar strony obok rozmowy, pełny ekran – okno dialogowe.
+    if (kam) kam.setAttribute('role', kam.dataset.tryb === 'mini' ? 'region' : 'dialog');
+    /* Animacje powitania (zorza, gradient nagłówka) pod nakładką z rozmyciem
+       tła wymuszały przeliczanie rozmycia co klatkę: Ustawienia 10 kl./s na
+       komputerze, karty 2–4× wolniej (zespół IT, runda 9). Klasa na <html>
+       pauzuje je w CSS, dopóki coś zasłania powitanie – także kamera na
+       pełnym ekranie i tryb głosowy. */
+    document.documentElement.classList.toggle('pod-nakladka', Boolean(wierzch));
   };
   const obserwator = new MutationObserver(przelicz);
   for (const w of elementy) obserwator.observe(w, { attributes: true, attributeFilter: ['style', 'hidden', 'data-tryb'] });
