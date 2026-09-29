@@ -418,7 +418,7 @@ function utworz({ SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, 
        ElevenLabs ani OpenAI za zdanie, którego nikt nie usłyszy (zespół IT, runda 9). */
     const koniec = Date.now() + BUDZET_ROZMOWY_MS;
     const DOM_MS = Number(env.COSMOS_GLOS_DOM_MS) || 25_000;
-    const klient = new AbortController().signal;
+    const klient = sygnalKlienta(res);
 
     const bledy = [];
     /* Zaproszona osoba z działającym Piperem na własnym komputerze czyta

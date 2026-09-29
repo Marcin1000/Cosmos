@@ -3282,15 +3282,26 @@ function grajNagranie(blob) {
   });
 }
 
+/* Telefon zablokował odtwarzanie (brak świeżego dotknięcia): kolejne /api/tts
+   i tak nie zagrają, a każde pytanie czekało ~0,8 s na pełne nagranie przed
+   głosem systemowym, drugą porcję pobierając na darmo – w płatnym TTS za
+   pieniądze (zespół IT, runda 9). Do najbliższego dotknięcia albo klawisza
+   od razu głos systemowy. */
+let glosSerweraZablokowany = false;
+for (const zd of ['pointerdown', 'keydown']) {
+  document.addEventListener(zd, () => { glosSerweraZablokowany = false; }, { capture: true, passive: true });
+}
+
 async function speakText(text) {
   const clean = stripForSpeech(text);
   if (!clean) return;
   stopSpeaking();
   speakSerial = {};                   // znacznik tej wypowiedzi
   const mine = speakSerial;
+  let doPrzeczytania = clean;         // co zostaje dla głosu systemowego
 
   // 1. Głos z serwera: ElevenLabs / OpenAI / Piper (kolejność ustawia serwer).
-  if (ttsSerwera()) {
+  if (ttsSerwera() && !glosSerweraZablokowany) {
     const porcje = porcjeGlosu(clean);
     /* Przerwanie ma działać też wtedy, gdy nagranie jeszcze się pobiera –
        dotknięcie kuli w „MÓWIĘ…" nie może czekać na odpowiedź serwera. */
@@ -3310,20 +3321,27 @@ async function speakText(text) {
       if (speakSerial !== mine) return;
       // Następną porcję pobieramy, zanim ta się skończy – bez przerw między zdaniami.
       if (i + 1 < porcje.length) { nastepna = pobierz(porcje[i + 1]); nastepna.catch(() => {}); }
-      if (!(await grajNagranie(blob))) break;   // zablokowane – niżej głos systemowy
+      if (!(await grajNagranie(blob))) {
+        if (speakSerial !== mine) return;
+        // Zablokowane: pobierana w tle następna porcja idzie do kosza, zanim zapłacimy za nią dalej.
+        przerwij.abort();
+        glosSerweraZablokowany = true;
+        break;                          // niżej głos systemowy
+      }
       zagrane++;
       if (speakSerial !== mine) return;
     }
     if (speakSerial !== mine) return;   // przerwane w trakcie pobierania: bez głosu zastępczego
     if (zagrane === porcje.length) return;
-    if (zagrane > 0) return;          // urwało się w połowie – nie czytamy od nowa innym głosem
+    // Urwało się w połowie – głos systemowy DOKAŃCZA, nie czyta od nowa.
+    doPrzeczytania = porcje.slice(zagrane).join(' ');
   }
 
   // 2. Głos systemowy przeglądarki
   if ('speechSynthesis' in window) {
     const langPrefix = t('speechLang').slice(0, 2);
     const voice = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix));
-    for (const part of splitForSpeech(clean)) {
+    for (const part of splitForSpeech(doPrzeczytania)) {
       if (speakSerial !== mine) return;   // ktoś przerwał albo zaczął nową
       await new Promise((resolve) => {
         const u = new SpeechSynthesisUtterance(part);
@@ -5644,9 +5662,16 @@ const kartyUstawien = (() => {
     return Boolean(p) && [...p.querySelectorAll('[data-karta]')].some((s) => widoczna(s, p));
   };
   let biezaca = null;
-  function pokaz(g, { fokus = false } = {}) {
+  /* Karta wybrana w TYM otwarciu (kliknięcie, klawiatura, openSettings('…')).
+     Zapasowa – pokazana, bo wybrana jest jeszcze ukryta – nie jest wyborem:
+     Konto odsłania się dopiero po /api/auth, a Ustawienia otwarte wcześniej
+     startowały na „Zmysłach” i ZAPAMIĘTYWAŁY je na stałe (agencja, runda 9).
+     Do pamięci urządzenia trafia tylko wybór człowieka. */
+  let wybrana = null;
+  function pokaz(g, { fokus = false, wybor = false, zapisz = false } = {}) {
     const k = karty.find((x) => x.dataset.cel === g && !x.hidden) || karty.find((x) => !x.hidden);
     if (!k) return;
+    if (wybor) wybrana = g;
     biezaca = k.dataset.cel;
     for (const x of karty) {
       const tak = x === k;
@@ -5660,17 +5685,20 @@ const kartyUstawien = (() => {
     // Na telefonie pasek kart przewija się w bok – wybrana ma być w zasięgu.
     k.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     if (fokus) k.focus();
-    try { localStorage.setItem('cosmos.kartaUstawien', biezaca); } catch { /* bez pamięci */ }
+    if (zapisz && biezaca === g) { try { localStorage.setItem('cosmos.kartaUstawien', biezaca); } catch { /* bez pamięci */ } }
   }
   function odswiez() {
     for (const k of karty) k.hidden = !maTresc(k.dataset.cel);
     const zapamietana = (() => { try { return localStorage.getItem('cosmos.kartaUstawien'); } catch { return null; } })();
-    const cel = biezaca || zapamietana || 'konto';
+    const cel = wybrana || zapamietana || 'konto';
     const k = karty.find((x) => x.dataset.cel === cel);
-    if (!biezaca || !k || k.hidden) pokaz(cel);
+    const b = karty.find((x) => x.dataset.cel === biezaca);
+    // Cel właśnie się odsłonił, a stoi karta zastępcza – wracamy do celu.
+    if (k && !k.hidden && biezaca !== cel) pokaz(cel);
+    else if (!b || b.hidden) pokaz(cel);
   }
   for (const k of karty) {
-    k.addEventListener('click', () => pokaz(k.dataset.cel));
+    k.addEventListener('click', () => pokaz(k.dataset.cel, { wybor: true, zapisz: true }));
     k.addEventListener('keydown', (e) => {
       const widoczne = karty.filter((x) => !x.hidden);
       const i = widoczne.indexOf(k);
@@ -5681,11 +5709,13 @@ const kartyUstawien = (() => {
       else if (e.key === 'End') cel = widoczne[widoczne.length - 1];
       if (!cel) return;
       e.preventDefault();
-      pokaz(cel.dataset.cel, { fokus: true });
+      pokaz(cel.dataset.cel, { fokus: true, wybor: true, zapisz: true });
     });
   }
-  new MutationObserver(() => { if (modal.style.display !== 'none') odswiez(); })
-    .observe(modal, { attributes: true, attributeFilter: ['style'] });
+  new MutationObserver(() => {
+    if (modal.style.display !== 'none') odswiez();
+    else { wybrana = null; biezaca = null; }   // następne otwarcie zaczyna od zapamiętanej
+  }).observe(modal, { attributes: true, attributeFilter: ['style'] });
   /* Sekcje Konta odsłaniają się dopiero po odpowiedzi serwera, a klasa roli
      (członek/właściciel) przychodzi później niż samo okno. */
   new MutationObserver((zmiany) => {
@@ -6025,7 +6055,7 @@ function openSettings(karta) {
   $('brief-auto').checked = Boolean(settings.briefAuto);
   $('brief-time').value = settings.briefTime || '08:00';
   el.settingsModal.style.display = '';
-  if (typeof karta === 'string') kartyUstawien.pokaz(karta);
+  if (typeof karta === 'string') kartyUstawien.pokaz(karta, { wybor: true });
   pokazWersje();
 }
 
