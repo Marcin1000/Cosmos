@@ -5610,7 +5610,7 @@ const overlays = [
      gdy otwarte jest inne okno (Esc zamykał kamerę, a Ustawienia zostawały)
      ani gdy fokus jest poza nim (Esc w polu wiadomości zamykał kamerę) –
      obsługa na końcu listy niżej (agencja, runda 9). */
-  { id: 'live-panel', close: stopLive },
+  { open: () => $('live-panel').style.display !== 'none' && $('live-panel').dataset.tryb !== 'mini', close: stopLive },
   { id: 'gallery-modal', close: closeGallery },
   { id: 'timeline-modal', close: () => { $('timeline-modal').style.display = 'none'; } },
   { id: 'learn-modal', close: () => closeLearn() },   // public/nauka-widok.js, powstaje niżej
@@ -5629,7 +5629,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // Okienko kamery zamyka Esc tylko wtedy, gdy człowiek jest w nim (fokus na jego przycisku).
-  if ($('live-panel').style.display !== 'none' && $('live-panel').contains(document.activeElement)) {
+  if ($('live-panel').style.display !== 'none') {
     e.preventDefault();
     stopLive();
     return;
