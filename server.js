@@ -92,6 +92,8 @@ const sesjaWazna = (req) => () => Boolean(ktoPyta(req));
 const glos = require('./lib/glos.js').utworz({
   SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, STUDIO,
   zmysly: { fetch: agent.fetchZmyslow, zrodlo: agent.zrodloZmyslow, stanAgenta: agent.stanAgenta },
+  // Płatne źródła głosu na kluczu właściciela liczą się do budżetu osoby.
+  budzet: budzet_, cennik: cennik_, konta,
 });
 const szukanie_ = require('./lib/szukanie.js');
 const { handleSearch, szukajTekstu, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
@@ -179,6 +181,7 @@ const kb_ = require('./lib/baza-wiedzy.js').utworz({
   U, readJson, readBodyBuffer, sendJson, bladZapisu, addEvent, embedTexts, stripTags, czytelnyTekst, SENSES_URL,
   fetchZmyslow: agent.fetchZmyslow, zmyslyDostepne: () => agent.zmyslyDostepne(),
   przepiszMowe: (...a) => glos.przepisz(...a),
+  budzet: budzet_, cennik: cennik_, konta,
 });
 const { kbPliki: KB_FILES, saveKb, kbAddFile, kbItemMeta, kbSearch, obrazDlaModelu, extractKbText, extOf, wymagaTranskrypcji } = kb_;
 
@@ -1321,7 +1324,8 @@ async function handleModels(req, res) {
 /* Studio potrzebuje bazy wiedzy i dziennika zdarzeń, ale nie odwrotnie.
    Podajemy mu je tutaj, po zdefiniowaniu obu stron: krzyżowe `require`
    dałoby cykliczną zależność i jedna ze stron widziałaby pusty obiekt. */
-studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems, zadania: zadania_ });
+studio_.polacz({ kbPliki: () => KB_FILES(), addEvent, kbAddFile, kbItemMeta, kbPozycje: () => U().kbItems, zadania: zadania_,
+  budzet: budzet_, cennik: cennik_, konta });
 // Oś czasu migawek otoczenia (Digital Time Machine) – lib/os-czasu.js.
 const osCzasu_ = require('./lib/os-czasu.js').utworz({
   U, readJson, sendJson, addEvent, bladZapisu, kbAddFile, kbPliki: () => KB_FILES(), saveKb, tsName,
