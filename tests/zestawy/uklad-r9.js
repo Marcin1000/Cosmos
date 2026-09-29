@@ -151,11 +151,11 @@ const KONTRAST = `
         .map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return r.top + r.height / 2; }));
       const a = await os();
       w.sprawdz(Math.max(...a) - Math.min(...a) <= 1, `${tag}: ikony sterowania i migawka nie na jednej osi (${a.map(Math.round).join(' / ')})`);
-      // Przełączenie „Rozpoznawania” zmienia podpis pod ikoną – oś ma zostać.
-      await p.evaluate(() => { const s = document.getElementById('live-rozp-stan'); s.textContent = 'wył. · sam podgląd, długi opis stanu'; });
+      // Przełączenie „Rozpoznawania” zmienia podpis pod ikoną (także na długi) – oś ma zostać.
+      await p.evaluate(() => { const s = document.getElementById('live-rozp-stan'); s.textContent = 'wył. · sam podgląd – czeka na komputer ze zmysłami, który jeszcze się nie odezwał'; });
       await p.waitForTimeout(100);
       const b = await os();
-      w.sprawdz(a.every((x, i) => Math.abs(x - b[i]) <= 1), `${tag}: dwuwierszowy stan przesuwa przyciski (${a.map(Math.round).join('/')} → ${b.map(Math.round).join('/')})`);
+      w.sprawdz(a.every((x, i) => Math.abs(x - b[i]) <= 1), `${tag}: długi stan przesuwa przyciski (${a.map(Math.round).join('/')} → ${b.map(Math.round).join('/')})`);
       // Ciemna scena: kolor silnika OpenAI jasny także w jasnym motywie.
       const jasnosc = await p.evaluate(() => {
         const s = document.createElement('i'); s.style.cssText = 'position:absolute;width:4px;height:4px;background:var(--k-akt)';
