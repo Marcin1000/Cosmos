@@ -99,6 +99,72 @@ for (const [wej, wzor] of R) {
   ok(wzor.test(wyn), `z jednostkami: „${wej}” → „${wyn}”`);
 }
 
+/* Runda 9 (agencja-rozmowa): zakresy na końcu zdania, jednostka w dopełniaczu
+   po przyimku, zakresy dat, ogólne „A–B słowo”, „o 6:55–7:10”, minus. */
+const R9 = [
+  // Zakres po „około” na końcu zdania i przed przecinkiem – kształt odpowiedzi w trybie głosowym.
+  ['Ile stopni? Około 8–9.', 'Ile stopni? Około ośmiu do dziewięciu.'],
+  ['Będzie ich około 20–30, może więcej.', 'Będzie ich około dwudziestu do trzydziestu, może więcej.'],
+  ['Około 8–9 (w nocy mniej).', 'Około ośmiu do dziewięciu (w nocy mniej).'],
+  // Jednostka po przyimku w dopełniaczu.
+  ['Spadnie do 2 °C.', 'Spadnie do dwóch stopni Celsjusza.'],
+  ['Najcieplej około 22–24 °C.', 'Najcieplej około dwudziestu dwóch do dwudziestu czterech stopni Celsjusza.'],
+  ['Wiatr do 3 m/s.', 'Wiatr do trzech metrów na sekundę.'],
+  ['Około 2 km.', 'Około dwóch kilometrów.'],
+  ['Do 1 km.', 'Do jednego kilometra.'],
+  ['Powyżej 23 %.', 'Powyżej dwudziestu trzech procent.'],
+  // Bez przyimku forma zostaje po liczbie.
+  ['Na zewnątrz 2 °C.', 'Na zewnątrz 2 stopnie Celsjusza.'],
+  ['Szczyt 1 km dalej.', 'Szczyt 1 kilometr dalej.'],
+  // Zakres dat.
+  ['Festiwal trwa 12–14 września.', 'Festiwal trwa od dwunastego do czternastego września.'],
+  ['Festiwal trwa od 12 do 14 września.', 'Festiwal trwa od dwunastego do czternastego września.'],
+  ['W dniach 1–3 paź.', 'W dniach od pierwszego do trzeciego października.'],
+  // Ogólny zakres przed słowem: przy 5+ „od … do …”, przy 2–4 tak, jak mówi się na głos.
+  ['Zostań 3–5 dni.', 'Zostań od trzech do pięciu dni.'],
+  ['Będzie 10–20 osób.', 'Będzie od dziesięciu do dwudziestu osób.'],
+  ['Zajmie to 2–3 godziny.', 'Zajmie to dwie, trzy godziny.'],
+  ['Będzie około 2–3 godziny marszu.', 'Będzie około dwie, trzy godziny marszu.'],
+  ['Wystarczą 2–3 tygodnie.', 'Wystarczą dwa, trzy tygodnie.'],
+  // Godziny po „o” – bez „o od”.
+  ['Złota godzina o 6:55–7:10.', 'Złota godzina o szóstej pięćdziesiąt pięć do siódmej dziesięć.'],
+  // Minus: w zakresie ujemnym i w działaniu.
+  ['Nocą od -5 do -2 °C.', 'Nocą od minus pięciu do minus dwóch stopni Celsjusza.'],
+  ['Nocą -3–-1 °C.', 'Nocą od minus trzech do minus jednego stopnia Celsjusza.'],
+  ['Nocą około −3 °C.', 'Nocą około minus trzech stopni Celsjusza.'],
+  ['Wynik: 10 − 4 = 6.', 'Wynik: 10 minus 4 = 6.'],
+  ['Jutro około 8−9 °C.', 'Jutro około ośmiu do dziewięciu stopni Celsjusza.'],
+  // Co zostaje: wynik meczu, COVID-19.
+  ['Mecz skończył się 2–1.', 'Mecz skończył się 2–1.'],
+  ['Test COVID-19 jutro.', 'Test COVID-19 jutro.'],
+];
+const wyniki9 = [];
+for (const [wej, oczek] of R9) {
+  const wyn = razem(wej);
+  wyniki9.push(wyn);
+  ok(wyn === oczek, `runda 9: „${wej}” → „${wyn}”${wyn === oczek ? '' : `  (oczekiwane: „${oczek}”)`}`);
+}
+// Gwarancja ogólna: słowo nigdy nie jest sklejone kreską z cyfrą („ośmiu–9”), nigdy „o od”.
+for (const wyn of [...wyniki9, ...R.map(([w]) => razem(w))]) {
+  ok(!/\p{L}–\d/u.test(wyn) && !/(?:^|\s)o od\s/iu.test(wyn), `bez „słowo–cyfra” i „o od”: „${wyn}”`);
+}
+/* Gwarancja dopełniacza: po przyimku jednostka nigdy w formie „2–4” ani
+   w mianowniku liczby pojedynczej – dla liczb, których forma różni się od
+   dopełniacza (1, 2, 3, 4, 22, 23, 24). */
+const ZLA_FORMA = /\b(?:stopnie|stopień|kilometry|kilometr|metry|metr)(?!\p{L})/u;
+for (const n of [1, 2, 3, 4, 22, 23, 24]) {
+  for (const j of ['°C', 'km', 'm/s', '%']) {
+    for (const wej of [`Do ${n} ${j}.`, `Około ${n >= 21 ? 21 : 0}–${n} ${j}.`, `Powyżej ${n} ${j}.`]) {
+      const wyn = razem(wej);
+      ok(!ZLA_FORMA.test(wyn) && !/\d/.test(wyn), `dopełniacz: „${wej}” → „${wyn}”`);
+    }
+  }
+}
+// Po angielsku bez zmian w zasadach: „from 8 to 9”, „about 8 to 9”.
+const en = (x) => jednostkiNaGlos(x, 'en');
+ok(en('Tomorrow about 8–9 °C.') === 'Tomorrow about 8 to 9 degrees Celsius.', `EN: „${en('Tomorrow about 8–9 °C.')}”`);
+ok(en('At night from -5 to -2 °C.') === 'At night from minus 5 to minus 2 degrees Celsius.', `EN: „${en('At night from -5 to -2 °C.')}”`);
+
 // Liczebniki na wyrywki.
 const LICZBY = [[0, 'm', 'zero'], [15, 'd', 'piętnastu'], [100, 'm', 'sto'], [212, 'd', 'dwustu dwunastu'],
   [2001, 'm', 'dwa tysiące jeden'], [21000, 'm', 'dwadzieścia jeden tysięcy'], [2000, 'd', 'dwóch tysięcy'],

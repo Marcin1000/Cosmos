@@ -4539,45 +4539,50 @@ const PTAK_SEKUND = 8;
 let ptakTrwa = false;
 // Z /api/status: czy ptaki obsłuży KTÓREŚ źródło (także serwer, bez domu).
 let stanPtakow = { dostepne: false, znany: false };
+let ptakiPoStatusie = false;
 
 /* KOLEJKA BEZ ZASIĘGU. W lesie nagranie jest, a internetu nie ma – dawniej
    przepadało. Teraz czeka w przeglądarce (IndexedDB) i rozpoznaje się samo,
    gdy sieć wróci. Po jednym: serwer odpowiada 429 na drugie nagranie tej
    samej osoby. Pamięć przeglądarki bywa niedostępna – wtedy po prostu mówimy,
-   że trzeba połączenia. */
+   że trzeba połączenia.
+   Nagranie należy do OSOBY (`kto`): na wspólnym telefonie nagranie Ani szło
+   na konto Bartka, który zalogował się po niej (runda 9). Przy wylogowaniu
+   i zmianie osoby baza znika w całości (konta.js, usunNagraniaPtakow) – dlatego
+   każde połączenie zamykamy zaraz po transakcji, inaczej usuwanie bazy czeka. */
 const ptakiOdlozone = {
   otworz() {
     return new Promise((ok, zle) => {
       const r = indexedDB.open('cosmos-ptaki', 1);
       r.onupgradeneeded = () => r.result.createObjectStore('nagrania', { keyPath: 'id', autoIncrement: true });
-      r.onsuccess = () => ok(r.result);
+      r.onsuccess = () => { const db = r.result; db.onversionchange = () => db.close(); ok(db); };
       r.onerror = () => zle(r.error);
     });
   },
-  async dodaj(blob) {
+  async transakcja(tryb, praca) {
     const db = await this.otworz();
-    await new Promise((ok, zle) => {
-      const tx = db.transaction('nagrania', 'readwrite');
-      tx.objectStore('nagrania').add({ blob, kiedy: Date.now() });
-      tx.oncomplete = ok; tx.onerror = () => zle(tx.error);
-    });
+    try {
+      return await new Promise((ok, zle) => {
+        const tx = db.transaction('nagrania', tryb);
+        const wynik = praca(tx.objectStore('nagrania'));
+        tx.oncomplete = () => ok(wynik && 'result' in wynik ? wynik.result : undefined);
+        tx.onerror = () => zle(tx.error);
+        tx.onabort = () => zle(tx.error);
+      });
+    } finally { db.close(); }
+  },
+  dodaj(blob, kto = kimJestem()) {
+    return this.transakcja('readwrite', (s) => s.add({ blob, kiedy: Date.now(), kto: kto || null }));
   },
   async wszystkie() {
-    const db = await this.otworz();
-    return new Promise((ok, zle) => {
-      const r = db.transaction('nagrania').objectStore('nagrania').getAll();
-      r.onsuccess = () => ok(r.result || []); r.onerror = () => zle(r.error);
-    });
+    return (await this.transakcja('readonly', (s) => s.getAll())) || [];
   },
-  async usun(id) {
-    const db = await this.otworz();
-    await new Promise((ok) => {
-      const tx = db.transaction('nagrania', 'readwrite');
-      tx.objectStore('nagrania').delete(id);
-      tx.oncomplete = ok; tx.onerror = ok;
-    });
+  usun(id) {
+    return this.transakcja('readwrite', (s) => s.delete(id)).catch(() => {});
   },
 };
+/** Id zalogowanej osoby (null, dopóki /api/auth nie odpowiedział). */
+function kimJestem() { return konta_.ja()?.id || null; }
 
 /** Opis wyniku BirdNET: ekran i głos osobno (nazwa po polsku, łacina drobnym drukiem). */
 function opisPtakow(lista) {
@@ -4595,24 +4600,65 @@ function opisPtakow(lista) {
 async function wyslijPtaka(blob) {
   const res = await fetch('/api/ptak', { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'X-Cosmos-Jezyk': getLang() }, body: blob });
   const dane = await readJsonSafe(res);
-  if (!res.ok) throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { status: res.status, kod: dane.kod });
+  if (!res.ok) {
+    throw Object.assign(new Error(dane.error || `HTTP ${res.status}`),
+      { status: res.status, kod: dane.kod, poIlu: Number(res.headers.get('Retry-After')) || 0 });
+  }
   return Array.isArray(dane.gatunki) ? dane.gatunki : [];
+}
+
+/* Które odpowiedzi serwera kończą los nagrania. Tylko błąd TREŚCI (zły plik,
+   za duży, zły typ) – ponawianie nic nie da. Wszystko inne jest chwilowe:
+   401 (sesja wygasła), 403 i 503 (BirdNET się rozgrzewa, restart), 429 (liczy
+   się poprzednie), 502/504 (dom śpi, Cloudflare). Dawniej każde z nich
+   kasowało nagranie z lasu na zawsze (zespół IT, runda 9). */
+const PTAK_BLAD_TRESCI = [400, 413, 415, 422];
+/** Błąd „na żywo”, po którym nagranie warto odłożyć, zamiast je zgubić. */
+const ptakBladChwilowy = (err) => err instanceof TypeError || [502, 503, 504].includes(err.status) || err.kod === 'ptaki-chwilowo';
+
+/** Zdanie dla błędu rozpoznawania ptaka – po kodzie, w języku interfejsu.
+    Zdanie serwera jest po polsku (czyta je też MCP), więc na ekran nie idzie. */
+function komunikatPtaka(err) {
+  if (err.status === 501) return t(konta_.ja()?.rola === 'czlonek' ? 'voice.birdNotInstalledMember' : 'voice.birdNotInstalled');
+  if (err.kod === 'ptaki-chwilowo') return t('voice.birdNoSenses');
+  if (err.status === 403) return t('voice.birdNotForYou');
+  if (err.status === 429 || err.kod === 'zajete') return t('voice.birdBusy');
+  if (err.kod === 'kolejka-pelna') return t('voice.birdQueueFull');
+  if (err.status === 413) return t('voice.birdTooBig');
+  if (err.status >= 500) return t('voice.birdNoSenses');
+  return t('voice.birdErr');
 }
 
 /** Rozpoznaj nagrania odłożone bez zasięgu – po jednym, gdy wróci sieć. */
 let ptakiOdkladanie = false;
+let ptakiPonowTimer = null;
 async function rozpoznajOdlozonePtaki() {
   if (ptakiOdkladanie || !navigator.onLine) return;
+  // Dopóki nie wiemy, KTO jest zalogowany, nic nie wysyłamy – nagranie mogłoby trafić do cudzej rozmowy.
+  const ja = kimJestem();
+  if (!ja) return;
   ptakiOdkladanie = true;
   try {
     const lista = await ptakiOdlozone.wszystkie().catch(() => []);
-    for (const w of lista) {
+    // Rekordy sprzed rundy 9 nie mają `kto` – należą do osoby, która jest tu od tamtej pory (zmiana osoby czyści bazę).
+    for (const w of lista.filter((x) => (x.kto || ja) === ja)) {
       const godzina = new Date(w.kiedy).toLocaleTimeString(getLang() === 'en' ? 'en-GB' : 'pl-PL', { hour: '2-digit', minute: '2-digit' });
       let gatunki;
       try { gatunki = await wyslijPtaka(w.blob); } catch (err) {
         if (err instanceof TypeError) break;          // sieć znowu zniknęła – spróbujemy później
-        await ptakiOdlozone.usun(w.id);               // błąd treści – nie ponawiamy w nieskończoność
-        continue;
+        if (PTAK_BLAD_TRESCI.includes(err.status)) {  // błąd treści – ponawianie nie pomoże
+          await ptakiOdlozone.usun(w.id);
+          pokazKomunikatPtaka(t('voice.birdLaterErr', { godzina }));
+          continue;
+        }
+        /* Chwilowe: nagranie zostaje, próbujemy później. Retry-After serwera
+           mówi kiedy; bez niego pół minuty. Przy 401/403 czekamy na zdarzenie
+           (logowanie, powrót do karty), nie na zegar. */
+        if (![401, 403].includes(err.status)) {
+          clearTimeout(ptakiPonowTimer);
+          ptakiPonowTimer = setTimeout(rozpoznajOdlozonePtaki, Math.min(Math.max(err.poIlu || 30, 5), 300) * 1000);
+        }
+        break;
       }
       await ptakiOdlozone.usun(w.id);
       const tekst = gatunki.length
@@ -4632,7 +4678,12 @@ function pokazKomunikatPtaka(tekst) {
   saveConversations();
   renderMessages({ przewin: sledzeDol });
 }
+/* Kolejka rusza nie tylko po `online` i w trybie głosowym: aplikacja
+   otwarta już z zasięgiem (zdarzenia `online` nie będzie) rusza ją po
+   pierwszym /api/status (refreshStatusWlasciwe), a telefon wyjęty z kieszeni
+   – przy powrocie do karty. */
 window.addEventListener('online', () => { rozpoznajOdlozonePtaki(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rozpoznajOdlozonePtaki(); });
 
 async function rozpoznajPtaka() {
   if (ptakTrwa) return;
@@ -4680,11 +4731,23 @@ async function rozpoznajPtaka() {
       lista = await wyslijPtaka(blob);
     } catch (err) {
       clearTimeout(wolno);
-      // Brak sieci: nagranie czeka w przeglądarce i rozpozna się po powrocie internetu.
-      if (err instanceof TypeError) {
+      /* Brak sieci albo chwilowa niedostępność (dom śpi, BirdNET się rozgrzewa,
+         kolejka pełna): nagranie czeka w przeglądarce i rozpozna się później.
+         Dawniej 502/503/504 na żywo gubiło nagranie z lasu (zespół IT, runda 9). */
+      if (ptakBladChwilowy(err)) {
         let odlozone = false;
         try { await ptakiOdlozone.dodaj(blob); odlozone = true; } catch { /* pamięć przeglądarki niedostępna */ }
-        el.voiceAnswer.textContent = t(odlozone ? 'voice.birdQueued' : 'voice.birdOffline');
+        if (err instanceof TypeError) {
+          el.voiceAnswer.textContent = t(odlozone ? 'voice.birdQueued' : 'voice.birdOffline');
+        } else {
+          console.warn('ptak:', err);
+          el.voiceAnswer.title = err.message || '';
+          el.voiceAnswer.textContent = `${komunikatPtaka(err)}${odlozone ? ` ${t('voice.birdKept')}` : ''}`;
+          if (odlozone) {
+            clearTimeout(ptakiPonowTimer);
+            ptakiPonowTimer = setTimeout(rozpoznajOdlozonePtaki, Math.min(Math.max(err.poIlu || 30, 5), 300) * 1000);
+          }
+        }
         return;
       }
       throw err;
@@ -4702,13 +4765,11 @@ async function rozpoznajPtaka() {
       await speakText(opis.glos);
     }
   } catch (err) {
-    /* Bez surowych błędów („HTTP 502”): zdanie serwera, gdy jest ludzkie,
-       a dla 403 – brak dostępu. Szczegół w podpowiedzi i w konsoli. */
+    /* Bez surowych błędów („HTTP 502”) i bez polskich zdań serwera w angielskim
+       interfejsie: zdanie po kodzie z i18n. Szczegół w podpowiedzi i w konsoli. */
     console.warn('ptak:', err);
     el.voiceAnswer.title = err.message || '';
-    el.voiceAnswer.textContent = err.status === 403 ? t('voice.birdNotForYou')
-      : [429, 503, 504].includes(err.status) && err.message && !/HTTP|\//.test(err.message) ? err.message
-        : err.status >= 500 ? t('voice.birdNoSenses') : t('voice.birdErr');
+    el.voiceAnswer.textContent = komunikatPtaka(err);
   } finally {
     ptakTrwa = false;
     if (voiceMode) {
@@ -6833,6 +6894,8 @@ async function refreshStatusWlasciwe() {
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true, znany: true };
     // Ptaki mają własną drogę (komputer osoby → serwer → dom) – osobny stan.
     stanPtakow = { dostepne: st.ptaki?.ok === true, znany: Boolean(st.ptaki) };
+    // Pierwszy status = serwer osiągalny: nagrania odłożone bez zasięgu ruszają bez otwierania trybu głosowego.
+    if (!ptakiPoStatusie) { ptakiPoStatusie = true; rozpoznajOdlozonePtaki(); }
     /* Kinect to cecha komputera osoby (jej agent albo dom z przyznaniem), nie roli:
        opcje widać wtedy, gdy zmysły tej osoby go mają (zespół IT, runda 8). */
     for (const o of document.querySelectorAll('#live-source option[data-kinect]')) o.hidden = !kinectDostepny();
@@ -6921,7 +6984,17 @@ async function checkAuth() {
     const d = await res.json();
     // Rola od razu: przyciski tylko dla właściciela nie mogą mignąć gościowi.
     konta_.zastosujRole(d.uzytkownik);
-    konta_.pilnujWlascicielaPamieci(d.uzytkownik);
+    /* ZMIANA OSOBY WYKRYTA DOPIERO TERAZ (sesja wygasła albo „Wyloguj
+       pozostałe urządzenia”, potem logowanie formularzem): pamięć przeglądarki
+       jest już wyczyszczona, ale ustawienia poprzedniej osoby siedzą w pamięci
+       STRONY (`settings`, silnik, źródło kamery) – lektor Ani czytał odpowiedzi
+       Bartka (agencja, runda 9). Jedno przeładowanie, zanim cokolwiek ruszy;
+       po nim `cosmos.kto` już się zgadza, więc drugiego nie będzie. */
+    if (konta_.pilnujWlascicielaPamieci(d.uzytkownik)) {
+      await konta_.usunNagraniaPtakow();
+      location.reload();
+      return new Promise(() => {});
+    }
     return d.required && !d.authed ? false : true;
   } catch {
     return true; // serwer nieosiągalny – nie blokuj UI (offline)

@@ -397,6 +397,10 @@ function utworzProtokol() {
     if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) return kilka;
     return wiele;
   }
+  // Wzorzec „kilka” dla formaPl: czy liczba bierze formę 2–4 („dwa, trzy, cztery stopnie”).
+  const KILKA = ['jeden', 'kilka', 'wiele', 'ulamek'];
+  // Przyimki, po których zakres nie dostaje „od”: „o 6:55 do 7:10”, „za 2 do 3 minut”.
+  const PRZYIMEK_BEZ_OD = /^(?:o|za|po|przez|na|w|we|z|ze|co|at|in|for|by|within|after)\s+$/i;
   // Czy w tym miejscu kończy się zdanie (reszta pusta albo od wielkiej litery).
   const koniecZdania = (reszta) => /^\s*(?:$|\p{Lu})/u.test(reszta);
 
@@ -433,21 +437,41 @@ function utworzProtokol() {
       const maOd = /^(?:od|from)\s+$/i.test(slowo);   // „od 10–20 °C” nie dostaje drugiego „od”
       // „około 8–9 °C” → „około ośmiu do dziewięciu”, nie „około od ośmiu do dziewięciu” (runda 8).
       const przyblizenie = /^(?:około|ok\.|about|around)\s+$/i.test(slowo);
-      return `${slowo}${maOd || przyblizenie ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
+      /* Po innym przyimku drugiego nie dokładamy: „o 6:55–7:10” to „o szóstej
+         pięćdziesiąt pięć do siódmej dziesięć”, nie „o od szóstej…”; „wzrośnie
+         o 2–3 °C”, „za 2–3 min”, „na 3–5 dni” tak samo (runda 9). */
+      const przyimek = PRZYIMEK_BEZ_OD.test(slowo);
+      return `${slowo}${maOd || przyblizenie || przyimek ? '' : (en ? 'from ' : 'od ')}${a} ${en ? 'to' : 'do'} ${b}`;
     };
+    /* Minus w działaniu: „10 − 4 = 6” to „dziesięć minus cztery”, nie zakres
+       (runda 9). Znak minus (U+2212) ze spacjami z obu stron jest działaniem;
+       bez spacji („8−9 °C”) – łącznikiem zakresu jak niżej. */
+    t = t.replace(/(\d)[  ]+−[  ]+(?=\d)/g, '$1 minus ');
     /* Łącznik zakresu to nie tylko „-” i „–”: modele piszą też łącznik
        niełamiący (U+2011), minus (U+2212) i kreskę cyfrową (U+2012). Z nimi
        zakres nie był rozpoznany i lektor czytał „około ośmiu-9 stopni”
-       (Marcin, runda 8). */
-    t = t.replace(/(\d)\s*[\u2010\u2011\u2012\u2212]\s*(?=\d)/g, '$1–');
-    // Zakres przed słowem po „około”: „około 8–9 stopni” → „około 8 do 9 stopni” (odmienia liczbyNaGlos).
-    t = t.replace(/(?<![\p{L}])((?:około|ok\.|about|around)\s+)(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)(?=\s+\p{L})/giu,
-      (_, slowo, a, b) => odDo(slowo, a, b));
+       (Marcin, runda 8). Minus po łączniku to drugi koniec ujemny („-3‑-1”). */
+    t = t.replace(/(\d)\s*[‐‑‒−]\s*(?=[−-]?\d)/g, '$1–');
+    /* Zakres po „około”: „około 8–9 stopni” → „około 8 do 9 stopni” (odmienia
+       liczbyNaGlos). Także na końcu zdania i przed przecinkiem – „Około 8–9.”
+       to dokładnie kształt odpowiedzi w trybie głosowym, a reguła z rundy 8
+       wymagała słowa po zakresie i lektor czytał „Około ośmiu–9.” (runda 9).
+       Po polsku zakres kończący się na 2–4 przed zwykłym rzeczownikiem zostaje
+       dla liczbyNaGlos: rzeczownik stoi wtedy w mianowniku („około 2–3
+       godziny”), więc „około dwóch do trzech godziny” byłoby błędem. */
+    t = t.replace(/(?<![\p{L}])((?:około|ok\.|about|around)\s+)(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)(?=(\s+\p{L})|\s*[.,;:!?()…]|\s*$)/giu,
+      (cale, slowo, a, b, zaSlowem, offset, calosc) => {
+        if (!en && zaSlowem && formaPl(b, KILKA) === KILKA[1]
+          && !new RegExp(`^\\s*${JEDNOSTKA_ZAKRESU}`, 'u').test(calosc.slice(offset + cale.length))) return cale;
+        return odDo(slowo, a, b);
+      });
     // Zakres godzin „6:41–7:25”: „od 6:41 do 7:25”.
-    t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–\u2014-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
+    t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–—-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
       (_, slowo = '', a, b) => odDo(slowo, a, b));
-    // Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”.
-    t = t.replace(new RegExp(`(\\p{L}+\\s+)?(?<![\\p{N}.,:/])(\\d+(?:[.,]\\d+)?)\\s*[–-]\\s*(\\d+(?:[.,]\\d+)?)(?=\\s*${JEDNOSTKA_ZAKRESU})`, 'gu'),
+    /* Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”. Końce
+       mogą być ujemne („-3–-1 °C” → „od minus 3 do minus 1”); minus przed
+       pierwszym tylko po spacji, nawiasie albo na początku (runda 9). */
+    t = t.replace(new RegExp(`(\\p{L}+\\s+)?(?<![\\p{N}.,:/])((?:(?<=^|[\\s(])[\\u2212–-])?\\d+(?:[.,]\\d+)?)\\s*[–-]\\s*([\\u2212-]?\\d+(?:[.,]\\d+)?)(?=\\s*${JEDNOSTKA_ZAKRESU})`, 'gu'),
       (_, slowo = '', a, b) => odDo(slowo, a, b));
 
     /* Minus i plus przed liczbą: „EV −0,7”, „do –2 °C” (półpauza – tak piszą
@@ -459,7 +483,13 @@ function utworzProtokol() {
     for (const [wzor, formy, dopisek, cyfr = 1] of (en ? JEDNOSTKI_EN : JEDNOSTKI_PL)) {
       const re = new RegExp(`(?<![\\p{L}\\p{N}.,:/])(\\d{${cyfr},}(?:[.,]\\d+)?)\\s*${wzor.source}${KONIEC}`, 'gu');
       t = t.replace(re, (cale, liczba, offset, calosc) => {
-        const slowo = en ? (liczba === '1' ? formy[0] : formy[1]) : formaPl(liczba, formy);
+        /* Po przyimku z dopełniaczem jednostka też idzie w dopełniaczu: „do 2 °C”
+           to „do dwóch stopni”, nie „do dwóch stopnie”; „około 21–24 °C” – drugi
+           koniec stoi po „do”. Liczebnik odmienia potem liczbyNaGlos (krok 4),
+           ale formę jednostki trzeba wybrać tutaj (runda 9). */
+        const poPrzyimku = !en && !/[.,]/.test(liczba) && PO_PRZYIMKU_DOP.test(calosc.slice(Math.max(0, offset - 30), offset));
+        const slowo = en ? (liczba === '1' ? formy[0] : formy[1])
+          : poPrzyimku ? (liczba === '1' ? formy[3] : formy[2]) : formaPl(liczba, formy);
         // „2 godz. Potem” – kropka skrótu była też końcem zdania.
         const kropka = cale.endsWith('.') && koniecZdania(calosc.slice(offset + cale.length)) ? '.' : '';
         return `${liczba} ${slowo}${dopisek}${kropka}`;
@@ -577,6 +607,9 @@ function utworzProtokol() {
   const PRZYIMKI_DOP = '(?:od|do|około|ok\\.|koło|powyżej|poniżej|bez|dla|wśród|spośród|zamiast|blisko|niespełna|u)';
   const ZENSKIE = '(?:godzin|minut|sekund|osob|osób|dob|noc|złotów|sztuk|wycieczk|atrakcj|plaż|gwiazdk|klatk|stacj|ulic|lini|kaw|szklank|łyżk|porcj|butelk|tabletk|stron|książk|lekcj|częśc|wersj|opcj|propozycj|restauracj|wysp|tras|rzecz|kobiet|córk|mil|nagrod|dzielnic|wiosk|miejscowośc|ścieżk|drog|trasy)';
 
+  // Tekst kończący się przyimkiem z dopełniaczem (jednostkiNaGlos: „do 2 °C” → „stopni”).
+  const PO_PRZYIMKU_DOP = new RegExp(`(?:^|[^\\p{L}])${PRZYIMKI_DOP}\\s+(?:minus\\s+)?$`, 'iu');
+
   // Odstęp tysięcy („36 000”, „1 500 zł”) – taka liczba to jedna liczba, nie „trzydzieści sześć” i „000”.
   const NIE_TYSIACE = '(?![ \\u00a0\\u202f]\\d{3}(?!\\d))';
 
@@ -607,6 +640,39 @@ function utworzProtokol() {
     t = t.replace(new RegExp(`${bezCyfry}([12]\\d{3})\\s*(?:r\\.|roku\\b)`, 'gu'), (_, y) => `${rokSlownie(Number(y))} roku`);
     t = t.replace(new RegExp(`(${MIESIACE.join('|')}|${MIESIACE_MSC.join('|')})\\s+([12]\\d{3})(?![\\p{N}])`, 'gu'), (_, mies, y) => `${mies} ${rokSlownie(Number(y))}`);
 
+    /* 2b. Zakres dat „12–14 września”, „od 12 do 14 września” → „od dwunastego
+       do czternastego września”. Bez tego krok 3 widział tylko drugi dzień
+       („12–czternastego września”), a krok 4 brał „od 12” za liczebnik główny
+       („od dwunastu do czternastego”) (runda 9). */
+    t = t.replace(new RegExp(`(?:(^|[^\\p{L}])([Oo]d)\\s+|${bezCyfry})([1-9]|[12]\\d|3[01])\\s*(?:[–-]|\\s+do\\s+)\\s*([1-9]|[12]\\d|3[01])\\s+(${MIESIACE.join('|')}|(?:${Object.keys(MIES_SKROT).join('|')})(?![\\p{L}]))(\\.?)`, 'gu'),
+      (cale, przed, od, a, b2, mies, kropka, offset, calosc) => {
+        const klucz = mies.toLowerCase();
+        const pelny = klucz in MIES_SKROT ? MIESIACE[MIES_SKROT[klucz]] : mies;
+        const zostaw = kropka && (klucz in MIES_SKROT ? !/^\s*[\p{Ll},;:]/u.test(calosc.slice(offset + cale.length)) : true);
+        return `${przed || ''}${od || 'od'} ${porzadkowyDop(Number(a))} do ${porzadkowyDop(Number(b2))} ${pelny}${zostaw ? '.' : ''}`;
+      });
+
+    /* 2c. Ogólny zakres „A–B słowo” (liczby całkowite, rosnąco): lektor czytał
+       „Zostań 3–5 dni” jako „trzy pięć dni”. Po polsku rzeczownik zgadza się
+       z drugą liczbą: przy 5+ stoi w dopełniaczu („3–5 dni”) i wystarcza „od
+       trzech do pięciu dni” (odmienia krok 4); przy 2–4 stoi w mianowniku
+       („2–3 godziny”) i czytamy go tak, jak mówi się na głos: „dwie, trzy
+       godziny”. Po przyimku (około, o, za, na…) bez „od”. Wynik meczu („2–1”),
+       lata i „8–9 tys.” zostają (runda 9). */
+    t = t.replace(new RegExp(`(^|[^\\p{L}])(?:(\\p{L}+\\.?)\\s+)?${bezCyfry}(\\d{1,3})–(\\d{1,3})(?=(\\s+\\p{L}+)|\\s*[.,;:!?()…]|\\s*$)`, 'gu'),
+      (cale, przed, slowo = '', a, b2, zaSlowem = '') => {
+        const x = Number(a), y = Number(b2);
+        const rzecz = zaSlowem.trim();
+        if (!(x < y) || /^(?:tys|mln|mld|milion|miliard|z|ze|w|we|i|a|o|na|do|po|za)$/iu.test(rzecz)) return cale;
+        const poSlowie = slowo ? `${slowo} ` : '';
+        if (rzecz && formaPl(b2, KILKA) === KILKA[1]) {
+          const zenski = new RegExp(`^${ZENSKIE}\\p{L}*[yie]$`, 'iu').test(rzecz);
+          return `${przed}${poSlowie}${liczbaSlownie(x, 'm', zenski)}, ${liczbaSlownie(y, 'm', zenski)}`;
+        }
+        const bezOd = /^(?:od|około|ok\.|koło)$/i.test(slowo) || PRZYIMEK_BEZ_OD.test(poSlowie);
+        return `${przed}${poSlowie}${bezOd ? '' : 'od '}${a} do ${b2}`;
+      });
+
     // 3. Data „12 września”, „6 wrz” → „dwunastego września”.
     t = t.replace(new RegExp(`${bezCyfry}([1-9]|[12]\\d|3[01])\\s+(${MIESIACE.join('|')}|(?:${Object.keys(MIES_SKROT).join('|')})(?![\\p{L}]))(\\.?)`, 'gu'),
       (_, d, mies, kropka, offset, calosc) => {
@@ -621,9 +687,11 @@ function utworzProtokol() {
     // 4. Po przyimku z dopełniaczem: „do 21 stopni” → „do dwudziestu jeden stopni”.
     //    Liczba z częścią ułamkową („do 2,5 km”) zostaje – nie zgadujemy.
     //    „ok. 3 tysiące” – liczba przed „tysiące/mln” to część większej liczby, nie ruszamy.
-    t = t.replace(new RegExp(`(^|[^\\p{L}])(${PRZYIMKI_DOP})\\s+(\\d{1,6})(?![\\p{N}.,:/]?\\d)(?![.,:]\\d)${NIE_TYSIACE}(?!\\s*(?:tys|mln|mld|milion|miliard))`, 'giu'),
-      (cale, przed, przyimek, n, offset, calosc) => {
+    t = t.replace(new RegExp(`(^|[^\\p{L}])(${PRZYIMKI_DOP})\\s+(minus\\s+)?(\\d{1,6})(?![\\p{N}.,:/]?\\d)(?![.,:]\\d)${NIE_TYSIACE}(?!\\s*(?:tys|mln|mld|milion|miliard))`, 'giu'),
+      (cale, przed, przyimek, minus = '', n, offset, calosc) => {
         const x = Number(n);
+        // „do minus 2 °C” → „do minus dwóch stopni” (runda 9).
+        if (minus) { const sl = liczbaSlownie(x, 'd'); return sl ? `${przed}${przyimek} minus ${sl}` : cale; }
         const dalej = calosc.slice(offset + cale.length);
         const slowoDalej = (dalej.match(/^\s+(\p{L}+)/u) || [])[1] || '';
         // Rok po przyimku („działa od 2019”) – porządkowo, gdy nie stoi za nim rzeczownik.

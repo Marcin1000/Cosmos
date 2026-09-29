@@ -51,7 +51,27 @@ function utworzKonta({ $, t, zmienJezyk }) {
     /^cosmos\.zakladki$/, /^cosmos\.ujecia\./, /^cosmos\.videoFrame$/, /^cosmos\.bieg$/, /^cosmos\.conversations$/,
     /^cosmos\.niezapisane$/, /^cosmos\.modeleSerwera$/,
     // Źródło kamery to cecha osoby i JEJ komputera – „Kinect” właściciela nie może zostać dla gościa (runda 8).
-    /^cosmos\.liveSource$/];
+    /^cosmos\.liveSource$/,
+    /* Kamera w trybie głosowym: włączona przez Anię włączała się Bartkowi przy
+       pierwszym trybie głosowym, choć on jej nie włączał (zespół IT, runda 9).
+       `cosmos.sttEngine` zostaje – to cecha urządzenia (jak mikrofon), nie osoby. */
+    /^cosmos\.voiceCam$/];
+
+  /* Nagrania ptaków odłożone bez zasięgu (IndexedDB `cosmos-ptaki`, app.js)
+     też są osoby: po wylogowaniu Ani szły na konto Bartka (zespół IT, runda 9).
+     Kasujemy całą bazę; aplikacja zamyka połączenia po każdej transakcji,
+     a gdyby jakieś wisiało – nie czekamy dłużej niż sekundę. */
+  function usunNagraniaPtakow() {
+    if (typeof indexedDB === 'undefined') return Promise.resolve(false);
+    return new Promise((ok) => {
+      const koniec = setTimeout(() => ok(false), 1000);
+      try {
+        const r = indexedDB.deleteDatabase('cosmos-ptaki');
+        r.onsuccess = () => { clearTimeout(koniec); ok(true); };
+        r.onerror = () => { clearTimeout(koniec); ok(false); };
+      } catch { clearTimeout(koniec); ok(false); }
+    });
+  }
   /* `speak`: na wspólnym telefonie odpowiedzi NASTĘPNEJ osoby czytałyby się na głos
      (np. w pociągu), choć ona tego nie włączała (zespół IT, runda 8). */
   const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*|speak)$/;
@@ -61,6 +81,8 @@ function utworzKonta({ $, t, zmienJezyk }) {
     for (let i = 0; i < magazyn.length; i++) klucze.push(magazyn.key(i));
     const doUsuniecia = klucze.filter((k) => k && PAMIEC_OSOBY.some((w) => w.test(k)));
     for (const k of doUsuniecia) magazyn.removeItem(k);
+    // Prawdziwa pamięć przeglądarki (nie atrapa z testu) – razem z nią nagrania ptaków.
+    if (typeof localStorage !== 'undefined' && magazyn === localStorage) usunNagraniaPtakow();
     try {
       const ust = JSON.parse(magazyn.getItem('cosmos.settings') || 'null');
       if (ust && typeof ust === 'object') {
@@ -400,6 +422,8 @@ function utworzKonta({ $, t, zmienJezyk }) {
     $('konto-wyloguj').addEventListener('click', async () => {
       await zadaj('/api/logout', { metoda: 'POST' });
       try { wyczyscPamiecOsoby(); localStorage.removeItem('cosmos.kto'); } catch { /* */ }
+      // Przeładowanie przerwałoby usuwanie bazy w pół – czekamy na nie.
+      await usunNagraniaPtakow();
       location.reload();
     });
     $('konto-wyloguj-wszedzie').addEventListener('click', async () => {
@@ -469,7 +493,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
   }
 
   return { tokenZaproszenia, pokazZaproszenie, zastosujRole, odswiez, odswiezKonto, odswiezDostep,
-    wyczyscPamiecOsoby, pilnujWlascicielaPamieci, bladKonta, ciastkoPrzyjete, ja: () => ja };
+    wyczyscPamiecOsoby, pilnujWlascicielaPamieci, usunNagraniaPtakow, bladKonta, ciastkoPrzyjete, ja: () => ja };
 }
 
 if (typeof window !== 'undefined') window.utworzKonta = utworzKonta;

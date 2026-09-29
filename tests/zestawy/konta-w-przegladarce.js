@@ -15,12 +15,28 @@
       `<img src=x onerror=…>` wykonałoby kod w sesji właściciela. Sprawdzamy
       na atrapie DOM-u, że żaden węzeł panelu nie ma treści HTML, a imię
       stoi w nim jako zwykły tekst.
+
+   4. W PRAWDZIWEJ PRZEGLĄDARCE (runda 9), na serwerze z kontami – bo czysta
+      funkcja na atrapie magazynu przechodziła, a telefon przepuszczał błąd:
+      a) nagranie ptaka odłożone bez zasięgu (IndexedDB) przy chwilowym błędzie
+         serwera (503) zostaje, a błąd treści (400) je kończy;
+      b) aplikacja otwarta już z siecią rozpoznaje odłożone nagranie sama, bez
+         trybu głosowego (po pierwszym /api/status);
+      c) nagranie cudzej osoby nie idzie na konto bieżącej;
+      d) sesja wygasła, na tym samym telefonie loguje się ktoś inny: nagrania
+         poprzedniej osoby znikają, jej lektor nie czyta odpowiedzi nowej (stan
+         w pamięci strony, nie tylko w localStorage), kamera w trybie głosowym
+         nie włącza się sama;
+      e) „Wyloguj” kasuje nagrania;
+      f) po angielsku błędy ptaków (429, 503, 501) są po angielsku, a 503 na
+         żywo odkłada nagranie zamiast je gubić.
 */
 const path = require('node:path');
 const { zainstalujDom, Element } = require(path.join(__dirname, '..', 'atrapy', 'maly-dom.js'));
 const { utworzKonta } = require(path.join(__dirname, '..', '..', 'public', 'konta.js'));
 
 const fail = [];
+const fetchNatywny = global.fetch;   // część 3 podmienia fetch na atrapę, część 4 potrzebuje prawdziwego
 const ok = (w, opis) => { console.log(`${w ? 'ok ' : 'ŹLE'} ${opis}`); if (!w) fail.push(opis); };
 const t = (k, v) => (v ? `${k}:${JSON.stringify(v)}` : k);
 
@@ -108,6 +124,141 @@ function magazyn(poczatek = {}) {
   ok(dom.dokument.body.classList.contains('rola-czlonek'), 'rola członka oznaczona na <body> (ukrywa elementy właściciela)');
 
   dom.odinstaluj();
+  delete global.location; delete global.navigator; global.fetch = fetchNatywny;
+
+  await wPrzegladarce();
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKONTA W PRZEGLĄDARCE OK');
   process.exit(fail.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// --- 4. Prawdziwa przeglądarka, prawdziwe konta ---------------------------------
+async function wPrzegladarce() {
+  const { maPrzegladarke, przegladarka, serwerCosmosa, czekajNa, zabij } = require(path.join(__dirname, '..', 'pomoc'));
+  if (!maPrzegladarke()) { console.log('POMINIĘTE (część przeglądarkowa): brak Chromium'); return; }
+  const PORT = 3511;
+  const S = `http://127.0.0.1:${PORT}`;
+  const HASLO = 'haslo-wlasciciela-123';
+  const srv = serwerCosmosa(PORT, { COSMOS_PASSWORD: HASLO, COSMOS_LOGIN: 'marcin', COSMOS_NAZWA: 'Marcin',
+    EMBED_PROVIDER: 'off', SENSES_URL: 'http://127.0.0.1:9', NEMOTRON_BASE_URL: 'http://127.0.0.1:9/v1' });
+  let b;
+  try {
+    if (!(await czekajNa(`${S}/api/auth`))) throw new Error('serwer testowy nie wstał');
+    const ciastko = (r) => r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    const log = await fetch(`${S}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: S },
+      body: JSON.stringify({ login: 'marcin', password: HASLO }) });
+    const W = ciastko(log);
+    const z = await (await fetch(`${S}/api/konta/zaproszenia`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: S, Cookie: W }, body: JSON.stringify({ nazwa: 'Bartek' }) })).json();
+    const zap = await fetch(`${S}/api/zaproszenie`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: S },
+      body: JSON.stringify({ token: z.token, login: 'bartek', nazwa: 'Bartek', haslo: 'haslo-bartka-123' }) });
+    ok(zap.ok, `konto Bartka założone z zaproszenia (${zap.status})`);
+
+    b = await przegladarka();
+    const ctx = await b.newContext({ viewport: { width: 358, height: 607 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+    await ctx.addCookies(W.split('; ').map((kv) => ({ name: kv.split('=')[0], value: kv.slice(kv.indexOf('=') + 1), url: S })));
+    const p = await ctx.newPage();
+    const bledy = [];
+    p.on('pageerror', (e) => bledy.push(e.message));
+
+    // Atrapa /api/ptak w przeglądarce: licznik żądań i odpowiedź zależna od trybu.
+    const ptak = { n: 0, tryb: 200 };
+    await p.route('**/api/ptak', (r) => {
+      ptak.n++;
+      const [status, cialo] = {
+        200: [200, { gatunki: [] }],
+        400: [400, { error: 'Zły plik.', kod: 'zly-plik' }],
+        429: [429, { error: 'Poprzednie nagranie jeszcze się liczy – chwilę.', kod: 'zajete' }],
+        501: [501, { error: 'BirdNET niedostępny', kod: 'zmysly-blad' }],
+        503: [503, { error: 'Dużo osób rozpoznaje teraz ptaki – spróbuj za kilka sekund.', kod: 'kolejka-pelna' }],
+      }[ptak.tryb];
+      return r.fulfill({ status, contentType: 'application/json', headers: { 'Retry-After': '300' }, body: JSON.stringify(cialo) });
+    });
+    const gotowa = (kto) => p.waitForFunction((k) => typeof kimJestem === 'function' && kimJestem() === k
+      && document.querySelector('.app.gotowa'), kto, { timeout: 15000 });
+    const ileOdlozonych = () => p.evaluate(async () => (await ptakiOdlozone.wszystkie()).length);
+    const dodaj = (kto) => p.evaluate(async (k) => {
+      await ptakiOdlozone.dodaj(new Blob([new Uint8Array(4000).fill(7)], { type: 'audio/wav' }), k || undefined);
+    }, kto || null);
+    const kolejka = () => p.evaluate(async () => { clearTimeout(ptakiPonowTimer); await rozpoznajOdlozonePtaki(); });
+
+    await p.goto(`${S}/app`, { waitUntil: 'load' });
+    await gotowa('wlasciciel');
+    await p.waitForTimeout(600);   // pierwszy /api/status
+
+    // a) 503 – nagranie zostaje; 400 – znika
+    ptak.tryb = 503; ptak.n = 0;
+    await dodaj();
+    await kolejka();
+    ok(ptak.n === 1 && await ileOdlozonych() === 1, `4a. chwilowy błąd (503) – nagranie dalej czeka w przeglądarce (żądań ${ptak.n})`);
+
+    // b) aplikacja otwarta z siecią – nagranie rusza samo, bez trybu głosowego
+    ptak.tryb = 200; ptak.n = 0;
+    await p.goto(`${S}/app`, { waitUntil: 'load' });
+    await gotowa('wlasciciel');
+    await p.waitForFunction(async () => (await ptakiOdlozone.wszystkie()).length === 0, null, { timeout: 8000 }).catch(() => {});
+    console.log('DEBUG', await p.evaluate(async () => JSON.stringify({ po: ptakiPoStatusie, ja: kimJestem(), on: navigator.onLine, l: await ptakiOdlozone.wszystkie() })));
+    ok(ptak.n === 1 && await ileOdlozonych() === 0, `4b. start z siecią: odłożone nagranie rozpoznane bez trybu głosowego (żądań ${ptak.n})`);
+
+    ptak.tryb = 400; ptak.n = 0;
+    await dodaj();
+    await kolejka();
+    ok(ptak.n === 1 && await ileOdlozonych() === 0, '4a. błąd treści (400) kończy nagranie – bez ponawiania w nieskończoność');
+
+    // c) cudze nagranie nie wychodzi
+    ptak.tryb = 200; ptak.n = 0;
+    await dodaj('u-obcy');
+    await kolejka();
+    ok(ptak.n === 0 && await ileOdlozonych() === 1, `4c. nagranie innej osoby nie idzie na konto bieżącej (żądań ${ptak.n})`);
+
+    // d) sesja wygasła, loguje się Bartek formularzem
+    await dodaj();
+    await p.evaluate(() => {
+      settings.speak = true; saveSettings(); pokazGlosnik();
+      localStorage.setItem('cosmos.voiceCam', '1');
+    });
+    ptak.n = 0;
+    await ctx.clearCookies();
+    await p.goto(`${S}/app`, { waitUntil: 'load' });
+    await p.waitForSelector('#login-form', { state: 'visible', timeout: 10000 });
+    await p.fill('#login-login', 'bartek');
+    await p.fill('#login-password', 'haslo-bartka-123');
+    const idB = (await (await fetch(`${S}/api/auth`, { headers: { Cookie: ciastko(zap) } })).json()).uzytkownik.id;
+    await p.click('#login-submit');
+    await gotowa(idB);
+    await p.waitForTimeout(1200);
+    const d = await p.evaluate(() => ({
+      speak: settings.speak === true, glosnik: document.getElementById('tts-toggle').getAttribute('aria-pressed'),
+      voiceCam: localStorage.getItem('cosmos.voiceCam'),
+    }));
+    ok(await ileOdlozonych() === 0 && ptak.n === 0, `4d. po zmianie osoby nagrania poprzedniej zniknęły i nic nie poszło na konto nowej (żądań ${ptak.n})`);
+    ok(!d.speak && d.glosnik !== 'true', `4d. lektor poprzedniej osoby wyłączony w pamięci strony (speak ${d.speak}, aria-pressed ${d.glosnik})`);
+    ok(d.voiceCam === null, `4d. kamera w trybie głosowym poprzedniej osoby nie przechodzi na nową (${d.voiceCam})`);
+
+    // f) po angielsku: 503 na żywo odkłada nagranie, zdania po angielsku
+    await p.evaluate(() => {
+      setLang('en');
+      window.NasluchWlasny = { dostepny: () => true, nagrajWav: async () => new Blob([new Uint8Array(4000)], { type: 'audio/wav' }) };
+    });
+    const naZywo = async (tryb) => {
+      ptak.tryb = tryb;
+      return p.evaluate(async () => { stanPtakow = { dostepne: true, znany: true }; await rozpoznajPtaka(); clearTimeout(ptakiPonowTimer); return document.getElementById('voice-answer').textContent; });
+    };
+    const po503 = await naZywo(503);
+    ok(await ileOdlozonych() === 1, '4f. 503 na żywo – nagranie odłożone, nie zgubione');
+    const polskie = /[ąćęłńóśźż]/i;
+    const po429 = await naZywo(429);
+    const po501 = await naZywo(501);
+    ok([po503, po429, po501].every((x) => x && !polskie.test(x)), `4f. błędy ptaków po angielsku („${po503}” | „${po429}” | „${po501}”)`);
+
+    // e) „Wyloguj” kasuje nagrania
+    await p.evaluate(async () => { await konta_.odswiez().catch(() => {}); });
+    await Promise.all([p.waitForNavigation({ waitUntil: 'load' }), p.evaluate(() => document.getElementById('konto-wyloguj').click())]);
+    await p.waitForSelector('#login-form', { state: 'visible', timeout: 10000 });
+    ok(await ileOdlozonych() === 0, '4e. „Wyloguj” kasuje nagrania ptaków odłożone w przeglądarce');
+
+    ok(!bledy.length, `4. błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
+  } finally {
+    if (b) await b.close();
+    zabij(srv);
+  }
+}

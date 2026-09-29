@@ -18,7 +18,15 @@
  *      właściciela,
  *   7. koniec środków / zły klucz → kod `stt-trwaly` (przeglądarka od razu na
  *      własne rozpoznawanie, zamiast gubić trzy wypowiedzi),
- *   8. `przepisz()` – ten sam łańcuch dla nagrań w bazie wiedzy bez zmysłów. */
+ *   8. `przepisz()` – ten sam łańcuch dla nagrań w bazie wiedzy bez zmysłów,
+ *   9. wspólny termin łańcucha: wiszące zmysły i wiszący własny serwer w domu nie
+ *      zjadają 2 × 60 s – OpenAI odpowiada, zanim Cloudflare odda 524,
+ *  10. klient odszedł → płatna chmura nie dostaje zlecenia (rozpoznawanie i czytanie),
+ *  11. zmysły bez Whispera (501) + odrzucony klucz → `stt-trwaly`, nie „spróbuj jeszcze raz”,
+ *  12. własny serwer STT z 404 `{detail}` → zdanie o własnym serwerze (nie o chmurze),
+ *      treść `detail` w dzienniku,
+ *  13. nagranie z bazy wiedzy (`tryb: 'plik'`): whisper-1, bez podpowiedzi „Hej, Cosmos.”,
+ *      opus jako .ogg. */
 const http = require('node:http');
 const { utworz } = require('../../lib/glos.js');
 const { sendJson, readBodyBuffer, readJson } = require('../../lib/rdzen.js');
@@ -35,13 +43,27 @@ const wywolania = [];
 let elevenPada = false;
 let zmyslyZywe = false;
 let oaBrakSrodkow = false;
+let oaZlyKlucz = false;
+let zmyslySttTryb = 'ok';        // ok | wisi | 501
+let elevenWisi = false;
+const wiszace = [];
 const atrapa = http.createServer((req, res) => {
   const cialo = [];
   req.on('data', (c) => cialo.push(c));
   req.on('end', () => {
     const tresc = Buffer.concat(cialo);
     wywolania.push({ url: req.url, auth: req.headers.authorization || req.headers['xi-api-key'] || '', tresc: tresc.toString('latin1') });
+    // Uśpiony komputer w domu: połączenie przyjęte, odpowiedzi nie ma.
+    if (req.url === '/wl-wisi/v1/audio/transcriptions') { wiszace.push(res); return undefined; }
+    if (req.url === '/wl-404/v1/audio/transcriptions') {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ detail: 'Model whisper-1 is not installed locally.' }));
+    }
     if (req.url === '/oa/v1/audio/transcriptions') {
+      if (oaZlyKlucz) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: 'Incorrect API key provided.', code: 'invalid_api_key' } }));
+      }
       if (oaBrakSrodkow) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: { message: 'You exceeded your current quota, please check your plan and billing details.', code: 'insufficient_quota' } }));
@@ -54,6 +76,7 @@ const atrapa = http.createServer((req, res) => {
       return res.end(Buffer.from('MP3-OPENAI'));
     }
     if (req.url.startsWith('/el/v1/text-to-speech/')) {
+      if (elevenWisi) { wiszace.push(res); return undefined; }
       if (elevenPada) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"detail":{"message":"quota"}}'); }
       res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
       return res.end(Buffer.from('MP3-ELEVEN'));
@@ -65,6 +88,11 @@ const atrapa = http.createServer((req, res) => {
     }
     // Zmysły dostają tryb i język w parametrach (?tryb=nasluch&jezyk=pl) – liczy się ścieżka.
     if (req.url.split('?')[0] === '/zm/stt') {
+      if (zmyslySttTryb === 'wisi') { wiszace.push(res); return undefined; }
+      if (zmyslySttTryb === '501') {
+        res.writeHead(501, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ detail: 'Whisper nie jest zainstalowany.' }));
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ text: 'z Whispera' }));
     }
@@ -223,6 +251,89 @@ const atrapa = http.createServer((req, res) => {
   const zGosciem = await glos.przepisz(gosc, wav, 'audio/wav', { pominZmysly: true }).then(() => 'ok', (e) => e.kod);
   ok(zGosciem === 'brak', `gość bez przyznań: przepisz() nie sięga po klucz właściciela (${zGosciem})`);
 
+  // --- 9–13: termin łańcucha, zerwanie klienta, 501, własny serwer 404, tryb „plik”
+  /* Budżet 16 s, źródło domowe 5 s: 5 + 5 s na dom i jeszcze ponad 5 s (najkrótsza próba) na OpenAI.
+     W produkcji 85 s i 25 s – ta sama arytmetyka. */
+  const BUDZET = { COSMOS_GLOS_BUDZET_MS: '16000', COSMOS_GLOS_DOM_MS: '5000' };
+  const postaw = async (g) => {
+    const s9 = http.createServer((req, res) => (new URL(req.url, 'http://x').pathname === '/api/tts' ? g.handleTts(req, res) : g.handleStt(req, res)));
+    await new Promise((rr) => s9.listen(0, '127.0.0.1', rr));
+    return { s9, u: `http://127.0.0.1:${s9.address().port}` };
+  };
+  zmyslyZywe = true;
+  zmyslySttTryb = 'wisi';
+  const g9 = utworz({ SENSES_URL: `${A}/zm`, silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO,
+    env: { ...BUDZET, STT_BASE_URL: `${A}/wl-wisi/v1`, STT_LOKALNY: '1' } });
+  const p9 = await postaw(g9);
+  wywolania.length = 0;
+  let t0 = Date.now();
+  r = await fetch(`${p9.u}/api/stt?jezyk=pl&tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav, signal: AbortSignal.timeout(30000) })
+    .catch((e) => ({ status: 0, json: async () => ({ blad: e.message }) }));
+  d = await r.json();
+  let ms = Date.now() - t0;
+  ok(r.status === 200 && d.zrodlo === 'openai' && ms < 16500, `9. wiszące zmysły i własny serwer w domu → OpenAI w terminie (${r.status}, ${d.zrodlo}, ${ms} ms, budżet 16 s)`);
+  ok(wywolania.some((w) => w.url.startsWith('/zm/stt')) && wywolania.some((w) => w.url.startsWith('/wl-wisi/')), '9. oba źródła domowe dostały swoją szansę (po 5 s)');
+
+  // 10. klient zrywa po 1 s – OpenAI nie dostaje nic, nawet gdy termin by pozwolił
+  wywolania.length = 0;
+  const ac10 = new AbortController();
+  setTimeout(() => ac10.abort(), 1000);
+  await fetch(`${p9.u}/api/stt?jezyk=pl&tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav, signal: ac10.signal }).catch(() => null);
+  await new Promise((rr) => setTimeout(rr, 11000));
+  ok(!wywolania.some((w) => w.url.startsWith('/oa/')), `10. klient odszedł w trakcie → OpenAI 0 zleceń (${wywolania.map((w) => w.url.split('?')[0]).join(', ')})`);
+  elevenWisi = true;
+  wywolania.length = 0;
+  const ac10b = new AbortController();
+  setTimeout(() => ac10b.abort(), 1000);
+  await fetch(`${p9.u}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Dzień dobry.' }), signal: ac10b.signal }).catch(() => null);
+  await new Promise((rr) => setTimeout(rr, 1500));
+  ok(wywolania.some((w) => w.url.startsWith('/el/')) && !wywolania.some((w) => w.url === '/oa/v1/audio/speech'), '10. czytanie: klient odszedł przy wiszącym ElevenLabs → OpenAI nie czyta');
+  t0 = Date.now();
+  r = await fetch(`${p9.u}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Dzień dobry.' }), signal: AbortSignal.timeout(30000) }).catch(() => ({ status: 0 }));
+  ms = Date.now() - t0;
+  ok(r.status === 502 && ms < 17000, `10. czytanie przy wiszącym ElevenLabs kończy się w terminie (${r.status}, ${ms} ms)`);
+  elevenWisi = false;
+  p9.s9.close();
+
+  // 11. zmysły bez Whispera (501) + zły klucz OpenAI → stt-trwaly
+  zmyslySttTryb = '501';
+  oaZlyKlucz = true;
+  const p11 = await postaw(utworz({ SENSES_URL: `${A}/zm`, silniki, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO, env: {} }));
+  r = await fetch(`${p11.u}/api/stt?jezyk=pl&tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  d = await r.json();
+  ok(r.status === 502 && d.kod === 'stt-trwaly', `11. zmysły 501 + klucz odrzucony → ${d.kod}`);
+  oaZlyKlucz = false;
+  zmyslySttTryb = 'ok';
+  zmyslyZywe = false;
+  p11.s9.close();
+
+  // 12. własny serwer STT: 404 {detail} (speaches bez modelu) – zdanie o własnym serwerze
+  const bezOpenAi = { ...silniki, dostep: () => ({ ok: false }) };
+  const p12 = await postaw(utworz({ SENSES_URL: 'http://127.0.0.1:1', silniki: bezOpenAi, kto: () => ktoTeraz, sendJson, readBodyBuffer, readJson, STUDIO,
+    env: { STT_BASE_URL: `${A}/wl-404/v1` } }));
+  const dziennik = [];
+  const blConsole = console.error;
+  console.error = (...a) => { dziennik.push(a.join(' ')); };
+  r = await fetch(`${p12.u}/api/stt?jezyk=pl&tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  d = await r.json();
+  console.error = blConsole;
+  ok(r.status === 502 && d.kod === 'stt-trwaly' && !/chmurze/.test(d.error || '') && /STT_MODEL/.test(d.error || ''), `12. własny serwer 404 → „${d.error}”`);
+  ok(dziennik.some((l) => /not installed/.test(l)), '12. treść `detail` trafia do dziennika serwera');
+  p12.s9.close();
+
+  // 13. tryb „plik”: whisper-1, bez podpowiedzi, opus jako .ogg
+  wywolania.length = 0;
+  const pl13 = await glos.przepisz(wlasciciel, Buffer.from('OggS nagranie spotkania'), 'audio/opus', { pominZmysly: true, tryb: 'plik' });
+  const w13 = wywolania.find((w) => w.url === '/oa/v1/audio/transcriptions');
+  ok(pl13.zrodlo === 'openai' && w13 && /name="model"\r\n\r\nwhisper-1/.test(w13.tresc), '13. nagranie z bazy wiedzy idzie do whisper-1');
+  ok(w13 && !/name="prompt"/.test(w13.tresc), '13. nagranie z bazy wiedzy bez podpowiedzi „Hej, Cosmos.”');
+  ok(w13 && /filename="mowa\.ogg"/.test(w13.tresc) && /Content-Type: audio\/ogg/.test(w13.tresc), '13. audio/opus wysłane jako .ogg');
+  wywolania.length = 0;
+  await glos.przepisz(wlasciciel, wav, 'audio/wav', { pominZmysly: true, tryb: 'pytanie' });
+  const w13b = wywolania.find((w) => w.url === '/oa/v1/audio/transcriptions');
+  ok(w13b && /name="model"\r\n\r\ngpt-4o-mini-transcribe/.test(w13b.tresc), '13. rozmowa dalej idzie do szybkiego modelu');
+
+  for (const w of wiszace) { try { w.destroy(); } catch { /* już zamknięte */ } }
   atrapa.close(); serwer.close(); serwer2.close();
   console.log(problemy.length ? `\n${problemy.length} problem(ów)` : '\nGŁOS SERWERA OK');
   process.exit(problemy.length ? 1 : 0);
