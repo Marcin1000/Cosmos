@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="151 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-151-5E9E3A?style=flat-square">
+  <img alt="153 zestawy testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-153-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 151 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 153 zestawy plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 151 zestawów + 10 selftestów Pythona (~12 min)
+npm test                  # 153 zestawy + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -542,6 +542,37 @@ zmiany w otoczeniu i wysyła je do Cosmosa (`POST /api/events`). Serwer dokleja 
 zdarzenia do **kontekstu każdej rozmowy** (sekcja „KONTEKST PERCEPCJI"), więc możesz
 zapytać *„co się zmieniło w pokoju?"* – a Nemotron odpowie na podstawie prawdziwych
 obserwacji, niezależnie od tego, czy działa lokalnie, czy w chmurze.
+
+### 👥 Zespół agentów – modele, które pomagają głównemu
+
+Główny model (ten z zakładki: Chmura, Lokalnie, OpenAI albo Claude) może poprosić o pomoc inne
+modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i przy mieszaniu ich
+(np. lokalny model prowadzi, a rola działa w chmurze).
+
+- **Jak poprosić:** przycisk z dwiema osobami w polu wiadomości (działa na jedną wiadomość) albo
+  słowa „zrób to zespołem”, „niech agenci…”. W trybie **„Proponuj, gdy warto”** (domyślny) model
+  odpowiada od razu, a pod odpowiedzią pojawia się cicha linijka „Mogę to sprawdzić zespołem…”
+  z przyciskami **Uruchom · Zmień · ×**. „Uruchom” zastępuje odpowiedź wersją zespołową – pod
+  jednym pytaniem zawsze jest jedna odpowiedź.
+- **Role:** badacz (szuka w sieci), sprzętowiec, programista, oko (zdjęcia), analityk, recenzent
+  (sprawdza pozostałych). Skład – najwyżej 3 role – dobiera krótki planista, a **model do każdej
+  roli dobiera Cosmos**: Twój wybór → Twoje uprawnienia → w czym model jest dobry (wyniki
+  „Sprawdź”, katalog) → model prowadzącego. Przed startem możesz skład zmienić: inny model do roli,
+  „Auto”, usuń albo dodaj rolę.
+- **W trakcie:** blok „Zespół” w odpowiedzi pokazuje każdą rolę w kolorze jej silnika, z nazwą
+  silnika i stanem słowami. Możesz **pominąć rolę**, kazać **odpowiedzieć od razu** z tym, co jest,
+  albo zatrzymać wszystko. Praca idzie na serwerze – zgaszony ekran jej nie przerywa. Po wyniku
+  blok zwija się do jednej linijki; notatki ról zostają w rozmowie.
+- **Prywatność:** gdy prowadzi model lokalny, a rola miałaby działać w chmurze, Cosmos pyta
+  o zgodę (Start / Tylko lokalnie / Bez agentów). Pilnuje tego serwer. Role nie dostają Twojego
+  profilu, pamięci ani percepcji – tylko zadanie i skrót rozmowy.
+- **Ustawienia → Agenci:** tryb (Wyłączony / Na prośbę / Proponuj, gdy warto / Uruchamiaj sam),
+  pytanie przed startem, stała zgoda na chmurę, najwięcej ról, przypięty model do roli.
+- **Zaproszone osoby:** bez przyznania **„Zespół agentów”** (panel Dostęp) zespół działa im tylko
+  na chmurze NVIDIA i na ich własnych kluczach; jeden zespół naraz i limit dzienny. W panelu Dostęp
+  widać zużycie silników (wywołania i tokeny z 30 dni) – bez treści rozmów i bez nazw ról.
+- **Tryb głosowy:** zespół tylko na wyraźną prośbę; pod kulą kropki ról, czytana jest wyłącznie
+  odpowiedź prowadzącego.
 
 ### 🎙️ Asystent głosowy – „Hej, Kosmos"
 
@@ -1441,7 +1472,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 151 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 153 zestawy + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

@@ -193,7 +193,7 @@ nic nie ginie.
    zakłada konto – dlatego wysyłaj go tylko tej jednej osobie.
 
 Przy każdej osobie masz przełączniki **lokalny GPU (i zmysły) / OpenAI (czat
-i głos) / Claude / Studio / Wyszukiwarki (Google) / Ptaki na serwerze**.
+i głos) / Claude / Studio / Wyszukiwarki (Google) / Ptaki na serwerze / Zespół agentów**.
 Włączone – ta osoba korzysta z nich na Twoich kluczach i Twoim sprzęcie.
 Wyłączone – nie ma ich, chyba że wpisze własny klucz (dotyczy OpenAI i Claude).
 
@@ -207,6 +207,11 @@ Wyłączone – nie ma ich, chyba że wpisze własny klucz (dotyczy OpenAI i Cla
   Bez przyznania osoba szuka darmowymi źródłami.
 - **Ptaki na serwerze** – BirdNET na serwerze (`PTAKI_URL`, KROK 6b
   w `docs/START-TUTAJ.md`), dla kogoś, kto nie ma go na własnym komputerze.
+- **Zespół agentów** – role zespołu (planista i do 3 ról) mogą liczyć się na Twoich kluczach
+  i Twoim GPU. Jedno pytanie zespołem to kilka wywołań modelu. Bez przyznania osoba ma zespół
+  tylko na chmurze NVIDIA i na własnych kluczach; zawsze jeden zespół naraz i limit dzienny
+  (`COSMOS_ZESPOL_*` w `.env`). Pod osobą widać zużycie silników z 30 dni (wywołania i tokeny) –
+  bez treści rozmów i bez nazw ról.
 
 Na Twoich kluczach osoba dostaje **model z `.env`** (i jego wizyjny) – nie
 dowolny z cennika. Inne modele dopuszczasz w `.env`:

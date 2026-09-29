@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="151 test suites" src="https://img.shields.io/badge/test%20suites-151-5E9E3A?style=flat-square">
+  <img alt="153 test suites" src="https://img.shields.io/badge/test%20suites-153-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 151 suites plus 10 Python
+**Tests measure behaviour, never source text.** 153 suites plus 10 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -225,6 +225,20 @@ the model name stays on one line, the suggestions are set quietly (grey, no shad
 do not outweigh the heading, and in landscape the mark gives way to a single row of
 suggestions – a suite checks that nothing scrolls at the owner's window sizes.
 
+**A team of models is one answer, not a group chat.** Ask for a team (the button in the
+composer, or "do this as a team") and a small planner model picks up to three roles from a
+closed catalogue – researcher, gear expert, programmer, eye, analyst, reviewer – and writes each
+a task. The server, not the planner, assigns a model to every role: the person's choice first,
+then what they are allowed to use, then what each model is good at (a probe-backed skills map),
+then the lead model itself. Roles run in parallel on the server inside one resumable run, so a
+locked phone does not stop them; their notes reach the lead model as untrusted material in the
+last user turn, never as system text. The thread shows one reply with a collapsible "Team" block:
+each role is a branch in its engine's colour, with the engine named in words. Three rules came
+from the reviews rather than the mock-ups: a local lead never sends anything to the cloud without
+consent, enforced on the server; an invited member cannot spend the owner's keys on a team without
+a separate grant; and one provider-wide limiter (not a per-person one) keeps three people's teams
+from turning into a wall of 429s.
+
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
 a genuine limitation for outside readers – the reasoning is dense and it is all
@@ -311,7 +325,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 151 suites + 10 Python selftests (~12 min)
+npm test                  # 153 suites + 10 Python selftests (~12 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -367,7 +381,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               151 behaviour suites, mock upstreams, fake DOM
+tests/               153 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 
