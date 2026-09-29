@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   '/nauka-widok.js',
   '/zmysly-widok.js',
   '/samouczek.js',
+  '/zespol-widok.js',
   '/manifest.webmanifest',
   '/icons/cosmos.svg',
   '/icons/cosmos-192.png',

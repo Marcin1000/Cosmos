@@ -4248,3 +4248,449 @@ select::-ms-expand { display: none; }
   .zm-polecenie-wiersz { flex-direction: column; }
   .zm-polecenie-wiersz .zm-kopiuj { align-self: flex-start; }
 }
+
+/* ==================== ZESPÓŁ AGENTÓW ====================
+   Makiety agencji-ux (runda 9); budowniczowie: public/zespol-widok.js.
+
+   Zespół NIE jest osobnym czatem ani stosem kart. To jedna odpowiedź
+   prowadzącego – jego nić, jego podpis – a w niej zwijany blok „Zespół”.
+   Każda rola to gałąź odchodząca od nici prowadzącego, zakończona kropką
+   w kolorze SWOJEGO silnika. Lokalny prowadzący z rolą w chmurze NVIDII
+   i drugą w Claude to niebieska nić z zieloną i pomarańczową gałęzią –
+   widać, kto co wniósł, zanim przeczyta się choć słowo.
+
+   Jeden komponent, pięć stanów (data-stan na .zespol):
+     dobieranie  – planista układa skład (jedna cicha linijka)
+     propozycja  – skład do przejrzenia/zmiany, czeka na Start (bramka)
+     praca       – role pracują; wiersze ze stanem i podglądem na żywo
+     wynik       – zwinięty do jednej linii jak tok myślenia
+     blad        – wynik z rolą, która nie odpowiedziała (nie blokuje)
+
+   Geometria: .msg-kolumna ma padding-left 26 px, nić stoi na 10–13 px.
+   Blok zaczyna się na 26 px, więc środek nici jest 14,5 px na lewo od niego.
+   Gałąź (.rola::before) startuje przy prawej krawędzi nici i skręca
+   łukiem do kropki roli. */
+
+.zespol {
+  --zespol-nic: -13px;              /* x prawej krawędzi nici względem bloku */
+  position: relative;
+  margin: 2px 0 10px;
+  font-size: 13px;
+}
+
+/* ---------- nagłówek: przełącznik zwijania ---------- */
+.zespol-glowa {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 30px; padding: 2px 0; text-align: left;
+  font: 400 11px/1.3 var(--font-mono); letter-spacing: .02em;
+  color: var(--text-faint);
+  border-radius: 8px;
+}
+.zespol-glowa:hover { color: var(--text-dim); }
+.zespol-glowa:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.zespol-glowa svg.zespol-ikona { width: 15px; height: 15px; flex: none; }
+.zespol-tytul { color: var(--text-dim); white-space: nowrap; }
+.zespol-kto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zespol-czas { margin-left: auto; white-space: nowrap; }
+.zespol-chev { width: 14px !important; height: 14px !important; flex: none; transition: transform .2s ease; }
+.zespol[data-otwarty="true"] .zespol-chev { transform: rotate(180deg); }
+/* Kropki w nagłówku: kolory silników ról, zanim ktoś rozwinie listę. */
+.zespol-kropki { display: inline-flex; gap: 3px; flex: none; }
+.zespol-kropki i { width: 6px; height: 6px; border-radius: 50%; background: var(--k); }
+
+/* ---------- lista ról ---------- */
+.zespol-role { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; }
+.zespol[data-otwarty="false"] .zespol-role,
+.zespol[data-otwarty="false"] .zespol-stopka { display: none; }
+
+.rola {
+  --k: var(--border-strong); --k-tekst: var(--text-dim);
+  position: relative; padding-left: 18px;
+}
+.rola[data-silnik="cloud"]  { --k: var(--k-nvidia); --k-tekst: var(--k-nvidia-tekst); }
+.rola[data-silnik="local"]  { --k: var(--k-local);  --k-tekst: var(--k-local-tekst); }
+.rola[data-silnik="claude"] { --k: var(--k-claude); --k-tekst: var(--k-claude-tekst); }
+.rola[data-silnik="openai"] { --k: var(--k-openai); --k-tekst: var(--k-openai-tekst); }
+
+/* Gałąź: od nici prowadzącego łukiem do kropki. */
+.rola::before {
+  content: ""; position: absolute; left: var(--zespol-nic); top: 2px;
+  width: calc(-1 * var(--zespol-nic) + 1px); height: 13px;
+  border-left: 1.5px solid; border-bottom: 1.5px solid; border-bottom-left-radius: 9px;
+  border-color: color-mix(in srgb, var(--k) 65%, transparent);
+  pointer-events: none;
+}
+.rola[data-stan="czeka"]::before, .rola[data-stan="pominieta"]::before { border-color: color-mix(in srgb, var(--k) 30%, transparent); }
+.rola-kropka {
+  position: absolute; left: 0; top: 11px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--k);
+}
+.rola[data-stan="czeka"] .rola-kropka,
+.rola[data-stan="pominieta"] .rola-kropka,
+.rola[data-stan="zatrzymana"] .rola-kropka { background: transparent; box-shadow: inset 0 0 0 1.5px var(--k); }
+.rola[data-stan="blad"] .rola-kropka { background: transparent; box-shadow: inset 0 0 0 1.5px var(--danger); }
+.rola[data-stan="pracuje"] .rola-kropka { animation: rola-puls 1.8s ease-in-out infinite; }
+@keyframes rola-puls {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--k) 0%, transparent); }
+}
+
+/* Wiersz: nazwa roli · silnik+model · stan. Cały wiersz to przycisk
+   „pokaż wkład” (aria-expanded). */
+.rola-wiersz {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "nazwa model stan";
+  align-items: baseline; gap: 2px 12px; width: 100%;
+  min-height: 30px; padding: 5px 0; text-align: left; border-radius: 6px;
+}
+.rola-wiersz:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.rola-nazwa { grid-area: nazwa; font-size: 13.5px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.rola-model {
+  grid-area: model; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 400 11px/1.3 var(--font-mono); color: var(--text-dim);
+}
+/* Nazwa silnika jak w podpisie odpowiedzi: wielkie litery, kolor silnika
+   jako TEKST (AA w obu motywach). Kolor to nie jedyny nośnik – nazwa stoi obok. */
+.rola-silnik { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--k-tekst); margin-right: 6px; }
+.rola-stan { grid-area: stan; font: 400 11px/1.3 var(--font-mono); color: var(--text-faint); white-space: nowrap; }
+.rola[data-stan="blad"] .rola-stan { color: var(--danger); }
+.rola[data-stan="pominieta"] .rola-nazwa, .rola[data-stan="zatrzymana"] .rola-nazwa { color: var(--text-dim); }
+.rola-zamiast { color: var(--warning-tekst); }
+
+/* Podgląd na żywo: jedna linijka, tylko dla roli, która właśnie pisze. */
+.rola-podglad {
+  margin: -3px 0 5px; font-size: 12.5px; line-height: 1.45; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rola-podglad::after { content: ""; display: inline-block; width: 6px; height: 12px; margin-left: 2px; vertical-align: -1px; background: var(--k); opacity: .7; animation: kursor-rola 1s steps(2) infinite; }
+@keyframes kursor-rola { 50% { opacity: 0; } }
+
+/* Pełny wkład roli po rozwinięciu – własna cienka nić w kolorze silnika roli. */
+.rola-tresc {
+  margin: 2px 0 10px; padding: 8px 12px 8px 12px; max-height: 280px; overflow-y: auto;
+  border-left: 2px solid var(--k); border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--bg-elevated) 70%, var(--bg));
+  font-size: 13.5px; line-height: 1.6; color: var(--text);
+}
+.rola-tresc p { margin: 0 0 6px; }
+.rola-tresc p:last-child { margin: 0; }
+
+/* Akcje przy wierszu (błąd, praca): cichy tekst, nie przyciski-klocki. */
+.rola-akcje { display: flex; gap: 14px; margin: -2px 0 6px; }
+.rola-akcje button, .zespol-link {
+  font-size: 12.5px; color: var(--text-dim); min-height: 28px; padding: 0;
+  text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px;
+}
+.rola-akcje button:hover, .zespol-link:hover { color: var(--text); text-decoration-color: currentColor; }
+
+/* ---------- propozycja: edycja przed startem ---------- */
+.rola-model-btn {
+  grid-area: model; justify-self: start; max-width: 100%; min-width: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg-elevated); color: var(--text-dim);
+  font: 400 11px/1.4 var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rola-model-btn:hover, .rola-model-btn[aria-expanded="true"] { color: var(--text); border-color: var(--border-strong); }
+.rola-model-btn::after { content: "▾"; opacity: .6; }
+.rola-usun {
+  grid-area: stan; width: 28px; height: 28px; margin: -4px -6px -4px 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--text-faint);
+}
+.rola-usun:hover { color: var(--danger); background: var(--bg-hover); }
+.rola-usun svg { width: 14px; height: 14px; }
+.zespol[data-stan="propozycja"] .rola-wiersz { cursor: default; }
+
+.zespol-stopka {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.zespol-dodaj { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); min-height: 34px; padding: 0 4px; border-radius: 8px; }
+.zespol-dodaj:hover { color: var(--text); }
+.zespol-dodaj svg { width: 15px; height: 15px; }
+.zespol-przyciski { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.zespol-przyciski .btn-primary { padding: 8px 20px; font-size: 13.5px; }
+.zespol-przyciski .btn-ghost, .zespol-przyciski .btn-secondary { font-size: 13px; }
+
+/* Bramka zgody: spokojna, neutralna – to informacja, nie alarm.
+   Kluczowe zdanie pogrubione; bez bursztynu i bez czerwieni. */
+.zespol-zgoda {
+  flex: 1 0 100%; display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 12px;
+  background: var(--bg-elevated); font-size: 13px; line-height: 1.5; color: var(--text-dim);
+}
+.zespol-zgoda b { color: var(--text); font-weight: 600; }
+.zespol-zgoda svg { width: 17px; height: 17px; margin-top: 1px; color: var(--text-dim); }
+.zespol-zgoda small { display: block; margin-top: 2px; font-size: 12px; color: var(--text-faint); }
+
+/* ---------- dobieranie składu ---------- */
+.zespol[data-stan="dobieranie"] .zespol-glowa { cursor: default; }
+.zespol-dobieram::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  margin-right: 8px; vertical-align: 1px; background: var(--k, var(--text-faint));
+  animation: rola-puls 1.8s ease-in-out infinite;
+}
+
+/* ---------- po wyniku ---------- */
+/* Nota pod scaloną odpowiedzią, gdy jakaś rola nie dała wkładu. */
+.zespol-nota { margin: 6px 0 2px; font-size: 12.5px; color: var(--text-faint); }
+/* Prowadzący nie złożył odpowiedzi – wkład zespołu zostaje, jedna akcja. */
+.zespol-blad-scalenia {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  padding: 10px 12px; border-radius: 10px; font-size: 13.5px; color: var(--text);
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+/* „Proponuj, gdy warto”: jedna cicha linijka pod odpowiedzią solo.
+   Bez ramki i tła – Marcin prosił o delikatniejsze podpowiedzi. Tylko pod
+   OSTATNIĄ odpowiedzią; znika przy następnej wiadomości. */
+.zespol-sugestia {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-faint);
+  animation: sugestia-wchodzi .5s ease both .3s;
+}
+.zespol-sugestia svg.zespol-ikona { width: 14px; height: 14px; }
+.zespol-sugestia .kto { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); }
+.zespol-sugestia .kto i { width: 6px; height: 6px; border-radius: 50%; background: var(--k); }
+.zespol-sugestia .zespol-link { font-size: 12.5px; }
+.zespol-sugestia .zamknij { margin-left: 2px; color: var(--text-faint); width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+.zespol-sugestia .zamknij:hover { color: var(--text); background: var(--bg-hover); }
+.zespol-sugestia .zamknij svg { width: 13px; height: 13px; }
+@keyframes sugestia-wchodzi { from { opacity: 0; transform: translateY(3px); } }
+
+/* ---------- przycisk „Zespół” w polu wiadomości ---------- */
+.attach-btn.zespol-btn[aria-pressed="true"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--k-akt) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k-akt) 45%, transparent);
+}
+
+/* ---------- edytor roli: okienko (komputer) / arkusz (telefon) ---------- */
+.rola-edytor {
+  position: absolute; z-index: 60; width: min(360px, 92vw);
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-soft); padding: 6px; display: flex; flex-direction: column;
+  max-height: min(70vh, 520px);
+}
+.re-glowa { display: flex; align-items: center; gap: 8px; padding: 8px 10px 6px; }
+.re-glowa h4 { font-size: 14px; font-weight: 600; margin: 0; flex: 1; color: var(--text); }
+.re-glowa .icon-btn { width: 32px; height: 32px; }
+.re-lista { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+.re-grupa {
+  display: flex; align-items: center; gap: 7px; padding: 10px 10px 4px;
+  font: 500 10.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--k-tekst);
+}
+.re-grupa::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--k); }
+.re-grupa[data-silnik="cloud"], .re-lista [data-silnik="cloud"]   { --k: var(--k-nvidia); --k-tekst: var(--k-nvidia-tekst); }
+.re-grupa[data-silnik="local"], .re-lista [data-silnik="local"]   { --k: var(--k-local);  --k-tekst: var(--k-local-tekst); }
+.re-grupa[data-silnik="claude"], .re-lista [data-silnik="claude"] { --k: var(--k-claude); --k-tekst: var(--k-claude-tekst); }
+.re-grupa[data-silnik="openai"], .re-lista [data-silnik="openai"] { --k: var(--k-openai); --k-tekst: var(--k-openai-tekst); }
+.rola-edytor .model-opcja { position: relative; }
+.rola-edytor .model-opcja.wybrany { background: color-mix(in srgb, var(--k, var(--k-akt)) 14%, transparent); }
+.rola-edytor .model-opcja.wybrany::after {
+  content: ""; position: absolute; right: 12px; top: 50%; width: 5px; height: 9px; margin-top: -6px;
+  border: solid var(--text); border-width: 0 1.7px 1.7px 0; transform: rotate(45deg);
+}
+.re-brak { display: flex; gap: 8px; align-items: flex-start; margin: 6px 10px 2px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.45; color: var(--text-faint); }
+.re-brak svg { width: 14px; height: 14px; margin-top: 1px; }
+.re-stopka { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 10px 6px; border-top: 1px solid var(--border); }
+.re-stopka label { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-dim); margin-right: auto; }
+.re-stopka input { accent-color: var(--text); width: 15px; height: 15px; }
+.re-usun { font-size: 12.5px; color: var(--danger); min-height: 32px; }
+.re-stopka .btn-primary { padding: 7px 18px; font-size: 13px; }
+
+@media (max-width: 600px) {
+  /* Telefon: arkusz od dołu na całą szerokość, cele dotykowe 44 px. */
+  .rola-edytor {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%;
+    border-radius: 20px 20px 0 0; max-height: 78dvh;
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
+    box-shadow: var(--shadow);
+  }
+  .rola-edytor::before { content: ""; align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 2px 0 4px; }
+  .rola-edytor .model-opcja { min-height: 48px; justify-content: center; }
+  .re-tlo { position: fixed; inset: 0; z-index: 59; background: color-mix(in srgb, var(--bg) 40%, rgba(0, 0, 0, .35)); }
+}
+
+/* ---------- telefon: wiersz roli na dwie linijki ---------- */
+@media (max-width: 520px) {
+  .rola-wiersz {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nazwa stan" "model model";
+    min-height: 44px; padding: 6px 0;
+  }
+  .rola-kropka { top: 13px; }
+  .rola::before { top: 3px; height: 14px; }
+  .zespol-kto { display: none; }          /* w nagłówku zostaje „3 role” */
+  .zespol-stopka { gap: 8px; }
+  .zespol-przyciski { width: 100%; margin-left: 0; }
+  .zespol-przyciski .btn-primary { flex: 1 0 100%; order: -1; padding: 11px 20px; }
+  .zespol-przyciski .btn-ghost, .zespol-przyciski .btn-secondary { flex: 1 1 0; min-height: 40px; }
+  .rola-usun { width: 40px; height: 40px; margin: -10px -10px -10px 0; }
+}
+
+/* ---------- telefon w poziomie: role jako pigułki w jednym rzędzie ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .zespol-role { flex-direction: row; flex-wrap: wrap; gap: 6px; padding-left: 2px; }
+  .rola { padding-left: 0; }
+  .rola::before { display: none; }
+  .rola-kropka { position: static; display: inline-block; flex: none; }
+  .rola-wiersz {
+    display: inline-flex; align-items: center; gap: 7px; width: auto; min-height: 30px;
+    padding: 3px 11px 3px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elevated);
+  }
+  .rola-wiersz .rola-model { display: none; }
+  .rola-nazwa { font-size: 12.5px; }
+  .rola-podglad, .rola-tresc { display: none; }
+}
+
+/* ---------- tryb głosowy: kropki ról pod kulą ---------- */
+.voice-zespol { display: flex; justify-content: center; gap: 18px; margin: 4px 0 2px; }
+.vz-rola { --k: var(--text-faint); display: flex; flex-direction: column; align-items: center; gap: 6px; font: 500 9.5px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
+.vz-rola[data-silnik="cloud"]  { --k: var(--k-nvidia); }
+.vz-rola[data-silnik="local"]  { --k: var(--k-local); }
+.vz-rola[data-silnik="claude"] { --k: var(--k-claude); }
+.vz-rola[data-silnik="openai"] { --k: var(--k-openai); }
+.vz-rola i { width: 9px; height: 9px; border-radius: 50%; background: var(--k); }
+.vz-rola[data-stan="czeka"] i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--k); }
+.vz-rola[data-stan="pracuje"] i { animation: rola-puls 1.8s ease-in-out infinite; }
+.vz-rola[data-stan="gotowe"] { color: var(--text-dim); }
+
+/* ---------- Ustawienia → Agenci ---------- */
+.ag-tryby { display: flex; flex-direction: column; gap: 0; border: 0; padding: 0; margin: 0; }
+.ag-tryb {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; align-items: start;
+  padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer; position: relative;
+}
+.ag-tryb:first-of-type { border-top: 0; padding-top: 2px; }
+.ag-tryb input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ag-tryb .kolko { width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; }
+.ag-tryb input:checked + .kolko { border-color: var(--text); }
+.ag-tryb input:checked + .kolko::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
+.ag-tryb input:focus-visible + .kolko { outline: 2px solid var(--text); outline-offset: 2px; }
+.ag-tryb .set-wiersz-tekst { font-size: 14px; }
+.ag-tryb .domyslne { margin-left: 6px; font: 400 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+.ag-segment { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; background: var(--bg-sidebar); }
+.ag-segment button { min-width: 36px; min-height: 30px; border-radius: 7px; font: 500 13px/1 var(--font-mono); color: var(--text-dim); }
+.ag-segment button[aria-pressed="true"] { background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-soft); }
+.ag-role { list-style: none; margin: 0; padding: 0; }
+.ag-rola { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); min-height: 52px; }
+.ag-rola:first-child { border-top: 0; padding-top: 0; }
+.ag-rola .rola-model-btn { grid-area: auto; justify-self: end; max-width: 190px; }
+.ag-rola .rola-model-btn i { width: 7px; height: 7px; border-radius: 50%; background: var(--k); flex: none; }
+.ag-rola .rola-model-btn[data-silnik="cloud"]  { --k: var(--k-nvidia); }
+.ag-rola .rola-model-btn[data-silnik="local"]  { --k: var(--k-local); }
+.ag-rola .rola-model-btn[data-silnik="claude"] { --k: var(--k-claude); }
+.ag-rola .rola-model-btn[data-silnik="openai"] { --k: var(--k-openai); }
+.ag-rola .rola-model-btn.auto { color: var(--text-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rola[data-stan="pracuje"] .rola-kropka, .vz-rola[data-stan="pracuje"] i, .zespol-dobieram::before,
+  .rola-podglad::after, .zespol-sugestia { animation: none !important; }
+  .zespol-chev { transition: none; }
+}
+
+/* .btn-ghost nie ma w style.css stylu bazowego (jest tylko .niebezpieczny) –
+   w zespole potrzebny cichy przycisk tekstowy. */
+.zespol .btn-ghost { font-size: 13px; color: var(--text-dim); padding: 8px 12px; border-radius: 999px; min-height: 36px; }
+.zespol .btn-ghost:hover { color: var(--text); background: var(--bg-hover); }
+
+/* Nagłówek otwartego bloku nie powtarza nazw ról – stoją niżej w wierszach. */
+.zespol[data-otwarty="true"] .zespol-kto { display: none; }
+/* Stan przy nazwie, nie na drugim końcu 730 px karty. */
+.zespol { max-width: 620px; }
+
+/* Telefon w poziomie – poprawka: pigułką jest cała rola, kropka w środku. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .rola { display: inline-flex; align-items: center; gap: 7px; padding: 2px 11px 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elevated); }
+  .rola-wiersz { border: 0; padding: 0; background: none; min-height: 28px; }
+  .rola-akcje { display: none; }
+}
+
+/* Telefon: „· prowadzi” łamało podpis na dwie linie; blok zespołu tuż pod
+   podpisem i tak mówi, że to odpowiedź zespołu. */
+@media (max-width: 520px) { .msg-silnik-prowadzi { display: none; } }
+
+/* Powód, dla którego rola nie dała wkładu – bez kursora podglądu. */
+.rola-blad { margin: -3px 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--text-dim); }
+/* Opcje edytora na całą szerokość; miejsce na znacznik wyboru. */
+.rola-edytor .model-opcja { width: 100%; padding-right: 36px; }
+.rola-edytor .model-opcja-nazwa.auto { font-family: var(--font-sans); font-size: 13.5px; font-weight: 500; }
+
+/* Ustawienia na telefonie: długa nazwa modelu nie ściska nazwy roli. */
+@media (max-width: 520px) { .ag-rola .rola-model-btn { max-width: min(190px, 46vw); } }
+
+/* Nakładka głosu jest ZAWSZE ciemna (style.css nadpisuje tam tylko --text*).
+   Kolory silników bierzemy z ciemnego motywu – inaczej w jasnym kropka roli
+   na OpenAI (#16171B) znika na granatowym tle (zmierzone: 1,1:1). */
+.voice-zespol { --k-nvidia: #76B84F; --k-local: #5B8FF5; --k-claude: #DE7A51; --k-openai: #ECEBE6; }
+
+/* Zastępstwo z planu („zamiast X”) i zapas po awarii – osobna linijka,
+   żeby na telefonie nie ucięła się w wielokropku razem z modelem. */
+.rola-uwaga { margin: -3px 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--warning-tekst); }
+/* Rola odrzucona przed startem (auto: brak zgody, uprawnień, limitu) –
+   wiersz bez gałęzi: nie pracowała, więc nie odchodzi od nici. */
+.zespol-odrzucone {
+  position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
+  margin: 2px 0 4px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
+}
+.zespol-odrzucone::before {
+  content: ""; position: absolute; left: 0; top: 6px; width: 8px; height: 8px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--text-faint);
+}
+.zespol-nota .zespol-link { margin-left: 6px; font-size: 12.5px; }
+/* Blok kodu wklejony z wkładu roli: podpis roli i silnika w nagłówku. */
+.kod-od { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; color: var(--text-dim); }
+.kod-od i { width: 6px; height: 6px; border-radius: 50%; background: var(--k); }
+@media (orientation: landscape) and (max-height: 500px) { .zespol-odrzucone { padding-left: 2px; } .zespol-odrzucone::before { display: none; } }
+
+/* Stopka bez kreski: „Stop zespołu” w pracy, „Zmień skład” po wyniku. */
+.zespol-stopka-cicha { border-top: 0; padding-top: 2px; margin-top: 0; }
+
+/* Wejście wierszy, gdy przychodzi `event: sklad`: rola wsuwa się o 3 px,
+   gałąź dorysowuje się od nici (jak nić odpowiedzi – nic-rysuje).
+   --i = numer roli, 40 ms odstępu. Tylko przy pierwszym pokazaniu (.nowa). */
+.zespol .rola.nowa { animation: rola-wchodzi .28s cubic-bezier(.2, .7, .1, 1) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.zespol .rola.nowa::before { animation: galaz-rysuje .36s cubic-bezier(.2, .7, .1, 1) both; animation-delay: calc(var(--i, 0) * 40ms + 60ms); }
+@keyframes rola-wchodzi { from { opacity: 0; transform: translateY(3px); } }
+@keyframes galaz-rysuje { from { clip-path: inset(0 100% 0 0); } }
+/* Zmiana stanu kropki (czeka → pracuje → gotowe) bez skoku. */
+.rola-kropka { transition: background-color .2s ease, box-shadow .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .zespol .rola.nowa, .zespol .rola.nowa::before { animation: none !important; }
+  .rola-kropka { transition: none; }
+}
+/* Czytnik ekranu: blok nie jest „żywy” (inaczej #messages role=log czytałby
+   każdą deltę podglądu); zmiany stanu ogłasza osobny region statusu. */
+.zespol-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- dopiski wdrożenia (paczka H) ---------- */
+/* Linijki odrzuconych ról i noty – pod listą ról, także gdy blok zwinięty. */
+.zespol-dodatki { margin-top: 2px; }
+.zespol[data-otwarty="false"] .zespol-dodatki .zespol-odrzucone { display: none; }
+/* „Dodaj rolę” – krótka lista ról z katalogu pod przyciskiem. */
+.zespol-dodaj-menu {
+  flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px;
+}
+.zespol-dodaj-menu[hidden] { display: none; }
+.zespol-dodaj-opcja {
+  min-height: 32px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg-elevated); font-size: 13px; color: var(--text-dim);
+}
+.zespol-dodaj-opcja:hover { color: var(--text); border-color: var(--border-strong); }
+/* Legenda i nota pod trybami w Ustawieniach (w makiecie – styl w atrybucie). */
+.ag-legenda { margin-bottom: 6px; font-size: 12px; color: var(--text-faint); }
+.ag-glos-nota { font-size: 12px; color: var(--text-faint); margin: -4px 0 0; }
+.ag-brak { margin: 8px 0 0; }
+/* Blok w karcie błędu (prowadzący nie złożył odpowiedzi): nad komunikatem. */
+.msg-zespol-blad .zespol { margin: 0 0 8px; }
+.msg-zespol-blad .rola::before { display: none; }
+/* Edytor na komputerze: tło niewidoczne (klik obok zamyka), na telefonie – przyciemnione. */
+@media (min-width: 601px) { .re-tlo { display: none; } }
+.zespol-sugestia .zespol-uruchom { color: var(--text); }
+@media (max-width: 520px) {
+  .zespol-sugestia .zespol-link, .zespol-sugestia .zamknij { min-height: 44px; }
+  .zespol-sugestia .zamknij { width: 44px; }
+  .zespol-stopka-cicha .zespol-link, .rola-akcje button { min-height: 44px; }
+}

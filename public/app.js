@@ -28,6 +28,8 @@ const DEFAULT_SETTINGS = {
      odpowiedzi to łata; sensowny domyślny budżet to profilaktyka. */
   maxTokens: 4096,
   speak: false,
+  // Zespół agentów: pytaj przed startem, gdy rola jest na innym płatnym silniku (Ustawienia → Agenci).
+  zespolPotwierdzaj: true,
 };
 
 let conversations = [];          // INDEKS rozmów: [{id, title, createdAt, updatedAt}]
@@ -763,7 +765,7 @@ function nazwaSilnika(klucz) {
   return klucz === 'cloud' ? 'NVIDIA' : klucz === 'local' ? t('silnik.local')
     : klucz === 'claude' ? 'Claude' : klucz === 'openai' ? 'OpenAI' : '';
 }
-function podpisSilnika(klucz, model) {
+function podpisSilnika(klucz, model, prowadzi = false) {
   const nazwa = nazwaSilnika(klucz);
   if (!nazwa) return null;
   const el = document.createElement('div');
@@ -775,7 +777,16 @@ function podpisSilnika(klucz, model) {
     m.textContent = krotki;
     el.appendChild(m);
   }
+  if (prowadzi) dopiszProwadzi(el);
   return el;
+}
+/** „· prowadzi” w podpisie odpowiedzi zespołu (na telefonie ukryte – blok i tak to mówi). */
+function dopiszProwadzi(podpis) {
+  if (!podpis || podpis.querySelector('.msg-silnik-prowadzi')) return;
+  const s = document.createElement('span');
+  s.className = 'msg-silnik-prowadzi';
+  s.textContent = ` · ${t('ag.prowadzi')}`;
+  (podpis.querySelector('small') || podpis).appendChild(s);
 }
 /* Silnik przypięty do TURY. Przełączenie zakładki w trakcie odpowiedzi
    podpisywało odpowiedź chmury jako „lokalny GPU", a kolejne rundy narzędzi
@@ -784,7 +795,7 @@ function podpisSilnika(klucz, model) {
 let znakTury = null;
 const znakSilnika = () => znakTury || ({ silnik: endpoint, model: currentModel() || '' });
 
-function messageElement(m, idx = -1) {
+function messageElement(m, idx = -1, opcje = {}) {
   const role = m.role;
   const text = msgText(m);
   const images = msgImages(m);
@@ -829,6 +840,10 @@ function messageElement(m, idx = -1) {
     return msg;
   }
 
+  /* Notatki zespołu nie dostają własnego dymka – ich blok rysuje się
+     w następnej odpowiedzi prowadzącego (renderMessages). */
+  if (m.search && m.narzedzie === 'zespol') return null;
+
   if (m.search) {
     msg.className = 'msg msg-search';
     msg.innerHTML =
@@ -843,6 +858,11 @@ function messageElement(m, idx = -1) {
     body.textContent = text;
     // Zdanie serwera (z adresem – tylko u właściciela) zostaje w podpowiedzi, gdy na ekranie stoi tłumaczenie.
     if (m.szczegol) body.title = m.szczegol;
+    // Zespół pracował, a prowadzący nie złożył odpowiedzi – wkład ról zostaje widoczny w karcie błędu.
+    if (opcje.notatki) {
+      msg.classList.add('msg-zespol-blad');
+      body.prepend(blokZapisanegoZespolu(opcje.notatki));
+    }
     msg.appendChild(body);
     // Błąd na końcu rozmowy – jedno kliknięcie zamiast przepisywania pytania.
     const conv = activeConv();
@@ -875,6 +895,15 @@ function messageElement(m, idx = -1) {
         ponow.addEventListener('click', () => regenerateFrom(idx));
       }
       akcje.appendChild(ponow);
+      // Notatki są, zawiódł tylko prowadzący – „Złóż ponownie” pisze od nowa z tych samych notatek.
+      if (opcje.notatki && String(opcje.notatki.m.content || '').trim()) {
+        const zloz = document.createElement('button');
+        zloz.className = 'msg-action-btn msg-ponow';
+        zloz.textContent = t('ag.zlozPonownie');
+        zloz.title = t('ag.regenerujTitle');
+        zloz.addEventListener('click', () => zlozPonownie(opcje.notatki.idx));
+        akcje.appendChild(zloz);
+      }
       body.appendChild(akcje);
     }
     return msg;
@@ -948,8 +977,11 @@ function messageElement(m, idx = -1) {
   col.className = 'msg-kolumna';
   col.style.flex = '1';
   col.style.minWidth = '0';
-  const podpis = !isError && podpisSilnika(m.silnik, m.model);
+  const podpis = !isError && podpisSilnika(m.silnik, m.model, Boolean(opcje.notatki));
   if (podpis) col.appendChild(podpis);
+  // Blok „Zespół” z notatek tej tury – wewnątrz nici prowadzącego, pod podpisem.
+  const stZespolu = opcje.notatki ? ZESPOL.stanZWiadomosci(opcje.notatki.m) : null;
+  if (stZespolu) col.appendChild(blokZapisanegoZespolu(opcje.notatki, stZespolu));
   /* Przyciski tylko pod OSTATNIĄ wypowiedzią tury. Pasek postępu („Szukam…")
      i kroki pośrednie to nie odpowiedź – pięć „Regeneruj" pod jedną
      odpowiedzią i „Zapamiętaj" przy „Przeszukuję archiwum…" to szum. */
@@ -957,12 +989,16 @@ function messageElement(m, idx = -1) {
   const srodekTury = m.status || (nastepna && (nastepna.role === 'assistant'
     || (nastepna.role === 'user' && nastepna.search)));
   col.append(body);
-  if (!srodekTury) col.append(messageActions(text, { copy: true, role: 'assistant', idx }));
+  if (stZespolu) {
+    const nota = zespolWidok.notaBezWkladu(stZespolu, () => ponowZespolem(opcje.notatki.idx, { sklad: ZESPOL.skladDoWyslania(stZespolu.role) }));
+    if (nota) col.append(nota);
+  }
+  if (!srodekTury) col.append(messageActions(text, { copy: true, role: 'assistant', idx, zespol: Boolean(stZespolu) || opcje.poZespole }));
   msg.appendChild(col);
   return msg;
 }
 
-function messageActions(text, { copy, role, idx = -1 }) {
+function messageActions(text, { copy, role, idx = -1, zespol = false }) {
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
 
@@ -1006,6 +1042,8 @@ function messageActions(text, { copy, role, idx = -1 }) {
     const regen = document.createElement('button');
     regen.className = 'msg-action-btn';
     regen.innerHTML = '↻ ' + t('regenerate');
+    // Pod odpowiedzią zespołu „Regeneruj” pisze od nowa z tych samych notatek (bez drugiego zespołu).
+    if (zespol) regen.title = t('ag.regenerujTitle');
     regen.addEventListener('click', () => regenerateFrom(idx));
     actions.appendChild(regen);
   }
@@ -1167,11 +1205,31 @@ function renderMessages({ przewin = true } = {}) {
   updateTokenEstimate();
   if (!hasMessages) return;
 
+  /* Notatki zespołu czekają na pierwszą odpowiedź prowadzącego (albo kartę
+     błędu) swojej tury; bez odpowiedzi – własna karta z samym blokiem. */
+  let notatki = null;
+  let poZespole = false;
   conv.messages.forEach((m, idx) => {
     // Szkielet siatki po przerwanym szukaniu – nic już na niego nie przyjdzie.
     if (toSzkielet(m) && !isGenerating) return;
-    el.messages.appendChild(messageElement(m, idx));
+    if (m.search && m.narzedzie === 'zespol') {
+      if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
+      notatki = { m, idx };
+      poZespole = true;
+      return;
+    }
+    if (m.role === 'user' && !m.search) {
+      if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
+      notatki = null;
+      poZespole = false;
+    }
+    const dlaZespolu = notatki && m.role === 'assistant' && !m.status ? notatki : null;
+    if (dlaZespolu) notatki = null;
+    const e = messageElement(m, idx, { notatki: dlaZespolu, poZespole });
+    if (e) el.messages.appendChild(e);
   });
+  if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
+  dolozPropozycjeZespolu(conv);
   if (przewin) scrollToBottom(true);
   else { el.chatScroll.scrollTop = byloScroll; ostatniScrollTop = byloScroll; }
 }
@@ -1817,6 +1875,8 @@ function toApiMessages(conv) {
     if (i === granica) api.turaOd = api.length;
     if (m.error || m.role === 'action' || m.status || m.komunikatCosmosa || toSzkielet(m)) return;
     if (bezOdpowiedzi.has(i)) return;
+    // Zespół zatrzymany przed prowadzącym – wiadomość bez notatek jest tylko dla oczu.
+    if (m.narzedzie === 'zespol' && !String(m.content || '').trim()) return;
     let text = msgText(m);
     // Siatka zdjęć ma w treści samo zapytanie – bez ramki model brał je za swoje zdanie.
     if (m.role === 'assistant' && msgPhotos(m).length) text = `(pokazano zdjęcia: ${text || 'bez podpisu'})`;
@@ -1925,6 +1985,7 @@ async function ruszKolejke() {
   renderKolejka();
   const conv = ensureConversation(poz.text || '');
   conv.messages.push({ role: 'user', content: poz.content });
+  if (poz.zespol) zespolNaTure = { uruchom: true, przygotuj: true };
   saveConversations(true);          // patrz sendMessage – zaraz rusza generowanie
   renderSidebar();
   renderMessages();
@@ -1949,7 +2010,8 @@ async function sendMessage() {
           ...(gotowe.length ? { docs: gotowe.map((d) => ({ name: d.name, chars: d.chars, text: d.text, truncated: d.truncated })) } : {}),
         }
       : text;
-    kolejka.push({ text, content, images: pendingImages.length, convId: activeId });
+    kolejka.push({ text, content, images: pendingImages.length, convId: activeId, ...(zespolWcisniety ? { zespol: true } : {}) });
+    ustawPrzyciskZespolu(false);
     try { localStorage.removeItem(KLUCZ_SZKICU); } catch { /* bez pamięci */ }
     pendingImages = [];
     pendingDocs = [];
@@ -1977,6 +2039,8 @@ async function sendMessage() {
       }
     : text;
   conv.messages.push({ role: 'user', content });
+  // Przycisk „Zespół” działa na jedną wiadomość – po wysłaniu wraca.
+  if (zespolWcisniety) { zespolNaTure = { uruchom: true, przygotuj: true }; ustawPrzyciskZespolu(false); }
   pendingImages = [];
   pendingDocs = [];
   renderAttachments();
@@ -2106,8 +2170,11 @@ async function streamOnce(conv, opcje = {}) {
      się albo lokalny model ładuje się do pamięci karty (zimny start) – napis
      „model myśli… 45 s” był wtedy nieprawdą (zespół IT, runda 5). */
   let naglowkiPrzyszly = false;
+  const zt = opcje.zespolTury || null;
   const waitTimer = setInterval(() => {
     if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
+    // Zespół pracuje: postęp pokazuje blok, „model myśli… 40 s” byłoby nieprawdą.
+    if (zt && zt.st.role.length && zt.st.faza !== 'prowadzacy') { if (waitNote) { waitNote = ''; schedulePaint(); } return; }
     const s = Math.round((Date.now() - started) / 1000);
     const klucz = naglowkiPrzyszly ? 'chat.stillWorking' : ep === 'local' ? 'chat.waitLocal' : 'chat.waitStart';
     /* 15 s czekania na lokalny model (zimny start, dom się budzi): wyjście do
@@ -2198,6 +2265,8 @@ async function streamOnce(conv, opcje = {}) {
           useSearch: settings.offline ? false : undefined,
           // odpowiedź będzie czytana na głos – model ma mówić, nie pisać
           trybGlosowy: voiceMode || undefined,
+          // Zespół agentów – tylko w pierwszym żądaniu tury (runGeneration), nigdy w dokończeniu i rundach kaskady.
+          zespol: opcje.zespol || undefined,
           bieg: biegId,
           rozmowa: conv.id,
         }),
@@ -2270,6 +2339,11 @@ async function streamOnce(conv, opcje = {}) {
            Mówimy o tym wprost – pokazanie samego dalszego ciągu wyglądałoby
            jak odpowiedź, która zaczyna się w połowie zdania. */
         if (typ === 'luka') { acc += t('bieg.luka') + '\n\n'; schedulePaint(); continue; }
+        // Zdarzenia zespołu (bez `choices`) – skład, role, faza prowadzącego.
+        if (ZDARZENIA_ZESPOLU.has(typ)) {
+          if (zt) zespolZdarzenie(zt, typ, data, { kolumna, body, podpis });
+          continue;
+        }
         try {
           const json = JSON.parse(data);
           const d = json.choices?.[0]?.delta || {};
@@ -2545,6 +2619,421 @@ const {
   adresPrywatny, rozbrojZnaczniki,
 } = utworzProtokol();
 
+/* ============ ZESPÓŁ AGENTÓW ============
+   Widok i czyste funkcje stanu: public/zespol-widok.js. Tu zostaje klej:
+   zdarzenia biegu → blok w odpowiedzi, zapis notatek przed odpowiedzią
+   prowadzącego, przycisk w polu wiadomości, propozycja pod odpowiedzią,
+   bramka zgody przed startem, edytor modelu roli, Ustawienia → Agenci
+   i kropki ról w trybie głosowym. Serwer: lib/zespol.js. */
+const ZDARZENIA_ZESPOLU = new Set(['zespol', 'sklad', 'rola', 'faza']);
+const zespolWidok = utworzZespolWidok({ t, renderMarkdown, widokWToku, nazwaSilnika });
+const PLATNE_SILNIKI = ['openai', 'claude'];
+let zespolNaTure = null;        // jednorazowa prośba o zespół dla następnej tury
+let propozycjaZespolu = null;   // „Mogę to sprawdzić zespołem” pod ostatnią odpowiedzią (tylko w pamięci)
+const cfgZespolu = () => (serverConfig && serverConfig.zespol) || {};
+
+/** Indeks ostatniej wypowiedzi człowieka (nie wyniku narzędzia) – początek tury. */
+function granicaTury(conv) {
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    const m = conv.messages[i];
+    if (m.role === 'user' && !m.search) return i;
+  }
+  return 0;
+}
+/** Odcisk zapytania – ten sam, którym narzędzie szukania pilnuje powtórek (narzedzia.js). */
+const odciskZapytania = (q) => bezOgonkowKlient(String(q || '')).toLowerCase().replace(/\s+/g, ' ');
+
+/* Zgoda na chmurę przy lokalnym prowadzącym i „Nie teraz” pod propozycją –
+   do końca ROZMOWY (w tej karcie przeglądarki), nie na zawsze. Stała zgoda
+   jest w Ustawieniach → Agenci i żyje na serwerze. */
+function zbiorSesji(klucz) {
+  try { return new Set(JSON.parse(sessionStorage.getItem(klucz) || '[]')); } catch { return new Set(); }
+}
+function dopiszDoSesji(klucz, id) {
+  const z = zbiorSesji(klucz);
+  z.add(id);
+  try { sessionStorage.setItem(klucz, JSON.stringify([...z].slice(-200))); } catch { /* bez pamięci – zostaje w tej stronie */ }
+  (pamiecSesji[klucz] ||= new Set()).add(id);
+}
+const pamiecSesji = {};
+const wSesji = (klucz, id) => Boolean(id) && (zbiorSesji(klucz).has(id) || Boolean(pamiecSesji[klucz] && pamiecSesji[klucz].has(id)));
+const zgodaChmury = (conv) => Boolean(cfgZespolu().zgodaChmura) || wSesji('cosmos.zespol.zgoda', conv && conv.id);
+const ustawZgode = (conv) => conv && dopiszDoSesji('cosmos.zespol.zgoda', conv.id);
+const wyciszonyZespol = (conv) => wSesji('cosmos.zespol.cisza', conv && conv.id);
+
+/** Modele wybrane w zakładkach silników – serwer dobiera z nich modele ról. */
+function modeleZakladek() {
+  const m = {};
+  for (const s of SILNIKI_Z_MODELEM) {
+    if (!serverConfig.endpoints || !serverConfig.endpoints[s]) continue;
+    const id = nadpisanieModelu(s) || epConfig(s).model;
+    if (id) m[s] = id;
+  }
+  return m;
+}
+
+/** Pole `zespol` dla pierwszego żądania tury (albo undefined). */
+function zespolDoWyslania(conv, prosba) {
+  const cfg = cfgZespolu();
+  if (!cfg.dozwolony) return undefined;
+  const baza = { modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) || Boolean(prosba && prosba.zgoda) } };
+  if (prosba && Array.isArray(prosba.sklad) && prosba.sklad.length) return { ...baza, sklad: prosba.sklad, uruchom: true };
+  if (prosba && prosba.uruchom) return { ...baza, uruchom: true };
+  /* Bez prośby – serwer sam decyduje (bramka 0 ms), czy pytanie warte jest
+     zespołu: „Proponuj”, „Uruchamiaj sam”, a w każdym trybie poza wyłączonym
+     – jawne „zrób to zespołem”. Wyciszona rozmowa nie płaci za planistę. */
+  if (cfg.tryb === 'wylaczony' || wyciszonyZespol(conv)) return undefined;
+  return { ...baza, auto: true };
+}
+
+/** Wiadomość notatek do rozmowy – raz na turę, przed odpowiedzią prowadzącego. */
+function zapiszNotatkiTury(conv, zt, stan) {
+  if (!zt || zt.zapisane) return;
+  const w = ZESPOL.wiadomoscNotatek(zt.st);
+  if (!w) return;
+  zt.zapisane = true;
+  conv.messages.push(w);
+  if (zt.st.szukaj && stan) (stan.szukaj ||= new Set()).add(odciskZapytania(zt.st.szukaj));
+}
+
+/** Zdarzenie zespołu z biegu → stan tury i blok w karcie odpowiedzi. */
+function zespolZdarzenie(zt, typ, surowe, miejsce) {
+  let d;
+  try { d = JSON.parse(surowe); } catch { return; }
+  const ogloszenia = ZESPOL.zjedzZdarzenieZespolu(zt.st, typ, d);
+  if (typ === 'sklad' && d.propozycja) return;
+  // Planista uznał, że zespół niepotrzebny (tryb „sam”) – odpowiada sam prowadzący.
+  if (zt.st.faza === 'bez-rol') { if (zt.ui) { zt.ui.el.remove(); zt.ui = null; } return; }
+  if (!zt.ui) {
+    zt.ui = zespolWidok.blokZespolu(zt.st, { zywy: true, naPomin: (r) => zespolAkcja('pomin', r), naScal: () => zespolAkcja('scal') });
+    miejsce.kolumna.insertBefore(zt.ui.el, miejsce.body);
+    dopiszProwadzi(miejsce.podpis);
+    clearInterval(zt.tik);
+    // Sekundy „pracuje · 12 s” płyną także wtedy, gdy rola milczy.
+    zt.tik = setInterval(() => { if (zt.ui && zt.st.faza === 'role') zt.ui.odswiez(); }, 1000);
+  }
+  zt.ui.odswiez();
+  // Kursor prowadzącego dopiero, gdy on pisze – w fazie ról postęp pokazuje blok.
+  miejsce.body.hidden = zt.st.faza === 'planowanie' || zt.st.faza === 'role';
+  for (const o of ogloszenia) zt.ui.oglos(zespolWidok.tekstOgloszenia(o, zt.st));
+  if (typ === 'faza') zt.ui.zwin();
+  glosZespolu(zt.st);
+}
+
+/** „Pomiń” roli i „Stop zespołu – odpowiedz sam” w trakcie biegu. */
+function zespolAkcja(typ, r) {
+  const bieg = biegBiezacy && biegBiezacy.id;
+  if (!bieg) return;
+  fetch(`/api/zespol/${typ === 'pomin' ? 'pomin' : 'scal'}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bieg, ...(r ? { r } : {}) }),
+  }).catch(() => { /* bieg już się skończył */ });
+}
+
+/** Tryb głosowy: kropki ról pod kulą i „ZESPÓŁ · 2 Z 3”; null = sprzątnij. */
+function glosZespolu(st) {
+  const nakladka = $('voice-overlay');
+  const stary = nakladka && nakladka.querySelector('.voice-zespol');
+  if (!voiceMode || !st || !st.role.length) { if (stary) stary.remove(); return; }
+  const nowy = zespolWidok.kropkiGlosu(st);
+  if (stary) stary.replaceWith(nowy);
+  else nakladka.querySelector('.voice-fala')?.after(nowy);
+  const status = zespolWidok.statusGlosu(st);
+  if (status && el.voiceStatus.textContent !== status) el.voiceStatus.textContent = status;
+}
+
+/** Karta odpowiedzi (awatar, nić, podpis) bez treści – dla bloku bez odpowiedzi. */
+function kartaOdpowiedzi(silnik, model, prowadzi = true) {
+  const msg = document.createElement('div');
+  msg.className = 'msg msg-assistant';
+  if (silnik) msg.dataset.silnik = silnik;
+  msg.innerHTML = `<div class="msg-avatar">${AVATAR_SVG}</div>`;
+  const kolumna = document.createElement('div');
+  kolumna.className = 'msg-kolumna';
+  kolumna.style.flex = '1';
+  kolumna.style.minWidth = '0';
+  const podpis = podpisSilnika(silnik, model, prowadzi);
+  if (podpis) kolumna.appendChild(podpis);
+  msg.appendChild(kolumna);
+  return { msg, kolumna };
+}
+
+/** Blok zapisanego zespołu (wynik) z akcjami po wyniku. */
+function blokZapisanegoZespolu(notatki, st = ZESPOL.stanZWiadomosci(notatki.m)) {
+  const blok = zespolWidok.blokZespolu(st, {
+    zywy: false,
+    naZmienSklad: () => zmienSkladTury(notatki.idx, st, blok.el),
+    naZgodaIPonow: () => { ustawZgode(activeConv()); ponowZespolem(notatki.idx, { uruchom: true }); },
+  });
+  return blok.el;
+}
+
+/** Notatki bez odpowiedzi (restart w fazie ról, Stop) – karta z samym blokiem. */
+function kartaSamegoZespolu(notatki) {
+  const st = ZESPOL.stanZWiadomosci(notatki.m);
+  const p = st.prowadzacy || {};
+  const { msg, kolumna } = kartaOdpowiedzi(p.silnik || '', p.model || '');
+  kolumna.appendChild(blokZapisanegoZespolu(notatki, st));
+  if (String(notatki.m.content || '').trim() && !isGenerating) {
+    kolumna.appendChild(zespolWidok.bladScalenia(p.silnik || 'cloud', () => zlozPonownie(notatki.idx)));
+  }
+  return msg;
+}
+
+/** Nowa tura zespołu zamiast wszystkiego po pytaniu (jedno pytanie = jedna odpowiedź). */
+function zespolOdPytania(conv, prosba) {
+  if (!conv || isGenerating) return;
+  conv.messages = conv.messages.slice(0, granicaTury(conv) + 1);
+  propozycjaZespolu = null;
+  zespolNaTure = prosba;
+  saveConversations();
+  renderMessages();
+  runGeneration(conv);
+}
+/** Zespół od nowa od miejsca notatek (Ponów zespołem, Zgoda i ponów, Zmień skład). */
+function ponowZespolem(notIdx, prosba) {
+  const conv = activeConv();
+  if (!conv || isGenerating) return;
+  conv.messages = conv.messages.slice(0, notIdx);
+  propozycjaZespolu = null;
+  zespolNaTure = prosba;
+  saveConversations();
+  renderMessages();
+  runGeneration(conv);
+}
+/** Prowadzący od nowa na tych samych notatkach – bez drugiego zespołu. */
+function zlozPonownie(notIdx) {
+  const conv = activeConv();
+  if (!conv || isGenerating) return;
+  conv.messages = conv.messages.slice(0, notIdx + 1);
+  saveConversations();
+  renderMessages();
+  runGeneration(conv);
+}
+
+/** Klucze ról, które można dołożyć do składu (oko – tylko przy obrazie). */
+function katalogRol(conv) {
+  const pytanie = conv && conv.messages[granicaTury(conv)];
+  const obraz = Boolean(pytanie && msgImages(pytanie).length);
+  return (cfgZespolu().role || []).filter((k) => k !== 'oko' || obraz).map((klucz) => ({ klucz }));
+}
+
+/** Czy skład ma rolę na płatnym silniku innym niż prowadzący (ustawienie „Pytaj przed startem”). */
+const platnyInny = (role, prowadzacy) => settings.zespolPotwierdzaj !== false
+  && (role || []).some((r) => !r.auto && PLATNE_SILNIKI.includes(r.silnik) && r.silnik !== (prowadzacy && prowadzacy.silnik));
+
+/**
+ * Skład do przejrzenia (bramka zgody, edycja) w miejscu elementu `zamiast`.
+ * naWynik({sklad, zgoda}) – Start albo „Tylko lokalnie”; naWynik(null) – „Bez agentów”.
+ */
+function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, naWynik }) {
+  const pytajOZgode = prowadzacy.silnik === 'local' && !zgodaChmury(conv);
+  const lokalnieDomyslnie = pytajOZgode && serverConfig.endpoints && serverConfig.endpoints.local
+    ? role.map((r) => ({ ...r, silnik: 'local', model: r.silnik === 'local' ? r.model : prowadzacy.model, auto: false })) : null;
+  const p = zespolWidok.propozycja({
+    role, prowadzacy, pytajOZgode, lokalnie: lokalnie || lokalnieDomyslnie,
+    maxRol: cfgZespolu().maxRol || 3, katalog: katalogRol(conv),
+    otworzEdytor: (r, btn, gotowe) => otworzEdytorRoli(r, btn, gotowe),
+    naStart: ({ role: r, zgoda }) => { if (zgoda) ustawZgode(conv); naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda }); },
+    naTylkoLokalnie: (r) => naWynik({ sklad: ZESPOL.skladDoWyslania(r) }),
+    naBez: () => naWynik(null),
+  });
+  zamiast.replaceWith(p.el);
+  requestAnimationFrame(() => p.el.scrollIntoView({ block: 'nearest' }));
+  return p;
+}
+
+/** „Zmień skład” pod odpowiedzią zespołu: edycja w miejscu bloku, Start = nowy zespół. */
+function zmienSkladTury(notIdx, st, blokEl) {
+  const conv = activeConv();
+  if (!conv || isGenerating || !blokEl.isConnected) return;
+  const prowadzacy = st.prowadzacy || { silnik: endpoint, model: currentModel() };
+  pokazPropozycje(blokEl, {
+    conv, prowadzacy,
+    role: st.role.map((r) => ({ rola: r.rola, zadanie: '', silnik: r.silnik, model: r.model })),
+    naWynik: (w) => (w ? ponowZespolem(notIdx, w) : renderMessages({ przewin: false })),
+  });
+}
+
+/**
+ * Przycisk „Zespół”: skład przed startem, gdy może być potrzebna zgoda
+ * (lokalny prowadzący, a rola w chmurze) albo potwierdzenie roli na innym
+ * płatnym silniku. Plan idzie BEZ zgody – planista zostaje lokalny, a role
+ * z chmury wracają jako `zamiast` z powodem `wymaga-zgody`.
+ * Zwraca prośbę do zespolDoWyslania, null („Bez agentów”) albo 'stop'.
+ */
+async function bramkaZespolu(conv) {
+  const cfg = cfgZespolu();
+  const prowadzacy = { silnik: znakTury.silnik, model: znakTury.model };
+  const silnikiOsoby = Object.keys(serverConfig.endpoints || {});
+  const mozeChmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && silnikiOsoby.some((s) => s !== 'local');
+  const mozePlatny = settings.zespolPotwierdzaj !== false && silnikiOsoby.some((s) => PLATNE_SILNIKI.includes(s) && s !== prowadzacy.silnik);
+  if (!cfg.dozwolony || (!mozeChmura && !mozePlatny)) return { uruchom: true };
+
+  const { msg, kolumna } = kartaOdpowiedzi(prowadzacy.silnik, prowadzacy.model);
+  const stDob = ZESPOL.nowyStanTury();
+  stDob.faza = 'planowanie';
+  const dobieranie = zespolWidok.blokZespolu(stDob, { zywy: true });
+  kolumna.appendChild(dobieranie.el);
+  el.messages.appendChild(msg);
+  scrollToBottom(true);
+  const ac = new AbortController();
+  abortController = ac;
+  try {
+    let plan = null;
+    try {
+      const r = await fetch('/api/zespol/plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ac.signal,
+        body: JSON.stringify({
+          messages: toApiMessages(conv), endpoint: prowadzacy.silnik, model: znakTury.nadpisanie || undefined,
+          modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) }, trybGlosowy: voiceMode || undefined, jawna: true,
+        }),
+      });
+      plan = r.ok ? await readJsonSafe(r) : null;
+    } catch { if (ac.signal.aborted) return 'stop'; }
+    if (ac.signal.aborted || turaPrzerwana) return 'stop';
+    const role = plan && plan.sklad && Array.isArray(plan.sklad.role) ? plan.sklad.role : [];
+    // Planu nie ma – serwer ułoży skład sam, w biegu.
+    if (!role.length) return { uruchom: true };
+    const zaZgoda = plan.wymagaZgody === 'chmura' ? ZESPOL.skladZaZgoda(role) : null;
+    const pytajOZgode = Boolean(zaZgoda && ZESPOL.silnikiChmury(zaZgoda).length);
+    if (!pytajOZgode && !platnyInny(role, prowadzacy)) return { sklad: ZESPOL.skladDoWyslania(role) };
+    return await new Promise((ok) => {
+      ac.signal.addEventListener('abort', () => ok('stop'), { once: true });
+      pokazPropozycje(dobieranie.el, {
+        conv, prowadzacy, role: zaZgoda || role, lokalnie: pytajOZgode ? role : null,
+        naWynik: (w) => ok(w),
+      });
+      scrollToBottom();
+    });
+  } finally {
+    msg.remove();
+    if (abortController === ac) abortController = null;
+  }
+}
+
+/** Cicha linijka „Mogę to sprawdzić zespołem” pod ostatnią odpowiedzią solo. */
+function dolozPropozycjeZespolu(conv) {
+  const p = propozycjaZespolu;
+  if (!p || !conv || p.convId !== conv.id || isGenerating || wyciszonyZespol(conv)) return;
+  const ost = conv.messages[conv.messages.length - 1];
+  if (!ost || ost.role !== 'assistant' || ost.error || ost.status) return;
+  const karty = el.messages.querySelectorAll('.msg-assistant');
+  const kolumna = karty.length && karty[karty.length - 1].querySelector('.msg-kolumna');
+  if (!kolumna) return;
+  const prowadzacy = p.prowadzacy || { silnik: ost.silnik || endpoint, model: ost.model || currentModel() };
+  const linijka = zespolWidok.sugestia(p, {
+    naUruchom: () => uruchomPropozycje(conv, p, prowadzacy, false, linijka),
+    naZmien: () => uruchomPropozycje(conv, p, prowadzacy, true, linijka),
+    naNieTeraz: () => { dopiszDoSesji('cosmos.zespol.cisza', conv.id); propozycjaZespolu = null; linijka.remove(); el.input.focus(); },
+  });
+  kolumna.insertBefore(linijka, kolumna.querySelector('.msg-actions'));
+}
+
+/** „Uruchom” = regeneracja TEJ odpowiedzi zespołem; „Zmień” – najpierw edycja składu. */
+function uruchomPropozycje(conv, p, prowadzacy, edycja, linijka) {
+  if (isGenerating) return;
+  const chmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && ZESPOL.silnikiChmury(p.role).length > 0;
+  if (!edycja && !chmura && !platnyInny(p.role, prowadzacy)) {
+    zespolOdPytania(conv, { sklad: ZESPOL.skladDoWyslania(p.role) });
+    return;
+  }
+  pokazPropozycje(linijka, {
+    conv, prowadzacy, role: p.role.map((r) => ({ ...r })),
+    naWynik: (w) => (w ? zespolOdPytania(conv, w) : renderMessages({ przewin: false })),
+  });
+}
+
+/** Podpis modelu w edytorze: cechy z katalogu (models.js). */
+function opisModelu(id, silnik) {
+  const info = typeof modelInfo === 'function' ? modelInfo(id, silnik) : null;
+  if (!info || !Array.isArray(info.cechy)) return '';
+  const jezyk = getLang() === 'en' ? 'en' : 'pl';
+  return info.cechy.map((c) => (CECHA_OPIS[c] ? CECHA_OPIS[c][jezyk] : '')).filter(Boolean).join(' · ');
+}
+/** Modele do wyboru, pogrupowane według silników tej osoby. */
+function grupyModeli(r) {
+  return SILNIKI_Z_MODELEM.filter((s) => serverConfig.endpoints && serverConfig.endpoints[s]).map((s) => {
+    const ids = [nadpisanieModelu(s) || epConfig(s).model, r && r.silnik === s ? r.model : '', epConfig(s).visionModel,
+      ...((listyModeli[s] && listyModeli[s].modele) || []).slice(0, 8)].filter(Boolean);
+    return { silnik: s, modele: [...new Set(ids)].map((id) => ({ id, podpis: opisModelu(id, s) })) };
+  });
+}
+/** Silniki, których członek nie ma (właściciel może je przyznać w panelu Dostęp). */
+const bezDostepuSilniki = () => (konta_.ja()?.rola === 'czlonek'
+  ? SILNIKI_Z_MODELEM.filter((s) => !(serverConfig.endpoints && serverConfig.endpoints[s])) : []);
+
+function otworzEdytorRoli(r, btn, gotowe, { zUsun = true, wybrany } = {}) {
+  zespolWidok.edytor({
+    tytul: zespolWidok.nazwaRoli(r),
+    grupy: grupyModeli(r),
+    wybrany: wybrany !== undefined ? wybrany : (r.auto || !r.model ? null : { silnik: r.silnik, model: r.model }),
+    autoPodpis: r.model ? t('ag.re.autoTeraz', { model: `${nazwaSilnika(r.silnik)} ${String(r.model).split('/').pop()}` }) : '',
+    bezDostepu: bezDostepuSilniki(), zUsun, kotwica: btn, gotowe,
+  });
+}
+
+// ---- przycisk „Zespół” w polu wiadomości (jednorazowy) ----
+let zespolWcisniety = false;
+function ustawPrzyciskZespolu(tak) {
+  const b = $('zespol-btn');
+  zespolWcisniety = Boolean(tak) && Boolean(b) && !b.hidden;
+  if (!b) return;
+  b.setAttribute('aria-pressed', String(zespolWcisniety));
+  b.title = t(zespolWcisniety ? 'ag.btnOn' : 'ag.btn');
+  el.input.placeholder = t(zespolWcisniety ? 'ag.inputPh' : 'inputPh');
+}
+function odswiezPrzyciskZespolu() {
+  const b = $('zespol-btn');
+  if (!b) return;
+  const cfg = cfgZespolu();
+  b.hidden = !cfg.dozwolony || cfg.tryb === 'wylaczony';
+  if (b.hidden) ustawPrzyciskZespolu(false);
+}
+$('zespol-btn')?.addEventListener('click', () => { ustawPrzyciskZespolu(!zespolWcisniety); el.input.focus(); });
+
+// ---- Ustawienia → Agenci ----
+let ustawieniaZespolu = null;
+async function rysujUstawieniaZespolu(pobierz = true) {
+  const box = $('ag-ustawienia');
+  if (!box) return;
+  const cfg = cfgZespolu();
+  if (!cfg.dozwolony) { box.textContent = ''; kartyUstawien.odswiez(); return; }
+  if (pobierz) {
+    try {
+      const r = await fetch('/api/zespol/ustawienia');
+      if (r.ok) ustawieniaZespolu = (await r.json()).ustawienia || ustawieniaZespolu;
+    } catch { /* offline – z konfiguracji */ }
+  }
+  const us = ustawieniaZespolu || { tryb: cfg.tryb, maxRol: cfg.maxRol, zgodaChmura: cfg.zgodaChmura, role: {} };
+  // Fokus zostaje na tym samym elemencie po przebudowie (radio, segment, rola).
+  const a = document.activeElement;
+  const cel = a && box.contains(a) ? (a.name === 'ag-tryb' ? `input[value="${a.value}"]`
+    : a.closest('.ag-segment') ? `.ag-segment button:nth-child(${[...a.parentNode.children].indexOf(a) + 1})`
+      : a.closest('.ag-rola') ? `.ag-rola[data-rola="${a.closest('.ag-rola').dataset.rola}"] button` : '') : '';
+  box.textContent = '';
+  box.append(zespolWidok.panelUstawien({
+    us, sufit: cfg.maxRolSufit || 3, potwierdzaj: settings.zespolPotwierdzaj !== false,
+    katalog: cfg.role || [], bezDostepu: bezDostepuSilniki(), naZmiane: zmienUstawieniaZespolu,
+    otworzEdytor: (klucz, btn, gotowe) => otworzEdytorRoli({ rola: klucz }, btn, gotowe, { zUsun: false, wybrany: (us.role || {})[klucz] || null }),
+  }));
+  if (cel) box.querySelector(cel)?.focus();
+  kartyUstawien.odswiez();
+}
+async function zmienUstawieniaZespolu(zmiana) {
+  if ('potwierdzaj' in zmiana) { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); return; }
+  try {
+    const r = await fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(zmiana) });
+    const d = await readJsonSafe(r);
+    if (r.ok && d.ustawienia) {
+      ustawieniaZespolu = d.ustawienia;
+      serverConfig.zespol = { ...cfgZespolu(), tryb: d.ustawienia.tryb, maxRol: d.ustawienia.maxRol, zgodaChmura: d.ustawienia.zgodaChmura };
+    }
+  } catch { /* offline – panel wraca do stanu z serwera */ }
+  odswiezPrzyciskZespolu();
+  rysujUstawieniaZespolu(false);
+}
+
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
    protokół rozmowy – ale UŻYTKOWNIK niczego nie napisał. Jedyne, co odróżnia
    jedno od drugiego na ekranie, to flaga `search`: z nią mamy zwijany blok
@@ -2764,15 +3253,35 @@ async function runGeneration(conv, podpiecie = null) {
     silnik: endpoint, model: currentModel() || '',
     nadpisanie: nadpisanieModelu(),
   };
+  /* Zespół agentów w tej turze: prośba (przycisk, „Uruchom”, „Zmień skład”)
+     jest jednorazowa; stan tury zbiera zdarzenia biegu. */
+  const prosbaZespolu = zespolNaTure;
+  zespolNaTure = null;
+  propozycjaZespolu = null;
+  const zt = { st: ZESPOL.nowyStanTury(), ui: null, zapisane: false, tik: null };
+  // Wyszukiwanie badacza już jest w notatkach – ten sam [SZUKAJ:] od prowadzącego dostaje „już wyszukałeś”.
+  const notatkiTury = conv.messages.slice(granicaTury(conv)).find((m) => m.narzedzie === 'zespol');
+  if (notatkiTury && notatkiTury.zespol && notatkiTury.zespol.szukaj) stan.szukaj = new Set([odciskZapytania(notatkiTury.zespol.szukaj)]);
 
   try {
+    let zespolWyslij;
+    if (!podpiecie && !notatkiTury) {
+      let prosba = prosbaZespolu;
+      if (prosba && prosba.przygotuj) prosba = await bramkaZespolu(conv);
+      if (prosba === 'stop') turaPrzerwana = true;
+      zespolWyslij = prosba === null && prosbaZespolu ? undefined : zespolDoWyslania(conv, prosba === 'stop' ? null : prosba);
+    }
+    if (zespolWyslij && (zespolWyslij.uruchom || zespolWyslij.sklad)) zt.st.faza = 'planowanie';
     for (let depth = 0; depth <= MAX_SEARCHES; depth++) {
       // „Zatrzymaj” w trakcie narzędzia: kolejnej płatnej rundy u modelu nie ma.
       if (turaPrzerwana) break;
       /* Podpięcie dotyczy WYŁĄCZNIE pierwszego przebiegu: wracamy do
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
-         zapytania do modelu i mają dostać własne biegi. */
-      let acc = await streamOnce(conv, depth === 0 && podpiecie ? podpiecie : {});
+         zapytania do modelu i mają dostać własne biegi. Zespół też tylko tu. */
+      let acc = await streamOnce(conv, depth === 0
+        ? { ...(podpiecie || {}), zespol: podpiecie ? undefined : zespolWyslij, zespolTury: zt } : {});
+      // Notatki zespołu PRZED odpowiedzią prowadzącego – jak wynik narzędzia.
+      if (depth === 0) zapiszNotatkiTury(conv, zt, stan);
       const ostatnia = depth === MAX_SEARCHES;
 
       /* Które narzędzie zawołał model. Kolejność sprawdzania jest kolejnością
@@ -2907,6 +3416,7 @@ async function runGeneration(conv, podpiecie = null) {
          i tam zostanie zapisana. Tu nic nie dopisujemy: fragment z notką
          „Zatrzymano” byłby nieprawdą. */
     } else if (err.name === 'AbortError') {
+      zapiszNotatkiTury(conv, zt, stan);
       /* Przerwana odpowiedź też przechodzi przez czyszczenie znaczników.
          To jedyna droga, którą tekst z modelu trafiał na ekran surowy –
          a przerywa się najczęściej wtedy, gdy coś trwa za długo, czyli
@@ -2921,6 +3431,7 @@ async function runGeneration(conv, podpiecie = null) {
       /* Błąd w połowie odpowiedzi (dostawca przeciążony, zerwane połączenie):
          napisany fragment zostaje, a pod nim – co się stało. Dawniej znikał
          razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
+      zapiszNotatkiTury(conv, zt, stan);
       const czesc = stripSearchMarker(err.partial || '');
       if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
       /* Komputer domowy nie odpowiada: pod błędem przycisk „Wyślij przez Chmurę”.
@@ -2949,6 +3460,12 @@ async function runGeneration(conv, podpiecie = null) {
     isGenerating = false;
     abortController = null;
     znakTury = null;
+    clearInterval(zt.tik);
+    glosZespolu(null);
+    // „Proponuj, gdy warto”: linijka pod gotową odpowiedzią solo (nie zapisywana w rozmowie).
+    if (zt.st.propozycja && !zt.st.role.length && !turaPrzerwana && !wyciszonyZespol(conv)) {
+      propozycjaZespolu = { convId: conv.id, ...zt.st.propozycja };
+    }
     setGeneratingUI(false);
     // Widz przeszedł do innej rozmowy: tamta ma swój zapis i swój ekran.
     if (odlaczony) {
@@ -6043,6 +6560,7 @@ function openSettings(karta) {
   loadMicList();
   odswiezWyborNasluchu();
   renderConfigInfo();
+  rysujUstawieniaZespolu();
   loadMemoryList();
   fetch('/api/profile').then((r) => r.json()).then((d) => { $('set-profile').value = d.profile || ''; }).catch(() => {});
   komunikatLokalizacji('');
@@ -7208,6 +7726,8 @@ async function loadServerConfigWlasciwe() {
   else buildEndpointTabs(loadJson('cosmos.zakladki', null) || ['cloud']);
   updateModelBadge();
   refreshStatus();
+  odswiezPrzyciskZespolu();
+  rysujUstawieniaZespolu(false);
 }
 
 // ----------------------------------------------------------------

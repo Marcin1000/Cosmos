@@ -298,6 +298,10 @@
           <button class="attach-btn" id="mic-btn" data-i18n-title="speak" title="Mów (dyktowanie)" aria-label="Mów">
             <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           </button>
+          <!-- Zespół agentów: jednorazowo dla następnej wiadomości (app.js, zespol-widok.js) -->
+          <button type="button" class="attach-btn zespol-btn" id="zespol-btn" aria-pressed="false" data-i18n-title="ag.btn" title="Zespół agentów" aria-label="Zespół agentów" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3.3 2.4-5.6 5.5-5.6s5.5 2.3 5.5 5.6"/><path d="M15.2 4.9a3.2 3.2 0 0 1 0 6.2"/><path d="M17.3 14.2c2 .7 3.2 2.6 3.2 5.3"/></svg>
+          </button>
           <button class="attach-btn" id="polish-btn" data-i18n-title="polish.btn" title="Dopracuj prompt" aria-label="Dopracuj prompt" hidden>
             <svg viewBox="0 0 24 24"><path d="M12 3l1.6 4.6L18 9l-4.4 1.4L12 15l-1.6-4.6L6 9l4.4-1.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="currentColor"/></svg>
           </button>
@@ -347,6 +351,7 @@
           <button type="button" role="tab" id="set-tab-konto" aria-controls="set-panel-konto" aria-selected="false" tabindex="-1" data-cel="konto" data-i18n="set.k.konto">Konto</button>
           <button type="button" role="tab" id="set-tab-zmysly" aria-controls="set-panel-zmysly" aria-selected="false" tabindex="-1" data-cel="zmysly" data-i18n="set.k.zmysly">Zmysły</button>
           <button type="button" role="tab" id="set-tab-silniki" aria-controls="set-panel-silniki" aria-selected="false" tabindex="-1" data-cel="silniki" data-i18n="set.k.silniki">Silniki</button>
+          <button type="button" role="tab" id="set-tab-agenci" aria-controls="set-panel-agenci" aria-selected="false" tabindex="-1" data-cel="agenci" data-i18n="set.k.agenci">Agenci</button>
           <button type="button" role="tab" id="set-tab-glos" aria-controls="set-panel-glos" aria-selected="false" tabindex="-1" data-cel="glos" data-i18n="set.k.glos">Głos</button>
           <button type="button" role="tab" id="set-tab-pamiec" aria-controls="set-panel-pamiec" aria-selected="false" tabindex="-1" data-cel="pamiec" data-i18n="set.k.pamiec">Pamięć</button>
           <button type="button" role="tab" id="set-tab-dom" aria-controls="set-panel-dom" aria-selected="false" tabindex="-1" data-cel="dom" data-i18n="set.k.dom">Dom</button>
@@ -528,6 +533,10 @@
             </section>
         </div>
 
+        <!-- Agenci: sekcje (z data-karta) buduje zespol-widok.js, gdy serwer ma zespół włączony. -->
+        <div class="set-panel" role="tabpanel" id="set-panel-agenci" data-panel="agenci" aria-labelledby="set-tab-agenci" hidden>
+          <div id="ag-ustawienia"></div>
+        </div>
         <div class="set-panel" role="tabpanel" id="set-panel-glos" data-panel="glos" aria-labelledby="set-tab-glos" hidden>
             <section class="set-sekcja field" data-karta="glos">
               <h3 data-i18n="set.sek.mikrofon">Mikrofon</h3>
@@ -1393,6 +1402,7 @@
   <script src="/nauka-widok.js"></script>
   <script src="/zmysly-widok.js"></script>
   <script src="/samouczek.js"></script>
+  <script src="/zespol-widok.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
