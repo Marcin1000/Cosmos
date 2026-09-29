@@ -421,7 +421,7 @@ function utworzKamere(z) {
         return;                       // panel zostaje otwarty – można zmienić źródło
       }
       // Zamknięte (albo otwarte na nowo) w trakcie czekania – ta kamera jest już niczyja.
-
+      if (nieaktualne()) { strumien.getTracks().forEach((s) => s.stop()); return; }
       // Poprzedni strumień (podwójne kliknięcie, szybka zmiana źródła) nie może zostać osierocony.
       if (liveStream && liveStream !== strumien) liveStream.getTracks().forEach((s) => s.stop());
       liveStream = strumien;
@@ -468,7 +468,7 @@ function utworzKamere(z) {
   /* Karta w tle (komputer, inna karta): pętle stają, podgląd zostaje; po
      powrocie ruszają, jeśli panel dalej jest otwarty (zespół IT, runda 9). */
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) wstrzymajWykrywanie();
+    if (false) wstrzymajWykrywanie();
     else if (panelOtwarty() && !liveTimer) uruchomPetle();
   });
 
