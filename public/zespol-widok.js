@@ -193,9 +193,13 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
       if (typeof d.kod === 'string') r.kod = d.kod.slice(0, 40);
       if (d.urwane) r.urwane = true;
       const jest = stanWidoku(r.stan);
-      if (KONCOWE_STANY_ROLI.has(r.stan) && byl !== jest) {
-        const gotowe = st.role.filter((x) => KONCOWE_STANY_ROLI.has(x.stan)).length;
-        ogl.push(jest === 'gotowe' ? { klucz: 'ag.sr.gotowa', rola: r.rola, g: gotowe, n: st.role.length }
+      /* Poprawka po recenzji (fala 3) to druga runda tej samej roli – bez
+         osobnego ogłoszenia; „N z M” liczy skład (czytnik nie słyszy „3 z 3”
+         po „2 z 2”). Jej koniec i tak ogłasza „Zespół skończył”. */
+      if (KONCOWE_STANY_ROLI.has(r.stan) && byl !== jest && r.fala !== 3) {
+        const sklad = skladBezPoprawki(st);
+        const gotowe = sklad.filter((x) => KONCOWE_STANY_ROLI.has(x.stan)).length;
+        ogl.push(jest === 'gotowe' ? { klucz: 'ag.sr.gotowa', rola: r.rola, g: gotowe, n: sklad.length }
           : { klucz: 'ag.sr.blad', rola: r.rola, stan: jest });
       }
     }
@@ -207,6 +211,8 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     st.czasRol = Number.isFinite(d.t) ? d.t : teraz - st.start;
     st.czasFazy = teraz;
     if (kwota(d.kosztZl) !== undefined) st.kosztZl = kwota(d.kosztZl);
+    // C5: fotograf dostał policzony plan – [PLAN:] prowadzącego nie liczy drugiego (narzedzia.js).
+    if (d.planPoliczony === true) st.planPoliczony = true;
     // Role, które nie doszły do końca, zanim prowadzący ruszył – już nie pracują.
     for (const r of st.role) if (!KONCOWE_STANY_ROLI.has(r.stan)) r.stan = r.tresc ? 'niedokonczona' : 'przerwana';
     if (st.role.length) ogl.push({ klucz: 'ag.sr.sklada' });
@@ -219,6 +225,24 @@ const czekaNaZgode = (st) => st.odrzucone.some((o) => o.kod === 'wymaga-zgody');
 
 /** Ile ról skończyło (gotowe, błąd, pominięta…). */
 const ileSkonczonych = (st) => st.role.filter((r) => KONCOWE_STANY_ROLI.has(r.stan)).length;
+/** Role składu – bez poprawki po recenzji (fala 3, druga runda programisty). */
+const skladBezPoprawki = (st) => st.role.filter((r) => r.fala !== 3);
+
+/** Koszt odpowiedzi prowadzącego (zdarzenie `koniec`, C2) – do „cała odpowiedź”. */
+function kosztProwadzacego(st, zl, szacowany = false) {
+  if (!st || kwota(zl) === undefined) return;
+  st.kosztProwadzacegoZl = kwota(zl);
+  if (szacowany) st.kosztProwadzacegoSzac = true;
+}
+/** Czy koszt tury to (choć w części) szacunek – wtedy „ok.”. */
+const kosztSzacowany = (st) => Boolean(st.kosztProwadzacegoSzac || st.role.some((r) => r.kosztSzacowany));
+/** Cała odpowiedź: role + planista (faza) + prowadzący; undefined, gdy nic nie wiadomo. */
+function kosztCaly(st) {
+  const r = kosztTury(st);
+  const p = kwota(st.kosztProwadzacegoZl);
+  if (r === undefined && p === undefined) return undefined;
+  return kwota((r || 0) + (p || 0));
+}
 
 /**
  * Wiadomość notatek do rozmowy – jak wynik narzędzia, PRZED odpowiedzią
@@ -231,7 +255,8 @@ function wiadomoscNotatek(st, teraz = Date.now()) {
   if (!st || (!st.role.length && !czekaNaZgode(st))) return null;
   return {
     role: 'user', search: true, narzedzie: 'zespol',
-    searchQuery: `praca zespołu: ${st.role.map((r) => r.nazwa || r.rola).join(', ') || 'bez ról'}`,
+    // Poprawka (fala 3) to nie osobna rola – następna tura widziała „Programista, Recenzent, Programista”.
+    searchQuery: `praca zespołu: ${skladBezPoprawki(st).map((r) => r.nazwa || r.rola).join(', ') || 'bez ról'}`,
     content: st.notatki || '',
     zespol: {
       v: 1, zrodlo: st.zrodlo, prowadzacy: st.prowadzacy,
@@ -248,6 +273,9 @@ function wiadomoscNotatek(st, teraz = Date.now()) {
       daneWyjdaDo: st.daneWyjdaDo,
       ...(st.szukaj ? { szukaj: st.szukaj } : {}),
       ...(kosztTury(st) !== undefined ? { kosztZl: kosztTury(st) } : {}),
+      ...(kwota(st.kosztProwadzacegoZl) !== undefined ? { kosztProwadzacegoZl: kwota(st.kosztProwadzacegoZl) } : {}),
+      ...(st.kosztProwadzacegoSzac ? { kosztProwadzacegoSzac: true } : {}),
+      ...(st.planPoliczony ? { planPoliczony: true } : {}),
       ...miejsceIKiedy(st),
     },
   };
@@ -285,6 +313,9 @@ function stanZWiadomosci(m) {
   st.czasRol = z.czas && Number(z.czas.role) || 0;
   st.notatki = typeof m.content === 'string' ? m.content : '';
   st.kosztZl = kwota(z.kosztZl);
+  if (kwota(z.kosztProwadzacegoZl) !== undefined) st.kosztProwadzacegoZl = kwota(z.kosztProwadzacegoZl);
+  if (z.kosztProwadzacegoSzac === true) st.kosztProwadzacegoSzac = true;
+  if (z.planPoliczony === true) st.planPoliczony = true;
   Object.assign(st, miejsceIKiedy(z));
   return st;
 }
@@ -367,7 +398,7 @@ const ZGODA_PRZECZENIE = {
 
 /* ---------------------------------------------------------------------------
    Złotówki: kwoty w formacie języka interfejsu (pl-PL „0,12 zł”, en-GB
-   „PLN 0.12”). Grosz to najmniejsza sensowna kwota – mniej to „< 0,01 zł”,
+   „PLN 0.12”). Grosz to najmniejsza sensowna kwota – mniej to „poniżej 0,01 zł”,
    a nie „0,00 zł”, które wyglądałoby jak darmo.
    --------------------------------------------------------------------------- */
 function kwotaZl(zl, jezyk = 'pl') {
@@ -375,7 +406,7 @@ function kwotaZl(zl, jezyk = 'pl') {
   if (typeof zl !== 'number' || !Number.isFinite(n) || n < 0) return '';
   const f = (x) => new Intl.NumberFormat(jezyk === 'en' ? 'en-GB' : 'pl-PL',
     { style: 'currency', currency: 'PLN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
-  return n > 0 && n < 0.005 ? `< ${f(0.01)}` : f(n);
+  return n > 0 && n < 0.005 ? `${jezyk === 'en' ? 'under' : 'poniżej'} ${f(0.01)}` : f(n);
 }
 
 /**
@@ -494,7 +525,16 @@ function utworzZespolWidok(z) {
   /** Znacznik „własna” przy nazwie roli (kolor nie jest jedynym nośnikiem – słowo). */
   const znakWlasnej = () => h('span', { klasa: 'rola-wlasna', tekst: t('ag.wlasna') });
   const krotkiModel = (m) => String(m || '').split('/').pop();
-  const ileRol = (n) => (n === 1 ? t('ag.role1') : t('ag.roleN', { n }));
+  // 1 rola, 2–4 role (ale 12–14 ról), 5+ ról.
+  const ileRol = (n) => (n === 1 ? t('ag.role1')
+    : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? t('ag.roleN', { n }) : t('ag.roleWiele', { n }));
+  /* Kwota z „ok.”, gdy to szacunek – ale nie „ok. poniżej 0,01 zł”. `klucz` ma
+     dwie wersje: z „ok.” (klucz) i bez (kluczDokladny). */
+  const zlOk = (kw, szac, klucz = 'ag.okZl', kluczDokladny = '') => {
+    const tekst = zl(kw);
+    if (szac && kw >= 0.005) return t(klucz, { zl: tekst });
+    return kluczDokladny ? t(kluczDokladny, { zl: tekst }) : tekst;
+  };
   const sekundy = (ms) => Math.max(0, Math.round((Number(ms) || 0) / 1000));
   const kolorSilnika = (s) => `var(--k-${s === 'cloud' ? 'nvidia' : s})`;
 
@@ -675,14 +715,18 @@ function utworzZespolWidok(z) {
       for (const r of skladRol) kropki.append(h('i', { styl: `--k:${kolorSilnika(r.silnik)}` }));
       glowa.append(kropki);
       glowa.append(h('span', { klasa: 'zespol-kto', tekst: skladRol.map(nazwaRoli).join(', ') }));
-      const czas = o.zywy && st.faza === 'role'
-        ? t('ag.postep', { g: ileSkonczonych(st), n, s: sekundy(teraz - st.start) })
-        : o.zywy && st.faza === 'prowadzacy' ? t('ag.postep', { g: ileSkonczonych(st), n, s: sekundy(st.czasRol) })
+      /* Postęp liczy skład (jak tytuł); poprawka po recenzji w toku – słowem:
+         „3 z 3 · poprawka · 34 s”, nie „3 z 4”, które sugerowało czwartą rolę. */
+      const gS = ileSkonczonych({ role: skladRol });
+      const f3 = st.role.some((r) => r.fala === 3 && stanWidoku(r.stan) === 'pracuje');
+      const postep = (s) => t('ag.postep', { g: gS, n: skladRol.length, s }).replace(/( · )/, f3 ? ` · ${t('ag.poprawkaKrotko')} · ` : '$1');
+      const czas = o.zywy && st.faza === 'role' ? postep(sekundy(teraz - st.start))
+        : o.zywy && st.faza === 'prowadzacy' ? postep(sekundy(st.czasRol))
           : `${sekundy(st.czasRol)} s`;
       const czasEl = h('span', { klasa: 'zespol-czas', tekst: czas });
-      // Koszt ról po wyniku – w zwiniętym bloku przy czasie, w otwartym w stopce.
-      const koszt = !o.zywy || st.faza === 'koniec' ? kosztTury(st) : undefined;
-      if (koszt > 0) czasEl.append(h('span', { klasa: 'zespol-koszt-glowa', tekst: ` · ${zl(koszt)}` }));
+      // Koszt po wyniku – w zwiniętym bloku jedna kwota: cała odpowiedź (z „ok.” przy szacunku).
+      const koszt = !o.zywy || st.faza === 'koniec' ? kosztCaly(st) : undefined;
+      if (koszt > 0) czasEl.append(h('span', { klasa: 'zespol-koszt-glowa', tekst: ` · ${zlOk(koszt, kosztSzacowany(st))}` }));
       glowa.append(czasEl);
       const chev = doc().createElement('span');
       chev.innerHTML = IK.chev;
@@ -713,10 +757,21 @@ function utworzZespolWidok(z) {
       } else if (!o.zywy && st.role.length && o.naZmienSklad) {
         stopka.append(przycisk('zespol-link', t('ag.zmienSklad'), () => o.naZmienSklad()));
       }
+      /* Stopka: „koszt ról: X · cała odpowiedź: Y” (Y = role + planista +
+         prowadzący, C2). Na telefonie mieści się tylko całość – część z rolami
+         chowa CSS. Prowadzący za darmo (Chmura) – samo „koszt ról”. Bez
+         `usage` od dostawcy kwota jest szacunkiem – „ok.”. */
       const koszt = !o.zywy ? kosztTury(st) : undefined;
-      // Bez `usage` od dostawcy koszt roli jest szacunkiem – mówimy „ok.”.
-      const szacowany = st.role.some((r) => r.kosztSzacowany);
-      if (koszt > 0) stopka.append(h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle'), tekst: t(szacowany ? 'ag.kosztOk' : 'ag.koszt', { zl: zl(koszt) }) }));
+      const cala = !o.zywy ? kosztCaly(st) : undefined;
+      const szacowany = kosztSzacowany(st);
+      const zRola = st.role.some((r) => r.kosztSzacowany);
+      if (cala > 0 && kwota(st.kosztProwadzacegoZl) > 0) {
+        const el = h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle') });
+        el.append(h('span', { klasa: 'zespol-koszt-podzial', tekst: `${zlOk(koszt || 0, zRola, 'ag.kosztOk', 'ag.koszt')} · ` }),
+          h('span', { tekst: zlOk(cala, szacowany, 'ag.kosztCalaOk', 'ag.kosztCala') }));
+        el.setAttribute('aria-label', el.textContent);
+        stopka.append(el);
+      } else if (koszt > 0) stopka.append(h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle'), tekst: zlOk(koszt, zRola, 'ag.kosztOk', 'ag.koszt') }));
       stopka.hidden = !stopka.firstChild;
     }
 
@@ -802,7 +857,7 @@ function utworzZespolWidok(z) {
     }
     // Szacunek tylko, gdy coś kosztuje (płatny silnik); darmowy skład – bez kwoty.
     const szac = kwota(prop.szacunekZl) !== undefined ? prop.szacunekZl : szacunekSkladu(prop.role);
-    if (szac > 0) d.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: t('ag.szacunek', { zl: zl(szac) }) }));
+    if (szac > 0) d.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: zlOk(szac, true, 'ag.szacunek', 'ag.szacunekDokladny') }));
     d.append(przycisk('zespol-link zespol-uruchom', t('ag.uruchom'), naUruchom, { title: t('ag.uruchomTitle') }));
     d.append(przycisk('zespol-link zespol-zmien', t('ag.zmien'), naZmien));
     d.append(przycisk('zamknij', '', naNieTeraz, { 'aria-label': t('ag.nieTeraz'), title: t('ag.nieTeraz'), ikona: IK.x }));
@@ -909,7 +964,7 @@ function utworzZespolWidok(z) {
       }
       // Szacunek kosztu ról na płatnych silnikach – tylko gdy większy od zera.
       const szac = !zmieniony && kwota(p.szacunekZl) !== undefined ? p.szacunekZl : szacunekSkladu(role);
-      if (szac > 0) stopka.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: t('ag.szacunek', { zl: zl(szac) }) }));
+      if (szac > 0) stopka.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: zlOk(szac, true, 'ag.szacunek', 'ag.szacunekDokladny') }));
       const przyciski = h('div', { klasa: 'zespol-przyciski' });
       przyciski.append(przycisk('btn-ghost', t('ag.bez'), () => p.naBez()));
       if (zgodaPotrzebna && p.lokalnie) przyciski.append(przycisk('btn-secondary', t('ag.tylkoLokalnie'), () => p.naTylkoLokalnie(p.lokalnie)));
@@ -1204,12 +1259,13 @@ function utworzZespolWidok(z) {
     }
     if (ul.firstChild) sekcja.append(ul);
     if (szkicWlasnej && !szkicWlasnej.id) sekcja.append(formularzWlasnej(k, lista));
-    else if (!szkicWlasnej) {
+    else if (!szkicWlasnej && lista.length >= MAX_WLASNYCH) {
+      // Limit: zdanie zamiast wyszarzonego przycisku z powodem w `title` (dotyk go nie pokaże).
+      sekcja.append(h('p', { klasa: 'field-hint ag-wl-pelne', tekst: t('ag.wl.limitPelny', { max: MAX_WLASNYCH }) }));
+    } else if (!szkicWlasnej) {
       const dodaj = h('button', { type: 'button', klasa: 'zespol-dodaj ag-wl-dodaj' });
       dodaj.innerHTML = IK.plus;
       dodaj.append(t('ag.wl.dodaj'));
-      dodaj.disabled = lista.length >= MAX_WLASNYCH;
-      if (dodaj.disabled) dodaj.title = t('ag.wl.limit', { max: MAX_WLASNYCH });
       dodaj.addEventListener('click', () => {
         szkicWlasnej = { id: null, nazwa: '', cel: '', instrukcja: '', cechy: [], fala: 1, wymagaObrazu: false, blad: '' };
         k.odswiez && k.odswiez({ fokus: '[data-pole="nazwa"]' });
@@ -1342,7 +1398,7 @@ function utworzZespolWidok(z) {
   }
   function statusGlosu(st) {
     if (st.faza === 'prowadzacy') return t('ag.glos.sklada');
-    if (st.faza === 'role') return t('ag.glos.pracuje', { g: ileSkonczonych(st), n: st.role.length });
+    if (st.faza === 'role') return t('ag.glos.pracuje', { g: ileSkonczonych({ role: skladBezPoprawki(st) }), n: skladBezPoprawki(st).length });
     return '';
   }
 
@@ -1358,6 +1414,7 @@ function utworzZespolWidok(z) {
 const CZYSTE_ZESPOLU = {
   stanWidoku, nowyStanTury, zjedzZdarzenieZespolu, wiadomoscNotatek, stanZWiadomosci, roleBezWkladu,
   skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
+  kosztProwadzacego, kosztCaly, kosztSzacowany, skladBezPoprawki,
   rozpoznajZgode, echoPytaniaZgody, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, maPowod, PLATNE_ZESPOLU,
 };
 

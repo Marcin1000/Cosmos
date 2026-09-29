@@ -4858,3 +4858,18 @@ select::-ms-expand { display: none; }
   .rola-dopisek.dlugi { display: none; }
   .rola-dopisek.krotki { display: inline; }
 }
+
+/* Poprawka po recenzji (fala 3): druga runda tej samej roli – wcięcie z łukiem
+   (tym samym, którym bramka łączy role z nagłówkiem). Pusta kropka znaczy
+   „czeka/pominięta”, więc kropki nie ruszamy. */
+.zespol .rola[data-fala="3"] { margin-left: 14px; position: relative; }
+.zespol .rola[data-fala="3"]::before {
+  content: ""; position: absolute; left: -11px; top: -4px; width: 8px; height: 14px;
+  border-left: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); border-bottom-left-radius: 6px;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .zespol .rola[data-fala="3"] { margin-left: 0; }
+  .zespol .rola[data-fala="3"]::before { display: none; }
+}
+/* Stopka kosztu: na telefonie tylko „cała odpowiedź”, podział (koszt ról) od 521 px. */
+@media (max-width: 520px) { .zespol-koszt-podzial { display: none; } }

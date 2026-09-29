@@ -35,7 +35,11 @@
    W15. `sklad.wymagaZgody` (true albo 'chmura') i silniki za zgodą – tylko
         znane nazwy, bez lokalnego;
    W16. fotograf: miejsce i czas planu wracają ze składem od osoby; `powod`
-        roli jako lista kodów. */
+        roli jako lista kodów;
+   W17. poprawka po recenzji nie ma własnego ogłoszenia, „N z M” liczy skład,
+        linijka historii bez poprawki jako osobnej roli;
+   W18. koszt całej odpowiedzi (role + planista + prowadzący z `koniec`, C2)
+        i `planPoliczony` (C5) – przez zapis i odczyt notatek. */
 const fs = require('fs');
 const path = require('path');
 const Z = require('../../public/zespol-widok.js');
@@ -199,6 +203,37 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
   ok(echo && !nieEcho.length, `W11c. echo pytania o zgodę = dosłowny ogon pytania < 1,2 s po mowie; odpowiedź powtarzająca słowa pytania nie jest echem${nieEcho.length ? ` – źle: ${nieEcho.map((x) => x[0]).join('; ')}` : ''}`);
 }
 
+// ------------------------------------------------------------------ W17, W18
+{
+  // W17: poprawka po recenzji nie ma własnego ogłoszenia, „N z M” liczy skład; historia bez fali 3.
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'cloud', model: 'm' }, role: [
+    { r: 'r1', rola: 'programista', nazwa: 'Programista', silnik: 'openai', model: 'gpt-5-mini', fala: 1 },
+    { r: 'r2', rola: 'recenzent', nazwa: 'Recenzent', silnik: 'claude', model: 'claude-sonnet-5', fala: 2 }] }, 0);
+  const o17 = [];
+  const zj = (typ, d, t) => o17.push(...Z.zjedzZdarzenieZespolu(s, typ, d, t));
+  zj('rola', { r: 'r1', stan: 'gotowa', ms: 10, kosztZl: 0.01 }, 10);
+  zj('rola', { r: 'r2', stan: 'gotowa', ms: 10, kosztZl: 0.02, kosztSzacowany: true }, 20);
+  zj('rola', { r: 'r1p', rola: 'programista', nazwa: 'Programista', fala: 3, poprawkaZ: 'r1', stan: 'pracuje', silnik: 'openai', model: 'gpt-5-mini' }, 30);
+  zj('rola', { r: 'r1p', stan: 'gotowa', ms: 10, kosztZl: 0.01 }, 40);
+  const gotowe = o17.filter((x) => x.klucz === 'ag.sr.gotowa');
+  ok(gotowe.length === 2 && gotowe.every((x) => x.n === 2) && gotowe[1].g === 2,
+    `W17a. ogłoszenia: poprawka bez własnego „gotowe”, „N z M” po składzie (${JSON.stringify(gotowe.map((x) => `${x.g}/${x.n}`))})`);
+  zj('faza', { faza: 'prowadzacy', notatki: 'N', kosztZl: 0.04, planPoliczony: true }, 50);
+  Z.kosztProwadzacego(s, 0.12, false);
+  const w = Z.wiadomoscNotatek(s, 60);
+  ok(!/Programista, Recenzent, Programista/.test(w.searchQuery) && /Programista, Recenzent$/.test(w.searchQuery),
+    `W17b. linijka historii bez poprawki jako osobnej roli („${w.searchQuery}”)`);
+  // W18: cała odpowiedź = role + planista (faza) + prowadzący; „ok.” przy szacunku; C5 planPoliczony; przez zapis i odczyt.
+  ok(s.planPoliczony === true && w.zespol.planPoliczony === true, 'W18a. `faza.planPoliczony` (C5) trafia do stanu i do notatek');
+  const s2 = Z.stanZWiadomosci(w);
+  ok(Z.kosztCaly(s) === 0.16 && Z.kosztTury(s) === 0.04 && Z.kosztCaly(s2) === 0.16 && Z.kosztSzacowany(s2) && s2.planPoliczony === true,
+    `W18b. koszt całej odpowiedzi z prowadzącym (${Z.kosztCaly(s)} / po odczycie ${Z.kosztCaly(s2)}), szacunek zapamiętany`);
+  const s3 = Z.nowyStanTury(0);
+  ok(Z.kosztCaly(s3) === undefined && (Z.kosztProwadzacego(s3, 0.05, true), Z.kosztCaly(s3) === 0.05 && Z.kosztSzacowany(s3)),
+    'W18c. bez ról i prowadzącego – nieznany; sam prowadzący z szacunkiem – jego kwota z „ok.”');
+}
+
 // ------------------------------------------------------------------ W12
 {
   const s = Z.nowyStanTury(0);
@@ -239,7 +274,7 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
 // ------------------------------------------------------------------ W14
 {
   const nb = (x) => x.replace(/\u00a0/g, ' ');
-  ok(nb(Z.kwotaZl(0.12, 'pl')) === '0,12 zł' && nb(Z.kwotaZl(0.12, 'en')) === 'PLN 0.12' && nb(Z.kwotaZl(0.001, 'pl')) === '< 0,01 zł'
+  ok(nb(Z.kwotaZl(0.12, 'pl')) === '0,12 zł' && nb(Z.kwotaZl(0.12, 'en')) === 'PLN 0.12' && nb(Z.kwotaZl(0.001, 'pl')) === 'poniżej 0,01 zł' && nb(Z.kwotaZl(0.001, 'en')) === 'under PLN 0.01'
     && Z.kwotaZl(undefined, 'pl') === '' && Z.kwotaZl(-1, 'pl') === '',
     `W14a. kwoty: „${Z.kwotaZl(0.12, 'pl')}”, „${Z.kwotaZl(0.12, 'en')}”, grosz „${Z.kwotaZl(0.001, 'pl')}”, brak → ''`);
   ok(Z.szacunekSkladu([{ silnik: 'claude', szacunekZl: 0.1 }, { silnik: 'cloud' }, { silnik: 'local' }]) === 0.1
