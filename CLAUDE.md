@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 146 zestawów + 10 selftestów Pythona, ~12 min
+npm test                  # 148 zestawów + 10 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -143,6 +143,7 @@ robi większość szybkich zestawów.
 | `agent-zmyslow.js` | zmysły na komputerze KAŻDEJ osoby: parowanie kodem, długie odpytywanie, przełączniki, **`fetchZmyslow()` – jedyna droga do zmysłów** |
 | `zmysly-serwera.js` | zmysły na procesorze serwera – dziś tylko `/ptak` (BirdNET pod `PTAKI_URL`): biała lista tras, kolejka, jedno nagranie na osobę; trzecie źródło w `fetchZmyslow()` |
 | `os-czasu.js` | oś czasu migawek otoczenia |
+| `umiejetnosci.js` | co który model umie (sonda „Sprawdź” > dostawca > katalog > nazwa), `dobierzModel()` do ról zespołu; wyniki sond w `data/konta/modele-sprawdzone.json` |
 
 Źródła inteligencji za wspólnym interfejsem OpenAI-compatible:
 

@@ -290,7 +290,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
 
   const SILNIKI = [
     ['local', 'acc.engLocal'], ['openai', 'acc.engOpenai'], ['claude', 'acc.engClaude'], ['studio', 'acc.engStudio'],
-    ['szukanie', 'acc.engSzukanie'], ['ptaki', 'acc.engPtaki'],
+    ['szukanie', 'acc.engSzukanie'], ['ptaki', 'acc.engPtaki'], ['zespol', 'acc.engZespol'],
   ];
 
   function wierszOsoby(u) {
@@ -304,6 +304,12 @@ function utworzKonta({ $, t, zmienJezyk }) {
       `${u.login} · ${u.rola === 'wlasciciel' ? t('acc.roleOwner') : t('acc.roleMember')} · `
       + `${t('acc.lastSeen')}: ${kiedy(u.ostatnio)} · ${t('acc.messages', { n: z.wiadomosci || 0, dzis: z.dzisiaj || 0 })}`
       + (u.miejsce ? ` · ${t('acc.disk', { zajete: rozmiar(u.miejsce.zajete) })}` : '')));
+    // Zużycie silników z ostatnich 30 dni (tylko Twoje klucze i GPU – własnych kluczy
+    // osoby serwer tu nie pokazuje). Bez treści i bez nazw ról agentów.
+    const sil = (z.silniki && z.silniki.dni30) || {};
+    const linie = Object.entries(sil).filter(([, v]) => v && v.wywolan)
+      .map(([nazwa, v]) => t('acc.zuzycieSilnika', { silnik: nazwa, n: v.wywolan, tok: Math.round(((v.we || 0) + (v.wy || 0)) / 1000) }));
+    if (linie.length) opis.append(element('div', 'osoba-meta mono', linie.join(' · ')));
     glowa.append(opis);
     w.append(glowa);
     if (u.rola === 'wlasciciel') return w;

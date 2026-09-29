@@ -408,12 +408,12 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
 
   // --- 24: klatka z kamery do ślepego modelu spoza katalogu
   const klatka = [{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ' } }, { type: 'text', text: 'slepaklatka co trzymam?' }];
-  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'mistral-nemo', klatkaKamery: true } });
+  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'slepy-nieznany:7b', klatkaKamery: true } });
   const drugieS = wszystkie.slepaklatka[1] || { messages: [] };
   ok(!bl(w) && w.status === 200 && proby.slepaklatka === 2 && !JSON.stringify(drugieS.messages).includes('image_url')
     && /nie widzi/.test(JSON.stringify(drugieS.messages)) && !/OBRAZ Z KAMERY/.test(JSON.stringify(drugieS.messages)),
   `24. odmowa klatki → ponowienie bez obrazu, z notką „nie widzi” (${w.status}, ${proby.slepaklatka} żądania)`);
-  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'mistral-nemo', klatkaKamery: true } });
+  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'slepy-nieznany:7b', klatkaKamery: true } });
   ok(!bl(w) && proby.slepaklatka === 3 && !JSON.stringify(ostatnie.slepaklatka.messages).includes('image_url'),
     `24. następna klatka od razu bez obrazu (${proby.slepaklatka - 2} żądanie)`);
 

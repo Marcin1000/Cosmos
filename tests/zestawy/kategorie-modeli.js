@@ -19,7 +19,7 @@ const up = http.createServer((req, res) => {
   let b = ''; req.on('data', (c) => { b += c; });
   req.on('end', () => {
     const j = JSON.parse(b);
-    const img = Array.isArray(j.messages[0].content);
+    const img = Array.isArray(j.messages[j.messages.length - 1].content);
     const bad = (code, msg) => {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: msg } }));

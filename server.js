@@ -21,6 +21,8 @@ const crypto = require('node:crypto');
 // Katalog modeli współdzielony z przeglądarką – jedno miejsce wiedzy o tym,
 // który model widzi obrazy. Plik eksportuje się i dla okna, i dla Node.
 const { modelNotForChat, modelNotAChatPartner } = require('./public/models.js');
+// Co model umie (sonda > dostawca > katalog > nazwa) i zapis wyników „Sprawdź”.
+const umiejetnosci_ = require('./lib/umiejetnosci.js');
 
 /* Rdzeń: konfiguracja, silniki, ścieżki i cztery pomocnicze, bez których nie
    da się obsłużyć żądania. Zależność idzie tylko w jedną stronę – rdzeń nie
@@ -929,7 +931,6 @@ const { OCZEKUJACE } = czat_;
  * przyjęcie obrazka 1×1 bywało fałszywym „widzi” (dostawca ignorował obraz,
  * zespół IT runda 9). Wynik ocenia `ocenSondeWzroku` z lib/umiejetnosci.js.
  */
-const umiejetnosci_ = require('./lib/umiejetnosci.js');
 /* Wyniki „Sprawdź” i capabilities dostawców: wiedza o MODELU na kluczu
    właściciela, jeden plik serwera obok kont (bez adresów i kluczy). */
 const rejestrModeli = umiejetnosci_.utworzRejestrModeli({
@@ -1141,7 +1142,8 @@ async function handleModelCheck(req, res) {
     blad: text.ok ? null : text.error,
     // Sam komunikat dostawcy nie mówi, co ma teraz zrobić człowiek przed ekranem.
     podpowiedz: text.ok ? null : podpowiedzSprawdzenia(ep, data.endpoint, model, text),
-    bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
+    bladObrazy: (text.ok && !vision.ok) ? vision.error
+      : (text.ok && obrazyPewnosc === 'nie') ? 'Obraz przyjęty, ale model nie rozpoznał koloru próbki – obrazu nie widzi.' : null,
   });
 }
 
