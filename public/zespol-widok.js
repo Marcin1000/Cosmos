@@ -1093,42 +1093,75 @@ function utworzZespolWidok(z) {
 
   // Odmowa zapisu limitu (zła kwota) – zostaje pod polami po przebudowie panelu.
   let bladBudzetu = '';
+  let zapisanyTimer = null;
   function sekcjaBudzetu(k) {
     const us = k.budzet || { dzien: 0, miesiac: 0 };
     const sb = k.stanBudzetu || {};
     const sekcja = h('section', { klasa: 'set-sekcja field ag-budzet-sekcja', 'data-karta': 'agenci' },
       h('h3', { tekst: t('ag.bud.h') }), h('p', { klasa: 'set-sekcja-opis', tekst: t('ag.bud.opis') }));
     const pola = h('div', { klasa: 'ag-budzet' });
+    /* Powód odmowy WIDOCZNY pod polami (role=alert). Sama czerwona ramka
+       i `title` nic nie mówiły na telefonie. Zła kwota z przeglądarki nie
+       przebudowuje panelu – wpisane „abc” i fokus zostają. */
+    const blad = h('p', { klasa: 'ag-wl-blad ag-budzet-blad', id: 'ag-budzet-blad', role: 'alert', tekst: bladBudzetu });
+    blad.hidden = !bladBudzetu;
+    // „Budżet zapisany.” przy polach (nie gdzieś na górze karty); znika po chwili.
+    const zapisany = h('p', { klasa: 'set-stan ag-budzet-zapisany', role: 'status' });
     const pole = (klucz, etykieta) => {
       const input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', 'data-pole': `budzet-${klucz}`,
-        'aria-describedby': 'ag-budzet-stan', placeholder: '0' });
+        'aria-describedby': `ag-budzet-stan${bladBudzetu ? ' ag-budzet-blad' : ''}`, placeholder: '0' });
       input.value = us[klucz] > 0 ? String(us[klucz]).replace('.', jezyk() === 'en' ? '.' : ',') : '';
       input.addEventListener('change', async () => {
         const n = zlZPola(input.value);
-        if (n === null) { input.setAttribute('aria-invalid', 'true'); input.title = t('ag.bud.zly'); return; }
+        if (n === null) {
+          input.setAttribute('aria-invalid', 'true');
+          input.setAttribute('aria-describedby', 'ag-budzet-stan ag-budzet-blad');
+          blad.textContent = t('ag.bud.zly'); blad.hidden = false;
+          return;
+        }
         input.removeAttribute('aria-invalid');
-        const nowy = { dzien: us.dzien || 0, miesiac: us.miesiac || 0, [klucz]: n };
         bladBudzetu = '';
-        const w = await k.naZmiane({ budzetZl: nowy });
-        if (w && w.ok === false) { bladBudzetu = w.error || t('ag.bud.zly'); k.odswiez && k.odswiez({ fokus: `[data-pole="budzet-${klucz}"]` }); }
+        /* Tylko zmieniony klucz – serwer scala. Dawniej szło {dzien, miesiac}
+           ze stanu z chwili rysowania: drugie pole zapisane przed odpowiedzią
+           na pierwsze wysyłało STARĄ wartość pierwszego i kasowało ją. */
+        const w = await k.naZmiane({ budzetZl: { [klucz]: n } });
+        if (w && w.ok === false) { bladBudzetu = w.error || t('ag.bud.zly'); k.odswiez && k.odswiez({ fokus: `[data-pole="budzet-${klucz}"]` }); return; }
+        // Panel przebudował się po zapisie – napis wstawiamy do nowego.
+        const nowy = typeof document !== 'undefined' && document.querySelector('.ag-budzet-zapisany');
+        if (nowy) {
+          nowy.textContent = t('acc.budzetZapisany');
+          clearTimeout(zapisanyTimer);
+          zapisanyTimer = setTimeout(() => { nowy.textContent = ''; }, 3000);
+        }
       });
       return h('label', { klasa: 'field ag-budzet-pole' }, h('span', { klasa: 'field-label', tekst: etykieta }),
         h('span', { klasa: 'ag-budzet-wejscie' }, input, h('span', { klasa: 'ag-budzet-zl', 'aria-hidden': 'true', tekst: jezyk() === 'en' ? 'PLN' : 'zł' })));
     };
     pola.append(pole('dzien', t('ag.bud.dzien')), pole('miesiac', t('ag.bud.miesiac')));
-    sekcja.append(pola);
-    if (bladBudzetu) sekcja.append(h('p', { klasa: 'ag-wl-blad', role: 'alert', tekst: bladBudzetu }));
+    sekcja.append(pola, blad, zapisany);
     const stan = [];
     if (kwota(sb.wydanoDzis) !== undefined) stan.push(t('ag.bud.wydanoDzis', { zl: zl(sb.wydanoDzis) }));
     if (kwota(sb.wydanoMiesiac) !== undefined) stan.push(t('ag.bud.wydanoMiesiac', { zl: zl(sb.wydanoMiesiac) }));
     if (sb.dzien > 0 && typeof sb.zostaloDzis === 'number') stan.push(t('ag.bud.zostaloDzis', { zl: zl(Math.max(0, sb.zostaloDzis)) }));
+    if (sb.miesiac > 0 && typeof sb.zostaloMiesiac === 'number') stan.push(t('ag.bud.zostaloMiesiac', { zl: zl(Math.max(0, sb.zostaloMiesiac)) }));
     sekcja.append(h('p', { klasa: 'set-stan ag-budzet-stan', id: 'ag-budzet-stan', tekst: stan.join(' · ') }));
-    // Limit właściciela ciaśniejszy niż własny – członek widzi, skąd bierze się „zostało”.
-    const odWlasciciela = sb.limit && typeof sb.limit === 'object' ? sb.limit.dzien === 'wlasciciel'
-      : sb.dzien > 0 && !(us.dzien > 0 && us.dzien <= sb.dzien);
-    if (sb.dzien > 0 && odWlasciciela) sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.odWlasciciela', { zl: zl(sb.dzien) }) }));
+    // Limit właściciela ciaśniejszy niż własny – członek widzi, skąd bierze się „zostało” (dzienny i miesięczny osobno).
+    const odWlasciciela = (okres) => (sb.limit && typeof sb.limit === 'object' ? sb.limit[okres] === 'wlasciciel'
+      : sb[okres] > 0 && !(us[okres] > 0 && us[okres] <= sb[okres]));
+    if (sb.dzien > 0 && odWlasciciela('dzien')) sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.odWlasciciela', { zl: zl(sb.dzien) }) }));
+    if (sb.miesiac > 0 && odWlasciciela('miesiac')) sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.odWlascicielaMiesiac', { zl: zl(sb.miesiac) }) }));
     if (typeof k.kurs === 'number' && k.kurs > 0) {
       sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.kurs', { kurs: new Intl.NumberFormat(jezyk() === 'en' ? 'en-GB' : 'pl-PL', { minimumFractionDigits: 2 }).format(k.kurs) }) }));
+    }
+    // Ceny zgadnięte (model spoza cennika, cennik z pamięci) – jedna linijka, gdy serwer o tym mówi.
+    // Pole z serwera: cennik.stan() (paczka B2) – { openai: { stan }, zgadniete: [{ model }], saZgadniete }.
+    const cn = k.cennik && typeof k.cennik === 'object' ? k.cennik : null;
+    const zgadniete = cn ? (Array.isArray(cn.zgadniete) ? cn.zgadniete : []).map((x) => String((x && x.model) || '')).filter(Boolean) : [];
+    if (cn && (cn.saZgadniete || zgadniete.length)) {
+      const data = cn.openai && typeof cn.openai.stan === 'string' ? cn.openai.stan : '';
+      const modele = [...new Set(zgadniete)].slice(0, 3).join(', ');
+      sekcja.append(h('p', { klasa: 'field-hint ag-budzet-cennik',
+        tekst: t(modele ? 'ag.bud.cennikZgadniety' : 'ag.bud.cennikZgadnietyOgolnie', { modele, data: data || '?' }) }));
     }
     return sekcja;
   }

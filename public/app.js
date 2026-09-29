@@ -3183,7 +3183,7 @@ async function rysujUstawieniaZespolu(pobierz = true, { fokus = '' } = {}) {
     us, sufit: cfg.maxRolSufit || 3, potwierdzaj: potwierdzajZespolu(),
     katalog: roleWbudowane(), bezDostepu: bezDostepuSilniki(), naZmiane: zmienUstawieniaZespolu,
     otworzEdytor: (klucz, btn, gotowe) => otworzEdytorRoli({ rola: klucz }, btn, gotowe, { zUsun: false, wybrany: (us.role || {})[klucz] || null }),
-    wlasne: wlasneRoleOsoby(), budzet: us.budzetZl, stanBudzetu: cfg.budzet, kurs: cfg.kurs,
+    wlasne: wlasneRoleOsoby(), budzet: us.budzetZl, stanBudzetu: cfg.budzet, kurs: cfg.kurs, cennik: cfg.cennik,
     odswiez: (o) => rysujUstawieniaZespolu(false, o || {}),
   }));
   // querySelector znajduje też WYŁĄCZONY przycisk (8 ról), a .focus() na nim nic nie robi – fokus spadał na <body>.

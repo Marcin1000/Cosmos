@@ -121,6 +121,18 @@ const ile = (przedrostek) => wywolania.filter((w) => w.url.startsWith(przedroste
   czysty.ceny('gpt-5.4', 'openai'); czysty.ceny('claude-opus-5-5', 'claude');
   ok(czysty.stan().saZgadniete === false && czysty.stan().claude.pewne === true, 'same znane modele – stan bez cen zgadniętych');
 
+  // --- 1b. Cache wejścia OpenAI ---------------------------------------------------------
+  const bezCache = c.kosztZl('gpt-5', 'openai', { we: 20000, wy: 500 });
+  const zCache = c.kosztZl('gpt-5', 'openai', { we: 20000, wy: 500, cache: 18000 });
+  const oczekCache = Math.round(((2000 * 1.25 + 18000 * 1.25 * 0.1 + 500 * 10) / 1e6) * 3.7 * 1e4) / 1e4;
+  ok(blisko(zCache, oczekCache) && zCache < bezCache, `gpt-5: 18 tys. z 20 tys. wejścia z cache ceną 0,1 (${zCache} zł, bez cache ${bezCache})`);
+  ok(c.mnoznikCache('gpt-5.4-mini') === 0.1 && c.mnoznikCache('gpt-4.1') === 0.25 && c.mnoznikCache('o4-mini') === 0.25
+    && c.mnoznikCache('gpt-4o-2024-08-06') === 0.5, 'mnożniki cache: gpt-5* 0,1; gpt-4.1/o3/o4-mini 0,25; gpt-4o 0,5');
+  ok(c.kosztZl('claude-sonnet-5', 'claude', { we: 20000, wy: 500, cache: 18000 }) === c.kosztZl('claude-sonnet-5', 'claude', { we: 20000, wy: 500 }),
+    'Claude przez warstwę zgodną – cache pełną ceną (ostrożnie)');
+  ok(c.kosztZl('gpt-5', 'openai', { we: 1000, wy: 0, cache: 5000 }) === c.kosztZl('gpt-5', 'openai', { we: 1000, wy: 0, cache: 1000 }),
+    'cache większy niż wejście – przycięty do wejścia');
+
   // --- 2. kosztUslugiZl -----------------------------------------------------------------
   const k = (...a) => c.kosztUslugiZl(...a);
   const stt60 = k('stt', 'gpt-4o-mini-transcribe', 60);

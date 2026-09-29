@@ -33,7 +33,8 @@
        budżetu (config.zespol.budzet), zła kwota – 400;
    T12. budżet od właściciela dla członka: rola na przyznanym Claude ponad
        limit → chmura wspólna z powodem `budzet`; wyczerpany limit
-       + prowadzący na kluczu właściciela → 429 (limit „wlasciciel”). */
+       + prowadzący na kluczu właściciela → 429 (limit „wlasciciel”); prowadzący
+       bez miejsca w budżecie nie rusza (koniec z kodem budzet-wyczerpany). */
 const fs = require('fs');
 const path = require('path');
 const { KORZEN, ATRAPY, serwerCosmosa, uruchom, czekajNa, zabij, zwolnijPorty, katalogOsoby } = require('../pomoc');
@@ -79,6 +80,7 @@ function klient(ip) {
       }
       w.zdarzenia = zdarzenia;
       w.sklad = (zdarzenia.find((e) => e.typ === 'sklad') || {}).dane || { role: [], odrzucone: [] };
+      w.koniec = (zdarzenia.find((e) => e.typ === 'koniec') || {}).dane || null;
       return w;
     },
   };
@@ -98,7 +100,7 @@ const zeruj = () => fetch(`http://127.0.0.1:${A.cloud}/__zeruj`);
     LOCAL_BASE_URL: `http://127.0.0.1:${A.local}/v1`, LOCAL_MODEL: 'qwen3:8b',
     OPENAI_API_KEY: 'sk-openai-wlasciciela-zespol-01', OPENAI_BASE_URL: `http://127.0.0.1:${A.openai}/v1`, OPENAI_MODEL: 'gpt-4o-mini',
     ANTHROPIC_API_KEY: KLUCZ_CLAUDE_W, ANTHROPIC_BASE_URL: `http://127.0.0.1:${A.claude}/v1`, CLAUDE_MODEL: 'claude-haiku-4-5',
-    COSMOS_MODELE_PRZYZNANE: 'claude-haiku-4-5', COSMOS_ZESPOL_NA_DOBE: '5',
+    COSMOS_MODELE_PRZYZNANE: 'claude-haiku-4-5', COSMOS_ZESPOL_NA_DOBE: '6',
     COSMOS_ZESPOL_CISZA_MS: '3000', COSMOS_ZESPOL_TERMIN_PLANISTY_MS: '1500', COSMOS_BIEG_SIEROTA_MS: '300',
   });
   try {
@@ -285,8 +287,18 @@ const zeruj = () => fetch(`http://127.0.0.1:${A.cloud}/__zeruj`);
       const an = w.sklad.role.find((r) => r.rola === 'analityk') || {};
       ok(pb.kod === 200 && an.silnik === 'cloud' && an.zamiast && an.zamiast.silnik === 'claude' && /budzet/.test(an.powod || '')
         && !(await zadania()).some((x) => x.silnik === 'claude'), `T12a. rola na kluczu właściciela ponad limit członka → chmura wspólna, powód „budzet” (${an.powod})`);
-      // Prowadzący na przyznanym Claude wydaje ponad limit – następna tura zespołu z nim: 429.
-      await bartek.tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Przeanalizuj zuzycie-duze' }], zespol: { sklad: [{ rola: 'analityk', silnik: 'cloud' }] } });
+      /* Rola na przyznanym Claude mieści się w szacunku, ale wydaje dużo więcej
+         (usage 200 tys. tokenów) – prowadzący na kluczu właściciela nie dostaje
+         już rezerwacji: bez wywołania, koniec z kodem budzet-wyczerpany. Następna
+         tura zespołu z nim: 429 od razu. */
+      await marcin.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: bartek.id, dzien: 0.3 } });
+      await zeruj();
+      const w1 = await bartek.tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Przeanalizuj zuzycie-duze' }],
+        zespol: { sklad: [{ rola: 'analityk', silnik: 'claude', model: 'claude-haiku-4-5' }] } });
+      const z1 = await zadania();
+      ok(w1.koniec && w1.koniec.kod === 'budzet-wyczerpany' && z1.some((x) => x.silnik === 'claude' && x.rola === 'ANALITYK')
+        && !z1.some((x) => x.rodzaj === 'prowadzacy'),
+        `T12c. rola wydała ponad szacunek – prowadzący na kluczu właściciela bez rezerwacji nie rusza (koniec: ${w1.koniec && w1.koniec.kod}; analityk: ${(w1.sklad.role[0] || {}).silnik}; zdarzenia: ${w1.zdarzenia.map((e) => e.typ + (e.dane.kod ? `:${e.dane.kod}` : '')).join(',')})`);
       const w2 = await bartek.tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Przeanalizuj' }], zespol: { uruchom: true } });
       ok(w2.kod === 429 && w2.json.kod === 'budzet-wyczerpany' && w2.json.limit === 'wlasciciel' && w2.json.error,
         `T12b. wyczerpany limit od właściciela + prowadzący na jego kluczu → 429 (${w2.kod}, ${w2.json.limit})`);
@@ -296,7 +308,7 @@ const zeruj = () => fetch(`http://127.0.0.1:${A.cloud}/__zeruj`);
     // ------------------------------------------------------------ T9
     {
       let odmowa = null;
-      for (let i = 0; i < 6 && !odmowa; i++) {
+      for (let i = 0; i < 8 && !odmowa; i++) {
         const w = await ania.tura({ messages: [{ role: 'user', content: 'Zrób to zespołem' }], zespol: { uruchom: true } });
         odmowa = w.zdarzenia.find((e) => e.typ === 'zespol' && e.dane.faza === 'odmowa');
         if (odmowa) ok(odmowa.dane.kod === 'limit-dobowy' && /bez zespołu/.test(w.odpowiedz) && !w.zdarzenia.some((e) => e.typ === 'rola'),

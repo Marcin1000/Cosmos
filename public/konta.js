@@ -314,7 +314,10 @@ function utworzKonta({ $, t, zmienJezyk }) {
     if (linie.length) opis.append(element('div', 'osoba-meta mono', linie.join(' · ')));
     // Złotówki na Twoich kluczach (OpenAI, Claude) – z cennika, dziś i w tym miesiącu.
     const wydane = wydaneZl(z.zl);
-    if (wydane) opis.append(element('div', 'osoba-meta mono osoba-zl', t('acc.zuzycieZl', { dzis: zl(wydane.dzis), miesiac: zl(wydane.miesiac) })));
+    // Przy ustawionym limicie: ile z niego („0,12 z 2,50 zł”), nie sama kwota.
+    const lim = u.budzetZl && typeof u.budzetZl === 'object' ? u.budzetZl : {};
+    const zLimitem = (kw, limit) => (Number(limit) > 0 ? t('acc.zlZLimitu', { zl: zl(kw), limit: zl(Number(limit)) }) : zl(kw));
+    if (wydane) opis.append(element('div', 'osoba-meta mono osoba-zl', t('acc.zuzycieZl', { dzis: zLimitem(wydane.dzis, lim.dzien), miesiac: zLimitem(wydane.miesiac, lim.miesiac) })));
     glowa.append(opis);
     w.append(glowa);
     if (u.rola === 'wlasciciel') return w;
@@ -401,6 +404,18 @@ function utworzKonta({ $, t, zmienJezyk }) {
     const b = u.budzetZl && typeof u.budzetZl === 'object' ? u.budzetZl : { dzien: 0, miesiac: 0 };
     const blok = element('div', 'osoba-budzet');
     blok.append(element('span', 'osoba-budzet-tytul', t('acc.budzet')));
+    const idOsoby = String(u.id || '').replace(/[^\w-]/g, '');
+    /* Ten sam wzór co Ustawienia → Agenci: etykieta nad polem, „zł” w polu.
+       Powód złej kwoty WIDOCZNY pod polami (role=alert), a „Budżet zapisany.”
+       przy polach (role=status) – nie na górze karty, 126 px nad ekranem. */
+    const blad = element('span', 'field-hint blad osoba-budzet-blad');
+    blad.id = `osoba-budzet-blad-${idOsoby}`;
+    blad.setAttribute('role', 'alert');
+    blad.hidden = true;
+    const stan = element('span', 'osoba-budzet-stan');
+    stan.setAttribute('role', 'status');
+    let stanTimer = null;
+    const pokazBlad = (tekst) => { blad.textContent = tekst || ''; blad.hidden = !tekst; };
     const pola = element('div', 'osoba-budzet-pola');
     const pole = (klucz, podpis) => {
       const et = element('label', 'osoba-budzet-pole');
@@ -414,20 +429,38 @@ function utworzKonta({ $, t, zmienJezyk }) {
       input.setAttribute('aria-label', `${t('acc.budzet')}: ${podpis} – ${u.nazwa || u.login}`);
       input.addEventListener('change', async () => {
         const n = zlZPola(input.value);
-        if (n === null) { input.setAttribute('aria-invalid', 'true'); return; }
+        if (n === null) {
+          input.setAttribute('aria-invalid', 'true');
+          input.setAttribute('aria-describedby', blad.id);
+          pokazBlad(t('ag.bud.zly'));
+          return;
+        }
         input.removeAttribute('aria-invalid');
-        const nowy = { dzien: b.dzien || 0, miesiac: b.miesiac || 0, [klucz]: n };
-        const r = await zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: u.id, ...nowy } });
-        if (!r.ok) { komunikat(r.json.error || r.json.blad || t('httpErr', { status: r.kod }), true); return; }
-        Object.assign(b, nowy);
+        input.removeAttribute('aria-describedby');
+        pokazBlad('');
+        // Tylko zmieniony limit – serwer scala; drugi szybki zapis nie nadpisze pierwszego starą wartością.
+        const r = await zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: u.id, [klucz]: n } });
+        if (!r.ok) {
+          const tekst = r.json && r.json.kod === 'budzet-zly' ? t('ag.bud.zly') : (r.json.error || r.json.blad || t('httpErr', { status: r.kod }));
+          input.setAttribute('aria-invalid', 'true');
+          input.setAttribute('aria-describedby', blad.id);
+          pokazBlad(tekst);
+          return;
+        }
+        const zSerwera = r.json && r.json.uzytkownik && r.json.uzytkownik.budzetZl;
+        Object.assign(b, zSerwera && typeof zSerwera === 'object' ? zSerwera : { [klucz]: n });
         u.budzetZl = b;
-        komunikat(t('acc.budzetZapisany'));
+        stan.textContent = t('acc.budzetZapisany');
+        clearTimeout(stanTimer);
+        stanTimer = setTimeout(() => { stan.textContent = ''; }, 3000);
       });
-      et.append(input, element('span', '', podpis));
+      const wejscie = element('span', 'ag-budzet-wejscie');
+      wejscie.append(input, element('span', 'ag-budzet-zl', jezykEn() ? 'PLN' : 'zł'));
+      et.append(element('span', 'field-label', podpis), wejscie);
       return et;
     };
-    pola.append(pole('dzien', t('acc.budzetDzien')), pole('miesiac', t('acc.budzetMiesiac')));
-    blok.append(pola, element('span', 'field-hint', t('acc.budzetHint')));
+    pola.append(pole('dzien', t('ag.bud.dzien')), pole('miesiac', t('ag.bud.miesiac')));
+    blok.append(pola, stan, blad, element('span', 'field-hint', t('acc.budzetHint')));
     return blok;
   }
 
