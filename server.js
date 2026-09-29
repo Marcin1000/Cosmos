@@ -924,10 +924,18 @@ const { OCZEKUJACE } = czat_;
  * `/v1/models` u NVIDII wypisuje wszystko, co NVIDIA hostuje, a nie to, do czego
  * Twój klucz ma dostęp: część pozycji kończy się „Not found for account". Tego
  * nie da się przewidzieć z nazwy – trzeba spróbować. Wysyłamy więc najtańsze
- * możliwe żądanie (jeden token), a przy teście wzroku dokładamy obrazek 1×1.
- * Odpowiedź 200 znaczy „działa”; treść nas nie interesuje.
+ * możliwe żądanie (jeden token). Rozmowa: odpowiedź 200 znaczy „działa”.
+ * Wzrok: obrazek 8×8 w jednym kolorze i pytanie „jaki to kolor” – samo
+ * przyjęcie obrazka 1×1 bywało fałszywym „widzi” (dostawca ignorował obraz,
+ * zespół IT runda 9). Wynik ocenia `ocenSondeWzroku` z lib/umiejetnosci.js.
  */
-const PROBE_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const umiejetnosci_ = require('./lib/umiejetnosci.js');
+/* Wyniki „Sprawdź” i capabilities dostawców: wiedza o MODELU na kluczu
+   właściciela, jeden plik serwera obok kont (bez adresów i kluczy). */
+const rejestrModeli = umiejetnosci_.utworzRejestrModeli({
+  plik: path.join(DATA_DIR, 'konta', 'modele-sprawdzone.json'), czytajJson, zapiszAtomowo,
+});
+const modelLib = require('./lib/model.js');
 
 /** Usuń z komunikatu dostawcy rzeczy, których nie chcemy nigdzie kopiować.
  *
@@ -957,8 +965,12 @@ const BUDZET_SPRAWDZENIA_MS = 88_000;
    surowe `max_tokens: 1` modele rozumujące OpenAI odrzucały, więc „Sprawdź
    wszystkie" oznaczało gpt-5, o3 i o4-mini jako niedostępne, choć w rozmowie
    działały (zespół IT, runda 5). Limit zostaje mały – to tylko „czy odpowie". */
-function cialoSondy(ep, model, content) {
-  const b = parametryDla(ep, { model, messages: [{ role: 'user', content }], max_tokens: 1, stream: false });
+function cialoSondy(ep, model, content, { wzrok = false } = {}) {
+  /* Sonda wzroku potrzebuje słowa odpowiedzi („red”), nie jednego tokenu –
+     i myślenia WYŁ. (ustawMyslenie z lib/model.js, gdy katalog zna sposób),
+     inaczej model myślący odda pustą treść i nic nie udowodni. */
+  let b = parametryDla(ep, { model, messages: [{ role: 'user', content }], max_tokens: wzrok ? 16 : 1, stream: false });
+  if (wzrok && typeof modelLib.ustawMyslenie === 'function') b = modelLib.ustawMyslenie(b, model, false) || b;
   for (const k of ['max_tokens', 'max_completion_tokens']) if (typeof b[k] === 'number') b[k] = Math.min(b[k], 32);
   return b;
 }
@@ -968,16 +980,25 @@ const ODMOWA_LIMITU_SONDY = /max_tokens|max_completion_tokens|output limit was r
 
 async function probeOnce(ep, model, withImage, czasMs = PROBE_TIMEOUT_MS) {
   const content = withImage
-    ? [{ type: 'image_url', image_url: { url: PROBE_PNG } }, { type: 'text', text: 'hi' }]
+    ? [{ type: 'image_url', image_url: { url: umiejetnosci_.PNG_SONDY_WZROKU } },
+      { type: 'text', text: umiejetnosci_.PYTANIE_SONDY_WZROKU }]
     : 'hi';
   try {
+    const start = Date.now();
     const r = await fetch(`${ep.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: authHeaders(ep),
-      body: JSON.stringify(cialoSondy(ep, model, content)),
+      body: JSON.stringify(cialoSondy(ep, model, content, { wzrok: withImage })),
       signal: AbortSignal.timeout(czasMs),
     });
-    if (r.ok) return { ok: true };
+    if (r.ok) {
+      const czas = Date.now() - start;
+      if (!withImage) { r.body?.cancel().catch(() => {}); return { ok: true, czas }; }
+      // Treść liczy się tylko przy wzroku: czy model nazwał kolor.
+      let tekst = '';
+      try { tekst = String((await r.json())?.choices?.[0]?.message?.content || ''); } catch { /* bez treści */ }
+      return { ok: true, czas, tekst: tekst.slice(0, 200) };
+    }
     let detail = '';
     try { detail = await r.text(); } catch { /* bez treści */ }
     if (r.status === 400 && ODMOWA_LIMITU_SONDY.test(detail) && !withImage) return { ok: true };

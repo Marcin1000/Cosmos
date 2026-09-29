@@ -479,6 +479,25 @@ scrubUzyte >= 4 ? ok(`redakcja danych konta w ${scrubUzyte - 1} miejscach`) : zl
   else if (wywolan !== 1) zle(`trasyApi wołane ${wywolan} razy – każde wywołanie poza routerem omija bramkę`);
   else ok(`każda trasa /api/ za logowaniem poza ${PUBLICZNE.length} publicznymi`);
 }
+/* Zespół agentów (lib/zespol*.js) pracuje w imieniu osoby POZA zwykłym
+   żądaniem: kolejki, pracownicy, zdarzenia strumieni. Tam `pickEndpoint(`
+   i `silniki.dostep(` bez osoby biorą osobę z kontekstu – a gdy go brak,
+   dają silnik serwera, czyli klucz WŁAŚCICIELA (sonda it-konta, runda 9).
+   Wolno tylko `silniki.dostepDla(nazwa, u)`: jawna osoba, a brak kontekstu
+   to wyjątek. Reguła stoi, zanim pliki powstaną. */
+{
+  const plikiZespolu = fs.readdirSync(path.join(R, 'lib')).filter((f) => /^zespol.*\.js$/.test(f));
+  const naruszenia = [];
+  for (const f of plikiZespolu) {
+    rd(`lib/${f}`).split('\n').forEach((l, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(l)) return;
+      if (/\bpickEndpoint\s*\(|\bdostep\s*\(/.test(l)) naruszenia.push(`lib/${f}:${i + 1}`);
+    });
+  }
+  naruszenia.length
+    ? zle(`zespół wybiera silnik bez jawnej osoby (pickEndpoint/silniki.dostep zamiast silniki.dostepDla): ${naruszenia.join(', ')}`)
+    : ok(`zespół wybiera silnik tylko przez dostepDla (${plikiZespolu.length} plików lib/zespol*.js)`);
+}
 // Liczenie wystąpień kłamie – limit bywa w obiekcie opcji kilka linii wyżej.
 // Patrzymy w okno wokół każdego wywołania.
 const linie = server.split('\n');
