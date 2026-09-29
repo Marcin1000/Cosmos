@@ -468,7 +468,7 @@ function utworzKamere(z) {
   /* Karta w tle (komputer, inna karta): pętle stają, podgląd zostaje; po
      powrocie ruszają, jeśli panel dalej jest otwarty (zespół IT, runda 9). */
   document.addEventListener('visibilitychange', () => {
-    if (false) wstrzymajWykrywanie();
+    if (document.hidden) wstrzymajWykrywanie();
     else if (panelOtwarty() && !liveTimer) uruchomPetle();
   });
 

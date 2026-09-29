@@ -20,7 +20,7 @@
      7. usługa padła → członek dostaje 503 w < 2 s, bez adresu,
      8. nagranie większe niż 4 MB → 413 bez czytania,
      9. współrzędne idą do usługi zaokrąglone do 0,1°, w nagłówkach, nie w adresie,
-    10. usługa w rozgrzewce (birdnet_gotowy:false) → 503 „ptaki-chwilowo” z Retry-After,
+    10. usługa w rozgrzewce (birdnet_gotowy:false) → członek z przyznaniem dostaje 503 „ptaki-chwilowo” z Retry-After,
         nie 403 „na Twoim koncie”; gotowość widać najpóźniej ~4 s po rozgrzewce, nie po 30,
     11. zerwane nagranie trzyma miejsce, dopóki usługa liczy: 10 × wyślij-i-zerwij
         → usługa nigdy nie liczy więcej niż PTAKI_NARAZ naraz, drugie nagranie tej
@@ -93,7 +93,7 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
 
 (async () => {
   await new Promise((r) => atrapa.listen(PORT_PTAKOW, '127.0.0.1', r));
-  niegotowyDo = Date.now() + 6000;
+  niegotowyDo = Date.now() + 8000;
   const startSerwera = Date.now();
   const srv = serwerCosmosa(PORT, {
     COSMOS_PASSWORD: HASLO, COSMOS_LOGIN: 'marcin',
@@ -107,18 +107,31 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     await marcin.zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
     await marcin.zadaj('/api/location', { metoda: 'POST', dane: { location: 'Biebrza', lat: 53.4567, lon: 22.6789 } });
 
-    /* ---- 10. Rozgrzewka: chwilowo, nie „na Twoim koncie” ---- */
-    const r10 = await fetch(`${ADRES}/api/ptak`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'CF-Connecting-IP': '10.9.0.1', Cookie: marcin.ciastko() }, body: nagranie('rozgrzewka') });
+    /* ---- członkowie ---- */
+    const czlonkowie = [];
+    for (let i = 0; i < 8; i++) {
+      const zap = await marcin.zadaj('/api/konta/zaproszenia', { metoda: 'POST', dane: { nazwa: `Osoba ${i}` } });
+      const k = klient(`10.9.1.${i + 2}`);
+      const przyj = await k.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token: zap.json.token, login: `osoba${i}`, haslo: `haslo-osoby-${i}-12345` } });
+      if (przyj.kod !== 200) throw new Error(`członek ${i}: ${przyj.tekst}`);
+      czlonkowie.push({ k, id: przyj.json.uzytkownik.id });
+    }
+
+    /* ---- 10. Rozgrzewka: chwilowo, nie „na Twoim koncie” ----
+       Członek z przyznaniem (dom mu nie przysługuje, więc jedynym źródłem jest serwer). */
+    const rozgrzewany = czlonkowie[7];
+    await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: rozgrzewany.id, silniki: { ptaki: true } } });
+    const r10 = await fetch(`${ADRES}/api/ptak`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', Cookie: rozgrzewany.k.ciastko() }, body: nagranie('rozgrzewka') });
     const j10 = await r10.json().catch(() => ({}));
     ok(r10.status === 503 && j10.kod === 'ptaki-chwilowo' && Number(r10.headers.get('retry-after')) > 0,
-      `10. usługa w rozgrzewce → ${r10.status} ${j10.kod}, Retry-After ${r10.headers.get('retry-after')}`);
+      `10. usługa w rozgrzewce, członek z przyznaniem → ${r10.status} ${j10.kod}, Retry-After ${r10.headers.get('retry-after')} (${Date.now() - startSerwera} ms od startu)`);
     let gotowePo = -1;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 100; i++) {
       const s10 = (await marcin.zadaj('/api/status')).json;
-      if (s10.ptaki && s10.ptaki.ok) { gotowePo = Date.now() - startSerwera; break; }
+      if (s10.ptaki && s10.ptaki.zrodlo === 'serwer') { gotowePo = Date.now() - startSerwera; break; }
       await new Promise((r) => setTimeout(r, 250));
     }
-    ok(gotowePo > 0 && gotowePo < 12500, `10. gotowość widać ${gotowePo} ms od startu (rozgrzewka 6 s, sprawdzanie co 4 s, nie co 30)`);
+    ok(gotowePo > 0 && gotowePo < 14500, `10. gotowość serwera widać ${gotowePo} ms od startu (rozgrzewka 8 s, sprawdzanie co 4 s, nie co 30)`);
 
     /* ---- 1. Bez domu ---- */
     const r1 = await ptak(marcin, 'w1');
@@ -135,16 +148,6 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     wywolania.length = 0;
     await marcin.zadaj('/api/detect', { metoda: 'POST', dane: { image: 'data:image/jpeg;base64,AAAA' } });
     ok(!wywolania.some((w) => w.sciezka !== '/ptak'), `2. /api/detect nie trafia na serwer (${wywolania.map((w) => w.sciezka).join(',') || 'brak wywołań'})`);
-
-    /* ---- członkowie ---- */
-    const czlonkowie = [];
-    for (let i = 0; i < 8; i++) {
-      const zap = await marcin.zadaj('/api/konta/zaproszenia', { metoda: 'POST', dane: { nazwa: `Osoba ${i}` } });
-      const k = klient(`10.9.1.${i + 2}`);
-      const przyj = await k.zadaj('/api/zaproszenie', { metoda: 'POST', dane: { token: zap.json.token, login: `osoba${i}`, haslo: `haslo-osoby-${i}-12345` } });
-      if (przyj.kod !== 200) throw new Error(`członek ${i}: ${przyj.tekst}`);
-      czlonkowie.push({ k, id: przyj.json.uzytkownik.id });
-    }
 
     /* ---- 5. Przyznanie ---- */
     const bez = await ptak(czlonkowie[0].k, 'bez');
