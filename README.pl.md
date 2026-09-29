@@ -225,7 +225,8 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
 - 💬 Czat ze streamingiem odpowiedzi w czasie rzeczywistym (SSE)
 - 📱 **Ekran powitalny bez przewijania** – na telefonie znak, nagłówek, aktywny model
   (w jednym wierszu; pełna nazwa po przytrzymaniu) i cztery podpowiedzi 2×2 mieszczą się
-  nad polem wiadomości. W poziomie znak i etykieta ustępują, a podpowiedzi stają w jednym rzędzie
+  nad polem wiadomości. Podpowiedzi są celowo ciche (szary tekst, bez cienia), żeby nie
+  przejmowały ekranu od nagłówka. W poziomie znak i etykieta ustępują, a podpowiedzi stają w jednym rzędzie
 - 🖼️ **Obsługa obrazów** – załącz lub wklej zdjęcie, odpowie model wizyjny (Nemotron VL i in.)
 - ☁️ / 🖥️ **Tryb hybrydowy** – przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym.
   Po dodaniu klucza dochodzą osobne zakładki **OpenAI** i **Claude** (`OPENAI_API_KEY`,

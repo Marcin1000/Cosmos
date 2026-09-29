@@ -14,7 +14,11 @@
  *       (pełna nazwa zostaje w podpowiedzi `title`),
  *    3. każda podpowiedź jest w całości nad polem wiadomości, klikalna
  *       (nic jej nie zasłania) i ma co najmniej 40 px wysokości pod palec,
- *    4. nic nie wystaje w bok.
+ *    4. nic nie wystaje w bok,
+ *    5. na telefonie podpowiedzi są LŻEJSZE od nagłówka (Marcin: „ciężar
+ *       całości jest przesunięty na te opcje”): zwykła grubość i tekst
+ *       jaśniejszy niż w nagłówku, ale nadal czytelny – kontrast ≥ 4,5:1
+ *       w jasnym i ciemnym motywie.
  */
 const { srodowisko, przegladarka, maPrzegladarke, wynik } = require('../pomoc');
 
@@ -41,8 +45,8 @@ const MODEL = 'nvidia/nemotron-3-super-120b-a12b';
   const br = await przegladarka();
 
   for (const [nazwa, viewport, tel, gora] of OKNA) {
-    for (const jezyk of ['pl', 'en']) {
-      const ctx = await br.newContext({ viewport, isMobile: tel, hasTouch: tel });
+    for (const [jezyk, motyw] of [['pl', 'light'], ['en', 'dark']]) {
+      const ctx = await br.newContext({ viewport, isMobile: tel, hasTouch: tel, colorScheme: motyw });
       await ctx.addInitScript((j) => { try { localStorage.setItem('cosmos.lang', j); } catch {} }, jezyk);
       const pg = await ctx.newPage();
       await pg.goto(`${env.adres}/app`, { waitUntil: 'load' });
@@ -50,7 +54,7 @@ const MODEL = 'nvidia/nemotron-3-super-120b-a12b';
       // Nazwę ustawia aplikacja tą samą drogą co pole w Ustawieniach – nadpisanie modelu.
       await pg.evaluate((m) => { settings[POLE_MODELU[endpoint]] = m; updateModelBadge(); }, MODEL);
       await pg.waitForTimeout(300);
-      const tag = `${nazwa} (${jezyk})`;
+      const tag = `${nazwa} (${jezyk}, ${motyw})`;
 
       const r = await pg.evaluate((gora) => {
         const rect = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
@@ -64,10 +68,27 @@ const MODEL = 'nvidia/nemotron-3-super-120b-a12b';
           const x = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
           return Boolean(x) && (x === el || el.contains(x));
         };
+        // Kolor jako [r,g,b] – przeglądarka liczy color-mix i zmienne za nas.
+        const rgb = (c) => { const x = document.createElement('i'); x.style.color = c; document.body.append(x);
+          const v = getComputedStyle(x).color; x.remove();
+          const cv = document.createElement('canvas').getContext('2d'); cv.fillStyle = v; cv.fillRect(0, 0, 1, 1);
+          return [...cv.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+        const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+          .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+        const kontrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+        const tlo = rgb(getComputedStyle(document.body).backgroundColor);
+        const pierwsza = document.querySelector('.suggestion');
+        const h1 = document.querySelector('.welcome h1');
+        const waga = {
+          podp: Number(getComputedStyle(pierwsza).fontWeight), h1: Number(getComputedStyle(h1).fontWeight),
+          kPodp: kontrast(rgb(getComputedStyle(pierwsza).color), tlo),
+          kH1: kontrast(rgb(getComputedStyle(h1).color), tlo),
+        };
         const model = document.getElementById('welcome-model');
         const sub = document.querySelector('.welcome-sub');
         const lh = parseFloat(getComputedStyle(sub).lineHeight) || parseFloat(getComputedStyle(sub).fontSize) * 1.5;
         return {
+          waga,
           przewijanie: scroll.scrollHeight - scroll.clientHeight,
           wbok: document.documentElement.scrollWidth - innerWidth,
           gora: gora.map((s) => [s, naEkranie(rect(document.querySelector(s)))]),
@@ -90,6 +111,12 @@ const MODEL = 'nvidia/nemotron-3-super-120b-a12b';
         w.sprawdz(p.naEkranie, `${tag}: 3. podpowiedź „${p.tekst}” nie mieści się nad polem wiadomości`);
         w.sprawdz(p.klikalna, `${tag}: 3. podpowiedź „${p.tekst}” jest zasłonięta`);
         w.sprawdz(p.h >= 40, `${tag}: 3. podpowiedź „${p.tekst}” ma ${Math.round(p.h)} px – za mało pod palec`);
+      }
+      if (tel) {
+        const { podp, h1, kPodp, kH1 } = r.waga;
+        w.sprawdz(podp <= 400 && podp < h1, `${tag}: 5. podpowiedzi mają grubość ${podp} (nagłówek ${h1}) – ciężar idzie w dół ekranu`);
+        w.sprawdz(kPodp < kH1 - 1, `${tag}: 5. podpowiedzi tak ciemne jak nagłówek (kontrast ${kPodp.toFixed(1)} vs ${kH1.toFixed(1)})`);
+        w.sprawdz(kPodp >= 4.5, `${tag}: 5. podpowiedzi nieczytelne (kontrast ${kPodp.toFixed(1)}:1 < 4,5:1)`);
       }
       w.sprawdz(r.wbok <= 1, `${tag}: 4. strona wystaje w bok o ${r.wbok} px`);
       console.log(`${tag}: przewijanie ${r.przewijanie} px, model ${r.modelWiersze} wiersz(e)`);

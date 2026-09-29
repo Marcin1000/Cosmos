@@ -221,7 +221,8 @@ screen and unobstructed without scrolling. Settings got real tabs for the same r
 old tabs scrolled one long list whose groups were interleaved in the HTML, so the highlight
 jumped "out of order". The welcome screen follows the same rule: on a 360×600 phone it
 used to scroll by ~120 px under the composer, so the four suggestions now sit in a 2×2 grid,
-the model name stays on one line, and in landscape the mark gives way to a single row of
+the model name stays on one line, the suggestions are set quietly (grey, no shadow) so they
+do not outweigh the heading, and in landscape the mark gives way to a single row of
 suggestions – a suite checks that nothing scrolls at the owner's window sizes.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
