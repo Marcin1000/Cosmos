@@ -6064,13 +6064,26 @@ function openSettings(karta) {
 async function pokazWersje() {
   const pole = $('set-wersja');
   if (!pole) return;
+  // Wersja WCZYTANEGO kodu – konfiguracja z chwili otwarcia strony.
   const w = serverConfig.wersja || {};
   let naTymUrzadzeniu = '';
-  try { naTymUrzadzeniu = (await caches.keys()).find((k) => /^cosmos-/.test(k)) || ''; } catch { /* bez pamięci PWA */ }
-  const nieaktualna = naTymUrzadzeniu && w.pamiec && naTymUrzadzeniu !== w.pamiec;
+  try {
+    const klucze = (await caches.keys()).filter((k) => /^cosmos-/.test(k));
+    naTymUrzadzeniu = klucze.includes(w.pamiec) ? w.pamiec : (klucze[0] || '');
+  } catch { /* bez pamięci PWA */ }
+  let klucz = 'set.wersjaPamiec';
+  if (naTymUrzadzeniu && w.pamiec && naTymUrzadzeniu !== w.pamiec) {
+    /* Pamięć inna niż wczytany kod: albo starsza (telefon nie pobrał nowej),
+       albo NOWSZA – service worker zaktualizował ją w tle, a karta ma jeszcze
+       stary kod. Dawniej obie mówiły „starsza pamięć” z nazwą NOWEJ (agencja,
+       runda 9). Rozstrzyga świeża konfiguracja serwera. */
+    let teraz = '';
+    try { teraz = ((await (await fetch('/api/config')).json()).wersja || {}).pamiec || ''; } catch { /* offline */ }
+    klucz = teraz && naTymUrzadzeniu === teraz ? 'set.wersjaNowa' : 'set.wersjaStara';
+  }
   pole.textContent = [
     w.commit ? t('set.wersja', { kod: w.commit }) : '',
-    naTymUrzadzeniu ? t(nieaktualna ? 'set.wersjaStara' : 'set.wersjaPamiec', { nazwa: naTymUrzadzeniu }) : '',
+    naTymUrzadzeniu ? t(klucz, { nazwa: naTymUrzadzeniu }) : '',
   ].filter(Boolean).join(' · ');
 }
 

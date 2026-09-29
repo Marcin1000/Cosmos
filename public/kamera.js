@@ -978,6 +978,11 @@ function utworzKamere(z) {
     stan.textContent = t(klucz);
     stan.classList.toggle('czeka', klucz === 'live.stanCzeka');
     b.title = t(brak ? 'liveNotForYou' : 'live.rozpoznawanieTytul');
+    /* Stan w NAZWIE przycisku: aria-label z samym opisem funkcji zasłaniał
+       czytnikowi ekranu treść („czeka na komputer”, „niedostępne”) – stan był
+       tylko dla oczu (agencja, runda 9). Wyjaśnienie pod obrazem jako opis. */
+    b.setAttribute('aria-label', `${t('live.rozpoznawanie')}: ${t(klucz)}`);
+    b.setAttribute('aria-describedby', 'live-wyjasnienie');
   }
   pokazRozpoznawanie();
   $('live-rozpoznawanie').addEventListener('click', () => {
@@ -987,6 +992,8 @@ function utworzKamere(z) {
     try { localStorage.setItem('cosmos.liveRozpoznawanie', liveRozpoznawanie ? '1' : '0'); } catch { /* tryb prywatny */ }
     pokazRozpoznawanie();
     if (liveRozpoznawanie) {
+      // Wyjaśnienie („komputer nie odpowiada”) i pigułka wracają od razu, nie przy następnym cyklu.
+      if (!bladKinecta) ustawStatusSpoczynkowy();
       if ($('live-panel').style.display !== 'none') setTimeout(liveDetect, 50);
       return;
     }
