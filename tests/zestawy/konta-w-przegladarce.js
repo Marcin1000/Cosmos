@@ -69,7 +69,7 @@ function magazyn(poczatek = {}) {
   const m = magazyn({
     'cosmos.conv.abc': '{"title":"rozmowa Marcina"}', 'cosmos.convIndex': '[{"id":"abc"}]',
     'cosmos.kbSelected': '["x"]', 'cosmos.lang': 'pl', 'cosmos.micId': 'kinect',
-    'cosmos.liveSource': 'kinect-color', 'cosmos.settings': '{"speak":true,"temperature":0.4}',
+    'cosmos.liveSource': 'kinect-color', 'cosmos.settings': '{"speak":true,"temperature":0.4,"zespolPotwierdzaj":false}',
   });
   ok(k.pilnujWlascicielaPamieci({ id: 'wlasciciel' }, m) === false, 'pierwsze logowanie niczego nie czyści');
   ok(m.getItem('cosmos.conv.abc') !== null, 'kopia właściciela zostaje, dopóki loguje się właściciel');
@@ -84,6 +84,8 @@ function magazyn(poczatek = {}) {
   ok(m.getItem('cosmos.liveSource') === null, 'źródło kamery poprzedniej osoby zniknęło');
   const ustPo = JSON.parse(m.getItem('cosmos.settings') || '{}');
   ok(ustPo.speak !== true && ustPo.temperature === 0.4, 'czytanie na głos wyłączone dla nowej osoby, reszta ustawień urządzenia została');
+  // „Pytaj przed startem” czekające na przenosiny na serwer należy do osoby – nie trafi na konto następnej.
+  ok(!('zespolPotwierdzaj' in ustPo), 'wyłączone „Pytaj przed startem” poprzedniej osoby nie przechodzi na nową');
   ok(m.getItem('cosmos.lang') === 'pl' && m.getItem('cosmos.micId') === 'kinect',
     'ustawienia urządzenia (język, mikrofon) zostały');
   ok(m.getItem('cosmos.kto') === 'u-ania', 'przeglądarka pamięta, czyja jest teraz kopia');

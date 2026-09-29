@@ -162,7 +162,7 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
     ['pl', 'no', ''], ['pl', 'Hmm', ''], ['pl', 'Dziękuję', ''], ['pl', 'Tak naprawdę chciałem zapytać o coś innego', ''],
     ['pl', 'Jaka będzie jutro pogoda w Krakowie i czy warto jechać na zdjęcia nad morze?', ''], ['pl', '', ''],
     ['en', 'Yes.', 'tak'], ['en', 'Go ahead', 'tak'], ['en', 'No problem', 'tak'], ['en', 'Why not?', 'tak'],
-    ['en', 'Only locally', 'lokalnie'], ['en', 'Keep it local', 'lokalnie'], ['en', 'Yes, but locally', 'lokalnie'],
+    ['en', 'Only locally', 'lokalnie'], ['en', 'Local only', 'lokalnie'], ['en', 'Keep it local', 'lokalnie'], ['en', 'Yes, but locally', 'lokalnie'],
     ['en', 'No.', 'nie'], ['en', 'No thanks', 'nie'], ['en', 'Without agents', 'nie'], ['en', 'Hmm', ''],
   ];
   const zle = przypadki.filter(([j, x, oczek]) => Z.rozpoznajZgode(x, j) !== oczek).map(([j, x, oczek]) => `${j}:„${x}” → ${Z.rozpoznajZgode(x, j) || '∅'} (≠ ${oczek || '∅'})`);

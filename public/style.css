@@ -4796,3 +4796,25 @@ select::-ms-expand { display: none; }
   .rola-dopisek.dlugi { display: none; }
   .rola-dopisek.krotki { display: inline; }
 }
+/* Pytanie o zgodę mówi, co powiedzieć – ogólna podpowiedź na dole znika, żeby
+   trzy przyciski nie wchodziły na nią na niskim telefonie. */
+.voice-overlay:has(.voice-zgoda:not([hidden])) .voice-hint { display: none; }
+@media (max-width: 420px) {
+  .voice-zgoda { gap: 6px; }
+  .voice-zgoda button { padding: 0 14px; font-size: 13.5px; }
+}
+/* Telefon w poziomie (313 px wysokości): przy pytaniu o zgodę kula maleje,
+   słupki i podpowiedź ustępują – pytanie i trzy przyciski muszą się zmieścić. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .voice-overlay:has(.voice-zgoda:not([hidden])) { gap: 8px; padding-bottom: 12px; }
+  .voice-overlay:has(.voice-zgoda:not([hidden])) .voice-fala { display: none; }
+  .voice-overlay:has(.voice-zgoda:not([hidden])) .voice-orb { width: 72px; height: 72px; }
+  .voice-overlay:has(.voice-zgoda:not([hidden])) .voice-answer { flex-shrink: 0; font-size: 14px; padding: 8px 14px; }
+}
+/* Długa nazwa roli (własna – do 40 znaków, poprawka po recenzji) nie wchodzi
+   na stan: ucina się wielokropkiem; pełna jest w etykiecie wiersza. */
+.rola-nazwa { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) {
+  .rola-dopisek.dlugi { display: none; }
+  .rola-dopisek.krotki { display: inline; }
+}

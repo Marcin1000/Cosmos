@@ -1174,12 +1174,12 @@ function utworzZespolWidok(z) {
     }
     cechy.append(h('span', { klasa: 'field-hint', tekst: t('ag.wl.pole.cechyHint') }));
     const fala = h('fieldset', { klasa: 'ag-wl-fala' }, h('legend', { klasa: 'field-label', tekst: t('ag.wl.pole.fala') }));
-    for (const n of [1, 2]) {
+    for (const [n, klucz, podpowiedz] of [[1, 'ag.wl.fala1', 'ag.wl.fala1Hint'], [2, 'ag.wl.fala2', 'ag.wl.fala2Hint']]) {
       const r = h('input', { type: 'radio', name: 'ag-wl-fala', value: String(n), 'data-pole': `fala-${n}` });
       r.checked = sz.fala === n;
       r.addEventListener('change', () => { if (r.checked) sz.fala = n; });
       fala.append(h('label', { klasa: 'ag-wl-cecha' }, r, h('span', { klasa: 'set-wiersz-tekst' },
-        h('span', { tekst: t(`ag.wl.fala${n}`) }), h('span', { klasa: 'field-hint', tekst: t(`ag.wl.fala${n}Hint`) }))));
+        h('span', { tekst: t(klucz) }), h('span', { klasa: 'field-hint', tekst: t(podpowiedz) }))));
     }
     const obraz = h('input', { type: 'checkbox', 'data-pole': 'wymagaObrazu' });
     obraz.checked = sz.wymagaObrazu;

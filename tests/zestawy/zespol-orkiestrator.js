@@ -37,7 +37,27 @@
    O11. limit naraz: trzeci zespół właściciela → 409 zespol-zajety;
    O9b. role domyślnie bez myślenia (planista, badacz), recenzent bez zmian;
    O12. SIGTERM w fazie ról: żadnego nowego wywołania modelu, w rozmowie
-       notatki z DOMKNIĘTYMI stanami ról (nic „pisze”). */
+       notatki z DOMKNIĘTYMI stanami ról (nic „pisze”);
+   O13. fala 3 – poprawka kodu po recenzji: nowa rola `r1p` ogłasza się
+       zdarzeniem z falą 3, poprawkaZ, silnikiem i modelem programisty; ten
+       sam model dostaje swój kod i uwagi recenzenta; do prowadzącego idzie
+       wersja poprawiona, w zapisie zostaje też oryginał (fala 1); „BEZ UWAG”
+       – bez poprawki; nieudana poprawka – kod z fali 1, bez zapasu; za mało
+       czasu fazy – bez poprawki;
+   O14. fotograf: planista daje miejsce i kiedy, serwer liczy plan (geokoder,
+       pogoda) i daje go TYLKO fotografowi; prowadzący wie, że plan jest
+       w notatkach (bez dublowania); nieznane miejsce – fotograf dostaje
+       „brak planu”, prowadzący liczy sam;
+   O15. własna rola: planista widzi ją bez instrukcji i wybiera, rola dostaje
+       instrukcję osoby w ramie roli;
+   O16. budżet w zł: płatna rola ponad budżet → darmowa chmura z powodem
+       `budzet`; w budżecie – szacunek przed startem, koszt z usage w końcu
+       roli i w fazie prowadzącego, bez wiszących rezerwacji; bez usage –
+       koszt z szacunku z flagą; fala 1 wydała za dużo → recenzent pominięty
+       (`budzet`); wyczerpany budżet + płatny prowadzący → 429;
+   O17. głos: planista krócej (także „tylko plan”); lokalny prowadzący bez
+       zgody – role lokalnie, zero żądań do chmury, `sklad` i „tylko plan”
+       mówią wymagaZgody i dokąd poszłyby dane. */
 const fs = require('fs');
 const path = require('path');
 const { KORZEN, serwerCosmosa, atrapaNode, czekajNa, zabij, zwolnijPorty, katalogOsoby } = require('../pomoc');
@@ -122,6 +142,10 @@ async function nowaRozmowa(id, pytanie) {
     SEARCH_URL: `http://127.0.0.1:${A.cloud}/szukaj`, SEARXNG_URL: '', SERPER_API_KEY: '', BRAVE_API_KEY: '',
     COSMOS_ZESPOL_CISZA_MS: '2500', COSMOS_ZESPOL_TERMIN_ROLI_MS: '5000', COSMOS_ZESPOL_TERMIN_PLANISTY_MS: '1500',
     COSMOS_ZESPOL_TERMIN_FAZY_MS: '12000', COSMOS_BIEG_SIEROTA_MS: '400', COSMOS_CZAS_NA_DOKONCZENIE_MS: '2500',
+    // Fala 3 przy fazie 12 s; planista w głosie krócej niż zwykle (700 vs 1500 ms).
+    COSMOS_ZESPOL_MIN_NA_POPRAWKE_MS: '3000', COSMOS_ZESPOL_TERMIN_PLANISTY_GLOS_MS: '700',
+    // Plan fotografa: geokoder i pogoda z atrapy.
+    GEOCODE_SEARCH_URL: `http://127.0.0.1:${A.cloud}/geokoduj`, WEATHER_URL: `http://127.0.0.1:${A.cloud}/pogoda`, GEOCODE_COUNTRY: '',
   };
   let srv = serwerCosmosa(PORT, env);
   const katalog = srv.katalogDanych;
@@ -314,6 +338,155 @@ async function nowaRozmowa(id, pytanie) {
       ok(!w4.zdarzenia.length, 'O10d. „Proponuj” przy prostym pytaniu – ani planisty w zdarzeniach, ani propozycji');
     }
 
+
+    // ------------------------------------------------------------ O13 fala 3 – poprawka kodu
+    {
+      await zeruj();
+      const rozmowa = 'rozmowapoprawki1';
+      const pytanie = 'plan-kod napisz funkcję sumującą';
+      await nowaRozmowa(rozmowa, pytanie);
+      const w = await tura({ messages: [{ role: 'user', content: pytanie }], rozmowa, zespol: { uruchom: true } });
+      const zdr = zd(w, 'rola');
+      const pierwsze = zdr.find((e) => e.r === 'r1p');
+      const st = stanyKoncowe(w);
+      const z = await zadania();
+      const pop = z.filter((x) => x.poprawka);
+      const prog = z.find((x) => x.rola === 'PROGRAMISTA' && !x.poprawka);
+      const rec = z.find((x) => x.rola === 'RECENZENT');
+      const pr = z.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      ok(pierwsze && pierwsze.fala === 3 && pierwsze.poprawkaZ === 'r1' && pierwsze.rola === 'programista' && pierwsze.silnik && pierwsze.model
+        && pierwsze.stan === 'czeka' && zdr.indexOf(pierwsze) === zdr.findIndex((e) => e.r === 'r1p') && st.r1p === 'gotowa',
+        `O13a. poprawka ogłasza się pierwszym zdarzeniem roli r1p (fala 3, poprawkaZ r1, ${pierwsze && pierwsze.silnik}), kończy „gotowa”`);
+      ok(pop.length === 1 && prog && rec && pop[0].silnik === prog.silnik && pop[0].model === prog.model && pop[0].czas >= rec.czas
+        && pop[0].role.join() === 'system,user,assistant,user' && pop[0].ostatnia.includes('notatka roli RECENZENT') && pop[0].tekst.includes('notatka roli PROGRAMISTA'),
+        'O13b. ten sam model programisty, PO recenzji: jego kod jako asystent, uwagi recenzenta w ostatniej wiadomości');
+      ok(pr.ostatnia.includes('KOD-POPRAWIONY') && !pr.ostatnia.includes('notatka roli PROGRAMISTA') && /już poprawiony po uwagach/.test(pr.ostatnia)
+        && /wkładów: 2/.test(w.tekst), 'O13c. do prowadzącego idzie wersja poprawiona (dwa wkłady: programista i recenzent)');
+      await spij(900);
+      const conv = JSON.parse(fs.readFileSync(path.join(katalogOsoby(katalog), 'conversations', `${rozmowa}.json`), 'utf8'));
+      const wk = ((conv.messages.find((m) => m.narzedzie === 'zespol') || {}).zespol || {}).wklady || [];
+      const w1 = wk.find((x) => x.r === 'r1') || {}; const w3 = wk.find((x) => x.r === 'r1p') || {};
+      ok(w1.fala === 1 && w1.tresc.includes('notatka roli PROGRAMISTA') && w3.fala === 3 && w3.poprawkaZ === 'r1' && w3.tresc.includes('KOD-POPRAWIONY'),
+        'O13d. zapis: oryginał jako wkład fali 1, poprawka z falą 3 i poprawkaZ');
+      await zeruj();
+      const w2 = await tura({ messages: [{ role: 'user', content: 'plan-kod rola-bezuwag:RECENZENT' }], zespol: { uruchom: true } });
+      ok(!zd(w2, 'rola').some((e) => e.r === 'r1p') && !(await zadania()).some((x) => x.poprawka) && w2.koniec && w2.koniec.blad === '',
+        'O13e. recenzent „BEZ UWAG” – bez poprawki');
+      await zeruj();
+      const w3b = await tura({ messages: [{ role: 'user', content: 'plan-kod poprawka-500' }], zespol: { uruchom: true } });
+      const z3 = await zadania();
+      const pr3 = z3.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      const prog3 = z3.find((x) => x.rola === 'PROGRAMISTA' && !x.poprawka) || {};
+      ok(stanyKoncowe(w3b).r1p === 'blad' && w3b.koniec && w3b.koniec.blad === '' && pr3.ostatnia.includes('notatka roli PROGRAMISTA')
+        && !/już poprawiony/.test(pr3.ostatnia) && z3.filter((x) => x.poprawka).every((x) => x.silnik === prog3.silnik && x.model === prog3.model),
+        'O13f. nieudana poprawka: bez zapasu na innym modelu, prowadzący dostaje kod z fali 1');
+    }
+
+    // ------------------------------------------------------------ O14 fotograf
+    {
+      await zeruj();
+      const w = await tura({ messages: [{ role: 'user', content: 'plan-foto kiedy złota godzina?' }], zespol: { uruchom: true } });
+      const s = sklad(w);
+      const z = await zadania();
+      const f = z.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '', tekst: '' };
+      const r = z.find((x) => x.rola === 'RECENZENT') || { tekst: '' };
+      const pr = z.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      ok(s.role.map((x) => x.rola).join() === 'fotograf,recenzent' && s.miejsce === 'Morskie Oko' && s.kiedy === '2026-10-01T18:00',
+        `O14a. skład z fotografem; miejsce i kiedy od planisty (${s.miejsce}, ${s.kiedy})`);
+      ok(z.some((x) => x.rodzaj === 'geokod' && /morskie oko/i.test(x.tekst)) && f.ostatnia.includes('DANE PLANU (policzone przez Cosmosa):')
+        && /49\.2013/.test(f.ostatnia) && !f.ostatnia.includes('plan nie został policzony'),
+        'O14b. serwer policzył plan dla miejsca z planisty (geokoder) i dał go fotografowi');
+      ok(!/DANE PLANU|49\.2013/.test(r.tekst) && /plan zdjęciowy jest policzony w notatkach fotografa/.test(pr.ostatnia) && !/49\.2013/.test(pr.ostatnia),
+        'O14c. plan tylko u fotografa; prowadzący wie, że plan jest w notatkach (bez dublowania liczb)');
+      await zeruj();
+      await tura({ messages: [{ role: 'user', content: 'Zrób to zespołem: zachód słońca' }],
+        zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }], miejsce: 'Atlantyda Zaginiona' } });
+      const z2 = await zadania();
+      const f2 = z2.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      const pr2 = z2.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      ok(/brak – plan nie został policzony/.test(f2.ostatnia) && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia),
+        'O14d. nieznane miejsce: fotograf dostaje „brak planu” (NIEPEWNE), prowadzący nie dostaje zakazu liczenia');
+    }
+
+    // ------------------------------------------------------------ O15 własna rola
+    {
+      const zap = await (await post('/api/zespol/ustawienia', { wlasneRole: [{ nazwa: 'Tłumacz', cel: 'przekład na angielski',
+        instrukcja: 'INSTRUKCJA-TLUMACZA: tłumacz dosłownie', cechy: ['polski'] }] })).json();
+      const id = ((zap.ustawienia || {}).wlasneRole || [{}])[0].id;
+      await zeruj();
+      const w = await tura({ messages: [{ role: 'user', content: 'plan-wlasna przetłumacz zdanie' }], zespol: { uruchom: true } });
+      const s = sklad(w);
+      const z = await zadania();
+      const pl = z.find((x) => x.rodzaj === 'planista') || { system: '', tekst: '' };
+      const t = z.find((x) => x.rola === 'TŁUMACZ') || { system: '', tekst: '' };
+      ok(/^w-[0-9a-f]{8}$/.test(id || '') && pl.system.includes(id) && !pl.tekst.includes('INSTRUKCJA-TLUMACZA')
+        && s.role[0] && s.role[0].rola === id && s.role[0].wlasna === true && s.role[0].nazwa === 'Tłumacz',
+        `O15a. planista widzi własną rolę (bez jej instrukcji) i ją wybiera (${id})`);
+      ok(t.system.includes('INSTRUKCJA ROLI (od użytkownika): INSTRUKCJA-TLUMACZA') && !/PROFIL|KONTEKST PERCEPCJI|JAK ODPOWIADASZ/.test(t.tekst)
+        && stanyKoncowe(w).r1 === 'gotowa', 'O15b. rola własna: instrukcja osoby w ramie roli, bez instrukcji Cosmosa');
+      await post('/api/zespol/ustawienia', { wlasneRole: [] });
+    }
+
+    // ------------------------------------------------------------ O16 budżet w zł
+    {
+      const limit = (dzien) => post('/api/zespol/ustawienia', { budzetZl: { dzien } });
+      const cfg = async () => (await (await fetch(`${ADRES}/api/config`)).json()).zespol || {};
+      const naClaude = { sklad: [{ rola: 'analityk', silnik: 'claude', model: 'claude-haiku-4-5' }, { rola: 'recenzent', silnik: 'claude', model: 'claude-haiku-4-5' }] };
+      const konce = (w) => zd(w, 'rola').filter((e) => e.ms !== undefined);
+      await limit(0.01); await zeruj();
+      const w1 = await tura({ messages: [{ role: 'user', content: 'Budżet: przeanalizuj' }], zespol: naClaude });
+      const s1 = sklad(w1);
+      ok(s1.role.length === 2 && s1.role.every((r) => r.silnik === 'cloud' && r.zamiast && r.zamiast.silnik === 'claude' && /budzet/.test(r.powod || ''))
+        && !(await zadania()).some((x) => x.silnik === 'claude'), `O16a. płatne role ponad budżet → darmowa chmura, powód „budzet” (${s1.role.map((r) => r.powod).join('; ')})`);
+      await limit(50); await zeruj();
+      const w2 = await tura({ messages: [{ role: 'user', content: 'Budżet: przeanalizuj' }], zespol: naClaude });
+      const s2 = sklad(w2);
+      const k2 = konce(w2);
+      const faza = zd(w2, 'faza')[0] || {};
+      const suma = k2.reduce((a, e) => a + (e.kosztZl || 0), 0);
+      const c2 = await cfg();
+      ok(s2.role.every((r) => r.silnik === 'claude' && r.szacunekZl > 0) && s2.szacunekZl >= s2.role.reduce((a, r) => a + r.szacunekZl, 0) - 1e-9,
+        `O16b. szacunek przed startem: na rolę i całość (${s2.szacunekZl} zł)`);
+      ok(k2.length === 2 && k2.every((e) => e.kosztZl > 0 && !e.kosztSzacowany) && Math.abs((faza.kosztZl || 0) - suma) < 0.0002
+        && c2.budzet && c2.budzet.wydanoDzis > 0 && c2.budzet.zarezerwowano === 0,
+        `O16c. koszt z usage na końcu roli i w fazie prowadzącego (${suma.toFixed(4)} zł), wydatek zapisany, bez wiszących rezerwacji`);
+      await zeruj();
+      const w3 = await tura({ messages: [{ role: 'user', content: 'Budżet: bez-usage' }], zespol: naClaude });
+      ok(konce(w3).every((e) => e.kosztZl > 0 && e.kosztSzacowany === true), 'O16d. bez usage od dostawcy – koszt z szacunku, z flagą');
+      await limit(Math.ceil(((await cfg()).budzet.wydanoDzis + 0.5) * 100) / 100); await zeruj();
+      const w4 = await tura({ messages: [{ role: 'user', content: 'Budżet: zuzycie-duze' }], zespol: naClaude });
+      const r2 = konce(w4).find((e) => e.r === 'r2') || {};
+      ok(stanyKoncowe(w4).r1 === 'gotowa' && r2.stan === 'pominieta' && r2.kod === 'budzet' && !(await zadania()).some((x) => x.rola === 'RECENZENT'),
+        `O16e. fala 1 wydała ponad budżet → recenzent pominięty bez wywołania (${r2.stan}/${r2.kod})`);
+      const w5 = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Budżet: płatny prowadzący' }], zespol: { uruchom: true } });
+      let j5 = {}; try { j5 = JSON.parse(w5.blad || '{}'); } catch { /* */ }
+      ok(w5.status === 429 && j5.kod === 'budzet-wyczerpany' && j5.error && j5.blad && j5.zostalo === 0,
+        `O16f. wyczerpany budżet + płatny prowadzący → 429 budzet-wyczerpany (${w5.status})`);
+      await limit(0);
+    }
+
+    // ------------------------------------------------------------ O17 głos i zgoda
+    {
+      await zeruj();
+      const t0 = Date.now();
+      const r = await post('/api/zespol/plan', { endpoint: 'cloud', pytanie: 'plan-milczy Zrób to zespołem: przeanalizuj', trybGlosowy: true });
+      const msGlos = Date.now() - t0; const j = await r.json();
+      const t1 = Date.now();
+      await post('/api/zespol/plan', { endpoint: 'cloud', pytanie: 'plan-milczy Zrób to zespołem: przeanalizuj' });
+      const msTekst = Date.now() - t1;
+      ok(r.status === 200 && j.sklad && j.sklad.zrodlo === 'heurystyka' && msGlos < 1300 && msTekst >= 1400,
+        `O17a. głos: planista krócej (${msGlos} ms wobec ${msTekst} ms)`);
+      await zeruj();
+      const w = await tura({ endpoint: 'local', trybGlosowy: true, messages: [{ role: 'user', content: 'Zrób to zespołem: przeanalizuj' }], zespol: { uruchom: true } });
+      const s = sklad(w);
+      const z = await zadania();
+      ok(s.wymagaZgody === true && (s.silnikiZaZgoda || []).length > 0 && (s.daneWyjdaDoZaZgoda || []).length > 0 && s.role.length
+        && s.role.every((x) => x.silnik === 'local') && !z.some((x) => x.silnik !== 'local' && !['szukanie', 'geokod'].includes(x.rodzaj)),
+        `O17b. głos, lokalny prowadzący bez zgody: role lokalnie, 0 żądań do chmury, sklad mówi wymagaZgody (${(s.daneWyjdaDoZaZgoda || []).join(',')})`);
+      const p = await (await post('/api/zespol/plan', { endpoint: 'local', pytanie: 'Zrób to zespołem: przeanalizuj', trybGlosowy: true })).json();
+      ok(p.wymagaZgody === 'chmura' && (p.silnikiZaZgoda || []).length > 0, 'O17c. „tylko plan” w głosie też mówi o zgodzie i dokąd');
+    }
+
     // ------------------------------------------------------------ O11 limit naraz
     {
       await zeruj();
@@ -360,6 +533,17 @@ async function nowaRozmowa(id, pytanie) {
       ok(notatki && stany.length === 3 && stany.every((s) => ['gotowa', 'niedokonczona', 'przerwana', 'blad', 'pominieta', 'urwana'].includes(s))
         && notatki.zespol.wklady.some((x) => x.tresc),
         `O12b. w rozmowie notatki z domkniętymi stanami (${stany.join(',')})`);
+    }
+    // ------------------------------------------------------------ O13g za mało czasu na poprawkę
+    zabij(srv);
+    for (let i = 0; i < 60 && srv.exitCode === null; i++) await spij(100);
+    srv = serwerCosmosa(PORT, { ...env, COSMOS_ZESPOL_MIN_NA_POPRAWKE_MS: '60000' });
+    if (!await czekajNa(ADRES)) throw new Error('serwer (bez czasu na poprawkę) nie wstał');
+    {
+      await zeruj();
+      const w = await tura({ messages: [{ role: 'user', content: 'plan-kod napisz funkcję' }], zespol: { uruchom: true } });
+      ok(stanyKoncowe(w).r2 === 'gotowa' && !zd(w, 'rola').some((e) => e.r === 'r1p') && !(await zadania()).some((x) => x.poprawka),
+        'O13g. do końca fazy zostało mniej niż próg – bez poprawki kodu');
     }
   } catch (err) {
     fail.push(`wyjątek: ${err.stack || err.message}`);

@@ -104,7 +104,7 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
   ok(U.dobierzModel('badacz', [k('deepseek-r1:8b', 'cloud'), k('nvidia/nvidia-nemotron-nano-9b-v2', 'cloud')], { glosowy: true })?.id
     === 'nvidia/nvidia-nemotron-nano-9b-v2', 'C7. tryb głosowy: szybki zamiast zawsze myślącego');
   ok(U.dobierzModel('nieznana-rola', lista) === null && U.dobierzModel('oko', []) === null, 'C8. nieznana rola i pusta pula → null');
-  ok(Object.keys(U.ROLE).sort().join() === 'analityk,badacz,oko,programista,recenzent,sprzetowiec', 'C9. katalog ról MVP');
+  ok(Object.keys(U.ROLE).sort().join() === 'analityk,badacz,fotograf,oko,programista,recenzent,sprzetowiec', 'C9. katalog ról (MVP + fotograf)');
 }
 
 // ------------------------------------------------------------------ D. obrazek sondy i ocena
