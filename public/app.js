@@ -1199,8 +1199,12 @@ el.chatScroll.addEventListener('wheel', (e) => { if (e.deltaY < 0) sledzeDol = f
 // ----------------------------------------------------------------
 
 // Na wąskich ekranach panel boczny to nakładka – zwiń go po akcji nawigacyjnej.
+/* Ten sam warunek co blok szuflady w style.css – zmieniasz jeden, zmieniasz oba.
+   Telefon w poziomie (740×313) ma szerokość komputera, ale panel stojący obok
+   rozmowy zabierał mu 272 px i Ustawienia były poza ekranem (agencja, runda 9). */
+const SZUFLADA = '(max-width: 720px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse)';
 function collapseSidebarOnMobile() {
-  if (window.innerWidth <= 720) {
+  if (window.matchMedia(SZUFLADA).matches) {
     el.sidebar.classList.add('collapsed');
     document.querySelector('.app').classList.add('sidebar-hidden');
   }
@@ -1748,6 +1752,26 @@ function klatkaWTurze(conv) {
   return Boolean(pytanie && pytanie.content && typeof pytanie.content === 'object' && pytanie.content.klatka);
 }
 
+/** Pytania, po których stoi SAM dymek błędu, a dalej już następne pytanie.
+ *  Dymek błędu do modelu nie idzie, więc dwie wypowiedzi człowieka stawały
+ *  obok siebie i serwer sklejał je w jedną: „A\n\nB”. Po czterech błędach
+ *  w trybie głosowym model dostawał wszystkie cztery pytania naraz, a „Wyślij
+ *  przez Chmurę” pod ostatnim wysyłało do chmury oba (agencja, runda 9).
+ *  Człowiek, który po błędzie pyta dalej, pyta o to NOWE. Bieżące pytanie
+ *  (granica) zostaje zawsze; pytanie z choćby urywkiem odpowiedzi – też. */
+function pytaniaBezOdpowiedzi(wiadomosci, granica) {
+  const wynik = new Set();
+  const pytanie = (m) => m && m.role === 'user' && !m.search;
+  for (let i = 0; i < wiadomosci.length; i++) {
+    if (!pytanie(wiadomosci[i]) || i === granica) continue;
+    let j = i + 1;
+    let bledy = 0;
+    while (j < wiadomosci.length && wiadomosci[j].error) { bledy++; j++; }
+    if (bledy && pytanie(wiadomosci[j])) wynik.add(i);
+  }
+  return wynik;
+}
+
 function toApiMessages(conv) {
   const api = [];
   const sysPrompt = settings.systemPrompt.trim() || t('systemPromptDefault');
@@ -1776,11 +1800,13 @@ function toApiMessages(conv) {
     const m = conv.messages[i];
     if (m.role === 'user' && !m.search) { granica = i; break; }
   }
+  const bezOdpowiedzi = pytaniaBezOdpowiedzi(conv.messages, granica);
   conv.messages.forEach((m, i) => {
     // Gdzie w wysyłanej tablicy zaczyna się bieżąca tura – serwer przy małym
     // oknie modelu lokalnego wyrzuca tylko wiadomości sprzed niej.
     if (i === granica) api.turaOd = api.length;
     if (m.error || m.role === 'action' || m.status || m.komunikatCosmosa || toSzkielet(m)) return;
+    if (bezOdpowiedzi.has(i)) return;
     let text = msgText(m);
     // Siatka zdjęć ma w treści samo zapytanie – bez ramki model brał je za swoje zdanie.
     if (m.role === 'assistant' && msgPhotos(m).length) text = `(pokazano zdjęcia: ${text || 'bez podpisu'})`;
@@ -2183,6 +2209,7 @@ async function streamOnce(conv, opcje = {}) {
     let buffer = '';
     let koniecBiegu = false;      // serwer powiedział „to już wszystko"
     let bladBiegu = '';
+    let trwalyBiegu = false;   // błąd trwały w strumieniu (zły klucz, brak środków) → „Ustawienia”, nie „Ponów”
     let proby = 0;
 
     /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer – po nim wracamy
@@ -2202,7 +2229,7 @@ async function streamOnce(conv, opcje = {}) {
         if (data === '[DONE]') continue;
         if (typ === 'koniec') {
           koniecBiegu = true;
-          try { bladBiegu = JSON.parse(data).blad || ''; } catch { /* bez szczegółów */ }
+          try { const k = JSON.parse(data); bladBiegu = k.blad || ''; trwalyBiegu = Boolean(k.trwaly); } catch { /* bez szczegółów */ }
           continue;
         }
         /* Serwer nie pamięta początku tej odpowiedzi (bufor urwany limitem).
@@ -2297,6 +2324,7 @@ async function streamOnce(conv, opcje = {}) {
       // Napisany już fragment idzie razem z błędem – wyżej trafi do rozmowy.
       const e = new Error(bladBiegu);
       e.partial = rozdzielMyslenie(acc).tresc;
+      if (trwalyBiegu) e.trwaly = true;
       throw e;
     }
     // `<think>` w treści to myślenie, nie odpowiedź – i nie wolno z niego
