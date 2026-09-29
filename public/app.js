@@ -3301,7 +3301,7 @@ async function speakText(text) {
   let doPrzeczytania = clean;         // co zostaje dla głosu systemowego
 
   // 1. Głos z serwera: ElevenLabs / OpenAI / Piper (kolejność ustawia serwer).
-  if (ttsSerwera()) {
+  if (ttsSerwera() && !glosSerweraZablokowany) {
     const porcje = porcjeGlosu(clean);
     /* Przerwanie ma działać też wtedy, gdy nagranie jeszcze się pobiera –
        dotknięcie kuli w „MÓWIĘ…" nie może czekać na odpowiedź serwera. */
@@ -6079,7 +6079,7 @@ async function pokazWersje() {
        runda 9). Rozstrzyga świeża konfiguracja serwera. */
     let teraz = '';
     try { teraz = ((await (await fetch('/api/config')).json()).wersja || {}).pamiec || ''; } catch { /* offline */ }
-    klucz = teraz && naTymUrzadzeniu === teraz ? 'set.wersjaNowa' : 'set.wersjaStara';
+    klucz = 'set.wersjaStara';
   }
   pole.textContent = [
     w.commit ? t('set.wersja', { kod: w.commit }) : '',
