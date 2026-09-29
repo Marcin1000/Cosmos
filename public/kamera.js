@@ -21,6 +21,16 @@ function utworzKamere(z) {
 
   let liveStream = null;
   let liveTimer = null;
+  /* POKOLENIE OTWARCIA. startLive czeka na getUserMedia (na telefonie – okno
+     zgody), play() i listę kamer. Zamknięcie w tym czasie (Esc, „×”, wstecz)
+     zostawiało kamerę WŁĄCZONĄ: strumień przychodził po stopLive, pętle
+     rozpoznawania ruszały i klatki szły do zmysłów przy zamkniętym panelu,
+     a dioda świeciła do przeładowania (agencja i zespół IT, runda 9). Każde
+     otwarcie i zamknięcie podbija licznik; startLive po każdym await sprawdza,
+     czy dalej jest „swoje”. */
+  let pokolenieLive = 0;
+  let liveStartTimer = null;   // pierwsze rozpoznanie 800 ms po starcie – czyszczone w stopLive
+  const panelOtwarty = () => $('live-panel').style.display !== 'none';
   let livePrevObjects = '';
   let liveLastObjects = [];
   let liveLastAutoSnap = 0;
@@ -143,14 +153,16 @@ function utworzKamere(z) {
    */
   function ustawStatusKamery(tekst, szczegoly = '') {
     statusKamery = String(tekst || '');
+    /* Tylko przy ZMIANIE: #live-status ma role=status i czytnik ekranu
+       ogłaszał to samo zdanie co sekundę, przy każdym kroku pętli (runda 9). */
     const el = $('live-status');
     if (el) {
-      el.textContent = statusKamery;
+      if (el.textContent !== statusKamery) el.textContent = statusKamery;
       el.hidden = !statusKamery;
     }
     const wyj = $('live-wyjasnienie');
     if (wyj) {
-      wyj.textContent = szczegoly;
+      if (wyj.textContent !== szczegoly) wyj.textContent = szczegoly;
       wyj.hidden = !szczegoly;
     }
   }
@@ -346,7 +358,10 @@ function utworzKamere(z) {
       try { history.pushState({ kamera: 1 }, ''); wpisHistorii = true; } catch { /* bez historii */ }
     }
     if (tryb === 'mini') cofnijWpis();
-    dopasujPanelKamery();
+    /* --composer-h potrzebuje tylko okienko. W pełnym ekranie pomiar pola
+       tuż po odsłonięciu panelu wymuszał układ w obsłudze kliknięcia (63 ms
+       przy CPU ×4, zespół IT, runda 9) – teraz tylko okienko i po klatce. */
+    if (tryb === 'mini') requestAnimationFrame(dopasujPanelKamery);
   }
   window.addEventListener('popstate', () => {
     if (wlasneCofniecia > 0) { wlasneCofniecia--; return; }
@@ -369,6 +384,10 @@ function utworzKamere(z) {
   }
 
   async function startLive(tryb) {
+    const moje = ++pokolenieLive;
+    const nieaktualne = () => moje !== pokolenieLive;
+    clearInterval(liveTimer); liveTimer = null;
+    clearTimeout(liveStartTimer);
     poprawZrodlo();
     $('live-source').value = liveSource;
     const video = $('live-video');
@@ -391,18 +410,26 @@ function utworzKamere(z) {
       img.hidden = false;
       startKinectStream();
     } else {
+      let strumien;
       try {
-        liveStream = await getMedia(videoConstraints(cameraFacing()));
+        strumien = await getMedia(videoConstraints(cameraFacing()));
       } catch (err) {
+        if (nieaktualne()) return;
         img.hidden = true;
         video.hidden = false;
         ustawStatusKamery(bladKamery(err));
         return;                       // panel zostaje otwarty – można zmienić źródło
       }
+      // Zamknięte (albo otwarte na nowo) w trakcie czekania – ta kamera jest już niczyja.
+      if (nieaktualne()) { strumien.getTracks().forEach((s) => s.stop()); return; }
+      // Poprzedni strumień (podwójne kliknięcie, szybka zmiana źródła) nie może zostać osierocony.
+      if (liveStream && liveStream !== strumien) liveStream.getTracks().forEach((s) => s.stop());
+      liveStream = strumien;
       img.hidden = true;
       video.hidden = false;
       video.srcObject = liveStream;
       await video.play().catch(() => {});
+      if (nieaktualne()) return;      // stopLive już zatrzymało strumień
     }
     /* PROPORCJĘ SCENY USTAWIAMY OD RAZU, NIE DOPIERO PRZY ROZPOZNAWANIU.
      *
@@ -420,18 +447,37 @@ function utworzKamere(z) {
     liveMediaSize();
     // Przełącznik przód/tył tylko przy kamerze przeglądarki i tylko wtedy,
     // gdy jest co przełączać. Kinect ma jeden obiektyw.
-    $('live-flip').hidden = liveIsKinect() || !(await hasMultipleCameras());
+    const wiele = liveIsKinect() ? false : await hasMultipleCameras();
+    if (nieaktualne()) return;
+    $('live-flip').hidden = !wiele;
 
     ustawStatusSpoczynkowy();
+    uruchomPetle();
+  }
+
+  /** Pętle rozpoznawania (obiekty co 3 s, dłonie). Tylko przy otwartym
+   *  panelu i widocznej karcie – w tle klatki nie trafiają do nikogo. */
+  function uruchomPetle() {
+    clearInterval(liveTimer);
+    clearTimeout(liveStartTimer);
+    if (!panelOtwarty() || document.hidden) return;
     liveTimer = setInterval(liveDetect, 3000);
-    setTimeout(liveDetect, 800);
+    liveStartTimer = setTimeout(liveDetect, 800);
     startDlonie();
   }
+  /* Karta w tle (komputer, inna karta): pętle stają, podgląd zostaje; po
+     powrocie ruszają, jeśli panel dalej jest otwarty (zespół IT, runda 9). */
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) wstrzymajWykrywanie();
+    else if (panelOtwarty() && !liveTimer) uruchomPetle();
+  });
 
   /** @param {boolean} [naChwile] zamknięcie przed ponownym otwarciem (zmiana
    *  źródła) – wpis w historii zostaje, „wstecz” dalej zamyka kamerę. */
   function stopLive(naChwile) {
+    pokolenieLive++;                  // otwarcie w toku (czeka na getUserMedia) zatrzyma swój strumień samo
     clearInterval(liveTimer); liveTimer = null;
+    clearTimeout(liveStartTimer); liveStartTimer = null;
     stopDlonie();
     stopKinectStream();
     if (liveStream) { liveStream.getTracks().forEach((t) => t.stop()); liveStream = null; }
@@ -451,7 +497,7 @@ function utworzKamere(z) {
   let detekcjaWToku = false;
   let plotnoDetekcji = null;
   async function liveDetect() {
-    if (detekcjaWToku) return;
+    if (detekcjaWToku || !panelOtwarty()) return;
     detekcjaWToku = true;
     try { await liveDetectKrok(); } finally { detekcjaWToku = false; }
   }
@@ -612,7 +658,7 @@ function utworzKamere(z) {
   }
 
   async function liveDlonieKrok() {
-    if (dlonieWToku || !dlonieMozliwe()) return;
+    if (dlonieWToku || !dlonieMozliwe() || !panelOtwarty()) return;
     const media = liveMedia();
     const { w, h } = liveMediaSize();
     if (!w || !h) return;
@@ -653,6 +699,7 @@ function utworzKamere(z) {
         ctx.stroke();
         for (const [x, y] of p) { ctx.beginPath(); ctx.arc(x, y, Math.max(2.5, w / 260), 0, Math.PI * 2); ctx.fill(); }
       }
+      if (dlonie.length) ostatniaDlon = Date.now();
       liveDlonie = dlonie.length ? opisDloni(dlonie, d.summary) : '';
       zlozStatus();
       // Do kontekstu modelu tylko opis, który utrzymał się dwa odczyty z rzędu –
@@ -727,8 +774,15 @@ function utworzKamere(z) {
 
   let plotnoDloni = null;
   let bledyDloni = 0;           // kolejne błędy z rzędu; -1 = brak MediaPipe, pętla stoi
+  /* Co 350 ms tylko wtedy, gdy jest co łapać: nagrywanie albo dłoń widziana
+     w ostatnich 3 s. Zapisany gest wystarczał, żeby pętla szła co 350 ms
+     przy pustym kadrze – szarpało to strumień odpowiedzi na telefonie (zespół
+     IT, runda 9). Dłoń wchodzi w kadr → najpóźniej po 0,8 s pętla przyspiesza,
+     a okno gestu ma 2,5 s. */
+  let ostatniaDlon = 0;
   function odstepDloni() {
-    const zwykly = nagrywanieGestu || wzorceGestow.length ? 350 : 1200;
+    const szybko = nagrywanieGestu || (wzorceGestow.length && Date.now() - ostatniaDlon < 3000);
+    const zwykly = szybko ? 350 : (wzorceGestow.length ? 800 : 1200);
     // Po błędach rosnący odstęp (do 15 s): padające MediaPipe nie może dostawać zleceń co 350 ms.
     return bledyDloni > 0 ? Math.min(15000, zwykly * 2 ** Math.min(bledyDloni, 6)) : zwykly;
   }

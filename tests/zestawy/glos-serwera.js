@@ -46,6 +46,7 @@ let oaBrakSrodkow = false;
 let oaZlyKlucz = false;
 let zmyslySttTryb = 'ok';        // ok | wisi | 501
 let elevenWisi = false;
+let elevenWolnoPada = false;
 const wiszace = [];
 const atrapa = http.createServer((req, res) => {
   const cialo = [];
@@ -77,6 +78,8 @@ const atrapa = http.createServer((req, res) => {
     }
     if (req.url.startsWith('/el/v1/text-to-speech/')) {
       if (elevenWisi) { wiszace.push(res); return undefined; }
+      // Wolny i w końcu odmawiający (np. przeciążony): po 2 s 401 – potem byłaby kolej OpenAI.
+      if (elevenWolnoPada) { setTimeout(() => { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end('{"detail":{"message":"quota"}}'); }, 2000); return undefined; }
       if (elevenPada) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"detail":{"message":"quota"}}'); }
       res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
       return res.end(Buffer.from('MP3-ELEVEN'));
@@ -294,13 +297,15 @@ const atrapa = http.createServer((req, res) => {
   await fetch(`${p9.u}/api/stt?jezyk=pl&tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav, signal: ac10.signal }).catch(() => null);
   await new Promise((rr) => setTimeout(rr, 11000));
   ok(!wywolania.some((w) => w.url.startsWith('/oa/')), `10. klient odszedł w trakcie → OpenAI 0 zleceń (${wywolania.map((w) => w.url.split('?')[0]).join(', ')})`);
-  elevenWisi = true;
+  elevenWolnoPada = true;
   wywolania.length = 0;
   const ac10b = new AbortController();
   setTimeout(() => ac10b.abort(), 1000);
   await fetch(`${p9.u}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Dzień dobry.' }), signal: ac10b.signal }).catch(() => null);
-  await new Promise((rr) => setTimeout(rr, 1500));
-  ok(wywolania.some((w) => w.url.startsWith('/el/')) && !wywolania.some((w) => w.url === '/oa/v1/audio/speech'), '10. czytanie: klient odszedł przy wiszącym ElevenLabs → OpenAI nie czyta');
+  await new Promise((rr) => setTimeout(rr, 3000));
+  ok(wywolania.some((w) => w.url.startsWith('/el/')) && !wywolania.some((w) => w.url === '/oa/v1/audio/speech'), '10. czytanie: klient odszedł, ElevenLabs potem odmówił → OpenAI nie czyta');
+  elevenWolnoPada = false;
+  elevenWisi = true;
   t0 = Date.now();
   r = await fetch(`${p9.u}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Dzień dobry.' }), signal: AbortSignal.timeout(30000) }).catch(() => ({ status: 0 }));
   ms = Date.now() - t0;
