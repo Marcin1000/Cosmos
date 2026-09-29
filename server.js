@@ -612,7 +612,7 @@ async function capabilityManifest(opcje = {}) {
       id, model: ep.model || '(nie ustawiono)', gotowy: Boolean(ep.apiKey || ep.model),
     })),
     zmysly: { online: senses.online, ...senses.caps },
-    obrazy: true,
+    obrazy: typeof opcje.widzi === 'boolean' ? opcje.widzi : null,
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: studio && Boolean(STUDIO.eleven.key), wideo: studio && Boolean(STUDIO.seedance.key),
       eksport: czyWlasciciel() ? (STUDIO.exportDir || null) : null },
