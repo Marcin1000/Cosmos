@@ -14,6 +14,17 @@
         zamiast „Działa 0 z N”.
      6. Wylogowanie na wspólnym urządzeniu czyści instrukcję systemową
         poprzedniej osoby (funkcja w Node, bez przeglądarki).
+
+   Runda 9:
+     7. Pytanie, po którym był tylko błąd, nie skleja się z następnym („A\n\nB”)
+        – ani w zwykłej rozmowie, ani w „Wyślij przez Chmurę”, które wysyła
+        TYLKO ostatnie pytanie.
+     8. „Wyślij przez Chmurę” pierwsze, w jednym wierszu z „Ponów”, bez znaków-
+        emoji; jest też przy zimnym starcie i już w trakcie czekania (≥ 15 s)
+        na lokalny model.
+     9. Po angielsku błąd silnika Lokalnie jest po angielsku.
+    10. Karta Ustawień: wolne /api/auth nie przestawia na „Zmysły” i nic nie
+        zapisuje bez kliknięcia.
 */
 const { przegladarka, maPrzegladarke, serwerCosmosa, czekajNa, zabij } = require('../pomoc');
 const { utworzKonta } = require('../../public/konta.js');
@@ -176,6 +187,119 @@ const sse = (tekst) => `data: ${JSON.stringify({ choices: [{ delta: { content: t
   ok(silniki6.join() === 'local,cloud' && /Odpowiedź z chmury/.test(s6.tekst) && s6.bledy === 0 && s6.silnik === 'cloud',
     `6. kliknięcie wysyła to samo pytanie do chmury i przełącza zakładkę (${silniki6.join()}, zakładka ${s6.silnik}, błędów ${s6.bledy})`);
   await p.unroute('**/api/chat');
+
+  /* ---- 7. Pytanie bez odpowiedzi nie skleja się z następnym ---- */
+  const api7 = await p.evaluate(() => toApiMessages({ messages: [
+    { role: 'user', content: 'Pytanie A' }, { role: 'assistant', content: '⚠︎ błąd', error: true },
+    { role: 'user', content: 'Pytanie B' },
+  ] }).filter((m) => m.role === 'user').map((m) => m.content));
+  ok(api7.length === 1 && api7[0] === 'Pytanie B', `7. po błędzie model dostaje tylko nowe pytanie (${JSON.stringify(api7)})`);
+  const api7b = await p.evaluate(() => toApiMessages({ messages: [
+    { role: 'user', content: 'Pytanie A' }, { role: 'assistant', content: 'Urywek odpowiedzi' },
+    { role: 'assistant', content: '⚠︎ błąd', error: true }, { role: 'user', content: 'Pytanie B' },
+  ] }).filter((m) => m.role === 'user').map((m) => m.content));
+  ok(api7b.length === 2, `7. pytanie z urywkiem odpowiedzi zostaje w historii (${JSON.stringify(api7b)})`);
+
+  const doChmury = [];
+  await p.route('**/api/chat', (r) => {
+    const cialo = JSON.parse(r.request().postData() || '{}');
+    if (cialo.endpoint === 'local') return r.continue();
+    doChmury.push(cialo.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')));
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body: `${sse('Odpowiedź z chmury.')}data: [DONE]\n\n` });
+  });
+  await p.evaluate(() => { newConversation(); setEndpoint('local'); });
+  await wyslij('Pytanie A o Kraków');
+  await czekajNaKoniec();
+  await wyslij('Pytanie B o Gdańsk');
+  await czekajNaKoniec();
+  const s8 = await p.evaluate(() => {
+    const akcje = document.querySelector('.msg-error .msg-bledu-akcje');
+    const przyciski = akcje ? [...akcje.querySelectorAll('button')] : [];
+    const r = przyciski.map((x) => x.getBoundingClientRect().top);
+    return {
+      pierwszy: przyciski[0] ? przyciski[0].classList.contains('msg-przez-chmure') : false,
+      ile: przyciski.length, jedenWiersz: r.length === 2 && Math.abs(r[0] - r[1]) <= 2,
+      znaki: przyciski.map((x) => x.textContent).join('|'),
+    };
+  });
+  ok(s8.pierwszy && s8.ile === 2, `8. „Wyślij przez Chmurę” jest pierwsze, obok „Ponów” (${s8.ile} przycisków)`);
+  ok(!/[\u2190-\u27BF]/.test(s8.znaki), `8. przyciski pod błędem bez znaków-emoji („${s8.znaki}”)`);
+  await p.click('.msg-error .msg-przez-chmure');
+  await czekajNaKoniec();
+  ok(doChmury.length === 1 && doChmury[0].length === 1 && doChmury[0][0] === 'Pytanie B o Gdańsk',
+    `7. „Wyślij przez Chmurę” wysyła tylko ostatnie pytanie (${JSON.stringify(doChmury)})`);
+  await p.unroute('**/api/chat');
+
+  /* ---- 8. Zimny start ma przycisk ---- */
+  await p.route('**/api/chat', (r) => r.fulfill({ status: 504, contentType: 'application/json',
+    body: JSON.stringify({ error: 'Lokalny model dopiero się ładuje (Ollama) – spróbuj za chwilę.', kod: 'zimny-start' }) }));
+  await p.evaluate(() => { newConversation(); setEndpoint('local'); });
+  await wyslij('pytanie przy zimnym starcie');
+  await czekajNaKoniec();
+  ok(await p.evaluate(() => Boolean(document.querySelector('.msg-error .msg-przez-chmure'))), '8. przy zimnym starcie pod błędem jest „Wyślij przez Chmurę”');
+  await p.unroute('**/api/chat');
+
+  /* ---- 9. Po angielsku błąd Lokalnie po angielsku ---- */
+  await p.route('**/api/chat', (r) => r.fulfill({ status: 502, contentType: 'application/json',
+    body: JSON.stringify({ error: 'Komputer w domu nie odpowiada (http://100.1.2.3:11434/v1) – obudź go.', kod: 'lokalny-niedostepny', rodzaj: 'uspiony' }) }));
+  await p.evaluate(() => { setLang('en'); newConversation(); setEndpoint('local'); });
+  await wyslij('question while the home computer sleeps');
+  await czekajNaKoniec();
+  const s9 = await p.evaluate(() => {
+    const b = document.querySelector('.msg-error .msg-content');
+    if (!b) return { tekst: '', szczegol: '' };
+    const kopia = b.cloneNode(true);
+    kopia.querySelectorAll('button, .msg-bledu-akcje').forEach((x) => x.remove());
+    return { tekst: kopia.textContent, szczegol: b.title };
+  });
+  ok(s9.tekst && !/[ąćęłńóśźż]/i.test(s9.tekst) && /Cloud/.test(s9.tekst), `9. po angielsku błąd Lokalnie po angielsku („${s9.tekst.slice(0, 90)}”)`);
+  ok(/100\.1\.2\.3/.test(s9.szczegol), '9. zdanie serwera (szczegół) zostaje w podpowiedzi');
+  await p.evaluate(() => setLang('pl'));
+  await p.unroute('**/api/chat');
+
+  /* ---- 8. Przycisk chmury już w trakcie czekania na lokalny ---- */
+  const silniki8 = [];
+  await p.route('**/api/chat', async (r) => {
+    const cialo = JSON.parse(r.request().postData() || '{}');
+    silniki8.push(cialo.endpoint);
+    if (cialo.endpoint === 'local') {
+      await new Promise((x) => setTimeout(x, 25000));      // model się ładuje, nagłówków nie ma
+      return r.abort().catch(() => {});
+    }
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body: `${sse('Odpowiedź z chmury.')}data: [DONE]\n\n` });
+  });
+  await p.evaluate(() => { newConversation(); setEndpoint('local'); });
+  await wyslij('pytanie przy ładującym się modelu');
+  const przycisk8 = await p.waitForSelector('.wait-przez-chmure', { timeout: 20000 }).catch(() => null);
+  ok(Boolean(przycisk8), '8. po ~15 s czekania na lokalny w notce jest „Wyślij przez Chmurę”');
+  if (przycisk8) {
+    await p.click('.wait-przez-chmure');
+    await p.waitForFunction(() => /Odpowiedź z chmury/.test(document.getElementById('messages').textContent), null, { timeout: 10000 }).catch(() => {});
+    await czekajNaKoniec();
+    const s8b = await p.evaluate(() => ({
+      role: activeConversation.messages.map((m) => (m.error ? 'blad' : m.role)).join(','), silnik: endpoint,
+    }));
+    ok(silniki8.join() === 'local,cloud' && s8b.role === 'user,assistant' && s8b.silnik === 'cloud',
+      `8. kliknięcie w trakcie czekania: to samo pytanie do chmury, jedno pytanie i jedna odpowiedź (${silniki8.join()}; ${s8b.role}; ${s8b.silnik})`);
+  }
+  await p.unroute('**/api/chat');
+
+  /* ---- 10. Karta Ustawień przy wolnym /api/auth ---- */
+  await p.route(/\/api\/(konto|konta|auth)/, async (r) => { await new Promise((x) => setTimeout(x, 450)); r.continue().catch(() => {}); });
+  for (const zapamietana of ['konto', null]) {
+    await p.evaluate((z) => { if (z) localStorage.setItem('cosmos.kartaUstawien', z); else localStorage.removeItem('cosmos.kartaUstawien'); }, zapamietana);
+    await p.reload({ waitUntil: 'load' });
+    await p.waitForSelector('.app.gotowa', { timeout: 10000 });
+    await p.evaluate(() => document.getElementById('settings-btn').click());
+    await p.waitForTimeout(1500);
+    const s10 = await p.evaluate(() => ({
+      wybrana: document.querySelector('#settings-modal .set-karty [aria-selected="true"]')?.dataset.cel,
+      zapisana: localStorage.getItem('cosmos.kartaUstawien'),
+    }));
+    ok(s10.wybrana === 'konto' && s10.zapisana === zapamietana,
+      `10. zapamiętana „${zapamietana}”, wolne /api/auth → pokazana „${s10.wybrana}”, zapisana „${s10.zapisana}”`);
+  }
+  await p.unroute(/\/api\/(konto|konta|auth)/);
 
   ok(!bledy.length, `błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   await b.close();

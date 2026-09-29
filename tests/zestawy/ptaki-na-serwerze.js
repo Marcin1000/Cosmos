@@ -186,6 +186,18 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     const przed11 = wywolania.length;
     for (let i = 0; i < 10; i++) await wyslijIZerwij(czlonkowie[5], `zerw-${i}`);
     const drugie = await ptak(czlonkowie[5].k, 'zerw-drugie');
+    /* Rezerwacja osoby PRZED wczytaniem ciała: nagranie, którego ciało jeszcze płynie
+       (tu: stoi w pół drogi), dostaje 429 od razu – serwer nie czeka na 4 MB, żeby odmówić. */
+    const staleCialo = await new Promise((resolve) => {
+      const t0 = Date.now();
+      const zq = http.request(`${ADRES}/api/ptak`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', Cookie: czlonkowie[5].k.ciastko() } }, (odp) => {
+        odp.resume(); resolve({ kod: odp.statusCode, ms: Date.now() - t0 }); zq.destroy();
+      });
+      zq.on('error', () => {});
+      zq.write(Buffer.alloc(1024));
+      setTimeout(() => { resolve({ kod: 0, ms: Date.now() - t0 }); zq.destroy(); }, 1500);
+    });
+    ok(staleCialo.kod === 429 && staleCialo.ms < 1000, `11. drugie nagranie z niedokończonym ciałem → ${staleCialo.kod} po ${staleCialo.ms} ms (bez czekania na ciało)`);
     const innej = await ptak(czlonkowie[6].k, 'innej');
     ok(liczyMaks <= 1, `11. 10 × wyślij-i-zerwij: usługa liczyła naraz najwyżej ${liczyMaks} (PTAKI_NARAZ=1), zleceń ${wywolania.length - przed11}`);
     ok(drugie.kod === 429, `11. ta sama osoba w trakcie zerwanego nagrania → ${drugie.kod}`);
