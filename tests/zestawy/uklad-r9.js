@@ -152,9 +152,12 @@ const KONTRAST = `
       const a = await os();
       w.sprawdz(Math.max(...a) - Math.min(...a) <= 1, `${tag}: ikony sterowania i migawka nie na jednej osi (${a.map(Math.round).join(' / ')})`);
       // Przełączenie „Rozpoznawania” zmienia podpis pod ikoną (także na długi) – oś ma zostać.
-      await p.evaluate(() => { const s = document.getElementById('live-rozp-stan'); s.textContent = 'wył. · sam podgląd – czeka na komputer ze zmysłami, który jeszcze się nie odezwał'; });
-      await p.waitForTimeout(100);
-      const b = await os();
+      // Tekst i pomiar w jednym kroku: kamera.js sam odświeża stan co chwilę.
+      const b = await p.evaluate(() => {
+        document.getElementById('live-rozp-stan').textContent = 'wył. · sam podgląd – czeka na komputer ze zmysłami, który jeszcze się nie odezwał';
+        return ['#live-rozpoznawanie .kam-przel-ikona', '#live-snapshot', '#live-gesty-btn .kam-przel-ikona']
+          .map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return r.top + r.height / 2; });
+      });
       w.sprawdz(a.every((x, i) => Math.abs(x - b[i]) <= 1), `${tag}: długi stan przesuwa przyciski (${a.map(Math.round).join('/')} → ${b.map(Math.round).join('/')})`);
       // Ciemna scena: kolor silnika OpenAI jasny także w jasnym motywie.
       const jasnosc = await p.evaluate(() => {
