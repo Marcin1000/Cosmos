@@ -5852,7 +5852,8 @@ function startNasluchWlasny() {
       silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
       const kluczZmiany = offline ? 'voice.sttOfflineSwitch'
-        : trwaly ? (err.zrodlo === 'wlasny' ? 'voice.sttWlasnySwitch' : 'voice.sttKluczSwitch') : 'voice.sttFallback';
+        : trwaly ? (err.powod === 'budzet-wyczerpany' ? 'voice.sttBudzetSwitch'   // budżet na płatne modele, nie klucz
+          : err.zrodlo === 'wlasny' ? 'voice.sttWlasnySwitch' : 'voice.sttKluczSwitch') : 'voice.sttFallback';
       komunikatGlosu(t(kluczZmiany));
       // Człowiek nie patrzy na ekran – zmianę mówimy głosem systemowym, krótko (także odrzucony klucz – README obiecuje „mówi dlaczego”).
       if ((offline || trwaly) && voiceMode && 'speechSynthesis' in window) {

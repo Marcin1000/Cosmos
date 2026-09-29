@@ -708,6 +708,7 @@ for (const m of moduly) {
   for (const x of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   for (const x of src.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
+  for (const x of src.matchAll(/class\s+([A-Za-z_$][\w$]*)/g)) zdef.add(x[1]);
   /* Definicje METOD – `constructor(co) {` w klasie, `has(_, prop) {` w pośredniku
      (lib/kontekst.js). Wyglądają jak wywołanie, bo nazwa stoi przed nawiasem,
      ale po nawiasie jest klamra ciała, a nie średnik czy operator. Bez tego

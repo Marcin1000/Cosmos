@@ -122,6 +122,16 @@ const blisko = (a, b) => Math.abs(a - b) < 1e-4;
   // Osobna osoba – żeby nie ruszać sum Ani sprawdzanych niżej.
   const k3b = konta.zanotujZuzycie(await nowy('cezary'), { silnik: 'claude', zrodlo: 'wlasny', model: 'claude-opus-5-5', szacunek: { we: 6000, wy: 900, myslenie: false } });
   ok(blisko(k3b, 1.5 * 0.1554), `szacunek z \`myslenie: false\` – bez doliczonego myślenia (${k3b})`);
+  /* Cache OpenAI: tokeny z pamięci podręcznej (prompt_tokens_details.cached_tokens)
+     przechodzą z odczytu usage (lib/model.js) do zapisu kosztu – liczone taniej
+     niż pełne wejście, ale nie za darmo. */
+  const { czytajUsage } = require(path.join(R, 'model.js'));
+  const u9 = czytajUsage('data: {"choices":[],"usage":{"prompt_tokens":100000,"completion_tokens":1000,"prompt_tokens_details":{"cached_tokens":80000}}}\n');
+  ok(u9 && u9.cache === 80000, `czytajUsage oddaje tokeny z cache (${u9 && u9.cache})`);
+  const idD = await nowy('dorota');
+  const kPelny = konta.zanotujZuzycie(idD, { silnik: 'openai', zrodlo: 'wlasny', model: 'gpt-5', we: 100000, wy: 1000 });
+  const kCache = konta.zanotujZuzycie(idD, { silnik: 'openai', zrodlo: 'wlasny', model: 'gpt-5', we: u9.we, wy: u9.wy, cache: u9.cache });
+  ok(kCache > 0 && kCache < kPelny * 0.5, `cache OpenAI liczony ułamkiem ceny wejścia w zapisie kosztu (${kCache} < ${kPelny})`);
   const k4 = konta.zanotujZuzycie(idA, { silnik: 'openai', zrodlo: 'przyznany', model: 'gpt-5', zl: 0.5 });
   ok(k4 === 0.5, 'kwota podana wprost (orkiestrator ją zna) – zapisana tak, jak jest');
   const k5 = konta.zanotujZuzycie(idA, { silnik: 'openai', zrodlo: 'przyznany', model: 'gpt-5', we: 0, wy: 0 });

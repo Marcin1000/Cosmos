@@ -1154,11 +1154,12 @@ function utworzZespolWidok(z) {
       sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.kurs', { kurs: new Intl.NumberFormat(jezyk() === 'en' ? 'en-GB' : 'pl-PL', { minimumFractionDigits: 2 }).format(k.kurs) }) }));
     }
     // Ceny zgadnięte (model spoza cennika, cennik z pamięci) – jedna linijka, gdy serwer o tym mówi.
-    // Pole z serwera: cennik.stan() (paczka B2) – { openai: { stan }, zgadniete: [{ model }], saZgadniete }.
+    // Pole z serwera (/api/config zespol.cennik): { openai, claude, saZgadniete } – daty cenników, bez cen;
+    // właścicielowi może dojść lista `zgadniete: [{ model }]`.
     const cn = k.cennik && typeof k.cennik === 'object' ? k.cennik : null;
     const zgadniete = cn ? (Array.isArray(cn.zgadniete) ? cn.zgadniete : []).map((x) => String((x && x.model) || '')).filter(Boolean) : [];
     if (cn && (cn.saZgadniete || zgadniete.length)) {
-      const data = cn.openai && typeof cn.openai.stan === 'string' ? cn.openai.stan : '';
+      const data = typeof cn.openai === 'string' ? cn.openai : cn.openai && typeof cn.openai.stan === 'string' ? cn.openai.stan : '';
       const modele = [...new Set(zgadniete)].slice(0, 3).join(', ');
       sekcja.append(h('p', { klasa: 'field-hint ag-budzet-cennik',
         tekst: t(modele ? 'ag.bud.cennikZgadniety' : 'ag.bud.cennikZgadnietyOgolnie', { modele, data: data || '?' }) }));

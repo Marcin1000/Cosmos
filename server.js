@@ -98,12 +98,13 @@ require('./lib/model.js').ustawKsiegowegoModeli({
   },
   po(silnik, model, usage, znacznik, { wy = 0, messages = [] } = {}) {
     if (!znacznik) return;
-    const u = usage ? { we: usage.prompt_tokens || usage.input_tokens || 0, wy: usage.completion_tokens || usage.output_tokens || 0 } : null;
+    const u = usage ? { we: usage.prompt_tokens || usage.input_tokens || 0, wy: usage.completion_tokens || usage.output_tokens || 0,
+      cache: (usage.prompt_tokens_details && usage.prompt_tokens_details.cached_tokens) || 0 } : null;
     try {
       /* Bez usage (pośrednik): wejście z wiadomości (nie 0), wyjście z długości
          tekstu; myślenie modelu dolicza cennik.szacujZl w lib/konta.js. */
       const kosztZl = konta.zanotujZuzycie(znacznik.id, { silnik: znacznik.silnik || silnik, zrodlo: znacznik.zrodlo, model,
-        we: u ? u.we : 0, wy: u ? u.wy : 0,
+        we: u ? u.we : 0, wy: u ? u.wy : 0, cache: u ? u.cache : 0,
         ...(u ? {} : { szacunek: { we: tokenyWiadomosci(messages), wy: Math.ceil(wy / 3) } }) });
       if (znacznik.rezerwacja) budzet_.rozlicz(znacznik.rezerwacja, kosztZl);
     } finally {
@@ -918,7 +919,10 @@ function handleConfig(res) {
     },
     // Zespół agentów: czy i jak – bez modeli właściciela, adresów i kluczy.
     // Budżet w zł: ile zostało (najciaśniejszy limit osoby) i kurs do przeliczeń w widoku.
-    zespol: { ...zespol_.doKonfiguracji(), budzet: budzet_.stan(kto()), kurs: cennik_.kurs() },
+    zespol: { ...zespol_.doKonfiguracji(), budzet: budzet_.stan(kto()), kurs: cennik_.kurs(),
+      /* Stan cennika bez cen: daty tabel i czy któryś model liczy się ceną
+         zgadniętą – widok pokazuje wtedy linijkę w Ustawienia → Agenci. */
+      cennik: (() => { const c = cennik_.stan(); return { openai: c.openai.stan, claude: c.claude.stan, saZgadniete: c.saZgadniete }; })() },
   });
 }
 
