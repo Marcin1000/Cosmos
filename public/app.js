@@ -6624,6 +6624,7 @@ function updateModelBadge() {
   el.topbarModel.classList.toggle('niedostepny', stan === 'bez-klucza' || stan === 'offline');
   el.topbarModel.title = stan === 'bez-klucza' ? t('stat.noKey') : stan === 'offline' ? t('stat.offline') : '';
   el.welcomeModel.textContent = model;
+  el.welcomeModel.title = model;   // na telefonie nazwa bywa ucięta wielokropkiem
 }
 
 /* WYBÓR MODELU Z PLAKIETKI. Model zmieniało się tylko w Ustawieniach → Silniki;
