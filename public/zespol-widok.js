@@ -1086,17 +1086,26 @@ function utworzZespolWidok(z) {
     }
     trybSekcja.append(fs, h('p', { klasa: 'field-hint ag-glos-nota', tekst: t('ag.set.glosNota') }));
 
-    const przel = (klucz, kluczHint, wlaczony, na) => {
-      const input = h('input', { type: 'checkbox' });
+    const przel = (klucz, kluczHint, wlaczony, na, pole = '') => {
+      const input = h('input', { type: 'checkbox', ...(pole ? { 'data-przel': pole } : {}) });
       input.checked = wlaczony;
       input.addEventListener('change', () => na(input.checked));
       return h('label', { klasa: 'set-wiersz zm-przelacznik' },
         h('span', { klasa: 'set-wiersz-tekst' }, h('span', { tekst: t(klucz) }), h('span', { klasa: 'field-hint', tekst: t(kluczHint) })),
         input, h('span', { klasa: 'zm-suwak', 'aria-hidden': 'true' }));
     };
+    /* Zapis przełącznika się nie udał (bez sieci, błąd serwera) – mówimy to
+       pod przełącznikami. Dawniej „Pytaj przed startem” wracało na OFF bez
+       słowa i nie obowiązywało ani teraz, ani po powrocie sieci. */
+    const zapiszPrzelacznik = async (zmiana) => {
+      const w = await k.naZmiane(zmiana);
+      const nowy = w && w.ok === false ? (w.error || t('ag.wl.bladZapisu')) : '';
+      if (nowy !== bladStartu) { bladStartu = nowy; k.odswiez && k.odswiez({ fokus: `[data-przel="${Object.keys(zmiana)[0]}"]` }); }
+    };
     const startSekcja = h('section', { klasa: 'set-sekcja field', 'data-karta': 'agenci' }, h('h3', { tekst: t('ag.set.start.h') }),
-      przel('ag.set.potwierdzaj', 'ag.set.potwierdzajHint', k.potwierdzaj, (v) => k.naZmiane({ potwierdzaj: v })),
-      przel('ag.set.zgodaStala', 'ag.set.zgodaStalaHint', k.us.zgodaChmura, (v) => k.naZmiane({ zgodaChmura: v })));
+      przel('ag.set.potwierdzaj', 'ag.set.potwierdzajHint', k.potwierdzaj, (v) => zapiszPrzelacznik({ potwierdzaj: v }), 'potwierdzaj'),
+      przel('ag.set.zgodaStala', 'ag.set.zgodaStalaHint', k.us.zgodaChmura, (v) => zapiszPrzelacznik({ zgodaChmura: v }), 'zgodaChmura'));
+    if (bladStartu) startSekcja.append(h('p', { klasa: 'ag-start-blad', role: 'alert', tekst: bladStartu }));
     const segment = h('span', { klasa: 'ag-segment', role: 'group', 'aria-label': t('ag.set.maks') });
     for (let n = 2; n <= Math.max(2, Math.min(4, k.sufit)); n++) {
       const b = przycisk('', String(n), () => k.naZmiane({ maxRol: n }), { 'aria-pressed': String(k.us.maxRol === n) });
@@ -1148,6 +1157,8 @@ function utworzZespolWidok(z) {
 
   // Odmowa zapisu limitu (zła kwota) – zostaje pod polami po przebudowie panelu.
   let bladBudzetu = '';
+  // Nieudany zapis przełącznika w „Start zespołu” – zostaje pod nimi do następnej udanej zmiany.
+  let bladStartu = '';
   let zapisanyTimer = null;
   function sekcjaBudzetu(k) {
     const us = k.budzet || { dzien: 0, miesiac: 0 };
@@ -1158,7 +1169,7 @@ function utworzZespolWidok(z) {
     /* Powód odmowy WIDOCZNY pod polami (role=alert). Sama czerwona ramka
        i `title` nic nie mówiły na telefonie. Zła kwota z przeglądarki nie
        przebudowuje panelu – wpisane „abc” i fokus zostają. */
-    const blad = h('p', { klasa: 'ag-wl-blad ag-budzet-blad', id: 'ag-budzet-blad', role: 'alert', tekst: bladBudzetu });
+    const blad = h('p', { klasa: 'ag-budzet-blad', id: 'ag-budzet-blad', role: 'alert', tekst: bladBudzetu });
     blad.hidden = !bladBudzetu;
     // „Budżet zapisany.” przy polach (nie gdzieś na górze karty); znika po chwili.
     const zapisany = h('p', { klasa: 'set-stan ag-budzet-zapisany', role: 'status' });
@@ -1370,8 +1381,10 @@ function utworzZespolWidok(z) {
       const w = await k.naZmiane({ wlasneRole: nowa });
       if (w && w.ok === false) {
         // Serwer odmówił (walidacja, limit, dysk) – szkic wraca z powodem.
-        szkicWlasnej = { ...kopia, blad: w.error || t('ag.wl.bladZapisu'), bladPole: '' };
-        k.odswiez && k.odswiez({ fokus: '.ag-wl-zapisz' });
+        // Nazwa roli Cosmosa (Z7, `nazwa-zajeta`) – powód pod polem nazwy; inne odmowy – przy przyciskach.
+        const podNazwa = w.kod === 'nazwa-zajeta';
+        szkicWlasnej = { ...kopia, blad: w.error || t('ag.wl.bladZapisu'), bladPole: podNazwa ? 'nazwa' : '' };
+        k.odswiez && k.odswiez({ fokus: podNazwa ? '[data-pole="nazwa"]' : '.ag-wl-zapisz' });
         return false;
       }
       return true;

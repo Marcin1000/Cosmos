@@ -365,6 +365,17 @@ function utworzNarzedzia(z) {
          planu na ekranie, bo każda runda to nowa wypowiedź modelu.
 
          Archiwum i grafiki miały tę zaporę od dawna, plan nie miał. */
+      /* Plan policzył już fotograf zespołu (C5, `faza.planPoliczony`) – drugi
+         plan z innymi godzinami i nastawami pod notatkami byłby sprzeczny.
+         Jedyną zaporą było zdanie w notatkach, a słaby prowadzący i tak pisał
+         [PLAN:] (agencja-rozmowa, etap 5). */
+      if (k.stan.planZespolu) {
+        dodajWynikNarzedzia(k.conv,
+          'PLAN JEST JUŻ POLICZONY w notatkach fotografa wyżej. Nie licz go drugi raz – '
+          + 'godziny i nastawy przepisz z notatki i dokończ odpowiedź.',
+          t('chat.planQuery'));
+        return { akcja: 'dalej' };
+      }
       const odcisk = bezOgonkowKlient(JSON.stringify(parametry));
       if (k.stan.plan.has(odcisk)) {
         dodajWynikNarzedzia(k.conv,

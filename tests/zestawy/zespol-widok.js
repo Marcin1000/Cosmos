@@ -39,7 +39,9 @@
    W17. poprawka po recenzji nie ma własnego ogłoszenia, „N z M” liczy skład,
         linijka historii bez poprawki jako osobnej roli;
    W18. koszt całej odpowiedzi (role + planista + prowadzący z `koniec`, C2)
-        i `planPoliczony` (C5) – przez zapis i odczyt notatek. */
+        i `planPoliczony` (C5) – przez zapis i odczyt notatek;
+   W19. przy planie policzonym przez fotografa [PLAN:] prowadzącego nie liczy
+        drugiego planu (narzedzia.js). */
 const fs = require('fs');
 const path = require('path');
 const Z = require('../../public/zespol-widok.js');
@@ -234,6 +236,34 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
     'W18c. bez ról i prowadzącego – nieznany; sam prowadzący z szacunkiem – jego kwota z „ok.”');
 }
 
+// ------------------------------------------------------------------ W19
+const w19 = (async () => {
+  // C5 w narzedzia.js: gdy fotograf dostał policzony plan (stan.planZespolu), [PLAN:] prowadzącego nie liczy drugiego.
+  const { utworzNarzedzia } = require('../../public/narzedzia.js');
+  const protokol = require('../../public/protokol.js').utworzProtokol();
+  const adresy = [];
+  const doModelu = [];
+  const narz = utworzNarzedzia({
+    t: (k) => k, saveConversations: () => {}, renderMessages: () => {},
+    dodajWynikNarzedzia: (c, tresc) => { doModelu.push(tresc); c.messages.push({ role: 'user', content: tresc, search: true }); },
+    stripSearchMarker: protokol.stripSearchMarker, readJsonSafe: async (r) => r.json(),
+    fetch: async (a) => { adresy.push(String(a)); return { ok: true, status: 200, json: async () => ({ ok: true, tekst: 'DANE PLANU' }) }; },
+    webSearch: async () => '', naKafelek: (x) => x, naKontekst: (d) => JSON.stringify(d), bezOgonkowKlient: (x) => String(x || '').toLowerCase(),
+    zebranyMaterial: () => [], zastosujZmianePlotna: () => ({ ok: true }), pokazPlotno: () => {}, mowGlosem: async () => {}, PORCJA_ARCHIWUM: 24,
+    wstawTekstModelu: () => null, WZORCE: { SZUKAJ: protokol.SEARCH_MARKER_RE, ARCHIWUM: protokol.ARCHIVE_RE, PLAN: protokol.PLAN_RE,
+      PLOTNO_NOWE: protokol.CANVAS_NEW_RE, PLOTNO_ZMIANA: protokol.CANVAS_PATCH_RE, KOD: protokol.RUN_FENCE_RE, GRAFIKA: protokol.PHOTO_MARKER_RE, OBRAZ: protokol.IMAGE_MARKER_RE },
+  });
+  const plan = narz.find((n) => n.nazwa === 'plan');
+  const acc = '[PLAN: obiektyw=24-105 miejsce=Morskie Oko]';
+  const w1 = await plan.wykonaj({ acc, dop: plan.dopasuj(acc), conv: { messages: [] }, depth: 0, ostatnia: false, przed: '',
+    stan: { archiwum: new Set(), grafiki: new Set(), plan: new Set(), planZespolu: true } });
+  ok(w1 && w1.akcja === 'dalej' && !adresy.some((a) => a.includes('/api/plan')) && /JUŻ POLICZONY/.test(doModelu.join(' ')),
+    `W19. plan policzony przez fotografa (C5) – [PLAN:] prowadzącego nie liczy drugiego, model dostaje „przepisz z notatki” (żądań /api/plan: ${adresy.length})`);
+  await plan.wykonaj({ acc, dop: plan.dopasuj(acc), conv: { messages: [] }, depth: 0, ostatnia: false, przed: '',
+    stan: { archiwum: new Set(), grafiki: new Set(), plan: new Set() } }).catch(() => {});
+  ok(adresy.some((a) => a.includes('/api/plan')), 'W19b. bez planu zespołu [PLAN:] liczy się jak dawniej');
+})().catch((e) => ok(false, `W19. wyjątek: ${e.message}`));
+
 // ------------------------------------------------------------------ W12
 {
   const s = Z.nowyStanTury(0);
@@ -344,5 +374,7 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
   ok(rozne.length <= 2, `W10b. angielskie teksty są przetłumaczone (tych samych co PL: ${rozne.join(', ') || 0})`);
 }
 
-console.log(bledy.length ? `\nDO POPRAWY:\n- ${bledy.join('\n- ')}` : '\nzespol-widok OK');
-process.exit(bledy.length ? 1 : 0);
+w19.then(() => {
+  console.log(bledy.length ? `\nDO POPRAWY:\n- ${bledy.join('\n- ')}` : '\nzespol-widok OK');
+  process.exit(bledy.length ? 1 : 0);
+});

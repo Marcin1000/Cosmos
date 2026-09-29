@@ -4741,8 +4741,8 @@ select::-ms-expand { display: none; }
 .ag-wl-cecha { display: inline-flex; align-items: flex-start; gap: 8px; min-height: 32px; font-size: 13.5px; color: var(--text); cursor: pointer; }
 .ag-wl-cecha input { margin-top: 3px; accent-color: var(--text); flex: none; }
 .ag-wl-cechy > .field-hint { flex: 1 0 100%; }
-.ag-wl-blad { margin: 0; font-size: 12.5px; color: var(--danger); }
-.ag-wl-blad[hidden] { display: none; }
+.ag-wl-blad, .ag-budzet-blad, .ag-start-blad { margin: 0; font-size: 12.5px; color: var(--danger); }
+.ag-wl-blad[hidden], .ag-budzet-blad[hidden] { display: none; }
 /* Brak nazwy / instrukcji: pole oznaczone, powód tuż pod nim. */
 .ag-wl-formularz [aria-invalid="true"] { border-color: var(--danger) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
 .ag-wl-formularz .field > .ag-wl-blad { margin-top: 6px; }
@@ -4754,22 +4754,6 @@ select::-ms-expand { display: none; }
   .ag-wlasna { grid-template-columns: minmax(0, 1fr); }
   .ag-wl-akcje { justify-self: start; }
   .ag-wl-przyciski button { flex: 1 1 0; }
-}
-/* Cele dotyku ≥ 44 px – telefon pionowo (szerokość) i poziomo (dotyk; 740×313
-   nie łapie się w max-width). Selektory ze specyficznością nie niższą niż
-   reguły bazowe (.ag-wl-przyciski .btn-primary to 0,2,0). */
-@media (max-width: 520px), (pointer: coarse) {
-  .ag-wl-przyciski .btn-ghost, .ag-wl-przyciski .btn-primary { min-height: 44px; }
-  .ag-budzet-wejscie input { min-height: 44px; }
-  .ag-wl-dodaj { min-height: 44px; }
-  .ag-wl-akcje .zespol-link { min-height: 44px; min-width: 44px; }
-  .ag-wl-cecha { min-height: 44px; align-items: center; }
-  .ag-wl-cecha input { margin-top: 0; }
-  /* dwulinijkowe (fala, „tylko z obrazem”): kółko przy PIERWSZEJ linii, nie w środku bloku */
-  .ag-wl-fala .ag-wl-cecha, .ag-wl-obraz { align-items: flex-start; }
-  .ag-wl-fala .ag-wl-cecha input, .ag-wl-obraz input { margin-top: 4px; }
-  .osoba-budzet-pole input { min-height: 44px; }
-  .msg-bledu-akcje button { min-height: 44px; }
 }
 /* Karta Agenci: sekcje w opakowaniu .ag-panel – ten sam odstęp co w innych kartach. */
 .ag-panel { display: flex; flex-direction: column; gap: 16px; }
@@ -4873,3 +4857,21 @@ select::-ms-expand { display: none; }
 }
 /* Stopka kosztu: na telefonie tylko „cała odpowiedź”, podział (koszt ról) od 521 px. */
 @media (max-width: 520px) { .zespol-koszt-podzial { display: none; } }
+
+/* Cele dotyku ≥ 44 px – telefon pionowo (szerokość) i poziomo (dotyk; 740×313
+   nie łapie się w max-width). Blok stoi NA KOŃCU pliku, a selektory mają
+   specyficzność nie niższą niż reguły bazowe (.ag-wl-przyciski .btn-primary
+   to 0,2,0) – inaczej późniejsza reguła bazowa wygrywa (pola Dostępu 39 px). */
+@media (max-width: 520px), (pointer: coarse) {
+  .ag-wl-przyciski .btn-ghost, .ag-wl-przyciski .btn-primary { min-height: 44px; }
+  .ag-budzet-wejscie input { min-height: 44px; }
+  .ag-wl-dodaj { min-height: 44px; }
+  .ag-wl-akcje .zespol-link { min-height: 44px; min-width: 44px; }
+  .ag-wl-cecha { min-height: 44px; align-items: center; }
+  .ag-wl-cecha input { margin-top: 0; }
+  /* dwulinijkowe (fala, „tylko z obrazem”): kółko przy PIERWSZEJ linii, nie w środku bloku */
+  .ag-wl-fala .ag-wl-cecha, .ag-wl-obraz { align-items: flex-start; }
+  .ag-wl-fala .ag-wl-cecha input, .ag-wl-obraz input { margin-top: 4px; }
+  .osoba-budzet-pole input { min-height: 44px; }
+  .msg-bledu-akcje button { min-height: 44px; }
+}

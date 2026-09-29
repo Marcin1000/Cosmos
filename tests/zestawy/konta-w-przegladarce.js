@@ -122,22 +122,39 @@ function magazyn(poczatek = {}) {
   ok(przelaczniki.length === 7, `członek ma siedem przełączników: silniki, Studio, wyszukiwarki, ptaki, zespół (${przelaczniki.length})`);
 
   /* Budżet członka w złotówkach (etap 5): dwa pola z limitem od właściciela,
-     zmiana = PUT /api/konta/budzet z oboma limitami; zła kwota nic nie wysyła.
-     Wydatki na kluczach właściciela – linijka w opisie osoby. */
-  const pola = lista.children[1].poKlasie('osoba-budzet-pole').map((et) => et.children[0]);
+     zmiana = PUT /api/konta/budzet z TYLKO zmienionym limitem (serwer scala –
+     drugi szybki zapis nie nadpisze pierwszego starą wartością); zła kwota
+     nic nie wysyła i mówi dlaczego (role=alert), zapis – „zapisany” przy
+     polach (role=status). Wydatki na kluczach właściciela – linijka w opisie
+     osoby, przy limicie „X z Y”. */
+  const wiersz = lista.children[1];
+  const pola = wiersz.poKlasie('osoba-budzet-pole').map((et) => et.poKlasie('ag-budzet-wejscie')[0].children[0]);
+  const alert = wiersz.poKlasie('osoba-budzet-blad')[0];
+  const stanB = wiersz.poKlasie('osoba-budzet-stan')[0];
   ok(pola.length === 2 && pola[0].value === '2,5' && pola[1].value === '', `budżet członka: dwa pola, dzienny „${pola[0] && pola[0].value}”`);
   wywolania.length = 0;
   pola[1].value = '12,50';
   await pola[1].dispatch('change');
   const put = wywolania.find((x) => x.url === '/api/konta/budzet');
-  ok(put && put.metoda === 'PUT' && put.dane.id === 'u-1' && put.dane.dzien === 2.5 && put.dane.miesiac === 12.5,
-    `zmiana limitu → PUT /api/konta/budzet z oboma limitami (${JSON.stringify(put && put.dane)})`);
+  ok(put && put.metoda === 'PUT' && put.dane.id === 'u-1' && put.dane.miesiac === 12.5 && !('dzien' in put.dane),
+    `zmiana limitu → PUT /api/konta/budzet tylko ze zmienionym limitem (${JSON.stringify(put && put.dane)})`);
+  ok(stanB && stanB.getAttribute('role') === 'status' && /acc\.budzetZapisany/.test(stanB.textContent), `po zapisie „zapisany” przy polach, role=status („${stanB && stanB.textContent}”)`);
   wywolania.length = 0;
   pola[0].value = 'dużo';
   await pola[0].dispatch('change');
   ok(!wywolania.some((x) => x.url === '/api/konta/budzet') && pola[0].getAttribute('aria-invalid') === 'true', 'zła kwota – nic nie idzie na serwer, pole oznaczone');
-  const zl = lista.children[1].poKlasie('osoba-zl')[0];
-  ok(zl && /acc\.zuzycieZl/.test(zl.textContent) && /0\.12 zł/.test(zl.textContent) && /1\.50 zł/.test(zl.textContent), `wydatki członka w złotówkach w opisie osoby (${zl && zl.textContent})`);
+  ok(alert && !alert.hidden && alert.getAttribute('role') === 'alert' && /ag\.bud\.zly/.test(alert.textContent) && pola[0].getAttribute('aria-describedby') === alert.id,
+    `zła kwota – powód WIDOCZNY pod polami (role=alert, aria-describedby) („${alert && alert.textContent}”)`);
+  const zl = wiersz.poKlasie('osoba-zl')[0];
+  ok(zl && /acc\.zuzycieZl/.test(zl.textContent) && /acc\.zlZLimitu.*0\.12 zł.*2\.50 zł/.test(zl.textContent) && /1\.50 zł/.test(zl.textContent),
+    `wydatki członka w złotówkach w opisie osoby, przy limicie dziennym „X z Y” (${zl && zl.textContent})`);
+  // Odmowa serwera `budzet-zly` – zdanie z i18n (serwer pisze po polsku także w EN).
+  const fetchPrzed = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 400, json: async () => ({ kod: 'budzet-zly', error: 'Budżet to kwota w złotówkach od 0 do 100000 (0 = bez limitu).' }) });
+  pola[0].value = '3';
+  await pola[0].dispatch('change');
+  global.fetch = fetchPrzed;
+  ok(/ag\.bud\.zly/.test(alert.textContent) && !/złotówkach od 0/.test(alert.textContent), `odmowa serwera „budzet-zly” przez i18n („${alert.textContent}”)`);
 
   // Członek nie widzi panelu Dostęp
   k.zastosujRole({ id: 'u-1', rola: 'czlonek' });

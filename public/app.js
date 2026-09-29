@@ -2081,6 +2081,11 @@ const BIEG_KLUCZ = 'cosmos.bieg';
  *  Inne błędy – zdanie serwera bez zmian. */
 function bladSilnikaPoLudzku(err, zapasChmura) {
   const kod = err && err.kod;
+  if (/^budzet/.test(kod || '') && !err.okres) {
+    /* Bez okresu – odmowa w trakcie tury (prowadzący zespołu nie zmieścił się
+       w budżecie, `koniec {kod}`): notatki ról już są w rozmowie. */
+    return [t('chat.budzetBrak'), err.zespolNotatki ? t('chat.budzetNotatki') : '', zapasChmura ? t('chat.budzetChmura') : ''].filter(Boolean).join(' ');
+  }
   if (/^budzet/.test(kod || '')) {
     return [t(err.okres === 'miesiac' ? 'chat.budzetMiesiac' : 'chat.budzetDzien'),
       t(err.limit === 'wlasciciel' ? 'chat.budzetWlasciciel' : 'chat.budzetWlasny'),
@@ -2455,7 +2460,7 @@ async function streamOnce(conv, opcje = {}) {
       const e = new Error(bladBiegu);
       e.partial = rozdzielMyslenie(acc).tresc;
       if (trwalyBiegu) e.trwaly = true;
-      if (kodBiegu.kod) Object.assign(e, kodBiegu);
+      if (kodBiegu.kod) Object.assign(e, kodBiegu, zt && zt.st.role.length ? { zespolNotatki: true } : {});
       throw e;
     }
     // `<think>` w treści to myślenie, nie odpowiedź – i nie wolno z niego
@@ -2734,6 +2739,8 @@ function zapiszNotatkiTury(conv, zt, stan) {
   zt.zapisane = true;
   conv.messages.push(w);
   if (zt.st.szukaj && stan) (stan.szukaj ||= new Set()).add(odciskZapytania(zt.st.szukaj));
+  // C5: fotograf dostał policzony plan – [PLAN:] prowadzącego w tej turze nie liczy drugiego (narzedzia.js).
+  if (zt.st.planPoliczony && stan) stan.planZespolu = true;
 }
 
 /** Zdarzenie zespołu z biegu → stan tury i blok w karcie odpowiedzi. */
@@ -3241,11 +3248,15 @@ async function zmienUstawieniaZespolu(zmiana) {
       }
     } else {
       // Stały kod od serwera → zdanie w języku interfejsu (serwer pisze po polsku).
-      const PO_KODZIE = { 'za-duzo-rol': t('ag.wl.limit', { max: 8 }), 'rola-bez-nazwy': t('ag.wl.brakNazwy'), 'zle-role': t('ag.wl.zleRole'), 'budzet-zly': t('ag.bud.zly') };
+      const PO_KODZIE = { 'za-duzo-rol': t('ag.wl.limit', { max: 8 }), 'rola-bez-nazwy': t('ag.wl.brakNazwy'), 'zle-role': t('ag.wl.zleRole'), 'budzet-zly': t('ag.bud.zly'),
+        'nazwa-zajeta': t('ag.wl.nazwaZajeta') };
       wynik = { ok: false, kod: (d && d.kod) || '', error: PO_KODZIE[d && d.kod] || (d && (d.error || d.blad)) || t('httpErr', { status: r.status }) };
     }
   } catch {
-    if ('potwierdzaj' in zmiana) { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); }
+    /* Bez sieci w przeglądarce zostaje tylko WYŁĄCZENIE (przeniesie je migracja
+       po powrocie sieci). Włączenie `true` nic by nie dało – potwierdzajZespolu()
+       honoruje z przeglądarki tylko `false` – więc go nie udajemy: panel mówi, że zapis się nie udał. */
+    if ('potwierdzaj' in zmiana && zmiana.potwierdzaj === false) { settings.zespolPotwierdzaj = false; saveSettings(); }
     wynik = { ok: false, error: t('ag.wl.bladZapisu') };
   }
   if ('budzetZl' in zmiana && wynik.ok) await odswiezStanBudzetu();
@@ -3494,6 +3505,8 @@ async function runGeneration(conv, podpiecie = null) {
   // Wyszukiwanie badacza już jest w notatkach – ten sam [SZUKAJ:] od prowadzącego dostaje „już wyszukałeś”.
   const notatkiTury = conv.messages.slice(granicaTury(conv)).find((m) => m.narzedzie === 'zespol');
   if (notatkiTury && notatkiTury.zespol && notatkiTury.zespol.szukaj) stan.szukaj = new Set([odciskZapytania(notatkiTury.zespol.szukaj)]);
+  // Regeneruj na tych samych notatkach: plan fotografa dalej obowiązuje.
+  if (notatkiTury && notatkiTury.zespol && notatkiTury.zespol.planPoliczony === true) stan.planZespolu = true;
 
   try {
     let zespolWyslij;
@@ -3673,12 +3686,13 @@ async function runGeneration(conv, podpiecie = null) {
          Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
          więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
       // Zimny start też: model ładuje się minutami, a chmura odpowie od razu (zespół IT, runda 9).
-      // Budżet na płatne modele wyczerpany (429): chmura NVIDIA nic nie kosztuje – to samo jednym kliknięciem.
+      // Budżet na płatne modele wyczerpany (429): chmura NVIDIA nie liczy się do budżetu – to samo jednym kliknięciem.
       const budzet = /^budzet/.test(err.kod || '');
       const zapasChmura = (['lokalny-niedostepny', 'zimny-start'].includes(err.kod) || (budzet && endpoint !== 'cloud')) && epConfig('cloud').hasApiKey;
       const tekstBledu = bladSilnikaPoLudzku(err, zapasChmura);
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${tekstBledu}`, error: true,
-        ...(tekstBledu !== err.message ? { szczegol: err.message } : {}),
+        // Budżet: zdanie klienta mówi wszystko, a zdanie serwera jest po polsku (w EN było polskim `title`).
+        ...(tekstBledu !== err.message && !budzet ? { szczegol: err.message } : {}),
         ...(err.trwaly || budzet ? { trwaly: true } : {}), ...(budzet ? { budzet: err.limit === 'wlasciciel' ? 'wlasciciel' : 'wlasny' } : {}),
         ...(zapasChmura ? { zapas: 'cloud' } : {}) });
       saveConversations(false, conv);
@@ -5246,6 +5260,10 @@ function stopVoiceRecognizers() {
     voiceRec.onerror = null;
     try { voiceRec.stop(); } catch { /* już zatrzymany */ }
     voiceRec = null;
+    /* onend (zerowany wyżej) zerował znacznik zużytych wyników – bez tego po
+       wyjściu i ponownym wejściu pierwsze zdanie identyczne z ostatnim
+       zużytym („Hej Cosmos”) uchodziło za już obsłużone i przepadało. */
+    oznaczZuzyte(null, 0);
   }
 }
 

@@ -38,7 +38,9 @@
         w bloku wiersz ze znacznikiem „własna”;
    P16. poprawka po recenzji (fala 3): wiersz „Programista – poprawka po
         recenzji” pod recenzentem, nagłówek liczy role bez poprawki;
-   P17. złotówki: limit dzienny zapisany na serwerze, koszt ról przy wyniku,
+   P17. złotówki: limit dzienny zapisany na serwerze („Budżet zapisany.” przy
+        polach, dwa szybkie zapisy nie kasują się, zła kwota – widoczny powód),
+        koszt ról przy wyniku,
         szacunek w bramce płatnego silnika, rola pominięta z powodu budżetu,
         czat 429 budzet-wyczerpany → komunikat, „Wyślij przez Chmurę”,
         „Ustawienia budżetu” (karta Agenci);
@@ -50,7 +52,9 @@
         tylko lokalnie” → lokalnie); przeczenie w środku zdania nie jest zgodą;
         „Tylko lokalnie” na scenie → zero żądań do chmury, 10 s ciszy → bez zespołu;
    P19. „Pytaj przed startem” na serwerze: wyłączone w przeglądarce idzie tam
-        JEDNYM zapisem i znika z pamięci przeglądarki. */
+        JEDNYM zapisem i znika z pamięci przeglądarki;
+   P20. blok: postęp po składzie z „poprawka” słowem, „ok.” przy szacunku,
+        stopka „koszt ról · cała odpowiedź” (z prowadzącym, C2), „5 ról”. */
 const path = require('path');
 const { ATRAPY, serwerCosmosa, uruchom, czekajNa, zwolnijPorty, przegladarka, wynik } = require('../pomoc');
 
@@ -298,7 +302,7 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const b62 = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"]') || {}).innerText || '');
     ok(Boolean(bramka2) && /Claude/i.test(b62) && !/wyśle treść rozmowy do chmury/.test(b62), 'P6d. rola na innym płatnym silniku – skład do potwierdzenia (bez zdania o chmurze)');
     const szac = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"] .zespol-szacunek') || {}).textContent || '');
-    ok(/^ok\. (\d+,\d{2}|< 0,01)\s?zł$/.test(szac.replace(/\u00a0/g, ' ')), `P17c. szacunek kosztu w bramce płatnego silnika („${szac}”)`);
+    ok(/^koszt (ok\. \d+,\d{2}|poniżej 0,01)\s?zł$/.test(szac.replace(/\u00a0/g, ' ')), `P17c. szacunek kosztu w bramce płatnego silnika – z etykietą „koszt” („${szac}”)`);
     if (bramka2) await page.click('.zespol[data-stan="propozycja"] .btn-ghost');
     await koniecTury();
     const m62 = await wiadomosci();
@@ -392,7 +396,7 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.waitForSelector('#ag-ustawienia .ag-wlasne-sekcja', { timeout: 5000 }).catch(() => {});
     const en14 = await page.evaluate(() => ({ wl: (document.querySelector('.ag-wlasne-sekcja h3') || {}).textContent, bud: (document.querySelector('.ag-budzet-sekcja h3') || {}).textContent,
       dodaj: (document.querySelector('.ag-wl-dodaj') || {}).textContent }));
-    ok(en14.wl === 'Custom roles' && en14.bud === 'Budget in złoty' && /^Add a custom role$/.test((en14.dodaj || '').trim()),
+    ok(en14.wl === 'Custom roles' && en14.bud === 'Budget (PLN)' && /^Add a custom role$/.test((en14.dodaj || '').trim()),
       `P10b. EN: „${en14.wl}”, „${en14.bud}”, „${en14.dodaj}”`);
     await page.evaluate(() => closeSettings());
     await page.evaluate(() => { setLang('pl'); renderMessages(); });
@@ -483,6 +487,36 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const us17 = await ustawieniaSerwera();
     const stan17 = await page.evaluate(() => (document.querySelector('.ag-budzet-stan') || {}).textContent || '');
     ok(us17.budzetZl && us17.budzetZl.dzien === 3.5 && /Wydano dziś/.test(stan17), `P17a. limit dzienny „3,5” zapisany jako 3.5 zł; stan wydatków w karcie („${stan17}”)`);
+    const zapisany17 = await page.evaluate(() => { const e = document.querySelector('.ag-budzet-zapisany'); return e ? { rola: e.getAttribute('role'), tekst: e.textContent } : null; });
+    ok(zapisany17 && zapisany17.rola === 'status' && /Budżet zapisany/.test(zapisany17.tekst), `P17g. „Budżet zapisany.” przy polach (role=status) (${JSON.stringify(zapisany17)})`);
+    // Dwa szybkie zapisy przy wolnej sieci (jak za Cloudflare): drugi nie kasuje pierwszego.
+    await page.route('**/api/zespol/ustawienia', async (r) => { if (r.request().method() === 'POST') await spij(700); return r.continue(); });
+    await page.fill('[data-pole="budzet-dzien"]', '4');
+    await page.press('[data-pole="budzet-dzien"]', 'Tab');
+    await page.fill('[data-pole="budzet-miesiac"]', '50');
+    await page.press('[data-pole="budzet-miesiac"]', 'Tab');
+    await page.waitForTimeout(2000);
+    await page.unroute('**/api/zespol/ustawienia');
+    const us17h = (await ustawieniaSerwera()).budzetZl || {};
+    ok(us17h.dzien === 4 && us17h.miesiac === 50, `P17h. dwa szybkie zapisy limitu (dzień, potem miesiąc przy wolnej sieci) – serwer ma oba (${JSON.stringify(us17h)})`);
+    // Zła kwota: powód WIDOCZNY pod polami (role=alert), wpisany tekst i fokus zostają (bez przebudowy panelu).
+    await page.fill('[data-pole="budzet-miesiac"]', 'abc');
+    await page.press('[data-pole="budzet-miesiac"]', 'Tab');
+    await page.waitForTimeout(300);
+    const zly17 = await page.evaluate(() => { const e = document.querySelector('.ag-budzet-blad'); const i = document.querySelector('[data-pole="budzet-miesiac"]');
+      return { widac: Boolean(e && !e.hidden && e.getBoundingClientRect().height > 0), tekst: e ? e.textContent : '', rola: e && e.getAttribute('role'), wartosc: i.value,
+        opis: (i.getAttribute('aria-describedby') || '').includes('ag-budzet-blad'), inv: i.getAttribute('aria-invalid') }; });
+    ok(zly17.widac && zly17.rola === 'alert' && /od 0 do 100/.test(zly17.tekst) && zly17.wartosc === 'abc' && zly17.opis && zly17.inv === 'true',
+      `P17i. zła kwota – widoczny powód pod polami (role=alert, aria-describedby), wpisane „abc” zostaje (${JSON.stringify(zly17)})`);
+    // P19b: „Pytaj przed startem” włączane bez sieci – widoczny błąd zapisu, bez cichego `true` w przeglądarce.
+    await page.route('**/api/zespol/ustawienia', (r) => (r.request().method() === 'POST' ? r.abort() : r.continue()));
+    await page.locator('[data-przel="potwierdzaj"]').evaluate((el) => el.click());
+    await page.waitForSelector('.ag-start-blad', { timeout: 3000 }).catch(() => {});
+    await page.unroute('**/api/zespol/ustawienia');
+    const p19b = await page.evaluate(() => ({ blad: (document.querySelector('.ag-start-blad') || {}).textContent || '',
+      lokalnie: JSON.parse(localStorage.getItem('cosmos.settings') || '{}').zespolPotwierdzaj, przel: document.querySelector('[data-przel="potwierdzaj"]').checked }));
+    ok(/Nie udało się zapisać|zapis/i.test(p19b.blad) && p19b.lokalnie !== true && p19b.przel === false,
+      `P19b. „Pytaj przed startem” bez sieci – błąd zapisu pod przełącznikiem, bez cichego true w przeglądarce (${JSON.stringify(p19b)})`);
     await page.evaluate(() => zmienUstawieniaZespolu({ budzetZl: { dzien: 0, miesiac: 0 } }));
     await page.evaluate(() => closeSettings());
 
@@ -521,6 +555,34 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
       return w;
     });
     ok(/budżet/.test(pom17.blad) && /budżet wyczerpany/.test(pom17.odrz), `P17d. rola pominięta i odrzucona z powodu budżetu – słowami („${pom17.blad}”, „${pom17.odrz}”)`);
+    // P20: blok zespołu – postęp po składzie z „poprawka” słowem, „ok.” przy szacunku, koszt całej odpowiedzi, odmiana „5 ról”.
+    const b20 = await page.evaluate(() => {
+      const rola = (r, rola, extra = {}) => ({ r, rola, silnik: 'openai', model: 'gpt-5-mini', stan: 'gotowa', tresc: 'x', ms: 1000, ...extra });
+      const zywy = ZESPOL.nowyStanTury(Date.now() - 5000);
+      ZESPOL.zjedzZdarzenieZespolu(zywy, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'cloud', model: 'm' }, role: [
+        { r: 'r1', rola: 'programista', silnik: 'openai', model: 'gpt-5-mini' }, { r: 'r2', rola: 'recenzent', silnik: 'claude', model: 'c' }] });
+      ZESPOL.zjedzZdarzenieZespolu(zywy, 'rola', { r: 'r1', stan: 'gotowa', ms: 10 });
+      ZESPOL.zjedzZdarzenieZespolu(zywy, 'rola', { r: 'r2', stan: 'gotowa', ms: 10 });
+      ZESPOL.zjedzZdarzenieZespolu(zywy, 'rola', { r: 'r1p', rola: 'programista', fala: 3, poprawkaZ: 'r1', stan: 'pracuje', silnik: 'openai', model: 'gpt-5-mini' });
+      const bz = zespolWidok.blokZespolu(zywy, { zywy: true });
+      document.body.append(bz.el);
+      const postep = bz.el.querySelector('.zespol-czas').textContent;
+      bz.el.remove();
+      const st = ZESPOL.stanZWiadomosci({ content: 'N', zespol: { prowadzacy: { silnik: 'claude', model: 'c' }, kosztZl: 0.06, kosztProwadzacegoZl: 0.12,
+        wklady: [rola('r1', 'badacz', { kosztZl: 0.03, kosztSzacowany: true }), rola('r2', 'analityk'), rola('r3', 'programista'), rola('r4', 'recenzent'), rola('r5', 'fotograf')] } });
+      const b = zespolWidok.blokZespolu(st, { zywy: false });
+      document.body.append(b.el);
+      const glowa = b.el.querySelector('.zespol-koszt-glowa').textContent;
+      const tytul = b.el.querySelector('.zespol-tytul').textContent;
+      b.el.querySelector('.zespol-glowa').click();
+      const stopka = (b.el.querySelector('.zespol-koszt') || {}).textContent || '';
+      b.el.remove();
+      return { postep, glowa, tytul, stopka };
+    });
+    const nb20 = (x) => x.replace(/\u00a0/g, ' ');
+    ok(/^2 z 2 · poprawka · \d+ s$/.test(b20.postep), `P20a. fala 3 w toku: postęp po składzie, poprawka słowem („${b20.postep}”)`);
+    ok(nb20(b20.glowa) === ' · ok. 0,18 zł' && /· 5 ról$/.test(b20.tytul), `P20b. zwinięty: cała odpowiedź z „ok.” przy szacunku, „5 ról” („${b20.glowa}”, „${b20.tytul}”)`);
+    ok(nb20(b20.stopka) === 'koszt ról: ok. 0,06 zł · cała odpowiedź: ok. 0,18 zł', `P20c. stopka: koszt ról i cała odpowiedź z prowadzącym („${b20.stopka}”)`);
     await nowaRozmowa();
     await page.route('**/api/chat', (r) => (r.request().method() === 'POST'
       ? r.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ kod: 'budzet-wyczerpany', error: 'Budżet wyczerpany.', blad: 'Budżet wyczerpany.', zostalo: 0, okres: 'dzien', limit: 'wlasny' }) })
@@ -608,11 +670,12 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await spij(200);
     const g18 = await gp.evaluate(() => ({ mowa: window.__mowa.join(' '), przyciski: [...document.querySelectorAll('#voice-zgoda button')].map((x) => x.textContent),
       kropki: document.querySelectorAll('#voice-overlay .voice-zespol .vz-rola').length }));
-    const przed18 = doModeli(await stanAtrapy()).filter((x) => x.rodzaj === 'rola' && x.silnik !== 'local');
+    const przed18 = doModeli(await stanAtrapy()).filter((x) => x.rodzaj === 'rola');
     ok(jest18 && /Zespół chce wysłać rozmowę do chmury: NVIDIA\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów” – zgoda obowiązuje do końca tej rozmowy\.$/.test(g18.mowa)
       && g18.przyciski.join('|') === 'Tak|Tylko lokalnie|Bez agentów' && g18.kropki > 0,
       `P18a. tryb głosowy: Cosmos mówi pytanie o chmurę (co wychodzi i na jak długo), na scenie trzy przyciski i kropki ról (${JSON.stringify(g18).slice(0, 400)})`);
-    ok(przed18.length === 0, `P18b. zanim padnie odpowiedź, żadna rola nie pyta chmury (${przed18.length})`);
+    // Serwer czeka na zgodę, zanim ruszy JAKĄKOLWIEK rolę (Z8) – lokalne też nie zajmują GPU na darmo.
+    ok(przed18.length === 0, `P18b. zanim padnie odpowiedź, żadna rola nie rusza – ani w chmurze, ani lokalnie (${przed18.map((x) => x.silnik).join(',') || 0})`);
     // Echo ogona pytania z głośnika tuż po końcu mowy – nie rozstrzyga i nie liczy się jako niejasne.
     const mowaPrzed18 = await gp.evaluate(() => window.__mowa.length);
     await gp.evaluate(() => __powiedz('do końca tej rozmowy'));
@@ -623,8 +686,9 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await gp.evaluate(() => __powiedz('Tak, można wysłać do chmury'));
     const r18c = await po18();
     ok(echo18.czeka && echo18.mowa === mowaPrzed18, `P18c. ogon pytania z głośnika (echo) nie rozstrzyga zgody i nie wywołuje „nie rozumiem” (czeka: ${echo18.czeka}, wypowiedzi: ${mowaPrzed18} → ${echo18.mowa})`);
-    ok(r18c.chmura && r18c.m.some((x) => /^zespol:.*cloud/.test(x)) && r18c.m[r18c.m.length - 1] === 'assistant',
-      `P18d. „Tak, można wysłać do chmury” mikrofonem (słowa z pytania) → role w chmurze, jedna odpowiedź (${r18c.m.join(',')})`);
+    ok(r18c.chmura && r18c.m.some((x) => /^zespol:.*cloud/.test(x)) && r18c.m[r18c.m.length - 1] === 'assistant'
+      && r18c.m.filter((x) => x.startsWith('zespol')).length === 1,
+      `P18d. „Tak, można wysłać do chmury” mikrofonem (słowa z pytania) → role w chmurze, jedne notatki, jedna odpowiedź (${r18c.m.join(',')})`);
     for (const [odp, opis] of [['Tak, ale tylko lokalnie', 'P18e. „Tak, ale tylko lokalnie” mikrofonem (75% słów z pytania – nie echo)'],
       ['Ja nie chcę do chmury', 'P18f. „Ja nie chcę do chmury” (przeczenie w środku zdania)'],
       ['Tylko lokalnie, nie wysyłaj rozmowy', 'P18g. „Tylko lokalnie, nie wysyłaj rozmowy”']]) {
@@ -649,6 +713,21 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     ok(czekal >= 9000 && !r18i.m.some((x) => x.startsWith('zespol')) && r18i.m[r18i.m.length - 1] === 'assistant' && !r18i.role && r18i.z.every((x) => x.silnik === 'local')
       && /bez zespołu/.test(r18i.mowa),
       `P18i. 10 s ciszy → „bez agentów”: odpowiedź bez zespołu, nic do chmury (czekał ${Math.round(czekal / 1000)} s; ${r18i.m.join(',')}; ${r18i.z.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')}; „${r18i.mowa.slice(-120)}”)`);
+    // P18j (poza dokładkami): po wyjściu z głosu i ponownym wejściu to samo pierwsze zdanie nie przepada jako „już zużyte”.
+    const wejdzIPowiedz = async (tekst) => {
+      await gp.evaluate(() => { newConversation(); setEndpoint('cloud'); });
+      await gp.click('#voice-btn');
+      await gp.waitForFunction(() => voiceMode && voiceState === 'wake' && window.__sr.some((x) => x.dziala), null, { timeout: 8000 });
+      await gp.evaluate((t) => __powiedz(t), tekst);
+      const ruszyl = await gp.waitForFunction(() => voiceState !== 'wake', null, { timeout: 4000 }).then(() => true).catch(() => false);
+      await gp.waitForFunction(() => !isGenerating, null, { timeout: 20000 }).catch(() => {});
+      await gp.click('#voice-close').catch(() => {});
+      await spij(300);
+      return ruszyl;
+    };
+    const r1 = await wejdzIPowiedz('Hej Cosmos, która godzina');
+    const r2 = await wejdzIPowiedz('Hej Cosmos, która godzina');
+    ok(r1 && r2, `P18j. to samo pierwsze zdanie po ponownym wejściu w tryb głosowy nie jest ignorowane (1: ${r1}, 2: ${r2})`);
     await gctx.close();
 
     ok(!bledy.length, `P0. bez błędów strony (${bledy.join(' | ').slice(0, 200)})`);
