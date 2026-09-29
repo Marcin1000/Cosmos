@@ -213,6 +213,15 @@ Wyłączone – nie ma ich, chyba że wpisze własny klucz (dotyczy OpenAI i Cla
   (`COSMOS_ZESPOL_*` w `.env`). Pod osobą widać zużycie silników z 30 dni (wywołania i tokeny) –
   bez treści rozmów i bez nazw ról.
 
+**Budżet w złotówkach.** Przy każdej osobie są pola **budżet dzienny** i **miesięczny (zł)**
+oraz ile wydała dziś i w tym miesiącu. Limit dotyczy wydatków na **Twoich** kluczach (OpenAI,
+Claude – czat, zespół i wywołania pomocnicze); 0 znaczy bez limitu. Po wyczerpaniu osoba
+dostaje czytelny komunikat, a zespół pomija płatne role albo przenosi je na darmową chmurę
+NVIDIA. Ceny liczą się z cennika modeli i kursu `COSMOS_KURS_USD_PLN` (domyślnie 3,70 zł
+za dolara); nowy model, którego Cosmos nie zna, liczy się najwyższą ceną jego rodziny –
+własną cenę wpiszesz w `COSMOS_CENNIK`. Każda osoba może też ustawić sobie niższy limit
+w Ustawienia → Agenci; obowiązuje ciaśniejszy z dwóch.
+
 Na Twoich kluczach osoba dostaje **model z `.env`** (i jego wizyjny) – nie
 dowolny z cennika. Inne modele dopuszczasz w `.env`:
 `COSMOS_MODELE_PRZYZNANE=gpt-4o-mini,claude-haiku-4-5`. Długość jednej
