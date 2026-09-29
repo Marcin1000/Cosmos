@@ -74,7 +74,9 @@ function utworzKonta({ $, t, zmienJezyk }) {
   }
   /* `speak`: na wspólnym telefonie odpowiedzi NASTĘPNEJ osoby czytałyby się na głos
      (np. w pociągu), choć ona tego nie włączała (zespół IT, runda 8). */
-  const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*|speak)$/;
+  /* `zespolPotwierdzaj`: wyłączone „Pytaj przed startem” czeka w przeglądarce na
+     przenosiny na serwer (app.js, migrujPotwierdzaj) – nie może trafić na konto następnej osoby. */
+  const USTAWIENIA_OSOBY = /^(systemPrompt|model[A-Z]\w*|speak|zespolPotwierdzaj)$/;
   function wyczyscPamiecOsoby(magazyn = (typeof localStorage !== 'undefined' ? localStorage : null)) {
     if (!magazyn) return 0;
     const klucze = [];
@@ -310,6 +312,9 @@ function utworzKonta({ $, t, zmienJezyk }) {
     const linie = Object.entries(sil).filter(([, v]) => v && v.wywolan)
       .map(([nazwa, v]) => t('acc.zuzycieSilnika', { silnik: nazwa, n: v.wywolan, tok: Math.round(((v.we || 0) + (v.wy || 0)) / 1000) }));
     if (linie.length) opis.append(element('div', 'osoba-meta mono', linie.join(' · ')));
+    // Złotówki na Twoich kluczach (OpenAI, Claude) – z cennika, dziś i w tym miesiącu.
+    const wydane = wydaneZl(z.zl);
+    if (wydane) opis.append(element('div', 'osoba-meta mono osoba-zl', t('acc.zuzycieZl', { dzis: zl(wydane.dzis), miesiac: zl(wydane.miesiac) })));
     glowa.append(opis);
     w.append(glowa);
     if (u.rola === 'wlasciciel') return w;
@@ -332,6 +337,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
       przelaczniki.append(et);
     }
     w.append(przelaczniki);
+    w.append(budzetOsoby(u));
 
     const akcje = element('div', 'field-row osoba-akcje');
     const wyloguj = element('button', 'btn-ghost', t('acc.logoutUser'));
@@ -364,6 +370,65 @@ function utworzKonta({ $, t, zmienJezyk }) {
     akcje.append(haslo, wyloguj, usun);
     w.append(akcje);
     return w;
+  }
+
+  /* ---- Budżet członka w złotówkach (etap 5) ----
+     Limit wydatków osoby na KLUCZACH WŁAŚCICIELA (przyznany OpenAI/Claude,
+     zespół). Własnych kluczy osoby nie dotyczy – za nie płaci ona sama. */
+  const jezykEn = () => typeof document !== 'undefined' && document.documentElement && document.documentElement.lang === 'en';
+  function zl(x) {
+    const n = Number(x) || 0;
+    if (typeof window !== 'undefined' && window.ZESPOL && window.ZESPOL.kwotaZl) return window.ZESPOL.kwotaZl(n, jezykEn() ? 'en' : 'pl');
+    return `${n.toFixed(2)} zł`;
+  }
+  /** {dzis, miesiac} z `zuzycie.zl` (albo z jego części „wlasciciel”) – null, gdy serwer nic nie liczy. */
+  function wydaneZl(z) {
+    if (!z || typeof z !== 'object') return null;
+    const w = z.zrodla && z.zrodla.wlasciciel && typeof z.zrodla.wlasciciel === 'object' ? z.zrodla.wlasciciel : z;
+    const dzis = Number(w.dzis);
+    const miesiac = Number(w.miesiac);
+    if (!Number.isFinite(dzis) && !Number.isFinite(miesiac)) return null;
+    return { dzis: Number.isFinite(dzis) ? dzis : 0, miesiac: Number.isFinite(miesiac) ? miesiac : 0 };
+  }
+  /** Liczba zł z pola (przecinek albo kropka); null – niepoprawna. */
+  function zlZPola(v) {
+    const s = String(v || '').trim().replace(/\s|zł|pln/gi, '').replace(',', '.');
+    if (!s) return 0;
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 && n <= 100000 ? Math.round(n * 100) / 100 : null;
+  }
+  function budzetOsoby(u) {
+    const b = u.budzetZl && typeof u.budzetZl === 'object' ? u.budzetZl : { dzien: 0, miesiac: 0 };
+    const blok = element('div', 'osoba-budzet');
+    blok.append(element('span', 'osoba-budzet-tytul', t('acc.budzet')));
+    const pola = element('div', 'osoba-budzet-pola');
+    const pole = (klucz, podpis) => {
+      const et = element('label', 'osoba-budzet-pole');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.autocomplete = 'off';
+      input.dataset.pole = `budzet-${klucz}`;
+      input.placeholder = '0';
+      input.value = b[klucz] > 0 ? String(b[klucz]).replace('.', jezykEn() ? '.' : ',') : '';
+      input.setAttribute('aria-label', `${t('acc.budzet')}: ${podpis} – ${u.nazwa || u.login}`);
+      input.addEventListener('change', async () => {
+        const n = zlZPola(input.value);
+        if (n === null) { input.setAttribute('aria-invalid', 'true'); return; }
+        input.removeAttribute('aria-invalid');
+        const nowy = { dzien: b.dzien || 0, miesiac: b.miesiac || 0, [klucz]: n };
+        const r = await zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: u.id, ...nowy } });
+        if (!r.ok) { komunikat(r.json.error || r.json.blad || t('httpErr', { status: r.kod }), true); return; }
+        Object.assign(b, nowy);
+        u.budzetZl = b;
+        komunikat(t('acc.budzetZapisany'));
+      });
+      et.append(input, element('span', '', podpis));
+      return et;
+    };
+    pola.append(pole('dzien', t('acc.budzetDzien')), pole('miesiac', t('acc.budzetMiesiac')));
+    blok.append(pola, element('span', 'field-hint', t('acc.budzetHint')));
+    return blok;
   }
 
   function wierszZaproszenia(z) {

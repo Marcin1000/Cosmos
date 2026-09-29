@@ -29,7 +29,13 @@
      9. zespół agentów członka (etap 2): role na chmurze wspólnej (klucz
         NVIDIA, nigdy płatny klucz właściciela), w żadnym zapytaniu nic
         z danych właściciela, a paczka roli nie ma nawet profilu członka
-        (ma go tylko prowadzący); ustawienia zespołu są osobne.
+        (ma go tylko prowadzący); ustawienia zespołu są osobne,
+    10. budżet w złotówkach (etap 5): właściciel ustawia członkowi dzienny
+        limit na SWOICH kluczach; czat członka przechodzi, dopóki limit się
+        nie wyczerpie, potem 429 „budzet-wyczerpany” – zanim cokolwiek
+        poleci do dostawcy; chmura wspólna i własny klucz członka działają
+        dalej; właściciel nie widzi złotówek z własnego klucza członka;
+        odpowiedź bez `usage` (przerwany strumień) też kosztuje, nie zero.
 
    Atrapa modelu zapamiętuje nagłówek Authorization każdego zapytania –
    dzięki temu widać nie „czy odpowiedziało", tylko CZYIM kluczem.
@@ -70,7 +76,8 @@ const atrapa = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'odpowiedź' } }] })}\n\n`);
       // Jak OpenAI z include_usage: ostatni blok z pustym `choices` i zużyciem.
-      if (d.stream_options && d.stream_options.include_usage) {
+      // „BEZ-USAGE” w pytaniu – dostawca, który zużycia nie podaje (punkt 10).
+      if (d.stream_options && d.stream_options.include_usage && !/BEZ-USAGE/.test(JSON.stringify(d.messages || []))) {
         res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 40, completion_tokens: 2, total_tokens: 42 } })}\n\n`);
       }
       res.end('data: [DONE]\n\n');
@@ -281,13 +288,20 @@ function klient(ip) {
   const po = (await licznikiW()).dzisiaj?.cloud || {};
   ok(po.wywolan - przed.wywolan === 2 && po.we - przed.we === 80 && po.wy - przed.wy === 4,
     `właściciel widzi 2 wywołania chmury członka i ich tokeny (${po.wywolan - przed.wywolan} wyw., ${po.we - przed.we}/${po.wy - przed.wy} tok.)`);
+  /* Wcześniejsze punkty (dopracowanie promptu na przyznanym OpenAI i na
+     kluczu członka) też są już liczone – llmComplete księguje od etapu 5 –
+     więc sprawdzamy RÓŻNICE wokół jednego pytania na własnym kluczu. */
+  const oaiW = async () => ((await licznikiW()).dzisiaj || {}).openai || { wywolan: 0, we: 0 };
+  const oaiA = async () => ((await ania.zadaj('/api/konto')).json.uzytkownik?.zuzycie?.silniki?.dzisiaj || {}).openai || { wywolan: 0, we: 0 };
+  const przedW8 = await oaiW();
+  const przedA8 = await oaiA();
   await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: KLUCZ_OPENAI_CZLONKA } });
   await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'openai', bieg: 'bieganiwlasny001', messages: [{ role: 'user', content: 'na moim kluczu' }] } });
   await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: '' } });
-  const liczW = await licznikiW();
-  ok(!(liczW.dzisiaj || {}).openai && !(liczW.dni30 || {}).openai, 'właściciel NIE widzi zużycia z własnego klucza członka');
-  const mojeA = (await ania.zadaj('/api/konto')).json.uzytkownik?.zuzycie?.silniki?.dzisiaj || {};
-  ok(mojeA.openai && mojeA.openai.wywolan === 1 && mojeA.openai.we === 40, `członek widzi u siebie zużycie własnego klucza (${JSON.stringify(mojeA.openai)})`);
+  const poW8 = await oaiW();
+  ok(poW8.wywolan === przedW8.wywolan && poW8.we === przedW8.we, `właściciel NIE widzi zużycia z własnego klucza członka (${przedW8.wywolan} → ${poW8.wywolan})`);
+  const poA8 = await oaiA();
+  ok(poA8.wywolan - przedA8.wywolan === 1 && poA8.we - przedA8.we === 40, `członek widzi u siebie zużycie własnego klucza (+${poA8.wywolan - przedA8.wywolan} wyw., +${poA8.we - przedA8.we} tok.)`);
   const surowe = (await marcin.zadaj('/api/konta')).tekst;
   ok(!/licz mnie|na moim kluczu/.test(surowe), 'liczniki bez treści pytań');
 
@@ -305,6 +319,69 @@ function klient(ip) {
   await ania.zadaj('/api/zespol/ustawienia', { metoda: 'POST', dane: { tryb: 'wylaczony' } });
   const ustW = (await marcin.zadaj('/api/zespol/ustawienia')).json.ustawienia || {};
   ok(ustW.tryb === 'proponuj', 'ustawienia zespołu członka nie zmieniają ustawień właściciela');
+
+  // --- 10. Budżet w złotówkach ------------------------------------------------------------
+  const samaSobieBudzet = await ania.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: idAni, dzien: 1000 } });
+  ok(samaSobieBudzet.kod === 403, `członek nie ustawi sobie budżetu od właściciela → ${samaSobieBudzet.kod}`);
+  await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAni, silniki: { openai: true } } });
+  const zlAniW = async () => ((((await marcin.zadaj('/api/konta')).json.uzytkownicy || []).find((u) => u.id === idAni) || {}).zuzycie || {}).zl || {};
+  // Limit tuż nad tym, co już wydała na kluczach właściciela – kilka pytań i koniec.
+  const juz = (await zlAniW()).dzis || 0;
+  const limitA = Math.ceil((juz + 0.012) * 100) / 100;
+  const ustB = await marcin.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: idAni, dzien: limitA } });
+  ok(ustB.kod === 200 && ustB.json.uzytkownik.budzetZl.dzien === limitA, `właściciel ustawia członkowi dzienny budżet (${limitA} zł)`);
+  let przeszlo = 0;
+  let odmowaB = null;
+  let zlyMoment = '';
+  for (let i = 0; i < 15 && !odmowaB; i += 1) {
+    const przed = (await ania.zadaj('/api/konto')).json.budzet || {};
+    zapytania.length = 0;
+    const r = await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'openai', messages: [{ role: 'user', content: `płatne pytanie ${i}` }] } });
+    if (r.kod === 429) {
+      odmowaB = r;
+      if (!przed.wyczerpany) zlyMoment = `odmowa przy niewyczerpanym budżecie (${JSON.stringify(przed)})`;
+      ok(zapytania.length === 0, 'przy wyczerpanym budżecie nic nie poleciało do dostawcy');
+    } else {
+      przeszlo += 1;
+      if (r.kod !== 200 || przed.wyczerpany) zlyMoment = `pytanie ${i}: ${r.kod} przy stanie ${JSON.stringify(przed)}`;
+    }
+  }
+  ok(przeszlo >= 1 && odmowaB && !zlyMoment, `czat na kluczu właściciela przechodzi do wyczerpania budżetu, potem odmowa (${przeszlo} przeszło) ${zlyMoment}`);
+  ok(odmowaB && odmowaB.json.kod === 'budzet-wyczerpany' && odmowaB.json.zostalo === 0 && odmowaB.json.limit === 'wlasciciel'
+    && odmowaB.json.okres === 'dzien' && /budżet/.test(odmowaB.json.error || ''), `429 mówi, który budżet i jaki okres (${odmowaB && odmowaB.tekst})`);
+  /* Wywołania pomocnicze (llmComplete: dopracowanie promptu, streszczenie,
+     pomysły, Studio) pilnują tego samego budżetu – dawniej omijały go
+     zupełnie (paczka K). Przy wyczerpanym: odmowa i zero żądań. */
+  zapytania.length = 0;
+  const polishB = await ania.zadaj('/api/polish', { metoda: 'POST', dane: { text: 'popraw mi to proszę', endpoint: 'openai' } });
+  ok(polishB.kod !== 200 && /budżet/i.test(polishB.tekst || '') && zapytania.length === 0,
+    `dopracowanie promptu przy wyczerpanym budżecie – odmowa bez żądania do dostawcy (${polishB.kod}, ${zapytania.length})`);
+  const cfgB = (await ania.zadaj('/api/config')).json.zespol || {};
+  ok(cfgB.budzet && cfgB.budzet.wyczerpany === true && cfgB.budzet.limit.dzien === 'wlasciciel' && cfgB.kurs > 0,
+    '/api/config: zespol.budzet mówi „wyczerpany” i czyj to limit, jest kurs');
+  zapytania.length = 0;
+  const chmuraB = await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'cloud', messages: [{ role: 'user', content: 'za darmo' }] } });
+  ok(chmuraB.kod === 200 && zapytania.length === 1 && zapytania[0].klucz === KLUCZ_NVIDIA, 'chmura wspólna działa mimo wyczerpanego budżetu (bez opłat)');
+  await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: KLUCZ_OPENAI_CZLONKA } });
+  const przedWl = ((await ania.zadaj('/api/konto')).json.uzytkownik.zuzycie.zl.zrodla.wlasny || {}).dzis || 0;
+  zapytania.length = 0;
+  const wlasnyB = await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'openai', bieg: 'bieganibudzet01',
+    messages: [{ role: 'user', content: 'na moim kluczu BEZ-USAGE' }] } });
+  ok(wlasnyB.kod === 200 && zapytania.length === 1 && zapytania[0].klucz === KLUCZ_OPENAI_CZLONKA,
+    'budżet od właściciela nie blokuje własnego klucza członka');
+  const zlA10 = (await ania.zadaj('/api/konto')).json.uzytkownik.zuzycie.zl;
+  ok(zlA10.zrodla.wlasny && zlA10.zrodla.wlasny.dzis > przedWl, `odpowiedź bez \`usage\` też kosztuje – z szacunku (${przedWl} → ${zlA10.zrodla.wlasny && zlA10.zrodla.wlasny.dzis} zł)`);
+  await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: '' } });
+  const zlW10 = await zlAniW();
+  ok(!zlW10.zrodla.wlasny && zlW10.dzis === zlW10.zrodla.wlasciciel.dzis && zlW10.dzis < zlA10.dzis,
+    `właściciel nie widzi złotówek z własnego klucza członka (${zlW10.dzis} < ${zlA10.dzis})`);
+  const zlM = async () => (await marcin.zadaj('/api/konto')).json.uzytkownik.zuzycie.zl.dzis;
+  const przedPol = await zlM();
+  const polishM = await marcin.zadaj('/api/polish', { metoda: 'POST', dane: { text: 'popraw to', endpoint: 'openai' } });
+  ok(polishM.kod === 200 && (await zlM()) > przedPol, `dopracowanie promptu na płatnym silniku zapisuje koszt w zł (${przedPol} → ${await zlM()})`);
+  const przedM = await zlM();
+  await marcin.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'openai', messages: [{ role: 'user', content: 'BEZ-USAGE bez biegu' }] } });
+  ok((await zlM()) > przedM, 'bez biegu i bez `usage` – koszt z szacunku wejścia, nie zero');
 
   zabij(srv);
   atrapa.close();

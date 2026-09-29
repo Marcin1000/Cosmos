@@ -92,14 +92,16 @@ function magazyn(poczatek = {}) {
   const ZLE_IMIE = '<img src=x onerror="fetch(\'/api/konta/uzytkownik?id=wlasciciel\',{method:\'DELETE\'})">';
   global.location = { origin: 'https://cosmosai.live', pathname: '/', hash: '' };
   global.navigator = {};
-  global.fetch = async (url) => ({
+  const wywolania = [];
+  global.fetch = async (url, o = {}) => (wywolania.push({ url: String(url), metoda: o.method || 'GET', dane: o.body ? JSON.parse(o.body) : null }), {
     ok: true, status: 200,
     json: async () => (String(url).startsWith('/api/konta') ? {
       logowanie: true,
       silnikiSerwera: { local: false, openai: true, claude: false, studio: false },
       uzytkownicy: [
         { id: 'wlasciciel', login: 'marcin', nazwa: 'Marcin', rola: 'wlasciciel', zuzycie: {} },
-        { id: 'u-1', login: 'gosc', nazwa: ZLE_IMIE, rola: 'czlonek', silniki: { openai: false }, zuzycie: { wiadomosci: 3 } },
+        { id: 'u-1', login: 'gosc', nazwa: ZLE_IMIE, rola: 'czlonek', silniki: { openai: false }, budzetZl: { dzien: 2.5, miesiac: 0 },
+          zuzycie: { wiadomosci: 3, zl: { dzis: 0.12, miesiac: 1.5, zrodla: { wlasciciel: { dzis: 0.12, miesiac: 1.5 } } } } },
       ],
       zaproszenia: [{ id: 'z1', nazwa: ZLE_IMIE, wygasa: Date.now() + 1e6 }],
     } : {}),
@@ -116,6 +118,24 @@ function magazyn(poczatek = {}) {
   const przelaczniki = lista.children[1].poKlasie('osoba-silnik');
   // Lokalny GPU, OpenAI, Claude, Studio, płatne wyszukiwarki (runda 7), ptaki na serwerze (runda 8) i zespół agentów.
   ok(przelaczniki.length === 7, `członek ma siedem przełączników: silniki, Studio, wyszukiwarki, ptaki, zespół (${przelaczniki.length})`);
+
+  /* Budżet członka w złotówkach (etap 5): dwa pola z limitem od właściciela,
+     zmiana = PUT /api/konta/budzet z oboma limitami; zła kwota nic nie wysyła.
+     Wydatki na kluczach właściciela – linijka w opisie osoby. */
+  const pola = lista.children[1].poKlasie('osoba-budzet-pole').map((et) => et.children[0]);
+  ok(pola.length === 2 && pola[0].value === '2,5' && pola[1].value === '', `budżet członka: dwa pola, dzienny „${pola[0] && pola[0].value}”`);
+  wywolania.length = 0;
+  pola[1].value = '12,50';
+  await pola[1].dispatch('change');
+  const put = wywolania.find((x) => x.url === '/api/konta/budzet');
+  ok(put && put.metoda === 'PUT' && put.dane.id === 'u-1' && put.dane.dzien === 2.5 && put.dane.miesiac === 12.5,
+    `zmiana limitu → PUT /api/konta/budzet z oboma limitami (${JSON.stringify(put && put.dane)})`);
+  wywolania.length = 0;
+  pola[0].value = 'dużo';
+  await pola[0].dispatch('change');
+  ok(!wywolania.some((x) => x.url === '/api/konta/budzet') && pola[0].getAttribute('aria-invalid') === 'true', 'zła kwota – nic nie idzie na serwer, pole oznaczone');
+  const zl = lista.children[1].poKlasie('osoba-zl')[0];
+  ok(zl && /acc\.zuzycieZl/.test(zl.textContent) && /0\.12 zł/.test(zl.textContent) && /1\.50 zł/.test(zl.textContent), `wydatki członka w złotówkach w opisie osoby (${zl && zl.textContent})`);
 
   // Członek nie widzi panelu Dostęp
   k.zastosujRole({ id: 'u-1', rola: 'czlonek' });

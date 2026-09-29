@@ -29,6 +29,9 @@
     13. blokada IPv6 liczona po sieci /64, nie po pojedynczym adresie,
     14. miniatura SVG (może nieść skrypt) nie przechodzi przez proxy, a proxy nie
         idzie za przekierowaniem poza listę hostów,
+    11c. budżet członka w złotówkach ustawia tylko właściciel; zła kwota – 400,
+        właścicielowi takiego limitu się nie ustawia (404), limit widać w panelu
+        Dostęp i u członka, a zapis ląduje od razu w pliku kont,
      9b. „Wyloguj wszędzie" zrywa też OTWARTY strumień zdarzeń na innym urządzeniu.
 */
 const fs = require('node:fs');
@@ -366,6 +369,27 @@ async function postaw(dataDir) {
   ok((await marcin.zadaj('/api/konto')).json.uzytkownik.silniki.zespol === true, 'właściciel ma zespół zawsze');
   await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { zespol: false } } });
   ok((await ania.zadaj('/api/konto')).json.uzytkownik.silniki.zespol === false, 'odebranie zespołu działa od następnego żądania');
+
+  // --- 11c. Budżet członka w złotówkach (zespół agentów, etap 5) -------------------
+  const budzetSama = await ania.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: idAniTu, dzien: 999 } });
+  ok(budzetSama.kod === 403, `członek nie ustawi sobie budżetu na kluczach właściciela → ${budzetSama.kod}`);
+  const budzetOk = await marcin.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: idAniTu, dzien: '2,50', miesiac: 40 } });
+  ok(budzetOk.kod === 200 && budzetOk.json.uzytkownik.budzetZl.dzien === 2.5 && budzetOk.json.uzytkownik.budzetZl.miesiac === 40,
+    `właściciel ustawia członkowi budżet dzienny i miesięczny, „2,50” = 2,5 zł (${JSON.stringify(budzetOk.json).slice(0, 120)})`);
+  const budzetyZle = await Promise.all([-1, 'dużo', 100001].map((v) => marcin.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: idAniTu, dzien: v } })));
+  ok(budzetyZle.every((r) => r.kod === 400 && r.json.kod === 'budzet-zly'), `zła kwota → 400 budzet-zly (${budzetyZle.map((r) => r.kod)})`);
+  const budzetW = await marcin.zadaj('/api/konta/budzet', { metoda: 'PUT', dane: { id: 'wlasciciel', dzien: 5 } });
+  ok(budzetW.kod === 404, `właściciel nie ma budżetu „od właściciela” → ${budzetW.kod}`);
+  const aniaBudzet = ((await marcin.zadaj('/api/konta')).json.uzytkownicy || []).find((u) => u.id === idAniTu) || {};
+  const wydaneAni = aniaBudzet.zuzycie && aniaBudzet.zuzycie.zl ? aniaBudzet.zuzycie.zl.dzis : NaN;
+  ok(aniaBudzet.budzetZl && aniaBudzet.budzetZl.dzien === 2.5 && wydaneAni >= 0,
+    `panel Dostęp: budżet członka i jego wydatki w zł (złe kwoty niczego nie zmieniły; wydane dziś ${wydaneAni})`);
+  const kontoAni = (await ania.zadaj('/api/konto')).json;
+  ok(kontoAni.budzetZl && kontoAni.budzetZl.dzien === 2.5 && kontoAni.budzet && kontoAni.budzet.dzien === 2.5
+    && kontoAni.budzet.limit.dzien === 'wlasciciel' && Math.abs(kontoAni.budzet.zostaloDzis - (2.5 - wydaneAni)) < 1e-4 && kontoAni.wlasnyBudzetZl,
+  `członek widzi swój budżet od właściciela, ile zostało i własny limit (${JSON.stringify(kontoAni.budzet)})`);
+  const naDysku = JSON.parse(fs.readFileSync(path.join(dane, 'konta', 'uzytkownicy.json'), 'utf8')).find((u) => u.id === idAniTu) || {};
+  ok(naDysku.budzetZl && naDysku.budzetZl.dzien === 2.5 && naDysku.budzetZl.miesiac === 40, 'budżet zapisany od razu w pliku kont (przeżyje restart)');
 
   // --- 6. Usunięcie konta ------------------------------------------------------
   // Ania zostawia coś po sobie, żeby było co „nie zgubić".

@@ -43,11 +43,45 @@ const zmyslySerwera = require('./lib/zmysly-serwera.js');
 const silniki = require('./lib/silniki.js');
 ustawStraznikaSilnikow(silniki.wybierz);
 const { stanOsoby } = require('./lib/stan-osoby.js');
+/* Cennik modeli i budżet w złotówkach: koszt każdego płatnego wywołania
+   (konta.zanotujZuzycie), limity dzienne i miesięczne z rezerwacją dla
+   zespołu agentów. Jeden cennik dla kont, czatu, zespołu i widoku. */
+const cennik_ = require('./lib/cennik.js').utworzCennik({ env: process.env });
+konta.ustawCennik(cennik_);
+const budzet_ = require('./lib/budzet.js').utworzBudzet({ konta, cennik: cennik_ });
+/* Wywołania pomocnicze (llmComplete) liczą koszt i pilnują budżetu tak samo
+   jak czat. Bez osoby (praca serwera, rutyny właściciela) – bez księgowania. */
+require('./lib/model.js').ustawKsiegowegoModeli({
+  przed(silnik) {
+    const u = kto();
+    if (!u) return null;
+    const d = silniki.dostep(silnik);
+    const naKluczuWlasciciela = konta.NA_KLUCZU_WLASCICIELA.includes(d && d.zrodlo);
+    if (!cennik_.darmowy(silnik)) {
+      const w = budzet_.wyczerpany(u, { naKluczuWlasciciela });
+      if (w) {
+        const e = new Error(w.limit === 'wlasciciel'
+          ? 'Wyczerpany budżet na płatne modele ustawiony przez właściciela. Przełącz na Chmurę albo poproś o większy limit.'
+          : 'Wyczerpany Twój budżet na płatne modele (Ustawienia → Agenci). Przełącz na Chmurę albo zmień limit.');
+        e.kod = 'budzet-wyczerpany';
+        throw e;
+      }
+    }
+    return { id: u.id, zrodlo: d && d.zrodlo };
+  },
+  po(silnik, model, usage, znacznik, { wy = 0 } = {}) {
+    if (!znacznik) return;
+    const u = usage ? { we: usage.prompt_tokens || usage.input_tokens || 0, wy: usage.completion_tokens || usage.output_tokens || 0 } : null;
+    konta.zanotujZuzycie(znacznik.id, { silnik, zrodlo: znacznik.zrodlo, model,
+      we: u ? u.we : 0, wy: u ? u.wy : 0, ...(u ? {} : { szacunek: { we: 0, wy: Math.ceil(wy / 3) } }) });
+  },
+});
 const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
   obcePochodzenie, handleKonto, handleKonta, migrujDoKont, TYLKO_WLASCICIEL,
 } = require('./lib/konta-trasy.js').utworz({
   konta, silniki, kto, katalogDla, zapomnij, WLASCICIEL_ID,
   DATA_DIR, ENDPOINTS, STUDIO, imageProviders, sendJson, readJson, readBodyBuffer,
+  budzet: budzet_,
 });
 /* Czy sesja, z którą przyszło żądanie, dalej istnieje – dla połączeń, które
    trwają długo (strumień zdarzeń, widz odpowiedzi): „Wyloguj wszędzie" i zmiana
@@ -841,7 +875,8 @@ function handleConfig(res) {
       exportDir: wlasciciel ? STUDIO.exportDir : null,
     },
     // Zespół agentów: czy i jak – bez modeli właściciela, adresów i kluczy.
-    zespol: zespol_.doKonfiguracji(),
+    // Budżet w zł: ile zostało (najciaśniejszy limit osoby) i kurs do przeliczeń w widoku.
+    zespol: { ...zespol_.doKonfiguracji(), budzet: budzet_.stan(kto()), kurs: cennik_.kurs() },
   });
 }
 
@@ -922,6 +957,7 @@ async function handleEvents(req, res) {
 const czat_ = require('./lib/czat.js').utworz({
   U, archiwum, procedury, urzadzenia, searchMemory, memoryContextLines, kbSearch, obrazDlaModelu,
   biegi: biegi_, terazTekst, capabilityManifest, capabilityText, scrubSecrets,
+  cennik: cennik_, budzet: budzet_,
 });
 const { OCZEKUJACE } = czat_;
 
@@ -948,6 +984,9 @@ const zespol_ = require('./lib/zespol.js').utworz({
   czat: czat_, biegi: biegi_, konta, U, terazTekst, szukajTekstu, rejestrModeli,
   // Po SIGTERM żadnych nowych płatnych wywołań – wyniku nikt by nie zobaczył.
   czyZamykanie: () => zamykanie, bladZapisu, scrubSecrets,
+  /* Koszt w zł i budżet osoby (szacunek składu, rezerwacja przed płatną rolą)
+     oraz plan zdjęciowy policzony przez Cosmosa dla fotografa – w kontekście osoby. */
+  cennik: cennik_, budzet: budzet_, policzPlan: plener_.policzPlan,
 });
 czat_.ustawZespol(zespol_);
 const modelLib = require('./lib/model.js');

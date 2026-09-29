@@ -30,6 +30,10 @@ const ODRZUCONE_KLUCZ = {
   niedostepny: 'ag.odrzuconeUprawnienia',
   'limit-rol': 'ag.odrzuconeLimit',
   'limit-lokalny': 'ag.odrzuconeLimit',
+  budzet: 'ag.odrzuconeBudzet',
+  'budzet-dzienny': 'ag.odrzuconeBudzet',
+  'budzet-miesieczny': 'ag.odrzuconeBudzet',
+  'budzet-wyczerpany': 'ag.odrzuconeBudzet',
 };
 
 /** Stan roli od serwera → stan wiersza (atrybut data-stan i klucz `ag.stan.*`). */
@@ -46,17 +50,39 @@ function stanWidoku(stan) {
 
 const silnikZespolu = (s) => (SILNIKI_ZESPOLU.includes(s) ? s : 'cloud');
 const napis = (x, max = 400) => (typeof x === 'string' ? x.slice(0, max) : '');
+/** Kwota w zł z serwera (liczba ≥ 0) albo undefined. */
+const kwota = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.round(x * 10000) / 10000 : undefined);
+/* Płatne silniki – cennik liczy tylko je (NVIDIA w chmurze i lokalny GPU: 0 zł). */
+const PLATNE_ZESPOLU = ['openai', 'claude'];
+/** Najwięcej ról w jednym stanie: sufit właściciela 5 + poprawka programisty (fala 3) + zapas. */
+const MAX_ROL_WIDOKU = 10;
+
+/** Rola WŁASNA osoby: id „w-…” nadaje serwer, nazwę i instrukcję – człowiek
+ *  (Ustawienia → Agenci). Nazwa idzie na ekran tylko przez textContent. */
+const czyWlasnaRola = (r) => Boolean(r && (r.wlasna === true || /^w-/.test(String(r.rola || r.klucz || ''))));
+
+/** Pola kosztu i fali, które przechodzą bez zmian przez zdarzenia, zapis i odczyt. */
+function dodatkiRoli(r) {
+  const o = {};
+  if (r.wlasna === true || czyWlasnaRola(r)) o.wlasna = true;
+  if (r.fala === 1 || r.fala === 2 || r.fala === 3) o.fala = r.fala;
+  if (r.fala === 3 && typeof r.poprawkaZ === 'string') o.poprawkaZ = r.poprawkaZ.slice(0, 20);
+  if (kwota(r.szacunekZl) !== undefined) o.szacunekZl = kwota(r.szacunekZl);
+  if (kwota(r.kosztZl) !== undefined) o.kosztZl = kwota(r.kosztZl);
+  return o;
+}
 
 /** Pusty stan tury zespołu. */
 function nowyStanTury(teraz = Date.now()) {
   return {
     faza: '', start: teraz, zrodlo: '', prowadzacy: null, role: [], odrzucone: [], daneWyjdaDo: [],
     szukaj: '', notatki: '', czasRol: 0, czasFazy: 0, odmowa: null, propozycja: null, bylSklad: false,
+    wymagaZgody: false, silnikiZaZgoda: [], szacunekZl: undefined, kosztZl: undefined,
   };
 }
 
 function roleZDanych(lista) {
-  return (Array.isArray(lista) ? lista : []).filter((r) => r && typeof r === 'object').slice(0, 8).map((r, i) => ({
+  return (Array.isArray(lista) ? lista : []).filter((r) => r && typeof r === 'object').slice(0, MAX_ROL_WIDOKU).map((r, i) => ({
     r: napis(r.r, 20) || `r${i + 1}`,
     rola: napis(r.rola, 40),
     nazwa: napis(r.nazwa, 60),
@@ -65,13 +91,18 @@ function roleZDanych(lista) {
     model: napis(r.model, 200),
     ...(r.zamiast && typeof r.zamiast === 'object' ? { zamiast: { silnik: silnikZespolu(r.zamiast.silnik), model: napis(r.zamiast.model, 200) } } : {}),
     ...(typeof r.powod === 'string' ? { powod: r.powod.slice(0, 200) } : {}),
+    ...dodatkiRoli(r),
   }));
 }
 
 function odrzuconeZDanych(lista) {
-  return (Array.isArray(lista) ? lista : []).filter((o) => o && typeof o === 'object').slice(0, 8)
-    .map((o) => ({ rola: napis(o.rola, 40), kod: napis(o.kod, 40), ...(o.silnik ? { silnik: silnikZespolu(o.silnik) } : {}) }));
+  return (Array.isArray(lista) ? lista : []).filter((o) => o && typeof o === 'object').slice(0, MAX_ROL_WIDOKU)
+    .map((o) => ({ rola: napis(o.rola, 40), kod: napis(o.kod, 40), ...(o.silnik ? { silnik: silnikZespolu(o.silnik) } : {}),
+      ...(typeof o.nazwa === 'string' ? { nazwa: napis(o.nazwa, 60) } : {}) }));
 }
+
+/** `wymagaZgody` z serwera: true albo 'chmura' (trasa planu), fałsz – wszystko inne. */
+const wymagaZgodyZ = (x) => x === true || x === 'chmura';
 
 /**
  * Jedno zdarzenie biegu → stan tury. Czyste: zmienia tylko `st`.
@@ -95,6 +126,7 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
         role, odrzucone: odrzuconeZDanych(d.odrzucone),
         prowadzacy: d.prowadzacy && typeof d.prowadzacy === 'object' ? { silnik: silnikZespolu(d.prowadzacy.silnik), model: napis(d.prowadzacy.model, 200) } : null,
         daneWyjdaDo: Array.isArray(d.daneWyjdaDo) ? d.daneWyjdaDo.map((x) => napis(x, 40)) : [],
+        ...(kwota(d.szacunekZl) !== undefined ? { szacunekZl: kwota(d.szacunekZl) } : {}),
       } : null;
       return ogl;
     }
@@ -105,6 +137,11 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     st.odrzucone = odrzuconeZDanych(d.odrzucone);
     st.daneWyjdaDo = Array.isArray(d.daneWyjdaDo) ? d.daneWyjdaDo.map((x) => napis(x, 40)) : [];
     st.szukaj = napis(d.szukaj, 300);
+    // Tryb głosowy: rola w chmurze przy lokalnym prowadzącym czeka na zgodę (pytanie głosem).
+    st.wymagaZgody = wymagaZgodyZ(d.wymagaZgody);
+    // Silniki, na które skład poszedłby za zgodą (do pytania głosem): tylko znane nazwy.
+    st.silnikiZaZgoda = Array.isArray(d.silnikiZaZgoda) ? [...new Set(d.silnikiZaZgoda.filter((x) => SILNIKI_ZESPOLU.includes(x) && x !== 'local'))] : [];
+    st.szacunekZl = kwota(d.szacunekZl);
     if (st.role.length) {
       st.faza = 'role';
       ogl.push({ klucz: 'ag.sr.start', role: st.role.map((r) => r.rola) });
@@ -112,8 +149,18 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     return ogl;
   }
   if (typ === 'rola') {
-    const r = st.role.find((x) => x.r === d.r);
+    let r = st.role.find((x) => x.r === d.r);
+    /* Fala 3 – poprawka kodu po recenzji: nowa rola, której nie było w składzie.
+       Serwer zapowiada ją pierwszym zdarzeniem z `fala:3` i `poprawkaZ`
+       (r programisty); wiersz staje na końcu, pod recenzentem. */
+    if (!r && d.fala === 3 && typeof d.r === 'string' && d.r && st.role.some((x) => x.r === d.poprawkaZ) && st.role.length < MAX_ROL_WIDOKU) {
+      const zrodlo = st.role.find((x) => x.r === d.poprawkaZ);
+      r = { ...roleZDanych([{ ...d, rola: d.rola || zrodlo.rola, nazwa: d.nazwa || zrodlo.nazwa, silnik: d.silnik || zrodlo.silnik, model: d.model || zrodlo.model }])[0],
+        stan: 'czeka', tresc: '', ms: 0, start: 0 };
+      st.role.push(r);
+    }
     if (!r) return ogl;
+    if (kwota(d.kosztZl) !== undefined) r.kosztZl = kwota(d.kosztZl);
     if (typeof d.d === 'string' && d.d) {
       r.tresc += d.d;
       if (r.stan === 'czeka' || r.stan === 'pracuje') r.stan = 'pisze';
@@ -150,6 +197,7 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     st.notatki = typeof d.notatki === 'string' ? d.notatki : '';
     st.czasRol = Number.isFinite(d.t) ? d.t : teraz - st.start;
     st.czasFazy = teraz;
+    if (kwota(d.kosztZl) !== undefined) st.kosztZl = kwota(d.kosztZl);
     // Role, które nie doszły do końca, zanim prowadzący ruszył – już nie pracują.
     for (const r of st.role) if (!KONCOWE_STANY_ROLI.has(r.stan)) r.stan = r.tresc ? 'niedokonczona' : 'przerwana';
     if (st.role.length) ogl.push({ klucz: 'ag.sr.sklada' });
@@ -182,15 +230,24 @@ function wiadomoscNotatek(st, teraz = Date.now()) {
         r: r.r, rola: r.rola, nazwa: r.nazwa, silnik: r.silnik, model: r.model,
         stan: KONCOWE_STANY_ROLI.has(r.stan) ? r.stan : (r.tresc ? 'niedokonczona' : 'przerwana'),
         tresc: r.tresc.slice(0, 8000), ms: r.ms || (r.start ? teraz - r.start : 0),
-        ...(r.blad ? { blad: r.blad } : {}), ...(r.urwane ? { urwane: true } : {}),
-        ...(r.zamiast ? { zamiast: r.zamiast } : {}), ...(r.zapas ? { zapas: r.zapas } : {}),
+        ...(r.blad ? { blad: r.blad } : {}), ...(r.urwane ? { urwane: true } : {}), ...(r.kod ? { kod: r.kod } : {}),
+        ...(r.zamiast ? { zamiast: r.zamiast } : {}), ...(r.powod ? { powod: r.powod } : {}), ...(r.zapas ? { zapas: r.zapas } : {}),
+        ...dodatkiRoli(r),
       })),
       odrzucone: st.odrzucone,
       czas: { role: st.czasRol || (teraz - st.start), calosc: teraz - st.start },
       daneWyjdaDo: st.daneWyjdaDo,
       ...(st.szukaj ? { szukaj: st.szukaj } : {}),
+      ...(kosztTury(st) !== undefined ? { kosztZl: kosztTury(st) } : {}),
     },
   };
+}
+
+/** Koszt ról tury w zł: z `faza.kosztZl`, a bez niego – suma kosztów ról (undefined, gdy nic nie wiadomo). */
+function kosztTury(st) {
+  if (kwota(st.kosztZl) !== undefined) return kwota(st.kosztZl);
+  const znane = st.role.filter((r) => kwota(r.kosztZl) !== undefined);
+  return znane.length ? kwota(znane.reduce((s, r) => s + r.kosztZl, 0)) : undefined;
 }
 
 /** Stan widoku z zapisanej wiadomości notatek (także z zapisu sieroty serwera). */
@@ -200,10 +257,12 @@ function stanZWiadomosci(m) {
   st.faza = 'koniec';
   st.zrodlo = napis(z.zrodlo, 20);
   if (z.prowadzacy && typeof z.prowadzacy === 'object') st.prowadzacy = { silnik: silnikZespolu(z.prowadzacy.silnik), model: napis(z.prowadzacy.model, 200) };
-  st.role = (Array.isArray(z.wklady) ? z.wklady : []).filter((w) => w && typeof w === 'object').slice(0, 8).map((w, i) => ({
+  st.role = (Array.isArray(z.wklady) ? z.wklady : []).filter((w) => w && typeof w === 'object').slice(0, MAX_ROL_WIDOKU).map((w, i) => ({
     r: napis(w.r, 20) || `r${i + 1}`, rola: napis(w.rola, 40), nazwa: napis(w.nazwa, 60), silnik: silnikZespolu(w.silnik),
     model: napis(w.model, 200), stan: napis(w.stan, 20) || 'gotowa', tresc: napis(w.tresc, 8000), ms: Number(w.ms) || 0, start: 0,
     ...(w.blad ? { blad: napis(w.blad, 300) } : {}), ...(w.urwane ? { urwane: true } : {}),
+    ...(typeof w.kod === 'string' && w.kod ? { kod: napis(w.kod, 40) } : {}), ...(typeof w.powod === 'string' ? { powod: napis(w.powod, 200) } : {}),
+    ...dodatkiRoli(w),
     ...(w.zamiast && typeof w.zamiast === 'object' ? { zamiast: { silnik: silnikZespolu(w.zamiast.silnik), model: napis(w.zamiast.model, 200) } } : {}),
     ...(w.zapas && typeof w.zapas === 'object' ? { zapas: {
       silnik: silnikZespolu(w.zapas.silnik), model: napis(w.zapas.model, 200),
@@ -215,6 +274,7 @@ function stanZWiadomosci(m) {
   st.szukaj = napis(z.szukaj, 300);
   st.czasRol = z.czas && Number(z.czas.role) || 0;
   st.notatki = typeof m.content === 'string' ? m.content : '';
+  st.kosztZl = kwota(z.kosztZl);
   return st;
 }
 
@@ -224,7 +284,8 @@ const roleBezWkladu = (st) => st.role.filter((r) => !String(r.tresc || '').trim(
 /** Skład do wysłania w `/api/chat` – tylko klucz roli, zadanie i wybór modelu
  *  (instrukcję roli serwer bierze z katalogu). */
 function skladDoWyslania(role) {
-  return (role || []).filter((r) => r && r.rola).map((r) => ({
+  // Poprawka po recenzji (fala 3) nie jest rolą do wyboru – serwer dokłada ją sam.
+  return (role || []).filter((r) => r && r.rola && r.fala !== 3).map((r) => ({
     rola: r.rola,
     ...(r.zadanie ? { zadanie: String(r.zadanie).slice(0, 1000) } : {}),
     ...(r.auto ? {} : r.silnik ? { silnik: r.silnik, model: r.model || '' } : {}),
@@ -243,13 +304,85 @@ function silnikiChmury(role) {
  */
 function skladZaZgoda(role) {
   return (role || []).map((r) => (r.zamiast && /wymaga-zgody/.test(r.powod || '') && r.zamiast.silnik !== 'local'
-    ? { ...r, silnik: r.zamiast.silnik, model: r.zamiast.model || '', zamiast: undefined, powod: undefined, wymagaZgody: true }
+    ? { ...r, silnik: r.zamiast.silnik, model: r.zamiast.model || '', zamiast: undefined, powod: undefined, wymagaZgody: true,
+      // Szacunek z planu dotyczył silnika lokalnego (0 zł); za zgodą koszt płatnego silnika jest nieznany.
+      szacunekZl: PLATNE_ZESPOLU.includes(r.zamiast.silnik) ? undefined : 0 }
     : { ...r }));
 }
 
 /** Tura ma już notatki zespołu – „Regeneruj” i rundy kaskady nie wołają go drugi raz. */
 function turaMaNotatki(wiadomosci, odKtorej = 0) {
   return (wiadomosci || []).slice(odKtorej).some((m) => m && m.narzedzie === 'zespol');
+}
+
+/* ---------------------------------------------------------------------------
+   Zgoda GŁOSEM (tryb głosowy): Cosmos pyta „Powiedz tak, tylko lokalnie albo
+   bez agentów”, a to, co rozpozna mowa, trafia tutaj. Odpowiedź bywa krótka
+   i niechlujna („No dobra.”, „Tak, ale tylko lokalnie”, „Nie, dzięki”), więc
+   kolejność ma znaczenie:
+     1. „lokalnie” wygrywa ze wszystkim („tak, ale lokalnie”, „nie, u mnie”) –
+        to wybór, przy którym nic nie wychodzi z komputera;
+     2. zwroty zgody, w których pada „nie” („nie ma sprawy”, „czemu nie”);
+     3. odmowa („nie”, „bez agentów”) przed zgodą („tak, bez agentów” = nie);
+     4. zgoda.
+   Niejasne (także długie zdanie – to raczej nowe pytanie niż odpowiedź) → ''.
+   Polskie „no” to potakiwanie („no dobra”), nie angielskie „no” – dlatego
+   każdy język ma własne wzorce. Tekst jest bez ogonków i interpunkcji.
+   --------------------------------------------------------------------------- */
+const ZGODA_WZORCE = {
+  pl: {
+    lokalnie: /(?:^| )(?:lokaln\p{L}*|na (?:moim |tym |swoim )?(?:komputerze|kompie)|u mnie|w domu|bez chmury|nie (?:do|w|na) chmur\p{L}*|bez wysylania|offline|domow\p{L}*)(?= |$)/u,
+    takZNie: /^(?:no |a )?(?:nie ma sprawy|nie ma problemu|czemu nie|dlaczego nie|nie widze przeszkod)(?= |$)/u,
+    nie: /^(?:no |a )?(?:nie|nie nie|nie dziekuje|nie dzieki|nie trzeba|nie chce|nie teraz|anuluj|stop|zrezygnuj|rezygnuje|odpusc|daj spokoj)(?= |$)|(?:^| )(?:bez (?:agentow|agenta|zespolu|pomocnikow|nikogo)|(?:odpowiedz|zrob to) sam\p{L}*|sam odpowiedz|niech odpowie sam)(?= |$)/u,
+    tak: /^(?:no |a |to )?(?:tak(?! (?:naprawde|samo|jak|czy|czy siak))|jasne|pewnie|dobra|dobrze|okej|ok|okay|zgoda|zgadzam sie|oczywiscie|smialo|mozesz|mozna|startuj|start|rusz|ruszaj|dawaj|wysylaj|wyslij|niech bedzie|prosze|poprosze|yes)(?= |$)|(?:^| )(?:uzyj chmury|w chmurze|przez chmure|chmura|do chmury)(?= |$)/u,
+  },
+  en: {
+    lokalnie: /(?:^| )(?:local\p{L}*|on (?:my|this) (?:computer|machine|pc)|at home|no cloud|not (?:to|in) the cloud|without (?:the )?cloud|offline|keep it (?:here|local))(?= |$)/u,
+    takZNie: /^(?:no problem|why not|no worries)(?= |$)/u,
+    nie: /^(?:no|nope|nah|no thanks|no thank you|not now|cancel|stop|never mind|dont)(?= |$)|(?:^| )(?:without (?:the )?(?:agents|team)|no (?:agents|team)|(?:answer|do it) (?:yourself|alone|on your own))(?= |$)/u,
+    tak: /^(?:yes|yeah|yep|yup|sure|ok|okay|go|go ahead|start|do it|alright|all right|fine|of course|please|please do|absolutely|sounds good)(?= |$)|(?:^| )(?:use the cloud|the cloud|cloud is fine)(?= |$)/u,
+  },
+};
+
+/* ---------------------------------------------------------------------------
+   Złotówki: kwoty w formacie języka interfejsu (pl-PL „0,12 zł”, en-GB
+   „PLN 0.12”). Grosz to najmniejsza sensowna kwota – mniej to „< 0,01 zł”,
+   a nie „0,00 zł”, które wyglądałoby jak darmo.
+   --------------------------------------------------------------------------- */
+function kwotaZl(zl, jezyk = 'pl') {
+  const n = Number(zl);
+  if (typeof zl !== 'number' || !Number.isFinite(n) || n < 0) return '';
+  const f = (x) => new Intl.NumberFormat(jezyk === 'en' ? 'en-GB' : 'pl-PL',
+    { style: 'currency', currency: 'PLN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
+  return n > 0 && n < 0.005 ? `< ${f(0.01)}` : f(n);
+}
+
+/**
+ * Szacunek kosztu składu przed startem (zł) albo null, gdy nieznany:
+ * rola z szacunkiem serwera liczy się nim, rola na darmowym silniku – zerem,
+ * a rola na płatnym bez szacunku (zmieniona w edytorze, „Auto”) – nieznana.
+ */
+function szacunekSkladu(role) {
+  let suma = 0;
+  for (const r of role || []) {
+    if (!r) continue;
+    if (kwota(r.szacunekZl) !== undefined) { suma += r.szacunekZl; continue; }
+    if (r.auto || PLATNE_ZESPOLU.includes(r.silnik)) return null;
+  }
+  return kwota(suma);
+}
+
+/** Tekst z rozpoznawania mowy → 'tak' | 'lokalnie' | 'nie' | '' (niejasne). */
+function rozpoznajZgode(tekst, jezyk = 'pl') {
+  const w = ZGODA_WZORCE[jezyk === 'en' ? 'en' : 'pl'];
+  const t = String(tekst || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (!t || t.length > 80 || t.split(' ').length > 10) return '';
+  if (w.lokalnie.test(t)) return 'lokalnie';
+  if (w.takZNie.test(t)) return 'tak';
+  if (w.nie.test(t)) return 'nie';
+  if (w.tak.test(t)) return 'tak';
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -297,11 +430,23 @@ function utworzZespolWidok(z) {
     return b;
   };
 
+  const jezyk = () => (typeof z.jezyk === 'function' && z.jezyk() === 'en' ? 'en' : 'pl');
+  const zl = (x) => kwotaZl(x, jezyk());
+  /** Własna rola osoby po id – z jej listy (świeża nazwa), inaczej nazwa ze zdarzenia. */
+  const wlasna = (id) => (typeof z.wlasneRole === 'function' ? z.wlasneRole() || [] : []).find((x) => x && x.id === id) || null;
   const nazwaRoli = (r) => {
+    if (czyWlasnaRola(r)) {
+      const w = wlasna(r.rola || r.klucz);
+      return (w && w.nazwa) || r.nazwa || t('ag.wl.bezNazwy');
+    }
     const k = `ag.rola.${r.rola}`;
     const s = t('ag.rola.' + r.rola);
     return s && s !== k ? s : (r.nazwa || r.rola || '?');
   };
+  /** Nazwa wiersza: poprawka po recenzji (fala 3) to „Programista – poprawka po recenzji”. */
+  const nazwaWiersza = (r) => (r.fala === 3 ? t('ag.poprawka', { rola: nazwaRoli(r) }) : nazwaRoli(r));
+  /** Znacznik „własna” przy nazwie roli (kolor nie jest jedynym nośnikiem – słowo). */
+  const znakWlasnej = () => h('span', { klasa: 'rola-wlasna', tekst: t('ag.wlasna') });
   const krotkiModel = (m) => String(m || '').split('/').pop();
   const ileRol = (n) => (n === 1 ? t('ag.role1') : t('ag.roleN', { n }));
   const sekundy = (ms) => Math.max(0, Math.round((Number(ms) || 0) / 1000));
@@ -320,6 +465,7 @@ function utworzZespolWidok(z) {
     if (kod === 'termin' || kod === 'czas') return t('ag.bladCzas', { s: sekundy(r.ms) });
     if (kod === 'uprawnienia') return t('ag.bladUprawnienia');
     if (kod === 'niedostepny' || kod === 'limit-dostawcy') return t('ag.bladNiedostepny');
+    if (/^budzet/.test(kod)) return t('ag.bladBudzet');
     if (kod === 'pominieta' || kod === 'zatrzymana' || kod === 'scalono') return '';
     return r.stan === 'blad' ? t('ag.bladNiedostepny') : '';
   }
@@ -370,11 +516,21 @@ function utworzZespolWidok(z) {
     }
 
     function wierszRoli(r, i) {
-      const li = h('li', { klasa: 'rola nowa', 'data-r': r.r, 'data-rola': r.rola, styl: `--i:${i}` });
+      const li = h('li', { klasa: 'rola nowa', 'data-r': r.r, 'data-rola': r.rola, styl: `--i:${i}`,
+        ...(r.fala === 3 ? { 'data-fala': '3' } : {}), ...(czyWlasnaRola(r) ? { 'data-wlasna': 'true' } : {}) });
       li.addEventListener('animationend', () => li.classList.remove('nowa'), { once: true });
       const kropka = h('span', { klasa: 'rola-kropka', 'aria-hidden': 'true' });
       const wiersz = h('button', { type: 'button', klasa: 'rola-wiersz', 'aria-expanded': 'false', 'aria-controls': `${id}-${r.r}` });
       const nazwa = h('span', { klasa: 'rola-nazwa' });
+      const nazwaTxt = doc().createTextNode('');
+      nazwa.append(nazwaTxt);
+      /* Poprawka po recenzji: pełny dopisek w wierszu, krótki w pigułce
+         (telefon w poziomie) – inaczej cztery role nie mieszczą się w rzędzie. */
+      if (r.fala === 3) {
+        nazwa.append(h('span', { klasa: 'rola-dopisek dlugi', tekst: ` – ${t('ag.poprawkaDopisek')}` }),
+          h('span', { klasa: 'rola-dopisek krotki', tekst: ` – ${t('ag.poprawkaKrotko')}` }));
+      }
+      if (czyWlasnaRola(r)) nazwa.append(znakWlasnej());
       const model = h('span', { klasa: 'rola-model' });
       const silnik = h('span', { klasa: 'rola-silnik' });
       const modelTxt = doc().createTextNode('');
@@ -392,7 +548,7 @@ function utworzZespolWidok(z) {
       const akcje = h('div', { klasa: 'rola-akcje' });
       const tresc = h('div', { klasa: 'rola-tresc md', id: `${id}-${r.r}` });
       li.append(kropka, wiersz, uwaga, podglad, blad, akcje, tresc);
-      const w = { li, wiersz, nazwa, silnik, modelTxt, stanEl, uwaga, podglad, blad, akcje, tresc, trescZrodlo: null };
+      const w = { li, wiersz, nazwa, nazwaTxt, silnik, modelTxt, stanEl, uwaga, podglad, blad, akcje, tresc, trescZrodlo: null };
       wiersze.set(r.r, w);
       return li;
     }
@@ -401,8 +557,9 @@ function utworzZespolWidok(z) {
       const ws = stanWidoku(r.stan);
       w.li.dataset.silnik = r.silnik;
       w.li.dataset.stan = ws;
-      const nazwa = nazwaRoli(r);
-      if (w.nazwa.textContent !== nazwa) w.nazwa.textContent = nazwa;
+      const nazwa = nazwaWiersza(r);
+      const nazwaRdzen = nazwaRoli(r);
+      if (w.nazwaTxt.data !== nazwaRdzen) w.nazwaTxt.data = nazwaRdzen;
       const sil = nazwaSilnika(r.silnik);
       if (w.silnik.textContent !== sil) w.silnik.textContent = sil;
       const m = krotkiModel(r.model);
@@ -410,11 +567,13 @@ function utworzZespolWidok(z) {
       const stanTxt = tekstStanu(r, teraz);
       if (w.stanEl.textContent !== stanTxt) w.stanEl.textContent = stanTxt;
       w.wiersz.title = r.zadanie || '';
-      w.wiersz.setAttribute('aria-label', `${t('ag.pokazWklad', { rola: nazwa })} · ${sil} ${m} · ${stanTxt}`);
-      // Zastępstwo z planu albo zapas po awarii – osobna linijka.
+      const koszt = kwota(r.kosztZl) > 0 ? ` · ${zl(r.kosztZl)}` : '';
+      w.wiersz.setAttribute('aria-label', `${t('ag.pokazWklad', { rola: nazwa })}${czyWlasnaRola(r) ? ` (${t('ag.wlasna')})` : ''} · ${sil} ${m} · ${stanTxt}${koszt}`);
+      // Zastępstwo z planu albo zapas po awarii – osobna linijka; budżet mówi, czemu tańszy silnik.
+      const kluczZamiast = r.powod === 'budzet' ? 'ag.zamiastBudzet' : 'ag.zamiast';
       const uwaga = r.zapas && r.zapas.po && r.zapas.po.model ? t('ag.zapasPo', { model: krotkiModel(r.zapas.po.model) })
-        : r.zamiast && r.zamiast.model && r.zamiast.model !== r.model ? t('ag.zamiast', { model: krotkiModel(r.zamiast.model) })
-          : r.zamiast && r.zamiast.silnik !== r.silnik ? t('ag.zamiast', { model: nazwaSilnika(r.zamiast.silnik) }) : '';
+        : r.zamiast && r.zamiast.model && r.zamiast.model !== r.model ? t(kluczZamiast, { model: krotkiModel(r.zamiast.model) })
+          : r.zamiast && r.zamiast.silnik !== r.silnik ? t(kluczZamiast, { model: nazwaSilnika(r.zamiast.silnik) }) : '';
       w.uwaga.textContent = uwaga;
       w.uwaga.hidden = !uwaga;
       const otwartaRola = otwarteRole.has(r.r);
@@ -463,16 +622,22 @@ function utworzZespolWidok(z) {
       const glowaWnetrze = doc().createElement('span');
       glowaWnetrze.innerHTML = IK.zespol;
       glowa.append(glowaWnetrze.firstChild);
-      glowa.append(h('span', { klasa: 'zespol-tytul', tekst: `${t('ag.zespol')} · ${ileRol(n)}` }));
+      // Poprawka po recenzji (fala 3) to druga runda tej samej roli – nie liczy się jako osobna rola w nagłówku.
+      const skladRol = st.role.filter((r) => r.fala !== 3);
+      glowa.append(h('span', { klasa: 'zespol-tytul', tekst: `${t('ag.zespol')} · ${ileRol(skladRol.length)}` }));
       const kropki = h('span', { klasa: 'zespol-kropki', 'aria-hidden': 'true' });
-      for (const r of st.role) kropki.append(h('i', { styl: `--k:${kolorSilnika(r.silnik)}` }));
+      for (const r of skladRol) kropki.append(h('i', { styl: `--k:${kolorSilnika(r.silnik)}` }));
       glowa.append(kropki);
-      glowa.append(h('span', { klasa: 'zespol-kto', tekst: st.role.map(nazwaRoli).join(', ') }));
+      glowa.append(h('span', { klasa: 'zespol-kto', tekst: skladRol.map(nazwaRoli).join(', ') }));
       const czas = o.zywy && st.faza === 'role'
         ? t('ag.postep', { g: ileSkonczonych(st), n, s: sekundy(teraz - st.start) })
         : o.zywy && st.faza === 'prowadzacy' ? t('ag.postep', { g: ileSkonczonych(st), n, s: sekundy(st.czasRol) })
           : `${sekundy(st.czasRol)} s`;
-      glowa.append(h('span', { klasa: 'zespol-czas', tekst: czas }));
+      const czasEl = h('span', { klasa: 'zespol-czas', tekst: czas });
+      // Koszt ról po wyniku – w zwiniętym bloku przy czasie, w otwartym w stopce.
+      const koszt = !o.zywy || st.faza === 'koniec' ? kosztTury(st) : undefined;
+      if (koszt > 0) czasEl.append(h('span', { klasa: 'zespol-koszt-glowa', tekst: ` · ${zl(koszt)}` }));
+      glowa.append(czasEl);
       const chev = doc().createElement('span');
       chev.innerHTML = IK.chev;
       glowa.append(chev.firstChild);
@@ -490,7 +655,7 @@ function utworzZespolWidok(z) {
         if (x.kod === 'wymaga-zgody' && o.naZgodaIPonow) wiersz.append(przycisk('zespol-link', t('ag.zgodaIPonow'), () => o.naZgodaIPonow()));
         dodatki.append(wiersz);
       }
-      if (st.odmowa) dodatki.append(h('p', { klasa: 'zespol-nota', tekst: t('ag.odmowaLimit') }));
+      if (st.odmowa) dodatki.append(h('p', { klasa: 'zespol-nota', tekst: t(/^budzet/.test(st.odmowa.kod) ? 'ag.odmowaBudzet' : 'ag.odmowaLimit') }));
       dodatki.hidden = !dodatki.firstChild;
     }
 
@@ -502,6 +667,8 @@ function utworzZespolWidok(z) {
       } else if (!o.zywy && st.role.length && o.naZmienSklad) {
         stopka.append(przycisk('zespol-link', t('ag.zmienSklad'), () => o.naZmienSklad()));
       }
+      const koszt = !o.zywy ? kosztTury(st) : undefined;
+      if (koszt > 0) stopka.append(h('span', { klasa: 'zespol-koszt', title: t('ag.kosztTitle'), tekst: t('ag.koszt', { zl: zl(koszt) }) }));
       stopka.hidden = !stopka.firstChild;
     }
 
@@ -546,7 +713,8 @@ function utworzZespolWidok(z) {
 
   /** Ogłoszenie z reduktora → zdanie dla czytnika ekranu. */
   function tekstOgloszenia(o, st) {
-    const nazwa = (klucz) => nazwaRoli({ rola: klucz });
+    // Z roli w składzie – własna rola ma nazwę od osoby, nie ze słownika.
+    const nazwa = (klucz) => nazwaRoli((st && st.role.find((r) => r.rola === klucz)) || { rola: klucz });
     if (o.klucz === 'ag.sr.start') return t('ag.sr.start', { role: o.role.map(nazwa).join(', ') });
     if (o.klucz === 'ag.sr.gotowa') return t('ag.sr.gotowa', { rola: nazwa(o.rola), g: o.g, n: o.n });
     if (o.klucz === 'ag.sr.blad') return t('ag.sr.blad', { rola: nazwa(o.rola), powod: t('ag.stan.' + o.stan) });
@@ -581,8 +749,12 @@ function utworzZespolWidok(z) {
     ik.innerHTML = IK.zespol;
     d.append(ik.firstChild, h('span', { tekst: t('ag.sugestia') }));
     for (const r of prop.role) {
-      d.append(h('span', { klasa: 'kto', styl: `--k:${kolorSilnika(r.silnik)}` }, h('i'), `${nazwaRoli(r)} · ${nazwaSilnika(r.silnik)}`));
+      d.append(h('span', { klasa: 'kto', styl: `--k:${kolorSilnika(r.silnik)}` }, h('i'), `${nazwaRoli(r)} · ${nazwaSilnika(r.silnik)}`,
+        czyWlasnaRola(r) ? znakWlasnej() : null));
     }
+    // Szacunek tylko, gdy coś kosztuje (płatny silnik); darmowy skład – bez kwoty.
+    const szac = kwota(prop.szacunekZl) !== undefined ? prop.szacunekZl : szacunekSkladu(prop.role);
+    if (szac > 0) d.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: t('ag.szacunek', { zl: zl(szac) }) }));
     d.append(przycisk('zespol-link zespol-uruchom', t('ag.uruchom'), naUruchom, { title: t('ag.uruchomTitle') }));
     d.append(przycisk('zespol-link zespol-zmien', t('ag.zmien'), naZmien));
     d.append(przycisk('zamknij', '', naNieTeraz, { 'aria-label': t('ag.nieTeraz'), title: t('ag.nieTeraz'), ikona: IK.x }));
@@ -608,6 +780,8 @@ function utworzZespolWidok(z) {
    */
   function propozycja(p) {
     let role = p.role.map((r, i) => ({ ...r, r: r.r || `p${i + 1}` }));
+    // Skład zmieniony w edytorze – szacunek całości z planu przestaje pasować.
+    let zmieniony = false;
     const sekcja = h('section', { klasa: 'zespol', 'data-stan': 'propozycja', 'data-otwarty': 'true', 'aria-label': t('ag.zespol'), 'aria-live': 'off' });
     const sr = h('p', { klasa: 'zespol-sr', role: 'status' });
     const glowa = h('div', { klasa: 'zespol-glowa' });
@@ -635,14 +809,18 @@ function utworzZespolWidok(z) {
           p.otworzEdytor(r, btn, (wybor) => {
             btn.setAttribute('aria-expanded', 'false');
             if (!wybor) return;
+            zmieniony = true;
             if (wybor.usun) { role = role.filter((x) => x !== r); maluj(); return; }
-            Object.assign(r, wybor.auto ? { auto: true } : { auto: false, silnik: wybor.silnik, model: wybor.model });
+            // Inny model = inna cena; darmowy silnik to pewne 0 zł.
+            Object.assign(r, wybor.auto ? { auto: true, szacunekZl: undefined }
+              : { auto: false, silnik: wybor.silnik, model: wybor.model, szacunekZl: PLATNE_ZESPOLU.includes(wybor.silnik) ? undefined : 0 });
             maluj();
           });
         });
         const wiersz = h('div', { klasa: 'rola-wiersz', title: r.zadanie || '' },
-          h('span', { klasa: 'rola-nazwa', tekst: nazwa }), btn,
-          przycisk('rola-usun', '', () => { role = role.filter((x) => x !== r); maluj(); }, { 'aria-label': t('ag.usun', { rola: nazwa }), ikona: IK.x }));
+          h('span', { klasa: 'rola-nazwa', tekst: nazwa }, czyWlasnaRola(r) ? znakWlasnej() : null), btn,
+          przycisk('rola-usun', '', () => { zmieniony = true; role = role.filter((x) => x !== r); maluj(); }, { 'aria-label': t('ag.usun', { rola: nazwa }), ikona: IK.x }));
+        if (czyWlasnaRola(r)) li.dataset.wlasna = 'true';
         li.append(h('span', { klasa: 'rola-kropka', 'aria-hidden': 'true' }), wiersz);
         lista.append(li);
       });
@@ -654,11 +832,17 @@ function utworzZespolWidok(z) {
         dodaj.innerHTML = IK.plus;
         dodaj.append(t('ag.dodaj'));
         const menu = h('div', { klasa: 'zespol-dodaj-menu', role: 'menu', hidden: true });
-        for (const k of wolne) {
-          menu.append(przycisk('zespol-dodaj-opcja', nazwaRoli({ rola: k.klucz }), () => {
-            role.push({ rola: k.klucz, zadanie: '', silnik: p.prowadzacy.silnik, model: p.prowadzacy.model, auto: true, r: `p${Date.now()}` });
+        // Najpierw role z katalogu, potem własne osoby – z oznaczeniem „własna”.
+        for (const k of [...wolne.filter((x) => !czyWlasnaRola(x)), ...wolne.filter((x) => czyWlasnaRola(x))]) {
+          const wl = czyWlasnaRola(k);
+          const opcja = przycisk(`zespol-dodaj-opcja${wl ? ' wlasna' : ''}`, nazwaRoli({ rola: k.klucz, nazwa: k.nazwa }), () => {
+            zmieniony = true;
+            role.push({ rola: k.klucz, zadanie: '', silnik: p.prowadzacy.silnik, model: p.prowadzacy.model, auto: true, r: `p${Date.now()}`,
+              ...(wl ? { wlasna: true, nazwa: napis(k.nazwa, 60) } : {}) });
             maluj();
-          }, { role: 'menuitem' }));
+          }, { role: 'menuitem', ...(wl ? { title: k.cel || '' } : {}) });
+          if (wl) opcja.append(znakWlasnej());
+          menu.append(opcja);
         }
         dodaj.addEventListener('click', () => { menu.hidden = !menu.hidden; dodaj.setAttribute('aria-expanded', String(!menu.hidden)); });
         stopka.append(dodaj, menu);
@@ -675,6 +859,9 @@ function utworzZespolWidok(z) {
         zg.append(tekst);
         stopka.append(zg);
       }
+      // Szacunek kosztu ról na płatnych silnikach – tylko gdy większy od zera.
+      const szac = !zmieniony && kwota(p.szacunekZl) !== undefined ? p.szacunekZl : szacunekSkladu(role);
+      if (szac > 0) stopka.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: t('ag.szacunek', { zl: zl(szac) }) }));
       const przyciski = h('div', { klasa: 'zespol-przyciski' });
       przyciski.append(przycisk('btn-ghost', t('ag.bez'), () => p.naBez()));
       if (zgodaPotrzebna && p.lokalnie) przyciski.append(przycisk('btn-secondary', t('ag.tylkoLokalnie'), () => p.naTylkoLokalnie(p.lokalnie)));
@@ -842,8 +1029,186 @@ function utworzZespolWidok(z) {
       brak.append(h('span', { tekst: t('ag.re.brak', { silniki: k.bezDostepu.map(nazwaSilnika).join(', ') }) }));
       roleSekcja.append(brak);
     }
-    kontener.append(trybSekcja, startSekcja, roleSekcja);
+    const budzetSekcja = k.budzet || k.stanBudzetu ? sekcjaBudzetu(k) : null;
+    kontener.append(trybSekcja, startSekcja, ...(budzetSekcja ? [budzetSekcja] : []), roleSekcja, sekcjaWlasnychRol(k));
     return kontener;
+  }
+
+  // ---- Budżet w złotówkach (U5) ----------------------------------------------
+  /** Liczba zł z pola (przecinek albo kropka); null = niepoprawna. */
+  const zlZPola = (v) => {
+    const s = String(v || '').trim().replace(/\s|zł|pln/gi, '').replace(',', '.');
+    if (!s) return 0;
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 && n <= 100000 ? Math.round(n * 100) / 100 : null;
+  };
+
+  function sekcjaBudzetu(k) {
+    const us = k.budzet || { dzien: 0, miesiac: 0 };
+    const sb = k.stanBudzetu || {};
+    const sekcja = h('section', { klasa: 'set-sekcja field ag-budzet-sekcja', 'data-karta': 'agenci' },
+      h('h3', { tekst: t('ag.bud.h') }), h('p', { klasa: 'set-sekcja-opis', tekst: t('ag.bud.opis') }));
+    const pola = h('div', { klasa: 'ag-budzet' });
+    const pole = (klucz, etykieta) => {
+      const input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', 'data-pole': `budzet-${klucz}`,
+        'aria-describedby': 'ag-budzet-stan', placeholder: '0' });
+      input.value = us[klucz] > 0 ? String(us[klucz]).replace('.', jezyk() === 'en' ? '.' : ',') : '';
+      input.addEventListener('change', async () => {
+        const n = zlZPola(input.value);
+        if (n === null) { input.setAttribute('aria-invalid', 'true'); return; }
+        input.removeAttribute('aria-invalid');
+        const nowy = { dzien: us.dzien || 0, miesiac: us.miesiac || 0, [klucz]: n };
+        await k.naZmiane({ budzetZl: nowy });
+      });
+      return h('label', { klasa: 'field ag-budzet-pole' }, h('span', { klasa: 'field-label', tekst: etykieta }),
+        h('span', { klasa: 'ag-budzet-wejscie' }, input, h('span', { klasa: 'ag-budzet-zl', 'aria-hidden': 'true', tekst: jezyk() === 'en' ? 'PLN' : 'zł' })));
+    };
+    pola.append(pole('dzien', t('ag.bud.dzien')), pole('miesiac', t('ag.bud.miesiac')));
+    sekcja.append(pola);
+    const stan = [];
+    if (kwota(sb.wydanoDzis) !== undefined) stan.push(t('ag.bud.wydanoDzis', { zl: zl(sb.wydanoDzis) }));
+    if (kwota(sb.wydanoMiesiac) !== undefined) stan.push(t('ag.bud.wydanoMiesiac', { zl: zl(sb.wydanoMiesiac) }));
+    if (sb.dzien > 0 && typeof sb.zostaloDzis === 'number') stan.push(t('ag.bud.zostaloDzis', { zl: zl(Math.max(0, sb.zostaloDzis)) }));
+    sekcja.append(h('p', { klasa: 'set-stan ag-budzet-stan', id: 'ag-budzet-stan', tekst: stan.join(' · ') }));
+    // Limit właściciela ciaśniejszy niż własny – członek widzi, skąd bierze się „zostało”.
+    const odWlasciciela = sb.limit && typeof sb.limit === 'object' ? sb.limit.dzien === 'wlasciciel'
+      : sb.dzien > 0 && !(us.dzien > 0 && us.dzien <= sb.dzien);
+    if (sb.dzien > 0 && odWlasciciela) sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.odWlasciciela', { zl: zl(sb.dzien) }) }));
+    if (typeof k.kurs === 'number' && k.kurs > 0) {
+      sekcja.append(h('p', { klasa: 'field-hint', tekst: t('ag.bud.kurs', { kurs: new Intl.NumberFormat(jezyk() === 'en' ? 'en-GB' : 'pl-PL', { minimumFractionDigits: 2 }).format(k.kurs) }) }));
+    }
+    return sekcja;
+  }
+
+  // ---- Własne role (U1) --------------------------------------------------------
+  const CECHY_ROLI = ['kod', 'wizja', 'rozumowanie', 'szybki', 'polski'];
+  const MAX_WLASNYCH = 8;
+  /* Szkic formularza trwa między przebudowami panelu (zmiana trybu, zapis
+     innego pola) – inaczej wpisana instrukcja znikałaby po każdym kliknięciu. */
+  let szkicWlasnej = null;
+
+  function sekcjaWlasnychRol(k) {
+    const lista = Array.isArray(k.wlasne) ? k.wlasne.slice(0, MAX_WLASNYCH) : [];
+    const sekcja = h('section', { klasa: 'set-sekcja field ag-wlasne-sekcja', 'data-karta': 'agenci' });
+    sekcja.append(h('div', { klasa: 'ag-wl-glowa' }, h('h3', { tekst: t('ag.wl.h') }),
+      h('span', { klasa: 'ag-wl-licznik', tekst: t('ag.wl.licznik', { n: lista.length, max: MAX_WLASNYCH }) })));
+    sekcja.append(h('p', { klasa: 'set-sekcja-opis', tekst: t('ag.wl.opis') }));
+    const ul = h('ul', { klasa: 'ag-role ag-wlasne' });
+    for (const r of lista) {
+      if (szkicWlasnej && szkicWlasnej.id === r.id) { ul.append(h('li', { klasa: 'ag-wl-edytowana' }, formularzWlasnej(k, lista))); continue; }
+      const opis = [r.cel, (r.cechy || []).filter((c) => CECHY_ROLI.includes(c)).map((c) => t('ag.wl.cecha.' + c)).join(', '),
+        r.fala === 2 ? t('ag.wl.fala2Krotko') : '', r.wymagaObrazu ? t('ag.wl.obrazKrotko') : ''].filter(Boolean).join(' · ');
+      const edytuj = przycisk('zespol-link ag-wl-edytuj', t('ag.wl.edytuj'), () => {
+        szkicWlasnej = { id: r.id, nazwa: r.nazwa || '', cel: r.cel || '', instrukcja: r.instrukcja || '', cechy: [...(r.cechy || [])],
+          fala: r.fala === 2 ? 2 : 1, wymagaObrazu: Boolean(r.wymagaObrazu), blad: '' };
+        k.odswiez && k.odswiez({ fokus: '[data-pole="nazwa"]' });
+      }, { 'aria-label': t('ag.wl.edytujRole', { nazwa: r.nazwa || '' }) });
+      const usun = przycisk('zespol-link ag-wl-usun', t('ag.wl.usun'), async () => {
+        if (typeof confirm === 'function' && !confirm(t('ag.wl.usunPotwierdz', { nazwa: r.nazwa || '' }))) return;
+        const w = await k.naZmiane({ wlasneRole: lista.filter((x) => x !== r).map(doZapisu) });
+        if (w && w.ok === false) { szkicWlasnej = null; k.odswiez && k.odswiez(); }
+      }, { 'aria-label': t('ag.wl.usunRole', { nazwa: r.nazwa || '' }) });
+      ul.append(h('li', { klasa: 'ag-rola ag-wlasna', 'data-id': r.id || '' },
+        h('span', { klasa: 'set-wiersz-tekst' }, h('span', { klasa: 'ag-wl-nazwa' }, h('span', { tekst: r.nazwa || '' }), znakWlasnej()),
+          h('span', { klasa: 'field-hint', tekst: opis })),
+        h('span', { klasa: 'ag-wl-akcje' }, edytuj, usun)));
+    }
+    if (ul.firstChild) sekcja.append(ul);
+    if (szkicWlasnej && !szkicWlasnej.id) sekcja.append(formularzWlasnej(k, lista));
+    else if (!szkicWlasnej) {
+      const dodaj = h('button', { type: 'button', klasa: 'zespol-dodaj ag-wl-dodaj' });
+      dodaj.innerHTML = IK.plus;
+      dodaj.append(t('ag.wl.dodaj'));
+      dodaj.disabled = lista.length >= MAX_WLASNYCH;
+      if (dodaj.disabled) dodaj.title = t('ag.wl.limit', { max: MAX_WLASNYCH });
+      dodaj.addEventListener('click', () => {
+        szkicWlasnej = { id: null, nazwa: '', cel: '', instrukcja: '', cechy: [], fala: 1, wymagaObrazu: false, blad: '' };
+        k.odswiez && k.odswiez({ fokus: '[data-pole="nazwa"]' });
+      });
+      sekcja.append(dodaj);
+    }
+    return sekcja;
+  }
+
+  /** Rola do zapisu: tylko pola z kontraktu (id nadaje serwer nowej roli). */
+  const doZapisu = (r) => ({
+    ...(r.id ? { id: r.id } : {}), nazwa: String(r.nazwa || '').trim().slice(0, 40), cel: String(r.cel || '').trim().slice(0, 120),
+    instrukcja: String(r.instrukcja || '').trim().slice(0, 1500), cechy: (r.cechy || []).filter((c) => CECHY_ROLI.includes(c)),
+    fala: r.fala === 2 ? 2 : 1, wymagaObrazu: Boolean(r.wymagaObrazu),
+  });
+
+  function formularzWlasnej(k, lista) {
+    const sz = szkicWlasnej;
+    const f = h('div', { klasa: 'ag-wl-formularz', role: 'group', 'aria-label': t(sz.id ? 'ag.wl.edycja' : 'ag.wl.nowa') });
+    const idP = (x) => `ag-wl-${x}`;
+    const tekstowe = (pole, max, wielo) => {
+      const el = h(wielo ? 'textarea' : 'input', { id: idP(pole), 'data-pole': pole, maxlength: String(max),
+        ...(wielo ? { rows: '5' } : { type: 'text', autocomplete: 'off' }), 'aria-describedby': `${idP(pole)}-hint` });
+      el.value = sz[pole] || '';
+      return el;
+    };
+    const blad = h('p', { klasa: 'ag-wl-blad', role: 'alert', tekst: sz.blad || '' });
+    blad.hidden = !sz.blad;
+    const nazwa = tekstowe('nazwa', 40);
+    const cel = tekstowe('cel', 120);
+    const instr = tekstowe('instrukcja', 1500, true);
+    const licznikInstr = h('span', { klasa: 'field-hint ag-wl-licz', id: `${idP('instrukcja')}-hint` });
+    const liczI = () => { licznikInstr.textContent = t('ag.wl.znaki', { n: instr.value.length, max: 1500 }); };
+    liczI();
+    // Powód odmowy znika, gdy człowiek zaczyna poprawiać (nie wisi nad wpisaną już nazwą).
+    const bezBledu = () => { if (sz.blad) { sz.blad = ''; blad.textContent = ''; blad.hidden = true; } };
+    nazwa.addEventListener('input', () => { sz.nazwa = nazwa.value; bezBledu(); });
+    cel.addEventListener('input', () => { sz.cel = cel.value; });
+    instr.addEventListener('input', () => { sz.instrukcja = instr.value; liczI(); bezBledu(); });
+    const wiersz = (pole, el, podpowiedz) => h('div', { klasa: 'field' },
+      h('label', { klasa: 'field-label', for: idP(pole), tekst: t('ag.wl.pole.' + pole) }), el,
+      podpowiedz || h('span', { klasa: 'field-hint', id: `${idP(pole)}-hint`, tekst: t('ag.wl.pole.' + pole + 'Hint') }));
+    f.append(wiersz('nazwa', nazwa), wiersz('cel', cel), wiersz('instrukcja', instr, licznikInstr));
+    // Cechy – po nich Cosmos dobiera model roli („Auto”).
+    const cechy = h('fieldset', { klasa: 'ag-wl-cechy' }, h('legend', { klasa: 'field-label', tekst: t('ag.wl.pole.cechy') }));
+    for (const c of CECHY_ROLI) {
+      const box = h('input', { type: 'checkbox', value: c, 'data-pole': `cecha-${c}` });
+      box.checked = sz.cechy.includes(c);
+      box.addEventListener('change', () => { sz.cechy = box.checked ? [...new Set([...sz.cechy, c])] : sz.cechy.filter((x) => x !== c); });
+      cechy.append(h('label', { klasa: 'ag-wl-cecha' }, box, h('span', { tekst: t('ag.wl.cecha.' + c) })));
+    }
+    cechy.append(h('span', { klasa: 'field-hint', tekst: t('ag.wl.pole.cechyHint') }));
+    const fala = h('fieldset', { klasa: 'ag-wl-fala' }, h('legend', { klasa: 'field-label', tekst: t('ag.wl.pole.fala') }));
+    for (const n of [1, 2]) {
+      const r = h('input', { type: 'radio', name: 'ag-wl-fala', value: String(n), 'data-pole': `fala-${n}` });
+      r.checked = sz.fala === n;
+      r.addEventListener('change', () => { if (r.checked) sz.fala = n; });
+      fala.append(h('label', { klasa: 'ag-wl-cecha' }, r, h('span', { klasa: 'set-wiersz-tekst' },
+        h('span', { tekst: t(`ag.wl.fala${n}`) }), h('span', { klasa: 'field-hint', tekst: t(`ag.wl.fala${n}Hint`) }))));
+    }
+    const obraz = h('input', { type: 'checkbox', 'data-pole': 'wymagaObrazu' });
+    obraz.checked = sz.wymagaObrazu;
+    obraz.addEventListener('change', () => { sz.wymagaObrazu = obraz.checked; });
+    const obrazEt = h('label', { klasa: 'ag-wl-cecha ag-wl-obraz' }, obraz, h('span', { klasa: 'set-wiersz-tekst' },
+      h('span', { tekst: t('ag.wl.pole.obraz') }), h('span', { klasa: 'field-hint', tekst: t('ag.wl.pole.obrazHint') })));
+    const anuluj = przycisk('btn-ghost', t('ag.wl.anuluj'), () => { szkicWlasnej = null; k.odswiez && k.odswiez({ fokus: '.ag-wl-dodaj' }); });
+    const zapisz = przycisk('btn-primary ag-wl-zapisz', t('ag.wl.zapisz'), async () => {
+      const gotowa = doZapisu(sz);
+      const brak = !gotowa.nazwa ? 'nazwa' : !gotowa.instrukcja ? 'instrukcja' : '';
+      if (brak) {
+        sz.blad = t(brak === 'nazwa' ? 'ag.wl.brakNazwy' : 'ag.wl.brakInstrukcji');
+        blad.textContent = sz.blad; blad.hidden = false;
+        (brak === 'nazwa' ? nazwa : instr).focus();
+        return;
+      }
+      zapisz.disabled = true;
+      const nowa = sz.id ? lista.map((x) => (x.id === sz.id ? { ...gotowa, id: sz.id } : doZapisu(x))) : [...lista.map(doZapisu), gotowa];
+      const kopia = szkicWlasnej;
+      szkicWlasnej = null;
+      const w = await k.naZmiane({ wlasneRole: nowa });
+      if (w && w.ok === false) {
+        // Serwer odmówił (walidacja, limit, dysk) – szkic wraca z powodem.
+        szkicWlasnej = { ...kopia, blad: w.error || t('ag.wl.bladZapisu') };
+        k.odswiez && k.odswiez({ fokus: '.ag-wl-zapisz' });
+      }
+    });
+    f.append(cechy, fala, obrazEt, blad, h('div', { klasa: 'ag-wl-przyciski' }, anuluj, zapisz));
+    return f;
   }
 
   // -------------------------------------------------------------------------
@@ -874,6 +1239,7 @@ function utworzZespolWidok(z) {
 const CZYSTE_ZESPOLU = {
   stanWidoku, nowyStanTury, zjedzZdarzenieZespolu, wiadomoscNotatek, stanZWiadomosci, roleBezWkladu,
   skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
+  rozpoznajZgode, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, PLATNE_ZESPOLU,
 };
 
 if (typeof window !== 'undefined') Object.assign(window, { utworzZespolWidok, ZESPOL: CZYSTE_ZESPOLU });

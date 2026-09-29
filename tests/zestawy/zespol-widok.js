@@ -20,7 +20,19 @@
    W8. tura z notatkami – `turaMaNotatki` (Regeneruj nie woła zespołu drugi raz);
    W9. propozycja („Proponuj, gdy warto”) nie jest pracą zespołu – nie zmienia ról;
    W10. każdy klucz i18n użyty przez widok zespołu jest w OBU słownikach,
-        łącznie z kluczami budowanymi z danych (stany, role, tryby). */
+        łącznie z kluczami budowanymi z danych (stany, role, tryby);
+   W11. zgoda GŁOSEM: wypowiedź → 'tak' | 'lokalnie' | 'nie' | '' (PL i EN):
+        „lokalnie” wygrywa z „tak”, „nie ma sprawy” to zgoda, polskie „no”
+        i długie zdanie to nie odpowiedź;
+   W12. poprawka po recenzji (fala 3): pierwsze zdarzenie `rola` z `fala:3`
+        i `poprawkaZ` dopisuje wiersz na końcu – tylko przy istniejącej roli;
+        przechodzi przez zapis i odczyt notatek, nie idzie w składzie do wysłania;
+   W13. własna rola („w-…”) jest rozpoznana i przechodzi przez zapis i odczyt;
+   W14. złotówki: kwoty w formacie pl-PL / en-GB (grosz, nie „0,00”), szacunek
+        składu nieznany dla płatnej roli bez szacunku, koszt tury z `faza`
+        albo z ról, w notatkach i po odczycie; kod „budzet” roli zostaje;
+   W15. `sklad.wymagaZgody` (true albo 'chmura') i silniki za zgodą – tylko
+        znane nazwy, bez lokalnego. */
 const fs = require('fs');
 const path = require('path');
 const Z = require('../../public/zespol-widok.js');
@@ -139,13 +151,111 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
   ok(s5.role.length === 0 && s5.propozycja && s5.propozycja.role.length === 3 && !s5.bylSklad, 'W9. propozycja nie jest pracą zespołu (role bez zmian)');
 }
 
+// ------------------------------------------------------------------ W11
+{
+  const przypadki = [
+    ['pl', 'Tak.', 'tak'], ['pl', 'No dobra', 'tak'], ['pl', 'Jasne!', 'tak'], ['pl', 'okej', 'tak'], ['pl', 'Nie ma sprawy', 'tak'],
+    ['pl', 'Czemu nie?', 'tak'], ['pl', 'Użyj chmury', 'tak'],
+    ['pl', 'Tylko lokalnie', 'lokalnie'], ['pl', 'Tak, ale tylko lokalnie', 'lokalnie'], ['pl', 'Nie, u mnie na komputerze', 'lokalnie'],
+    ['pl', 'Bez chmury', 'lokalnie'], ['pl', 'Nie do chmury', 'lokalnie'],
+    ['pl', 'Nie.', 'nie'], ['pl', 'Nie, dziękuję', 'nie'], ['pl', 'Bez agentów', 'nie'], ['pl', 'Tak, bez agentów', 'nie'], ['pl', 'Odpowiedz sam', 'nie'],
+    ['pl', 'no', ''], ['pl', 'Hmm', ''], ['pl', 'Dziękuję', ''], ['pl', 'Tak naprawdę chciałem zapytać o coś innego', ''],
+    ['pl', 'Jaka będzie jutro pogoda w Krakowie i czy warto jechać na zdjęcia nad morze?', ''], ['pl', '', ''],
+    ['en', 'Yes.', 'tak'], ['en', 'Go ahead', 'tak'], ['en', 'No problem', 'tak'], ['en', 'Why not?', 'tak'],
+    ['en', 'Only locally', 'lokalnie'], ['en', 'Keep it local', 'lokalnie'], ['en', 'Yes, but locally', 'lokalnie'],
+    ['en', 'No.', 'nie'], ['en', 'No thanks', 'nie'], ['en', 'Without agents', 'nie'], ['en', 'Hmm', ''],
+  ];
+  const zle = przypadki.filter(([j, x, oczek]) => Z.rozpoznajZgode(x, j) !== oczek).map(([j, x, oczek]) => `${j}:„${x}” → ${Z.rozpoznajZgode(x, j) || '∅'} (≠ ${oczek || '∅'})`);
+  ok(!zle.length, `W11. zgoda głosem: ${przypadki.length} wypowiedzi PL/EN → tak/lokalnie/nie/niejasne${zle.length ? ` – źle: ${zle.join('; ')}` : ''}`);
+}
+
+// ------------------------------------------------------------------ W12
+{
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'cloud', model: 'm' }, role: [
+    { r: 'r1', rola: 'programista', nazwa: 'Programista', silnik: 'openai', model: 'gpt-5-mini', fala: 1 },
+    { r: 'r2', rola: 'recenzent', nazwa: 'Recenzent', silnik: 'claude', model: 'claude-sonnet-5', fala: 2 }] }, 0);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'x9', rola: 'programista', stan: 'pracuje' }, 10);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r9p', rola: 'programista', fala: 3, poprawkaZ: 'r9', stan: 'pracuje' }, 10);
+  ok(s.role.length === 2, 'W12a. nieznana rola bez fali 3 (albo z poprawką nieistniejącej) – pominięta');
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r1p', rola: 'programista', nazwa: 'Programista', fala: 3, poprawkaZ: 'r1', stan: 'czeka', silnik: 'openai', model: 'gpt-5-mini' }, 20);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r1p', stan: 'pracuje' }, 30);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r1p', d: 'poprawiony kod' }, 40);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r1p', stan: 'gotowa', ms: 900, kosztZl: 0.0123 }, 50);
+  const p = s.role[2];
+  ok(s.role.length === 3 && p && p.r === 'r1p' && p.fala === 3 && p.poprawkaZ === 'r1' && p.silnik === 'openai' && p.tresc === 'poprawiony kod' && p.stan === 'gotowa',
+    'W12b. fala 3: pierwsze zdarzenie dopisuje wiersz na końcu (pod recenzentem), dalej stany jak inne');
+  const w12 = Z.wiadomoscNotatek(s, 100);
+  const z12 = w12.zespol.wklady.find((x) => x.r === 'r1p');
+  ok(z12 && z12.fala === 3 && z12.poprawkaZ === 'r1' && z12.kosztZl === 0.0123, 'W12c. w notatkach poprawka ma fala:3, poprawkaZ i koszt');
+  const o12 = Z.stanZWiadomosci(w12);
+  ok(o12.role[2].fala === 3 && o12.role[2].poprawkaZ === 'r1', 'W12d. po odczycie zapisu wiersz poprawki zostaje poprawką');
+  ok(Z.skladDoWyslania(o12.role).length === 2 && !Z.skladDoWyslania(o12.role).some((x) => x.rola === 'programista' && x.fala), 'W12e. „Zmień skład”/„Ponów” nie wysyła poprawki jako osobnej roli');
+}
+
+// ------------------------------------------------------------------ W13
+{
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, role: [{ r: 'r1', rola: 'w-1a2b3c4d', nazwa: 'Tłumacz', silnik: 'local', model: 'q', fala: 2 }],
+    odrzucone: [{ rola: 'w-9f9f9f9f', kod: 'wymaga-zgody', silnik: 'claude', wlasna: true, nazwa: 'Doradca' }] }, 0);
+  ok(s.role[0].wlasna === true && Z.czyWlasnaRola(s.role[0]) && Z.czyWlasnaRola({ klucz: 'w-x' }) && !Z.czyWlasnaRola({ rola: 'badacz' }),
+    'W13a. własna rola rozpoznana po „w-” (i fladze), wbudowana – nie');
+  ok(s.odrzucone[0].nazwa === 'Doradca', 'W13b. odrzucona własna rola niesie swoją nazwę (do linijki pod blokiem)');
+  const o = Z.stanZWiadomosci(Z.wiadomoscNotatek(s, 10));
+  ok(o.role[0].wlasna === true && o.role[0].nazwa === 'Tłumacz' && o.role[0].fala === 2, 'W13c. zapis i odczyt zachowują własną rolę');
+  ok(Z.skladDoWyslania(s.role)[0].rola === 'w-1a2b3c4d', 'W13d. skład do wysłania niesie id własnej roli (instrukcję ma serwer)');
+}
+
+// ------------------------------------------------------------------ W14
+{
+  const nb = (x) => x.replace(/\u00a0/g, ' ');
+  ok(nb(Z.kwotaZl(0.12, 'pl')) === '0,12 zł' && nb(Z.kwotaZl(0.12, 'en')) === 'PLN 0.12' && nb(Z.kwotaZl(0.001, 'pl')) === '< 0,01 zł'
+    && Z.kwotaZl(undefined, 'pl') === '' && Z.kwotaZl(-1, 'pl') === '',
+    `W14a. kwoty: „${Z.kwotaZl(0.12, 'pl')}”, „${Z.kwotaZl(0.12, 'en')}”, grosz „${Z.kwotaZl(0.001, 'pl')}”, brak → ''`);
+  ok(Z.szacunekSkladu([{ silnik: 'claude', szacunekZl: 0.1 }, { silnik: 'cloud' }, { silnik: 'local' }]) === 0.1
+    && Z.szacunekSkladu([{ silnik: 'claude' }]) === null && Z.szacunekSkladu([{ silnik: 'cloud', auto: true }]) === null
+    && Z.szacunekSkladu([{ silnik: 'cloud' }]) === 0,
+    'W14b. szacunek składu: znany + darmowe = suma; płatna bez szacunku albo „Auto” = nieznany');
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, szacunekZl: 0.2, role: [
+    { r: 'r1', rola: 'badacz', silnik: 'openai', model: 'gpt-5-mini', szacunekZl: 0.05 },
+    { r: 'r2', rola: 'analityk', silnik: 'claude', model: 'c' }] }, 0);
+  ok(s.szacunekZl === 0.2 && s.role[0].szacunekZl === 0.05, 'W14c. szacunek całości i roli ze `sklad`');
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r1', stan: 'gotowa', ms: 1, kosztZl: 0.04 }, 5);
+  Z.zjedzZdarzenieZespolu(s, 'rola', { r: 'r2', stan: 'pominieta', kod: 'budzet', ms: 0, kosztZl: 0 }, 6);
+  ok(Z.kosztTury(s) === 0.04, `W14d. koszt tury bez \`faza\` – suma ról (${Z.kosztTury(s)})`);
+  Z.zjedzZdarzenieZespolu(s, 'faza', { faza: 'prowadzacy', t: 10, notatki: 'N', kosztZl: 0.0512 }, 10);
+  const w = Z.wiadomoscNotatek(s, 20);
+  const o = Z.stanZWiadomosci(w);
+  ok(w.zespol.kosztZl === 0.0512 && o.kosztZl === 0.0512 && Z.kosztTury(o) === 0.0512, 'W14e. koszt z `faza` w notatkach i po odczycie');
+  ok(o.role[1].stan === 'pominieta' && o.role[1].kod === 'budzet', 'W14f. rola pominięta z powodu budżetu – kod zostaje w zapisie (wiersz mówi „budżet”)');
+  const pr = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(pr, 'sklad', { propozycja: true, szacunekZl: 0.33, role: [{ r: 'r1', rola: 'badacz', silnik: 'claude' }] }, 0);
+  ok(pr.propozycja.szacunekZl === 0.33, 'W14g. propozycja („Proponuj”) niesie szacunek');
+}
+
+// ------------------------------------------------------------------ W15
+{
+  const s = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s, 'sklad', { v: 1, wymagaZgody: true, silnikiZaZgoda: ['claude', 'local', 'x<y', 'cloud'], role: [{ r: 'r1', rola: 'analityk', silnik: 'local' }] }, 0);
+  ok(s.wymagaZgody === true && s.silnikiZaZgoda.join(',') === 'claude,cloud', `W15a. wymagaZgody + silniki za zgodą (${s.silnikiZaZgoda.join(',')})`);
+  const s2 = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s2, 'sklad', { v: 1, role: [{ r: 'r1', rola: 'analityk', silnik: 'local' }] }, 0);
+  ok(s2.wymagaZgody === false && Z.wymagaZgodyZ('chmura') && Z.wymagaZgodyZ(true) && !Z.wymagaZgodyZ(null), 'W15b. bez pola – bez pytania; trasa planu: \'chmura\' = true');
+}
+
 // ------------------------------------------------------------------ W10
 {
-  const zrodla = ['public/zespol-widok.js', 'public/app.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', '..', f), 'utf8')).join('\n');
-  const literalne = [...new Set([...zrodla.matchAll(/\bt\('((?:ag|narzedzie)\.[a-zA-Z0-9_.]+[a-zA-Z0-9_])'/g)].map((m) => m[1]))];
+  const zrodla = ['public/zespol-widok.js', 'public/app.js', 'public/konta.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', '..', f), 'utf8')).join('\n');
+  const literalne = [...new Set([...zrodla.matchAll(/\bt\('((?:ag|narzedzie|chat\.budzet|voice\.errBudzet|acc\.budzet|acc\.zuzycieZl)[a-zA-Z0-9_.]*[a-zA-Z0-9_])'/g)].map((m) => m[1]))];
   const zDanych = [
     ...['czeka', 'pracuje', 'gotowe', 'pominieta', 'zatrzymana', 'blad'].map((s) => `ag.stan.${s}`),
-    ...['badacz', 'sprzetowiec', 'programista', 'oko', 'analityk', 'recenzent'].flatMap((r) => [`ag.rola.${r}`, `ag.rola.${r}.opis`]),
+    ...['badacz', 'fotograf', 'sprzetowiec', 'programista', 'oko', 'analityk', 'recenzent'].flatMap((r) => [`ag.rola.${r}`, `ag.rola.${r}.opis`]),
+    // Własne role: cechy, pola formularza, fale (klucze składane z danych).
+    ...['kod', 'wizja', 'rozumowanie', 'szybki', 'polski'].map((c) => `ag.wl.cecha.${c}`),
+    ...['nazwa', 'cel'].flatMap((x) => [`ag.wl.pole.${x}`, `ag.wl.pole.${x}Hint`]), 'ag.wl.pole.instrukcja', 'ag.wl.pole.cechy', 'ag.wl.pole.cechyHint',
+    'ag.wl.pole.fala', 'ag.wl.pole.obraz', 'ag.wl.pole.obrazHint', 'ag.wl.fala1', 'ag.wl.fala1Hint', 'ag.wl.fala2', 'ag.wl.fala2Hint',
+    'ag.odrzuconeBudzet', 'ag.odmowaBudzet', 'ag.glos.zgodaGrupa', 'ag.glos.tak', 'chat.doBudzetu', 'voice.errBudzet', 'voice.errBudzetChmura',
     ...['wylaczony', 'prosba', 'proponuj', 'sam'].flatMap((t) => [`ag.set.tryb.${t}`, `ag.set.tryb.${t}Hint`]),
     'narzedzie.zespol', 'set.k.agenci', 'ag.btn', 'ag.btnOn', 'ag.inputPh', 'ag.pokaz', 'ag.ukryj',
     'ag.odrzuconeZgoda', 'ag.odrzuconeUprawnienia', 'ag.odrzuconeLimit', 'ag.set.potwierdzaj', 'ag.set.zgodaStala',

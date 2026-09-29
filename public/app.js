@@ -28,8 +28,9 @@ const DEFAULT_SETTINGS = {
      odpowiedzi to łata; sensowny domyślny budżet to profilaktyka. */
   maxTokens: 4096,
   speak: false,
-  // Zespół agentów: pytaj przed startem, gdy rola jest na innym płatnym silniku (Ustawienia → Agenci).
-  zespolPotwierdzaj: true,
+  /* „Pytaj przed startem” (zespół agentów) żyje na serwerze – /api/zespol/ustawienia
+     `potwierdzaj`. Stare `zespolPotwierdzaj: false` z przeglądarki czeka tu na
+     jednorazową migrację (migrujPotwierdzaj). */
 };
 
 let conversations = [];          // INDEKS rozmów: [{id, title, createdAt, updatedAt}]
@@ -884,11 +885,14 @@ function messageElement(m, idx = -1, opcje = {}) {
       }
       const ponow = document.createElement('button');
       /* Błąd trwały (zły klucz, brak środków, model spoza rozmowy): „Ponów”
-         zawsze skończy się tak samo – droga prowadzi do Ustawień. */
+         zawsze skończy się tak samo – droga prowadzi do Ustawień. Limit budżetu
+         od właściciela zmienia tylko on – wtedy zostaje sama „Chmura”. */
+      if (m.budzet === 'wlasciciel') ponow.hidden = true;
       if (m.trwaly) {
         ponow.className = 'msg-action-btn msg-ponow ik ik-trybik';
-        ponow.textContent = t('chat.doUstawien');
-        ponow.addEventListener('click', () => openSettings('silniki'));
+        // Budżet w złotówkach ustawia się w Ustawienia → Agenci, nie w silnikach.
+        ponow.textContent = t(m.budzet ? 'chat.doBudzetu' : 'chat.doUstawien');
+        ponow.addEventListener('click', () => openSettings(m.budzet ? 'agenci' : 'silniki'));
       } else {
         ponow.className = 'msg-action-btn msg-ponow ik ik-odswiez';
         ponow.textContent = t('chat.ponow');
@@ -2077,6 +2081,11 @@ const BIEG_KLUCZ = 'cosmos.bieg';
  *  Inne błędy – zdanie serwera bez zmian. */
 function bladSilnikaPoLudzku(err, zapasChmura) {
   const kod = err && err.kod;
+  if (/^budzet/.test(kod || '')) {
+    return [t(err.okres === 'miesiac' ? 'chat.budzetMiesiac' : 'chat.budzetDzien'),
+      t(err.limit === 'wlasciciel' ? 'chat.budzetWlasciciel' : 'chat.budzetWlasny'),
+      zapasChmura ? t('chat.budzetChmura') : ''].filter(Boolean).join(' ');
+  }
   if (kod !== 'lokalny-niedostepny' && kod !== 'zimny-start') return String((err && err.message) || '');
   const dalej = t(zapasChmura ? 'chat.lokWyslijChmura' : 'chat.lokPrzelaczChmura');
   if (kod === 'zimny-start') return t('chat.lokZimny', { dalej });
@@ -2092,6 +2101,7 @@ function glosBledu(err) {
   if (kod === 'lokalny-niedostepny' && err.zapasChmura) return 'voice.errConnChmura';
   if (kod === 'lokalny-niedostepny') return err.rodzaj === 'odmowa' ? 'voice.errOllama' : 'voice.errConn';
   if (kod === 'zimny-start') return 'voice.errColdStart';
+  if (/^budzet/.test(kod || '')) return err.zapasChmura ? 'voice.errBudzetChmura' : 'voice.errBudzet';
   if (kod === 'klucz-dostawcy' || kod === 'brak-klucza') return 'voice.errKey';
   const m = String((err && err.message) || '');
   return /środk|kredyt|credit|billing|balance|insufficient|płatno/i.test(m) ? 'voice.errMoney'
@@ -2278,13 +2288,16 @@ async function streamOnce(conv, opcje = {}) {
       let data = {};
       try {
         data = await readJsonSafe(res);
-        errText = data.error || errText;
+        // Budżet w złotówkach (429 budzet-wyczerpany) podaje powód w `blad`.
+        errText = data.error || data.blad || errText;
       } catch { /* ignore */ }
       zapamietajBieg(null);
       /* Kod i „trwały" od serwera: głos wybiera zdanie po kodzie, a przy błędzie
          trwałym (zły klucz, brak środków, model, który nie rozmawia) zamiast
          „Ponów", który zawsze skończy się tak samo, jest droga do Ustawień. */
-      throw Object.assign(new Error(errText), { kod: data.kod || '', rodzaj: data.rodzaj || '', trwaly: Boolean(data.trwaly), status: res.status });
+      throw Object.assign(new Error(errText), { kod: data.kod || '', rodzaj: data.rodzaj || '', trwaly: Boolean(data.trwaly), status: res.status,
+        // Budżet w złotówkach: który limit (dzienny/miesięczny) i czyj (własny/od właściciela).
+        ...(data.okres ? { okres: String(data.okres) } : {}), ...(data.limit ? { limit: String(data.limit) } : {}) });
     }
 
     naglowkiPrzyszly = true;
@@ -2626,11 +2639,24 @@ const {
    bramka zgody przed startem, edytor modelu roli, Ustawienia → Agenci
    i kropki ról w trybie głosowym. Serwer: lib/zespol.js. */
 const ZDARZENIA_ZESPOLU = new Set(['zespol', 'sklad', 'rola', 'faza']);
-const zespolWidok = utworzZespolWidok({ t, renderMarkdown, widokWToku, nazwaSilnika });
+const zespolWidok = utworzZespolWidok({ t, renderMarkdown, widokWToku, nazwaSilnika, jezyk: () => getLang(), wlasneRole: () => wlasneRoleOsoby() });
 const PLATNE_SILNIKI = ['openai', 'claude'];
 let zespolNaTure = null;        // jednorazowa prośba o zespół dla następnej tury
 let propozycjaZespolu = null;   // „Mogę to sprawdzić zespołem” pod ostatnią odpowiedzią (tylko w pamięci)
 const cfgZespolu = () => (serverConfig && serverConfig.zespol) || {};
+let ustawieniaZespolu = null;     // GET /api/zespol/ustawienia (z własnymi rolami, budżetem, „potwierdzaj”)
+/** Własne role osoby (Ustawienia → Agenci) – z /api/zespol/ustawienia, pobieranych na starcie. */
+const wlasneRoleOsoby = () => (ustawieniaZespolu && Array.isArray(ustawieniaZespolu.wlasneRole) ? ustawieniaZespolu.wlasneRole
+  : Array.isArray(cfgZespolu().wlasneRole) ? cfgZespolu().wlasneRole : []);
+/* „Pytaj przed startem” żyje na serwerze (pole `potwierdzaj`). Wyłączone
+   w przeglądarce przed przenosinami czeka na jednorazową migrację – do tego
+   czasu obowiązuje wartość z przeglądarki, żeby nic nie zaczęło pytać samo. */
+function potwierdzajZespolu() {
+  if (settings.zespolPotwierdzaj === false) return false;
+  if (ustawieniaZespolu && typeof ustawieniaZespolu.potwierdzaj === 'boolean') return ustawieniaZespolu.potwierdzaj;
+  if (typeof cfgZespolu().potwierdzaj === 'boolean') return cfgZespolu().potwierdzaj;
+  return true;
+}
 
 /** Indeks ostatniej wypowiedzi człowieka (nie wyniku narzędzia) – początek tury. */
 function granicaTury(conv) {
@@ -2676,6 +2702,8 @@ function modeleZakladek() {
 function zespolDoWyslania(conv, prosba) {
   const cfg = cfgZespolu();
   if (!cfg.dozwolony) return undefined;
+  // „Bez agentów” (zgoda głosem: „nie” albo cisza) – ta tura bez zespołu, także bez planisty.
+  if (prosba && prosba.bez) return undefined;
   const baza = { modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) || Boolean(prosba && prosba.zgoda) } };
   if (prosba && Array.isArray(prosba.sklad) && prosba.sklad.length) return { ...baza, sklad: prosba.sklad, uruchom: true };
   if (prosba && prosba.uruchom) return { ...baza, uruchom: true };
@@ -2702,6 +2730,14 @@ function zespolZdarzenie(zt, typ, surowe, miejsce) {
   try { d = JSON.parse(surowe); } catch { return; }
   const ogloszenia = ZESPOL.zjedzZdarzenieZespolu(zt.st, typ, d);
   if (typ === 'sklad' && d.propozycja) return;
+  /* Tryb głosowy: rola w chmurze czeka na zgodę (lokalny prowadzący). Bramki
+     nie ma czego kliknąć, więc bieg staje, ZANIM role ruszą, a Cosmos pyta
+     głosem (pytajOZgodeWBiegu w runGeneration). */
+  if (typ === 'sklad' && voiceMode && zt.st.wymagaZgody && !zt.zgodaGlos && !zgodaChmury(zt.conv)) {
+    zt.zgodaGlos = { role: zt.st.role.map((r) => ({ ...r })), odrzucone: zt.st.odrzucone.slice(), silniki: zt.st.silnikiZaZgoda.slice() };
+    stopGeneration();
+    return;
+  }
   /* Planista uznał, że zespół niepotrzebny (tryb „sam”) – odpowiada sam prowadzący.
      Zostaje tylko linijka roli, która czeka na zgodę na chmurę („Zgoda i ponów”). */
   if (zt.st.faza === 'bez-rol' && !ZESPOL.czekaNaZgode(zt.st)) { if (zt.ui) { zt.ui.el.remove(); zt.ui = null; } return; }
@@ -2816,23 +2852,30 @@ function zlozPonownie(notIdx) {
 function katalogRol(conv) {
   const pytanie = conv && conv.messages[granicaTury(conv)];
   const obraz = Boolean(pytanie && msgImages(pytanie).length);
-  return (cfgZespolu().role || []).filter((k) => k !== 'oko' || obraz).map((klucz) => ({ klucz }));
+  return [
+    ...roleWbudowane().filter((k) => k !== 'oko' || obraz).map((klucz) => ({ klucz })),
+    // Własne role osoby – „Dodaj rolę” pokazuje je z oznaczeniem „własna”.
+    ...wlasneRoleOsoby().filter((r) => r && r.id && (!r.wymagaObrazu || obraz))
+      .map((r) => ({ klucz: r.id, nazwa: r.nazwa, cel: r.cel, wlasna: true, wymagaObrazu: Boolean(r.wymagaObrazu) })),
+  ];
 }
+/** Klucze ról z katalogu Cosmosa – bez własnych („w-…”), które serwer dopisuje do `config.zespol.role`. */
+const roleWbudowane = () => (cfgZespolu().role || []).filter((k) => typeof k === 'string' && !/^w-/.test(k));
 
 /** Czy skład ma rolę na płatnym silniku innym niż prowadzący (ustawienie „Pytaj przed startem”). */
-const platnyInny = (role, prowadzacy) => settings.zespolPotwierdzaj !== false
+const platnyInny = (role, prowadzacy) => potwierdzajZespolu()
   && (role || []).some((r) => !r.auto && PLATNE_SILNIKI.includes(r.silnik) && r.silnik !== (prowadzacy && prowadzacy.silnik));
 
 /**
  * Skład do przejrzenia (bramka zgody, edycja) w miejscu elementu `zamiast`.
  * naWynik({sklad, zgoda}) – Start albo „Tylko lokalnie”; naWynik(null) – „Bez agentów”.
  */
-function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, naWynik }) {
+function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, szacunekZl, naWynik }) {
   const pytajOZgode = prowadzacy.silnik === 'local' && !zgodaChmury(conv);
   const lokalnieDomyslnie = pytajOZgode && serverConfig.endpoints && serverConfig.endpoints.local
     ? role.map((r) => ({ ...r, silnik: 'local', model: r.silnik === 'local' ? r.model : prowadzacy.model, auto: false })) : null;
   const p = zespolWidok.propozycja({
-    role, prowadzacy, pytajOZgode, lokalnie: lokalnie || lokalnieDomyslnie,
+    role, prowadzacy, pytajOZgode, lokalnie: lokalnie || lokalnieDomyslnie, szacunekZl,
     maxRol: cfgZespolu().maxRol || 3, katalog: katalogRol(conv),
     otworzEdytor: (r, btn, gotowe) => otworzEdytorRoli(r, btn, gotowe),
     naStart: ({ role: r, zgoda }) => { if (zgoda) ustawZgode(conv); naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda }); },
@@ -2851,7 +2894,8 @@ function zmienSkladTury(notIdx, st, blokEl) {
   const prowadzacy = st.prowadzacy || { silnik: endpoint, model: currentModel() };
   pokazPropozycje(blokEl, {
     conv, prowadzacy,
-    role: st.role.map((r) => ({ rola: r.rola, zadanie: '', silnik: r.silnik, model: r.model })),
+    // Poprawka po recenzji (fala 3) nie jest rolą składu – serwer dokłada ją sam.
+    role: st.role.filter((r) => r.fala !== 3).map((r) => ({ rola: r.rola, zadanie: '', silnik: r.silnik, model: r.model, ...(r.wlasna ? { wlasna: true, nazwa: r.nazwa } : {}) })),
     naWynik: (w) => (w ? ponowZespolem(notIdx, w) : renderMessages({ przewin: false })),
   });
 }
@@ -2868,7 +2912,7 @@ async function bramkaZespolu(conv) {
   const prowadzacy = { silnik: znakTury.silnik, model: znakTury.model };
   const silnikiOsoby = Object.keys(serverConfig.endpoints || {});
   const mozeChmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && silnikiOsoby.some((s) => s !== 'local');
-  const mozePlatny = settings.zespolPotwierdzaj !== false && silnikiOsoby.some((s) => PLATNE_SILNIKI.includes(s) && s !== prowadzacy.silnik);
+  const mozePlatny = potwierdzajZespolu() && silnikiOsoby.some((s) => PLATNE_SILNIKI.includes(s) && s !== prowadzacy.silnik);
   if (!cfg.dozwolony || (!mozeChmura && !mozePlatny)) return { uruchom: true };
 
   const { msg, kolumna } = kartaOdpowiedzi(prowadzacy.silnik, prowadzacy.model);
@@ -2896,13 +2940,26 @@ async function bramkaZespolu(conv) {
     const role = plan && plan.sklad && Array.isArray(plan.sklad.role) ? plan.sklad.role : [];
     // Planu nie ma – serwer ułoży skład sam, w biegu.
     if (!role.length) return { uruchom: true };
-    const zaZgoda = plan.wymagaZgody === 'chmura' ? ZESPOL.skladZaZgoda(role) : null;
+    const zaZgoda = ZESPOL.wymagaZgodyZ(plan.wymagaZgody) ? ZESPOL.skladZaZgoda(role) : null;
     const pytajOZgode = Boolean(zaZgoda && ZESPOL.silnikiChmury(zaZgoda).length);
+    /* Tryb głosowy: bramki nie ma czego kliknąć w wątku – pytanie o chmurę
+       idzie głosem (i trzema przyciskami na scenie). O płatny silnik głos nie
+       pyta osobno: o zespół poproszono tu wprost, a koszt stoi w bloku. */
+    if (voiceMode) {
+      if (!pytajOZgode) return { sklad: ZESPOL.skladDoWyslania(role) };
+      const w = await pytajOZgodeGlosem(ZESPOL.silnikiChmury(zaZgoda), zaZgoda);
+      if (ac.signal.aborted || turaPrzerwana) return 'stop';
+      if (w === 'tak') { ustawZgode(conv); return { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true }; }
+      if (w === 'lokalnie') return { sklad: ZESPOL.skladDoWyslania(role) };
+      return null;
+    }
     if (!pytajOZgode && !platnyInny(role, prowadzacy)) return { sklad: ZESPOL.skladDoWyslania(role) };
     return await new Promise((ok) => {
       ac.signal.addEventListener('abort', () => ok('stop'), { once: true });
       pokazPropozycje(dobieranie.el, {
         conv, prowadzacy, role: zaZgoda || role, lokalnie: pytajOZgode ? role : null,
+        // Szacunek planu dotyczy składu z planu; za zgodą (inne silniki) liczy się z ról.
+        szacunekZl: zaZgoda ? undefined : plan.sklad.szacunekZl,
         naWynik: (w) => ok(w),
       });
       scrollToBottom();
@@ -2911,6 +2968,100 @@ async function bramkaZespolu(conv) {
     msg.remove();
     if (abortController === ac) abortController = null;
   }
+}
+
+/* ---- Zgoda GŁOSEM (U4) -------------------------------------------------
+   W trybie głosowym wątku nikt nie ogląda, więc bramki zgody nie da się
+   kliknąć. Gdy zespół chce użyć chmury przy lokalnym prowadzącym, Cosmos MÓWI
+   pytanie, słucha odpowiedzi tym samym rozpoznawaniem mowy co zawsze
+   (rozpoznajZgode w zespol-widok.js), a na scenie stoją też trzy przyciski.
+   Dwie niejasne odpowiedzi albo 10 s ciszy = „bez agentów” – wtedy nic nie
+   wychodzi z komputera. */
+const ZGODA_GLOSEM_MS = 10000;
+let zgodaGlosem = null;          // { odpowiedz(tekst), wybierz(w) } – gdy czekamy na odpowiedź
+
+function pytajOZgodeGlosem(silniki, role) {
+  return new Promise((gotowe) => {
+    const panel = $('voice-zgoda');
+    let timer = null;
+    let sufit = 0;
+    let niejasne = 0;
+    let koniec = false;
+    const zakoncz = (w) => {
+      if (koniec) return;
+      koniec = true;
+      clearTimeout(timer);
+      zgodaGlosem = null;
+      if (panel) panel.hidden = true;
+      el.voiceAnswer.textContent = '';
+      glosZespolu(null);
+      ustawGluchote(true);             // tura rusza dalej – Cosmos myśli, nie słucha
+      if (voiceMode) setVoiceState('thinking');
+      gotowe(['tak', 'lokalnie', 'nie'].includes(w) ? w : 'nie');
+    };
+    // 10 s na odpowiedź od końca pytania; trwająca mowa albo rozpoznawanie przesuwa termin (najwyżej o 8 s).
+    const odliczaj = (ms = ZGODA_GLOSEM_MS) => {
+      clearTimeout(timer);
+      if (ms === ZGODA_GLOSEM_MS) sufit = Date.now() + ZGODA_GLOSEM_MS + 8000;
+      timer = setTimeout(() => {
+        if (typeof nasluchZajety === 'function' && nasluchZajety() && Date.now() < sufit) { odliczaj(400); return; }
+        zakoncz('nie');
+      }, ms);
+    };
+    const mow = async (tekst) => {
+      el.voiceAnswer.textContent = tekst;
+      setVoiceState('speaking');
+      voiceOstatniaOdpowiedz = stripForSpeech(tekst);   // echo pytania nie wróci jako odpowiedź
+      await speakText(tekst);
+      voiceKoniecMowienia = Date.now();
+    };
+    const sluchaj = () => {
+      if (koniec) return;
+      if (!voiceMode) { zakoncz('nie'); return; }
+      startQueryListening();
+      clearTimeout(nasluchCisza);      // koniec słuchania wyznacza pytanie o zgodę, nie zwykła cisza
+      odliczaj();
+    };
+    zgodaGlosem = {
+      odpowiedz(tekst) {
+        el.voiceTranscript.classList.remove('podglad', 'komunikat');
+        el.voiceTranscript.textContent = tekst;
+        const w = ZESPOL.rozpoznajZgode(tekst, getLang() === 'en' ? 'en' : 'pl');
+        if (w) { zakoncz(w); return; }
+        if (++niejasne >= 2) { zakoncz('nie'); return; }
+        clearTimeout(timer);
+        mow(t('ag.glos.zgodaPowtorz')).then(sluchaj);
+      },
+      wybierz: zakoncz,
+    };
+    if (panel) panel.hidden = false;
+    // Kropki proponowanych ról pod kulą – kto i na jakim silniku.
+    glosZespolu({ faza: '', role: (role || []).map((r) => ({ ...r, stan: 'czeka' })) });
+    const pytanie = t('ag.glos.zgodaPytanie', { silniki: silniki.map((x) => nazwaSilnika(x)).join(', ') });
+    mow(pytanie).then(sluchaj);
+  });
+}
+
+/**
+ * Bieg zatrzymany na `sklad` z `wymagaZgody` (tryb głosowy) → pytanie głosem
+ * i ta sama tura od nowa: „tak” – skład z chmurą (bez drugiego planisty, gdy
+ * żadna rola nie odpadła), „tylko lokalnie” – skład z planu, „nie” – bez zespołu.
+ */
+async function pytajOZgodeWBiegu(conv, zg) {
+  const zaZgoda = ZESPOL.skladZaZgoda(zg.role);
+  const odpadly = zg.odrzucone.filter((o) => o.kod === 'wymaga-zgody');
+  const silniki = [...new Set([...(zg.silniki || []), ...ZESPOL.silnikiChmury(zaZgoda), ...odpadly.map((o) => o.silnik).filter((x) => x && x !== 'local')])];
+  const w = await pytajOZgodeGlosem(silniki.length ? silniki : ['cloud'], [...zaZgoda, ...odpadly.map((o) => ({ rola: o.rola, nazwa: o.nazwa, silnik: o.silnik || 'cloud' }))]);
+  if (activeConv() !== conv) return;
+  let prosba;
+  if (w === 'tak') {
+    ustawZgode(conv);
+    prosba = odpadly.length ? { uruchom: true, zgoda: true } : { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true };
+  } else if (w === 'lokalnie') {
+    const lokalne = zg.role.filter((r) => r.silnik === 'local' || !/wymaga-zgody/.test(r.powod || ''));
+    prosba = lokalne.length ? { sklad: ZESPOL.skladDoWyslania(lokalne) } : { bez: true };
+  } else prosba = { bez: true };
+  zespolOdPytania(conv, prosba);
 }
 
 /** Cicha linijka „Mogę to sprawdzić zespołem” pod ostatnią odpowiedzią solo. */
@@ -2940,7 +3091,7 @@ function uruchomPropozycje(conv, p, prowadzacy, edycja, linijka) {
     return;
   }
   pokazPropozycje(linijka, {
-    conv, prowadzacy, role: p.role.map((r) => ({ ...r })),
+    conv, prowadzacy, role: p.role.map((r) => ({ ...r })), szacunekZl: p.szacunekZl,
     naWynik: (w) => (w ? zespolOdPytania(conv, w) : renderMessages({ przewin: false })),
   });
 }
@@ -2994,45 +3145,93 @@ function odswiezPrzyciskZespolu() {
 $('zespol-btn')?.addEventListener('click', () => { ustawPrzyciskZespolu(!zespolWcisniety); el.input.focus(); });
 
 // ---- Ustawienia → Agenci ----
-let ustawieniaZespolu = null;
-async function rysujUstawieniaZespolu(pobierz = true) {
+async function rysujUstawieniaZespolu(pobierz = true, { fokus = '' } = {}) {
   const box = $('ag-ustawienia');
   if (!box) return;
-  const cfg = cfgZespolu();
+  let cfg = cfgZespolu();
   if (!cfg.dozwolony) { box.textContent = ''; kartyUstawien.odswiez(); return; }
   if (pobierz) {
-    try {
-      const r = await fetch('/api/zespol/ustawienia');
-      if (r.ok) ustawieniaZespolu = (await r.json()).ustawienia || ustawieniaZespolu;
-    } catch { /* offline – z konfiguracji */ }
+    await Promise.all([pobierzUstawieniaZespolu(), odswiezStanBudzetu()]);
+    cfg = cfgZespolu();
   }
   const us = ustawieniaZespolu || { tryb: cfg.tryb, maxRol: cfg.maxRol, zgodaChmura: cfg.zgodaChmura, role: {} };
-  // Fokus zostaje na tym samym elemencie po przebudowie (radio, segment, rola).
+  // Fokus zostaje na tym samym elemencie po przebudowie (radio, segment, rola, pole formularza).
   const a = document.activeElement;
-  const cel = a && box.contains(a) ? (a.name === 'ag-tryb' ? `input[value="${a.value}"]`
+  const cel = fokus || (a && box.contains(a) ? (a.name === 'ag-tryb' ? `input[value="${a.value}"]`
     : a.closest('.ag-segment') ? `.ag-segment button:nth-child(${[...a.parentNode.children].indexOf(a) + 1})`
-      : a.closest('.ag-rola') ? `.ag-rola[data-rola="${a.closest('.ag-rola').dataset.rola}"] button` : '') : '';
+      : a.dataset && a.dataset.pole ? `[data-pole="${a.dataset.pole}"]`
+        : a.closest('.ag-wlasna') ? `.ag-wlasna[data-id="${a.closest('.ag-wlasna').dataset.id}"] .${a.classList.contains('ag-wl-usun') ? 'ag-wl-usun' : 'ag-wl-edytuj'}`
+          : a.closest('.ag-rola') ? `.ag-rola[data-rola="${a.closest('.ag-rola').dataset.rola}"] button` : '') : '');
   box.textContent = '';
   box.append(zespolWidok.panelUstawien({
-    us, sufit: cfg.maxRolSufit || 3, potwierdzaj: settings.zespolPotwierdzaj !== false,
-    katalog: cfg.role || [], bezDostepu: bezDostepuSilniki(), naZmiane: zmienUstawieniaZespolu,
+    us, sufit: cfg.maxRolSufit || 3, potwierdzaj: potwierdzajZespolu(),
+    katalog: roleWbudowane(), bezDostepu: bezDostepuSilniki(), naZmiane: zmienUstawieniaZespolu,
     otworzEdytor: (klucz, btn, gotowe) => otworzEdytorRoli({ rola: klucz }, btn, gotowe, { zUsun: false, wybrany: (us.role || {})[klucz] || null }),
+    wlasne: wlasneRoleOsoby(), budzet: us.budzetZl, stanBudzetu: cfg.budzet, kurs: cfg.kurs,
+    odswiez: (o) => rysujUstawieniaZespolu(false, o || {}),
   }));
-  if (cel) box.querySelector(cel)?.focus();
+  if (cel) (box.querySelector(cel) || (fokus ? box.querySelector('.ag-wl-dodaj:not([disabled]), .ag-wl-edytuj') : null))?.focus();
   kartyUstawien.odswiez();
 }
+
+/** Ustawienia zespołu osoby z serwera (własne role, budżet, „potwierdzaj”) + migracja „potwierdzaj”. */
+async function pobierzUstawieniaZespolu() {
+  if (!cfgZespolu().dozwolony) return;
+  try {
+    const r = await fetch('/api/zespol/ustawienia');
+    if (r.ok) ustawieniaZespolu = (await r.json()).ustawienia || ustawieniaZespolu;
+  } catch { /* offline – z konfiguracji */ }
+  migrujPotwierdzaj();
+}
+
+/** Świeży stan budżetu (wydano dziś, zostało) – z /api/config, tylko część zespołu. */
+async function odswiezStanBudzetu() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.zespol) serverConfig.zespol = { ...cfgZespolu(), ...d.zespol };
+  } catch { /* offline – zostaje stan z startu */ }
+}
+
+/** Zapis w Ustawienia → Agenci. Zwraca {ok, error} – formularz własnej roli
+ *  zostaje otwarty z powodem, gdy serwer odmówi. */
 async function zmienUstawieniaZespolu(zmiana) {
-  if ('potwierdzaj' in zmiana) { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); return; }
+  let wynik = { ok: false, error: '' };
   try {
     const r = await fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(zmiana) });
     const d = await readJsonSafe(r);
     if (r.ok && d.ustawienia) {
       ustawieniaZespolu = d.ustawienia;
-      serverConfig.zespol = { ...cfgZespolu(), tryb: d.ustawienia.tryb, maxRol: d.ustawienia.maxRol, zgodaChmura: d.ustawienia.zgodaChmura };
-    }
-  } catch { /* offline – panel wraca do stanu z serwera */ }
+      serverConfig.zespol = { ...cfgZespolu(), tryb: d.ustawienia.tryb, maxRol: d.ustawienia.maxRol, zgodaChmura: d.ustawienia.zgodaChmura,
+        ...(typeof d.ustawienia.potwierdzaj === 'boolean' ? { potwierdzaj: d.ustawienia.potwierdzaj } : {}) };
+      wynik = { ok: true };
+      if ('potwierdzaj' in zmiana) {
+        if (typeof d.ustawienia.potwierdzaj === 'boolean') { delete settings.zespolPotwierdzaj; saveSettings(); }
+        // Serwer bez pola `potwierdzaj` (starsza wersja) – ustawienie zostaje w przeglądarce jak dawniej.
+        else { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); }
+      }
+    } else wynik = { ok: false, error: (d && (d.error || d.blad)) || t('httpErr', { status: r.status }) };
+  } catch {
+    if ('potwierdzaj' in zmiana) { settings.zespolPotwierdzaj = zmiana.potwierdzaj; saveSettings(); }
+    wynik = { ok: false, error: t('ag.wl.bladZapisu') };
+  }
+  if ('budzetZl' in zmiana && wynik.ok) await odswiezStanBudzetu();
   odswiezPrzyciskZespolu();
-  rysujUstawieniaZespolu(false);
+  // Po zapisie własnej roli fokus wraca na „Dodaj własną rolę” (element sprzed przebudowy już nie istnieje).
+  const fokus = 'wlasneRole' in zmiana && wynik.ok ? '.ag-wl-dodaj:not([disabled])' : '';
+  await rysujUstawieniaZespolu(false, { fokus });
+  return wynik;
+}
+
+/* „Pytaj przed startem” przeniesione na serwer (etap 5). Kto wyłączył je
+   w tej przeglądarce, wysyła to raz na serwer; potem obowiązuje serwer na
+   każdym urządzeniu. Włączone (domyślne) nie wymaga przenosin. */
+let migracjaPotwierdzaj = false;
+function migrujPotwierdzaj() {
+  if (migracjaPotwierdzaj || settings.zespolPotwierdzaj !== false || !ustawieniaZespolu) return;
+  migracjaPotwierdzaj = true;
+  zmienUstawieniaZespolu({ potwierdzaj: false }).finally(() => { migracjaPotwierdzaj = false; });
 }
 
 /* Wynik narzędzia wraca do modelu jako wiadomość użytkownika – bo tak wygląda
@@ -3259,7 +3458,7 @@ async function runGeneration(conv, podpiecie = null) {
   const prosbaZespolu = zespolNaTure;
   zespolNaTure = null;
   propozycjaZespolu = null;
-  const zt = { st: ZESPOL.nowyStanTury(), ui: null, zapisane: false, tik: null };
+  const zt = { st: ZESPOL.nowyStanTury(), ui: null, zapisane: false, tik: null, conv, zgodaGlos: null };
   // Wyszukiwanie badacza już jest w notatkach – ten sam [SZUKAJ:] od prowadzącego dostaje „już wyszukałeś”.
   const notatkiTury = conv.messages.slice(granicaTury(conv)).find((m) => m.narzedzie === 'zespol');
   if (notatkiTury && notatkiTury.zespol && notatkiTury.zespol.szukaj) stan.szukaj = new Set([odciskZapytania(notatkiTury.zespol.szukaj)]);
@@ -3416,6 +3615,9 @@ async function runGeneration(conv, podpiecie = null) {
       /* Widz odszedł do innej rozmowy – odpowiedź pisze się dalej na serwerze
          i tam zostanie zapisana. Tu nic nie dopisujemy: fragment z notką
          „Zatrzymano” byłby nieprawdą. */
+    } else if (err.name === 'AbortError' && zt.zgodaGlos) {
+      /* Bieg stanął, żeby zapytać głosem o zgodę na chmurę – nic się jeszcze
+         nie policzyło, więc nic nie zapisujemy (ani notatek, ani „Zatrzymano”). */
     } else if (err.name === 'AbortError') {
       zapiszNotatkiTury(conv, zt, stan);
       /* Przerwana odpowiedź też przechodzi przez czyszczenie znaczników.
@@ -3439,11 +3641,14 @@ async function runGeneration(conv, podpiecie = null) {
          Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
          więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
       // Zimny start też: model ładuje się minutami, a chmura odpowie od razu (zespół IT, runda 9).
-      const zapasChmura = ['lokalny-niedostepny', 'zimny-start'].includes(err.kod) && epConfig('cloud').hasApiKey;
+      // Budżet na płatne modele wyczerpany (429): chmura NVIDIA nic nie kosztuje – to samo jednym kliknięciem.
+      const budzet = /^budzet/.test(err.kod || '');
+      const zapasChmura = (['lokalny-niedostepny', 'zimny-start'].includes(err.kod) || (budzet && endpoint !== 'cloud')) && epConfig('cloud').hasApiKey;
       const tekstBledu = bladSilnikaPoLudzku(err, zapasChmura);
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${tekstBledu}`, error: true,
         ...(tekstBledu !== err.message ? { szczegol: err.message } : {}),
-        ...(err.trwaly ? { trwaly: true } : {}), ...(zapasChmura ? { zapas: 'cloud' } : {}) });
+        ...(err.trwaly || budzet ? { trwaly: true } : {}), ...(budzet ? { budzet: err.limit === 'wlasciciel' ? 'wlasciciel' : 'wlasny' } : {}),
+        ...(zapasChmura ? { zapas: 'cloud' } : {}) });
       saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
          powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
@@ -3483,7 +3688,12 @@ async function runGeneration(conv, podpiecie = null) {
     /* Koniec odpowiedzi nie ściąga na dół kogoś, kto przewinął do początku,
        żeby czytać – tak było: 5600 px lotu w dół w chwili zakończenia. */
     renderMessages({ przewin: sledzeDol });
-    if (voiceMode) {
+    if (zt.zgodaGlos) {
+      /* Pytanie o zgodę głosem, potem ta sama tura od nowa (z chmurą, lokalnie
+         albo bez agentów). Kto w tej chwili wyszedł z głosu – dostaje zwykłą bramkę. */
+      if (voiceMode) await pytajOZgodeWBiegu(conv, zt.zgodaGlos);
+      else if (activeConv() === conv) zespolOdPytania(conv, { uruchom: true, przygotuj: true });
+    } else if (voiceMode) {
       /* Tura ze zdjęciami: plan stoi w kawałkach między siatkami, a „finalText”
          to tylko domknięcie z ostatniej rundy – często puste. Głos milczał
          wtedy albo mówił samo „Miłej podróży!” (agencja, runda 7). Czytamy
@@ -5430,6 +5640,8 @@ function pokazChmureWGlosie(tak) {
 }
 
 function exitVoiceMode() {
+  // Wyjście z głosu w trakcie pytania o zgodę = „bez agentów” (nic nie wychodzi do chmury).
+  if (zgodaGlosem) zgodaGlosem.wybierz('nie');
   pokazChmureWGlosie(false);
   voiceMode = false;
   silnikSesji = null;
@@ -6013,6 +6225,9 @@ const NOTE_START_RE = /\b(nowa notatka|nagraj notatk[ęe]|(zacznij|rozpocznij|st
 const NOTE_STOP_RE = /\b((koniec|zako[nń]cz|stop|zapisz)\s+(notatk[ęei]|nagrywani[ae]|dyktowani[ae])|(end|stop|save)\s+(note|recording))\b/i;
 
 async function handleVoiceQuery(text) {
+  /* Cosmos czeka na odpowiedź o zgodę na chmurę dla zespołu – to nie jest
+     nowe pytanie (i nie przerywa tury, która na tę odpowiedź czeka). */
+  if (zgodaGlosem) { zgodaGlosem.odpowiedz(text); return; }
   el.voiceTranscript.classList.remove('podglad', 'komunikat');
   el.voiceTranscript.textContent = text;
   /* Pytanie głosowe w trakcie pisanej odpowiedzi uruchamiało drugą generację
@@ -6081,6 +6296,11 @@ async function handleVoiceQuery(text) {
 }
 
 el.voiceBtn.addEventListener('click', enterVoiceMode);
+// Trzy przyciski zgody na scenie (to samo co odpowiedź głosem).
+$('voice-zgoda')?.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('[data-zgoda]');
+  if (b && zgodaGlosem) { stopSpeaking(); zgodaGlosem.wybierz(b.dataset.zgoda); }
+});
 el.voiceClose.addEventListener('click', exitVoiceMode);
 
 /* Kula jest przyciskiem ZAWSZE, nie tylko po przejściu na „naciśnij".
@@ -7729,6 +7949,8 @@ async function loadServerConfigWlasciwe() {
   refreshStatus();
   odswiezPrzyciskZespolu();
   rysujUstawieniaZespolu(false);
+  // Własne role (do „Dodaj rolę”) i „Pytaj przed startem” – od razu, nie dopiero po otwarciu Ustawień.
+  pobierzUstawieniaZespolu().then(() => rysujUstawieniaZespolu(false));
 }
 
 // ----------------------------------------------------------------

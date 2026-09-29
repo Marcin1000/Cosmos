@@ -27,7 +27,25 @@
    P9. Ustawienia → Agenci po „Silnikach”; tryb zapisany na serwerze;
        „Wyłączony” chowa przycisk zespołu;
    P10. EN: blok i przycisk po angielsku;
-   P11. tryb głosowy: kropki ról pod kulą, czytana tylko odpowiedź prowadzącego. */
+   P11. tryb głosowy: kropki ról pod kulą, czytana tylko odpowiedź prowadzącego.
+   Etap 5 (dokładki):
+   P14. Ustawienia → Agenci, „Własne role”: formularz (fokus, brak nazwy),
+        zapis na serwerze (id od serwera), nazwa od osoby TYLKO jako tekst,
+        znacznik „własna”, licznik, edycja tej samej roli;
+   P15. własna rola w „Dodaj rolę” (oznaczona) → w składzie idzie jej id,
+        w bloku wiersz ze znacznikiem „własna”;
+   P16. poprawka po recenzji (fala 3): wiersz „Programista – poprawka po
+        recenzji” pod recenzentem, nagłówek liczy role bez poprawki;
+   P17. złotówki: limit dzienny zapisany na serwerze, koszt ról przy wyniku,
+        szacunek w bramce płatnego silnika, rola pominięta z powodu budżetu,
+        czat 429 budzet-wyczerpany → komunikat, „Wyślij przez Chmurę”,
+        „Ustawienia budżetu” (karta Agenci);
+   P18. zgoda GŁOSEM (lokalny prowadzący, rola w chmurze): Cosmos mówi pytanie,
+        na scenie trzy przyciski, do odpowiedzi nic nie idzie do chmury;
+        „tak” → role w chmurze, „Tylko lokalnie” → zero żądań do chmury,
+        10 s ciszy → odpowiedź bez zespołu;
+   P19. „Pytaj przed startem” na serwerze: wyłączone w przeglądarce idzie tam
+        JEDNYM zapisem i znika z pamięci przeglądarki. */
 const path = require('path');
 const { ATRAPY, serwerCosmosa, uruchom, czekajNa, zwolnijPorty, przegladarka, wynik } = require('../pomoc');
 
@@ -77,16 +95,29 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const bledy = [];
     page.on('pageerror', (e) => bledy.push(e.message));
     const zadaniaCzatu = [];
+    const zapisyUstawien = [];
     page.on('request', (r) => {
       if (r.method() === 'POST' && r.url().endsWith('/api/chat')) { try { zadaniaCzatu.push(JSON.parse(r.postData() || '{}')); } catch { /* */ } }
+      if (r.method() === 'POST' && r.url().endsWith('/api/zespol/ustawienia')) { try { zapisyUstawien.push(JSON.parse(r.postData() || '{}')); } catch { /* */ } }
     });
     await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
     await page.waitForFunction(() => { const x = document.getElementById('zespol-btn'); return x && !x.hidden; }, null, { timeout: 15000 });
     const koniecTury = () => page.waitForFunction(() => !isGenerating, null, { timeout: 60000 });
+    const ustawieniaSerwera = () => page.evaluate(() => fetch('/api/zespol/ustawienia').then((r) => r.json()).then((d) => d.ustawienia));
+
+    // ---------------------------------------------------------------- P19
+    await page.waitForFunction(() => { try { return !('zespolPotwierdzaj' in JSON.parse(localStorage.getItem('cosmos.settings') || '{}')); } catch { return false; } },
+      null, { timeout: 8000 }).catch(() => {});
+    const us19 = await ustawieniaSerwera();
+    const lok19 = await page.evaluate(() => localStorage.getItem('cosmos.settings'));
+    ok(us19.potwierdzaj === false && zapisyUstawien.filter((z) => 'potwierdzaj' in z).length === 1 && !/zespolPotwierdzaj/.test(lok19)
+      && await page.evaluate(() => potwierdzajZespolu()) === false,
+      `P19. „Pytaj przed startem” wyłączone w przeglądarce → jeden zapis na serwerze, klucz znika z przeglądarki (zapisów ${zapisyUstawien.length})`);
     const wyslij = async (tekst) => { await page.fill('#input', tekst); await page.press('#input', 'Enter'); };
     const nowaRozmowa = async () => { await page.evaluate(() => newConversation()); await page.waitForTimeout(150); };
     const wiadomosci = () => page.evaluate(() => activeConversation.messages.map((m) => ({ role: m.role, narzedzie: m.narzedzie || '', search: Boolean(m.search),
-      content: typeof m.content === 'string' ? m.content : '', silnik: m.silnik || '', wklady: m.zespol ? m.zespol.wklady.length : 0 })));
+      // Wkłady ról składu – poprawka po recenzji (fala 3) to druga runda programisty, nie osobna rola.
+      content: typeof m.content === 'string' ? m.content : '', silnik: m.silnik || '', wklady: m.zespol ? m.zespol.wklady.filter((x) => x.fala !== 3).length : 0 })));
     const ekran = () => page.evaluate(() => document.getElementById('messages').innerText);
 
     // ---------------------------------------------------------------- P1
@@ -143,6 +174,21 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const wklad = await page.evaluate(() => ({ exp: document.querySelector('.zespol .rola-wiersz').getAttribute('aria-expanded'),
       tresc: document.querySelector('.zespol .rola-tresc').innerText }));
     ok(wklad.exp === 'true' && /WNIOSKI: notatka roli/.test(wklad.tresc), 'P1l. rozwinięty wiersz pokazuje pełny wkład roli (aria-expanded)');
+
+    // ---------------------------------------------------------------- P16, P17b
+    const f3 = await page.evaluate(() => {
+      const li = [...document.querySelectorAll('.zespol .rola')];
+      const ost = li[li.length - 1];
+      return { n: li.length, fala: ost && ost.dataset.fala, nazwa: ost ? ost.querySelector('.rola-nazwa').innerText : '', przed: li.length > 1 ? li[li.length - 2].dataset.rola : '',
+        glowa: document.querySelector('.zespol .zespol-tytul').textContent, koszt: (document.querySelector('.zespol .zespol-koszt') || {}).textContent || '' };
+    });
+    ok(f3.fala === '3' && /^Programista – poprawka po recenzji/.test(f3.nazwa) && f3.przed === 'recenzent' && /· 2 role$/.test(f3.glowa),
+      `P16. poprawka po recenzji: ostatni wiersz pod recenzentem, nagłówek bez niej (${JSON.stringify(f3).slice(0, 160)})`);
+    await page.click('.zespol-glowa');
+    const koszt17 = await page.evaluate(() => ({ glowa: (document.querySelector('.zespol .zespol-koszt-glowa') || {}).textContent || '',
+      widac: getComputedStyle(document.querySelector('.zespol .zespol-koszt-glowa') || document.body).display !== 'none' }));
+    ok(/zł$/.test(f3.koszt) && /koszt ról/.test(f3.koszt) && /· .*zł$/.test(koszt17.glowa) && koszt17.widac,
+      `P17b. koszt ról po wyniku: w stopce rozwiniętego bloku i przy czasie zwiniętego („${f3.koszt}”, „${koszt17.glowa}”)`);
 
     // ---------------------------------------------------------------- P2
     zadaniaCzatu.length = 0;
@@ -236,7 +282,8 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.evaluate(() => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: {} }) }));
     await page.click('.endpoint-tab[data-endpoint="cloud"]');
     // Rola na innym płatnym silniku przy „Pytaj przed startem”: bramka bez zgody na chmurę.
-    await page.evaluate(() => { settings.zespolPotwierdzaj = true; });
+    // „Pytaj przed startem” żyje na serwerze (etap 5) – przełącznik jak w Ustawieniach.
+    await page.evaluate(() => zmienUstawieniaZespolu({ potwierdzaj: true }));
     await page.evaluate(() => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: { programista: { silnik: 'claude', model: 'claude-sonnet-5' } } }) }));
     await nowaRozmowa();
@@ -245,11 +292,13 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const bramka2 = await page.waitForSelector('.zespol[data-stan="propozycja"] .btn-primary', { timeout: 15000 }).catch(() => null);
     const b62 = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"]') || {}).innerText || '');
     ok(Boolean(bramka2) && /Claude/i.test(b62) && !/wyśle treść rozmowy do chmury/.test(b62), 'P6d. rola na innym płatnym silniku – skład do potwierdzenia (bez zdania o chmurze)');
+    const szac = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"] .zespol-szacunek') || {}).textContent || '');
+    ok(/^ok\. (\d+,\d{2}|< 0,01)\s?zł$/.test(szac.replace(/\u00a0/g, ' ')), `P17c. szacunek kosztu w bramce płatnego silnika („${szac}”)`);
     if (bramka2) await page.click('.zespol[data-stan="propozycja"] .btn-ghost');
     await koniecTury();
     const m62 = await wiadomosci();
     ok(m62.length === 2 && !m62.some((m) => m.narzedzie === 'zespol'), '„Bez agentów” – odpowiedź bez zespołu'.replace(/^/, 'P6e. '));
-    await page.evaluate(() => { settings.zespolPotwierdzaj = false; });
+    await page.evaluate(() => zmienUstawieniaZespolu({ potwierdzaj: false }));
     await page.evaluate(() => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: {} }) }));
 
     // ---------------------------------------------------------------- P12, P13
@@ -306,9 +355,12 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await p7.setViewportSize({ width: 740, height: 313 });
     await p7.evaluate(() => renderMessages());
     await p7.click('.zespol-glowa');
+    /* Role składu w jednym rzędzie; poprawka po recenzji (fala 3, czwarta
+       pigułka) może zejść do drugiego – byle bez przewijania w bok. */
     const pigulki = await p7.evaluate(() => {
-      const li = [...document.querySelectorAll('.zespol .rola')];
-      return { gory: [...new Set(li.map((x) => Math.round(x.getBoundingClientRect().top)))].length, n: li.length, bok: document.documentElement.scrollWidth - innerWidth };
+      const li = [...document.querySelectorAll('.zespol .rola:not([data-fala="3"])')];
+      return { gory: [...new Set(li.map((x) => Math.round(x.getBoundingClientRect().top)))].length, n: li.length, bok: document.documentElement.scrollWidth - innerWidth,
+        poprawka: document.querySelectorAll('.zespol .rola[data-fala="3"]').length };
     });
     ok(pigulki.n === 3 && pigulki.gory === 1 && pigulki.bok <= 0, `P8. 740×313: role jako pigułki w jednym rzędzie (${JSON.stringify(pigulki)})`);
     await tel.close();
@@ -331,6 +383,13 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.evaluate(() => { setLang('en'); renderMessages(); });
     const en = await page.evaluate(() => ({ glowa: document.querySelector('.zespol .zespol-tytul').textContent, btn: document.getElementById('zespol-btn').getAttribute('aria-label') }));
     ok(/^Team · 3 roles$/.test(en.glowa) && en.btn === 'Agent team', `P10. EN: „${en.glowa}”, przycisk „${en.btn}”`);
+    await page.evaluate(() => openSettings('agenci'));
+    await page.waitForSelector('#ag-ustawienia .ag-wlasne-sekcja', { timeout: 5000 }).catch(() => {});
+    const en14 = await page.evaluate(() => ({ wl: (document.querySelector('.ag-wlasne-sekcja h3') || {}).textContent, bud: (document.querySelector('.ag-budzet-sekcja h3') || {}).textContent,
+      dodaj: (document.querySelector('.ag-wl-dodaj') || {}).textContent }));
+    ok(en14.wl === 'Custom roles' && en14.bud === 'Budget in złoty' && /^Add a custom role$/.test((en14.dodaj || '').trim()),
+      `P10b. EN: „${en14.wl}”, „${en14.bud}”, „${en14.dodaj}”`);
+    await page.evaluate(() => closeSettings());
     await page.evaluate(() => { setLang('pl'); renderMessages(); });
 
     // ---------------------------------------------------------------- P11
@@ -351,6 +410,162 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const glos = await page.evaluate(() => { const g = { mowa: window.__mowa.join('\n'), kropki: window.__kropki, zostaly: document.querySelectorAll('.voice-zespol').length }; voiceMode = false; return g; });
     ok(glos.kropki > 0 && glos.zostaly === 0, 'P11a. tryb głosowy: kropki ról pod kulą w trakcie, sprzątnięte po turze');
     ok(/Odpowiedź prowadzącego/.test(glos.mowa) && !/WNIOSKI|NOTATKI|notatka roli/.test(glos.mowa), `P11b. czytana tylko odpowiedź prowadzącego (${glos.mowa.slice(0, 80)})`);
+
+    // ---------------------------------------------------------------- P14
+    await page.evaluate(() => openSettings('agenci'));
+    await page.waitForSelector('#ag-ustawienia .ag-wl-dodaj', { timeout: 5000 });
+    await page.click('#ag-ustawienia .ag-wl-dodaj');
+    await page.waitForSelector('.ag-wl-formularz [data-pole="nazwa"]');
+    const fok14 = await page.evaluate(() => document.activeElement && document.activeElement.dataset.pole);
+    await page.click('.ag-wl-zapisz');
+    const blad14 = await page.evaluate(() => { const e = document.querySelector('.ag-wl-blad'); return e && !e.hidden ? e.textContent : ''; });
+    ok(fok14 === 'nazwa' && /Wpisz nazwę/.test(blad14), `P14a. „Dodaj własną rolę”: fokus w nazwie, bez nazwy nie zapisuje („${blad14}”)`);
+    // Nazwa ≤ 40 znaków (serwer tnie dłuższe) – w całości znacznik HTML.
+    const ZLA = '<img src=x onerror=window.__xss=1>';
+    await page.fill('[data-pole="nazwa"]', ZLA);
+    await page.fill('[data-pole="cel"]', 'Przekłada wnioski na prosty angielski');
+    await page.fill('[data-pole="instrukcja"]', 'Przetłumacz najważniejsze zdania na angielski.');
+    await page.check('[data-pole="cecha-polski"]');
+    await page.click('.ag-wl-zapisz');
+    await page.waitForSelector('#ag-ustawienia .ag-wlasna', { timeout: 5000 });
+    const us14 = (await ustawieniaSerwera()).wlasneRole || [];
+    const w14 = await page.evaluate(() => {
+      const li = document.querySelector('#ag-ustawienia .ag-wlasna');
+      return { tekst: li.innerText, img: Boolean(li.querySelector('img')), znak: Boolean(li.querySelector('.rola-wlasna')), xss: window.__xss || 0,
+        licznik: document.querySelector('.ag-wl-licznik').textContent, fokus: (document.activeElement && document.activeElement.className) || '' };
+    });
+    ok(us14.length === 1 && /^w-/.test(us14[0].id) && us14[0].nazwa === ZLA && (us14[0].cechy || []).includes('polski') && us14[0].instrukcja,
+      `P14b. własna rola zapisana na serwerze (id od serwera: ${us14[0] && us14[0].id})`);
+    ok(w14.tekst.includes(ZLA) && !w14.img && !w14.xss && w14.znak && /^1 z 8$/.test(w14.licznik),
+      'P14c. nazwa od osoby w liście TYLKO jako tekst (bez <img>), znacznik „własna”, licznik 1 z 8');
+    ok(/ag-wl-dodaj/.test(w14.fokus), `P14d. po zapisie fokus wraca na „Dodaj własną rolę” (${w14.fokus})`);
+    await page.click('#ag-ustawienia .ag-wl-edytuj');
+    await page.fill('[data-pole="nazwa"]', 'Tłumacz');
+    await page.click('.ag-wl-zapisz');
+    await page.waitForFunction(() => { const li = document.querySelector('#ag-ustawienia .ag-wlasna'); return li && /^Tłumacz\s/.test(li.innerText); }, null, { timeout: 5000 }).catch(() => {});
+    const us14b = (await ustawieniaSerwera()).wlasneRole || [];
+    ok(us14b.length === 1 && us14[0] && us14b[0].id === us14[0].id && us14b[0].nazwa === 'Tłumacz', 'P14e. edycja zmienia tę samą rolę (to samo id)');
+    // P17a – limit dzienny w złotówkach
+    await page.fill('[data-pole="budzet-dzien"]', '3,5');
+    await page.press('[data-pole="budzet-dzien"]', 'Tab');
+    await page.waitForTimeout(600);
+    const us17 = await ustawieniaSerwera();
+    const stan17 = await page.evaluate(() => (document.querySelector('.ag-budzet-stan') || {}).textContent || '');
+    ok(us17.budzetZl && us17.budzetZl.dzien === 3.5 && /Wydano dziś/.test(stan17), `P17a. limit dzienny „3,5” zapisany jako 3.5 zł; stan wydatków w karcie („${stan17}”)`);
+    await page.evaluate(() => zmienUstawieniaZespolu({ budzetZl: { dzien: 0, miesiac: 0 } }));
+    await page.evaluate(() => closeSettings());
+
+    // ---------------------------------------------------------------- P15
+    await nowaRozmowa();
+    await btn.click();
+    await wyslij('rola-wolna:ANALITYK policz dokładnie');
+    await koniecTury();
+    await page.click('.zespol-glowa');
+    await page.click('.zespol .zespol-stopka-cicha .zespol-link');
+    await page.waitForSelector('.zespol[data-stan="propozycja"] .zespol-dodaj', { timeout: 5000 });
+    await page.click('.zespol[data-stan="propozycja"] .zespol-dodaj');
+    const opcja15 = await page.evaluate(() => { const o = document.querySelector('.zespol-dodaj-opcja.wlasna'); return o ? o.innerText.replace(/\s+/g, ' ') : ''; });
+    ok(/^Tłumacz WŁASNA$|^Tłumacz własna$/i.test(opcja15), `P15a. „Dodaj rolę” pokazuje własną rolę z oznaczeniem („${opcja15}”)`);
+    zadaniaCzatu.length = 0;
+    await page.click('.zespol-dodaj-opcja.wlasna');
+    await page.click('.zespol[data-stan="propozycja"] .btn-primary');
+    await koniecTury();
+    const sklad15 = ((zadaniaCzatu.find((z) => z.zespol) || {}).zespol || {}).sklad || [];
+    ok(sklad15.some((r) => r.rola === us14[0].id) && sklad15.every((r) => !r.instrukcja && !r.nazwa), `P15b. w składzie idzie id własnej roli, bez nazwy i instrukcji (${sklad15.map((r) => r.rola).join(',')})`);
+    await page.click('.zespol-glowa');
+    const w15 = await page.evaluate(() => { const li = document.querySelector('.zespol .rola[data-wlasna="true"]'); return li ? li.querySelector('.rola-nazwa').innerText : ''; });
+    ok(/Tłumacz/.test(w15) && /własna/i.test(w15), `P15c. w bloku wiersz własnej roli z nazwą osoby i znacznikiem („${w15.replace(/\s+/g, ' ')}”)`);
+
+    // ---------------------------------------------------------------- P17d, P17e
+    const pom17 = await page.evaluate(() => {
+      const st = ZESPOL.stanZWiadomosci({ content: 'N', zespol: { prowadzacy: { silnik: 'cloud', model: 'm' }, wklady: [
+        { r: 'r1', rola: 'badacz', silnik: 'cloud', model: 'm', stan: 'gotowa', tresc: 'x', ms: 1000 },
+        { r: 'r2', rola: 'programista', silnik: 'claude', model: 'c', stan: 'pominieta', kod: 'budzet', tresc: '', ms: 0 }],
+      odrzucone: [{ rola: 'analityk', kod: 'budzet', silnik: 'openai' }] } });
+      const b = zespolWidok.blokZespolu(st, { zywy: false });
+      document.body.append(b.el);
+      b.el.querySelector('.zespol-glowa').click();
+      const w = { blad: b.el.querySelector('.rola[data-rola="programista"] .rola-blad').textContent, odrz: b.el.querySelector('.zespol-odrzucone').textContent };
+      b.el.remove();
+      return w;
+    });
+    ok(/budżet/.test(pom17.blad) && /budżet wyczerpany/.test(pom17.odrz), `P17d. rola pominięta i odrzucona z powodu budżetu – słowami („${pom17.blad}”, „${pom17.odrz}”)`);
+    await nowaRozmowa();
+    await page.route('**/api/chat', (r) => (r.request().method() === 'POST'
+      ? r.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ kod: 'budzet-wyczerpany', error: 'Budżet wyczerpany.', blad: 'Budżet wyczerpany.', zostalo: 0, okres: 'dzien', limit: 'wlasny' }) })
+      : r.continue()));
+    await page.click('.endpoint-tab[data-endpoint="claude"]');
+    await wyslij('Ile to kosztuje?');
+    await koniecTury();
+    await page.unroute('**/api/chat');
+    const e17 = await page.evaluate(() => { const m = [...document.querySelectorAll('.msg')].pop(); return { tekst: m.innerText,
+      przyciski: [...m.querySelectorAll('.msg-bledu-akcje button')].filter((x) => !x.hidden).map((x) => x.textContent) }; });
+    ok(/Dzienny budżet na płatne modele jest wyczerpany/.test(e17.tekst) && e17.przyciski.join('|') === 'Wyślij przez Chmurę|Ustawienia budżetu',
+      `P17e. czat 429 budzet-wyczerpany: komunikat, „Wyślij przez Chmurę”, „Ustawienia budżetu” (${e17.przyciski.join('|')})`);
+    await page.click('.msg-bledu-akcje button:has-text("Ustawienia budżetu")');
+    await page.waitForSelector('#set-panel-agenci:not([hidden]) .ag-budzet-sekcja', { timeout: 5000 }).catch(() => {});
+    ok(await page.locator('#set-panel-agenci:not([hidden]) .ag-budzet-sekcja').count() === 1, 'P17f. „Ustawienia budżetu” otwiera kartę Agenci z budżetem');
+    await page.evaluate(() => closeSettings());
+    await page.click('.endpoint-tab[data-endpoint="cloud"]');
+
+    // ---------------------------------------------------------------- P18
+    await nowaRozmowa();
+    await page.evaluate(() => {
+      window.__mowa = [];
+      speakText = async (tekst) => { window.__mowa.push(tekst); };
+      startQueryListening = () => { setVoiceState('listening'); };
+      voiceMode = true;
+      document.getElementById('voice-overlay').style.display = 'flex';
+      setEndpoint('local');
+    });
+    const turaGlosem = (tekst) => page.evaluate((t) => { const conv = ensureConversation('głos'); conv.messages.push({ role: 'user', content: t }); window.__tura = runGeneration(conv); }, tekst);
+    const pytanieZgody = () => page.waitForFunction(() => !document.getElementById('voice-zgoda').hidden, null, { timeout: 20000 }).then(() => true).catch(() => false);
+    const PYT18 = 'plan-chmura rola-wolna:ANALITYK zrób to zespołem: policz ekspozycję';
+    await zeruj();
+    await turaGlosem(PYT18);
+    const jest18 = await pytanieZgody();
+    await page.waitForTimeout(300);
+    const g18 = await page.evaluate(() => ({ mowa: window.__mowa.join(' | '), przyciski: [...document.querySelectorAll('#voice-zgoda button')].map((b) => b.textContent),
+      kropki: document.querySelectorAll('#voice-overlay .voice-zespol .vz-rola').length }));
+    const przed18 = doModeli(await stanAtrapy()).filter((x) => x.rodzaj === 'rola' && x.silnik !== 'local');
+    ok(jest18 && /^Zespół chce użyć chmury: NVIDIA\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów”\.$/.test(g18.mowa)
+      && g18.przyciski.join('|') === 'Tak|Tylko lokalnie|Bez agentów' && g18.kropki > 0,
+      `P18a. tryb głosowy: Cosmos mówi pytanie o chmurę, na scenie trzy przyciski i kropki ról (${g18.mowa.slice(0, 60)})`);
+    ok(przed18.length === 0, `P18b. zanim padnie odpowiedź, żadna rola nie pyta chmury (${przed18.length})`);
+    await zeruj();
+    await page.evaluate(() => handleVoiceQuery('Tak, jasne'));
+    await page.waitForTimeout(300);
+    await koniecTury();
+    const z18 = doModeli(await stanAtrapy());
+    const m18 = await page.evaluate(() => activeConversation.messages.map((m) => (m.zespol ? `zespol:${m.zespol.wklady.map((x) => x.silnik).join('+')}` : m.role)));
+    ok(z18.some((x) => x.rodzaj === 'rola' && x.silnik === 'cloud') && m18.some((x) => /^zespol:.*cloud/.test(x)) && m18[m18.length - 1] === 'assistant',
+      `P18c. „Tak” głosem → role w chmurze, jedna odpowiedź (${m18.join(',')})`);
+    await nowaRozmowa();
+    await page.evaluate(() => { window.__mowa = []; });
+    await turaGlosem(PYT18);
+    await pytanieZgody();
+    await zeruj();
+    await page.click('#voice-zgoda [data-zgoda="lokalnie"]');
+    await page.waitForTimeout(300);
+    await koniecTury();
+    const z18d = doModeli(await stanAtrapy());
+    ok(z18d.length > 0 && z18d.every((x) => x.silnik === 'local') && z18d.some((x) => x.rodzaj === 'rola'),
+      `P18d. „Tylko lokalnie” na scenie → zero żądań do chmury (${z18d.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')})`);
+    await nowaRozmowa();
+    await page.evaluate(() => { window.__mowa = []; });
+    await turaGlosem(PYT18);
+    await pytanieZgody();
+    await zeruj();
+    const t18 = Date.now();
+    await page.waitForFunction(() => document.getElementById('voice-zgoda').hidden, null, { timeout: 25000 }).catch(() => {});
+    const czekal = Date.now() - t18;
+    await koniecTury();
+    const z18e = doModeli(await stanAtrapy());
+    const m18e = await page.evaluate(() => ({ wiad: activeConversation.messages.map((m) => m.narzedzie || m.role), mowa: window.__mowa.slice(-1)[0] || '' }));
+    ok(czekal >= 9000 && !m18e.wiad.includes('zespol') && m18e.wiad[m18e.wiad.length - 1] === 'assistant' && z18e.every((x) => x.silnik === 'local' && x.rodzaj !== 'rola')
+      && /bez zespołu/.test(m18e.mowa),
+      `P18e. 10 s ciszy → „bez agentów”: odpowiedź bez zespołu, nic do chmury (czekał ${Math.round(czekal / 1000)} s; ${m18e.wiad.join(',')})`);
+    await page.evaluate(() => { voiceMode = false; document.getElementById('voice-overlay').style.display = 'none'; setEndpoint('cloud'); });
 
     ok(!bledy.length, `P0. bez błędów strony (${bledy.join(' | ').slice(0, 200)})`);
   } catch (err) {

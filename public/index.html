@@ -1329,6 +1329,12 @@
     <div class="voice-status mono" id="voice-status" aria-live="polite" data-i18n="voice.wake">POWIEDZ „HEJ, COSMOS”</div>
     <div class="voice-transcript" id="voice-transcript" aria-live="polite"></div>
     <div class="voice-answer" id="voice-answer" aria-live="polite"></div>
+    <!-- Zgoda na chmurę dla zespołu agentów: Cosmos pyta głosem, a tu to samo do dotknięcia. -->
+    <div class="voice-zgoda" id="voice-zgoda" role="group" data-i18n-aria="ag.glos.zgodaGrupa" aria-label="Zgoda na chmurę dla zespołu" hidden>
+      <button type="button" class="btn-primary" data-zgoda="tak" data-i18n="ag.glos.tak">Tak</button>
+      <button type="button" class="btn-secondary" data-zgoda="lokalnie" data-i18n="ag.tylkoLokalnie">Tylko lokalnie</button>
+      <button type="button" class="btn-ghost" data-zgoda="nie" data-i18n="ag.bez">Bez agentów</button>
+    </div>
     <div class="voice-camera-wrap" id="voice-camera-wrap" style="display:none">
       <video id="voice-camera" autoplay playsinline muted></video>
       <img id="voice-kinect" alt="" hidden>
