@@ -481,7 +481,9 @@
              pośrednik (Cloudflare) – serwer restartuje się albo nie odpowiada.
              Samo „HTTP 502” nic człowiekowi nie mówiło. */
           const posrednik = !dane.error && (res.status >= 502 && res.status <= 504 || res.status >= 520);
-          throw Object.assign(new Error(dane.error || `HTTP ${res.status}`), { kod: dane.kod || (posrednik ? 'serwer-niedostepny' : '') });
+          // `zrodlo`: które źródło padło trwale (np. własny serwer STT, nie chmura); 413 – za długie nagranie.
+          throw Object.assign(new Error(dane.error || `HTTP ${res.status}`),
+            { kod: dane.kod || (posrednik ? 'serwer-niedostepny' : ''), status: res.status, zrodlo: dane.zrodlo || '' });
         }
         const tekst = String(dane.text || '').trim();
         // Whisper na czystym szumie oddaje puste albo same znaki interpunkcyjne.

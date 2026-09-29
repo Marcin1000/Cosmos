@@ -841,31 +841,41 @@ function messageElement(m, idx = -1) {
 
   if (isError) {
     body.textContent = text;
+    // Zdanie serwera (z adresem – tylko u właściciela) zostaje w podpowiedzi, gdy na ekranie stoi tłumaczenie.
+    if (m.szczegol) body.title = m.szczegol;
     msg.appendChild(body);
     // Błąd na końcu rozmowy – jedno kliknięcie zamiast przepisywania pytania.
     const conv = activeConv();
     if (idx >= 0 && conv && idx === conv.messages.length - 1) {
-      const ponow = document.createElement('button');
-      ponow.className = 'msg-action-btn msg-ponow';
-      /* Błąd trwały (zły klucz, brak środków, model spoza rozmowy): „Ponów”
-         zawsze skończy się tak samo – droga prowadzi do Ustawień. */
-      if (m.trwaly) {
-        ponow.textContent = '⚙ ' + t('chat.doUstawien');
-        ponow.addEventListener('click', () => openSettings('silniki'));
-      } else {
-        ponow.textContent = '↻ ' + t('chat.ponow');
-        ponow.addEventListener('click', () => regenerateFrom(idx));
-      }
-      body.appendChild(ponow);
+      /* Przyciski w jednym wierszu, „Wyślij przez Chmurę” PIERWSZY: przy
+         uśpionym domu „Ponów” skończy się tym samym błędem. Ikony rysuje CSS
+         (kropka silnika, maski SVG) – znaki ☁ ⚙ ↻ Android malował kolorowymi
+         emoji (agencja, runda 9). */
+      const akcje = document.createElement('div');
+      akcje.className = 'msg-bledu-akcje';
       if (m.zapas === 'cloud') {
         const chmura = document.createElement('button');
         chmura.className = 'msg-action-btn msg-ponow msg-przez-chmure';
-        chmura.textContent = '☁ ' + t('chat.przezChmure');
+        chmura.textContent = t('chat.przezChmure');
         chmura.title = t('chat.przezChmureTytul');
         // Przełącza zakładkę na Chmurę jawnie – kolejne pytania też pójdą tam, co widać u góry.
         chmura.addEventListener('click', () => { setEndpoint('cloud'); regenerateFrom(idx); });
-        body.appendChild(chmura);
+        akcje.appendChild(chmura);
       }
+      const ponow = document.createElement('button');
+      /* Błąd trwały (zły klucz, brak środków, model spoza rozmowy): „Ponów”
+         zawsze skończy się tak samo – droga prowadzi do Ustawień. */
+      if (m.trwaly) {
+        ponow.className = 'msg-action-btn msg-ponow ik ik-trybik';
+        ponow.textContent = t('chat.doUstawien');
+        ponow.addEventListener('click', () => openSettings('silniki'));
+      } else {
+        ponow.className = 'msg-action-btn msg-ponow ik ik-odswiez';
+        ponow.textContent = t('chat.ponow');
+        ponow.addEventListener('click', () => regenerateFrom(idx));
+      }
+      akcje.appendChild(ponow);
+      body.appendChild(akcje);
     }
     return msg;
   }
@@ -1997,8 +2007,25 @@ async function sendMessage() {
    i bywa inna niż ta, którą użytkownik zdążył zobaczyć. */
 const BIEG_KLUCZ = 'cosmos.bieg';
 /** Klucz zdania do przeczytania na głos po błędzie czatu. */
+/** Błąd silnika Lokalnie na ekran – po kodzie i rodzaju z serwera, w języku
+ *  interfejsu. Serwer pisze po polsku (i z adresem domu dla właściciela), więc
+ *  pod angielskim „Send via Cloud” stało polskie zdanie (agencja, runda 9).
+ *  Inne błędy – zdanie serwera bez zmian. */
+function bladSilnikaPoLudzku(err, zapasChmura) {
+  const kod = err && err.kod;
+  if (kod !== 'lokalny-niedostepny' && kod !== 'zimny-start') return String((err && err.message) || '');
+  const dalej = t(zapasChmura ? 'chat.lokWyslijChmura' : 'chat.lokPrzelaczChmura');
+  if (kod === 'zimny-start') return t('chat.lokZimny', { dalej });
+  if (konta_.ja()?.rola === 'czlonek') return t('chat.lokCzlonek');
+  if (err.rodzaj === 'uspiony') return t('chat.lokUspiony', { dalej });
+  if (err.rodzaj === 'odmowa' || err.rodzaj === 'brama') return t('chat.lokOdmowa', { dalej });
+  return t('chat.lokInny', { dalej });
+}
+
 function glosBledu(err) {
   const kod = err && err.kod;
+  // Z przyciskiem chmury na scenie zdanie mówi, co można zrobić (copywriter, runda 9).
+  if (kod === 'lokalny-niedostepny' && err.zapasChmura) return 'voice.errConnChmura';
   if (kod === 'lokalny-niedostepny') return err.rodzaj === 'odmowa' ? 'voice.errOllama' : 'voice.errConn';
   if (kod === 'zimny-start') return 'voice.errColdStart';
   if (kod === 'klucz-dostawcy' || kod === 'brak-klucza') return 'voice.errKey';
@@ -2083,9 +2110,16 @@ async function streamOnce(conv, opcje = {}) {
     if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
     const s = Math.round((Date.now() - started) / 1000);
     const klucz = naglowkiPrzyszly ? 'chat.stillWorking' : ep === 'local' ? 'chat.waitLocal' : 'chat.waitStart';
-    waitNote = `<div class="wait-note mono">${escapeHtml(t(klucz, { s }))}</div>`;
+    /* 15 s czekania na lokalny model (zimny start, dom się budzi): wyjście do
+       chmury już teraz, a nie dopiero po 90 s i błędzie (zespół IT, runda 9). */
+    const chmura = ep === 'local' && !naglowkiPrzyszly && s >= 15 && epConfig('cloud').hasApiKey
+      ? ` <button type="button" class="msg-action-btn msg-przez-chmure wait-przez-chmure">${escapeHtml(t('chat.przezChmure'))}</button>` : '';
+    waitNote = `<div class="wait-note mono">${escapeHtml(t(klucz, { s }))}${chmura}</div>`;
     schedulePaint();
   }, 1000);
+  body.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('.wait-przez-chmure')) przezChmureWTrakcie(conv);
+  });
 
   /* Malowanie przebudowuje całą odpowiedź, więc kosztuje tym więcej, im jest
      dłuższa. Na telefonie długa odpowiedź zajmowała 78% wątku głównego,
@@ -2709,6 +2743,7 @@ async function domknijOdpowiedz(conv, surowe) {
 }
 
 async function runGeneration(conv, podpiecie = null) {
+  pokazChmureWGlosie(false);
   isGenerating = true;
   turaPrzerwana = false;
   dopiskiTury = 0;
@@ -2891,8 +2926,11 @@ async function runGeneration(conv, podpiecie = null) {
       /* Komputer domowy nie odpowiada: pod błędem przycisk „Wyślij przez Chmurę”.
          Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
          więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
-      const zapasChmura = err.kod === 'lokalny-niedostepny' && epConfig('cloud').hasApiKey;
-      conv.messages.push({ role: 'assistant', content: `⚠︎ ${err.message}`, error: true,
+      // Zimny start też: model ładuje się minutami, a chmura odpowie od razu (zespół IT, runda 9).
+      const zapasChmura = ['lokalny-niedostepny', 'zimny-start'].includes(err.kod) && epConfig('cloud').hasApiKey;
+      const tekstBledu = bladSilnikaPoLudzku(err, zapasChmura);
+      conv.messages.push({ role: 'assistant', content: `⚠︎ ${tekstBledu}`, error: true,
+        ...(tekstBledu !== err.message ? { szczegol: err.message } : {}),
         ...(err.trwaly ? { trwaly: true } : {}), ...(zapasChmura ? { zapas: 'cloud' } : {}) });
       saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
@@ -2900,7 +2938,10 @@ async function runGeneration(conv, podpiecie = null) {
          brzmiały identycznie: „błąd połączenia z modelem” (agencja, runda 5).
          Najpierw KOD od serwera – regexp po treści mówił „komputer chyba śpi”,
          gdy padła sama Ollama (zespół IT, runda 5). */
-      if (voiceMode) finalText = t(glosBledu(err));
+      if (voiceMode) {
+        finalText = t(glosBledu({ ...err, message: err.message, zapasChmura }));
+        pokazChmureWGlosie(zapasChmura);
+      }
     }
   } finally {
     const odlaczony = odlaczanie;
@@ -2960,6 +3001,21 @@ async function runGeneration(conv, podpiecie = null) {
    (agencja, runda 5). Flaga tury zamyka pętlę po bieżącym kroku. */
 let turaPrzerwana = false;
 let voiceKoniecMowienia = 0;   // kiedy Cosmos skończył czytać odpowiedź (zapora echa)
+
+/** „Wyślij przez Chmurę” w trakcie czekania na lokalny: zatrzymaj, przełącz
+ *  zakładkę i wyślij TO SAMO pytanie do chmury (bez dubla w rozmowie). */
+async function przezChmureWTrakcie(conv) {
+  stopGeneration();
+  for (let i = 0; i < 100 && isGenerating; i++) await new Promise((r) => setTimeout(r, 50));
+  if (isGenerating || activeConv() !== conv) return;
+  let ostatnie = -1;
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    if (conv.messages[i].role === 'user' && !conv.messages[i].search) { ostatnie = i; break; }
+  }
+  if (ostatnie < 0) return;
+  setEndpoint('cloud');
+  regenerateFrom(ostatnie + 1);
+}
 
 function stopGeneration() {
   turaPrzerwana = true;
@@ -4809,7 +4865,36 @@ async function rozpoznajPtaka() {
 
 $('voice-bird-btn').addEventListener('click', rozpoznajPtaka);
 
+/* Tryb głosowy przy uśpionym domu mówił „przełącz się na chmurę”, a na
+   scenie nie było jak (agencja, runda 9). Przycisk pod odpowiedzią robi to
+   samo co „Wyślij przez Chmurę” pod błędem – nadal jawne dotknięcie, nic
+   nie przełącza się samo (Marcin, runda 8). */
+function pokazChmureWGlosie(tak) {
+  let b = $('voice-chmura');
+  if (!tak) { if (b) b.hidden = true; return; }
+  if (!b) {
+    b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'voice-chmura';
+    b.className = 'voice-chmura msg-przez-chmure';
+    b.addEventListener('click', () => {
+      const conv = activeConv();
+      const i = conv ? conv.messages.length - 1 : -1;
+      b.hidden = true;
+      if (!conv || !conv.messages[i] || conv.messages[i].zapas !== 'cloud') return;
+      stopSpeaking();
+      setEndpoint('cloud');
+      regenerateFrom(i);
+    });
+    el.voiceAnswer.after(b);
+  }
+  b.textContent = t('chat.przezChmure');
+  b.title = t('chat.przezChmureTytul');
+  b.hidden = false;
+}
+
 function exitVoiceMode() {
+  pokazChmureWGlosie(false);
   voiceMode = false;
   silnikSesji = null;
   voiceNoteMode = false;
@@ -4977,7 +5062,13 @@ function startNasluchWlasny() {
         /* Przy nasłuchu słowa budzącego błąd dotyczy dźwięku z pokoju, o który
            nikt nie pytał – nie ma czego komunikować. Liczymy go tylko. */
         if (voiceState !== 'wake') {
-          komunikatGlosu(err.kod === 'serwer-niedostepny' ? t('voice.sttServer') : t('voice.sttErr', { msg: err.message }));
+          /* Po kodzie, w języku interfejsu: zdanie serwera jest po polsku
+             i w EN wychodziło „Speech recognition failed: usługa odpowiedziała
+             błędem…” (copywriter, runda 9). Nieznany błąd – zdanie serwera. */
+          komunikatGlosu(err.kod === 'serwer-niedostepny' ? t('voice.sttServer')
+            : err.kod === 'stt-blad' ? t('voice.sttBlad')
+              : err.status === 413 ? t('voice.sttZaDlugie')
+                : t('voice.sttErr', { msg: err.message }));
         }
         if (++nasluchAwarie < NASLUCH_PROG_AWARII) return;
       }
@@ -4989,11 +5080,13 @@ function startNasluchWlasny() {
       sttSerweraPadl = true;
       silnikSesji = 'przegladarka';
       if (nasluch) { nasluch.stop(); nasluch = null; }
-      komunikatGlosu(t(offline ? 'voice.sttOfflineSwitch' : trwaly ? 'voice.sttKluczSwitch' : 'voice.sttFallback'));
-      // Człowiek nie patrzy na ekran – zmianę mówimy głosem systemowym, krótko.
-      if (offline && voiceMode && 'speechSynthesis' in window) {
+      const kluczZmiany = offline ? 'voice.sttOfflineSwitch'
+        : trwaly ? (err.zrodlo === 'wlasny' ? 'voice.sttWlasnySwitch' : 'voice.sttKluczSwitch') : 'voice.sttFallback';
+      komunikatGlosu(t(kluczZmiany));
+      // Człowiek nie patrzy na ekran – zmianę mówimy głosem systemowym, krótko (także odrzucony klucz – README obiecuje „mówi dlaczego”).
+      if ((offline || trwaly) && voiceMode && 'speechSynthesis' in window) {
         try {
-          const u = new SpeechSynthesisUtterance(t('voice.sttOfflineSwitch'));
+          const u = new SpeechSynthesisUtterance(t(kluczZmiany));
           u.lang = getLang() === 'en' ? 'en-US' : 'pl-PL';
           speechSynthesis.speak(u);
         } catch { /* bez głosu systemowego zostaje napis */ }
