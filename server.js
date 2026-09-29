@@ -158,6 +158,8 @@ const { zapiszLubBlad } = miejsce_;
    przeglądarki. Zamknięcie karty ich nie przerywa; patrz lib/biegi.js. */
 const biegi_ = require('./lib/biegi.js').utworz({
   zapiszOdpowiedz: rozmowy_.dopiszWiadomosc,
+  // Tura zespołu agentów: notatki ról i odpowiedź prowadzącego jednym zapisem.
+  zapiszWiadomosci: rozmowy_.dopiszWiadomosci,
 });
 
 // Profil użytkownika – trwały tekst wstrzykiwany do każdej rozmowy (pamięć profilowa).
@@ -838,6 +840,8 @@ function handleConfig(res) {
       video: Boolean(STUDIO.seedance.key),
       exportDir: wlasciciel ? STUDIO.exportDir : null,
     },
+    // Zespół agentów: czy i jak – bez modeli właściciela, adresów i kluczy.
+    zespol: zespol_.doKonfiguracji(),
   });
 }
 
@@ -936,6 +940,16 @@ const { OCZEKUJACE } = czat_;
 const rejestrModeli = umiejetnosci_.utworzRejestrModeli({
   plik: path.join(DATA_DIR, 'konta', 'modele-sprawdzone.json'), czytajJson, zapiszAtomowo,
 });
+
+/* Zespół agentów – jedna tura to jeden bieg: planista, role na modelach
+   przydzielonych przez serwer, prowadzący scala (lib/zespol.js). Czat oddaje
+   mu turę, gdy przeglądarka o to prosi (`payload.zespol`). */
+const zespol_ = require('./lib/zespol.js').utworz({
+  czat: czat_, biegi: biegi_, konta, U, terazTekst, szukajTekstu: szukanie_.szukajTekstu, rejestrModeli,
+  // Po SIGTERM żadnych nowych płatnych wywołań – wyniku nikt by nie zobaczył.
+  czyZamykanie: () => zamykanie, bladZapisu, scrubSecrets,
+});
+czat_.ustawZespol(zespol_);
 const modelLib = require('./lib/model.js');
 
 /** Usuń z komunikatu dostawcy rzeczy, których nie chcemy nigdzie kopiować.
@@ -1302,7 +1316,7 @@ async function trasyApi(req, res, p) {
   /* Klatki Kinecta i dłonie też (każda metoda): przeglądarka dokładała nowe
      zlecenia szybciej, niż licznik rzeczy w toku spadał do zera, i każdy
      restart przy otwartej kamerze trwał pełne 20 s (zespół IT, runda 7). */
-  if (zamykanie && ((req.method === 'POST' && (p === '/api/chat' || p.startsWith('/api/studio/')
+  if (zamykanie && ((req.method === 'POST' && (p === '/api/chat' || p === '/api/zespol/plan' || p.startsWith('/api/studio/')
     || /^\/api\/(stt|tts|detect|pose|ptak)$/.test(p))) || p === '/api/dlonie' || p.startsWith('/api/kinect/'))) {
     res.setHeader('Retry-After', '5');
     return sendJson(res, 503, { error: 'Cosmos właśnie się aktualizuje – wyślij za kilka sekund.', kod: 'aktualizacja' });
@@ -1363,6 +1377,8 @@ async function trasyApi(req, res, p) {
     const czeka = !b && czat_.zatrzymajOczekujacy(`${kto().id}:${id}`);
     return sendJson(res, 200, { ok: Boolean(b || czeka) });
   }
+  // Zespół agentów: tylko plan, katalog ról, ustawienia osoby, „Pomiń rolę”, „Scal teraz”.
+  if (p.startsWith('/api/zespol/')) return await zespol_.obsluz(req, res, p);
   if (p === '/api/polish' && req.method === 'POST') return await handlePolish(req, res);
   if (p === '/api/events') return await handleEvents(req, res);
   // Kanał w drugą stronę: przeglądarka dowiaduje się o zdarzeniach zamiast

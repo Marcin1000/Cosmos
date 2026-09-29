@@ -25,7 +25,11 @@
      8. liczniki silników (etap 1 zespołu agentów): czat prosi dostawcę
         o `usage` i zapisuje wywołania i tokeny na silnik – z biegiem i bez;
         właściciel NIE widzi zużycia z własnego klucza członka, członek widzi
-        swoje w całości.
+        swoje w całości,
+     9. zespół agentów członka (etap 2): role na chmurze wspólnej (klucz
+        NVIDIA, nigdy płatny klucz właściciela), w żadnym zapytaniu nic
+        z danych właściciela, a paczka roli nie ma nawet profilu członka
+        (ma go tylko prowadzący); ustawienia zespołu są osobne.
 
    Atrapa modelu zapamiętuje nagłówek Authorization każdego zapytania –
    dzięki temu widać nie „czy odpowiedziało", tylko CZYIM kluczem.
@@ -59,6 +63,7 @@ const atrapa = http.createServer((req, res) => {
     zapytania.push({
       klucz: (req.headers.authorization || '').replace(/^Bearer /, ''),
       systemowe: (d.messages || []).filter((m) => m.role === 'system').map((m) => String(m.content)).join('\n'),
+      tresc: (d.messages || []).filter((m) => m.role !== 'system').map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n'),
       usage: Boolean(d.stream_options && d.stream_options.include_usage),
     });
     if (d.stream) {
@@ -285,6 +290,21 @@ function klient(ip) {
   ok(mojeA.openai && mojeA.openai.wywolan === 1 && mojeA.openai.we === 40, `członek widzi u siebie zużycie własnego klucza (${JSON.stringify(mojeA.openai)})`);
   const surowe = (await marcin.zadaj('/api/konta')).tekst;
   ok(!/licz mnie|na moim kluczu/.test(surowe), 'liczniki bez treści pytań');
+
+  // --- 9. Zespół agentów członka ------------------------------------------------------
+  zapytania.length = 0;
+  const zespolA = await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'cloud', bieg: 'bieganizespol001',
+    messages: [{ role: 'user', content: 'Zrób to zespołem: przeanalizuj mój budżet' }], zespol: { uruchom: true } } });
+  const role = zapytania.filter((z) => /ROLA AGENTA/.test(z.systemowe));
+  const prowadzacy = zapytania.filter((z) => !/ROLA AGENTA|ZAPLANUJ SKŁAD/.test(z.systemowe));
+  ok(zespolA.kod === 200 && /event: sklad/.test(zespolA.tekst) && role.length >= 1, `zespół członka rusza w jednym biegu (ról: ${role.length})`);
+  ok(zapytania.length > 0 && zapytania.every((z) => z.klucz === KLUCZ_NVIDIA), 'role, planista i prowadzący członka – kluczem NVIDIA, nigdy płatnym kluczem właściciela');
+  ok(!zapytania.some((z) => /SEKRET-/.test(z.systemowe + z.tresc)), 'w żadnym zapytaniu zespołu członka nic z danych właściciela');
+  ok(role.every((z) => !/Profil Ani/.test(z.systemowe + z.tresc)) && prowadzacy.some((z) => /Profil Ani/.test(z.systemowe)),
+    'paczka roli bez profilu członka (ma go tylko prowadzący)');
+  await ania.zadaj('/api/zespol/ustawienia', { metoda: 'POST', dane: { tryb: 'wylaczony' } });
+  const ustW = (await marcin.zadaj('/api/zespol/ustawienia')).json.ustawienia || {};
+  ok(ustW.tryb === 'proponuj', 'ustawienia zespołu członka nie zmieniają ustawień właściciela');
 
   zabij(srv);
   atrapa.close();
