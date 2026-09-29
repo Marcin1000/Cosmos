@@ -77,6 +77,13 @@ ok(w.zespol.wklady.length === 3 && w.zespol.wklady.every((x) => x.silnik && x.mo
 ok(/^praca zespołu: Badacz, Programista, Recenzent$/.test(w.searchQuery), 'W3c. etykieta wyniku dla modelu (następne tury skracają do jednej linii)');
 ok(w.zespol.szukaj === 'ceny obiektywów' && w.zespol.odrzucone.length === 1, 'W3d. zapytanie badacza i role odrzucone zapisane');
 ok(Z.wiadomoscNotatek(Z.nowyStanTury(), 1) === null, 'W3e. zespół nie ruszył → brak wiadomości notatek');
+{
+  const s0 = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s0, 'zespol', { faza: 'planowanie' }, 0);
+  Z.zjedzZdarzenieZespolu(s0, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'local', model: 'q' }, role: [], odrzucone: [{ rola: 'badacz', kod: 'wymaga-zgody', silnik: 'cloud' }] }, 1);
+  const m0 = Z.wiadomoscNotatek(s0, 2);
+  ok(m0 && m0.content === '' && m0.zespol.odrzucone[0].kod === 'wymaga-zgody', 'W3f. wszystkie role czekają na zgodę na chmurę – zapis dla „Zgoda i ponów”, bez notatek dla modelu');
+}
 
 // ------------------------------------------------------------------ W4
 {

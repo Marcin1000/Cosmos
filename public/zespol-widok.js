@@ -157,6 +157,9 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
   return ogl;
 }
 
+/** Rola odrzucona tylko z braku zgody na chmurę – do „Zgoda i ponów”. */
+const czekaNaZgode = (st) => st.odrzucone.some((o) => o.kod === 'wymaga-zgody');
+
 /** Ile ról skończyło (gotowe, błąd, pominięta…). */
 const ileSkonczonych = (st) => st.role.filter((r) => KONCOWE_STANY_ROLI.has(r.stan)).length;
 
@@ -168,10 +171,10 @@ const ileSkonczonych = (st) => st.role.filter((r) => KONCOWE_STANY_ROLI.has(r.st
  * wysyła, a blok zostaje na ekranie. null, gdy zespół nie ruszył.
  */
 function wiadomoscNotatek(st, teraz = Date.now()) {
-  if (!st || !st.role.length) return null;
+  if (!st || (!st.role.length && !czekaNaZgode(st))) return null;
   return {
     role: 'user', search: true, narzedzie: 'zespol',
-    searchQuery: `praca zespołu: ${st.role.map((r) => r.nazwa || r.rola).join(', ')}`,
+    searchQuery: `praca zespołu: ${st.role.map((r) => r.nazwa || r.rola).join(', ') || 'bez ról'}`,
     content: st.notatki || '',
     zespol: {
       v: 1, zrodlo: st.zrodlo, prowadzacy: st.prowadzacy,
@@ -410,7 +413,8 @@ function utworzZespolWidok(z) {
       w.wiersz.setAttribute('aria-label', `${t('ag.pokazWklad', { rola: nazwa })} · ${sil} ${m} · ${stanTxt}`);
       // Zastępstwo z planu albo zapas po awarii – osobna linijka.
       const uwaga = r.zapas && r.zapas.po && r.zapas.po.model ? t('ag.zapasPo', { model: krotkiModel(r.zapas.po.model) })
-        : r.zamiast && r.zamiast.model && r.zamiast.model !== r.model ? t('ag.zamiast', { model: krotkiModel(r.zamiast.model) }) : '';
+        : r.zamiast && r.zamiast.model && r.zamiast.model !== r.model ? t('ag.zamiast', { model: krotkiModel(r.zamiast.model) })
+          : r.zamiast && r.zamiast.silnik !== r.silnik ? t('ag.zamiast', { model: nazwaSilnika(r.zamiast.silnik) }) : '';
       w.uwaga.textContent = uwaga;
       w.uwaga.hidden = !uwaga;
       const otwartaRola = otwarteRole.has(r.r);
@@ -869,7 +873,7 @@ function utworzZespolWidok(z) {
 
 const CZYSTE_ZESPOLU = {
   stanWidoku, nowyStanTury, zjedzZdarzenieZespolu, wiadomoscNotatek, stanZWiadomosci, roleBezWkladu,
-  skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
+  skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
 };
 
 if (typeof window !== 'undefined') Object.assign(window, { utworzZespolWidok, ZESPOL: CZYSTE_ZESPOLU });

@@ -252,6 +252,29 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.evaluate(() => { settings.zespolPotwierdzaj = false; });
     await page.evaluate(() => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: {} }) }));
 
+    // ---------------------------------------------------------------- P12, P13
+    await nowaRozmowa();
+    await zeruj();
+    await btn.click();
+    await wyslij('rola-wolna:ANALITYK policz dokładnie');
+    await page.waitForSelector('.zespol .rola[data-rola="analityk"][data-stan="pracuje"] .rola-akcje button', { timeout: 15000 });
+    await page.click('.zespol .rola[data-rola="analityk"] .rola-akcje button');
+    await koniecTury();
+    const z12 = await stanAtrapy();
+    const w12 = await page.evaluate(() => (activeConversation.messages.find((m) => m.narzedzie === 'zespol') || { zespol: { wklady: [] } }).zespol.wklady.map((x) => `${x.rola}:${x.stan}`));
+    ok(w12.includes('analityk:pominieta') && z12.some((x) => x.rodzaj === 'prowadzacy'), `P12. „Pomiń” przy pracującej roli – rola pominięta, prowadzący odpowiada (${w12.join(',')})`);
+    await nowaRozmowa();
+    await zeruj();
+    await btn.click();
+    await wyslij('plan-trzy rola-wolna:ANALITYK rola-wolna:PROGRAMISTA policz i napisz');
+    await page.waitForSelector('.zespol .rola[data-stan="pracuje"]', { timeout: 15000 });
+    await page.click('.zespol .zespol-stopka .zespol-link');
+    await koniecTury();
+    const z13 = await stanAtrapy();
+    const m13 = await wiadomosci();
+    ok(z13.some((x) => x.rodzaj === 'prowadzacy') && m13[m13.length - 1].role === 'assistant' && !m13[m13.length - 1].content.includes('⚠'),
+      '„Stop zespołu – odpowiedz sam” – prowadzący scala to, co jest'.replace(/^/, 'P13. '));
+
     // ---------------------------------------------------------------- P7, P8
     await nowaRozmowa();
     await btn.click();

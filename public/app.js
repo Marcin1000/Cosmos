@@ -2702,8 +2702,9 @@ function zespolZdarzenie(zt, typ, surowe, miejsce) {
   try { d = JSON.parse(surowe); } catch { return; }
   const ogloszenia = ZESPOL.zjedzZdarzenieZespolu(zt.st, typ, d);
   if (typ === 'sklad' && d.propozycja) return;
-  // Planista uznał, że zespół niepotrzebny (tryb „sam”) – odpowiada sam prowadzący.
-  if (zt.st.faza === 'bez-rol') { if (zt.ui) { zt.ui.el.remove(); zt.ui = null; } return; }
+  /* Planista uznał, że zespół niepotrzebny (tryb „sam”) – odpowiada sam prowadzący.
+     Zostaje tylko linijka roli, która czeka na zgodę na chmurę („Zgoda i ponów”). */
+  if (zt.st.faza === 'bez-rol' && !ZESPOL.czekaNaZgode(zt.st)) { if (zt.ui) { zt.ui.el.remove(); zt.ui = null; } return; }
   if (!zt.ui) {
     zt.ui = zespolWidok.blokZespolu(zt.st, { zywy: true, naPomin: (r) => zespolAkcja('pomin', r), naScal: () => zespolAkcja('scal') });
     miejsce.kolumna.insertBefore(zt.ui.el, miejsce.body);
