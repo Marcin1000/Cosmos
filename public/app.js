@@ -6079,7 +6079,7 @@ async function pokazWersje() {
        runda 9). Rozstrzyga świeża konfiguracja serwera. */
     let teraz = '';
     try { teraz = ((await (await fetch('/api/config')).json()).wersja || {}).pamiec || ''; } catch { /* offline */ }
-    klucz = 'set.wersjaStara';
+    klucz = teraz && naTymUrzadzeniu === teraz ? 'set.wersjaNowa' : 'set.wersjaStara';
   }
   pole.textContent = [
     w.commit ? t('set.wersja', { kod: w.commit }) : '',
