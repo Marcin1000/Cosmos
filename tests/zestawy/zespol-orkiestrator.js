@@ -35,6 +35,7 @@
        z notatkami (Regeneruj) nie uruchamia zespołu drugi raz; „Proponuj”
        – odpowiedź sama + `sklad {propozycja:true}` przed końcem;
    O11. limit naraz: trzeci zespół właściciela → 409 zespol-zajety;
+   O9b. role domyślnie bez myślenia (planista, badacz), recenzent bez zmian;
    O12. SIGTERM w fazie ról: żadnego nowego wywołania modelu, w rozmowie
        notatki z DOMKNIĘTYMI stanami ról (nic „pisze”). */
 const fs = require('fs');
@@ -120,7 +121,7 @@ async function nowaRozmowa(id, pytanie) {
     ANTHROPIC_API_KEY: 'sk-ant-test-wlasciciela-12345', ANTHROPIC_BASE_URL: `http://127.0.0.1:${A.claude}/v1`, CLAUDE_MODEL: 'claude-haiku-4-5',
     SEARCH_URL: `http://127.0.0.1:${A.cloud}/szukaj`, SEARXNG_URL: '', SERPER_API_KEY: '', BRAVE_API_KEY: '',
     COSMOS_ZESPOL_CISZA_MS: '2500', COSMOS_ZESPOL_TERMIN_ROLI_MS: '5000', COSMOS_ZESPOL_TERMIN_PLANISTY_MS: '1500',
-    COSMOS_ZESPOL_TERMIN_FAZY_MS: '12000', COSMOS_BIEG_SIEROTA_MS: '400', COSMOS_CZAS_NA_DOKONCZENIE_MS: '300',
+    COSMOS_ZESPOL_TERMIN_FAZY_MS: '12000', COSMOS_BIEG_SIEROTA_MS: '400', COSMOS_CZAS_NA_DOKONCZENIE_MS: '2500',
   };
   let srv = serwerCosmosa(PORT, env);
   const katalog = srv.katalogDanych;
@@ -284,6 +285,14 @@ async function nowaRozmowa(id, pytanie) {
       const b = z.find((x) => x.rola === 'BADACZ'); const r = z.find((x) => x.rola === 'RECENZENT');
       ok(z.some((x) => x.rodzaj === 'szukanie') && b && b.tekst.includes('WYNIK-ATRAPY') && r && !r.tekst.includes('WYNIKI WYSZUKIWANIA:'),
         'O9. badacz dostaje wyniki wyszukiwania z serwera, recenzent nie');
+      const pl = z.find((x) => x.rodzaj === 'planista');
+      await zeruj();
+      await tura({ messages: [{ role: 'user', content: 'Ile kosztuje Galaxy S24?' }], zespol: { sklad: [{ rola: 'badacz', silnik: 'cloud' }, { rola: 'recenzent', silnik: 'cloud' }] } });
+      const z2 = await zadania();
+      const b2 = z2.find((x) => x.rola === 'BADACZ'); const r2 = z2.find((x) => x.rola === 'RECENZENT');
+      ok(b2 && b2.chat_template_kwargs && b2.chat_template_kwargs.enable_thinking === false && pl && pl.chat_template_kwargs
+        && pl.chat_template_kwargs.enable_thinking === false && r2 && !r2.chat_template_kwargs,
+        'O9b. myślenie: badacz i planista bez myślenia (Nemotron 3), recenzent – jak model chce');
     }
 
     // ------------------------------------------------------------ O10 stary klient, regeneracja, propozycja
@@ -317,26 +326,37 @@ async function nowaRozmowa(id, pytanie) {
     }
 
     // ------------------------------------------------------------ O12 SIGTERM
+    /* Restart daje biegom 2,5 s na dokończenie. W tym czasie rola z kolejki
+       (lokalny GPU: jedna naraz) mogłaby ruszyć – płatne wywołanie, którego
+       wyniku nikt nie zobaczy. */
+    {
+      await zeruj();
+      const p = tura({ endpoint: 'local', messages: [{ role: 'user', content: 'Restart w kolejce: rola-wolna:ANALITYK' }],
+        zespol: { sklad: [{ rola: 'analityk', silnik: 'local' }, { rola: 'programista', silnik: 'local' }] } }).catch(() => null);
+      await spij(400);
+      srv.kill('SIGTERM');
+      for (let i = 0; i < 60 && srv.exitCode === null; i++) await spij(100);
+      await p;
+      const po = await zadania();
+      ok(srv.exitCode !== null && !po.some((x) => x.rola === 'PROGRAMISTA' || x.rodzaj === 'prowadzacy'),
+        `O12a. po SIGTERM rola z kolejki i prowadzący nie ruszają (${po.map((x) => x.rola || x.rodzaj).join(',')})`);
+    }
+    srv = serwerCosmosa(PORT, env);
+    if (!await czekajNa(ADRES)) throw new Error('serwer po restarcie nie wstał');
     {
       await zeruj();
       const rozmowa = 'rozmowarestart1';
-      const pytanie = 'Restart: rola-wolna:ANALITYK rola-wolna:RECENZENT';
+      const pytanie = 'Restart: rola-wolna:ANALITYK rola-dluga:ANALITYK rola-wolna:RECENZENT';
       await nowaRozmowa(rozmowa, pytanie);
       const p = tura({ messages: [{ role: 'user', content: pytanie }], rozmowa, zespol: { sklad: [{ rola: 'analityk' }, { rola: 'programista' }, { rola: 'recenzent' }] } }).catch(() => null);
       await spij(900);
-      const przed = (await zadania()).length;
       srv.kill('SIGTERM');
-      for (let i = 0; i < 40 && srv.exitCode === null; i++) await spij(100);
+      for (let i = 0; i < 60 && srv.exitCode === null; i++) await spij(100);
       await p;
-      await spij(300);
-      const po = await zadania();
-      const nowe = po.slice(przed).filter((x) => x.rodzaj !== 'szukanie');
-      const plik = path.join(katalogOsoby(katalog), 'conversations', `${rozmowa}.json`);
+      const plik = path.join(katalogOsoby(srv.katalogDanych), 'conversations', `${rozmowa}.json`);
       const conv = JSON.parse(fs.readFileSync(plik, 'utf8'));
       const notatki = conv.messages.find((m) => m.narzedzie === 'zespol');
       const stany = notatki ? notatki.zespol.wklady.map((x) => x.stan) : [];
-      ok(srv.exitCode !== null && !nowe.length && !po.some((x) => x.rodzaj === 'prowadzacy'),
-        `O12a. po SIGTERM żadnego nowego wywołania modelu (nowych: ${nowe.length})`);
       ok(notatki && stany.length === 3 && stany.every((s) => ['gotowa', 'niedokonczona', 'przerwana', 'blad', 'pominieta', 'urwana'].includes(s))
         && notatki.zespol.wklady.some((x) => x.tresc),
         `O12b. w rozmowie notatki z domkniętymi stanami (${stany.join(',')})`);

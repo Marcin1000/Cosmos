@@ -38,6 +38,11 @@ const fail = [];
 const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`); if (!warunek) fail.push(opis); };
 const role = (w) => (w.ok && w.plan ? w.plan.role.map((r) => r.rola).join(',') : `(porażka: ${w.uwagi.join('; ')})`);
 
+/* Obietnica, która nigdy się nie rozwiąże (np. kolejka bez końca), kończyła
+   proces kodem 0 bez werdyktu – wyglądało to na zdany zestaw. */
+let skonczone = false;
+process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwał się w połowie (obietnica bez końca)'); process.exit(1); } });
+
 (async () => {
   // ------------------------------------------------------------------ A. bramka
   {
@@ -171,9 +176,11 @@ const role = (w) => (w.ok && w.plan ? w.plan.role.map((r) => r.rola).join(',') :
     const pb = k2.zajmij('B', null, 'm').then((z) => { kolej.push('B'); return z; });
     // A trzyma dwa miejsca, a w kolejce A stoi pierwsze – mimo to wchodzi B (mniej miejsc).
     a1();
-    const zb = await pb; zb();
-    const za = await pa; za(); a2();
-    ok(kolej.join('') === 'BA', `F4. kolejka oddaje miejsce osobie, która trzyma mniej (${kolej.join('')})`);
+    await new Promise((r) => setImmediate(r));
+    const pierwszy = kolej[0];
+    a2();
+    const [za, zb] = await Promise.all([pa, pb]); za(); zb();
+    ok(pierwszy === 'B', `F4. kolejka oddaje miejsce osobie, która trzyma mniej (pierwsza: ${pierwszy})`);
     // 429: limit = przyjęte − zapas.
     const k3 = new Kubelek('429', 10, { powrotMs: 100_000, zapas: 2 });
     const trzymane = [];
@@ -239,6 +246,7 @@ const role = (w) => (w.ok && w.plan ? w.plan.role.map((r) => r.rola).join(',') :
     b.zakoncz(bieg, '');
   }
 
+  skonczone = true;
   console.log(fail.length ? `\nDO POPRAWY:\n- ${fail.join('\n- ')}` : '\nzespol-plan OK');
   process.exit(fail.length ? 1 : 0);
 })().catch((err) => { console.error(err); process.exit(1); });

@@ -60,7 +60,7 @@ const glos = require('./lib/glos.js').utworz({
   zmysly: { fetch: agent.fetchZmyslow, zrodlo: agent.zrodloZmyslow, stanAgenta: agent.stanAgenta },
 });
 const szukanie_ = require('./lib/szukanie.js');
-const { handleSearch, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
+const { handleSearch, szukajTekstu, handleSearchImages, handleImageProxy, stripTags, czytelnyTekst } = szukanie_;
 const { uruchomKod, WLACZONE: KOD_WLACZONY } = require('./lib/kod.js');
 const { wspolrzedneMiejsca, szukajMiejsca } = require('./lib/miejsca.js');
 const canon = require('./lib/canon.js');
@@ -945,7 +945,7 @@ const rejestrModeli = umiejetnosci_.utworzRejestrModeli({
    przydzielonych przez serwer, prowadzący scala (lib/zespol.js). Czat oddaje
    mu turę, gdy przeglądarka o to prosi (`payload.zespol`). */
 const zespol_ = require('./lib/zespol.js').utworz({
-  czat: czat_, biegi: biegi_, konta, U, terazTekst, szukajTekstu: szukanie_.szukajTekstu, rejestrModeli,
+  czat: czat_, biegi: biegi_, konta, U, terazTekst, szukajTekstu, rejestrModeli,
   // Po SIGTERM żadnych nowych płatnych wywołań – wyniku nikt by nie zobaczył.
   czyZamykanie: () => zamykanie, bladZapisu, scrubSecrets,
 });
