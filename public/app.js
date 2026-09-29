@@ -5694,7 +5694,7 @@ const kartyUstawien = (() => {
     const k = karty.find((x) => x.dataset.cel === cel);
     const b = karty.find((x) => x.dataset.cel === biezaca);
     // Cel właśnie się odsłonił, a stoi karta zastępcza – wracamy do celu.
-    if (false) pokaz(cel);
+    if (k && !k.hidden && biezaca !== cel) pokaz(cel);
     else if (!b || b.hidden) pokaz(cel);
   }
   for (const k of karty) {

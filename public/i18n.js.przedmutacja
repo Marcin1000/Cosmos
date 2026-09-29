@@ -2403,7 +2403,7 @@ function applyI18n(root = document) {
   document.documentElement.lang = _lang;
   root.querySelectorAll('[data-i18n]').forEach((el) => {
     const v = t(el.getAttribute('data-i18n'));
-    el.textContent = v;
+    el.textContent = _lang === 'pl' ? twardeSpacje(v) : v;
   });
   root.querySelectorAll('[data-i18n-html]').forEach((el) => {
     el.innerHTML = t(el.getAttribute('data-i18n-html'));
