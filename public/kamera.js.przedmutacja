@@ -421,7 +421,7 @@ function utworzKamere(z) {
         return;                       // panel zostaje otwarty – można zmienić źródło
       }
       // Zamknięte (albo otwarte na nowo) w trakcie czekania – ta kamera jest już niczyja.
-
+      if (nieaktualne()) { strumien.getTracks().forEach((s) => s.stop()); return; }
       // Poprzedni strumień (podwójne kliknięcie, szybka zmiana źródła) nie może zostać osierocony.
       if (liveStream && liveStream !== strumien) liveStream.getTracks().forEach((s) => s.stop());
       liveStream = strumien;
