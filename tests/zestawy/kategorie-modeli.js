@@ -37,8 +37,9 @@ const up = http.createServer((req, res) => {
     if (img && j.model !== 'nvidia/vl-8b') {
       return bad(400, 'This model does not support image content type.');
     }
+    // Sonda wzroku pyta o kolor próbki – model, który widzi, go nazywa.
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+    res.end(JSON.stringify({ choices: [{ message: { content: img ? 'Red' : 'ok' } }] }));
   });
 });
 
@@ -60,6 +61,7 @@ up.listen(0, async () => {
   const { spawn } = require('child_process');
   const srv = spawn('node', ['server.js'], { cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3060', NVIDIA_API_KEY: 'test',
+      COSMOS_DATA_DIR: require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'cosmos-test-')),
       NEMOTRON_BASE_URL: `http://127.0.0.1:${portAtrapy}/v1` } });
   await new Promise((r) => setTimeout(r, 4500));
 

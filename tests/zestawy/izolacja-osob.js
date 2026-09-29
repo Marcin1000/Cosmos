@@ -21,7 +21,11 @@
         nigdy płatnym kluczem właściciela; własny klucz członka płaci za
         członka; przyznanie przez właściciela – płaci właściciel,
      6. cudzego biegu (odpowiedzi w tle) nie da się podejrzeć,
-     7. właściciel widzi zużycie członka, ale nie jego treści.
+     7. właściciel widzi zużycie członka, ale nie jego treści,
+     8. liczniki silników (etap 1 zespołu agentów): czat prosi dostawcę
+        o `usage` i zapisuje wywołania i tokeny na silnik – z biegiem i bez;
+        właściciel NIE widzi zużycia z własnego klucza członka, członek widzi
+        swoje w całości.
 
    Atrapa modelu zapamiętuje nagłówek Authorization każdego zapytania –
    dzięki temu widać nie „czy odpowiedziało", tylko CZYIM kluczem.
@@ -55,10 +59,15 @@ const atrapa = http.createServer((req, res) => {
     zapytania.push({
       klucz: (req.headers.authorization || '').replace(/^Bearer /, ''),
       systemowe: (d.messages || []).filter((m) => m.role === 'system').map((m) => String(m.content)).join('\n'),
+      usage: Boolean(d.stream_options && d.stream_options.include_usage),
     });
     if (d.stream) {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'odpowiedź' } }] })}\n\n`);
+      // Jak OpenAI z include_usage: ostatni blok z pustym `choices` i zużyciem.
+      if (d.stream_options && d.stream_options.include_usage) {
+        res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 40, completion_tokens: 2, total_tokens: 42 } })}\n\n`);
+      }
       res.end('data: [DONE]\n\n');
     } else {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -255,6 +264,27 @@ function klient(ip) {
   const aniaW = (kontaW.json.uzytkownicy || []).find((u) => u.id === idAni) || {};
   ok((aniaW.zuzycie || {}).wiadomosci >= 1, `właściciel widzi liczbę wiadomości członka (${(aniaW.zuzycie || {}).wiadomosci})`);
   ok(!/Profil Ani|haslo|skrot|sol/.test(kontaW.tekst), 'lista kont nie zawiera profilu członka ani skrótów haseł');
+
+  // --- 8. Liczniki silników: tokeny z `usage`, bez własnego klucza w widoku właściciela ---
+  const licznikiW = async () => (((await marcin.zadaj('/api/konta')).json.uzytkownicy || [])
+    .find((u) => u.id === idAni) || {}).zuzycie?.silniki || {};
+  const przed = (await licznikiW()).dzisiaj?.cloud || { wywolan: 0, we: 0, wy: 0 };
+  zapytania.length = 0;
+  await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'cloud', messages: [{ role: 'user', content: 'licz mnie' }] } });
+  await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'cloud', bieg: 'bieganilicznik01', messages: [{ role: 'user', content: 'licz mnie w biegu' }] } });
+  ok(zapytania.length === 2 && zapytania.every((z) => z.usage), 'czat prosi dostawcę o zużycie (stream_options.include_usage) – z biegiem i bez');
+  const po = (await licznikiW()).dzisiaj?.cloud || {};
+  ok(po.wywolan - przed.wywolan === 2 && po.we - przed.we === 80 && po.wy - przed.wy === 4,
+    `właściciel widzi 2 wywołania chmury członka i ich tokeny (${po.wywolan - przed.wywolan} wyw., ${po.we - przed.we}/${po.wy - przed.wy} tok.)`);
+  await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: KLUCZ_OPENAI_CZLONKA } });
+  await ania.zadaj('/api/chat', { metoda: 'POST', dane: { endpoint: 'openai', bieg: 'bieganiwlasny001', messages: [{ role: 'user', content: 'na moim kluczu' }] } });
+  await ania.zadaj('/api/konto/klucze', { metoda: 'PUT', dane: { nazwa: 'openai', klucz: '' } });
+  const liczW = await licznikiW();
+  ok(!(liczW.dzisiaj || {}).openai && !(liczW.dni30 || {}).openai, 'właściciel NIE widzi zużycia z własnego klucza członka');
+  const mojeA = (await ania.zadaj('/api/konto')).json.uzytkownik?.zuzycie?.silniki?.dzisiaj || {};
+  ok(mojeA.openai && mojeA.openai.wywolan === 1 && mojeA.openai.we === 40, `członek widzi u siebie zużycie własnego klucza (${JSON.stringify(mojeA.openai)})`);
+  const surowe = (await marcin.zadaj('/api/konta')).tekst;
+  ok(!/licz mnie|na moim kluczu/.test(surowe), 'liczniki bez treści pytań');
 
   zabij(srv);
   atrapa.close();

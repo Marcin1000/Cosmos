@@ -352,6 +352,21 @@ async function postaw(dataDir) {
   const detAni2 = await ania.zadaj('/api/detect', { metoda: 'POST', dane: obraz });
   ok(detAni2.kod === 200, `z przyznanym „lokalnym GPU" członek dochodzi do zmysłów → ${detAni2.kod}`);
 
+  // --- 11b. Przyznanie „zespol” (zespół agentów, etap 1) ------------------------
+  const kontaZ = await marcin.zadaj('/api/konta');
+  const aniaZ = (kontaZ.json.uzytkownicy || []).find((u) => u.id === idAniTu) || {};
+  ok(kontaZ.json.silnikiSerwera && kontaZ.json.silnikiSerwera.zespol === true && aniaZ.silniki && aniaZ.silniki.zespol === false,
+    'panel Dostęp: przełącznik „zespol” jest do przyznania, a członek domyślnie go nie ma');
+  const samaSobie = await ania.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { zespol: true } } });
+  ok(samaSobie.kod === 403, `członek nie przyzna sobie zespołu → ${samaSobie.kod}`);
+  const przyznZ = await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { zespol: true } } });
+  ok(przyznZ.kod === 200 && przyznZ.json.uzytkownik.silniki.zespol === true && przyznZ.json.uzytkownik.silniki.openai === true,
+    'właściciel przyznaje „zespol”, pozostałe przyznania zostają');
+  ok((await ania.zadaj('/api/konto')).json.uzytkownik.silniki.zespol === true, 'członek widzi u siebie przyznany zespół od następnego żądania');
+  ok((await marcin.zadaj('/api/konto')).json.uzytkownik.silniki.zespol === true, 'właściciel ma zespół zawsze');
+  await marcin.zadaj('/api/konta/uzytkownik', { metoda: 'PUT', dane: { id: idAniTu, silniki: { zespol: false } } });
+  ok((await ania.zadaj('/api/konto')).json.uzytkownik.silniki.zespol === false, 'odebranie zespołu działa od następnego żądania');
+
   // --- 6. Usunięcie konta ------------------------------------------------------
   // Ania zostawia coś po sobie, żeby było co „nie zgubić".
   await ania.zadaj('/api/profile', { metoda: 'POST', dane: { profile: 'Profil Ani' } });

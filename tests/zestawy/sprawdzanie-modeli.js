@@ -37,8 +37,9 @@ const up = http.createServer((req, res) => {
     if (withImage && j.model !== 'nvidia/vl-8b') {
       return bad(400, 'This model does not support image content type.');
     }
+    /* Sonda wzroku pyta o kolor próbki 8×8 – model, który widzi, go nazywa. */
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+    res.end(JSON.stringify({ choices: [{ message: { content: withImage ? 'Red' : 'ok' } }] }));
   });
 });
 
@@ -55,6 +56,8 @@ up.listen(7101, async () => {
   const srv = spawn('node', ['server.js'], {
     cwd: KORZEN, stdio: 'ignore', detached: true,
     env: { ...process.env, PORT: '3021', NVIDIA_API_KEY: 'test',
+      // własny katalog danych: wyniki „Sprawdź” zapisują się w konta/modele-sprawdzone.json
+      COSMOS_DATA_DIR: require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'cosmos-test-')),
       NEMOTRON_BASE_URL: 'http://127.0.0.1:7101/v1', NEMOTRON_MODEL: 'nvidia/nemotron-nano-9b-v2',
       LOCAL_BASE_URL: 'http://127.0.0.1:7101/v1' },
   });
@@ -81,9 +84,11 @@ up.listen(7101, async () => {
   if (!/Not found for account/.test(a.body.blad || '')) fail.push('zgubił komunikat dostawcy');
   if (seen.length - przed !== 1) fail.push('próbował wzroku mimo braku dostępu – marnuje limit');
 
-  // 4. sonda ma być najtańsza z możliwych
-  const drogie = seen.filter((s) => s.max_tokens !== 1 || s.stream !== false);
-  console.log(`4. sondy: ${seen.length}, wszystkie max_tokens=1 i bez strumienia: ${!drogie.length}`);
+  // 4. sonda ma być najtańsza z możliwych: rozmowa – jeden token, wzrok – tyle,
+  //    ile trzeba na nazwę koloru (najwyżej 32), i nigdy strumieniem
+  const drogie = seen.filter((s) => (s.withImage ? !(s.max_tokens > 1 && s.max_tokens <= 32) : s.max_tokens !== 1)
+    || s.stream !== false);
+  console.log(`4. sondy: ${seen.length}, rozmowa max_tokens=1, wzrok ≤ 32, bez strumienia: ${!drogie.length}`);
   if (drogie.length) fail.push('sonda nie jest najtańsza');
 
   // 5. brak modelu → czytelny błąd, nie wywrotka

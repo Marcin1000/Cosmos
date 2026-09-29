@@ -6536,13 +6536,51 @@ async function checkOneModel(epName, model) {
   return readJsonSafe(res);
 }
 
+/* Pewność wzroku z sondy: 'pewne' (nazwał kolor próbki), 'prawdopodobnie'
+   (przyjął obraz, odpowiedź nic nie dowodzi), 'nie'. Stary serwer i zapisane
+   wyniki mogą mieć samo `obrazy: true/false`. */
+function wzrokSondy(r) {
+  if (['pewne', 'prawdopodobnie', 'nie'].includes(r.obrazyPewnosc)) return r.obrazyPewnosc;
+  if (['pewne', 'prawdopodobnie', 'nie'].includes(r.obrazy)) return r.obrazy;
+  return r.obrazy ? 'pewne' : 'nie';
+}
+
+/* Znaczek pozycji w wybieraku: ten sam dla wyniku „na żywo” i zapisanego. */
+function znakSprawdzenia(r) {
+  if (!r.rozmowa) return r.inneZadanie ? '⚙' : r.niepewne ? '⏳' : '✗';
+  const w = wzrokSondy(r);
+  return w === 'pewne' ? '👁' : w === 'prawdopodobnie' ? '👁?' : '✓';
+}
+function oznaczOpcje(o, r) {
+  // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
+  // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
+  // zaczęłyby się nawarstwiać.
+  o.textContent = `${znakSprawdzenia(r)} ${o.textContent.replace(/^[✗✓👁⏳⚙]\??\s*/u, '')}`;
+  o.dataset.works = r.rozmowa ? '1' : '0';
+}
+
+/* Wyniki zapisane na serwerze (data/konta/modele-sprawdzone.json) – znaczki
+   w wybieraku zostają po odświeżeniu strony (zespół IT, runda 9). */
+function oznaczZapisane(selectEl, sprawdzone) {
+  if (!sprawdzone || typeof sprawdzone !== 'object') return;
+  for (const o of selectEl.options) {
+    const r = o.value && sprawdzone[o.value];
+    if (!r) continue;
+    oznaczOpcje(o, r);
+    if (r.kiedy) o.title = t('set.checkedOn', { d: new Date(r.kiedy).toLocaleDateString(getLang() === 'en' ? 'en-GB' : 'pl-PL') });
+  }
+}
+
 function renderCheckResult(box, r, ep = '') {
   const lines = [];
   if (r.rozmowa) {
     lines.push(`<div class="check-ok">${escapeHtml(t('set.checkOkChat'))}</div>`);
-    lines.push(r.obrazy
+    const w = wzrokSondy(r);
+    lines.push(w === 'pewne'
       ? `<div class="check-ok">${escapeHtml(t('set.checkOkVision'))}</div>`
-      : `<div class="check-warn">${escapeHtml(t('set.checkNoVision'))}</div>`);
+      : w === 'prawdopodobnie'
+        ? `<div class="check-warn">${escapeHtml(t('set.checkMaybeVision'))}</div>`
+        : `<div class="check-warn">${escapeHtml(t('set.checkNoVision'))}</div>`);
   } else {
     /* Nagłówek wg RODZAJU porażki. „✗ niedostępny na Twoim koncie” stało przy
        zimnym starcie, zawieszonej Ollamie i limicie zapytań – a to żadna
@@ -6573,6 +6611,9 @@ async function checkModelField(epName) {
     const r = await checkOneModel(epName, model);
     if (r.error && r.rozmowa === undefined) throw new Error(r.error);
     renderCheckResult(box, r, epName);
+    // Ten sam znaczek w wybieraku, co po „Sprawdź wszystkie” (serwer go zapisał).
+    const o = [...sel.options].find((x) => x.value === model);
+    if (o && !r.siec) { oznaczOpcje(o, r); o.title = ''; }
   } catch (err) {
     box.hidden = false;
     box.innerHTML = `<div class="check-bad">${escapeHtml(err.message)}</div>`;
@@ -6614,19 +6655,17 @@ async function checkAllModels(epName) {
     // Pięć stanów, nie dwa: „nie zdążył odpowiedzieć" i „to nie jest model do
     // rozmowy" to nie to samo, co „nie masz dostępu" – mieszanie ich kazałoby
     // odpuścić modele, które działają.
-    const mark = r.rozmowa ? (r.obrazy ? '👁' : '✓')
-      : r.inneZadanie ? '⚙' : r.niepewne ? '⏳' : '✗';
+    const w = wzrokSondy(r);
+    const widzi = r.rozmowa && w !== 'nie';
     if (r.rozmowa) ok++;
-    if (r.obrazy) vis++;
-    if (r.rozmowa) (r.obrazy ? wzrok : rozmowa).push(o.value);
-    else if (r.inneZadanie) inne.push(o.value);
+    if (widzi) vis++;
+    if (r.rozmowa) {
+      (widzi ? wzrok : rozmowa).push(w === 'prawdopodobnie' ? `${o.value} ${t('set.checkVisionUnsure')}` : o.value);
+    } else if (r.inneZadanie) inne.push(o.value);
     else if (r.niepewne) niepewne.push(o.value);
     else brak.push(`${o.value} – ${r.blad || '–'}`);
-    // Flaga `u` jest tu konieczna: 👁 to para surogatów, więc bez niej klasa
-    // znaków obcięłaby tylko jej połowę i przy drugim przebiegu znaczki
-    // zaczęłyby się nawarstwiać.
-    o.textContent = `${mark} ${o.textContent.replace(/^[✗✓👁⏳⚙]\s*/u, '')}`;
-    o.dataset.works = r.rozmowa ? '1' : '0';
+    oznaczOpcje(o, r);
+    o.title = '';
   }
 
   // Wynik trzeba dać się wynieść na zewnątrz: przy stu pozycjach nikt nie
@@ -6646,11 +6685,32 @@ async function checkAllModels(epName) {
     ...grupa(t('set.checkGroupNone'), brak),
   ].join('\n');
 
+  /* Lokalnie każda sonda ładowała model do pamięci karty – po całej liście
+     zostawał tam ostatni sprawdzony, a model rozmowy czekał potem na
+     przeładowanie (it-modele-open, runda 9). Rozgrzewamy model z zakładki. */
+  const rozgrzany = epName === 'local' ? await rozgrzejModelZakladki(epName) : '';
+
   box.innerHTML = `<div>${escapeHtml(t('set.checkSummary', { ok, n: opts.length, vis }))}</div>`
+    + (rozgrzany ? `<div class="check-ok">${escapeHtml(t('set.checkWarm', { m: rozgrzany }))}</div>` : '')
     + `<button type="button" class="btn-secondary check-all" id="copy-check-${epName}">`
     + `${escapeHtml(t('set.checkCopy'))}</button>`;
   $(`copy-check-${epName}`).addEventListener('click', (e) => copyCheckReport(e.currentTarget));
   if (link) link.disabled = false;
+}
+
+/** Poproś serwer o załadowanie modelu rozmowy (w tle). Zwraca jego nazwę,
+ *  gdy prośba poszła, albo pusty tekst. */
+async function rozgrzejModelZakladki(epName) {
+  const model = nadpisanieModelu(epName) || epConfig(epName).model || '';
+  if (!model) return '';
+  try {
+    const r = await fetch('/api/models/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: epName, model, rozgrzej: true }),
+    });
+    return r.ok ? model : '';
+  } catch { return ''; }
 }
 
 /** Skopiuj raport ze sprawdzenia do schowka.
@@ -6742,6 +6802,7 @@ async function fetchModelsInto(epName, selectEl, btn) {
       + (inne.length ? `<optgroup label="${t('model.notChat')}">`
           + inne.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('') + '</optgroup>' : '');
     selectEl.style.display = '';
+    oznaczZapisane(selectEl, data.sprawdzone);
 
     // Dopiero po pobraniu listy ma sens sprawdzanie jej w całości.
     let all = $(`check-all-${epName}`);

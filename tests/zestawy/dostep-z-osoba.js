@@ -136,13 +136,18 @@ const rzuca = (fn) => { try { fn(); return null; } catch (e) { return e; } };
 
   // --- 3. kolejka z kontekstem -----------------------------------------------------
   const kolejka = kolejkaZKontekstem({ naraz: 1 });
-  const zadanie = (u) => async () => { await pauza(10); return { kto: kto().id, d: silniki.dostepDla('openai', u) }; };
+  const zadanie = (u) => async () => {
+    await pauza(10);
+    let d = null;
+    try { d = silniki.dostepDla('openai', u); } catch { /* osoba w cudzym kontekście – to jest błąd, który łapiemy niżej */ }
+    return { kto: kto() && kto().id, d };
+  };
   const [ka, kb] = await Promise.all([
     wKontekscie(A, () => kolejka(zadanie(A))),
     wKontekscie(B, () => kolejka(zadanie(B))),
   ]);
   ok(ka.kto === idA && kb.kto === idB, `kolejka: zadanie A widzi ${ka.kto}, zadanie B widzi ${kb.kto}`);
-  ok(ka.d.ok && ka.d.ep.apiKey === KLUCZ_A && !kb.d.ok, 'kolejka: klucz A tylko w zadaniu A');
+  ok(Boolean(ka.d && ka.d.ok && ka.d.ep.apiKey === KLUCZ_A && kb.d && !kb.d.ok), 'kolejka: klucz A tylko w zadaniu A, dostepDla działa w obu zadaniach');
   // Współbieżność: nie więcej niż `naraz`.
   const dwie = kolejkaZKontekstem({ naraz: 2 });
   let trwa = 0; let max = 0;

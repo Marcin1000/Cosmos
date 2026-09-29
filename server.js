@@ -1070,6 +1070,21 @@ async function handleModelCheck(req, res) {
   const model = String(data.model || '').trim();
   if (!model) return sendJson(res, 400, { error: 'Brak identyfikatora modelu.' });
 
+  /* Rozgrzanie modelu z zakładki po „Sprawdź wszystkie” na silniku lokalnym.
+     Każda sonda ładuje model do pamięci karty, więc po sprawdzeniu listy
+     zostawał w niej ostatni sprawdzony – a następna wiadomość czekała na
+     przeładowanie (zmierzone 15,8 s zamiast 10,1 s, it-modele-open runda 9).
+     W tle, bez czekania: puste /api/generate Ollamy tylko ładuje model
+     (vLLM i llama.cpp trzymają jeden model i odpowiedzą 404 – bez szkody). */
+  if (data.rozgrzej === true) {
+    if (data.endpoint !== 'local') return sendJson(res, 400, { error: 'Rozgrzewa się tylko model lokalny.' });
+    const baza = String(ep.baseUrl || '').replace(/\/+$/, '').replace(/\/v1$/, '');
+    fetch(`${baza}/api/generate`, {
+      method: 'POST', headers: authHeaders(ep), body: JSON.stringify({ model }), signal: AbortSignal.timeout(600_000),
+    }).then((r) => r.body?.cancel().catch(() => {})).catch(() => {});
+    return sendJson(res, 202, { rozgrzewany: true, model });
+  }
+
   // Dwie grupy, jeden wniosek: nie stawiaj ich jako modelu czatu.
   //  • Embeddingi, przeszukiwanie, OCR nie mają końcówki rozmowy i zwrócą
   //    „404 page not found" – to nie brak dostępu, tylko inne przeznaczenie,
@@ -1099,12 +1114,26 @@ async function handleModelCheck(req, res) {
   // Wzrok sprawdzamy tylko wtedy, gdy sama rozmowa działa – inaczej
   // zdublowalibyśmy ten sam błąd dostępu i niepotrzebnie obciążyli limit.
   const vision = text.ok ? await probeModel(ep, model, true, doKiedy) : { ok: false, skipped: true };
+  const obrazyPewnosc = text.ok ? umiejetnosci_.ocenSondeWzroku(vision, model, data.endpoint) : 'nie';
+  const obrazy = obrazyPewnosc !== 'nie';
+
+  /* Zapis wyniku – tylko to, co jest WIEDZĄ o modelu: działa albo dostawca
+     odmówił. Zimny start, limit zapytań i brak sieci nic o modelu nie mówią,
+     więc nie nadpisują poprzedniego wyniku. Bez adresu, klucza i treści błędu. */
+  if (text.ok || (!text.timeout && !text.limit && !text.siec)) {
+    const blad = rejestrModeli.zapiszSprawdzenie({
+      silnik: String(data.endpoint || 'cloud'), model, rozmowa: text.ok, obrazy: obrazyPewnosc, czas: text.czas,
+    });
+    if (blad) console.error('Nie udało się zapisać wyniku sprawdzenia modelu:', blad.message);
+  }
 
   return sendJson(res, 200, {
     model,
     silnik: ep.label,
     rozmowa: text.ok,
-    obrazy: vision.ok,
+    obrazy,
+    obrazyPewnosc,
+    czas: text.ok ? text.czas : null,
     // „Nie zdążył odpowiedzieć" i „limit zapytań" to nie to samo, co „nie masz dostępu”.
     niepewne: Boolean(text.timeout || text.limit),
     siec: Boolean(text.siec),
@@ -1114,6 +1143,17 @@ async function handleModelCheck(req, res) {
     podpowiedz: text.ok ? null : podpowiedzSprawdzenia(ep, data.endpoint, model, text),
     bladObrazy: (text.ok && !vision.ok) ? vision.error : null,
   });
+}
+
+/* Zapisane wyniki „Sprawdź” dla listy modeli: znaczki w wybieraku nie znikają
+   po odświeżeniu. Tylko pola wiedzy o modelu – bez błędów dostawcy. */
+function sprawdzoneDlaListy(nazwa, ids) {
+  const zbior = new Set(ids);
+  const wynik = {};
+  for (const w of rejestrModeli.sprawdzenia(nazwa)) {
+    if (zbior.has(w.model)) wynik[w.model] = { rozmowa: w.rozmowa, obrazy: w.obrazy, czas: w.czas, kiedy: w.kiedy };
+  }
+  return wynik;
 }
 
 // ---------------------------------------------------------------------------
@@ -1140,6 +1180,17 @@ async function handleModels(req, res) {
       if (g && g.modele.length && Array.isArray(data.data)) {
         data = { ...data, data: data.data.filter((m) => g.modele.includes(m.id)), przycieta: true };
         for (const id of g.modele) if (!data.data.some((m) => m.id === id)) data.data.push({ id });
+      }
+      /* Claude: natywne /v1/models podaje okno, limit wyjścia, wzrok i myślenie
+         (Models API, pewne) – źródło pewniejsze niż katalog, więc zapisujemy je
+         dla umiejetnosci(). Tylko z prawdziwego API Anthropic. */
+      const nazwa = url.searchParams.get('endpoint') || 'cloud';
+      if (ep.anthropic && Array.isArray(data.data)) {
+        const blad = rejestrModeli.zapiszDostawce(nazwa, data.data);
+        if (blad) console.error('Nie udało się zapisać możliwości modeli dostawcy:', blad.message);
+      }
+      if (Array.isArray(data.data)) {
+        data = { ...data, sprawdzone: sprawdzoneDlaListy(nazwa, data.data.map((m) => m && m.id).filter(Boolean)) };
       }
       return sendJson(res, 200, data);
     }
