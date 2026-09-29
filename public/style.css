@@ -2142,9 +2142,9 @@ body::after {
 }
 .kam-przel[aria-disabled="true"] { opacity: .6; }
 .kam-przel-nazwa { font-size: 12.5px; line-height: 1.15; text-align: center; }
-/* Dwa wiersze stanu zarezerwowane – „wył. · sam podgląd” w dwóch wierszach
-   nie zmienia wysokości paska i obraz nad nim nie drga. */
-.kam-przel-stan { font-size: 10.5px; line-height: 1.25; min-height: 2.5em; color: var(--kam-dim); text-align: center; max-width: 100%; }
+/* Dwa wiersze stanu zarezerwowane i nie więcej – „wył. · sam podgląd”
+   w dwóch wierszach nie zmienia wysokości paska i obraz nad nim nie drga. */
+.kam-przel-stan { font-size: 10.5px; line-height: 1.25; min-height: 2.5em; max-height: 2.5em; overflow: hidden; color: var(--kam-dim); text-align: center; max-width: 100%; }
 .kam-przel-stan:empty { display: none; }
 .kam-przel-stan.czeka { color: var(--kam-ostrz); }
 .kam-migawka {
