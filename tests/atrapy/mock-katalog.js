@@ -20,6 +20,7 @@ http.createServer((req, res) => {
     if (BAD.includes(j.model)) return bad(404, `Function '${j.model}' Not found for account.`);
     if (img && !VL.includes(j.model)) return bad(400, 'This model does not support image content type.');
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+    // Model wizyjny naprawdę „widzi” próbkę sondy wzroku (8×8, czerwona) i nazywa jej kolor.
+    res.end(JSON.stringify({ choices: [{ message: { content: img ? 'Red' : 'ok' } }] }));
   });
 }).listen(7103, () => console.log('katalog na 7103'));

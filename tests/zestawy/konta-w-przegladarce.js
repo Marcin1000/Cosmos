@@ -114,8 +114,8 @@ function magazyn(poczatek = {}) {
   ok(lista.textContent.includes(ZLE_IMIE), 'imię gościa stoi w panelu jako zwykły tekst, znak po znaku');
   ok(zapr.textContent.includes(ZLE_IMIE), 'imię z zaproszenia też jako tekst');
   const przelaczniki = lista.children[1].poKlasie('osoba-silnik');
-  // Lokalny GPU, OpenAI, Claude, Studio, płatne wyszukiwarki (runda 7) i ptaki na serwerze (runda 8).
-  ok(przelaczniki.length === 6, `członek ma sześć przełączników: silniki, Studio, wyszukiwarki, ptaki (${przelaczniki.length})`);
+  // Lokalny GPU, OpenAI, Claude, Studio, płatne wyszukiwarki (runda 7), ptaki na serwerze (runda 8) i zespół agentów.
+  ok(przelaczniki.length === 7, `członek ma siedem przełączników: silniki, Studio, wyszukiwarki, ptaki, zespół (${przelaczniki.length})`);
 
   // Członek nie widzi panelu Dostęp
   k.zastosujRole({ id: 'u-1', rola: 'czlonek' });
