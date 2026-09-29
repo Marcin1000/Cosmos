@@ -216,7 +216,7 @@ function readBodyBuffer(req, limit = 128 * 1024 * 1024) {
       if (size > limit) {
         odrzucone = true;
         chunks = [];
-        reject(zaDuzeCialo()); req.destroy();
+        reject(zaDuzeCialo());
         return;
       }
       chunks.push(chunk);

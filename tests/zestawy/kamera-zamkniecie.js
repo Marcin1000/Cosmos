@@ -68,7 +68,8 @@ const DLON = { palce: [1, 1, 0, 0, 0], punkty: Array.from({ length: 21 }, (_, i)
     await ctx.addInitScript(atrapaKamery);
     const p = await ctx.newPage();
     const bledy = [];
-    p.on('pageerror', (e) => bledy.push(e.message));
+    // pwa.js przy zablokowanym service workerze (serviceWorkers: 'block') i sztucznym visibilitychange woła reg.update() na niczym – to nie kamera.
+    p.on('pageerror', (e) => { if (!/reading 'update'/.test(e.message)) bledy.push(e.message); });
 
     // Zmysły „działają” (z YOLO, dłońmi i pozą) – inaczej pętle rozpoznawania w ogóle nie ruszą.
     const licznik = { detect: 0, dlonie: 0, pose: 0, events: 0 };
