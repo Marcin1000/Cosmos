@@ -215,8 +215,21 @@ const atrapa = http.createServer((req, res) => {
   ok(glos3({ STT_BASE_URL: 'http://127.0.0.1:9/v1' }).mozliwosci(gosc).sttLokalnyWlasny === false, 'gość nie dostaje w /api/config cudzego serwera rozpoznawania');
   ktoTeraz = wlasciciel;
   // za duże nagranie odcięte przy czytaniu
-  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.alloc(26 * 1024 * 1024) }).catch(() => ({ status: 0 }));
-  ok(r.status === 413 || r.status === 0, `nagranie ponad 25 MB odrzucone (${r.status})`);
+  /* …i odmowa DOCHODZI: dawniej readBodyBuffer zrywał gniazdo, zanim trasa odpisała
+     413 – klient dostawał reset (za Cloudflare 502), a przeglądarka „serwer niedostępny”
+     zamiast „limit 25 MB” (zespół IT, runda 9). */
+  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.alloc(26 * 1024 * 1024) }).catch(() => ({ status: 0, json: async () => ({}) }));
+  d = await r.json().catch(() => ({}));
+  ok(r.status === 413 && /25 MB/.test(d.error || ''), `nagranie ponad 25 MB (z Content-Length) → ${r.status} „${d.error || ''}”`);
+  const strumien = new ReadableStream({
+    start(c) { for (let i = 0; i < 26; i++) c.enqueue(new Uint8Array(1024 * 1024)); c.close(); },
+  });
+  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: strumien, duplex: 'half' })
+    .catch(() => ({ status: 0, json: async () => ({}) }));
+  d = await r.json().catch(() => ({}));
+  ok(r.status === 413 && /25 MB/.test(d.error || ''), `nagranie ponad 25 MB bez Content-Length (strumień) → ${r.status}`);
+  r = await fetch(`${u4}?tryb=pytanie`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  ok(r.status === 200 || r.status === 502, `serwer żyje po za dużych nagraniach (${r.status})`);
   s4.close();
   /* Własny LOKALNY serwer rozpoznawania: nasłuch słowa budzącego bez podpowiedzi
      („Hej, Cosmos.” w prompt) – na szumie Whisper „słyszał” ją i Cosmos budził

@@ -62,7 +62,7 @@ function utworzKonta({ $, t, zmienJezyk }) {
      Kasujemy całą bazę; aplikacja zamyka połączenia po każdej transakcji,
      a gdyby jakieś wisiało – nie czekamy dłużej niż sekundę. */
   function usunNagraniaPtakow() {
-    if (true) return Promise.resolve(false);
+    if (typeof indexedDB === 'undefined') return Promise.resolve(false);
     return new Promise((ok) => {
       const koniec = setTimeout(() => ok(false), 1000);
       try {

@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="142 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-142-5E9E3A?style=flat-square">
+  <img alt="142 zestawy testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-142-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 142 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 142 zestawy plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 142 zestawów + 10 selftestów Pythona (~16 min)
+npm test                  # 142 zestawy + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -316,9 +316,9 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   cykliczne; kroki wrażliwe (płatność, wysłanie) zawsze wymagają potwierdzenia.
   Opcjonalnie **automatyzacja web tylko-do-odczytu** (Playwright) wykonuje same
   bezpieczne odczyty (sprawdź cenę / saldo / status)
-- 🕰️ **Digital Time Machine** (włączana w Ustawieniach) – automatyczny zapis migawek
+- 🕰️ **Digital Time Machine** (Ustawienia → Zmysły → Kamera → „Zapisuj migawki, gdy zmienia się scena”) – automatyczny zapis migawek
   sceny do osi czasu, ze wskaźnikiem „REC"
-- 💾 **Kopie zapasowe i statystyki** danych, **tryb offline**, uwierzytelnianie hasłem
+- 💾 **Kopie zapasowe i statystyki** danych, wyłączanie wyszukiwania („Nie szukaj w internecie”), uwierzytelnianie hasłem
 - 🎓 **Eksport danych treningowych** (JSONL) + przykład **QLoRA** – dotrenuj własny model
   na swoich rozmowach i wepnij go z powrotem jako profil „Lokalnie" (`training/`)
 - 📱 **Instalacja jako aplikacja**: Windows (PWA lub Electron + instalator .exe),
@@ -394,7 +394,7 @@ NEMOTRON_VISION_MODEL=              # model wizyjny (VL) do rozmów z obrazami
 > Nieaktualny wpis kończy się błędem **404 „page not found"**. Nie przepisuj więc nazw
 > z dokumentacji w ciemno – sprawdź aktualną listę w aplikacji.
 
-Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Pobierz listę**.
+Dokładne identyfikatory modeli sprawdzisz w aplikacji: **Ustawienia → Silniki → Pobierz listę**.
 Pod polem wyboru pojawia się opis modelu – do czego się nadaje, czy widzi obrazy,
 jaki ma kontekst i na co uważać. Katalog opisów: `public/models.js`.
 
@@ -602,11 +602,12 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
   nie działa, rozpoznawanie wbudowane w Chrome/Edge. **Którym mikrofonem** – wybierasz
   w Ustawieniach (macierz Kinecta, słuchawki Bluetooth, telefon, mikrofon laptopa);
   wybór jest zapamiętywany,
-- 🗣 **tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → Głos → „Rozmowa głosowa”). *Własny
-  strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę i sam wycina wypowiedzi
-  z sygnału: znika dźwięk podłączania sprzętu na Androidzie, słyszenie samego siebie
-  i pętle. Wymaga zmysłów z Whisperem – bez nich Cosmos wraca do Web Speech API
-  i mówi o tym wprost w Ustawieniach,
+- 🗣 **tryb głosowy ma dwa sposoby słuchania** (Ustawienia → Głos → „Rozmowa głosowa”).
+  *Mikrofon Cosmosa* otwiera mikrofon raz na całą rozmowę i sam wycina wypowiedzi – znika
+  dźwięk włączania mikrofonu na Androidzie, słyszenie samego siebie i pętle. Mowę
+  rozpoznaje Whisper na komputerze ze zmysłami, a bez niego usługa w chmurze (własny
+  serwer rozpoznawania albo OpenAI); gdy nie ma żadnej, Cosmos wraca do rozpoznawania
+  w przeglądarce i pisze o tym pod polem wyboru,
 - 🐦 przycisk **rozpoznawania ptaka** w nakładce głosowej – 8 s nagrania, gatunek
   z BirdNET-a (polska nazwa), czytany na głos. Współrzędne dokłada serwer, bo BirdNET
   zawęża listę do gatunków, które w tym tygodniu naprawdę występują w tym miejscu
@@ -623,7 +624,10 @@ Licznik zaznaczonych pozycji widać na przycisku w panelu bocznym.
 - 🔁 gdy chmura przerwie odpowiedź, zanim napisze pierwsze słowo („Service temporarily
   overloaded”), Cosmos po cichu ponawia raz; komunikat o błędzie jest po polsku, bez surowego
   angielskiego tekstu dostawcy. Lektor czyta zakresy „około 8–9 °C” jako „około ośmiu do
-  dziewięciu stopni”, przy każdym rodzaju kreski, jaką pisze model,
+  dziewięciu stopni”, przy każdym rodzaju kreski, jaką pisze model – także na końcu zdania
+  („Około 8–9.”), w datach („od dwunastego do czternastego września”), przed zwykłym słowem
+  („od trzech do pięciu dni”, „dwie, trzy godziny”), z minusem („od minus pięciu do minus
+  dwóch stopni”) i z jednostką po przyimku („do dwóch stopni”, nie „do dwóch stopnie”),
 - ☁ gdy silnik **Lokalnie** nie odpowiada (komputer w domu śpi albo Ollama nie działa), pod
   błędem obok „Ponów” stoi **„Wyślij przez Chmurę”**: jedno kliknięcie wysyła to samo pytanie
   do modelu NVIDIA i przełącza zakładkę na Chmurę. Samo się nie przełącza – chmura to inny
@@ -695,9 +699,9 @@ kontekstu jako sekcję „PAMIĘĆ DŁUGOTRWAŁA". Wpisami zarządzasz w **Ustaw
 
 ### 🎓 Nauka – uczysz Cosmosa (przycisk „Nauka" w panelu bocznym)
 
-Trzy zakładki, wszystkie z zasadą **człowiek w pętli** (nic nieodwracalnego nie dzieje się samo):
+Cztery zakładki (Pokaż i nazwij, Procedury, Rutyny, Pomysły), wszystkie z zasadą **człowiek w pętli** (nic nieodwracalnego nie dzieje się samo):
 
-**1. Rozpoznawanie (przez zmysły).** Włącz kamerę, pokaż coś (klucz, gest, pozę), nazwij
+**1. Pokaż i nazwij (rozpoznawanie przez zmysły).** Włącz kamerę, pokaż coś (klucz, gest, pozę), nazwij
 i kliknij *Naucz*. Cosmos zapisuje wzorzec (etykieta + opis + miniatura + embedding) i od
 tej pory **rozpoznaje to na żywo** w panelu kamery – dopisuje np. „✦ Mój klucz" do statusu
 i melduje jako zdarzenie percepcji, więc możesz o tym rozmawiać. To nauka **przez przykład**,
@@ -722,6 +726,10 @@ wartości. Nemotron może sam zaproponować uruchomienie: *„odpal sprawdzenie 
 **3. Rutyny (cyklicznie).** Zaplanuj procedurę: codziennie / co tydzień / co miesiąc / co N
 minut. O wyznaczonej porze Cosmos **przygotowuje** czynność i pyta, czy uruchomić (z bramką
 na krokach wrażliwych). Licznik przy „Nauce" pokazuje, ile rutyn czeka.
+
+**4. Pomysły.** Cosmos na podstawie swojego stanu, Twojego profilu i tematów rozmów
+proponuje, jak jeszcze mógłby Ci pomóc („Co jeszcze możesz dla mnie zrobić?”); możesz też
+dopisać własny pomysł. Nic nie dzieje się bez Twojej zgody – propozycje czekają tu na akceptację.
 
 **Automatyzacja web tylko-do-odczytu (opcjonalny moduł Playwright).** Dla procedur
 zawierających wyłącznie kroki nie zmieniające stanu (otwórz / poczekaj / odczytaj /
@@ -750,13 +758,13 @@ płatności/wysłania/potwierdzenia i tak wraca do ręcznego runnera z bramką.
 „Nauka" uczy **Cosmosa** (pamięć/umiejętności) – nie zmienia wag modelu. Jeśli chcesz
 **wpisać** swój styl/domenę w wagi, możesz dotrenować własny model:
 
-1. **Ustawienia → Dane treningowe → „Eksport JSONL (chat)"** – Twoje rozmowy jako zbiór
+1. **Ustawienia → Dane → „Dane do treningu” → „Eksport JSONL (chat)"** – Twoje rozmowy jako zbiór
    treningowy (jedna rozmowa na linię; dostępny też format „instrukcje").
 2. **`training/`** – gotowy skrypt **QLoRA** (Unsloth, pod jedno GPU jak RTX 3080) i przewodnik.
 3. Po treningu wpinasz model z powrotem jako profil **„Lokalnie"** (przez Ollama/GGUF) –
    rozmawiasz z własnym modelem w tym samym UI. **Pętla:** używaj → zbierz dane → dotrenuj → wepnij.
 
-**Albo jednym kliknięciem – przycisk „🎓 Dotrenuj teraz"** (Ustawienia → Dane treningowe).
+**Albo jednym kliknięciem – przycisk „🎓 Dotrenuj teraz"** (Ustawienia → Dane → „Dane do treningu”).
 Pojawia się, gdy masz lokalnie **Pythona** i skrypt; Cosmos zapisuje dataset, uruchamia
 QLoRA w tle (podgląd logu na żywo) i po sukcesie **sam rejestruje model w Ollamie**
 (`ollama create`) – zostaje tylko ustawić `LOCAL_MODEL` i przełączyć na profil „Lokalnie".
@@ -776,12 +784,12 @@ komputerze właściciela. Każda osoba podłącza swój komputer w **Ustawienia 
 2. Polecenie pobiera `senses/agent.py` (sama biblioteka standardowa Pythona),
    w razie potrzeby instaluje Pythona (winget), paruje komputer z kontem, dodaje
    agenta do autostartu i odpina go od okna – okno można zamknąć.
-3. Resztą sterujesz z aplikacji: przełączniki **Zmysły**, **Obserwator kamery**,
-   **Kinect** uruchamiają i zatrzymują programy na tym komputerze; „Zainstaluj
+3. Resztą sterujesz z aplikacji: przełączniki **Mowa, obraz i dokumenty**,
+   **Kamera w tle**, **Kinect** uruchamiają i zatrzymują programy na tym komputerze; „Zainstaluj
    zalecane” instaluje pakiety do osobnego środowiska `~/.cosmos/venv`; „Aktualizuj
    agenta” (pojawia się po każdej zmianie któregokolwiek pliku zmysłów na serwerze, nie
-   tylko `agent.py`, i uruchamia składniki od nowa na nowym kodzie), autostart, „Odłącz”. Gdy składnik padnie (brak pakietu, brak kamery),
-   w aplikacji widać „Nie wystartował” z końcówką dziennika.
+   tylko `agent.py`, i uruchamia składniki od nowa na nowym kodzie), autostart, „Odłącz komputer”. Gdy składnik padnie (brak pakietu, brak kamery),
+   w aplikacji widać „Nie udało się uruchomić” z końcówką dziennika.
 
 Połączenie jest **wychodzące**: agent sam pyta serwer o zlecenia (długie
 odpytywanie, 25 s), więc nie trzeba przekierowywać portów ani stawiać VPN-a,
@@ -922,10 +930,10 @@ Endpointy: `/api/capabilities`, `/api/suggest`, `/api/improvements`.
 
 ### 🏠 Urządzenia i poranna odprawa (Jarvis)
 
-- **Urządzenia** (Ustawienia → Urządzenia): dowolny sprzęt sterowany przez HTTP –
+- **Urządzenia** (Ustawienia → Dom → Urządzenia): dowolny sprzęt sterowany przez HTTP –
   Home Assistant, Shelly, Hue, Tasmota. W rozmowie powiesz *„przygaś światło"*,
   a Cosmos zaproponuje `[AKCJA: urządzenie | …]` – **wykonanie zawsze po Twoim kliknięciu**.
-- **Poranna odprawa** (Ustawienia → Poranna odprawa): pogoda (open-meteo, bez klucza API),
+- **Poranna odprawa** (Ustawienia → Dom → Poranna odprawa): pogoda (open-meteo, bez klucza API),
   wydarzenia z kalendarza `.ics`, czekające rutyny i ostatnie zdarzenia – streszczone
   modelem i **czytane na głos**. Ręcznie albo automatycznie o wybranej godzinie.
   Konfiguracja: `BRIEFING_LAT`, `BRIEFING_LON`, opcjonalnie `CALENDAR_ICS`.
@@ -1428,7 +1436,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 142 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 142 zestawy + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```
@@ -1473,7 +1481,7 @@ decyzji, nie usterki – skrypt celowo ich nie liczy jako błędów.
 | „Brak klucza API dla chmury NVIDIA" | Uzupełnij `NVIDIA_API_KEY` w `.env` i zrestartuj serwer |
 | „Nie udało się połączyć z lokalnym modelem" | Uruchom Ollama/vLLM; sprawdź `LOCAL_BASE_URL` |
 | Lokalny status „offline" | Ollama nie działa lub inny port – `ollama serve` i sprawdź `.env` |
-| Błąd 404 przy czacie / „404 page not found" | Zły identyfikator modelu. Komunikat podaje w nawiasie kwadratowym silnik i model, który poleciał. NVIDIA zmienia nazwy – sprawdź **Ustawienia → Pobierz listę** i popraw `NEMOTRON_MODEL` w `.env` |
+| Błąd 404 przy czacie / „404 page not found" | Zły identyfikator modelu. Komunikat podaje w nawiasie kwadratowym silnik i model, który poleciał. NVIDIA zmienia nazwy – sprawdź **Ustawienia → Silniki → Pobierz listę** i popraw `NEMOTRON_MODEL` w `.env` |
 | „(pusta odpowiedź modelu)" | Model rozumujący zużył cały budżet na myślenie. Zwiększ **Maks. tokenów odpowiedzi** albo weź szybszy model; Cosmos pokaże wtedy przynajmniej tok myślenia |
 | „Model oddał odpowiedź, której nie da się odczytać" | Dostawca zwrócił coś innego niż JSON – strumień mimo `stream: false` albo stronę błędu proxy. Komunikat zawiera status HTTP i początek odpowiedzi |
 | „Wyszukiwarka ogranicza ruch z tego serwera (HTTP 202)" | DuckDuckGo odmawia adresom centrów danych. Zmierzone na VPS-ie: dwa pierwsze zapytania dostają wyniki, każde następne stronę weryfikacyjną. Z domu tego nie widać. Najprostsze wyjście – klucz do wyszukiwarki z API (`SERPER_API_KEY` – wyniki Google, albo `BRAVE_API_KEY`); inne – własny SearXNG (`SEARXNG_URL`): nie znosi blokady, ale pyta kilkanaście silników, więc odmowa jednego nie kończy sprawy |

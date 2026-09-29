@@ -17,7 +17,32 @@
 # Zmienne: COSMOS (katalog Cosmosa, domyślnie ten, w którym leży skrypt),
 # PREFIKS (/opt/cosmos-ptaki), PORT_PTAKOW (7061), PYTHON (python3),
 # BEZ_SYSTEMD, POMIN_SPRAWDZENIE_PAMIECI=1 (na własne ryzyko).
+#
+# Dla testów: `TYLKO_FUNKCJE=1 source scripts/instaluj-ptaki.sh` tylko definiuje
+# funkcje (np. dopisz_ptaki_url) i wraca – nic nie instaluje.
 set -euo pipefail
+
+# Krok 5: PTAKI_URL do .env. Plik zapisany bez końcowej nowej linii (VS Code,
+# Notatnik, WinSCP) sklejał się z nią: „COSMOS_COOKIE_SECURE=1PTAKI_URL=…” –
+# ciasteczka traciły Secure, a Cosmos nie widział ptaków, choć skrypt pisał
+# „Gotowe” (zespół IT, runda 9). Drugie uruchomienie nie dubluje linii.
+dopisz_ptaki_url() {
+  local plik=$1 port=$2
+  if [ ! -f "$plik" ]; then
+    echo "Uwaga: brak $plik – dopisz ręcznie PTAKI_URL=http://127.0.0.1:$port"
+    return 0
+  fi
+  if grep -q '^PTAKI_URL=' "$plik"; then
+    grep -q "^PTAKI_URL=http://127.0.0.1:$port\$" "$plik" \
+      || echo "Uwaga: w .env jest już inne PTAKI_URL – zostawiam je (sprawdź: grep PTAKI_URL $plik)."
+    return 0
+  fi
+  if [ -s "$plik" ] && [ -n "$(tail -c1 "$plik")" ]; then echo >> "$plik"; fi
+  echo "PTAKI_URL=http://127.0.0.1:$port" >> "$plik"
+  echo "Dopisano PTAKI_URL do $plik"
+}
+
+if [ -n "${TYLKO_FUNKCJE:-}" ]; then return 0 2>/dev/null || exit 0; fi
 
 COSMOS=${COSMOS:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 PREFIKS=${PREFIKS:-/opt/cosmos-ptaki}
@@ -36,7 +61,7 @@ if [ -z "${BEZ_SYSTEMD:-}" ] && [ "$(id -u)" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------- 1. zasoby
-# Model zostaje w pamięci (~460 MB po pierwszym nagraniu), więc najpierw
+# Model zostaje w pamięci (ok. 540 MB po pierwszym nagraniu), więc najpierw
 # sprawdzamy, czy starczy miejsca obok działającego Cosmosa.
 krok "1/5 Pamięć i dysk"
 DOSTEPNE_MB=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
@@ -47,9 +72,13 @@ DZIALA_JUZ=""
 if [ -z "${BEZ_SYSTEMD:-}" ] && systemctl is-active --quiet "$USLUGA" 2>/dev/null; then DZIALA_JUZ=1; fi
 if [ -n "$DZIALA_JUZ" ]; then
   echo "Usługa $USLUGA już działa – to aktualizacja, jej pamięć jest już policzona."
+  # Zatrzymana na czas aktualizacji: rozgrzewka (krok 3) stawia drugi BirdNET, a dwa
+  # naraz (ok. 540 + 510 MB) na VPS-ie z 700 MB wolnego to OOM albo swap. Przy okazji
+  # pip nie podmienia plików pod działającym procesem. Krok 4 i tak ją uruchamia.
+  systemctl stop "$USLUGA"
 elif [ -z "${POMIN_SPRAWDZENIE_PAMIECI:-}" ] && [ "$DOSTEPNE_MB" -lt "$WYMAGANA_PAMIEC_MB" ]; then
   blad "za mało pamięci: ${DOSTEPNE_MB} MB dostępnej, potrzeba co najmniej ${WYMAGANA_PAMIEC_MB} MB przy działającym Cosmosie.
-Większy plan VPS (albo 1 GB swapu) i spróbuj jeszcze raz."
+Weź większy plan VPS (albo dodaj 1 GB swapu) i spróbuj jeszcze raz."
 fi
 if [ ! -d "$PREFIKS/venv" ] && [ "$WOLNE_DYSK_MB" -lt "$WYMAGANY_DYSK_MB" ]; then
   blad "za mało miejsca na dysku: ${WOLNE_DYSK_MB} MB, potrzeba ${WYMAGANY_DYSK_MB} MB."
@@ -59,8 +88,10 @@ fi
 krok "2/5 Python i pakiety (pierwszy raz: ~150 MB do pobrania, 1–3 min)"
 if [ -z "${BEZ_SYSTEMD:-}" ] && command -v apt-get >/dev/null; then
   # python3-venv: Debian i Ubuntu nie mają venv w samym python3.
-  # ffmpeg: tylko dla nagrań innych niż WAV (m4a/ogg); aplikacja wysyła WAV.
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-venv ffmpeg >/dev/null
+  # ffmpeg: tylko dla nagrań innych niż WAV (m4a/ogg); aplikacja wysyła WAV – bez zaleceń.
+  # apt-get update: po tygodniach listy pakietów są stare i łatany ffmpeg dawał 404.
+  DEBIAN_FRONTEND=noninteractive apt-get update -q >/dev/null
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends python3-venv ffmpeg >/dev/null
 fi
 command -v "$PYTHON" >/dev/null || blad "brak $PYTHON (Debian/Ubuntu: sudo apt install python3 python3-venv)"
 "$PYTHON" -c 'import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] <= (3, 14) else 1)' \
@@ -164,7 +195,7 @@ Environment=OPENBLAS_NUM_THREADS=1
 ExecStart=$PREFIKS/venv/bin/python $COSMOS/senses/service.py
 Restart=always
 RestartSec=5
-# Model ~460 MB; ponad limit systemd ubija usługę, a nie Cosmosa.
+# Model ok. 540 MB; ponad limit systemd ubija usługę, a nie Cosmosa.
 MemoryMax=900M
 # Pętla zdarzeń Cosmosa ma pierwszeństwo przy 1–2 rdzeniach.
 Nice=10
@@ -185,17 +216,7 @@ systemctl restart "$USLUGA"
 
 # ---------------------------------------------------------------- 5. Cosmos
 krok "5/5 Adres dla Cosmosa i sprawdzenie"
-if [ -f "$COSMOS/.env" ]; then
-  if grep -q '^PTAKI_URL=' "$COSMOS/.env"; then
-    grep -q "^PTAKI_URL=http://127.0.0.1:$PORT_PTAKOW\$" "$COSMOS/.env" \
-      || echo "Uwaga: w .env jest już inne PTAKI_URL – zostawiam je (sprawdź: grep PTAKI_URL $COSMOS/.env)."
-  else
-    echo "PTAKI_URL=http://127.0.0.1:$PORT_PTAKOW" >> "$COSMOS/.env"
-    echo "Dopisano PTAKI_URL do $COSMOS/.env"
-  fi
-else
-  echo "Uwaga: brak $COSMOS/.env – dopisz ręcznie PTAKI_URL=http://127.0.0.1:$PORT_PTAKOW"
-fi
+dopisz_ptaki_url "$COSMOS/.env" "$PORT_PTAKOW"
 if systemctl cat cosmos >/dev/null 2>&1; then systemctl restart cosmos; fi
 
 for _ in $(seq 1 60); do

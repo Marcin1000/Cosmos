@@ -19,7 +19,13 @@
         ogólne zdanie, bez ścieżki i bez adresu,
      7. usługa padła → członek dostaje 503 w < 2 s, bez adresu,
      8. nagranie większe niż 4 MB → 413 bez czytania,
-     9. współrzędne idą do usługi zaokrąglone do 0,1°, w nagłówkach, nie w adresie.
+     9. współrzędne idą do usługi zaokrąglone do 0,1°, w nagłówkach, nie w adresie,
+    10. usługa w rozgrzewce (birdnet_gotowy:false) → 503 „ptaki-chwilowo” z Retry-After,
+        nie 403 „na Twoim koncie”; gotowość widać najpóźniej ~4 s po rozgrzewce, nie po 30,
+    11. zerwane nagranie trzyma miejsce, dopóki usługa liczy: 10 × wyślij-i-zerwij
+        → usługa nigdy nie liczy więcej niż PTAKI_NARAZ naraz, drugie nagranie tej
+        osoby 429, a nagranie innej osoby dochodzi,
+    12. 30 nagrań jednej osoby naraz → do usługi dociera jedno (reszta 429 bez czytania).
 */
 const http = require('node:http');
 const crypto = require('node:crypto');
@@ -35,23 +41,27 @@ const HASLO = 'haslo-wlasciciela-ptaki';
 
 const wywolania = [];
 let tryb = 'ok';
+let niegotowyDo = 0;           // do tej chwili /health mówi „rozgrzewka”
+let liczyNaraz = 0;
+let liczyMaks = 0;
 const atrapa = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const cialo = [];
   req.on('data', (c) => cialo.push(c));
   req.on('end', () => {
     const json = (kod, d) => { res.writeHead(kod, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
-    if (u.pathname === '/health') return json(200, { birdnet: true, birdnet_gotowy: true });
+    if (u.pathname === '/health') return json(200, { birdnet: true, birdnet_gotowy: Date.now() >= niegotowyDo });
     wywolania.push({ sciezka: u.pathname, q: u.searchParams, lat: req.headers['x-cosmos-lat'], lon: req.headers['x-cosmos-lon'] });
     if (u.pathname !== '/ptak') return json(404, { error: 'tylko ptaki' });
     if (tryb === 'blad') {
       return json(500, { error: "Error opening 'C:\\Users\\Marcin\\AppData\\Local\\Temp\\tmpk3x9.wav': Format not recognised." });
     }
     const skrot = crypto.createHash('sha1').update(Buffer.concat(cialo)).digest('hex');
-    setTimeout(() => json(200, {
+    liczyNaraz++; liczyMaks = Math.max(liczyMaks, liczyNaraz);
+    setTimeout(() => { liczyNaraz--; json(200, {
       gatunki: [{ nazwa: 'puszczyk', nazwaEn: 'Tawny Owl', lacinska: 'Strix aluco', pewnosc: 0.97 }],
       wykryc: 1, zMiejscem: Boolean(req.headers['x-cosmos-lat']), skrot,
-    }), tryb === 'wolno' ? 600 : 5);
+    }); }, tryb === 'wolno' ? 600 : tryb === 'wolno2' ? 2000 : 5);
   });
 });
 
@@ -68,12 +78,14 @@ function klient(ip) {
         body: surowe !== undefined ? surowe : (dane === undefined ? undefined : JSON.stringify(dane)),
       });
       const sc = r.headers.get('set-cookie');
+      // (ciastko() niżej – dla zapytań, które test wysyła sam, z własnym sygnałem)
       if (sc) ciastko = sc.split(';')[0];
       const tekst = await r.text();
       let json = {};
       try { json = JSON.parse(tekst); } catch { /* tekst */ }
       return { kod: r.status, json, tekst };
     },
+    ciastko: () => ciastko,
   };
 }
 const nagranie = (znak) => Buffer.from(`RIFF-atrapa-wav-${znak}`.repeat(200));
@@ -81,6 +93,8 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
 
 (async () => {
   await new Promise((r) => atrapa.listen(PORT_PTAKOW, '127.0.0.1', r));
+  niegotowyDo = Date.now() + 6000;
+  const startSerwera = Date.now();
   const srv = serwerCosmosa(PORT, {
     COSMOS_PASSWORD: HASLO, COSMOS_LOGIN: 'marcin',
     SENSES_URL: 'http://127.0.0.1:1',            // dom wyłączony
@@ -92,6 +106,19 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     const marcin = klient('10.9.0.1');
     await marcin.zadaj('/api/login', { metoda: 'POST', dane: { password: HASLO } });
     await marcin.zadaj('/api/location', { metoda: 'POST', dane: { location: 'Biebrza', lat: 53.4567, lon: 22.6789 } });
+
+    /* ---- 10. Rozgrzewka: chwilowo, nie „na Twoim koncie” ---- */
+    const r10 = await fetch(`${ADRES}/api/ptak`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'CF-Connecting-IP': '10.9.0.1', Cookie: marcin.ciastko() }, body: nagranie('rozgrzewka') });
+    const j10 = await r10.json().catch(() => ({}));
+    ok(r10.status === 503 && j10.kod === 'ptaki-chwilowo' && Number(r10.headers.get('retry-after')) > 0,
+      `10. usługa w rozgrzewce → ${r10.status} ${j10.kod}, Retry-After ${r10.headers.get('retry-after')}`);
+    let gotowePo = -1;
+    for (let i = 0; i < 60; i++) {
+      const s10 = (await marcin.zadaj('/api/status')).json;
+      if (s10.ptaki && s10.ptaki.ok) { gotowePo = Date.now() - startSerwera; break; }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    ok(gotowePo > 0 && gotowePo < 12500, `10. gotowość widać ${gotowePo} ms od startu (rozgrzewka 6 s, sprawdzanie co 4 s, nie co 30)`);
 
     /* ---- 1. Bez domu ---- */
     const r1 = await ptak(marcin, 'w1');
@@ -144,6 +171,33 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     ok([a.kod, b.kod].sort().join(',') === '200,429', `4. ta sama osoba dwa nagrania naraz: ${a.kod}, ${b.kod}`);
     tryb = 'ok';
 
+    /* ---- 11. Zerwane nagranie trzyma miejsce, dopóki usługa liczy ---- */
+    tryb = 'wolno2';
+    liczyMaks = 0;
+    const wyslijIZerwij = (c, znak) => {
+      const ac = new AbortController();
+      setTimeout(() => ac.abort(), 100);
+      return fetch(`${ADRES}/api/ptak`, { method: 'POST', signal: ac.signal,
+        headers: { 'Content-Type': 'audio/wav', Cookie: c.k.ciastko() }, body: nagranie(znak) }).catch(() => null);
+    };
+    const przed11 = wywolania.length;
+    for (let i = 0; i < 10; i++) await wyslijIZerwij(czlonkowie[5], `zerw-${i}`);
+    const drugie = await ptak(czlonkowie[5].k, 'zerw-drugie');
+    const innej = await ptak(czlonkowie[6].k, 'innej');
+    ok(liczyMaks <= 1, `11. 10 × wyślij-i-zerwij: usługa liczyła naraz najwyżej ${liczyMaks} (PTAKI_NARAZ=1), zleceń ${wywolania.length - przed11}`);
+    ok(drugie.kod === 429, `11. ta sama osoba w trakcie zerwanego nagrania → ${drugie.kod}`);
+    ok(innej.kod === 200, `11. nagranie innej osoby dochodzi → ${innej.kod}`);
+    await new Promise((r) => setTimeout(r, 2200));
+
+    /* ---- 12. 30 nagrań jednej osoby naraz ---- */
+    tryb = 'wolno';
+    const przed12 = wywolania.length;
+    const trzydziesci = await Promise.all(Array.from({ length: 30 }, (_, i) => ptak(czlonkowie[7].k, `rownolegle-${i}`)));
+    const k12 = trzydziesci.map((w) => w.kod);
+    ok(wywolania.length - przed12 === 1 && k12.filter((k) => k === 200).length === 1 && k12.filter((k) => k === 429).length === 29,
+      `12. 30 naraz jednej osoby → do usługi ${wywolania.length - przed12}, 200×${k12.filter((k) => k === 200).length}, 429×${k12.filter((k) => k === 429).length}`);
+    tryb = 'ok';
+
     /* ---- 6. Błąd ze ścieżką ---- */
     tryb = 'blad';
     const bl = await ptak(czlonkowie[2].k, 'blad');
@@ -161,6 +215,9 @@ const ptak = (k, znak) => k.zadaj('/api/ptak', { metoda: 'POST', surowe: nagrani
     const pad = await ptak(czlonkowie[4].k, 'pad');
     const ms = Date.now() - t0;
     ok([502, 503].includes(pad.kod) && ms < 2000 && !/127\.0\.0\.1|localhost|:7476/.test(pad.tekst), `7. usługa padła: ${pad.kod} po ${ms} ms, bez adresu („${pad.json.error}”)`);
+    // Członek z przyznaniem przy leżącej usłudze: dalej „chwilowo” (503), nie „na Twoim koncie” (403).
+    const pad2 = await ptak(czlonkowie[4].k, 'pad2');
+    ok(pad2.kod === 503 && pad2.json.kod === 'ptaki-chwilowo', `7. druga próba przy leżącej usłudze: ${pad2.kod} ${pad2.json.kod}`);
   } catch (e) {
     fail.push(`wyjątek: ${e.message}`);
     console.error(e);

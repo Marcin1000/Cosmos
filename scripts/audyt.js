@@ -362,6 +362,33 @@ for (const [f, tekst] of Object.entries({
 zleLiczby.length ? zle('nieaktualna liczba zestawów: ' + zleLiczby.join('; '))
   : ok(`liczba zestawów w dokumentacji zgadza się z katalogiem (${ileZestawow})`);
 
+/* Odmiana przy liczbie. „142 zestawów" stało na stronie produktowej
+   i w README (runda 9): przy 139 było dobrze, zepsuło się samo przy podbiciu
+   liczby – i wróci przy każdym kolejnym, gdy nikt nie pomyśli o polskiej
+   odmianie. Sprawdzamy KAŻDĄ liczbę przy „zestaw/zestawy/zestawów" (także
+   podzbiory: „34 zestawy przeglądarkowe"), dla dowolnego n. Po przyimku
+   z dopełniaczem („do 142 zestawów") forma jest inna i ma prawo być. */
+function odmianaZestaw(n) {
+  if (n === 1) return 'zestaw';
+  const j = n % 10, s = n % 100;
+  return j >= 2 && j <= 4 && (s < 12 || s > 14) ? 'zestawy' : 'zestawów';
+}
+const zlaOdmiana = [];
+for (const [f, tekst] of Object.entries({
+  'README.pl.md': rd('README.pl.md'),
+  'CLAUDE.md': rd('CLAUDE.md'),
+  'tests/README.md': rd('tests/README.md'),
+  'public/strona/index.html': rd('public/strona/index.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
+})) {
+  for (const m of tekst.matchAll(/(?<![\p{L}\p{N}])(\d+)\s+(zestaw(?:ów|y)?)(?!\p{L})/gu)) {
+    if (/(?:^|[^\p{L}])(?:do|od|z|ze|około|dla|bez|spośród|wśród|powyżej|poniżej|zamiast)\s+$/iu.test(tekst.slice(Math.max(0, m.index - 20), m.index))) continue;
+    const dobra = odmianaZestaw(Number(m[1]));
+    if (m[2] !== dobra) zlaOdmiana.push(`${f}: „${m[0]}" – powinno być „${m[1]} ${dobra}"`);
+  }
+}
+zlaOdmiana.length ? zle('zła odmiana liczby zestawów: ' + zlaOdmiana.join('; '))
+  : ok('odmiana liczby zestawów zgadza się (zestaw / zestawy / zestawów)');
+
 /* Obrazy w README. Grafiki marki i zrzuty wymieniamy całymi zestawami
    (runda 4: banner.svg → banner-*.png) – wskazanie pliku, którego nie ma,
    daje na GitHubie pustą ramkę na samej górze wizytówki. */

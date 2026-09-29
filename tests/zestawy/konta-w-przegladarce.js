@@ -195,8 +195,8 @@ async function wPrzegladarce() {
     ptak.tryb = 200; ptak.n = 0;
     await p.goto(`${S}/app`, { waitUntil: 'load' });
     await gotowa('wlasciciel');
-    await p.waitForFunction(async () => (await ptakiOdlozone.wszystkie()).length === 0, null, { timeout: 8000 }).catch(() => {});
-    console.log('DEBUG', await p.evaluate(async () => JSON.stringify({ po: ptakiPoStatusie, ja: kimJestem(), on: navigator.onLine, l: await ptakiOdlozone.wszystkie() })));
+    // (waitForFunction z funkcją async nie czeka – obietnica jest „prawdziwa” od razu)
+    for (let i = 0; i < 40 && (ptak.n < 1 || await ileOdlozonych() > 0); i++) await p.waitForTimeout(200);
     ok(ptak.n === 1 && await ileOdlozonych() === 0, `4b. start z siecią: odłożone nagranie rozpoznane bez trybu głosowego (żądań ${ptak.n})`);
 
     ptak.tryb = 400; ptak.n = 0;

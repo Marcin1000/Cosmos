@@ -70,11 +70,13 @@
   <!-- ================= LOGOWANIE ================= -->
   <div class="login-overlay" id="login-overlay" style="display:none">
     <form class="login-box" id="login-form">
-      <svg class="login-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
-      <h1 class="login-title">COSMOS</h1>
-      <p class="login-sub" data-i18n="login.sub">Zaloguj się do Cosmosa</p>
-      <input type="text" id="login-login" data-i18n-ph="login.login" placeholder="Login" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus>
-      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password">
+      <div class="login-glowa">
+        <svg class="login-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
+        <h1 class="login-title">COSMOS</h1>
+        <p class="login-sub" data-i18n="login.sub">Zaloguj się do Cosmosa</p>
+      </div>
+      <input type="text" id="login-login" data-i18n-ph="login.login" placeholder="Login" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus aria-label="Login" data-i18n-aria="login.login">
+      <input type="password" id="login-password" data-i18n-ph="login.password" placeholder="Hasło" autocomplete="current-password" aria-label="Hasło" data-i18n-aria="login.password">
       <button type="submit" class="btn-primary" id="login-submit" data-i18n="login.submit">Zaloguj</button>
       <p class="login-error" id="login-error"></p>
       <a class="login-link" href="/" data-i18n="login.czym">Czym jest Cosmos?</a>
@@ -87,17 +89,25 @@
        Cloudflare: przeglądarka nie wysyła fragmentu w żądaniu. -->
   <div class="login-overlay" id="invite-overlay" style="display:none">
     <form class="login-box" id="invite-form">
-      <svg class="login-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
-      <h1 class="login-title">COSMOS</h1>
-      <p class="login-sub" id="invite-sub" data-i18n="inv.sub">Masz zaproszenie. Ustaw login i hasło – i gotowe.</p>
-      <p class="login-o" data-i18n="inv.oCosmos">Cosmos to osobisty, hybrydowy system AI: jedna rozmowa przez chmurę, lokalny GPU i modele komercyjne.</p>
-      <a class="login-link" href="/" target="_blank" rel="noopener" data-i18n="login.czym">Czym jest Cosmos?</a>
-      <input type="text" id="invite-name" data-i18n-ph="inv.name" placeholder="Twoje imię" autocomplete="name">
-      <input type="text" id="invite-login" data-i18n-ph="inv.login" placeholder="Login (do logowania)" autocomplete="username" autocapitalize="none" spellcheck="false">
-      <input type="password" id="invite-pass" data-i18n-ph="inv.pass" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password">
-      <input type="password" id="invite-pass2" data-i18n-ph="inv.pass2" placeholder="Powtórz hasło" autocomplete="new-password">
+      <div class="login-glowa">
+        <svg class="login-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
+        <h1 class="login-title">COSMOS</h1>
+        <p class="login-sub" id="invite-sub" data-i18n="inv.sub">Masz zaproszenie. Ustaw login i hasło – i gotowe.</p>
+      </div>
+      <!-- Imię i login przychodzą wypełnione z zaproszenia, a placeholder znika
+           po wypełnieniu – zostawały dwa prawie te same słowa („Bartek” /
+           „bartek”) bez nazwy pola. Stąd widoczne etykiety (runda 9). Opis
+           Cosmosa pod przyciskiem: przycisk mieści się na pierwszym ekranie. -->
+      <label class="login-pole"><span data-i18n="inv.name">Twoje imię</span>
+        <input type="text" id="invite-name" data-i18n-ph="inv.name" placeholder="Twoje imię" autocomplete="name"></label>
+      <label class="login-pole"><span data-i18n="inv.login">Login (do logowania)</span>
+        <input type="text" id="invite-login" data-i18n-ph="inv.login" placeholder="Login (do logowania)" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+      <input type="password" id="invite-pass" data-i18n-ph="inv.pass" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password" aria-label="Hasło (min. 8 znaków)" data-i18n-aria="inv.pass">
+      <input type="password" id="invite-pass2" data-i18n-ph="inv.pass2" placeholder="Powtórz hasło" autocomplete="new-password" aria-label="Powtórz hasło" data-i18n-aria="inv.pass2">
       <button type="submit" class="btn-primary" id="invite-submit" data-i18n="inv.submit">Dołącz</button>
       <p class="login-error" id="invite-error"></p>
+      <p class="login-o" data-i18n="inv.oCosmos">Cosmos to osobisty, hybrydowy system AI: jedna rozmowa przez chmurę, lokalny GPU i modele komercyjne.</p>
+      <a class="login-link" href="/" target="_blank" rel="noopener" data-i18n="login.czym">Czym jest Cosmos?</a>
       <button type="button" class="login-link login-jezyk" id="invite-lang" data-i18n="inv.innyJezyk">English</button>
     </form>
   </div>

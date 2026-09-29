@@ -554,7 +554,7 @@ i wykonaj `sudo systemctl daemon-reload && sudo systemctl restart cosmos`.
 Przycisk 🐦 w trybie głosowym rozpoznaje ptaka z 8 s nagrania. Domyślnie liczy to
 komputer ze zmysłami w domu – gdy jest wyłączony, w lesie nic nie rozpoznasz.
 BirdNET nie potrzebuje karty graficznej (8 s nagrania = ok. 0,3–1 s na jednym
-rdzeniu), więc może działać na samym VPS-ie. Kosztuje ok. 460 MB pamięci na stałe.
+rdzeniu), więc może działać na samym VPS-ie. Kosztuje ok. 540 MB pamięci na stałe.
 
 1. Sprawdź, czy serwer ma miejsce:
    ```bash
@@ -562,7 +562,8 @@ rdzeniu), więc może działać na samym VPS-ie. Kosztuje ok. 460 MB pamięci na
    nproc
    ```
    Patrz na kolumnę **available** w wierszu `Mem:` – przy działającym Cosmosie
-   potrzeba **co najmniej 700** (MB). Mniej – nie instaluj (albo większy plan VPS).
+   potrzeba **co najmniej 700** (MB). Mniej – nie instaluj (albo weź większy plan VPS;
+   skrypt zaproponuje też 1 GB swapu).
    `nproc` to liczba rdzeni: wystarczy 1, przy 2 i więcej Cosmos nie odczuje ptaków wcale.
 2. Zainstaluj jednym poleceniem (1–3 minuty, pobiera ok. 150 MB):
    ```bash
@@ -572,16 +573,25 @@ rdzeniu), więc może działać na samym VPS-ie. Kosztuje ok. 460 MB pamięci na
    (poza katalogiem Cosmosa – `git pull` go nie rusza), usługę `cosmos-ptaki`
    (tylko `127.0.0.1:7061`, niewidoczną z sieci), dopisze `PTAKI_URL` do `.env`
    i zrestartuje Cosmosa. Na końcu ma napisać „Gotowe”.
-3. Sprawdź:
+3. Sprawdź na serwerze:
    ```bash
-   systemctl status cosmos-ptaki
+   systemctl status cosmos-ptaki --no-pager
+   curl -s http://127.0.0.1:7061/health
    ```
-   Ma być `active (running)`. W aplikacji: wyłącz komputer w domu, otwórz tryb
-   głosowy i dotknij 🐦 – nazwa ptaka ma przyjść po polsku.
+   Pierwsze ma pokazać `active (running)`, drugie – `"birdnet_gotowy":true`. Jeśli
+   skrypt skończył się linią „BŁĄD: …”, zdanie po dwukropku mówi, czego brakuje.
+4. Sprawdź w aplikacji (po KROKU 7): otwórz tryb głosowy i dotknij 🐦 przy śpiewającym
+   ptaku – albo przy nagraniu ptaka puszczonym z drugiego telefonu. Nazwa przyjdzie po
+   polsku; „W tym nagraniu nie rozpoznano ptaka” też znaczy, że serwer działa. Jeśli
+   w Ustawienia → Zmysły masz podłączony komputer z BirdNET, na czas próby go wyłącz –
+   inaczej odpowie on, nie serwer.
+5. Zaproszone osoby: Ustawienia → Konto → Dostęp, przy osobie zaznacz „Ptaki na serwerze”.
+   Bez tego przycisk 🐦 im odmówi.
 
 **Aktualizacja.** Zwykłe `git pull && sudo systemctl restart cosmos` restartuje też
 ptaki (nowa wersja usługi). Tylko gdy zmieni się `senses/requirements-ptaki.txt`,
-uruchom skrypt z punktu 2 jeszcze raz – drugi raz tylko aktualizuje pakiety.
+uruchom skrypt z punktu 2 jeszcze raz – zatrzyma usługę ptaków, zaktualizuje pakiety
+i zrestartuje obie usługi, także Cosmosa (kilka sekund przerwy).
 
 **Usunięcie:**
 ```bash
@@ -1110,12 +1120,12 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
   Obok tryb głosowy uruchamiany przyciskiem fal dźwiękowych (rozmowa po polsku przy
   otwartej karcie; nasłuch słowa aktywującego w tle jest jeszcze niedokończony –
   patrz `senses/README.md`).
-- **Tryb głosowy ma dwa silniki nasłuchu** (Ustawienia → „Nasłuch w trybie
-  głosowym"). *Własny strumień + Whisper* otwiera mikrofon RAZ na całą rozmowę
-  i sam wycina wypowiedzi z sygnału – znika sygnał podłączania sprzętu na
-  Androidzie, słyszenie samego siebie i pętle. Wymaga zmysłów z Whisperem;
-  bez nich Cosmos wraca do rozpoznawania przeglądarki i pisze o tym pod polem
-  wyboru. W nakładce głosowej jest też przycisk 🐦: 8 s nagrania i gatunek
+- **Tryb głosowy ma dwa sposoby słuchania** (Ustawienia → Głos → „Rozmowa głosowa”).
+  *Mikrofon Cosmosa* otwiera mikrofon raz na całą rozmowę i sam wycina wypowiedzi –
+  znika dźwięk włączania mikrofonu na Androidzie, słyszenie samego siebie i pętle.
+  Mowę rozpoznaje Whisper na komputerze ze zmysłami, a bez niego usługa w chmurze
+  (własny serwer rozpoznawania albo OpenAI); gdy nie ma żadnej, Cosmos wraca do
+  rozpoznawania w przeglądarce i pisze o tym pod polem wyboru. W nakładce głosowej jest też przycisk 🐦: 8 s nagrania i gatunek
   ptaka z BirdNET-a, czytany na głos.
 - **Dyktowanie i dopracowanie promptu** – mikrofon 🎤 zamienia mowę na tekst, a którym
   mikrofonem – wybierasz w Ustawieniach (macierz Kinecta, Galaxy Buds, telefon,
@@ -1204,7 +1214,7 @@ Gdy już działa, masz do dyspozycji dużo więcej niż sam czat:
 | Plan zdjęciowy pisze „Nie znam Twoich współrzędnych" | Nie musisz nic ustawiać na stałe: wpisz nazwę miejsca w polu **Miejsce** w Plenerze („Zakopane", „Kraków, Polska"). Zapisanie lokalizacji na stałe jest w Ustawieniach, przycisk „📍 Wykryj" |
 | DJI Fly nie chce zaimportować pliku `.kmz` | Ten format nie przeszedł jeszcze przez prawdziwego drona – jest zbudowany według dokumentacji WPML i sprawdzony niezależnym parserem, ale to nie to samo. Najprościej pobrać `.kmz` **na telefonie**, w przeglądarce z Cosmosem – trafia do „Pobrane" i DJI Fly widzi go w imporcie misji. Z komputera przenieś plik kablem. **Pierwszy lot z importu rób nad pustym polem, z ręką na drążkach.** Jeśli aplikacja odrzuci plik, napisz mi, co dokładnie pokazała – poprawię strukturę |
 | Cosmos nie widzi aparatu po Wi-Fi | Po kolei: firmware R6 II musi być 1.7.0+, CCAPI trzeba raz aktywować narzędziem Canona, a `CANON_CCAPI_URL` w `.env` musi wskazywać adres z menu aparatu razem z portem 8080. Aparat usypia Wi-Fi po kilku minutach – to nie awaria. I najważniejsze: Cosmos na VPS-ie nie dosięgnie aparatu w domu, bo to inna sieć |
-| Cosmos w trybie głosowym słyszy sam siebie i odpowiada w kółko | Przełącz Ustawienia → „Nasłuch w trybie głosowym" na *Własny strumień + Whisper* (wymaga uruchomionych zmysłów). Wtedy mikrofon jest naprawdę wyciszany na czas mówienia, a nie tylko ignorowany |
+| Cosmos w trybie głosowym słyszy sam siebie i odpowiada w kółko | Przełącz Ustawienia → Głos → „Nasłuch w trybie głosowym” na *Mikrofon Cosmosa*. Wtedy mikrofon jest naprawdę wyciszany na czas mówienia, a nie tylko ignorowany |
 | Tryb głosowy pokazuje „SŁUCHAM…", ale nic nie słyszy | Cosmos sam to wykrywa i próbuje odzyskać mikrofon. Trzy typowe przyczyny: wygaszony ekran (Android usypia dźwięk), rozmowa przychodząca albo inna aplikacja, która zabrała mikrofon, oraz odłączone słuchawki. Gdy odzyskanie się nie uda, napisze wprost, co zrobić |
 | Whisper w trybie głosowym co chwilę zgłasza błąd | Po trzech nieudanych próbach z rzędu Cosmos sam wraca do rozpoznawania przeglądarki i pisze o tym. Zwykle znaczy to, że komputer domowy się wyłączył – po jego włączeniu przestaw z powrotem w Ustawieniach |
 | Klip z R6 II nie chce się wczytać do rozmowy | To najpewniej H.265/HEVC – tak nagrywa R6 II w 4K, a Chrome na Windowsie dekoduje go tylko z rozszerzeniem „HEVC Video Extensions". Cosmos rozpoznaje ten przypadek i mówi o nim wprost. Alternatywa: wrzuć plik proxy w H.264 |

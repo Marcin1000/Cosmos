@@ -57,12 +57,12 @@ sprawdz('Złota godzina 6:41–7:25, niebieska od 17:48-18:31.', 'Złota godzina
 sprawdz('Golden hour 6:41–7:25.', 'Golden hour from 6:41 to 7:25.', 'en');
 sprawdz('Ekspozycja 10–15 min.', 'Ekspozycja od 10 do 15 minut.');
 // Minus zapisany półpauzą (tak piszą modele i polska typografia) ginął.
-sprawdz('W nocy do –2 °C, rano –1°.', 'W nocy do minus 2 stopnie Celsjusza, rano minus 1 stopień.');
-sprawdz('Dojście ~20 min, zejście ~1 h, ≈ 3 km, ± 10 zł.', 'Dojście około 20 minut, zejście około 1 godzina, około 3 kilometry, plus minus 10 zł.');
+sprawdz('W nocy do –2 °C, rano –1°.', 'W nocy do minus 2 stopni Celsjusza, rano minus 1 stopień.');
+sprawdz('Dojście ~20 min, zejście ~1 h, ≈ 3 km, ± 10 zł.', 'Dojście około 20 minut, zejście około 1 godziny, około 3 kilometrów, plus minus 10 zł.');
 sprawdz('Walk ~20 min, ≈ 3 km, ± 2 °C.', 'Walk about 20 minutes, about 3 kilometres, plus or minus 2 degrees Celsius.', 'en');
 // Skróty: Piper i głos systemowy czytały je literami („en pe”, „te jot”).
 sprawdz('Np. ok. 2 godz. przed świtem, tj. o godz. 5:10, m.in. Wawel, kopce itp. Potem temp. 3 °C.',
-  'Na przykład około 2 godziny przed świtem, to jest o godzinie 5:10, między innymi Wawel, kopce i tak dalej. Potem temperatura 3 stopnie Celsjusza.');
+  'Na przykład około 2 godzin przed świtem, to jest o godzinie 5:10, między innymi Wawel, kopce i tak dalej. Potem temperatura 3 stopnie Celsjusza.');
 sprawdz('Wyjście trwa 2 godz. Potem od godz. 6 do godz. 9.', 'Wyjście trwa 2 godziny. Potem od godziny 6 do godziny 9.');
 sprawdz('Bring layers, e.g. a fleece, i.e. warm.', 'Bring layers, for example a fleece, that is warm.', 'en');
 sprawdz('Rock & roll, R&D.', 'Rock i roll, R i D.');

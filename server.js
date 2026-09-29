@@ -568,7 +568,11 @@ function moduleExists(...parts) {
   return fs.existsSync(path.join(__dirname, ...parts));
 }
 
-async function capabilityManifest() {
+/* `opcje.widzi` – czy silnik tej rozmowy widzi obrazy (czat liczy to z modelu
+   i modelu wizyjnego). Bez niego manifest nie mówi o obrazach nic: dawniej
+   obiecywał wzrok każdemu silnikowi, także ślepemu, i przeczył notce
+   „ten model nie widzi obrazów” w tym samym prompcie (runda 9). */
+async function capabilityManifest(opcje = {}) {
   // Członek bez zgody na zmysły ich nie ma – model nie może mu ich obiecywać.
   const senses = agent.zmyslyDostepne() ? await sensesState() : { online: false, caps: {} };
   /* Manifest idzie do kontekstu czatu tej osoby – ma mówić o JEJ możliwościach.
@@ -583,8 +587,9 @@ async function capabilityManifest() {
   if (!ENDPOINTS.cloud.apiKey) missing.push('chmura NVIDIA – ustaw NVIDIA_API_KEY w .env');
   if (!ENDPOINTS.local.model) missing.push('model lokalny na RTX – uruchom Ollamę i ustaw LOCAL_MODEL');
   /* Nie „wzrok”: zdjęcie i klatka z kamery idą do modelu wizyjnego bez zmysłów.
-     Po słowie „wzrok” model odmawiał opisania obrazu, który miał przed sobą. */
-  if (!senses.online) missing.push('zmysły na komputerze (Whisper, rozpoznawanie obiektów YOLO) – uruchom python senses/service.py; obrazy i klatki z kamery widzisz bez nich przez model wizyjny');
+     Po słowie „wzrok” model odmawiał opisania obrazu, który miał przed sobą.
+     O obrazach mówi osobna linia manifestu (`obrazy`), tylko gdy wiadomo. */
+  if (!senses.online) missing.push('zmysły na komputerze (Whisper, rozpoznawanie obiektów YOLO) – uruchom python senses/service.py');
   if (!embedStatus(senses.caps && senses.caps.embed).provider) {
     missing.push('wyszukiwanie semantyczne – uruchom zmysły albo ustaw NVIDIA_API_KEY '
       + '(embeddingi z chmury działają też przy wyłączonym komputerze domowym)');
@@ -607,6 +612,7 @@ async function capabilityManifest() {
       id, model: ep.model || '(nie ustawiono)', gotowy: Boolean(ep.apiKey || ep.model),
     })),
     zmysly: { online: senses.online, ...senses.caps },
+    obrazy: typeof opcje.widzi === 'boolean' ? opcje.widzi : null,
     embeddingi: embedStatus(senses.caps && senses.caps.embed),
     studio: { obraz: imgs, dzwiek: studio && Boolean(STUDIO.eleven.key), wideo: studio && Boolean(STUDIO.seedance.key),
       eksport: czyWlasciciel() ? (STUDIO.exportDir || null) : null },
@@ -656,6 +662,11 @@ function capabilityText(m) {
       + `embeddingi=${yes(z.embed)}, upscale=${yes(z.upscale)}`,
     // MediaPipe bywa zainstalowany, ale żadna funkcja interfejsu go nie wywołuje.
     // Bez tego zastrzeżenia model obiecywał odczyt sylwetki, którego nie ma.
+    // Nigdy oba zdania naraz: albo silnik widzi, albo nie; bez wiedzy – żadne.
+    m.obrazy === true ? 'Obrazy: zdjęcia i klatki z kamery dołączone do pytania widzisz – ten silnik ma model wizyjny '
+      + '(działa to także bez zmysłów).'
+      : m.obrazy === false ? 'Obrazy: ten model nie odczytuje zdjęć ani klatek z kamery – do zdjęć trzeba wybrać '
+        + 'w Ustawieniach model oznaczony „widzi obrazy”.' : null,
     `Sylwetka (MediaPipe): ${z.mediapipe ? 'biblioteka zainstalowana, ale ŻADNA funkcja '
       + 'Cosmosa jej nie wywołuje – nie obiecuj odczytu sylwetki z kamery przeglądarki' : 'nie'}`,
     `Kinect 360: ${z.kinect

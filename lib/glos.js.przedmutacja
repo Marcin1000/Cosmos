@@ -433,6 +433,7 @@ function utworz({ SENSES_URL, silniki, kto, sendJson, readBodyBuffer, readJson, 
       else if (zrodlo === 'openai') { const ep = openaiDla(u); if (ep) zrob = (s) => ttsOpenAi(ep, tekst, jezyk, s); }
       else if (zrodlo === 'zmysly' && z.online) zrob = (s) => ttsZmysly(tekst, s);
       if (!zrob) continue;
+      if (klient.aborted) return undefined;
       const ms = Math.min(zrodlo === 'zmysly' ? DOM_MS : 60_000, koniec - Date.now());
       if (ms < 5000) { bledy.push(`${zrodlo}: pominięte – koniec czasu`); continue; }
       try {

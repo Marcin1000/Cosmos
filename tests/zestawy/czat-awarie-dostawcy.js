@@ -25,7 +25,25 @@
  *  19. odmowa FORMATU obrazu → „dostawca nie przyjmuje tego formatu", a nie
  *      fałszywe „wybierz model, który widzi obrazy",
  *  18. drugi POST z tym samym biegiem (Chrome ponawia go sam, gdy połączenie
- *      padnie przed pierwszym bajtem) → jedno żądanie do dostawcy, ta sama odpowiedź. */
+ *      padnie przed pierwszym bajtem) → jedno żądanie do dostawcy, ta sama odpowiedź,
+ *  20. ciche ponowienie z rozumem (runda 9): błąd TRWAŁY w strumieniu (zły klucz,
+ *      za długa rozmowa, llama.cpp „error:”) – jedno żądanie; przejściowy (limit
+ *      tempa, server_error, surowa linia Ollamy) – dwa, komunikat po polsku bez
+ *      surowego angielskiego; koniec bez [DONE] i zerwane gniazdo przed słowem
+ *      – ponowione; samo „\n” to jeszcze nie treść i nie dubluje się; bez ponowienia
+ *      przy `pomiar` i po długim myśleniu; błąd sieci przy ponowieniu – przyczyna
+ *      z pierwszej próby; 401 przy ponowieniu – rada o kluczu; dostawca, który
+ *      po błędzie nie zamyka połączenia – koniec od razu,
+ *  21. vLLM z nowym brzmieniem przepełnienia okna → mniejszy limit, a następne
+ *      pytanie nadal z max_tokens (bez fałszywej poprawki max_completion_tokens),
+ *  22. obraz za duży dla dostawcy → 413 „za duże”, bez próby modelem wizyjnym,
+ *  23. lokalny: pusta 502 pośrednika → kod lokalny-niedostepny (brama), jedno żądanie
+ *      i bezpiecznik; llama.cpp 503 „Loading model” → zimny-start; cisza zimnego
+ *      startu → rozgrzewka /api/generate bez promptu,
+ *  24. klatka z kamery do ślepego modelu spoza katalogu → ponowienie bez obrazu,
+ *      następna klatka od razu bez obrazu,
+ *  25. notka o obrazie liczona do okna lokalnego: prompt + limit odpowiedzi ≤ okno,
+ *  26. manifest: silnik z wizją słyszy, że widzi obrazy, ślepy – że nie; nigdy oba. */
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -39,19 +57,91 @@ const spij = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const proby = {};                 // słowo → ile żądań dostał dostawca
 const ostatnie = {};              // słowo → treść ostatniego żądania
+const wszystkie = {};             // słowo → treści wszystkich żądań
+const rozgrzewki = [];            // ciała POST /lok/api/generate
+let bramaWylaczona = false;       // pośrednik przed wyłączoną Ollamą: 502 bez treści także na /models
+const sse = (o) => `data: ${JSON.stringify(o)}\n\n`;
+const rola = sse({ choices: [{ delta: { role: 'assistant' } }] });
+const dobra = (t) => sse({ choices: [{ delta: { content: t }, finish_reason: 'stop' }] }) + 'data: [DONE]\n\n';
 const blad = (res, kod, tresc, naglowki = {}) => {
   res.writeHead(kod, { 'Content-Type': 'application/json', ...naglowki });
   res.end(JSON.stringify(tresc));
 };
 const atrapa = http.createServer((req, res) => {
+  const lok = req.url.startsWith('/lok/');
+  if (lok && bramaWylaczona) { res.writeHead(502); return res.end(); }
+  if (lok && req.url.endsWith('/models')) {
+    // Okno 4096 zna tylko model „okno-4096” (vLLM: max_model_len) – pozostałe bez budżetu.
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ data: [{ id: 'okno-4096', max_model_len: 4096 }, { id: 'inny' }] }));
+  }
   if (req.url.endsWith('/models')) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"data":[{"id":"test"}]}'); }
+  if (lok && !req.url.includes('/chat/completions')) {
+    let g = '';
+    return req.on('data', (c) => { g += c; }).on('end', () => {
+      if (req.url.endsWith('/api/generate')) rozgrzewki.push(g);
+      res.writeHead(404); res.end();
+    });
+  }
   let b = '';
   req.on('data', (c) => { b += c; }).on('end', () => {
     let d = {}; try { d = JSON.parse(b); } catch { /* puste */ }
     const ost = [...(d.messages || [])].reverse().find((m) => m.role === 'user') || { content: '' };
     const t = typeof ost.content === 'string' ? ost.content : JSON.stringify(ost.content);
-    const slowo = (t.match(/przedpierwszym|przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat/) || [''])[0];
-    if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; }
+    const slowo = (t.match(/przedpierwszym|przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat|sseauth|sseratelimit|sseserwer|ssekontekst|llamaerr|ollamaraw|eofprzedslowem|zerwanieprzed|spacjaprzed|pomiarprzeciaz|mysliblad|ponowsiec|odp401|bezkonca|vllmnowy|zaduzeobraz|bramapusta|ladujemodel|zimnystart|slepaklatka|oknobudzet|manifestslepy|manifestwidzi/) || [''])[0];
+    if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; (wszystkie[slowo] = wszystkie[slowo] || []).push(d); }
+    const nr = proby[slowo];
+    const sseStart = () => res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    // --- 20: błędy w strumieniu po 200
+    if (slowo === 'sseauth') { sseStart(); return res.end(sse({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } })); }
+    if (slowo === 'sseratelimit') { sseStart(); return res.end(sse({ type: 'error', error: { type: 'rate_limit_error', message: 'Number of request tokens has exceeded your per-minute rate limit' } })); }
+    if (slowo === 'sseserwer') { sseStart(); return res.end(sse({ error: { message: 'The server had an error while processing your request. Sorry about that!', type: 'server_error' } })); }
+    if (slowo === 'ssekontekst') { sseStart(); return res.end(sse({ error: { message: "This model's maximum context length is 4096 tokens.", code: 400 } })); }
+    if (slowo === 'llamaerr') { sseStart(); return res.end(`error: ${JSON.stringify({ code: 500, message: 'Context size has been exceeded.', type: 'server_error' })}\n\n`); }
+    if (slowo === 'ollamaraw') { sseStart(); return res.end(`${JSON.stringify({ error: { message: 'model runner has unexpectedly stopped, this may be due to resource limitations' } })}\n\n`); }
+    if (slowo === 'eofprzedslowem') { sseStart(); return res.end(nr === 1 ? rola : dobra('Odpowiedź po EOF.')); }
+    if (slowo === 'zerwanieprzed') {
+      sseStart();
+      if (nr === 1) { res.write(rola); return setTimeout(() => res.socket.destroy(), 100); }
+      return res.end(dobra('Odpowiedź po zerwaniu.'));
+    }
+    if (slowo === 'spacjaprzed') {
+      sseStart();
+      if (nr === 1) return res.end(sse({ choices: [{ delta: { content: '\n' } }] }) + sse({ error: { message: 'Service temporarily overloaded' } }));
+      return res.end(dobra('Odpowiedź po spacji.'));
+    }
+    if (slowo === 'pomiarprzeciaz') { sseStart(); return res.end(nr === 1 ? sse({ error: { message: 'Service temporarily overloaded' } }) : dobra('Druga próba.')); }
+    if (slowo === 'mysliblad') {
+      sseStart(); res.write(rola);
+      return setTimeout(() => res.end(sse({ error: { message: 'Overloaded', type: 'overloaded_error' } })), 1400);
+    }
+    if (slowo === 'ponowsiec') {
+      if (nr === 1) { sseStart(); return res.end(sse({ error: { message: 'Service temporarily overloaded' } })); }
+      return req.socket.destroy();
+    }
+    if (slowo === 'odp401') {
+      if (nr === 1) { sseStart(); return res.end(sse({ error: { message: 'Service temporarily overloaded' } })); }
+      return blad(res, 401, { error: { message: 'invalid x-api-key', type: 'authentication_error' } });
+    }
+    if (slowo === 'bezkonca') { sseStart(); return res.write(sse({ error: { message: 'Service temporarily overloaded' } })); }
+    // --- 21: vLLM, nowe brzmienie przepełnienia okna
+    if (slowo === 'vllmnowy' && (d.max_tokens || d.max_completion_tokens) > 1100) {
+      const lim = d.max_tokens || d.max_completion_tokens;
+      return blad(res, 400, { object: 'error', type: 'BadRequestError', code: 400,
+        message: `'max_tokens' or 'max_completion_tokens' is too large: ${lim}. This model's maximum context length is 4096 tokens and your request has 3000 input tokens (${lim} > 4096 - 3000).` });
+    }
+    // --- 22: obraz za duży (Claude)
+    if (slowo === 'zaduzeobraz') {
+      return blad(res, 400, { error: { type: 'invalid_request_error', message: 'messages.1.content.1.image.source.base64: image exceeds 5 MB maximum: 6000000 bytes > 5242880 bytes' } });
+    }
+    // --- 23: lokalny za pośrednikiem
+    if (slowo === 'bramapusta') { res.writeHead(502); return res.end(); }
+    if (slowo === 'ladujemodel') return blad(res, 503, { error: { code: 503, message: 'Loading model', type: 'unavailable_error' } });
+    if (slowo === 'zimnystart') return;   // ładuje się dłużej niż limit ciszy
+    // --- 24: ślepy model spoza katalogu odmawia obrazu jak Ollama (500)
+    if (slowo === 'slepaklatka' && JSON.stringify(d.messages).includes('image_url')) {
+      return blad(res, 500, { error: { message: 'this model is missing data required for image input' } });
+    }
     if (slowo === 'przeciazony' && proby[slowo] < 3) {
       return blad(res, 529, { error: { message: 'Overloaded', type: 'overloaded_error' } }, { 'retry-after': '0.2' });
     }
@@ -168,6 +258,8 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
     NEMOTRON_BASE_URL: `http://127.0.0.1:${atrapa.address().port}/v1`, SENSES_URL: 'http://127.0.0.1:1',
     COSMOS_CISZA_MODELU_MS: '1500', COSMOS_BIEG_SIEROTA_MS: '600',
     NEMOTRON_VISION_MODEL: 'wizja-model', COSMOS_CISZA_MYSLENIA_MS: '6000', COSMOS_PULS_MS: '400',
+    LOCAL_BASE_URL: `http://127.0.0.1:${atrapa.address().port}/lok/v1`, LOCAL_MODEL: 'lokalny-test', LOCAL_VISION_MODEL: '',
+    COSMOS_PONOWIENIE_DO_MS: '1000',
   });
   if (!(await czekajNa(`${S}/api/auth`))) throw new Error('serwer nie wstał');
 
@@ -240,6 +332,114 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   w = await czat('przedpierwszym');
   ok(w.koniec && !w.koniec.blad && /Jutro słonecznie/.test(w.txt) && proby.przedpierwszym === 2,
     `11b. błąd przed pierwszym słowem → ciche ponowienie i odpowiedź (${proby.przedpierwszym} żądania, błąd: ${w.koniec && w.koniec.blad || 'brak'})`);
+
+  // --- 20: ciche ponowienie z rozumem (runda 9)
+  const bl = (x) => (x.koniec && x.koniec.blad) || '';
+  w = await czat('sseauth');
+  ok(proby.sseauth === 1 && /Klucz API/.test(bl(w)) && !/invalid x-api-key/.test(bl(w)),
+    `20a. authentication_error w strumieniu → bez ponowienia, po polsku (${proby.sseauth} żądanie: ${bl(w).slice(0, 60)})`);
+  w = await czat('sseratelimit');
+  ok(proby.sseratelimit === 2 && /Limit zapytań/.test(bl(w)) && !/per-minute/.test(bl(w)),
+    `20b. rate_limit_error → jedno ciche ponowienie, komunikat „Limit zapytań” (${proby.sseratelimit} żądania: ${bl(w).slice(0, 60)})`);
+  w = await czat('sseserwer');
+  ok(proby.sseserwer === 2 && /po stronie dostawcy/.test(bl(w)) && !/Sorry/.test(bl(w)),
+    `20c. server_error → ponowione, po polsku bez „Sorry about that” (${bl(w).slice(0, 60)})`);
+  w = await czat('ssekontekst');
+  ok(proby.ssekontekst === 1 && /za długa/.test(bl(w)), `20d. za długa rozmowa w strumieniu → bez ponowienia (${proby.ssekontekst} żądanie: ${bl(w).slice(0, 50)})`);
+  w = await czat('llamaerr');
+  ok(proby.llamaerr === 1 && /za długa/.test(bl(w)) && !/w połowie/.test(bl(w)),
+    `20e. llama.cpp „error: {…}” rozpoznany, pełny kontekst nie ponawiany (${proby.llamaerr}: ${bl(w).slice(0, 50)})`);
+  w = await czat('ollamaraw');
+  ok(proby.ollamaraw === 2 && /przerwan/.test(bl(w)) && !/w połowie|unexpectedly/.test(bl(w)),
+    `20f. surowa linia {"error"} Ollamy rozpoznana i raz ponowiona (${proby.ollamaraw}: ${bl(w).slice(0, 60)})`);
+  w = await czat('eofprzedslowem');
+  ok(proby.eofprzedslowem === 2 && !bl(w) && /Odpowiedź po EOF/.test(w.txt), `20g. koniec bez [DONE] przed słowem → ponowione, odpowiedź doszła (${proby.eofprzedslowem}: ${bl(w) || 'bez błędu'})`);
+  w = await czat('zerwanieprzed');
+  ok(proby.zerwanieprzed === 2 && !bl(w) && /Odpowiedź po zerwaniu/.test(w.txt), `20h. zerwane gniazdo przed słowem → ponowione (${proby.zerwanieprzed}: ${bl(w) || 'bez błędu'})`);
+  w = await czat('spacjaprzed');
+  ok(proby.spacjaprzed === 2 && !bl(w) && /Odpowiedź po spacji/.test(w.txt) && !w.txt.includes('"content":"\\n"'),
+    `20i. samo „\\n” przed błędem to nie treść: ponowione, bez zdublowanego początku (${proby.spacjaprzed})`);
+  w = await czat('pomiarprzeciaz', { dodatki: { pomiar: true } });
+  ok(proby.pomiarprzeciaz === 1 && /przerwan/.test(bl(w)), `20j. pomiar płynności → bez cichego ponowienia (${proby.pomiarprzeciaz} żądanie)`);
+  w = await czat('mysliblad', { dodatki: { model: 'claude-sonnet-5' } });
+  ok(proby.mysliblad === 1 && /przeciążony/.test(bl(w)), `20k. błąd po długim cichym myśleniu → bez ponowienia (${proby.mysliblad} żądanie: ${bl(w).slice(0, 50)})`);
+  w = await czat('ponowsiec');
+  ok(proby.ponowsiec === 2 && /przerwan/.test(bl(w)) && !/fetch failed/i.test(bl(w)),
+    `20l. błąd sieci przy ponowieniu → przyczyna z pierwszej próby, nie „fetch failed” (${bl(w).slice(0, 60)})`);
+  w = await czat('odp401');
+  ok(proby.odp401 === 2 && /Klucz API/.test(bl(w)) && !/przeciążony/.test(bl(w)), `20m. ponowienie dostało 401 → rada o kluczu (${bl(w).slice(0, 60)})`);
+  w = await czat('bezkonca');
+  ok(proby.bezkonca === 2 && w.czas < 4000 && /przerwan/.test(bl(w)) && !/zamilkł/.test(bl(w)),
+    `20n. błąd bez zamknięcia połączenia → koniec od razu (${w.czas} ms, ${bl(w).slice(0, 40)})`);
+
+  // --- 21: vLLM, nowe brzmienie przepełnienia
+  w = await czat('vllmnowy');
+  const pierwszyV = wszystkie.vllmnowy[1] || {};
+  ok(!bl(w) && w.status === 200 && proby.vllmnowy === 2 && pierwszyV.max_tokens === 1032 && pierwszyV.max_completion_tokens === undefined,
+    `21. vLLM „your request has N input tokens” → druga próba z max_tokens ${pierwszyV.max_tokens} (${w.status}, ${proby.vllmnowy} żądania)`);
+  w = await czat('vllmnowy');
+  const trzeciV = wszystkie.vllmnowy[2] || {};
+  ok(typeof trzeciV.max_tokens === 'number' && trzeciV.max_completion_tokens === undefined,
+    `21. następne pytanie dalej z max_tokens, bez fałszywej poprawki (${JSON.stringify({ mt: trzeciV.max_tokens, mct: trzeciV.max_completion_tokens })})`);
+
+  // --- 22: obraz za duży
+  w = await czat('zaduzeobraz', { tresc: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }, { type: 'text', text: 'zaduzeobraz – co tu jest?' }] });
+  ok(w.status === 413 && w.json.kod === 'obraz-za-duzy' && /za duże/.test(w.json.error || '') && !/widzi obrazy/.test(w.json.error || '') && proby.zaduzeobraz === 1,
+    `22. odmowa rozmiaru → 413 „za duże”, bez próby modelem wizyjnym (${w.status}, ${proby.zaduzeobraz} żądanie)`);
+
+  // --- 23: lokalny za pośrednikiem, llama.cpp w trakcie ładowania, zimny start
+  const lokalnie = { endpoint: 'local' };
+  bramaWylaczona = false;
+  w = await czat('bramapusta', { dodatki: lokalnie });
+  ok(w.status === 502 && w.json.kod === 'lokalny-niedostepny' && w.json.rodzaj === 'brama' && proby.bramapusta === 1,
+    `23a. pusta 502 pośrednika → lokalny-niedostepny/brama, jedno żądanie (${w.status} ${w.json.kod}/${w.json.rodzaj}, ${proby.bramapusta})`);
+  bramaWylaczona = true;
+  w = await czat('bramapusta', { dodatki: lokalnie });
+  ok(w.status === 502 && w.json.rodzaj === 'brama' && proby.bramapusta === 1, `23a. druga wiadomość z bezpiecznika (${proby.bramapusta} żądanie do modelu)`);
+  bramaWylaczona = false;
+  w = await czat('ladujemodel', { dodatki: lokalnie });
+  ok(w.status === 503 && w.json.kod === 'zimny-start' && /ładuje/.test(w.json.error || '') && !/Loading model/.test(w.json.error || ''),
+    `23b. llama.cpp 503 „Loading model” → zimny-start po polsku (${w.status} ${w.json.kod})`);
+  w = await czat('zimnystart', { dodatki: lokalnie });
+  await spij(300);
+  const rozgrzewka = rozgrzewki.map((x) => { try { return JSON.parse(x); } catch { return {}; } }).find((x) => x.model === 'lokalny-test');
+  ok(w.status === 504 && w.json.kod === 'zimny-start' && rozgrzewka && rozgrzewka.prompt === undefined,
+    `23c. cisza zimnego startu → w tle /api/generate bez promptu (${w.status}, rozgrzewek ${rozgrzewki.length})`);
+
+  // --- 24: klatka z kamery do ślepego modelu spoza katalogu
+  const klatka = [{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ' } }, { type: 'text', text: 'slepaklatka co trzymam?' }];
+  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'mistral-nemo', klatkaKamery: true } });
+  const drugieS = wszystkie.slepaklatka[1] || { messages: [] };
+  ok(!bl(w) && w.status === 200 && proby.slepaklatka === 2 && !JSON.stringify(drugieS.messages).includes('image_url')
+    && /nie widzi/.test(JSON.stringify(drugieS.messages)) && !/OBRAZ Z KAMERY/.test(JSON.stringify(drugieS.messages)),
+  `24. odmowa klatki → ponowienie bez obrazu, z notką „nie widzi” (${w.status}, ${proby.slepaklatka} żądania)`);
+  w = await czat('slepaklatka', { tresc: klatka, dodatki: { endpoint: 'local', model: 'mistral-nemo', klatkaKamery: true } });
+  ok(!bl(w) && proby.slepaklatka === 3 && !JSON.stringify(ostatnie.slepaklatka.messages).includes('image_url'),
+    `24. następna klatka od razu bez obrazu (${proby.slepaklatka - 2} żądanie)`);
+
+  // --- 25: notka o obrazie w budżecie okna lokalnego (okno 4096 z /models)
+  const { szacujTokeny } = require('../../lib/czat.js');
+  const historia = [];
+  for (let i = 0; i < 6; i++) historia.push({ role: 'user', content: `pytanie ${i} ${'ż'.repeat(1500)}` }, { role: 'assistant', content: `odpowiedź ${i} ${'ą'.repeat(1500)}` });
+  const rOkno = await fetch(`${S}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    endpoint: 'local', model: 'okno-4096', bieg: los(), useSenses: false, useMemory: false, useKb: false, useSearch: false, turaOd: historia.length,
+    messages: [...historia, { role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }, { type: 'text', text: 'oknobudzet co na zdjęciu?' }] }],
+  }) });
+  await rOkno.text();
+  const wOkno = ostatnie.oknobudzet || { messages: [] };
+  const sumaOkna = wOkno.messages.reduce((a, m) => a + szacujTokeny(m.content), 0) + (wOkno.max_tokens || 0);
+  ok(proby.oknobudzet === 1 && /OBRAZ W PYTANIU/.test(JSON.stringify(wOkno.messages)) && sumaOkna <= 4096,
+    `25. prompt z notką o obrazie + limit odpowiedzi mieści się w oknie (${sumaOkna} ≤ 4096, max_tokens ${wOkno.max_tokens})`);
+
+  // --- 26: manifest mówi prawdę o wzroku
+  const instr = (d) => (d && d.messages || []).filter((m) => m.role === 'system').map((m) => String(m.content)).join('\n');
+  await czat('manifestslepy', { dodatki: { endpoint: 'local', model: 'llama3.1:8b' } });
+  await czat('manifestwidzi', { dodatki: { model: 'nvidia/nemotron-3-super-120b-a12b' } });
+  const iS = instr(ostatnie.manifestslepy); const iW = instr(ostatnie.manifestwidzi);
+  const zdanieTak = /Obrazy: zdjęcia i klatki z kamery dołączone do pytania widzisz/;
+  const zdanieNie = /Obrazy: ten model nie odczytuje zdjęć/;
+  ok(zdanieNie.test(iS) && !zdanieTak.test(iS) && !/klatki z kamery widzisz/.test(iS), '26. ślepy silnik: manifest mówi, że nie widzi, i nie obiecuje wzroku');
+  ok(zdanieTak.test(iW) && !zdanieNie.test(iW), '26. silnik z modelem wizyjnym: manifest mówi, że widzi – jedno zdanie, nie oba');
 
   // --- 12: kontekst
   w = await czat('zadlugo');

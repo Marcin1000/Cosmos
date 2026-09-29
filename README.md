@@ -185,14 +185,14 @@ person through their name, their own API keys, the senses and the phone install.
 **Bird recognition works from the forest, not only from home.** Birds were the one
 sense that made no sense to route to a home PC: you stand in a forest with a phone and
 the computer at home is asleep. BirdNET needs no GPU – eight seconds of audio take
-0.2–0.5 s on one VPS core – so it also runs on the server as a small separate service
+0.3–1 s on one VPS core – so it also runs on the server as a small separate service
 (`cosmos-ptaki`, the same senses code filtered to one route, loopback only, 900 MB
 memory cap). The source chain for that one route is: the person's own computer if it
 has BirdNET, then the server, then the owner's home. The server side is fenced in: one
 analysis at a time, a short queue, an immediate `503` past it instead of a hanging
 request, one recording in flight per person, 4 MB cap, coordinates rounded to 0.1° and
 sent in headers, never in the URL. Members need an explicit grant, and a failure never
-shows them a path from someone else's disk. A recording made with no signal waits in
+shows them a path from someone else's disk. A recording made with no signal waits on
 the phone and is recognised when the connection comes back.
 
 **Tell the model what it actually has.** A vision model received the camera frame and
@@ -311,7 +311,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 142 suites + 10 Python selftests (~20 min)
+npm test                  # 142 suites + 10 Python selftests (~12 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```

@@ -16,6 +16,7 @@ Cosmos ma **konta**. Ty jesteś **właścicielem**, a osoby, które zaprosisz, s
 | Rozmowy, pamięć, profil, baza wiedzy, archiwum, sprzęt | własne | **własne** – nikt inny ich nie widzi, Ty też nie |
 | Chmura NVIDIA | ✓ | ✓ |
 | OpenAI, Claude, lokalny GPU, Studio | ✓ | gdy **przyznasz** w panelu Dostęp **albo** gdy osoba wpisze **własny klucz** (wtedy płaci sama) |
+| Płatne wyszukiwarki (Serper = Google, Brave), rozpoznawanie ptaków na serwerze | ✓ | gdy **przyznasz** w panelu Dostęp (**Wyszukiwarki (Google)**, **Ptaki na serwerze**) |
 | Mikrofon, głos, kamera w przeglądarce | ✓ | ✓ – bez instalowania czegokolwiek |
 | Kinect, aparat Canon, urządzenia domowe, poranna odprawa | ✓ | ✗ – to sprzęt w **Twoim** domu |
 | Wykonywanie kodu, trening modelu, automatyzacja stron | ✓ | ✗ – działają **na serwerze**, obok kluczy i danych wszystkich |
@@ -75,7 +76,7 @@ przestaną dochodzić, a nic tego głośno nie zgłosi. Połączenia w drugą st
 (VPS → Ollama i zmysły na domowym PC) działają bez zmian.
 
 `COSMOS_PASSWORD` działa **tylko przy pierwszym starcie**: staje się hasłem
-Twojego konta. Potem hasło zmieniasz w **Ustawienia → Twoje konto**.
+Twojego konta. Potem hasło zmieniasz w **Ustawienia → Konto → Twoje konto**.
 
 Na ekranie logowania możesz zostawić pole *Login* puste – wtedy logujesz się
 Ty. Stare skrypty i mostek MCP działają bez zmian.
@@ -185,15 +186,27 @@ nic nie ginie.
 
 ## Krok 3 – zaproś kogoś
 
-1. **Ustawienia** → blok **Dostęp** → wpisz imię → **Zaproś**.
+1. **Ustawienia → Konto** → blok **Dostęp** → wpisz imię → **Zaproś**.
 2. Pojawi się link. Na telefonie **Wyślij…** otworzy WhatsApp, SMS i resztę;
    na komputerze – **Kopiuj link**.
 3. Link **działa raz i wygasa po 7 dniach**. Kto otworzy go pierwszy, ten
    zakłada konto – dlatego wysyłaj go tylko tej jednej osobie.
 
-Przy każdej osobie masz przełączniki **lokalny GPU / OpenAI / Claude /
-Studio**. Włączone – ta osoba korzysta z nich na Twoich kluczach. Wyłączone –
-nie ma ich, chyba że wpisze własny klucz.
+Przy każdej osobie masz przełączniki **lokalny GPU (i zmysły) / OpenAI (czat
+i głos) / Claude / Studio / Wyszukiwarki (Google) / Ptaki na serwerze**.
+Włączone – ta osoba korzysta z nich na Twoich kluczach i Twoim sprzęcie.
+Wyłączone – nie ma ich, chyba że wpisze własny klucz (dotyczy OpenAI i Claude).
+
+- **lokalny GPU (i zmysły)** – model na Twoim domowym GPU i zmysły domu (Whisper,
+  rozpoznawanie obrazu, także BirdNET, gdy działa w domu).
+- **OpenAI (czat i głos)** – czat, głos (rozpoznawanie i czytanie na głos) oraz
+  **przepisywanie nagrań wrzucanych do bazy wiedzy** (do 25 MB każde, bez limitu
+  dziennego – płacisz Ty).
+- **Wyszukiwarki (Google)** – płatne wyszukiwarki z Twoim kluczem (Serper, Brave
+  jako zapas), w granicach `COSMOS_SZUKANIE_NA_MINUTE` i `COSMOS_SZUKANIE_NA_DOBE`.
+  Bez przyznania osoba szuka darmowymi źródłami.
+- **Ptaki na serwerze** – BirdNET na serwerze (`PTAKI_URL`, KROK 6b
+  w `docs/START-TUTAJ.md`), dla kogoś, kto nie ma go na własnym komputerze.
 
 Na Twoich kluczach osoba dostaje **model z `.env`** (i jego wizyjny) – nie
 dowolny z cennika. Inne modele dopuszczasz w `.env`:
@@ -237,11 +250,11 @@ czegokolwiek.
 
 **Opcjonalnie:**
 
-- **Ustawienia → Twoje konto → Własne klucze API** – kto ma swój klucz OpenAI
+- **Ustawienia → Konto → Twoje konto → Własne klucze API** – kto ma swój klucz OpenAI
   albo Anthropic, wpisuje go tutaj; zakładka silnika pojawi się od razu,
   a płaci ta osoba. Klucz widzi tylko serwer; w przeglądarce zostają cztery
   ostatnie znaki.
-- **Ustawienia → profil** – kilka zdań o sobie („fotografuję góry, wolę
+- **Ustawienia → Pamięć → O Tobie** – kilka zdań o sobie („fotografuję góry, wolę
   krótkie odpowiedzi"). Cosmos będzie to brał pod uwagę w każdej rozmowie.
 - **Plener → sprzęt** – korpus i obiektywy, jeśli ktoś fotografuje. Plan
   zdjęciowy liczy wtedy nastawy pod jego szkła, a nie pod Twoje.
@@ -266,7 +279,8 @@ sprzęcie, a zdarzenia z jej kamery trafiają tylko na jej konto:
    agenta do autostartu. Okno można potem zamknąć.
 3. Aplikacja sama zauważa połączenie. Dalej wszystko z panelu:
    **Zainstaluj zalecane** (pakiety zmysłów, ok. 3 GB), przełączniki
-   **Zmysły / Obserwator kamery / Kinect**, **Aktualizuj agenta**, **Odłącz**.
+   **Mowa, obraz i dokumenty / Kamera w tle / Kinect**, **Aktualizuj agenta**,
+   **Odłącz komputer**.
 
 Nie trzeba przekierowywać portów ani stawiać VPN-a: to komputer osoby łączy
 się z `cosmosai.live`, nie odwrotnie. Przełącznik **lokalny GPU** w panelu
@@ -294,7 +308,7 @@ Konto → Pokaż samouczek**.
 | Osoba nie widzi zakładki Claude / OpenAI | Włącz jej przełącznik w panelu Dostęp albo niech wpisze własny klucz. |
 | Po aktualizacji telefon pokazuje starą wersję | Na dole pojawia się „Jest nowa wersja Cosmosa. Odśwież" – kliknij. Nie pojawiło się? Przełącz się na chwilę do innej aplikacji i wróć (wtedy Cosmos sprawdza wersję) albo odśwież dwa razy. |
 | Po ustawieniu `COSMOS_HOST=127.0.0.1` obserwator kamery albo mostek MCP milczą | Łączą się jeszcze pod `http://100.x.y.z:3000`. Zmień im `COSMOS_URL` na adres z `tailscale serve` albo `https://cosmosai.live`. |
-| Obserwator kamery albo mostek MCP pod `https://cosmosai.live` dostają 403 albo stronę „Just a moment…” | To ochrona Cloudflare przed botami (Security → Bots: **Bot Fight Mode**, Settings: **Browser Integrity Check**). Wyłącz je albo łącz te programy przez `tailscale serve`. |
+| Obserwator kamery (`senses/watcher.py`) albo mostek MCP pod `https://cosmosai.live` dostają 403 albo stronę „Just a moment…” | To ochrona Cloudflare przed botami (Security → Bots: **Bot Fight Mode**, Settings: **Browser Integrity Check**). Wyłącz je albo łącz te programy przez `tailscale serve`. |
 | `cosmosai.live` pokazuje błąd 502 | Tunel działa, ale Cosmos nie: `sudo systemctl status cosmos --no-pager`. |
 | `cosmosai.live` pokazuje błąd 1033 | Nie działa tunel: `sudo systemctl restart cloudflared`. |
 | Lista kont z wiersza poleceń | `node scripts/konto.js lista` |

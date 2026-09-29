@@ -21,7 +21,14 @@
      6. płatne wyszukiwarki: członek bez przyznania nie wydaje pieniędzy
         właściciela, z przyznaniem – w granicach limitu; to samo pytanie
         w kwadransie nie kosztuje drugi raz; Brave tylko jako zapas Serpera,
-     7. opis gestu po angielsku ma angielskie nazwy palców.
+     7. opis gestu po angielsku ma angielskie nazwy palców,
+     8. runda 9 – błędy dostawcy i obrazy: rozpoznanie błędu w strumieniu (typ
+        Anthropic, code OpenAI, llama.cpp „error:”, surowa linia Ollamy,
+        problem+json) z kodem, podział na przejściowe i trwałe, „\n” to nie
+        treść; nowe brzmienie przepełnienia vLLM; odmowa rozmiaru obrazu;
+        notka o obrazie zależna od źródła i przed „TRYB GŁOSOWY”; parametry
+        wyciszane po odmowie; osobny limit ponowień 429 i szybka porażka
+        pośrednika przed modelem lokalnym.
 */
 const http = require('node:http');
 const path = require('node:path');
@@ -168,6 +175,116 @@ const KORZEN = path.join(__dirname, '..', '..');
       `6. zdjęcia: jedno płatne źródło naraz, nie dwa równolegle (${wolania.join(' ')})`);
   } finally {
     atrapa.close();
+  }
+
+  /* ---- 8. Runda 9: błędy dostawcy, obrazy, parametry ---- */
+  {
+    const C = require(path.join(KORZEN, 'lib', 'czat.js'));
+    const M = require(path.join(KORZEN, 'lib', 'model.js'));
+    const r = C.rozpoznajBladStrumienia;
+    const a = r('event: error\ndata: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}');
+    ok(a && a.status === 401 && a.tresc === 'invalid x-api-key' && !C.bladPrzejsciowy(a), '8. authentication_error → 401, trwały');
+    const o = r('data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}');
+    ok(o && o.status === 529 && C.bladPrzejsciowy(o), '8. overloaded_error → 529, przejściowy');
+    const q = r('data: {"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}');
+    ok(q && q.status === 429 && !C.bladPrzejsciowy(q), '8. insufficient_quota → 429, ale trwały (brak środków)');
+    const l = r('error: {"code":500,"message":"Context size has been exceeded.","type":"server_error"}');
+    ok(l && l.status === 500 && !C.bladPrzejsciowy(l), '8. llama.cpp „error: {…}” rozpoznany, pełne okno nie jest przejściowe');
+    const ol = r('{"error":{"message":"model runner has unexpectedly stopped"}}');
+    ok(ol && ol.status === 500 && C.bladPrzejsciowy(ol), '8. surowa linia {"error"} Ollamy rozpoznana, przejściowa');
+    const pj = r('data: {"type":"about:blank","title":"Service Unavailable","status":503,"detail":"upstream busy"}');
+    ok(pj && pj.status === 503 && pj.tresc === 'upstream busy', '8. problem+json rozpoznany z kodem');
+    const nv = r('data: {"error":{"message":"Service temporarily overloaded"}}');
+    ok(nv && nv.status === 529 && C.bladPrzejsciowy(nv), '8. NVIDIA bez typu – przeciążenie rozpoznane po treści');
+    ok(r('data: {"choices":[{"delta":{"content":"error: to zwykłe słowo"}}]}') === null && C.bladWStrumieniu('data: {"error":"x"}') === 'x',
+      '8. zwykły kawałek to nie błąd; dawny interfejs (napis) działa');
+    ok(!C.maTresc('data: {"choices":[{"delta":{"content":"\\n"}}]}') && !C.maTresc('data: {"choices":[{"delta":{"content":"<think>\\n\\n</think>"}}]}')
+      && !C.maTresc('data: {"choices":[{"delta":{"role":"assistant"}}]}') && C.maTresc('data: {"choices":[{"delta":{"content":" Tak"}}]}'),
+    '8. samo „\\n”, pusty <think> i rola to jeszcze nie treść; słowo – tak');
+
+    const vllm = "'max_tokens' or 'max_completion_tokens' is too large: 2048. This model's maximum context length is 4096 tokens and your request has 2554 input tokens (2048 > 4096 - 2554).";
+    ok(M.limitPoPrzepelnieniu(vllm) === 4096 - 2554 - 64, `8. nowe brzmienie vLLM → limit ${M.limitPoPrzepelnieniu(vllm)}`);
+    ok(M.poprawkaZOdmowy(vllm, { max_tokens: 2048 }) === null, '8. przepełnienie vLLM nie przełącza na max_completion_tokens');
+    ok(M.poprawkaZOdmowy("Unsupported parameter: 'max_tokens'. Use 'max_completion_tokens' instead.", { max_tokens: 10 }).naCompletion === true,
+      '8. prawdziwa prośba o max_completion_tokens dalej działa');
+    for (const k of ['reasoning_effort', 'verbosity', 'response_format', 'chat_template_kwargs']) {
+      const z = M.poprawkaZOdmowy(`Unrecognized request argument supplied: ${k}`, { [k]: 'x' });
+      ok(z && z.usun.includes(k), `8. odmowa „${k}” → parametr zdjęty`);
+    }
+
+    ok(C.odmowaRozmiaru('messages.1.content.1.image.source.base64: image exceeds 5 MB maximum: 6000000 bytes > 5242880 bytes')
+      && !C.odmowaRozmiaru(vllm) && !C.odmowaRozmiaru('this model is missing data required for image input'),
+    '8. odmowa rozmiaru obrazu rozpoznana, przepełnienie okna i ślepota – nie');
+
+    const obraz = { type: 'image_url', image_url: { url: 'data:x' } };
+    const notka = (w) => w.find((m) => m.role === 'system' && /^OBRAZ/.test(m.content)).content;
+    const tylkoBaza = notka(C.zObrazemWidzisz([{ role: 'system', content: 'S' },
+      { role: 'user', content: [{ type: 'text', text: '(Obraz z bazy wiedzy: mapa.png)' }, obraz, { type: 'text', text: 'Jaka pogoda?' }] }], { obrazowZBazy: 1 }));
+    ok(!/odpowiadaj na podstawie tego, co na (nim|niej) widać/.test(tylkoBaza) && !/kamer/i.test(tylkoBaza) && /bazie wiedzy/.test(tylkoBaza),
+      '8. sam obraz z bazy wiedzy: bez polecenia patrzenia i bez słowa o kamerze');
+    const czlowiek = notka(C.zObrazemWidzisz([{ role: 'user', content: [obraz, { type: 'text', text: 'co to?' }] }], {}));
+    ok(/OBRAZ W PYTANIU/.test(czlowiek) && !/kamer/i.test(czlowiek), '8. zdjęcie od człowieka: notka nie mówi o kamerze');
+    const obie = notka(C.zObrazemWidzisz([{ role: 'user', content: [{ type: 'text', text: '(Obraz z bazy wiedzy: mapa.png)' }, obraz, obraz, { type: 'text', text: 'co trzymam?' }] }],
+      { klatkaKamery: true, obrazowZBazy: 1 }));
+    ok(/OSTATNI obraz/.test(obie) && /Obraz z bazy wiedzy/.test(obie), '8. klatka i baza wiedzy: klatka to ostatni obraz, baza podpisana');
+    const glos = C.zObrazemWidzisz([{ role: 'system', content: 'S' }, { role: 'system', content: 'TRYB GŁOSOWY: krótko.' }, { role: 'user', content: [obraz] }], { klatkaKamery: true });
+    const systemy = glos.filter((m) => m.role === 'system').map((m) => m.content);
+    ok(/^TRYB GŁOSOWY/.test(systemy[systemy.length - 1]) && systemy.some((x) => /^OBRAZ Z KAMERY/.test(x)), '8. „TRYB GŁOSOWY” zostaje ostatnią instrukcją');
+
+    /* Obrazy z bazy wiedzy w zlozKontekst: podpis przed każdym, klatka z kamery
+       zostaje ostatnim obrazem; manifest dostaje „czy ten silnik widzi”. */
+    const { wKontekscie: wK } = require(path.join(KORZEN, 'lib', 'kontekst.js'));
+    const manifesty = [];
+    const cz = C.utworz({
+      U: () => ({ location: '', profile: '', sprzet: {}, kbItems: [{ id: 'k1', name: 'mapa.png', mime: 'image/png' }] }),
+      archiwum: { ile: () => 0 }, procedury: () => [], urzadzenia: () => [], searchMemory: async () => [], memoryContextLines: () => '',
+      kbSearch: async () => [], obrazDlaModelu: () => ({ buf: Buffer.from('x'), mime: 'image/png' }), biegi: {}, terazTekst: () => 'teraz',
+      capabilityManifest: async (o) => { manifesty.push(o); return {}; }, capabilityText: () => 'KIM JESTEŚ', scrubSecrets: (x) => x,
+    });
+    const zk = await wK({ id: 'wlasciciel', rola: 'wlasciciel' }, () => cz.zlozKontekst({
+      messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:klatka' } }, { type: 'text', text: 'co trzymam?' }] }],
+      kbSelected: ['k1'], useSenses: false, useMemory: false, useKb: false, endpoint: 'cloud', klatkaKamery: true,
+    }, { baseUrl: 'http://x/v1', model: 'nieznany-model', visionModel: '' }));
+    const czesci = zk.messages[zk.messages.length - 1].content;
+    const obrazy = czesci.map((p, i) => (p.type === 'image_url' ? i : -1)).filter((i) => i >= 0);
+    const bazowy = czesci.findIndex((p) => p.type === 'image_url' && /image\/png/.test(p.image_url.url));
+    ok(zk.obrazowZBazy === 1 && bazowy > 0 && /\(Obraz z bazy wiedzy: mapa\.png\)/.test(czesci[bazowy - 1].text || '')
+      && czesci[obrazy[obrazy.length - 1]].image_url.url === 'data:klatka',
+    '8. obraz z bazy wiedzy z podpisem przed nim, klatka z kamery ostatnim obrazem');
+    await wK({ id: 'wlasciciel', rola: 'wlasciciel' }, () => cz.zlozKontekst({ messages: [{ role: 'user', content: 'x' }], useSenses: false, useMemory: false, useKb: false,
+      endpoint: 'cloud', model: 'llama3.1:8b' }, { baseUrl: 'http://x/v1', model: 'm', visionModel: '' }));
+    await wK({ id: 'wlasciciel', rola: 'wlasciciel' }, () => cz.zlozKontekst({ messages: [{ role: 'user', content: 'x' }], useSenses: false, useMemory: false, useKb: false,
+      endpoint: 'cloud', model: 'llama3.1:8b' }, { baseUrl: 'http://x/v1', model: 'm', visionModel: 'wizja' }));
+    ok(manifesty[0].widzi === true && manifesty[1].widzi === false && manifesty[2].widzi === true,
+      `8. manifest wie, czy silnik widzi: nieznany tak, ślepy nie, ślepy z modelem wizyjnym tak (${manifesty.map((m) => m.widzi).join(',')})`);
+
+    // zapytajModel: osobny limit 429 i szybka porażka pośrednika przed modelem lokalnym
+    const licz = { n: 0 };
+    let tryb = '429';
+    const at = http.createServer((req, res) => {
+      req.resume(); req.on('end', () => {
+        licz.n++;
+        if (tryb === '429') { res.writeHead(429, { 'retry-after': '0.05', 'Content-Type': 'application/json' }); return res.end('{"error":{"message":"Rate limit"}}'); }
+        if (tryb === 'loading') { res.writeHead(503, { 'retry-after': '0.05', 'Content-Type': 'application/json' }); return res.end('{"error":{"code":503,"message":"Loading model"}}'); }
+        res.writeHead(502, { 'retry-after': '0.05' }); res.end();
+      });
+    });
+    await new Promise((x) => at.listen(0, '127.0.0.1', x));
+    const ep = { baseUrl: `http://127.0.0.1:${at.address().port}/v1`, apiKey: '' };
+    const pytaj = (opcje) => M.zapytajModel(ep, { model: 'm', messages: [{ role: 'user', content: 'x' }], max_tokens: 10 }, opcje).then((x) => { x.body?.cancel().catch(() => {}); return x.status; });
+    licz.n = 0; await pytaj({ ponowienia: 2, ponowienia429: 0 });
+    const n429 = licz.n;
+    licz.n = 0; await pytaj({});
+    ok(n429 === 1 && licz.n === 3, `8. ponowienia429: 0 → jedno żądanie przy 429, domyślnie jak dotąd (${n429} / ${licz.n})`);
+    tryb = '502';
+    licz.n = 0; await pytaj({ lokalny: true });
+    const nBrama = licz.n;
+    licz.n = 0; await pytaj({});
+    ok(nBrama === 1 && licz.n === 3, `8. pusta 502 przed modelem lokalnym → od razu; zwykły silnik dalej ponawia (${nBrama} / ${licz.n})`);
+    tryb = 'loading';
+    licz.n = 0; await pytaj({ lokalny: true });
+    ok(licz.n === 1, `8. llama.cpp „Loading model” → od razu, czat mówi o zimnym starcie (${licz.n})`);
+    at.close();
   }
 
   /* ---- 7. Opis gestu po angielsku ---- */

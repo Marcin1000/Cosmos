@@ -446,12 +446,12 @@ function utworzProtokol() {
     /* Minus w działaniu: „10 − 4 = 6” to „dziesięć minus cztery”, nie zakres
        (runda 9). Znak minus (U+2212) ze spacjami z obu stron jest działaniem;
        bez spacji („8−9 °C”) – łącznikiem zakresu jak niżej. */
-    t = t.replace(/(\d)[  ]+−[  ]+(?=\d)/g, '$1 minus ');
+    t = t.replace(/(\d)[ \u00a0]+\u2212[ \u00a0]+(?=\d)/g, '$1 minus ');
     /* Łącznik zakresu to nie tylko „-” i „–”: modele piszą też łącznik
        niełamiący (U+2011), minus (U+2212) i kreskę cyfrową (U+2012). Z nimi
        zakres nie był rozpoznany i lektor czytał „około ośmiu-9 stopni”
        (Marcin, runda 8). Minus po łączniku to drugi koniec ujemny („-3‑-1”). */
-    t = t.replace(/(\d)\s*[‐‑‒−]\s*(?=[−-]?\d)/g, '$1–');
+    t = t.replace(/(\d)\s*[\u2010\u2011\u2012\u2212]\s*(?=[\u2212-]?\d)/g, '$1–');
     /* Zakres po „około”: „około 8–9 stopni” → „około 8 do 9 stopni” (odmienia
        liczbyNaGlos). Także na końcu zdania i przed przecinkiem – „Około 8–9.”
        to dokładnie kształt odpowiedzi w trybie głosowym, a reguła z rundy 8
@@ -466,7 +466,7 @@ function utworzProtokol() {
         return odDo(slowo, a, b);
       });
     // Zakres godzin „6:41–7:25”: „od 6:41 do 7:25”.
-    t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–—-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
+    t = t.replace(/(\p{L}+\s+)?(?<![\p{N}:])(\d{1,2}:\d{2})\s*[–\u2014-]\s*(\d{1,2}:\d{2})(?![\p{N}:])/gu,
       (_, slowo = '', a, b) => odDo(slowo, a, b));
     /* Zakres „10–20 °C”: „od 10 do 20 stopni”, a nie „10 20 stopni”. Końce
        mogą być ujemne („-3–-1 °C” → „od minus 3 do minus 1”); minus przed
