@@ -44,7 +44,7 @@ function uruchomPwa({ t }) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
         document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') reg.update().catch(() => { /* offline */ });
+          if (document.visibilityState === 'visible' && reg) reg.update().catch(() => { /* offline */ });
         });
       }).catch(() => { /* offline dev */ });
     });
