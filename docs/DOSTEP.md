@@ -214,10 +214,12 @@ Wyłączone – nie ma ich, chyba że wpisze własny klucz (dotyczy OpenAI i Cla
   bez treści rozmów i bez nazw ról.
 
 **Budżet w złotówkach.** Przy każdej osobie są pola **budżet dzienny** i **miesięczny (zł)**
-oraz ile wydała dziś i w tym miesiącu. Limit dotyczy wydatków na **Twoich** kluczach (OpenAI,
-Claude – czat, zespół i wywołania pomocnicze); 0 znaczy bez limitu. Po wyczerpaniu osoba
-dostaje czytelny komunikat, a zespół pomija płatne role albo przenosi je na darmową chmurę
-NVIDIA. Ceny liczą się z cennika modeli i kursu `COSMOS_KURS_USD_PLN` (domyślnie 3,70 zł
+oraz ile wydała dziś i w tym miesiącu. Limit dotyczy wydatków na **Twoich** kluczach: czat, zespół, streszczenia i
+dopracowanie polecenia (OpenAI, Claude), głos (rozpoznawanie i czytanie OpenAI, ElevenLabs),
+przepisywanie nagrań do bazy wiedzy i Studio (obrazy, lektor, wideo); 0 znaczy bez limitu.
+Kilka pytań wysłanych naraz nie przebije limitu – każde rezerwuje kwotę przed wysłaniem. Po
+wyczerpaniu osoba dostaje czytelny komunikat, zespół pomija płatne role albo przenosi je na
+darmowy silnik (chmurę NVIDIA albo lokalny GPU), głos schodzi na zmysły albo głos przeglądarki. Ceny liczą się z cennika modeli i kursu `COSMOS_KURS_USD_PLN` (domyślnie 3,70 zł
 za dolara); nowy model, którego Cosmos nie zna, liczy się najwyższą ceną jego rodziny –
 własną cenę wpiszesz w `COSMOS_CENNIK`. Każda osoba może też ustawić sobie niższy limit
 w Ustawienia → Agenci; obowiązuje ciaśniejszy z dwóch.

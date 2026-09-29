@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="154 test suites" src="https://img.shields.io/badge/test%20suites-154-5E9E3A?style=flat-square">
+  <img alt="156 test suites" src="https://img.shields.io/badge/test%20suites-156-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 154 suites plus 10 Python
+**Tests measure behaviour, never source text.** 156 suites plus 10 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -246,10 +246,12 @@ only from that text. When a **reviewer** finds problems in the programmer's code
 gets one bounded round to fix just those points, and the lead sees the fixed version. People can
 define up to eight **custom roles** (name, goal, instructions, traits), which the planner picks like
 built-in ones and which nobody else can see. **Voice consent**: when a local lead needs the cloud,
-Cosmos asks out loud and listens for "yes", "local only" or "no agents"; silence means no. And a
-**budget in złoty**: every paid call (OpenAI, Claude) is priced from a model price list and an
-exchange rate and settled from the real `usage`; team roles reserve their estimate
-synchronously before the call, so parallel roles cannot overshoot the limit together. The owner sets a daily and monthly limit per member
+Cosmos asks out loud and listens for "yes", "local only" or "without agents"; a negation anywhere in the sentence never counts as yes, and silence means no. And a
+**budget in złoty**: every paid call (OpenAI and Claude models, voice, Studio images and video) is priced from a price list and an
+exchange rate and settled from the real `usage` (a role stopped mid-stream still costs its
+estimate); every paid call reserves its estimate synchronously before it is sent, so parallel
+requests or roles cannot overshoot the limit together. The review found exactly that: ten chats
+sent at once on a 0.50 zł limit spent 44 zł before the reservation existed. The owner sets a daily and monthly limit per member
 for spending on the owner's keys; anyone can set a tighter one for themselves. An unknown paid
 model is priced at the most expensive rate of its family, never at zero.
 
@@ -339,7 +341,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 154 suites + 10 Python selftests (~12 min)
+npm test                  # 156 suites + 10 Python selftests (~12 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -395,7 +397,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               154 behaviour suites, mock upstreams, fake DOM
+tests/               156 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 

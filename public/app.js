@@ -2326,6 +2326,7 @@ async function streamOnce(conv, opcje = {}) {
     let koniecBiegu = false;      // serwer powiedział „to już wszystko"
     let bladBiegu = '';
     let trwalyBiegu = false;   // błąd trwały w strumieniu (zły klucz, brak środków) → „Ustawienia”, nie „Ponów”
+    let kodBiegu = { kod: '' };
     let proby = 0;
 
     /* Jedno zdarzenie SSE. `id:` to numer nadany przez serwer – po nim wracamy
@@ -2345,7 +2346,15 @@ async function streamOnce(conv, opcje = {}) {
         if (data === '[DONE]') continue;
         if (typ === 'koniec') {
           koniecBiegu = true;
-          try { const k = JSON.parse(data); bladBiegu = k.blad || ''; trwalyBiegu = Boolean(k.trwaly); } catch { /* bez szczegółów */ }
+          try {
+            const k = JSON.parse(data);
+            bladBiegu = k.blad || ''; trwalyBiegu = Boolean(k.trwaly);
+            /* Kod błędu (np. budzet-wyczerpany prowadzącego zespołu) – zdanie
+               w języku interfejsu i „Wyślij przez Chmurę”, jak przy 429 czatu. */
+            kodBiegu = { kod: String(k.kod || ''), ...(k.okres ? { okres: String(k.okres) } : {}), ...(k.limit ? { limit: String(k.limit) } : {}) };
+            // Koszt odpowiedzi prowadzącego (C2) – do stopki zespołu „cała odpowiedź”.
+            if (zt && typeof k.kosztZl === 'number' && k.kosztZl > 0) ZESPOL.kosztProwadzacego(zt.st, k.kosztZl, k.kosztSzacowany === true);
+          } catch { /* bez szczegółów */ }
           continue;
         }
         /* Serwer nie pamięta początku tej odpowiedzi (bufor urwany limitem).
@@ -2446,6 +2455,7 @@ async function streamOnce(conv, opcje = {}) {
       const e = new Error(bladBiegu);
       e.partial = rozdzielMyslenie(acc).tresc;
       if (trwalyBiegu) e.trwaly = true;
+      if (kodBiegu.kod) Object.assign(e, kodBiegu);
       throw e;
     }
     // `<think>` w treści to myślenie, nie odpowiedź – i nie wolno z niego

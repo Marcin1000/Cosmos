@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="154 zestawy testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-154-5E9E3A?style=flat-square">
+  <img alt="156 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-156-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 154 zestawy plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 156 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 154 zestawy + 10 selftestów Pythona (~12 min)
+npm test                  # 156 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -561,12 +561,15 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
   Przed startem możesz skład zmienić: inny model do roli, „Auto”, usuń albo dodaj rolę.
 - **Fotograf nie zgaduje liczb.** Planista podaje miejsce i czas, Cosmos liczy plan (Słońce,
   złota i niebieska godzina, pogoda, nastawy w Twoim sprzęcie) tak samo jak przy „[PLAN:]”,
-  a fotograf pracuje wyłącznie na tych liczbach. Gdy planu nie da się policzyć, pisze, że nie wie.
+  a fotograf pracuje wyłącznie na tych liczbach (plan dla zdjęć, wideo tylko na prośbę o film;
+  przy samej dacie – na złotą godzinę). Gdy planu nie da się policzyć, pisze, że planu nie
+  policzono, i nie podaje godzin. Główny model nie liczy wtedy drugiego planu.
 - **Poprawka kodu po recenzji:** gdy w składzie są programista i recenzent, a recenzent ma uwagi,
   programista dostaje jedną rundę na poprawienie wskazanych problemów. Prowadzący dostaje wersję
-  poprawioną; w bloku „Zespół” to osobny wiersz „Programista – poprawka po recenzji”.
+  poprawioną tylko wtedy, gdy przyszedł pełny kod – urwana albo skrócona poprawka przepada
+  i zostaje kod sprzed recenzji; w bloku „Zespół” to osobny wiersz „Programista – poprawka po recenzji”.
 - **Własne role:** Ustawienia → Agenci → **Własne role** – do 8 ról z nazwą, celem, instrukcją,
-  cechami (kod, obraz, rozumowanie, szybki, polski) i falą (pracuje od razu albo po innych).
+  cechami (kod, obraz, rozumowanie, szybkość, polszczyzna) i falą (pracuje od razu albo po innych).
   Planista wybiera je tak samo jak wbudowane, a w edytorze składu są w „Dodaj rolę” z dopiskiem
   „własna”. Każda osoba widzi tylko swoje.
 - **W trakcie:** blok „Zespół” w odpowiedzi pokazuje każdą rolę w kolorze jej silnika, z nazwą
@@ -579,19 +582,26 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
 - **Ustawienia → Agenci:** tryb (Wyłączony / Na prośbę / Proponuj, gdy warto / Uruchamiaj sam),
   pytanie przed startem (zapisane na serwerze, więc to samo na telefonie i komputerze), stała zgoda
   na chmurę, najwięcej ról, przypięty model do roli, własne role i budżet.
-- **Budżet w złotówkach:** każde płatne wywołanie (OpenAI, Claude) liczy się w zł z cennika modeli
-  i kursu dolara (`COSMOS_KURS_USD_PLN`, domyślnie 3,70; własne ceny w `COSMOS_CENNIK`). Chmura
-  NVIDIA i lokalny GPU kosztują 0 zł. Przed startem zespołu widać szacunek („ok. 0,12 zł”), po
-  wyniku – koszt w stopce bloku. W Ustawienia → Agenci ustawiasz **limit dzienny i miesięczny**;
+- **Budżet w złotówkach:** liczą się w zł wszystkie płatne wywołania OpenAI, Claude, ElevenLabs
+  i Studia: czat, zespół (także przerwane role), streszczenia i dopracowanie polecenia, głos
+  (rozpoznawanie za minutę nagrania, czytanie za znaki), przepisywanie nagrań do bazy wiedzy
+  oraz obrazy, lektor i wideo w Studiu. Ceny z cennika modeli i kursu dolara
+  (`COSMOS_KURS_USD_PLN`, domyślnie 3,70; własne ceny w `COSMOS_CENNIK`); model, którego Cosmos
+  nie zna, liczy się najwyższą ceną jego rodziny. Chmura NVIDIA, lokalny GPU i zmysły nie liczą
+  się do budżetu. Każde płatne wywołanie rezerwuje kwotę przed wysłaniem, więc kilka pytań
+  naraz nie przebije limitu. Przed startem zespołu widać szacunek całej tury („koszt ok.
+  0,12 zł”), po wyniku – koszt ról i całej odpowiedzi w stopce bloku. W Ustawienia → Agenci ustawiasz **limit dzienny i miesięczny**;
   po jego wyczerpaniu płatna rola jest pomijana albo przechodzi na darmowy silnik, a zwykły czat
-  na płatnym silniku odpowiada komunikatem z przyciskiem „Wyślij przez Chmurę”.
+  na płatnym silniku odpowiada komunikatem z przyciskiem „Wyślij przez Chmurę”; głos schodzi
+  na zmysły albo głos przeglądarki, a Studio odmawia jak czat.
 - **Zaproszone osoby:** bez przyznania **„Zespół agentów”** (panel Dostęp) zespół działa im tylko
   na chmurze NVIDIA i na ich własnych kluczach; jeden zespół naraz i limit dzienny. W panelu Dostęp
   widać zużycie silników (wywołania i tokeny z 30 dni) – bez treści rozmów i bez nazw ról.
 - **Tryb głosowy:** zespół tylko na wyraźną prośbę; pod kulą kropki ról, czytana jest wyłącznie
   odpowiedź prowadzącego. Gdy zespół potrzebuje zgody na chmurę, Cosmos **pyta głosem**
-  („Powiedz „tak”, „tylko lokalnie” albo „bez agentów””) i słucha odpowiedzi; na ekranie są też
-  trzy przyciski. Cisza przez 10 s albo dwie niejasne odpowiedzi znaczą „bez agentów”.
+  („Powiedz »tak«, »tylko lokalnie« albo »bez agentów«”; zgoda obowiązuje do końca rozmowy) i słucha odpowiedzi; na ekranie są też
+  trzy przyciski. Przeczenie („nie chcę do chmury”) nigdy nie jest brane za zgodę. Cisza przez
+  10 s albo dwie niejasne odpowiedzi znaczą „bez agentów”.
 
 ### 🎙️ Asystent głosowy – „Hej, Kosmos"
 
@@ -1491,7 +1501,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 154 zestawy + 10 selftestów Pythona (~12 min)
+npm test                 # 156 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```
