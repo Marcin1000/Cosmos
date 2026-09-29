@@ -25,6 +25,10 @@
      9. Po angielsku błąd silnika Lokalnie jest po angielsku.
     10. Karta Ustawień: wolne /api/auth nie przestawia na „Zmysły” i nic nie
         zapisuje bez kliknięcia.
+    11. Twarda spacja po jednoliterowym słowie na ekranie (PL), nie w t().
+    12. Głos serwera zablokowany przez przeglądarkę: następna odpowiedź od
+        razu głosem systemowym, bez kolejnego /api/tts.
+    13. Linia wersji po aktualizacji w tle nie mówi „starsza” o NOWEJ pamięci.
 */
 const { przegladarka, maPrzegladarke, serwerCosmosa, czekajNa, zabij } = require('../pomoc');
 const { utworzKonta } = require('../../public/konta.js');
@@ -52,6 +56,14 @@ const ok = (warunek, opis) => { console.log(`${warunek ? 'OK ' : 'ZLE'} ${opis}`
   // Runda 8: czytanie na głos NIE zostaje – odpowiedzi nowej osoby czytałyby się na głos bez jej wiedzy.
   ok(ust.speak !== true, '6. czytanie na głos poprzedniej osoby wyłączone');
   ok(!dane.has('cosmos.ujecia.x') && !dane.has('cosmos.bieg'), '6. kadry i bieg poprzedniej osoby wyczyszczone');
+}
+
+/* ---- 11. Twarda spacja – czysta funkcja ---- */
+{
+  const { twardeSpacje, I18N } = require('../../public/i18n.js');
+  const zle = Object.entries(I18N.pl).filter(([, v]) => /(^|\s)[aiouwz] /i.test(twardeSpacje(v))).map(([k]) => k);
+  ok(!zle.length, `11. żadna wartość PL po twardeSpacje nie zostawia jednoliterowego słowa na końcu wiersza (${zle.slice(0, 5).join(', ') || 'brak'})`);
+  ok(twardeSpacje('Napisz funkcję w Pythonie') === 'Napisz funkcję w\u00A0Pythonie', '11. „w Pythonie” z twardą spacją');
 }
 
 if (!maPrzegladarke()) {
@@ -300,6 +312,58 @@ const sse = (tekst) => `data: ${JSON.stringify({ choices: [{ delta: { content: t
       `10. zapamiętana „${zapamietana}”, wolne /api/auth → pokazana „${s10.wybrana}”, zapisana „${s10.zapisana}”`);
   }
   await p.unroute(/\/api\/(konto|konta|auth)/);
+
+  /* ---- 11. Na ekranie twarda spacja, w t() – nie ---- */
+  const s11 = await p.evaluate(() => ({ ekran: document.querySelector('[data-i18n="sug2"]')?.textContent || '', t: t('sug2') }));
+  ok(s11.ekran.includes('\u00A0') && !s11.t.includes('\u00A0'), `11. podpowiedź na ekranie z twardą spacją, t() bez (${JSON.stringify(s11)})`);
+
+  /* ---- 12. Głos serwera zablokowany ---- */
+  let tts = 0;
+  await p.route('**/api/tts', (r) => { tts++; return r.fulfill({ status: 200, contentType: 'audio/wav', body: Buffer.alloc(2000) }); });
+  const s12 = await p.evaluate(async () => {
+    serverConfig.glos = { ...(serverConfig.glos || {}), ttsChmura: true };
+    HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException('zablokowane', 'NotAllowedError')); };
+    let systemowy = 0;
+    speechSynthesis.speak = (u) => { systemowy++; setTimeout(() => u.onend && u.onend(), 20); };
+    const dlugi = 'Pierwsze zdanie odpowiedzi jest krótkie. ' + 'Dalej idzie dłuższy akapit, który trafi do drugiej porcji czytania. '.repeat(6);
+    await speakText(dlugi);
+    const poPierwszej = systemowy;
+    return { poPierwszej, dlugi };
+  });
+  const ttsPoPierwszej = tts;
+  const s12b = await p.evaluate(async (dlugi) => {
+    let systemowy = 0;
+    const start = performance.now();
+    let pierwszy = null;
+    speechSynthesis.speak = (u) => { systemowy++; if (pierwszy === null) pierwszy = performance.now() - start; setTimeout(() => u.onend && u.onend(), 20); };
+    await speakText(dlugi);
+    return { systemowy, pierwszy };
+  }, s12.dlugi);
+  ok(s12.poPierwszej > 0 && ttsPoPierwszej <= 2, `12. zablokowany dźwięk: głos systemowy przeczytał odpowiedź (${s12.poPierwszej} części), /api/tts ${ttsPoPierwszej}`);
+  ok(tts === ttsPoPierwszej && s12b.systemowy > 0 && s12b.pierwszy < 100,
+    `12. następna odpowiedź bez /api/tts (${tts - ttsPoPierwszej}) i od razu głosem systemowym (${Math.round(s12b.pierwszy)} ms)`);
+  await p.evaluate(() => document.dispatchEvent(new Event('pointerdown')));
+  ok(await p.evaluate(() => glosSerweraZablokowany === false), '12. dotknięcie znosi blokadę – następna odpowiedź znów spróbuje głosu serwera');
+  await p.unroute('**/api/tts');
+
+  /* ---- 13. Linia wersji po aktualizacji w tle ---- */
+  await p.route('**/api/config', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wersja: { commit: 'nowy', pamiec: 'cosmos-v999-nowa' } }) }));
+  const s13 = await p.evaluate(async () => {
+    for (const k of await caches.keys()) await caches.delete(k);
+    await caches.open('cosmos-v999-nowa');
+    serverConfig.wersja = { commit: 'stary', pamiec: 'cosmos-v998-stara' };
+    await pokazWersje();
+    const poAktualizacji = document.getElementById('set-wersja').textContent;
+    serverConfig.wersja = { commit: 'nowy', pamiec: 'cosmos-v999-nowa' };
+    await pokazWersje();
+    const poOdswiezeniu = document.getElementById('set-wersja').textContent;
+    await caches.delete('cosmos-v999-nowa');
+    return { poAktualizacji, poOdswiezeniu };
+  });
+  ok(!/starsz/.test(s13.poAktualizacji.replace(/ta karta ma jeszcze starszą/, '')) && /odśwież/.test(s13.poAktualizacji) && /cosmos-v999-nowa/.test(s13.poAktualizacji),
+    `13. po aktualizacji w tle: „${s13.poAktualizacji}”`);
+  ok(!/starsz|odśwież/.test(s13.poOdswiezeniu), `13. po odświeżeniu bez „starsza” („${s13.poOdswiezeniu}”)`);
+  await p.unroute('**/api/config');
 
   ok(!bledy.length, `błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   await b.close();
