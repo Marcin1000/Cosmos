@@ -3014,10 +3014,12 @@ function pytajOZgodeGlosem(silniki, role) {
         zakoncz('nie');
       }, ms);
     };
+    let powiedziane = '';
     const mow = async (tekst) => {
       el.voiceAnswer.textContent = tekst;
       setVoiceState('speaking');
-      voiceOstatniaOdpowiedz = stripForSpeech(tekst);   // echo pytania nie wróci jako odpowiedź
+      powiedziane = stripForSpeech(tekst);
+      voiceOstatniaOdpowiedz = powiedziane;
       await speakText(tekst);
       voiceKoniecMowienia = Date.now();
     };
@@ -3030,6 +3032,13 @@ function pytajOZgodeGlosem(silniki, role) {
     };
     zgodaGlosem = {
       odpowiedz(tekst) {
+        /* Ogon własnego pytania z głośnika (tylko rozpoznawanie przeglądarki,
+           tylko tuż po końcu mowy) – słuchamy dalej, bez liczenia jako
+           niejasne. Zwykła zapora echa w askVoice tu nie działa: połykała
+           odpowiedzi powtarzające słowa pytania („Tak, ale tylko lokalnie”). */
+        const uslyszane = voicePoczatekWypowiedzi || Date.now();   // askVoice przychodzi 1,4 s ciszy później
+        if (silnikNasluchu() === 'przegladarka'
+          && ZESPOL.echoPytaniaZgody(tekst, powiedziane, uslyszane - voiceKoniecMowienia)) { sluchaj(); return; }
         el.voiceTranscript.classList.remove('podglad', 'komunikat');
         el.voiceTranscript.textContent = tekst;
         const w = ZESPOL.rozpoznajZgode(tekst, getLang() === 'en' ? 'en' : 'pl');
@@ -3177,7 +3186,9 @@ async function rysujUstawieniaZespolu(pobierz = true, { fokus = '' } = {}) {
     wlasne: wlasneRoleOsoby(), budzet: us.budzetZl, stanBudzetu: cfg.budzet, kurs: cfg.kurs,
     odswiez: (o) => rysujUstawieniaZespolu(false, o || {}),
   }));
-  if (cel) (box.querySelector(cel) || (fokus ? box.querySelector('.ag-wl-dodaj:not([disabled]), .ag-wl-edytuj') : null))?.focus();
+  // querySelector znajduje też WYŁĄCZONY przycisk (8 ról), a .focus() na nim nic nie robi – fokus spadał na <body>.
+  const celEl = cel ? box.querySelector(cel) : null;
+  if (cel) (celEl && !celEl.disabled ? celEl : (fokus ? box.querySelector('.ag-wl-dodaj:not([disabled]), .ag-wl-edytuj') : null))?.focus();
   kartyUstawien.odswiez();
 }
 
@@ -5682,6 +5693,7 @@ function exitVoiceMode() {
 let voiceRec = null;          // jedyny rozpoznawacz sesji
 let voiceDeaf = false;        // ignoruj wyniki (Cosmos myśli albo mówi)
 let voiceHeard = '';          // złożone zdanie w trybie pytania
+let voicePoczatekWypowiedzi = 0;   // kiedy przyszedł pierwszy wynik bieżącej wypowiedzi (echo pytania o zgodę)
 /* Komunikat (błąd rozpoznawania, mikrofon wyciszony) stoi w tym samym polu co
    usłyszane słowa. Dotknięcie kuli w trakcie słuchania brało treść pola jako
    pytanie – i model odpowiadał na „Nie udało się rozpoznać mowy: …".
@@ -6069,6 +6081,7 @@ function startVoiceRecognizer() {
         interim = doklejRozpoznane(interim, r[0].transcript);
       }
     }
+    if (!voicePoczatekWypowiedzi) voicePoczatekWypowiedzi = Date.now();
     el.voiceTranscript.textContent = doklejRozpoznane(voiceHeard, interim);
     ustawPodstan('slysze');
 
@@ -6084,6 +6097,7 @@ function startVoiceRecognizer() {
       voiceHeard = '';
       if (text) askVoice(text);
       else backToWake();
+      voicePoczatekWypowiedzi = 0;
     }, 1400);
   };
 
@@ -6108,6 +6122,7 @@ function startVoiceRecognizer() {
       clearTimeout(voiceSilence);
       if (voiceState === 'listening' && tekst) askVoice(tekst);
       else setVoiceState('push');
+      voicePoczatekWypowiedzi = 0;
       return;
     }
     if (wznowienJalowych >= WZNOWIEN_ZANIM_PRZYCISK) { nasluchNaPrzycisk(); return; }
@@ -6169,6 +6184,10 @@ function askVoice(text) {
      i połykała zwykłe dopytanie, które powtarza słowa z odpowiedzi: „A jutro
      będzie pogoda?” po „Jutro będzie ładna pogoda…” znikało bez śladu
      (agencja, runda 5). Własny strumień jest głuchy, gdy Cosmos mówi. */
+  /* Odpowiedź na pytanie o zgodę omija tę zaporę: pytanie kończy się listą
+     odpowiedzi, więc „Tak, ale tylko lokalnie” miało >70% jego słów i przepadało
+     jako echo. Echo pytania o zgodę odsiewa węziej zgodaGlosem.odpowiedz. */
+  if (zgodaGlosem) { ustawGluchote(true); handleVoiceQuery(text); return; }
   const echoMozliwe = silnikNasluchu() === 'przegladarka' && Date.now() - voiceKoniecMowienia < 4000;
   if (echoMozliwe && voiceOstatniaOdpowiedz && toSamoZdanie(text, voiceOstatniaOdpowiedz)) {
     backToWake();
@@ -6185,6 +6204,7 @@ function startWakeListening() { backToWake(); }
 function startQueryListening() {
   if (!voiceMode) return;
   voiceHeard = '';
+  voicePoczatekWypowiedzi = 0;
   // Wracamy do słuchania dopiero teraz – wszystko sprzed tej chwili to był
   // głos Cosmosa albo cisza, i nie może wrócić jako pytanie.
   if (voiceRec && voiceRec.__ostatniaDlugosc) {
@@ -6908,7 +6928,17 @@ el.setTemp.addEventListener('input', () => {
   el.tempValue.textContent = el.setTemp.value;
 });
 
-el.settingsSave.addEventListener('click', () => {
+el.settingsSave.addEventListener('click', async () => {
+  /* Otwarty formularz własnej roli zapisuje się najpierw. Dawniej „Zapisz”
+     w stopce zamykało okno, a wpisana rola przepadała po odświeżeniu strony.
+     Błąd (brak nazwy, odmowa serwera) – okno zostaje na karcie Agenci. */
+  const rola = await zespolWidok.zapiszSzkicWlasnej();
+  if (rola === false) {
+    kartyUstawien.pokaz('agenci', { wybor: true });
+    const box = $('ag-ustawienia');
+    (box && (box.querySelector('.ag-wl-formularz [aria-invalid="true"]') || box.querySelector('.ag-wl-zapisz')))?.focus();
+    return;
+  }
   for (const ep of SILNIKI_Z_MODELEM) settings[POLE_MODELU[ep]] = $(`set-model-${ep}`).value.trim();
   settings.systemPrompt = el.setSystem.value;
   settings.temperature = parseFloat(el.setTemp.value);

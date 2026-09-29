@@ -23,7 +23,8 @@
         łącznie z kluczami budowanymi z danych (stany, role, tryby);
    W11. zgoda GŁOSEM: wypowiedź → 'tak' | 'lokalnie' | 'nie' | '' (PL i EN):
         „lokalnie” wygrywa z „tak”, „nie ma sprawy” to zgoda, polskie „no”
-        i długie zdanie to nie odpowiedź;
+        i długie zdanie to nie odpowiedź; przeczenie w środku zdania („Ja nie
+        chcę do chmury”, „Absolutely not”) nigdy nie daje „tak” (W11b);
    W12. poprawka po recenzji (fala 3): pierwsze zdarzenie `rola` z `fala:3`
         i `poprawkaZ` dopisuje wiersz na końcu – tylko przy istniejącej roli;
         przechodzi przez zapis i odczyt notatek, nie idzie w składzie do wysłania;
@@ -169,6 +170,33 @@ ok(Z.turaMaNotatki([{ role: 'user', content: 'p' }, w], 0) && !Z.turaMaNotatki([
   ];
   const zle = przypadki.filter(([j, x, oczek]) => Z.rozpoznajZgode(x, j) !== oczek).map(([j, x, oczek]) => `${j}:„${x}” → ${Z.rozpoznajZgode(x, j) || '∅'} (≠ ${oczek || '∅'})`);
   ok(!zle.length, `W11. zgoda głosem: ${przypadki.length} wypowiedzi PL/EN → tak/lokalnie/nie/niejasne${zle.length ? ` – źle: ${zle.join('; ')}` : ''}`);
+}
+
+// ------------------------------------------------------------------ W11b
+{
+  // Przeczenie w środku zdania NIGDY nie daje „tak” – zgoda wysyła rozmowę z domu.
+  const odmowy = [
+    ['pl', 'Ja nie chcę do chmury.'], ['pl', 'Wolę nie wysyłać do chmury.'], ['pl', 'Chmura? Nie.'], ['pl', 'W chmurze nie.'],
+    ['pl', 'Przez chmurę nie, dzięki.'], ['pl', 'Nigdy do chmury'], ['pl', 'Tak nie wiem'], ['pl', 'nie wiem'],
+    ['en', 'I don\'t want the cloud.'], ['en', 'Not the cloud.'], ['en', 'Please don\'t use the cloud'], ['en', 'I\'d rather not use the cloud'],
+    ['en', 'Never the cloud'], ['en', 'Keep it off the cloud'], ['en', 'Absolutely not'], ['en', 'No way'],
+  ];
+  const zgody = [['pl', 'Tak, bez problemu'], ['pl', 'wyślij do chmury'], ['pl', 'dawaj'], ['en', 'absolutely'], ['en', 'use the cloud'], ['en', 'of course']];
+  const zleO = odmowy.filter(([j, x]) => Z.rozpoznajZgode(x, j) === 'tak').map(([j, x]) => `${j}:„${x}”`);
+  const zleZ = zgody.filter(([j, x]) => Z.rozpoznajZgode(x, j) !== 'tak').map(([j, x]) => `${j}:„${x}” → ${Z.rozpoznajZgode(x, j) || '∅'}`);
+  ok(!zleO.length && !zleZ.length, `W11b. przeczenie w środku zdania nie jest zgodą (${odmowy.length} odmów), zgody zostają (${zgody.length})${zleO.length ? ` – „tak” dla: ${zleO.join('; ')}` : ''}${zleZ.length ? ` – zgubione: ${zleZ.join('; ')}` : ''}`);
+  ok(Z.rozpoznajZgode('W chmurze nie.', 'pl') === 'lokalnie' && Z.rozpoznajZgode('Never the cloud', 'en') === 'lokalnie',
+    'W11b. odmowa chmury w zdaniu = „tylko lokalnie”');
+}
+
+// ------------------------------------------------------------------ W11c
+{
+  // Echo pytania o zgodę: tylko dosłowny OGON pytania i tylko tuż po końcu mowy.
+  const P = 'Zespół chce wysłać rozmowę do chmury: NVIDIA. Powiedz „tak”, „tylko lokalnie” albo „bez agentów” – zgoda obowiązuje do końca tej rozmowy.';
+  const echo = Z.echoPytaniaZgody('do końca tej rozmowy', P, 300) && Z.echoPytaniaZgody('Do końca tej rozmowy.', P, 1100) && Z.echoPytaniaZgody(P, P, 200);
+  const nieEcho = [['Tak, ale tylko lokalnie', 300], ['tak', 200], ['tylko lokalnie', 200], ['bez agentów', 200], ['do końca tej rozmowy', 1500], ['końca tej rozmowy ok', 200], ['', 100]]
+    .filter(([x, ms]) => Z.echoPytaniaZgody(x, P, ms));
+  ok(echo && !nieEcho.length, `W11c. echo pytania o zgodę = dosłowny ogon pytania < 1,2 s po mowie; odpowiedź powtarzająca słowa pytania nie jest echem${nieEcho.length ? ` – źle: ${nieEcho.map((x) => x[0]).join('; ')}` : ''}`);
 }
 
 // ------------------------------------------------------------------ W12

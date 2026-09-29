@@ -36,7 +36,7 @@ const {
    i trasy kont. Zasady – w nagłówkach tych modułów; bramka logowania zostaje
    niżej, w routerze (audyt sprawdza ją strukturalnie). */
 const { stan, naUzytkownika, istniejacy, wKontekscie, kto, czyWlasciciel, katalogDla,
-  zaladowani, zapomnij, WLASCICIEL_ID } = require('./lib/kontekst.js');
+  zaladowani, zapomnij, WLASCICIEL_ID, BrakKontekstu } = require('./lib/kontekst.js');
 const konta = require('./lib/konta.js');
 const agent = require('./lib/agent-zmyslow.js');
 const zmyslySerwera = require('./lib/zmysly-serwera.js');
@@ -49,31 +49,69 @@ const { stanOsoby } = require('./lib/stan-osoby.js');
 const cennik_ = require('./lib/cennik.js').utworzCennik({ env: process.env });
 konta.ustawCennik(cennik_);
 const budzet_ = require('./lib/budzet.js').utworzBudzet({ konta, cennik: cennik_ });
+/* Odmowa budżetu w wywołaniu pomocniczym – ten sam 429 i kod co w czacie
+   (przeglądarka proponuje Chmurę), nie 502 „nie powiodło się”, które
+   wyglądało na awarię dostawcy. */
+const odmowaBudzetuPomocniczego = (res, err) => sendJson(res, 429, {
+  kod: 'budzet-wyczerpany', error: err.message, blad: err.message, message: err.message,
+  zostalo: 0, okres: err.okres || null, limit: err.limit || null,
+});
 /* Wywołania pomocnicze (llmComplete) liczą koszt i pilnują budżetu tak samo
-   jak czat. Bez osoby (praca serwera, rutyny właściciela) – bez księgowania. */
+   jak czat: rezerwacja przed wysłaniem (równoległe streszczenia członka
+   z limitem 0,50 zł wydawały 15 zł – zespół IT, etap 5), rozliczenie po
+   odpowiedzi, zwolnienie przy błędzie. Silnik w znaczniku to ten, który
+   NAPRAWDĘ obsłuży żądanie: członek bez dostępu do Claude'a idzie przez
+   strażnika do Chmury – za darmo i zapisany pod Chmurą, nie pod Claude'em.
+   Darmowy silnik bez osoby (praca serwera, odprawa z rutyny) – bez księgowania;
+   płatny bez osoby – wyjątek (zasada 2 z CLAUDE.md: brak kontekstu to błąd,
+   nie właściciel „na wszelki wypadek”). */
+const { szacujTokeny: szacujTokenyCzatu } = require('./lib/czat.js');
+const tokenyWiadomosci = (messages) => (Array.isArray(messages) ? messages : [])
+  .reduce((a, m) => a + szacujTokenyCzatu(m && m.content), 0);
 require('./lib/model.js').ustawKsiegowegoModeli({
-  przed(silnik) {
+  przed(silnik, { model = '', messages = [], maxTokens = 0 } = {}) {
     const u = kto();
-    if (!u) return null;
     const d = silniki.dostep(silnik);
-    const naKluczuWlasciciela = konta.NA_KLUCZU_WLASCICIELA.includes(d && d.zrodlo);
-    if (!cennik_.darmowy(silnik)) {
-      const w = budzet_.wyczerpany(u, { naKluczuWlasciciela });
-      if (w) {
-        const e = new Error(w.limit === 'wlasciciel'
+    const naprawde = d && d.ok ? (['local', 'openai', 'claude'].includes(silnik) ? silnik : 'cloud') : 'cloud';
+    const zrodlo = d && d.ok ? d.zrodlo : 'wspolny';
+    if (!u) {
+      if (cennik_.darmowy(naprawde)) return null;
+      throw new BrakKontekstu(`llmComplete na silniku ${naprawde}`);
+    }
+    let rezerwacja = null;
+    if (!cennik_.darmowy(naprawde)) {
+      const naKluczuWlasciciela = konta.NA_KLUCZU_WLASCICIELA.includes(zrodlo);
+      const szacunek = cennik_.szacujZl(model, naprawde, { we: tokenyWiadomosci(messages), wy: maxTokens });
+      const rez = budzet_.zarezerwuj(u, szacunek, { naKluczuWlasciciela, przytnij: true });
+      if (!rez.ok) {
+        const e = new Error(rez.limit === 'wlasciciel'
           ? 'Wyczerpany budżet na płatne modele ustawiony przez właściciela. Przełącz na Chmurę albo poproś o większy limit.'
           : 'Wyczerpany Twój budżet na płatne modele (Ustawienia → Agenci). Przełącz na Chmurę albo zmień limit.');
         e.kod = 'budzet-wyczerpany';
+        e.okres = rez.okres;
+        e.limit = rez.limit;
         throw e;
       }
+      rezerwacja = rez.token;
     }
-    return { id: u.id, zrodlo: d && d.zrodlo };
+    return { id: u.id, zrodlo, silnik: naprawde, rezerwacja };
   },
-  po(silnik, model, usage, znacznik, { wy = 0 } = {}) {
+  po(silnik, model, usage, znacznik, { wy = 0, messages = [] } = {}) {
     if (!znacznik) return;
     const u = usage ? { we: usage.prompt_tokens || usage.input_tokens || 0, wy: usage.completion_tokens || usage.output_tokens || 0 } : null;
-    konta.zanotujZuzycie(znacznik.id, { silnik, zrodlo: znacznik.zrodlo, model,
-      we: u ? u.we : 0, wy: u ? u.wy : 0, ...(u ? {} : { szacunek: { we: 0, wy: Math.ceil(wy / 3) } }) });
+    try {
+      /* Bez usage (pośrednik): wejście z wiadomości (nie 0), wyjście z długości
+         tekstu; myślenie modelu dolicza cennik.szacujZl w lib/konta.js. */
+      const kosztZl = konta.zanotujZuzycie(znacznik.id, { silnik: znacznik.silnik || silnik, zrodlo: znacznik.zrodlo, model,
+        we: u ? u.we : 0, wy: u ? u.wy : 0,
+        ...(u ? {} : { szacunek: { we: tokenyWiadomosci(messages), wy: Math.ceil(wy / 3) } }) });
+      if (znacznik.rezerwacja) budzet_.rozlicz(znacznik.rezerwacja, kosztZl);
+    } finally {
+      if (znacznik.rezerwacja) budzet_.zwolnij(znacznik.rezerwacja);
+    }
+  },
+  zwolnij(znacznik) {
+    if (znacznik && znacznik.rezerwacja) budzet_.zwolnij(znacznik.rezerwacja);
   },
 });
 const { authEnabled, ktoPyta, handleLogin, handleLogout, handleZaproszenie,
@@ -790,6 +828,7 @@ async function handlePolish(req, res) {
     ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 1200 });
     return sendJson(res, 200, { ok: true, text: text.trim() });
   } catch (err) {
+    if (err.kod === 'budzet-wyczerpany') return odmowaBudzetuPomocniczego(res, err);
     return sendJson(res, 502, { error: 'polish-failed', message: err.message });
   }
 }
@@ -1559,6 +1598,7 @@ async function trasyApi(req, res, p) {
       ], { endpoint: data.endpoint || 'cloud', model: data.model, maxTokens: 600 });
       return sendJson(res, 200, { ok: true, summary });
     } catch (err) {
+      if (err.kod === 'budzet-wyczerpany') return odmowaBudzetuPomocniczego(res, err);
       return sendJson(res, 502, { error: `Streszczenie nie powiodło się: ${err.message}` });
     }
   }
@@ -1715,7 +1755,8 @@ let zamykanie = false;
 
 function zamknijPorzadnie(sygnal) {
   process.on(sygnal, () => {
-    if (zamykanie) process.exit(0);
+    // Drugi sygnał – od razu, ale złotówki zanotowane w oknie zamykania idą na dysk.
+    if (zamykanie) { konta.zapiszZalegle(); process.exit(0); }
     zamykanie = true;
     // Liczniki wiadomości i „ostatnio widziany" zapisują się z opóźnieniem (lib/konta.js).
     konta.zapiszZalegle();
@@ -1750,7 +1791,12 @@ function zamknijPorzadnie(sygnal) {
         })).catch((err) => console.error(`Nie udało się dopisać danych (${u.login}):`, err.message));
       });
       return Promise.all(zapisy);
-    }).finally(() => process.exit(0));
+    }).finally(() => {
+      /* Biegi dokończone w oknie zamykania zanotowały koszt w zł PO pierwszym
+         zapisie wyżej – bez drugiego ginął przy każdym wdrożeniu (zespół IT, etap 5). */
+      konta.zapiszZalegle();
+      process.exit(0);
+    });
   });
 }
 

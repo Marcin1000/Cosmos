@@ -334,6 +334,7 @@ function turaMaNotatki(wiadomosci, odKtorej = 0) {
      1. „lokalnie” wygrywa ze wszystkim („tak, ale lokalnie”, „nie, u mnie”) –
         to wybór, przy którym nic nie wychodzi z komputera;
      2. zwroty zgody, w których pada „nie” („nie ma sprawy”, „czemu nie”);
+     2a. przeczenie w dowolnym miejscu zdania – nigdy „tak” (ZGODA_PRZECZENIE);
      3. odmowa („nie”, „bez agentów”) przed zgodą („tak, bez agentów” = nie);
      4. zgoda.
    Niejasne (także długie zdanie – to raczej nowe pytanie niż odpowiedź) → ''.
@@ -343,7 +344,7 @@ function turaMaNotatki(wiadomosci, odKtorej = 0) {
 const ZGODA_WZORCE = {
   pl: {
     lokalnie: /(?:^| )(?:lokaln\p{L}*|na (?:moim |tym |swoim )?(?:komputerze|kompie)|u mnie|w domu|bez chmury|nie (?:do|w|na) chmur\p{L}*|bez wysylania|offline|domow\p{L}*)(?= |$)/u,
-    takZNie: /^(?:no |a )?(?:nie ma sprawy|nie ma problemu|czemu nie|dlaczego nie|nie widze przeszkod)(?= |$)/u,
+    takZNie: /^(?:no |a |tak )?(?:nie ma sprawy|nie ma problemu|czemu nie|dlaczego nie|nie widze przeszkod|bez problemu)(?= |$)/u,
     nie: /^(?:no |a )?(?:nie|nie nie|nie dziekuje|nie dzieki|nie trzeba|nie chce|nie teraz|anuluj|stop|zrezygnuj|rezygnuje|odpusc|daj spokoj)(?= |$)|(?:^| )(?:bez (?:agentow|agenta|zespolu|pomocnikow|nikogo)|(?:odpowiedz|zrob to) sam\p{L}*|sam odpowiedz|niech odpowie sam)(?= |$)/u,
     tak: /^(?:no |a |to )?(?:tak(?! (?:naprawde|samo|jak|czy|czy siak))|jasne|pewnie|dobra|dobrze|okej|ok|okay|zgoda|zgadzam sie|oczywiscie|smialo|mozesz|mozna|startuj|start|rusz|ruszaj|dawaj|wysylaj|wyslij|niech bedzie|prosze|poprosze|yes)(?= |$)|(?:^| )(?:uzyj chmury|w chmurze|przez chmure|chmura|do chmury)(?= |$)/u,
   },
@@ -351,8 +352,17 @@ const ZGODA_WZORCE = {
     lokalnie: /(?:^| )(?:local\p{L}*|on (?:my|this) (?:computer|machine|pc)|at home|no cloud|not (?:to|in) the cloud|without (?:the )?cloud|offline|keep it (?:here|local))(?= |$)/u,
     takZNie: /^(?:no problem|why not|no worries)(?= |$)/u,
     nie: /^(?:no|nope|nah|no thanks|no thank you|not now|cancel|stop|never mind|dont)(?= |$)|(?:^| )(?:without (?:the )?(?:agents|team)|no (?:agents|team)|(?:answer|do it) (?:yourself|alone|on your own))(?= |$)/u,
-    tak: /^(?:yes|yeah|yep|yup|sure|ok|okay|go|go ahead|start|do it|alright|all right|fine|of course|please|please do|absolutely|sounds good)(?= |$)|(?:^| )(?:use the cloud|the cloud|cloud is fine)(?= |$)/u,
+    tak: /^(?:yes|yeah|yep|yup|sure|ok|okay|go|go ahead|start|do it|alright|all right|fine|of course|please|please do|absolutely(?! not)|sounds good)(?= |$)|(?:^| )(?:use the cloud|the cloud|cloud is fine)(?= |$)/u,
   },
+};
+
+/* Przeczenie GDZIEKOLWIEK w zdaniu („Ja nie chcę do chmury”, „W chmurze nie”,
+   „Never the cloud”) nigdy nie daje „tak” – zgoda wychodzi z domu z danymi,
+   więc wątpliwość rozstrzyga się na korzyść komputera osoby. Odmowa z chmurą
+   w zdaniu = „tylko lokalnie”, inne przeczenie = odmowa albo dopytanie. */
+const ZGODA_PRZECZENIE = {
+  pl: /(?:^| )(?:nie|nigdy|zadn\p{L}*|bez)(?= |$)/u,
+  en: /(?:^| )(?:no|not|dont|never|nope|nah|off|without)(?= |$)/u,
 };
 
 /* ---------------------------------------------------------------------------
@@ -383,14 +393,39 @@ function szacunekSkladu(role) {
   return kwota(suma);
 }
 
+/** Tekst mowy bez ogonków, wielkich liter i interpunkcji („Tak, ale…” → „tak ale”). */
+function goloMowy(tekst) {
+  return String(tekst || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+/**
+ * Echo pytania o zgodę: rozpoznawanie przeglądarki słyszy głośnik i potrafi
+ * oddać OGON pytania już po odmilczeniu („…do końca tej rozmowy”). Echem jest
+ * tylko dosłowne zakończenie pytania, które przyszło tuż po jego końcu –
+ * odpowiedź człowieka, która powtarza słowa pytania („Tak, ale tylko
+ * lokalnie”), echem nie jest, bo pytanie się nią nie kończy.
+ * @param {string} tekst    rozpoznana wypowiedź
+ * @param {string} pytanie  to, co Cosmos właśnie powiedział
+ * @param {number} poKoncuMs ile ms minęło od końca mowy Cosmosa
+ */
+function echoPytaniaZgody(tekst, pytanie, poKoncuMs) {
+  if (!(poKoncuMs >= 0 && poKoncuMs < ECHO_ZGODY_MS)) return false;
+  const t = goloMowy(tekst);
+  const p = goloMowy(pytanie);
+  return Boolean(t && p) && (p === t || p.endsWith(` ${t}`));
+}
+const ECHO_ZGODY_MS = 1200;
+
 /** Tekst z rozpoznawania mowy → 'tak' | 'lokalnie' | 'nie' | '' (niejasne). */
 function rozpoznajZgode(tekst, jezyk = 'pl') {
-  const w = ZGODA_WZORCE[jezyk === 'en' ? 'en' : 'pl'];
-  const t = String(tekst || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const j = jezyk === 'en' ? 'en' : 'pl';
+  const w = ZGODA_WZORCE[j];
+  const t = goloMowy(tekst);
   if (!t || t.length > 80 || t.split(' ').length > 10) return '';
   if (w.lokalnie.test(t)) return 'lokalnie';
   if (w.takZNie.test(t)) return 'tak';
+  if (ZGODA_PRZECZENIE[j].test(t)) return /chmur|cloud/.test(t) ? 'lokalnie' : (w.nie.test(t) ? 'nie' : '');
   if (w.nie.test(t)) return 'nie';
   if (w.tak.test(t)) return 'tak';
   return '';
@@ -1104,6 +1139,8 @@ function utworzZespolWidok(z) {
   /* Szkic formularza trwa między przebudowami panelu (zmiana trybu, zapis
      innego pola) – inaczej wpisana instrukcja znikałaby po każdym kliknięciu. */
   let szkicWlasnej = null;
+  // Zapis otwartego formularza (dla globalnego „Zapisz” w stopce Ustawień) – Promise<boolean>.
+  let zapiszSzkicAkt = null;
 
   function sekcjaWlasnychRol(k) {
     const lista = Array.isArray(k.wlasne) ? k.wlasne.slice(0, MAX_WLASNYCH) : [];
@@ -1174,7 +1211,11 @@ function utworzZespolWidok(z) {
     const liczI = () => { licznikInstr.textContent = t('ag.wl.znaki', { n: instr.value.length, max: 1500 }); };
     liczI();
     // Powód odmowy znika, gdy człowiek zaczyna poprawiać (nie wisi nad wpisaną już nazwą).
-    const bezBledu = () => { if (sz.blad) { sz.blad = ''; blad.textContent = ''; blad.hidden = true; } };
+    const bezBledu = () => {
+      if (!sz.blad) return;
+      sz.blad = ''; sz.bladPole = ''; blad.textContent = ''; blad.hidden = true;
+      for (const x of [nazwa, instr]) { x.removeAttribute('aria-invalid'); x.setAttribute('aria-describedby', `${x.id}-hint`); }
+    };
     nazwa.addEventListener('input', () => { sz.nazwa = nazwa.value; bezBledu(); });
     cel.addEventListener('input', () => { sz.cel = cel.value; });
     instr.addEventListener('input', () => { sz.instrukcja = instr.value; liczI(); bezBledu(); });
@@ -1182,6 +1223,18 @@ function utworzZespolWidok(z) {
       h('label', { klasa: 'field-label', for: idP(pole), tekst: t('ag.wl.pole.' + pole) }), el,
       podpowiedz || h('span', { klasa: 'field-hint', id: `${idP(pole)}-hint`, tekst: t('ag.wl.pole.' + pole + 'Hint') }));
     f.append(wiersz('nazwa', nazwa), wiersz('cel', cel), wiersz('instrukcja', instr, licznikInstr));
+    blad.id = idP('blad');
+    /* Brak nazwy albo instrukcji: powód POD polem, którego dotyczy (na dole
+       przycisków byłby ~450 px niżej, poza ekranem), pole oznaczone dla
+       czytnika. Odmowa serwera (walidacja, limit, dysk) zostaje przy
+       przyciskach – tam jest wzrok po kliknięciu. */
+    const oznaczPole = (pole) => {
+      const el = pole === 'nazwa' ? nazwa : instr;
+      el.setAttribute('aria-invalid', 'true');
+      el.setAttribute('aria-describedby', `${blad.id} ${el.id}-hint`);
+      el.closest('.field').append(blad);
+      return el;
+    };
     // Cechy – po nich Cosmos dobiera model roli („Auto”).
     const cechy = h('fieldset', { klasa: 'ag-wl-cechy' }, h('legend', { klasa: 'field-label', tekst: t('ag.wl.pole.cechy') }));
     for (const c of CECHY_ROLI) {
@@ -1204,15 +1257,21 @@ function utworzZespolWidok(z) {
     obraz.addEventListener('change', () => { sz.wymagaObrazu = obraz.checked; });
     const obrazEt = h('label', { klasa: 'ag-wl-cecha ag-wl-obraz' }, obraz, h('span', { klasa: 'set-wiersz-tekst' },
       h('span', { tekst: t('ag.wl.pole.obraz') }), h('span', { klasa: 'field-hint', tekst: t('ag.wl.pole.obrazHint') })));
-    const anuluj = przycisk('btn-ghost', t('ag.wl.anuluj'), () => { szkicWlasnej = null; k.odswiez && k.odswiez({ fokus: '.ag-wl-dodaj' }); });
-    const zapisz = przycisk('btn-primary ag-wl-zapisz', t('ag.wl.zapisz'), async () => {
+    // „Anuluj” edycji wraca na „Edytuj” tej roli; nowej – na „Dodaj” (przy 8 rolach wyłączone – wtedy zapas w app.js).
+    const anuluj = przycisk('btn-ghost', t('ag.wl.anuluj'), () => {
+      const id = sz.id;
+      szkicWlasnej = null;
+      k.odswiez && k.odswiez({ fokus: id ? `.ag-wlasna[data-id="${id}"] .ag-wl-edytuj` : '.ag-wl-dodaj:not([disabled])' });
+    });
+    const zapiszSzkic = async () => {
       const gotowa = doZapisu(sz);
       const brak = !gotowa.nazwa ? 'nazwa' : !gotowa.instrukcja ? 'instrukcja' : '';
       if (brak) {
         sz.blad = t(brak === 'nazwa' ? 'ag.wl.brakNazwy' : 'ag.wl.brakInstrukcji');
+        sz.bladPole = brak;
         blad.textContent = sz.blad; blad.hidden = false;
-        (brak === 'nazwa' ? nazwa : instr).focus();
-        return;
+        oznaczPole(brak).focus();
+        return false;
       }
       zapisz.disabled = true;
       const nowa = sz.id ? lista.map((x) => (x.id === sz.id ? { ...gotowa, id: sz.id } : doZapisu(x))) : [...lista.map(doZapisu), gotowa];
@@ -1221,11 +1280,16 @@ function utworzZespolWidok(z) {
       const w = await k.naZmiane({ wlasneRole: nowa });
       if (w && w.ok === false) {
         // Serwer odmówił (walidacja, limit, dysk) – szkic wraca z powodem.
-        szkicWlasnej = { ...kopia, blad: w.error || t('ag.wl.bladZapisu') };
+        szkicWlasnej = { ...kopia, blad: w.error || t('ag.wl.bladZapisu'), bladPole: '' };
         k.odswiez && k.odswiez({ fokus: '.ag-wl-zapisz' });
+        return false;
       }
-    });
+      return true;
+    };
+    const zapisz = przycisk('btn-primary ag-wl-zapisz', t('ag.wl.zapisz'), () => { zapiszSzkic(); });
+    zapiszSzkicAkt = zapiszSzkic;
     f.append(cechy, fala, obrazEt, blad, h('div', { klasa: 'ag-wl-przyciski' }, anuluj, zapisz));
+    if (sz.blad && sz.bladPole) oznaczPole(sz.bladPole);
     return f;
   }
 
@@ -1251,13 +1315,16 @@ function utworzZespolWidok(z) {
   return {
     blokZespolu, tekstOgloszenia, notaBezWkladu, bladScalenia, sugestia, propozycja, edytor, panelUstawien,
     kropkiGlosu, statusGlosu, nazwaRoli, ikonaZespolu: IK.zespol,
+    /** Globalne „Zapisz”: otwarty formularz własnej roli zapisuje się najpierw.
+     *  null – nie było szkicu; true – zapisany; false – błąd (okno ma zostać). */
+    zapiszSzkicWlasnej: async () => (szkicWlasnej && zapiszSzkicAkt ? zapiszSzkicAkt() : null),
   };
 }
 
 const CZYSTE_ZESPOLU = {
   stanWidoku, nowyStanTury, zjedzZdarzenieZespolu, wiadomoscNotatek, stanZWiadomosci, roleBezWkladu,
   skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
-  rozpoznajZgode, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, maPowod, PLATNE_ZESPOLU,
+  rozpoznajZgode, echoPytaniaZgody, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, maPowod, PLATNE_ZESPOLU,
 };
 
 if (typeof window !== 'undefined') Object.assign(window, { utworzZespolWidok, ZESPOL: CZYSTE_ZESPOLU });

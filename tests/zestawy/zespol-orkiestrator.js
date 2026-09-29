@@ -57,7 +57,18 @@
        (`budzet`); wyczerpany budżet + płatny prowadzący → 429;
    O17. głos: planista krócej (także „tylko plan”); lokalny prowadzący bez
        zgody – role lokalnie, zero żądań do chmury, `sklad` i „tylko plan”
-       mówią wymagaZgody i dokąd poszłyby dane. */
+       mówią wymagaZgody i dokąd poszłyby dane; serwer nie rusza żadnej roli
+       (także lokalnej), dopóki przeglądarka nie zatrzyma biegu (O17d);
+   O14e–h. plan dla roli: godziny czasu miejsca bez pól UTC, „chwila”, tryb
+       zdjęcie (wideo tylko przy pytaniu o film), sama data + złota godzina
+       = nastawy na jej początek, nieistniejąca data = brak planu; faza
+       prowadzącego mówi planPoliczony (C5);
+   O18. przerwana płatna rola („Scal teraz”) kosztuje – szacunek z flagą;
+   O19. płatny planista po terminie kosztuje co najmniej szacunek;
+   O20. prowadzący rezerwuje budżet: ponad limit – bez wywołania, koniec
+       z kodem budzet-wyczerpany; szacunek składu z prowadzącym (C6);
+   O21. fala 3: poprawka urwana na limicie („urwana”), bez kodu, fragmentem
+       – prowadzący dostaje kod z fali 1; „BEZ UWAG” z dopiskiem – bez fali 3. */
 const fs = require('fs');
 const path = require('path');
 const { KORZEN, serwerCosmosa, atrapaNode, czekajNa, zabij, zwolnijPorty, katalogOsoby } = require('../pomoc');
@@ -398,14 +409,39 @@ async function nowaRozmowa(id, pytanie) {
         'O14b. serwer policzył plan dla miejsca z planisty (geokoder) i dał go fotografowi');
       ok(!/DANE PLANU|49\.2013/.test(r.tekst) && /plan zdjęciowy jest policzony w notatkach fotografa/.test(pr.ostatnia) && !/49\.2013/.test(pr.ostatnia),
         'O14c. plan tylko u fotografa; prowadzący wie, że plan jest w notatkach (bez dublowania liczb)');
+      const utc = f.ostatnia.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z/g) || [];
+      ok(!utc.length && f.ostatnia.includes('"godziny"') && f.ostatnia.includes('"chwila"') && f.ostatnia.includes('"tryb": "zdjecie"')
+        && !f.ostatnia.includes('"ujecia"') && (zd(w, 'faza')[0] || {}).planPoliczony === true,
+        `O14e. plan dla roli: godziny czasu miejsca bez pól UTC (${utc.slice(0, 2).join(', ') || 'brak'}), „chwila”, tryb zdjęcie bez listy ujęć; faza prowadzącego mówi planPoliczony`);
+      await zeruj();
+      await tura({ messages: [{ role: 'user', content: 'plan-foto chcę nakręcić film o zachodzie' }], zespol: { uruchom: true } });
+      const fw = (await zadania()).find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      ok(fw.ostatnia.includes('"tryb": "wideo"'), 'O14f. pytanie o film – plan w trybie wideo');
+      await zeruj();
+      const wd = await tura({ messages: [{ role: 'user', content: 'plan-foto-data kiedy złota godzina wieczorem?' }], zespol: { uruchom: true } });
+      const fd = (await zadania()).find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      const chwila = (fd.ostatnia.match(/"chwila": "([^"]*)"/) || [])[1] || '';
+      const zlota = ((fd.ostatnia.match(/"zlotaWieczor": "(\d{2}:\d{2})/) || [])[1]) || 'brak';
+      const minuty = (t) => { const [g, m] = String(t).split(':').map(Number); return g * 60 + m; };
+      const godzChwili = (chwila.match(/(\d{2}:\d{2})/) || [])[1] || '';
+      ok(sklad(wd).kiedy === '2026-10-01' && chwila.includes('01.10.2026') && /złota godzina/.test(chwila)
+        && Math.abs(minuty(godzChwili) - minuty(zlota)) <= 2,
+        `O14g. sama data od planisty + pytanie o złotą godzinę – nastawy liczone na jej początek (chwila: ${chwila.slice(0, 40)}; złota od ${zlota})`);
+      await zeruj();
+      const wz = await tura({ messages: [{ role: 'user', content: 'plan-foto-zladata kiedy złota godzina?' }], zespol: { uruchom: true } });
+      const z4 = await zadania();
+      const fz = z4.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      ok(/brak – plan nie został policzony: nieczytelna data „2026-02-30”/.test(fz.ostatnia) && !z4.some((x) => x.rodzaj === 'geokod')
+        && !(zd(wz, 'faza')[0] || {}).planPoliczony, 'O14h. nieistniejąca data od planisty – brak planu (bez liczenia na przeliczoną datę), bez planPoliczony');
       await zeruj();
       await tura({ messages: [{ role: 'user', content: 'Zrób to zespołem: zachód słońca' }],
         zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }], miejsce: 'Atlantyda Zaginiona' } });
       const z2 = await zadania();
       const f2 = z2.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
       const pr2 = z2.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
-      ok(/brak – plan nie został policzony/.test(f2.ostatnia) && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia),
-        'O14d. nieznane miejsce: fotograf dostaje „brak planu” (NIEPEWNE), prowadzący nie dostaje zakazu liczenia');
+      ok(/brak – plan nie został policzony: nie znaleziono miejsca „Atlantyda Zaginiona”/.test(f2.ostatnia) && !/SPRÓBUJ|Plener →/.test(f2.ostatnia)
+        && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia),
+        'O14d. nieznane miejsce: fotograf dostaje krótkie „brak planu” dla roli (bez poleceń dla człowieka), prowadzący nie dostaje zakazu liczenia');
     }
 
     // ------------------------------------------------------------ O15 własna rola
@@ -477,14 +513,88 @@ async function nowaRozmowa(id, pytanie) {
       ok(r.status === 200 && j.sklad && j.sklad.zrodlo === 'heurystyka' && msGlos < 1300 && msTekst >= 1400,
         `O17a. głos: planista krócej (${msGlos} ms wobec ${msTekst} ms)`);
       await zeruj();
-      const w = await tura({ endpoint: 'local', trybGlosowy: true, messages: [{ role: 'user', content: 'Zrób to zespołem: przeanalizuj' }], zespol: { uruchom: true } });
+      /* Z8: przeglądarka staje na `sklad` z wymagaZgody i woła Stop – serwer
+         w tym czasie nie rusza ŻADNEJ roli (także lokalnej). */
+      let poSkladzie = null;
+      const w = await tura({ endpoint: 'local', trybGlosowy: true, messages: [{ role: 'user', content: 'Zrób to zespołem: przeanalizuj' }], zespol: { uruchom: true } }, {
+        wTrakcie: async (bieg, wy) => {
+          for (let i = 0; i < 100 && !wy.zdarzenia.some((e) => e.typ === 'sklad'); i++) await spij(50);
+          await spij(600);
+          poSkladzie = (await zadania()).filter((x) => x.rodzaj === 'rola').length;
+          await post('/api/chat/stop', { bieg });
+        },
+      });
       const s = sklad(w);
       const z = await zadania();
       ok(s.wymagaZgody === true && (s.silnikiZaZgoda || []).length > 0 && (s.daneWyjdaDoZaZgoda || []).length > 0 && s.role.length
         && s.role.every((x) => x.silnik === 'local') && !z.some((x) => x.silnik !== 'local' && !['szukanie', 'geokod'].includes(x.rodzaj)),
         `O17b. głos, lokalny prowadzący bez zgody: role lokalnie, 0 żądań do chmury, sklad mówi wymagaZgody (${(s.daneWyjdaDoZaZgoda || []).join(',')})`);
+      ok(poSkladzie === 0 && !z.some((x) => x.rodzaj === 'rola' || x.rodzaj === 'prowadzacy') && w.koniec && w.koniec.blad === '',
+        `O17d. głos + wymagaZgody: serwer czeka na zgodę – żadna rola (także lokalna) nie rusza przed Stop (ról: ${poSkladzie})`);
       const p = await (await post('/api/zespol/plan', { endpoint: 'local', pytanie: 'Zrób to zespołem: przeanalizuj', trybGlosowy: true })).json();
       ok(p.wymagaZgody === 'chmura' && (p.silnikiZaZgoda || []).length > 0, 'O17c. „tylko plan” w głosie też mówi o zgodzie i dokąd');
+    }
+
+    // ------------------------------------------------------------ O18–O21 poprawki po przeglądzie dokładek
+    {
+      const limit = (dzien) => post('/api/zespol/ustawienia', { budzetZl: { dzien } });
+      const bud = async () => ((await (await fetch(`${ADRES}/api/config`)).json()).zespol || {}).budzet || {};
+      const konce = (w) => zd(w, 'rola').filter((e) => e.ms !== undefined);
+      await limit(50);
+      // O18 – przerwana płatna rola kosztuje (Scal teraz w połowie strumienia, bez usage).
+      await zeruj();
+      const przed = (await bud()).wydanoDzis || 0;
+      const w18 = await tura({ messages: [{ role: 'user', content: 'Scal płatnie: rola-dluga:ANALITYK rola-wolna:ANALITYK' }],
+        zespol: { sklad: [{ rola: 'analityk', silnik: 'claude', model: 'claude-haiku-4-5' }, { rola: 'recenzent', silnik: 'cloud' }] } }, {
+        wTrakcie: async (bieg) => { await spij(1500); await post('/api/zespol/scal', { bieg }); },
+      });
+      const k18 = konce(w18).find((e) => e.r === 'r1') || {};
+      const b18 = await bud();
+      ok(k18.stan === 'niedokonczona' && k18.kosztZl > 0 && k18.kosztSzacowany === true && b18.wydanoDzis > przed && b18.zarezerwowano === 0,
+        `O18. „Scal teraz” w trakcie płatnej roli: koszt z szacunku (${k18.kosztZl} zł, ${k18.stan}), wydatek zapisany, bez wiszących rezerwacji`);
+      // O19 – planista po terminie (płatny, bez strumienia) kosztuje co najmniej szacunek.
+      await zeruj();
+      const przed19 = (await bud()).wydanoDzis || 0;
+      const j19 = await (await post('/api/zespol/plan', { endpoint: 'claude', pytanie: 'plan-milczy Zrób to zespołem: przeanalizuj' })).json();
+      const b19 = await bud();
+      ok(j19.sklad && j19.sklad.zrodlo === 'heurystyka' && j19.kosztPlanistyZl > 0 && b19.wydanoDzis > przed19 && b19.zarezerwowano === 0,
+        `O19. płatny planista po terminie – koszt z szacunku (${j19.kosztPlanistyZl} zł), bez wiszącej rezerwacji`);
+      // O20 – prowadzący rezerwuje budżet (C1/C6); odmowa kończy turę, notatki zostają.
+      await zeruj();
+      const naChmurze = { sklad: [{ rola: 'analityk', silnik: 'cloud' }, { rola: 'recenzent', silnik: 'cloud' }] };
+      await limit(Math.ceil(((await bud()).wydanoDzis + 0.005) * 100) / 100);
+      const w20 = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Prowadzący płatny: przeanalizuj' }], zespol: naChmurze });
+      const s20 = sklad(w20);
+      const z20 = await zadania();
+      ok(w20.status === 200 && s20.szacunekProwadzacyZl > 0 && s20.szacunekZl >= s20.szacunekProwadzacyZl - 1e-9
+        && w20.koniec && /nie wystarczy na odpowiedź prowadzącego/.test(w20.koniec.blad) && w20.koniec.kod === 'budzet-wyczerpany'
+        && !z20.some((x) => x.rodzaj === 'prowadzacy') && z20.some((x) => x.rola === 'ANALITYK') && (await bud()).zarezerwowano === 0,
+        `O20a. prowadzący ponad budżet: bez wywołania, koniec z kodem budzet-wyczerpany; szacunek składu z prowadzącym (${s20.szacunekProwadzacyZl} z ${s20.szacunekZl} zł)`);
+      await limit(50); await zeruj();
+      const w20b = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Prowadzący płatny: przeanalizuj' }], zespol: naChmurze });
+      ok(w20b.koniec && w20b.koniec.blad === '' && /po scaleniu/.test(w20b.tekst) && (await bud()).zarezerwowano === 0,
+        'O20b. prowadzący w budżecie odpowiada; po turze nic nie zostaje zarezerwowane');
+      // O21 – fala 3: urwana na limicie, bez kodu, fragmentem – do prowadzącego idzie kod z fali 1; „BEZ UWAG” z dopiskiem – bez fali 3.
+      const fala3 = async (slowa) => {
+        await zeruj();
+        const w = await tura({ messages: [{ role: 'user', content: `plan-kod prog-kod ${slowa}` }], zespol: { uruchom: true } });
+        const z = await zadania();
+        return { w, st: stanyKoncowe(w), pr: (z.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' }).ostatnia, z };
+      };
+      const pelna = await fala3('');
+      ok(pelna.st.r1p === 'gotowa' && pelna.pr.includes('KOD-POPRAWIONY') && !pelna.pr.includes('KOD-ORYGINALNY') && /już poprawiony/.test(pelna.pr),
+        'O21a. pełna poprawka (domknięty kod) – do prowadzącego idzie wersja poprawiona');
+      const dl = await fala3('poprawka-length');
+      const kDl = konce(dl.w).find((e) => e.r === 'r1p') || {};
+      ok(dl.st.r1p === 'urwana' && kDl.urwane === true && dl.pr.includes('KOD-ORYGINALNY') && !/już poprawiony/.test(dl.pr),
+        `O21b. poprawka urwana na limicie tokenów – stan „urwana”, prowadzący dostaje kod z fali 1 (${dl.st.r1p})`);
+      const bk = await fala3('poprawka-bez-kodu'); const fr = await fala3('poprawka-fragment');
+      ok([bk, fr].every((x) => x.pr.includes('KOD-ORYGINALNY') && !x.pr.includes('KOD-POPRAWIONY') && !/już poprawiony/.test(x.pr)),
+        'O21c. poprawka bez kodu albo fragmentem („# ... reszta bez zmian”) – prowadzący dostaje pełny kod z fali 1');
+      const lg = await fala3('recenzja-lgtm');
+      ok(!zd(lg.w, 'rola').some((e) => e.r === 'r1p') && !lg.z.some((x) => x.poprawka),
+        'O21d. recenzja „BEZ UWAG – kod jest poprawny” – bez fali 3');
+      await limit(0);
     }
 
     // ------------------------------------------------------------ O11 limit naraz

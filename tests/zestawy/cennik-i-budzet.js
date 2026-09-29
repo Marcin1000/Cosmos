@@ -115,7 +115,13 @@ const blisko = (a, b) => Math.abs(a - b) < 1e-4;
   ok(konta.zanotujZuzycie(idA, { silnik: 'local', zrodlo: 'przyznany', model: 'claude-opus-5-5', zl: 0.5 }) === 0,
     'darmowy silnik – 0 zł, nawet gdy wołający poda kwotę (rola na chmurze nie zjada budżetu)');
   const k3 = konta.zanotujZuzycie(idA, { silnik: 'claude', zrodlo: 'wlasny', model: 'claude-opus-5-5', we: 0, wy: 0, szacunek: { we: 6000, wy: 900 } });
-  ok(blisko(k3, 1.5 * 0.1554), `brak usage (przerwany strumień) – 1,5 × szacunek, nie zero (${k3})`);
+  /* Szacunek bez usage dolicza ukryte myślenie modelu (Opus 5: 1500 tokenów płatnych jak wyjście) –
+     przerwany strumień modelu rozumującego to głównie myślenie, którego w tekście nie widać (etap 5, B1). */
+  const zMysleniem = c.kosztZl('claude-opus-5-5', 'claude', { we: 6000, wy: 900 + 1500 });
+  ok(blisko(k3, 1.5 * zMysleniem), `brak usage (przerwany strumień) – 1,5 × szacunek z myśleniem, nie zero (${k3} = 1,5 × ${zMysleniem})`);
+  // Osobna osoba – żeby nie ruszać sum Ani sprawdzanych niżej.
+  const k3b = konta.zanotujZuzycie(await nowy('cezary'), { silnik: 'claude', zrodlo: 'wlasny', model: 'claude-opus-5-5', szacunek: { we: 6000, wy: 900, myslenie: false } });
+  ok(blisko(k3b, 1.5 * 0.1554), `szacunek z \`myslenie: false\` – bez doliczonego myślenia (${k3b})`);
   const k4 = konta.zanotujZuzycie(idA, { silnik: 'openai', zrodlo: 'przyznany', model: 'gpt-5', zl: 0.5 });
   ok(k4 === 0.5, 'kwota podana wprost (orkiestrator ją zna) – zapisana tak, jak jest');
   const k5 = konta.zanotujZuzycie(idA, { silnik: 'openai', zrodlo: 'przyznany', model: 'gpt-5', we: 0, wy: 0 });

@@ -29,7 +29,9 @@
    P10. EN: blok i przycisk po angielsku;
    P11. tryb głosowy: kropki ról pod kulą, czytana tylko odpowiedź prowadzącego.
    Etap 5 (dokładki):
-   P14. Ustawienia → Agenci, „Własne role”: formularz (fokus, brak nazwy),
+   P14. Ustawienia → Agenci, „Własne role”: formularz (fokus, brak nazwy – powód
+        pod polem, aria-invalid; „Anuluj” wraca na „Edytuj”; globalne „Zapisz”
+        najpierw zapisuje otwartą rolę, przy błędzie okno zostaje),
         zapis na serwerze (id od serwera), nazwa od osoby TYLKO jako tekst,
         znacznik „własna”, licznik, edycja tej samej roli;
    P15. własna rola w „Dodaj rolę” (oznaczona) → w składzie idzie jej id,
@@ -40,10 +42,13 @@
         szacunek w bramce płatnego silnika, rola pominięta z powodu budżetu,
         czat 429 budzet-wyczerpany → komunikat, „Wyślij przez Chmurę”,
         „Ustawienia budżetu” (karta Agenci);
-   P18. zgoda GŁOSEM (lokalny prowadzący, rola w chmurze): Cosmos mówi pytanie,
-        na scenie trzy przyciski, do odpowiedzi nic nie idzie do chmury;
-        „tak” → role w chmurze, „Tylko lokalnie” → zero żądań do chmury,
-        10 s ciszy → odpowiedź bez zespołu;
+   P18. zgoda GŁOSEM (lokalny prowadzący, rola w chmurze) w prawdziwym trybie
+        głosowym na podstawionym SpeechRecognition: Cosmos mówi pytanie (co
+        wychodzi i na jak długo), na scenie trzy przyciski, do odpowiedzi nic
+        nie idzie do chmury; ogon pytania z głośnika nie rozstrzyga; odpowiedź
+        powtarzająca słowa pytania nie jest echem („tak…” → chmura, „Tak, ale
+        tylko lokalnie” → lokalnie); przeczenie w środku zdania nie jest zgodą;
+        „Tylko lokalnie” na scenie → zero żądań do chmury, 10 s ciszy → bez zespołu;
    P19. „Pytaj przed startem” na serwerze: wyłączone w przeglądarce idzie tam
         JEDNYM zapisem i znika z pamięci przeglądarki. */
 const path = require('path');
@@ -419,7 +424,12 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const fok14 = await page.evaluate(() => document.activeElement && document.activeElement.dataset.pole);
     await page.click('.ag-wl-zapisz');
     const blad14 = await page.evaluate(() => { const e = document.querySelector('.ag-wl-blad'); return e && !e.hidden ? e.textContent : ''; });
+    const pole14 = await page.evaluate(() => { const n = document.querySelector('[data-pole="nazwa"]'); const e = document.querySelector('.ag-wl-blad');
+      return { inv: n.getAttribute('aria-invalid'), opis: (n.getAttribute('aria-describedby') || '').split(' ').includes(e.id), podPolem: e.parentElement === n.closest('.field'),
+        fokus: document.activeElement && document.activeElement.dataset.pole }; });
     ok(fok14 === 'nazwa' && /Wpisz nazwę/.test(blad14), `P14a. „Dodaj własną rolę”: fokus w nazwie, bez nazwy nie zapisuje („${blad14}”)`);
+    ok(pole14.inv === 'true' && pole14.opis && pole14.podPolem && pole14.fokus === 'nazwa',
+      `P14a2. powód pod polem nazwy (nie przy przyciskach), pole z aria-invalid i aria-describedby na powód (${JSON.stringify(pole14)})`);
     // Nazwa ≤ 40 znaków (serwer tnie dłuższe) – w całości znacznik HTML.
     const ZLA = '<img src=x onerror=window.__xss=1>';
     await page.fill('[data-pole="nazwa"]', ZLA);
@@ -445,6 +455,27 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.waitForFunction(() => { const li = document.querySelector('#ag-ustawienia .ag-wlasna'); return li && /^Tłumacz\s/.test(li.innerText); }, null, { timeout: 5000 }).catch(() => {});
     const us14b = (await ustawieniaSerwera()).wlasneRole || [];
     ok(us14b.length === 1 && us14[0] && us14b[0].id === us14[0].id && us14b[0].nazwa === 'Tłumacz', 'P14e. edycja zmienia tę samą rolę (to samo id)');
+    await page.click('#ag-ustawienia .ag-wl-edytuj');
+    await page.click('.ag-wl-formularz .btn-ghost');
+    const fok14f = await page.evaluate(() => document.activeElement && document.activeElement.className);
+    ok(/ag-wl-edytuj/.test(fok14f), `P14f. „Anuluj” edycji – fokus wraca na „Edytuj” tej roli (${fok14f})`);
+    // Globalne „Zapisz” w stopce Ustawień z otwartym formularzem: najpierw zapis roli, błąd = okno zostaje.
+    await page.click('#ag-ustawienia .ag-wl-dodaj');
+    await page.fill('[data-pole="nazwa"]', 'Szkic');
+    await page.click('#settings-save');
+    await page.waitForTimeout(300);
+    const g14 = await page.evaluate(() => ({ otwarte: document.getElementById('settings-modal').style.display !== 'none',
+      inv: document.querySelector('[data-pole="instrukcja"]') && document.querySelector('[data-pole="instrukcja"]').getAttribute('aria-invalid') }));
+    await page.fill('[data-pole="instrukcja"]', 'Streść w trzech zdaniach.');
+    await page.click('#settings-save');
+    await page.waitForFunction(() => document.getElementById('settings-modal').style.display === 'none', null, { timeout: 5000 }).catch(() => {});
+    const us14g = (await ustawieniaSerwera()).wlasneRole || [];
+    const zamkniete14 = await page.evaluate(() => document.getElementById('settings-modal').style.display === 'none');
+    ok(g14.otwarte && g14.inv === 'true' && us14g.length === 2 && us14g[1].nazwa === 'Szkic' && zamkniete14,
+      `P14g. globalne „Zapisz” zapisuje otwartą rolę (bez instrukcji – okno zostaje z błędem) (${JSON.stringify(g14)}, ról ${us14g.length}, zamknięte ${zamkniete14})`);
+    await page.evaluate((r) => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wlasneRole: [r] }) }), us14g[0]);
+    await page.evaluate(() => openSettings('agenci'));
+    await page.waitForSelector('#ag-ustawienia [data-pole="budzet-dzien"]', { timeout: 5000 });
     // P17a – limit dzienny w złotówkach
     await page.fill('[data-pole="budzet-dzien"]', '3,5');
     await page.press('[data-pole="budzet-dzien"]', 'Tab');
@@ -509,63 +540,116 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await page.click('.endpoint-tab[data-endpoint="cloud"]');
 
     // ---------------------------------------------------------------- P18
-    await nowaRozmowa();
-    await page.evaluate(() => {
+    /* Prawdziwy tryb głosowy (enterVoiceMode, rozpoznawanie przeglądarki) na
+       podstawionym SpeechRecognition i speechSynthesis – odpowiedź idzie
+       „mikrofonem” przez askVoice, jak u człowieka. Dawniej zestaw wołał
+       handleVoiceQuery wprost i nie widział, że zapora echa połyka odpowiedź
+       powtarzającą słowa pytania. */
+    const gctx = await b.newContext({ viewport: { width: 1280, height: 860 }, serviceWorkers: 'block', locale: 'pl-PL' });
+    await gctx.addInitScript(() => {
+      try {
+        localStorage.setItem('cosmos.settings', JSON.stringify({ zespolPotwierdzaj: false }));
+        localStorage.setItem('cosmos.lang', 'pl'); localStorage.setItem('cosmos.sttEngine', 'przegladarka'); localStorage.setItem('cosmos.samouczek', '1');
+      } catch { /* */ }
+      window.__sr = [];
       window.__mowa = [];
-      speakText = async (tekst) => { window.__mowa.push(tekst); };
-      startQueryListening = () => { setVoiceState('listening'); };
-      voiceMode = true;
-      document.getElementById('voice-overlay').style.display = 'flex';
-      setEndpoint('local');
+      class SR {
+        constructor() { window.__sr.push(this); this.wyniki = []; this.dziala = false; }
+        start() { if (this.dziala) throw new DOMException('już działa', 'InvalidStateError'); this.dziala = true; setTimeout(() => this.onstart && this.onstart(), 5); }
+        stop() { if (!this.dziala) return; this.dziala = false; setTimeout(() => this.onend && this.onend(), 5); }
+        abort() { this.stop(); }
+      }
+      window.SpeechRecognition = SR; window.webkitSpeechRecognition = SR;
+      window.__powiedz = (tekst) => {
+        const r = [...window.__sr].reverse().find((x) => x.dziala);
+        if (!r) return false;
+        const w = [{ transcript: tekst, confidence: 0.9 }]; w.isFinal = true;
+        r.wyniki.push(w);
+        if (r.onresult) r.onresult({ resultIndex: r.wyniki.length - 1, results: r.wyniki });
+        return true;
+      };
+      const synth = { speaking: false, pending: false, paused: false, _u: null,
+        speak(u) { window.__mowa.push(u.text); this.speaking = true; this._u = u; setTimeout(() => u.onstart && u.onstart({}), 1);
+          u.__t = setTimeout(() => { this.speaking = false; this._u = null; if (u.onend) u.onend({}); }, 300); },
+        cancel() { const u = this._u; if (!u) return; clearTimeout(u.__t); this._u = null; this.speaking = false; if (u.onerror) u.onerror({ error: 'canceled' }); else if (u.onend) u.onend({}); },
+        getVoices() { return []; }, pause() {}, resume() {}, addEventListener() {}, removeEventListener() {} };
+      Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
     });
-    const turaGlosem = (tekst) => page.evaluate((t) => { const conv = ensureConversation('głos'); conv.messages.push({ role: 'user', content: t }); window.__tura = runGeneration(conv); }, tekst);
-    const pytanieZgody = () => page.waitForFunction(() => !document.getElementById('voice-zgoda').hidden, null, { timeout: 20000 }).then(() => true).catch(() => false);
+    const gp = await gctx.newPage();
+    gp.on('pageerror', (e) => bledy.push(`głos: ${e.message}`));
+    await gp.goto(`${ADRES}/app`, { waitUntil: 'load' });
+    await gp.waitForFunction(() => { const x = document.getElementById('zespol-btn'); return x && !x.hidden; }, null, { timeout: 15000 });
     const PYT18 = 'plan-chmura rola-wolna:ANALITYK zrób to zespołem: policz ekspozycję';
+    let nr18 = 0;
+    /** Wejście w tryb głosowy, pytanie głosem, czekanie na pytanie o zgodę (Cosmos słucha). */
+    const zgodaGlosem18 = async () => {
+      nr18++;
+      await gp.evaluate(() => { newConversation(); setEndpoint('local'); window.__mowa = []; });
+      await gp.click('#voice-btn');
+      await gp.waitForFunction(() => voiceMode && voiceState === 'wake' && window.__sr.some((x) => x.dziala), null, { timeout: 8000 });
+      await gp.evaluate((t) => __powiedz(t), `Hej Cosmos, ${PYT18} numer ${nr18}`);
+      return gp.waitForFunction(() => !document.getElementById('voice-zgoda').hidden && voiceState === 'listening' && window.__sr.some((x) => x.dziala),
+        null, { timeout: 20000 }).then(() => true).catch(() => false);
+    };
+    /** Koniec tury i wyjście z trybu głosowego; zwraca żądania do modeli i wiadomości. */
+    const po18 = async () => {
+      await gp.waitForFunction(() => !zgodaGlosem, null, { timeout: 20000 }).catch(() => {});
+      await gp.waitForFunction(() => !isGenerating && activeConversation.messages[activeConversation.messages.length - 1].role === 'assistant', null, { timeout: 30000 }).catch(() => {});
+      await spij(300);
+      const z = doModeli(await stanAtrapy());
+      const m = await gp.evaluate(() => activeConversation.messages.map((x) => (x.zespol ? `zespol:${x.zespol.wklady.map((y) => y.silnik).join('+')}` : x.role)));
+      const mowa = await gp.evaluate(() => window.__mowa.join(' '));
+      await gp.click('#voice-close').catch(() => {});
+      await spij(300);
+      return { z, m, mowa, chmura: z.some((x) => x.rodzaj === 'rola' && x.silnik !== 'local'), role: z.some((x) => x.rodzaj === 'rola') };
+    };
     await zeruj();
-    await turaGlosem(PYT18);
-    const jest18 = await pytanieZgody();
-    await page.waitForTimeout(300);
-    const g18 = await page.evaluate(() => ({ mowa: window.__mowa.join(' | '), przyciski: [...document.querySelectorAll('#voice-zgoda button')].map((b) => b.textContent),
+    const jest18 = await zgodaGlosem18();
+    await spij(200);
+    const g18 = await gp.evaluate(() => ({ mowa: window.__mowa.join(' '), przyciski: [...document.querySelectorAll('#voice-zgoda button')].map((x) => x.textContent),
       kropki: document.querySelectorAll('#voice-overlay .voice-zespol .vz-rola').length }));
     const przed18 = doModeli(await stanAtrapy()).filter((x) => x.rodzaj === 'rola' && x.silnik !== 'local');
-    ok(jest18 && /^Zespół chce użyć chmury: NVIDIA\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów”\.$/.test(g18.mowa)
+    ok(jest18 && /Zespół chce wysłać rozmowę do chmury: NVIDIA\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów” – zgoda obowiązuje do końca tej rozmowy\.$/.test(g18.mowa)
       && g18.przyciski.join('|') === 'Tak|Tylko lokalnie|Bez agentów' && g18.kropki > 0,
-      `P18a. tryb głosowy: Cosmos mówi pytanie o chmurę, na scenie trzy przyciski i kropki ról (${g18.mowa.slice(0, 60)})`);
+      `P18a. tryb głosowy: Cosmos mówi pytanie o chmurę (co wychodzi i na jak długo), na scenie trzy przyciski i kropki ról (${JSON.stringify(g18).slice(0, 400)})`);
     ok(przed18.length === 0, `P18b. zanim padnie odpowiedź, żadna rola nie pyta chmury (${przed18.length})`);
+    // Echo ogona pytania z głośnika tuż po końcu mowy – nie rozstrzyga i nie liczy się jako niejasne.
+    const mowaPrzed18 = await gp.evaluate(() => window.__mowa.length);
+    await gp.evaluate(() => __powiedz('do końca tej rozmowy'));
+    await spij(2200);   // 1,4 s ciszy kończy wypowiedź – echo idzie do askVoice osobno
+    const echo18 = await gp.evaluate(() => ({ czeka: Boolean(zgodaGlosem), mowa: window.__mowa.length }));
     await zeruj();
-    await page.evaluate(() => handleVoiceQuery('Tak, jasne'));
-    await page.waitForTimeout(300);
-    await koniecTury();
-    const z18 = doModeli(await stanAtrapy());
-    const m18 = await page.evaluate(() => activeConversation.messages.map((m) => (m.zespol ? `zespol:${m.zespol.wklady.map((x) => x.silnik).join('+')}` : m.role)));
-    ok(z18.some((x) => x.rodzaj === 'rola' && x.silnik === 'cloud') && m18.some((x) => /^zespol:.*cloud/.test(x)) && m18[m18.length - 1] === 'assistant',
-      `P18c. „Tak” głosem → role w chmurze, jedna odpowiedź (${m18.join(',')})`);
-    await nowaRozmowa();
-    await page.evaluate(() => { window.__mowa = []; });
-    await turaGlosem(PYT18);
-    await pytanieZgody();
+    // Odpowiedź powtarzająca słowa pytania (tak, wysłać, chmury) – mikrofonem.
+    await gp.evaluate(() => __powiedz('Tak, można wysłać do chmury'));
+    const r18c = await po18();
+    ok(echo18.czeka && echo18.mowa === mowaPrzed18, `P18c. ogon pytania z głośnika (echo) nie rozstrzyga zgody i nie wywołuje „nie rozumiem” (czeka: ${echo18.czeka}, wypowiedzi: ${mowaPrzed18} → ${echo18.mowa})`);
+    ok(r18c.chmura && r18c.m.some((x) => /^zespol:.*cloud/.test(x)) && r18c.m[r18c.m.length - 1] === 'assistant',
+      `P18d. „Tak, można wysłać do chmury” mikrofonem (słowa z pytania) → role w chmurze, jedna odpowiedź (${r18c.m.join(',')})`);
+    for (const [odp, opis] of [['Tak, ale tylko lokalnie', 'P18e. „Tak, ale tylko lokalnie” mikrofonem (75% słów z pytania – nie echo)'],
+      ['Ja nie chcę do chmury', 'P18f. „Ja nie chcę do chmury” (przeczenie w środku zdania)'],
+      ['Tylko lokalnie, nie wysyłaj rozmowy', 'P18g. „Tylko lokalnie, nie wysyłaj rozmowy”']]) {
+      await zgodaGlosem18();
+      await spij(600);
+      await zeruj();
+      await gp.evaluate((o) => __powiedz(o), odp);
+      const r = await po18();
+      ok(r.role && !r.chmura, `${opis} → role tylko lokalnie, zero żądań do chmury (${r.z.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')})`);
+    }
+    await zgodaGlosem18();
     await zeruj();
-    await page.click('#voice-zgoda [data-zgoda="lokalnie"]');
-    await page.waitForTimeout(300);
-    await koniecTury();
-    const z18d = doModeli(await stanAtrapy());
-    ok(z18d.length > 0 && z18d.every((x) => x.silnik === 'local') && z18d.some((x) => x.rodzaj === 'rola'),
-      `P18d. „Tylko lokalnie” na scenie → zero żądań do chmury (${z18d.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')})`);
-    await nowaRozmowa();
-    await page.evaluate(() => { window.__mowa = []; });
-    await turaGlosem(PYT18);
-    await pytanieZgody();
+    await gp.click('#voice-zgoda [data-zgoda="lokalnie"]');
+    const r18h = await po18();
+    ok(r18h.role && r18h.z.every((x) => x.silnik === 'local'), `P18h. „Tylko lokalnie” na scenie → zero żądań do chmury (${r18h.z.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')})`);
+    await zgodaGlosem18();
     await zeruj();
     const t18 = Date.now();
-    await page.waitForFunction(() => document.getElementById('voice-zgoda').hidden, null, { timeout: 25000 }).catch(() => {});
+    await gp.waitForFunction(() => document.getElementById('voice-zgoda').hidden, null, { timeout: 25000 }).catch(() => {});
     const czekal = Date.now() - t18;
-    await koniecTury();
-    const z18e = doModeli(await stanAtrapy());
-    const m18e = await page.evaluate(() => ({ wiad: activeConversation.messages.map((m) => m.narzedzie || m.role), mowa: window.__mowa.slice(-1)[0] || '' }));
-    ok(czekal >= 9000 && !m18e.wiad.includes('zespol') && m18e.wiad[m18e.wiad.length - 1] === 'assistant' && z18e.every((x) => x.silnik === 'local' && x.rodzaj !== 'rola')
-      && /bez zespołu/.test(m18e.mowa),
-      `P18e. 10 s ciszy → „bez agentów”: odpowiedź bez zespołu, nic do chmury (czekał ${Math.round(czekal / 1000)} s; ${m18e.wiad.join(',')})`);
-    await page.evaluate(() => { voiceMode = false; document.getElementById('voice-overlay').style.display = 'none'; setEndpoint('cloud'); });
+    const r18i = await po18();
+    ok(czekal >= 9000 && !r18i.m.some((x) => x.startsWith('zespol')) && r18i.m[r18i.m.length - 1] === 'assistant' && !r18i.role && r18i.z.every((x) => x.silnik === 'local')
+      && /bez zespołu/.test(r18i.mowa),
+      `P18i. 10 s ciszy → „bez agentów”: odpowiedź bez zespołu, nic do chmury (czekał ${Math.round(czekal / 1000)} s; ${r18i.m.join(',')}; ${r18i.z.map((x) => `${x.silnik}:${x.rodzaj}`).join(',')}; „${r18i.mowa.slice(-120)}”)`);
+    await gctx.close();
 
     ok(!bledy.length, `P0. bez błędów strony (${bledy.join(' | ').slice(0, 200)})`);
   } catch (err) {
