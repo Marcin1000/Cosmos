@@ -2927,7 +2927,7 @@ async function runGeneration(conv, podpiecie = null) {
          Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
          więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
       // Zimny start też: model ładuje się minutami, a chmura odpowie od razu (zespół IT, runda 9).
-      const zapasChmura = ['lokalny-niedostepny'].includes(err.kod) && epConfig('cloud').hasApiKey;
+      const zapasChmura = ['lokalny-niedostepny', 'zimny-start'].includes(err.kod) && epConfig('cloud').hasApiKey;
       const tekstBledu = bladSilnikaPoLudzku(err, zapasChmura);
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${tekstBledu}`, error: true,
         ...(tekstBledu !== err.message ? { szczegol: err.message } : {}),
