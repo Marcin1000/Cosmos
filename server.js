@@ -65,7 +65,7 @@ const odmowaBudzetuPomocniczego = (res, err) => sendJson(res, 429, {
    Darmowy silnik bez osoby (praca serwera, odprawa z rutyny) – bez księgowania;
    płatny bez osoby – wyjątek (zasada 2 z CLAUDE.md: brak kontekstu to błąd,
    nie właściciel „na wszelki wypadek”). */
-const { szacujTokeny: szacujTokenyCzatu } = require('./lib/czat.js');
+const { szacujTokeny: szacujTokenyCzatu, rodzajBleduPolaczenia: rodzajBleduPolaczeniaCzatu } = require('./lib/czat.js');
 const tokenyWiadomosci = (messages) => (Array.isArray(messages) ? messages : [])
   .reduce((a, m) => a + szacujTokenyCzatu(m && m.content), 0);
 require('./lib/model.js').ustawKsiegowegoModeli({
@@ -926,6 +926,92 @@ function handleConfig(res) {
   });
 }
 
+/* STAN SILNIKA dla plakietki (kontrakt K1, runda 10).
+
+   Marcin: kropka przy modelu lokalnym szara, choć model właśnie odpowiadał.
+   Sprawdzenie było jedno – GET /models, termin 5 s, tylko 2xx – a czat uznaje
+   komputer za żywy przy każdym kodzie < 500. 404 pośrednika (tailscale serve),
+   Ollama licząca /v1/models z uśpionego dysku albo pierwszy pakiet przez DERP
+   gasiły kropkę do następnego odpytania, a udana odpowiedź niczego nie
+   zmieniała (zespół IT i agencja, runda 10 – cztery niezależne odtworzenia).
+   Teraz:
+     – udana odpowiedź silnika w ciągu 2 min (lib/czat.js, zanotujKontakt) =
+       online, bez pytania dostawcy;
+     – lokalny: termin 8 s, 404 na /models = żyje; gdy /models milczy dłużej niż
+       2 s albo odpowiada błędem – równolegle tania próba /api/version (Ollama)
+       i /health (vLLM, llama.cpp);
+     – termin to „nie wiadomo” (online: null), nie „offline”;
+     – `powod` ('termin' | 'klucz' | 'http-NNN' | 'odmowa' | 'uspiony' | '')
+       mówi przeglądarce, co napisać w podpowiedzi;
+     – wynik pamiętany 10 s na silnik i klucz: każda karta odpytywała dom co 30 s
+       osobno, a równoległe sprawdzenia czekają na jedno.
+   Członek bez dostępu do silnika nie dostaje o nim pola (silniki.dostepne()),
+   a `powod` to kod, nigdy adres domu. */
+const TERMIN_STATUSU_MS = 5000;
+const TERMIN_STATUSU_LOKALNEGO_MS = 8000;
+const ZAPASOWA_SONDA_PO_MS = 2000;
+const PAMIEC_STATUSU_MS = 10_000;
+const KONTAKT_ONLINE_MS = 120_000;
+const pamiecStatusu = new Map();   // klucz silnika → { czas, wynik } | { obietnica }
+
+/** Wynik jednej próby: `{ status }` albo `{ blad }` – nigdy wyjątek. Treść
+ *  nie jest potrzebna, więc ciało od razu zamykamy (gniazdo wraca do puli). */
+function probaStatusu(url, naglowki, doKiedy) {
+  return fetch(url, { headers: naglowki, signal: AbortSignal.timeout(Math.max(300, doKiedy - Date.now())) })
+    .then((r) => { r.body?.cancel().catch(() => {}); return { status: r.status }; }, (blad) => ({ blad }));
+}
+const terminMinal = (blad) => blad && (blad.name === 'TimeoutError' || blad.name === 'AbortError');
+/** Błąd połączenia → powód: uśpiony komputer (brak trasy, termin łączenia) albo odmowa. */
+const powodBleduSieci = (blad) => (rodzajBleduPolaczeniaCzatu(blad) === 'uspiony' ? 'uspiony' : 'odmowa');
+
+async function sondaSilnika(nazwa, ep) {
+  const lokalny = nazwa === 'local';
+  const doKiedy = Date.now() + (lokalny ? TERMIN_STATUSU_LOKALNEGO_MS : TERMIN_STATUSU_MS);
+  // /models u Claude'a to natywne API.
+  const glowna = probaStatusu(`${ep.baseUrl}/models`, authHeaders(ep, { natywne: true }), doKiedy);
+  const zle = (status) => ({ online: false, status, powod: status === 401 || status === 403 ? 'klucz' : `http-${status}` });
+  if (!lokalny) {
+    const { status, blad } = await glowna;
+    if (blad) return terminMinal(blad) ? { online: null, status: 0, powod: 'termin' } : { online: false, status: 0, powod: powodBleduSieci(blad) };
+    return status >= 200 && status < 300 ? { online: true, status, powod: '' } : zle(status);
+  }
+  /* Zapasowa próba lokalnego: /api/version (Ollama, bez dysku) albo /health
+     (vLLM, llama.cpp). Żyje, gdy któraś odpowie 2xx. */
+  const korzen = String(ep.baseUrl).replace(/\/+$/, '').replace(/\/v1$/i, '');
+  let zapas = null;
+  const zapasowa = () => (zapas ||= Promise.all([
+    probaStatusu(`${korzen}/api/version`, {}, doKiedy),
+    probaStatusu(`${korzen}/health`, {}, doKiedy),
+  ]).then((w) => w.some((x) => x.status >= 200 && x.status < 300)));
+  let wynik = await Promise.race([glowna, new Promise((r) => { setTimeout(r, ZAPASOWA_SONDA_PO_MS, null).unref?.(); })]);
+  if (!wynik) {
+    // /models milczy (dysk z modelami się rozkręca) – tania próba równolegle, kto pierwszy.
+    const kto1 = await Promise.race([glowna.then((g) => ({ g })), zapasowa().then((z) => ({ z }))]);
+    if (kto1.z === true) return { online: true, status: 0, powod: '' };
+    wynik = kto1.g || await glowna;
+  }
+  const { status, blad } = wynik;
+  if (!blad && ((status >= 200 && status < 300) || status === 404)) return { online: true, status, powod: '' };
+  if (!blad && (status === 401 || status === 403)) return zle(status);
+  if (blad && !terminMinal(blad)) return { online: false, status: 0, powod: powodBleduSieci(blad) };
+  if (await zapasowa()) return { online: true, status: status || 0, powod: '' };
+  return blad ? { online: null, status: 0, powod: 'termin' } : zle(status);
+}
+
+/** Stan silnika: kontakt z czatu → pamięć 10 s → sonda (jedna naraz na silnik). */
+async function stanSilnika(nazwa, ep) {
+  if (czat_.ostatniKontakt(ep) > Date.now() - KONTAKT_ONLINE_MS) return { online: true, status: 0, powod: '', zrodlo: 'czat' };
+  const klucz = `${nazwa}|${czat_.kluczKontaktu(ep)}`;
+  const w = pamiecStatusu.get(klucz);
+  if (w && w.obietnica) return w.obietnica;
+  if (w && Date.now() - w.czas < PAMIEC_STATUSU_MS) return w.wynik;
+  const obietnica = sondaSilnika(nazwa, ep)
+    .catch(() => ({ online: null, status: 0, powod: 'termin' }))
+    .then((wynik) => { pamiecStatusu.set(klucz, { czas: Date.now(), wynik }); return wynik; });
+  pamiecStatusu.set(klucz, { obietnica });
+  return obietnica;
+}
+
 async function handleStatus(req, res) {
   const results = {};
   /* Tylko silniki tej osoby (własny klucz albo przyznane). Członek odpytywał
@@ -935,15 +1021,7 @@ async function handleStatus(req, res) {
   const zmysly = Boolean(zrodloZmyslow);
   await Promise.all([
     ...silniki.dostepne().map(async ({ nazwa: name, ep }) => {
-      try {
-        const r = await fetch(`${ep.baseUrl}/models`, {
-          headers: authHeaders(ep, { natywne: true }),   // /models u Claude'a to natywne API
-          signal: AbortSignal.timeout(5000),
-        });
-        results[name] = { online: r.ok, status: r.status };
-      } catch {
-        results[name] = { online: false, status: 0 };
-      }
+      results[name] = await stanSilnika(name, ep);
     }),
     (async () => {
       if (!zmysly) return;
