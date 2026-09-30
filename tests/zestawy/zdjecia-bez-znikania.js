@@ -200,15 +200,17 @@ const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
     natychmiast = false;
     czekajace.clear();
     await p.evaluate(() => { newConversation(); });
+    const zapytanPrzedTura = zapytanZdjec;
     await p.fill('#input', 'pokaż zdjęcia miejsc z Majorki');
     await p.keyboard.press('Enter');
-    await p.waitForFunction(() => { const m = (activeConv()?.messages || []).find((x) => Array.isArray(x.zdjecia)); return m && m.zdjecia.every((g) => g.stan === 'szukam'); }, null, { timeout: 15000 }).catch(() => {});
+    // Oba zapytania o zdjęcia w drodze (odpowiedzi wstrzymane) – dopiero wtedy „Zatrzymaj”.
+    for (let i = 0; i < 150 && zapytanZdjec - zapytanPrzedTura < 2; i++) await p.waitForTimeout(100);
     const zapytanPrzedStop = zapytanZdjec;
     const t0 = Date.now();
     await p.click('#stop-btn');
     await p.waitForFunction(() => document.getElementById('stop-btn').style.display === 'none', null, { timeout: 10000 }).catch(() => {});
     const czasStopu = Date.now() - t0;
-    await p.waitForTimeout(500);
+    await p.waitForTimeout(1000);
     const poStopie = await p.evaluate(() => {
       const m = (activeConv()?.messages || []).find((x) => Array.isArray(x.zdjecia));
       return { stany: m ? [...new Set(m.zdjecia.map((g) => g.stan))].join(',') : 'brak', tekst: m ? m.content : '', szkielety: document.querySelectorAll('.zdj-kafel.szkielet').length };
