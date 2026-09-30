@@ -41,7 +41,12 @@
    W18. koszt całej odpowiedzi (role + planista + prowadzący z `koniec`, C2)
         i `planPoliczony` (C5) – przez zapis i odczyt notatek;
    W19. przy planie policzonym przez fotografa [PLAN:] prowadzącego nie liczy
-        drugiego planu (narzedzia.js). */
+        drugiego planu (narzedzia.js);
+   W20–W24. skład „Darmowe modele” (runda 10): skład startowy z ustawienia
+        osoby, wariant i kandydaci przez białą listę, propozycja z wariantem
+        darmowym, tura „tylko darmowe” przez zapis i odczyt, „Auto – najlepszy
+        darmowy” w składzie do wysłania, „0 zł” tylko przy darmowym prowadzącym,
+        klucze PL/EN. */
 const fs = require('fs');
 const path = require('path');
 const Z = require('../../public/zespol-widok.js');
@@ -372,6 +377,59 @@ const w19 = (async () => {
   ok(literalne.length > 40 && !brak.length, `W10. ${literalne.length + zDanych.length} kluczy zespołu w PL i EN${brak.length ? ` – brak: ${brak.join(', ')}` : ''}`);
   const rozne = zDanych.filter((k) => I18N.pl[k] === I18N.en[k] && !/^\{/.test(I18N.pl[k]));
   ok(rozne.length <= 2, `W10b. angielskie teksty są przetłumaczone (tych samych co PL: ${rozne.join(', ') || 0})`);
+}
+
+// ------------------------------------------------------------------ W20–W24 skład „Darmowe modele” (runda 10, paczka Z)
+{
+  const prow = { silnik: 'cloud', model: 'nvidia/nemotron-3-super-120b-a12b' };
+  const darmoweSurowe = {
+    role: [{ r: 'r1', rola: 'analityk', silnik: 'cloud', model: 'nvidia/llama-3.3-nemotron-super-49b-v1.5', szacunekZl: 0 },
+      { r: 'r2', rola: 'recenzent', silnik: 'cloud', model: 'deepseek-ai/deepseek-v3.2', szacunekZl: 0 }],
+    odrzucone: [{ rola: 'badacz', kod: 'rodzina' }], szacunekZl: 0, prowadzacyPlatny: false,
+  };
+  const planSklad = { prowadzacy: prow, role: [{ r: 'r1', rola: 'analityk', silnik: 'claude', model: 'claude-sonnet-5', szacunekZl: 0.1 },
+    { r: 'r2', rola: 'recenzent', silnik: 'claude', model: 'claude-sonnet-5', szacunekZl: 0.1 }], odrzucone: [], szacunekZl: 0.26, darmowe: darmoweSurowe };
+  // W20: skład startowy z ustawienia osoby – darmowy tylko, gdy jest wariant darmowy.
+  const s1 = Z.skladStartowy(planSklad);
+  const s2 = Z.skladStartowy({ ...planSklad, skladDomyslny: 'darmowy' });
+  const s3 = Z.skladStartowy({ ...planSklad, skladDomyslny: 'darmowy', darmowe: null });
+  ok(s1.wariant === 'proponowany' && s1.role[0].silnik === 'claude' && s1.szacunekZl === 0.26 && s1.tylkoDarmowe === false
+    && s2.wariant === 'darmowe' && s2.role.every((r) => r.silnik === 'cloud') && s2.szacunekZl === 0 && s2.tylkoDarmowe === true
+    && s3.wariant === 'proponowany',
+    'W20. skład startowy: „Proponowany” domyślnie, „Darmowe modele” z ustawienia (tylkoDarmowe), bez wariantu darmowego – proponowany');
+  const w20 = Z.wariantDarmowy({ ...darmoweSurowe, role: [...darmoweSurowe.role, { rola: 'x', silnik: 'marsjanski', model: 'm' }], szacunekZl: -1 });
+  const k20 = Z.kandydaciZDanych({ analityk: [{ silnik: 'claude', model: 'claude-sonnet-5' }, { silnik: 'zly', model: 'x' }, { silnik: 'cloud', model: '' }, null] });
+  ok(w20 && w20.role[2].silnik === 'cloud' && w20.szacunekZl === undefined && Z.wariantDarmowy(null) === null && Z.wariantDarmowy({ role: [] }) === null
+    && k20.analityk.length === 1 && k20.analityk[0].darmowy === false,
+    'W20b. wariant i kandydaci z serwera przez białą listę (nieznany silnik → chmura, ujemna kwota odpada, śmieci odrzucone)');
+  // W21: reduktor – propozycja trzyma wariant darmowy, ustawienie i kandydatów; tura „tylko darmowe” przez zapis i odczyt.
+  const st = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(st, 'sklad', { v: 1, propozycja: true, ...planSklad, skladDomyslny: 'darmowy', szacunekProwadzacyZl: 0.05,
+    kandydaci: { analityk: [{ silnik: 'cloud', model: 'qwen/qwen3-235b-a22b' }] } });
+  const p21 = st.propozycja;
+  const start21 = Z.skladStartowy(p21);
+  ok(p21 && p21.darmowe && p21.darmowe.role.length === 2 && p21.skladDomyslny === 'darmowy' && p21.kandydaci.analityk[0].darmowy === true
+    && p21.szacunekProwadzacyZl === 0.05 && p21.role[0].silnik === 'claude' && start21.wariant === 'darmowe' && !st.role.length,
+    'W21. propozycja pod odpowiedzią: wariant darmowy, ustawienie osoby i kandydaci w stanie; skład startowy z nich; role tury nietknięte');
+  const stT = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(stT, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: prow, role: darmoweSurowe.role, odrzucone: [], tylkoDarmowe: true });
+  const odczyt = Z.stanZWiadomosci(Z.wiadomoscNotatek(stT));
+  ok(stT.tylkoDarmowe === true && odczyt.tylkoDarmowe === true, 'W21b. tura „tylko darmowe” – flaga w stanie, w zapisie notatek i po odczycie');
+  // W22: „Auto – najlepszy darmowy” idzie do serwera jako tylkoDarmowe bez silnika.
+  const w22 = Z.skladDoWyslania([{ rola: 'analityk', auto: true, autoDarmowy: true, silnik: 'claude', model: 'claude-sonnet-5' }, { rola: 'recenzent', auto: true }]);
+  ok(JSON.stringify(w22) === JSON.stringify([{ rola: 'analityk', tylkoDarmowe: true }, { rola: 'recenzent' }]),
+    `W22. skład do wysłania: Auto w wariancie darmowym → {tylkoDarmowe:true}, zwykłe Auto bez pól (${JSON.stringify(w22)})`);
+  // W23: „0 zł” tylko, gdy cała tura nic nie kosztuje; „jeden model” – wszystkie role na modelu prowadzącego.
+  ok(Z.zeroZl({ szacunekZl: 0 }) && !Z.zeroZl({ szacunekZl: 0.04, prowadzacyPlatny: true }) && Z.zeroZl({ prowadzacyPlatny: false })
+    && !Z.zeroZl({ prowadzacyPlatny: true }) && Z.jedenModel([{ silnik: 'cloud', model: prow.model }, { silnik: 'cloud', model: prow.model }], prow)
+    && !Z.jedenModel(darmoweSurowe.role, prow) && !Z.jedenModel([], prow),
+    'W23. „0 zł” tylko przy darmowym prowadzącym; „jeden model” rozpoznany');
+  // W24: klucze składane z danych (segment, edytor, uwaga, Ustawienia) są w obu słownikach i przetłumaczone.
+  const klucze = ['ag.wariant.grupa', 'ag.wariant.proponowany', 'ag.wariant.darmowe', 'ag.zeroZl', 'ag.darmowe.opis', 'ag.darmowe.jedenModel', 'ag.darmowe.prowadzacyPlatny',
+    'ag.pominietaRodzina', 'ag.odrzuconeDarmowe', 'ag.bladLimitDarmowy', 'ag.uruchomDarmowo', 'ag.uruchomDarmowoTitle', 'ag.re.bezOplat', 'ag.re.platny', 'ag.re.polecany',
+    'ag.re.autoDarmowy', 'ag.set.sklad.h', 'ag.set.sklad.opis', 'ag.set.sklad.proponowany', 'ag.set.sklad.proponowanyHint', 'ag.set.sklad.darmowe', 'ag.set.sklad.darmoweHint'];
+  const brak24 = klucze.filter((k) => !I18N.pl[k] || !I18N.en[k] || I18N.pl[k] === I18N.en[k]);
+  ok(!brak24.length && !klucze.some((k) => /—/.test(I18N.pl[k] + I18N.en[k])), `W24. ${klucze.length} kluczy składu darmowego w PL i EN, przetłumaczone${brak24.length ? ` – brak: ${brak24.join(', ')}` : ''}`);
 }
 
 w19.then(() => {

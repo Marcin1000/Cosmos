@@ -48,7 +48,15 @@
       bramka bez kierunków i geografii, nazwa roli Cosmosa dla własnej roli
       zajęta, cel własnej roli jako dane, odmiana „ról”, nieistniejąca data;
    M. geokoder: wycofany wołający nie pyta i nie włącza bezpiecznika;
-      po awarii czekające zapytania odpadają na bezpieczniku. */
+      po awarii czekające zapytania odpadają na bezpieczniku;
+   N. skład „Darmowe modele” (runda 10): wariant darmowy z tego samego planu
+      obok proponowanego (chmura NVIDIA, recenzent spoza rodziny autorów,
+      kwota całej tury – przy płatnym prowadzącym jego koszt), kandydaci do
+      edytora, strażnik „tylko darmowe” (kod tylko-darmowe), ustawienie
+      „Darmowe modele” dla ról na Auto, recenzent pominięty (kod „rodzina”),
+      zapas bez płatnego prowadzącego, budżet nieznanego myślenia, zapis
+      skladDomyslny, kubełek klucza chmury (429 obniża oba), [DONE] kończy
+      odczyt roli (K4), prowadzący bez obrazu po roli „oko” (Z5). */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -536,6 +544,127 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     ok(zapytan === 1 && M.uslugaNiedostepna() && Math.max(...czasy) < 1200,
       `M2. milczący geokoder: jedno zapytanie, reszta kolejki odpada na bezpieczniku (${zapytan} zapytań, najdłużej ${Math.max(...czasy)} ms)`);
     milczek.close(); milczek.closeAllConnections?.();
+  }
+
+  // ------------------------------------------------------------------ N. skład „Darmowe modele” (runda 10, paczka Z)
+  {
+    const { ENDPOINTS } = require(path.join(KORZEN, 'lib/rdzen.js'));
+    const PLATNE = ['openai', 'claude'];
+    const cennik = { darmowy: (s) => !PLATNE.includes(s), szacujZl: (m, s) => (PLATNE.includes(s) ? 0.01 : 0), kosztZl: () => 0.004, kurs: () => 3.7 };
+    const budzet = { stan: () => ({ wyczerpany: false }), wyczerpany: () => null, zarezerwuj: () => ({ ok: true, token: null }), rozlicz: () => {}, zwolnij: () => {} };
+    const ja = { id: 'wlasciciel', rola: 'wlasciciel' };
+    const Z = require(path.join(KORZEN, 'lib/zespol.js')).utworz({
+      czat: {}, biegi: {}, konta: { znajdz: () => ja, zanotujZuzycie: () => 0 }, U: () => ({ sprzet: {} }), cennik, budzet, log: () => {},
+    });
+    const { rodzinaModelu } = require(path.join(KORZEN, 'lib/umiejetnosci.js'));
+    const chmura = { silnik: 'cloud', model: 'nvidia/nemotron-3-super-120b-a12b' };
+    const claude = { silnik: 'claude', model: 'claude-sonnet-5' };
+    const sklad = (prowadzacy, zespol = {}, us = null) => Z.ulozSklad(ja, {
+      payload: { messages: [{ role: 'user', content: 'Zaplanuj tydzień na Sycylii' }], zespol: { sklad: [{ rola: 'analityk' }, { rola: 'recenzent' }], modele: { claude: 'claude-sonnet-5' }, ...zespol } },
+      prowadzacy, jawna: true, signal: new AbortController().signal, pytanie: 'Zaplanuj tydzień na Sycylii', maObraz: false, maSprzet: false,
+      us: us || Z.ustawienia(ja), zgodaChmury: true, zKandydatami: true,
+    });
+    await wKontekscie(ja, async () => {
+      // N1: proponowany sięga po płatne (Sonnet pisze po polsku lepiej) – obok wariant darmowy z tego samego planu.
+      const s1 = await sklad(chmura);
+      const d1 = s1.darmowe;
+      const rec1 = d1 && d1.role.find((r) => r.rola === 'recenzent');
+      ok(s1.role.some((r) => r.silnik === 'claude') && d1 && d1.role.length === 2 && d1.role.every((r) => !PLATNE.includes(r.silnik))
+        && d1.role[0].model === 'nvidia/llama-3.3-nemotron-super-49b-v1.5' && rec1 && !['nemotron'].includes(rodzinaModelu(rec1.model))
+        && d1.szacunekZl === 0 && d1.prowadzacyPlatny === false && s1.tylkoDarmowe === false,
+        `N1. wariant „Darmowe modele” obok proponowanego: role na chmurze NVIDIA, analityk Super 49B, recenzent spoza Nemotrona, 0 zł (${d1 && d1.role.map((r) => `${r.rola}:${r.model}`).join(', ')})`);
+      const k1 = (s1.kandydaci || {}).analityk || [];
+      ok(k1.some((x) => x.model === 'claude-sonnet-5' && !x.darmowy) && k1.some((x) => x.model === 'nvidia/llama-3.3-nemotron-super-49b-v1.5' && x.darmowy)
+        && k1.length > 2, `N1b. kandydaci do edytora roli z obu pul, z flagą „darmowy” (${k1.map((x) => x.model).join(', ')})`);
+      // N2: płatny prowadzący – darmowy wariant kosztuje tyle, co prowadzący (nigdy fałszywe 0 zł).
+      const s2 = await sklad(claude);
+      ok(s2.darmowe && s2.darmowe.prowadzacyPlatny === true && s2.darmowe.szacunekZl > 0 && s2.darmowe.szacunekZl === s2.darmowe.szacunekProwadzacyZl
+        && s2.darmowe.role.every((r) => !PLATNE.includes(r.silnik)),
+        `N2. prowadzący Claude: wariant darmowy z kwotą prowadzącego (${s2.darmowe && s2.darmowe.szacunekZl} zł) i flagą prowadzacyPlatny`);
+      // N3: ściśle darmowo – strażnik nie wpuszcza płatnego silnika, także jako zastępstwa prowadzącego.
+      const r3 = Z.rozstrzygnij(ja, [{ rola: 'analityk', silnik: 'claude', model: 'claude-sonnet-5' }], { prowadzacy: claude, zgodaChmura: true, maxRol: 3, tylkoDarmowe: true });
+      const kluczChmury = ENDPOINTS.cloud.apiKey;
+      ENDPOINTS.cloud.apiKey = '';
+      const r3b = Z.rozstrzygnij(ja, [{ rola: 'analityk', silnik: 'claude', model: 'claude-sonnet-5' }], { prowadzacy: claude, zgodaChmura: true, maxRol: 3, tylkoDarmowe: true });
+      ENDPOINTS.cloud.apiKey = kluczChmury;
+      ok(r3.role.length === 1 && r3.role[0].silnik === 'cloud' && /tylko-darmowe/.test(r3.role[0].powod || '')
+        && !r3b.role.length && r3b.odrzucone.some((o) => o.kod === 'tylko-darmowe'),
+        `N3. „tylko darmowe”: rola z Claude'a na chmurze NVIDIA; bez darmowego silnika – odrzucona z kodem tylko-darmowe (${JSON.stringify(r3b.odrzucone)})`);
+      // N3b: ustawienie „Darmowe modele” – role na „Auto” ze składu od osoby dobierane tylko spośród darmowych.
+      const s3 = await sklad(chmura, {}, { ...Z.ustawienia(ja), skladDomyslny: 'darmowy' });
+      const s3j = await sklad(chmura, { tylkoDarmowe: false }, { ...Z.ustawienia(ja), skladDomyslny: 'darmowy' });
+      ok(s3.role.every((r) => !PLATNE.includes(r.silnik)) && s3j.role.some((r) => r.silnik === 'claude'),
+        'N3b. ustawienie „Darmowe modele”: role na Auto tylko darmowe; jawne tylkoDarmowe:false („Proponowany” w bramce) wygrywa');
+      // N4: recenzent z tej samej rodziny co prowadzący i autorzy – pominięty (kod „rodzina”), nie udawany.
+      const pulaN = [{ id: 'nvidia/nemotron-3-super-120b-a12b', silnik: 'cloud' }, { id: 'nvidia/llama-3.3-nemotron-super-49b-v1.5', silnik: 'cloud' }];
+      const m4 = Z.modeleWariantu(ja, [{ rola: 'analityk' }, { rola: 'recenzent' }], { pula: pulaN, prowadzacy: chmura, us: Z.ustawienia(ja), glosowy: false, katalog: P.KATALOG, tylkoDarmowe: true });
+      const r4 = Z.rozstrzygnij(ja, m4, { prowadzacy: chmura, zgodaChmura: true, maxRol: 3, tylkoDarmowe: true });
+      ok(m4[1].pominieta === 'rodzina' && r4.role.length === 1 && r4.role[0].rola === 'analityk' && r4.odrzucone.some((o) => o.rola === 'recenzent' && o.kod === 'rodzina'),
+        `N4. same Nemotrony w puli – recenzent pominięty z kodem „rodzina” (${JSON.stringify(r4.odrzucone)})`);
+      // N5: zapas roli w turze darmowej nie idzie na płatnego prowadzącego.
+      const rolaD = { silnik: 'cloud', model: 'nvidia/llama-3.3-nemotron-super-49b-v1.5' };
+      const zD = Z.zapasRoli(rolaD, { u: ja, prowadzacy: claude, tylkoDarmowe: true });
+      const zP = Z.zapasRoli(rolaD, { u: ja, prowadzacy: claude, tylkoDarmowe: false });
+      ok(zD && zD.silnik === 'cloud' && zD.model === ENDPOINTS.cloud.model && zP && zP.silnik === 'claude'
+        && Z.zapasRoli({ silnik: 'cloud', model: ENDPOINTS.cloud.model }, { u: ja, prowadzacy: claude, tylkoDarmowe: true }) === null,
+        `N5. zapas w turze darmowej: domyślny model chmury zamiast płatnego prowadzącego (${zD && zD.model})`);
+      // N6: model o nieznanym sposobie myślenia dostaje budżet jak myślący (i ≥ 1500 w roli bez myślenia).
+      const lim = (r, m, mysli) => Z.limitRoli(r, m, mysli);
+      ok(lim('recenzent', 'deepseek-ai/deepseek-v3.2', true) === 2048 && lim('badacz', 'deepseek-ai/deepseek-v3.2', false) >= 1500
+        && lim('badacz', 'qwen/qwen3-coder-480b-a35b-instruct', false) < 1500 && lim('recenzent', 'z-ai/glm-4.7', true) === 2048
+        && lim('badacz', 'nvidia/nemotron-3-super-120b-a12b', false) < 1500,
+        `N6. nieznany sposób myślenia (DeepSeek V3): ${lim('recenzent', 'deepseek-ai/deepseek-v3.2', true)} w roli myślącej, ${lim('badacz', 'deepseek-ai/deepseek-v3.2', false)} bez myślenia; Qwen3 Coder („nigdy”) ${lim('badacz', 'qwen/qwen3-coder-480b-a35b-instruct', false)}`);
+      // N7: ustawienie „Jaki skład proponować” – zapis z białej listy, w konfiguracji.
+      const u7 = Z.zapiszUstawienia({ skladDomyslny: 'darmowy' }, ja);
+      const u7b = Z.zapiszUstawienia({ skladDomyslny: 'drogi' }, ja);
+      const cfg7 = Z.doKonfiguracji();
+      Z.zapiszUstawienia({ skladDomyslny: 'proponowany' }, ja);
+      ok(u7.ustawienia && u7.ustawienia.skladDomyslny === 'darmowy' && u7b.ustawienia.skladDomyslny === 'darmowy' && cfg7.skladDomyslny === 'darmowy'
+        && Z.ustawienia(ja).skladDomyslny === 'proponowany', 'N7. skladDomyslny zapisany (tylko proponowany|darmowy) i widoczny w /api/config');
+    });
+    // N8: przydział na KLUCZ chmury – role na kilku modelach NVIDII nie przekraczają limitu klucza, 429 obniża oba poziomy.
+    {
+      const { utworzPrzydzial } = require(path.join(KORZEN, 'lib/przydzial.js'));
+      const PR = utworzPrzydzial({ env: {}, powrotMs: 100_000 });
+      const ep = { baseUrl: 'https://integrate.api.nvidia.com/v1', apiKey: 'nvapi-test-klucz-123456' };
+      const trzymane = [];
+      for (let o = 0; o < 5; o++) for (const m of ['a', 'b', 'c']) PR.dla(ep, 'cloud', m).zajmij(`o${o}`, null, m).then((z) => { z.przyjete(); trzymane.push(z); });
+      await new Promise((r) => setTimeout(r, 20));
+      const naraz = trzymane.length;
+      const pelny = PR.dla(ep, 'cloud', 'd').pelny();
+      PR.dla(ep, 'cloud', 'a').zglos429();
+      const klucz = PR.stan().find((x) => /\|\*$/.test(x.kubelek));
+      const lok = PR.dla({ baseUrl: 'http://127.0.0.1:11434/v1' }, 'local', 'x');
+      const PR2 = utworzPrzydzial({ env: { COSMOS_ZESPOL_ROWNOLEGLE_CLOUD_KLUCZ: '3' }, powrotMs: 100_000 });
+      const t2 = [];
+      for (const m of ['a', 'b', 'c', 'd']) PR2.dla(ep, 'cloud', m).zajmij('x', null, m).then((z) => t2.push(z));
+      await new Promise((r) => setTimeout(r, 20));
+      ok(naraz === 6 && pelny && klucz && klucz.limit === 4 && typeof lok.pelny === 'function' && !lok.klucz && t2.length === 3,
+        `N8. kubełek klucza chmury: ${naraz} naraz na jednym kluczu (domyślnie 6, env 3 → ${t2.length}), nowy model czeka, po 429 limit klucza ${klucz && klucz.limit}, lokalny bez klucza`);
+      for (const z of [...trzymane, ...t2]) z();
+    }
+    // N9: K4 – `[DONE]` kończy odczyt roli, choć połączenie zostaje otwarte (pośrednik trzyma gniazdo).
+    {
+      const Z9 = require(path.join(KORZEN, 'lib/zespol.js')).utworz({ czat: {}, biegi: {}, konta: {}, U: () => ({}), log: () => {} });
+      let anulowano = false;
+      const enc = new TextEncoder();
+      const body = new ReadableStream({
+        start(c) { c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"notatka"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')); },
+        cancel() { anulowano = true; },
+      });
+      let tekst = '';
+      const w9 = await Promise.race([Z9.czytajStrumien({ body }, { onDelta: (x) => { tekst += x; }, pilnuj: () => {} }), new Promise((r) => setTimeout(() => r('termin'), 1500))]);
+      ok(w9 !== 'termin' && w9.koniec && tekst === 'notatka' && anulowano, `N9. [DONE] = koniec wkładu bez czekania na zamknięcie połączenia (${w9 === 'termin' ? 'wisi' : 'koniec'}, anulowano: ${anulowano})`);
+    }
+    // N10: Z5 – prowadzący po roli „oko” dostaje opis zamiast obrazu.
+    {
+      const Z10 = require(path.join(KORZEN, 'lib/zespol.js')).utworz({ czat: {}, biegi: {}, konta: {}, U: () => ({}), log: () => {} });
+      const wiad = [{ role: 'system', content: 'S' }, { role: 'user', content: [{ type: 'text', text: 'Co jest na zdjęciu?' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] },
+        { role: 'user', content: 'NOTATKI ZESPOŁU …' }];
+      const po = Z10.obrazOpisanyPrzezOko(wiad);
+      ok(!JSON.stringify(po).includes('image_url') && po.some((m) => m.role === 'user' && m.content === 'Co jest na zdjęciu?')
+        && po.some((m) => m.role === 'system' && /„Oko”/.test(m.content)), 'N10. obraz opisany przez oko: prowadzący bez obrazu, z tekstem pytania i zdaniem skąd wie, co na nim jest');
+    }
   }
 
   skonczone = true;

@@ -30,7 +30,9 @@
         nie gubi pokazanych, a brakujące dochodzą same po powrocie,
      7. „Zatrzymaj” w trakcie szukania zdjęć kończy turę od razu i nie wysyła
         kolejnych zapytań; tekst zostaje, szkielety znikają,
-     8. telefon 412 px: paski nie rozpychają strony w bok.
+     8. telefon 412 px: paski nie rozpychają strony w bok,
+     9. stara rozmowa (kawałki + osobne siatki) – jedna odpowiedź z paskami,
+        historia ze znacznikami, eksport jedną linią.
 */
 const { srodowisko, przegladarka, maPrzegladarke } = require('../pomoc');
 
@@ -234,10 +236,62 @@ const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
         zdjecia: [grupa('Teatro Greco, Taormina', 1, 22), grupa('Isola Bella', 1, 22), grupa('Etna', 2, 37)],
       });
       renderMessages();
-      return { scroll: document.documentElement.scrollWidth, klient: document.documentElement.clientWidth, paski: document.querySelectorAll('.zdj-pasek').length };
+      /* Trzy miary, bo każda łapie co innego: strona (Chrome na Androidzie
+         oddala wtedy cały widok), przewijana rozmowa (ma overflow-x: hidden,
+         więc strona sama nie urośnie) i sam pasek względem karty odpowiedzi. */
+      const sc = document.getElementById('chat-scroll');
+      const karta = document.querySelector('.msg-assistant .msg-kolumna').getBoundingClientRect();
+      const zaKarte = [...document.querySelectorAll('.zdj-pasek')].filter((p) => p.getBoundingClientRect().right > karta.right + 1).length;
+      return { scroll: document.documentElement.scrollWidth, klient: document.documentElement.clientWidth,
+        rozmowa: sc.scrollWidth, rozmowaKlient: sc.clientWidth, zaKarte, kartaPrawa: Math.round(karta.right), okno: innerWidth,
+        paski: document.querySelectorAll('.zdj-pasek').length };
     }, fotki('x', 1, 8));
-    ok(szer.paski === 2 && szer.scroll <= szer.klient, `8. 412 px: ${szer.paski} paski, strona nie przewija się w bok (${szer.scroll} ≤ ${szer.klient})`);
+    ok(szer.paski === 2 && szer.scroll <= szer.klient && szer.rozmowa <= szer.rozmowaKlient && szer.zaKarte === 0 && szer.kartaPrawa <= szer.okno,
+      `8. 412 px: ${szer.paski} paski, nic nie wystaje w bok (strona ${szer.scroll}/${szer.klient}, rozmowa ${szer.rozmowa}/${szer.rozmowaKlient}, pasków za kartą ${szer.zaKarte}, karta do ${szer.kartaPrawa}/${szer.okno})`);
     await tel.close();
+
+    /* ---- 9. Stara rozmowa (plan pokrojony siatkami) – bez migracji ----
+       Zapisane kawałki tekstu i osobne wiadomości { text, photos } rysują się
+       jako JEDNA odpowiedź z paskami; wiersz „dane dla modelu” o zdjęciach
+       znika; Kopiuj/Regeneruj pod całością; eksport – jedna linia o zdjęciach;
+       model dostaje własne znaczniki zamiast ramki „(pokazano zdjęcia: …)”. */
+    const stara = await p.evaluate((f) => {
+      newConversation();
+      const conv = ensureConversation('Stara Sycylia');
+      conv.messages.push(
+        { role: 'user', content: 'Plan Sycylii ze zdjęciami' },
+        { role: 'assistant', content: '### Dzień 1 – Taormina\n- Spacer.', silnik: 'cloud' },
+        { role: 'assistant', content: { text: 'Taormina Sicily view', photos: f }, silnik: 'cloud' },
+        { role: 'assistant', content: '### Dzień 2 – Etna\n- Kratery.', silnik: 'cloud' },
+        { role: 'assistant', content: { text: 'Mount Etna', photos: f }, silnik: 'cloud' },
+        { role: 'user', content: 'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI…', search: true, searchQuery: 'wyszukiwanie grafik', narzedzie: 'grafiki' },
+        { role: 'assistant', content: 'Miłego wyjazdu!', silnik: 'cloud' },
+      );
+      renderMessages();
+      const doModelu = toApiMessages(conv).filter((m) => m.role === 'assistant').map((m) => m.content).join('\n');
+      let eksport = '';
+      const stary = URL.createObjectURL;
+      URL.createObjectURL = (blob) => { blob.text().then((t) => { eksport = t; }); return 'blob:x'; };
+      const klik = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () {};
+      exportConversation();
+      URL.createObjectURL = stary;
+      HTMLAnchorElement.prototype.click = klik;
+      return new Promise((ok) => setTimeout(() => ok({
+        odpowiedzi: document.querySelectorAll('.msg-assistant').length,
+        paski: document.querySelectorAll('.zdj-pasek').length,
+        akcje: document.querySelectorAll('.msg-assistant .msg-actions').length,
+        wiersze: document.querySelectorAll('.msg-search').length,
+        doModelu,
+        eksport,
+      }), 100));
+    }, fotki('stare', 1, 8));
+    ok(stara.odpowiedzi === 1 && stara.paski === 2, `9. stara rozmowa: jedna odpowiedź z paskami (odpowiedzi ${stara.odpowiedzi}, pasków ${stara.paski})`);
+    ok(stara.akcje === 1 && stara.wiersze === 0, `9. pod całością jedne Kopiuj/Regeneruj, bez wiersza „dane dla modelu” (akcje ${stara.akcje}, wiersze ${stara.wiersze})`);
+    ok(/\[GRAFIKA: Taormina Sicily view\]/.test(stara.doModelu) && !/pokazano zdjęcia/.test(stara.doModelu),
+      '9. model dostaje w historii własne znaczniki, nie ramkę „(pokazano zdjęcia: …)”');
+    ok((stara.eksport.match(/\*\*Cosmos:\*\*/g) || []).length === 1 && /\(16\): Taormina Sicily view, Mount Etna/.test(stara.eksport),
+      `9. eksport: jedna odpowiedź i jedna linia o zdjęciach z nazwami miejsc`);
 
     ok(!bledy.length, `błędy JavaScriptu: ${bledy.length ? bledy.join(' | ') : 'brak'}`);
   } catch (e) {

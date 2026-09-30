@@ -67,6 +67,14 @@
    O19. płatny planista po terminie kosztuje co najmniej szacunek;
    O20. prowadzący rezerwuje budżet: ponad limit – bez wywołania, koniec
        z kodem budzet-wyczerpany; szacunek składu z prowadzącym (C6);
+   O22. obraz w turze (Z5): rola „oko” dostaje obraz, prowadzący zostaje na
+       modelu tekstowym i dostaje opis zamiast obrazu (dawniej 400 bez
+       NEMOTRON_VISION_MODEL albo 12B VL pisał całą odpowiedź);
+   O23. tura „tylko darmowe” (K5) przy płatnym prowadzącym: role na chmurze
+       NVIDIA, zalecany model spoza konta (404) spada na darmowy zapas –
+       zero ról na płatnych silnikach;
+   O24. /api/zespol/plan: proponowany + `darmowe` z tego samego planu,
+       kandydaci do edytora, `skladDomyslny` z ustawień osoby;
    O21. fala 3: poprawka urwana na limicie („urwana”), bez kodu, fragmentem
        – prowadzący dostaje kod z fali 1; „BEZ UWAG” z dopiskiem – bez fali 3. */
 const fs = require('fs');
@@ -595,6 +603,46 @@ async function nowaRozmowa(id, pytanie) {
       ok(!zd(lg.w, 'rola').some((e) => e.r === 'r1p') && !lg.z.some((x) => x.poprawka),
         'O21d. recenzja „BEZ UWAG – kod jest poprawny” – bez fali 3');
       await limit(0);
+    }
+
+    // ------------------------------------------------------------ O22–O24 skład „Darmowe modele” (runda 10, paczka Z)
+    {
+      // O22 (Z5): obraz ogląda rola „oko”, prowadzący zostaje tekstowy i dostaje opis zamiast obrazu.
+      await zeruj();
+      const { PNG_SONDY_WZROKU } = require(path.join(KORZEN, 'lib/umiejetnosci.js'));
+      const w22 = await tura({ messages: [{ role: 'user', content: [{ type: 'text', text: 'Co jest na tym zdjęciu? plan-oko' }, { type: 'image_url', image_url: { url: PNG_SONDY_WZROKU } }] }],
+        zespol: { uruchom: true } });
+      const z22 = await zadania();
+      const oko = z22.find((x) => x.rola === 'OKO'); const pr22 = z22.find((x) => x.rodzaj === 'prowadzacy');
+      ok(w22.status === 200 && oko && oko.obraz && pr22 && !pr22.obraz && pr22.model === 'nvidia/nemotron-3-super-120b-a12b'
+        && /obejrzała go rola zespołu „Oko”/i.test(pr22.system) && /wkładów: 2/.test(w22.tekst),
+        `O22. obraz → rola „oko” (${oko && `${oko.silnik}:${oko.model}`}), prowadzący na modelu tekstowym bez obrazu (${pr22 && pr22.model}, obraz: ${pr22 && pr22.obraz}; status ${w22.status})`);
+
+      // O23: tura „tylko darmowe” przy płatnym prowadzącym – zalecany model spoza konta (404) spada na darmowy zapas, nie na Claude'a.
+      await zeruj();
+      const w23 = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy? model-404:super-49b' }],
+        zespol: { sklad: [{ rola: 'analityk' }, { rola: 'recenzent' }], tylkoDarmowe: true } });
+      const z23 = await zadania();
+      const s23 = sklad(w23);
+      const zapas23 = zd(w23, 'rola').find((e) => e.stan === 'zapas');
+      ok(w23.status === 200 && s23.tylkoDarmowe === true && s23.role.length === 2 && s23.role.every((r) => ['cloud', 'local'].includes(r.silnik))
+        && !z23.some((x) => x.rodzaj === 'rola' && ['claude', 'openai'].includes(x.silnik)) && z23.some((x) => x.rodzaj === 'prowadzacy' && x.silnik === 'claude')
+        && zapas23 && zapas23.silnik === 'cloud' && stanyKoncowe(w23).r1 === 'gotowa',
+        `O23. „tylko darmowe” z prowadzącym Claude: role na chmurze NVIDIA, 404 → zapas na domyślnym modelu chmury, zero ról na płatnych (${z23.filter((x) => x.rodzaj === 'rola').map((x) => `${x.rola}@${x.silnik}:${x.model}`).join(', ')})`);
+
+      // O24: plan dla bramki – oba składy, kandydaci do edytora i ustawienie osoby; „Darmowe modele” nie zmienia proponowanego.
+      const plan = async () => (await post('/api/zespol/plan', { messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy na trzy cele?' }], endpoint: 'cloud',
+        modele: { claude: 'claude-sonnet-5' } })).json();
+      const p24 = await plan();
+      await post('/api/zespol/ustawienia', { skladDomyslny: 'darmowy' });
+      const p24b = await plan();
+      await post('/api/zespol/ustawienia', { skladDomyslny: 'proponowany' });
+      const d24 = p24.sklad && p24.sklad.darmowe;
+      ok(p24.sklad.role.some((r) => r.silnik === 'claude') && d24 && d24.role.length === 2 && d24.role.every((r) => !['claude', 'openai'].includes(r.silnik))
+        && d24.szacunekZl === 0 && d24.prowadzacyPlatny === false && p24.sklad.skladDomyslny === 'proponowany'
+        && Array.isArray((p24.sklad.kandydaci || {}).analityk) && p24b.sklad.skladDomyslny === 'darmowy' && p24b.sklad.darmowe
+        && p24b.sklad.role.some((r) => r.silnik === 'claude'),
+        `O24. /api/zespol/plan: proponowany (${p24.sklad.role.map((r) => r.silnik).join(',')}) + darmowe (${d24 && d24.role.map((r) => r.model.split('/').pop()).join(',')}, ${d24 && d24.szacunekZl} zł), kandydaci, skladDomyslny z ustawień`);
     }
 
     // ------------------------------------------------------------ O11 limit naraz

@@ -35,6 +35,11 @@
      zuzycie-duze     usage 200 000 / 20 000 tokenów (budżet w zł szybko się kończy)
      bez-usage        strumień bez bloku usage (koszt z szacunku)
      prowadzacy-powoli prowadzący pisze ~4 s
+     model-404:<fragment> każde żądanie do modelu, którego nazwa zawiera fragment
+                      (np. model-404:super-49b), dostaje 404 „Not found for account”
+                      – jak build.nvidia.com dla modelu spoza konta (wariant
+                      „Darmowe modele”: zalecany model bez dostępu → zapas)
+     plan-sycylia     analityk + badacz + recenzent (jak zrzut 3 Marcina)
 
    POPRAWKA (fala 3) – rola z „POPRAWKA PO RECENZJI” w ostatniej wiadomości:
    oddaje kod z KOD-POPRAWIONY. Geokoder (/geokoduj, jak Nominatim) zna
@@ -104,6 +109,7 @@ function planista(pytanie) {
     const id = (pytanie.match(/- (w-[0-9a-f]{8}) –/) || [])[1] || 'w-00000000';
     return `{"zespol": true, "role": [{"rola": "${id}", "zadanie": "Zrób swoje"}, {"rola": "recenzent", "zadanie": "Sprawdź"}]}`;
   }
+  if (/plan-sycylia/.test(pytanie)) return '{"zespol": true, "role": [{"rola": "analityk", "zadanie": "Ułóż trasę"}, {"rola": "badacz", "zadanie": "Sprawdź ceny i godziny"}, {"rola": "recenzent", "zadanie": "Sprawdź plan"}], "szukaj": "Sycylia atrakcje ceny"}';
   if (/plan-trzy/.test(pytanie)) return '{"zespol": true, "role": [{"rola": "analityk", "zadanie": "Policz"}, {"rola": "programista", "zadanie": "Kod"}, {"rola": "recenzent", "zadanie": "Sprawdź"}]}';
   return '{"zespol": true, "role": [{"rola": "analityk", "zadanie": "Rozłóż problem"}, {"rola": "recenzent", "zadanie": "Sprawdź notatki"}]}';
 }
@@ -174,6 +180,12 @@ function stworz(port, nazwa) {
       const zdejmij = () => { if (!zdjete) { zdjete = true; aktywne[nazwa]--; } };
       res.on('close', zdejmij);
 
+      // Model spoza konta (build.nvidia.com: „Function …: Not found for account”) – wariant darmowy.
+      const bez404 = [...pelny.matchAll(/model-404:([a-z0-9._-]+)/gi)].map((m) => m[1].toLowerCase());
+      if (bez404.some((f) => String(p.model || '').toLowerCase().includes(f))) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: { message: `Function '${p.model}': Not found for account 'atrapa'` } }));
+      }
       if (rodzaj === 'planista') {
         const odp = () => {
           res.writeHead(200, { 'Content-Type': 'application/json' });

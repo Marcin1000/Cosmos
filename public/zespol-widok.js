@@ -1255,6 +1255,13 @@ function utworzZespolWidok(z) {
       const m = i >= 0 ? g.modele.splice(i, 1)[0] : { id: k.model, podpis: opisModeluZ(k.model, k.silnik) };
       g.modele.unshift(m);
     }
+    // „Polecany” na samej górze swojej grupy – to model, który dobór dał tej roli w wybranym składzie.
+    if (e.polecany && SILNIKI_ZESPOLU.includes(e.polecany.silnik) && e.polecany.model) {
+      let g = grupy.find((x) => x.silnik === e.polecany.silnik);
+      if (!g) { g = { silnik: e.polecany.silnik, modele: [] }; grupy.push(g); }
+      const i = g.modele.findIndex((m) => m.id === e.polecany.model);
+      g.modele.unshift(i >= 0 ? g.modele.splice(i, 1)[0] : { id: e.polecany.model, podpis: opisModeluZ(e.polecany.model, e.polecany.silnik) });
+    }
     grupy.sort((a, b) => SILNIKI_ZESPOLU.indexOf(a.silnik) - SILNIKI_ZESPOLU.indexOf(b.silnik));
     for (const g of grupy) {
       if (!g.modele.length) continue;

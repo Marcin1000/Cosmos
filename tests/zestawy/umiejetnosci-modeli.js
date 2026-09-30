@@ -9,6 +9,11 @@ const { przegladarka, maPrzegladarke, KORZEN, uruchom, zabij, czekajNa } = requi
    B. umiejetnosci() – kolejność pewności sonda > dostawca > katalog > nazwa;
    C. dobierzModel() – rola „oko” tylko z widzącym, automat nie bierze na
       płatnym silniku modelu droższego niż prowadzący, głos woli szybkie;
+      runda 10: remis cech wygrywa darmowy silnik (nie „inny model”), zapora
+      porównuje cenę, wariant „tylko darmowe” (zalecenia na rolę, recenzent
+      z innej rodziny, wizja z pamięci ostrożniej), Ultra „wolny” (C10–C13);
+      katalog: Super 120B bez „polski”, modele build.nvidia.com z pewne:false,
+      sposób myślenia nieznany (A15–A17);
    D. sonda wzroku = obrazek 8×8 i pytanie o kolor: model, który obraz
       zignorował i odpowiedział „Hello”, NIE widzi (dawniej 1×1 = „widzi”);
    E. wynik „Sprawdź” zapisany w data/konta/modele-sprawdzone.json – bez
@@ -64,6 +69,19 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     && i('qwen3:30b-a3b').vramGb === 19 && i('qwen2.5-coder').vramGb === null, `A13. VRAM wg rozmiaru (qwen3:14b → ${i('qwen3:14b').vramGb} GB)`);
   const zlePoziomy = M.MODEL_CATALOG.filter((e) => e.poziom && !M.POZIOMY.includes(e.poziom));
   ok(!zlePoziomy.length, 'A14. poziomy tylko z POZIOMY');
+  // Runda 10 (paczka Z): Super 120B bez „polski” (błędy odmiany w transkrypcji), z „kod”; modele build.nvidia.com z pamięci.
+  const s120 = i('nvidia/nemotron-3-super-120b-a12b');
+  ok(!s120.cechy.includes('polski') && s120.cechy.includes('kod') && /polszczyzna nierówna/i.test(s120.uwaga || ''),
+    `A15. Super 120B: bez „polski”, z „kod”, uwaga o polszczyźnie (${s120.cechy.join(', ')})`);
+  const nowe10 = { 'qwen/qwen3-coder-480b-a35b-instruct': 'Qwen3 Coder 480B', 'qwen/qwen3-235b-a22b': 'Qwen3 235B', 'deepseek-ai/deepseek-v3.2': 'DeepSeek V3',
+    'z-ai/glm-4.7': 'GLM-4', 'moonshotai/kimi-k2.5': 'Kimi K2.5', 'moonshotai/kimi-k2-instruct': 'Kimi K2', 'meta/llama-4-maverick-17b-128e-instruct': 'Llama 4' };
+  const zle10 = Object.entries(nowe10).filter(([id, n]) => i(id).nazwa !== n || i(id).pewne !== false);
+  ok(!zle10.length && i('glm4:9b').nazwa !== 'GLM-4', `A16. modele build.nvidia.com w katalogu z pewne:false (lokalny glm4:9b to nie ten wpis)${zle10.length ? ': ' + zle10.map(([id]) => `${id}→${i(id).nazwa}`).join(', ') : ''}`);
+  const u10 = (id) => U.umiejetnosci(id, 'cloud');
+  ok(u10('deepseek-ai/deepseek-v3.2').myslenieNieznane && u10('moonshotai/kimi-k2.5').myslenieNieznane && u10('nieznany/model-xyz').myslenieNieznane
+    && !u10('qwen/qwen3-coder-480b-a35b-instruct').myslenieNieznane && !u10('nvidia/nemotron-3-super-120b-a12b').myslenieNieznane
+    && u10('moonshotai/kimi-k2.5').pewnosc.wizja === 'pamiec' && u10('nvidia/nemotron-nano-12b-v2-vl').pewnosc.wizja === 'katalog',
+    'A17. sposób myślenia nieznany (wpis z pamięci bez `myslenie`, model spoza katalogu), „nigdy” i znany – znane; wizja z pamięci oznaczona');
 }
 
 // ------------------------------------------------------------------ B. umiejetnosci
@@ -105,6 +123,43 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     === 'nvidia/nvidia-nemotron-nano-9b-v2', 'C7. tryb głosowy: szybki zamiast zawsze myślącego');
   ok(U.dobierzModel('nieznana-rola', lista) === null && U.dobierzModel('oko', []) === null, 'C8. nieznana rola i pusta pula → null');
   ok(Object.keys(U.ROLE).sort().join() === 'analityk,badacz,fotograf,oko,programista,recenzent,sprzetowiec', 'C9. katalog ról (MVP + fotograf)');
+
+  // Runda 10 (paczka Z): skład „Darmowe modele”.
+  const super120 = { id: 'nvidia/nemotron-3-super-120b-a12b', silnik: 'cloud' };
+  /* C10: remis cech – wygrywa DARMOWY silnik, nie „inny model niż prowadzący”
+     (zrzut 3 Marcina: Sonnet za 0,26 zł przy darmowym Nemotronie). Płatny
+     pierwszy na liście, żeby dawny remis rozstrzygała kolejność. */
+  const remis = [k('claude-sonnet-5', 'claude'), k('nvidia/llama-3.3-nemotron-super-49b-v1.5', 'cloud')];
+  ok(U.dobierzModel('analityk', remis, { prowadzacy: super120 })?.id === 'nvidia/llama-3.3-nemotron-super-49b-v1.5'
+    && U.ocenKandydata('analityk', remis[1], { prowadzacy: super120 }) - U.ocenKandydata('analityk', remis[0], { prowadzacy: super120 }) === 1,
+    'C10. remis cech: darmowy silnik +1, płatny wygrywa tylko przewagą cech');
+  ok(U.dobierzModel('badacz', [k('gpt-4o', 'openai'), super120], { prowadzacy: super120 })?.id === 'gpt-4o',
+    'C10b. płatny z przewagą cech (polszczyzna) dalej wygrywa w składzie proponowanym');
+  // C11: zapora ceny przy płatnym prowadzącym – ten sam poziom („pelny”), ale droższy model odpada.
+  const cena = (id) => ({ 'gpt-4o': 2.5 + 4 * 10, 'claude-sonnet-5': 3 + 4 * 15, 'claude-haiku-4-5': 1 + 4 * 5 })[id] ?? null;
+  const prow4o = { id: 'gpt-4o', silnik: 'openai' };
+  ok(U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), { prowadzacy: prow4o, cena }) === null
+    && U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), { prowadzacy: prow4o }) !== null
+    && U.ocenKandydata('analityk', k('claude-haiku-4-5', 'claude'), { prowadzacy: prow4o, cena }) !== null,
+    'C11. zapora porównuje cenę: Sonnet droższy od gpt-4o odpada, tańszy Haiku przechodzi');
+  // C12: wariant darmowy – płatny odpada, zalecenia na rolę, recenzent z innej rodziny, wizja z pamięci ostrożniej.
+  const pulaD = ['nvidia/nemotron-3-super-120b-a12b', 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'deepseek-ai/deepseek-v3.2', 'qwen/qwen3-235b-a22b',
+    'moonshotai/kimi-k2.5', 'nvidia/nemotron-nano-12b-v2-vl', 'openai/gpt-oss-120b'].map((id) => k(id, 'cloud'));
+  const oD = { prowadzacy: super120, tylkoDarmowe: true };
+  ok(U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), oD) === null
+    && U.dobierzModel('analityk', [k('claude-sonnet-5', 'claude'), ...pulaD], oD)?.id === 'nvidia/llama-3.3-nemotron-super-49b-v1.5'
+    && U.dobierzModel('recenzent', pulaD, { ...oD, rodzinyNotatek: ['nemotron'] })?.id === 'deepseek-ai/deepseek-v3.2'
+    && U.dobierzModel('oko', pulaD, oD)?.id === 'nvidia/nemotron-nano-12b-v2-vl',
+    'C12. „tylko darmowe”: płatny odpada, analityk → Super 49B v1.5, recenzent spoza Nemotrona, oko → zmierzony 12B VL przed Kimi z pamięci');
+  ok(U.ocenKandydata('recenzent', pulaD[2], { ...oD, rodzinyNotatek: ['nemotron'] }) - U.ocenKandydata('recenzent', pulaD[2], oD) === 2
+    && U.rodzinaModelu('nvidia/llama-3.3-nemotron-super-49b-v1.5') === 'nemotron' && U.rodzinaModelu('openai/gpt-oss-120b') === 'openai'
+    && U.rodzinaModelu('gpt-4o') === 'openai' && U.rodzinaModelu('claude-sonnet-5') === 'claude' && U.rodzinaModelu('qwen3:8b') === 'qwen',
+    'C12b. rodzina modelu (Llama-Nemotron to Nemotron, gpt-oss to OpenAI) i premia za inną rodzinę niż autorzy notatek');
+  // C13: Ultra ma te same cechy analityka co Super 49B, ale jest „wolny” – pierwszy na liście i tak przegrywa.
+  ok(U.umiejetnosci('nvidia/nemotron-3-ultra-550b', 'cloud').wolny === true
+    && U.dobierzModel('analityk', [k('nvidia/nemotron-3-ultra-550b', 'cloud'), k('nvidia/llama-3.3-nemotron-super-49b-v1.5', 'cloud')])?.id
+      === 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
+    'C13. Ultra „wolny” – przegrywa z szybszym modelem o tych samych cechach');
 }
 
 // ------------------------------------------------------------------ D. obrazek sondy i ocena

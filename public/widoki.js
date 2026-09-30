@@ -237,7 +237,6 @@ function utworzWidoki(z) {
       pasek.setAttribute('aria-label', t('chat.photosLoading'));
     }
     if (czekaja.length) pasek.setAttribute('aria-busy', 'true');
-    const lista = zdjeciaOdpowiedzi(wszystkie);
     for (const g of grupy) {
       if (g.stan === 'szukam' || g.stan === 'do-pobrania') {
         // Szkielet w wymiarach kafli – tekst pod paskiem nie skacze, gdy przyjdą zdjęcia.
@@ -299,11 +298,13 @@ function utworzWidoki(z) {
           et.appendChild(b);
           a.appendChild(et);
         }
-        const nr = lista.findIndex((x) => x.p === p);
         a.addEventListener('click', (e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
           e.preventDefault();
-          otworzZdjeciaOdpowiedzi(lista, Math.max(0, nr));
+          /* Lista liczona przy kliknięciu: pasek przeżywa przebudowę rozmowy,
+             a w tym czasie mogły dojść zdjęcia innych sekcji. */
+          const lista = zdjeciaOdpowiedzi(wszystkie);
+          otworzZdjeciaOdpowiedzi(lista, Math.max(0, lista.findIndex((x) => x.p === p)));
         });
         tor.appendChild(a);
       });
