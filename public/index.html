@@ -259,7 +259,7 @@
           <div class="welcome-zorza" aria-hidden="true"><i></i><i></i><i></i></div>
           <svg class="welcome-icon" aria-hidden="true"><use href="#znak-cosmos"/></svg>
           <p class="welcome-et"><span class="welcome-kropka"></span><span data-i18n="welcome.et">Jedna rozmowa · każdy model</span></p>
-          <h1 data-i18n-html="welcome.h">Od czego <em>zaczynamy?</em></h1>
+          <h1><em data-i18n="welcome.h">Od czego zaczynamy?</em></h1>
           <p class="welcome-sub"><span data-i18n="welcomeModelLabel">Aktywny model:</span> <span class="mono" id="welcome-model">–</span></p>
           <div class="suggestions" id="suggestions">
             <button class="suggestion" data-prompt-key="sug1p" data-i18n="sug1">Wyjaśnij, jak działa LLM</button>
@@ -1345,6 +1345,8 @@
 
   <!-- ============ PODGLĄD OBRAZU (pełny ekran) ============ -->
   <div class="img-viewer" id="img-viewer" style="display:none">
+    <!-- Zdjęcia z paska odpowiedzi: miejsce i „3 z 8” w obrębie miejsca. -->
+    <div class="img-viewer-gdzie" id="img-viewer-gdzie" hidden><b id="img-viewer-miejsce"></b><span class="mono" id="img-viewer-licznik"></span></div>
     <div class="img-viewer-bar">
       <!-- Przejście do strony, z której zdjęcie pochodzi. Widoczne tylko dla
            zdjęć z internetu – własnych plików nie ma dokąd „odesłać". -->
@@ -1360,6 +1362,12 @@
       </button>
     </div>
     <img id="img-viewer-img" alt="">
+    <button class="img-viewer-nav wstecz" id="img-viewer-prev" data-i18n-aria="img.poprzednie" aria-label="Poprzednie zdjęcie" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="img-viewer-nav dalej" id="img-viewer-next" data-i18n-aria="img.nastepne" aria-label="Następne zdjęcie" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <!-- Tytuł, serwis i licencja. Przy zdjęciach z Commons to nie ozdoba,
          tylko warunek legalnego użycia. -->
     <div class="img-viewer-caption" id="img-viewer-caption" hidden></div>

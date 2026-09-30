@@ -653,13 +653,25 @@ body::after {
   margin-bottom: 18px;
   text-wrap: balance;
 }
+/* paczka F (runda 10): gradient na CAŁYM napisie („Od czego” ma wyglądać jak
+   „zaczynamy?” – Marcin). `<em>` obejmuje cały tekst: inline = jeden ciągły
+   gradient przez linię i nieucięte „g”, „y”. Kolejność lustrzana (zieleń →
+   niebieski → pomarańcz → niebieski → zieleń, jak nić na stronie) nie ma
+   przejścia pomarańcz→zieleń, które w sRGB dawało oliwkowe błoto; kolory
+   tekstowe `--k-*-tekst` – w jasnym najsłabszy punkt 4,35:1 (było 2,99:1),
+   w ciemnym bez zmian (agencja-ux, kontrast-gradientu.js). */
 .welcome h1 em {
   font-style: normal;
-  background: linear-gradient(100deg, var(--k-nvidia) 0%, var(--k-local) 34%, var(--k-claude) 67%, var(--k-nvidia) 100%);
+  background: linear-gradient(100deg, var(--k-nvidia-tekst) 0%, var(--k-local-tekst) 25%, var(--k-claude-tekst) 50%, var(--k-local-tekst) 75%, var(--k-nvidia-tekst) 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: welcome-plyn 9s linear infinite;
 }
+@supports (background: linear-gradient(in oklch, red, blue)) {
+  .welcome h1 em { background-image: linear-gradient(100deg in oklch, var(--k-nvidia-tekst) 0%, var(--k-local-tekst) 25%, var(--k-claude-tekst) 50%, var(--k-local-tekst) 75%, var(--k-nvidia-tekst) 100%); }
+}
+/* Kropka powitania gaśnie razem z kropką plakietki – ten sam stan silnika (runda 10). */
+.welcome-kropka.niedostepny { background: var(--text-faint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-faint) 18%, transparent); }
 @keyframes welcome-plyn { to { background-position: -220% 0; } }
 /* Kto prosi system o mniej ruchu, dostaje zorzę i gradient w bezruchu –
    kolory zostają, dryf i przepływ znikają. To samo z wejściem karty
@@ -1111,8 +1123,117 @@ body::after {
   line-height: 1.5;
 }
 
+/* ==== paczka F (runda 10): zdjęcia z sieci w pasku nad sekcją odpowiedzi ====
+   Projekt agencja-ux (makieta-karuzeli.html). Siatka 2×4 w osobnej wiadomości
+   zajmowała 577 px na miejsce na telefonie; pasek ~126 px. Ucięty trzeci kafel
+   mówi „przewiń w bok” – bez tej wskazówki pasek byłby niewidoczny (stąd
+   dawna decyzja o siatce niżej, która zostaje dla archiwum). Łańcuch
+   `min-width: 0` (.msg-kolumna, .msg-content) musi zostać: pasek w elemencie
+   flex bez niego rozpychał rodzica do sumy kafli i Chrome na Androidzie
+   oddalał całą stronę. Bez `touch-action: pan-x` – pionowy gest na pasku
+   ma przewijać rozmowę (it-plynnosc). */
+.zdj-pasek {
+  --kafel-w: clamp(136px, 38vw, 208px);
+  --kafel-h: calc(var(--kafel-w) * .75);
+  --wlew: 20px;                              /* prawy padding karty – pasek dochodzi do jej krawędzi */
+  position: relative;
+  margin: 8px calc(-1 * var(--wlew)) 12px 0;
+}
+:is(h1, h2, h3, h4) + .zdj-pasek { margin-top: 6px; }
+.zdj-tor {
+  display: flex; gap: 8px;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 2px var(--wlew) 2px 0;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0 var(--wlew);
+  overscroll-behavior-x: contain;            /* Android: gest w bok nie cofa strony */
+  scrollbar-width: none;
+}
+.zdj-tor::-webkit-scrollbar { display: none; }
+.zdj-pasek[data-dalej] .zdj-tor { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
+.zdj-pasek[data-wstecz] .zdj-tor { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px); mask-image: linear-gradient(90deg, transparent, #000 28px); }
+.zdj-pasek[data-wstecz][data-dalej] .zdj-tor { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 44px), transparent); }
+.zdj-kafel {
+  position: relative; flex: none; display: block;
+  width: var(--kafel-w); height: var(--kafel-h);
+  border-radius: 12px; overflow: hidden;
+  background: var(--bg-hover);
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+.zdj-kafel[data-miejsce-start]:not(:first-child) { margin-left: 8px; }   /* nowe miejsce w tym samym pasku */
+.zdj-kafel img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.2, .7, .1, 1); }
+.zdj-kafel::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); pointer-events: none; }
+.zdj-kafel:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .zdj-kafel:hover img { transform: scale(1.035); } }
+.zdj-kafel:active img { transform: scale(.985); transition-duration: .15s; }
+/* Etykieta miejsca – szkło na zdjęciu; biały na rgba(17,18,20,.62) ≥ 5,3:1 także na białym niebie. */
+.zdj-etykieta {
+  position: absolute; left: 7px; bottom: 7px; max-width: calc(100% - 14px);
+  padding: 4px 9px 4px 7px; border-radius: 9px;
+  display: flex; align-items: flex-start; gap: 5px;
+  font: 500 11.5px/1.3 var(--font-sans); color: #fff; letter-spacing: .005em;
+  background: rgba(17, 18, 20, .62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.zdj-etykieta svg { flex: none; width: 11px; height: 11px; margin-top: 2px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.zdj-etykieta b { font-weight: 500; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+/* Źródło: na komputerze pod kursorem, na telefonie w podglądzie – na kaflu to szum ×8. */
+.zdj-zrodlo {
+  position: absolute; right: 7px; top: 7px; padding: 2px 7px; border-radius: 6px;
+  font: 500 10px/1.4 var(--font-mono); color: #fff; background: rgba(17, 18, 20, .62);
+  opacity: 0; transition: opacity .2s;
+}
+@media (hover: hover) and (pointer: fine) { .zdj-kafel:hover .zdj-zrodlo, .zdj-kafel:focus-visible .zdj-zrodlo { opacity: 1; } }
+/* Strzałki – tylko wskaźnik precyzyjny (kółko myszy nie przesuwa paska w bok); na dotyku przewija palec. */
+.zdj-strzalka {
+  position: absolute; top: calc(50% - 18px); z-index: 2;
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow-soft);
+  opacity: 0; transition: opacity .2s, transform .2s; cursor: pointer; padding: 0;
+}
+.zdj-strzalka svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.zdj-strzalka.wstecz { left: 6px; }
+.zdj-strzalka.dalej { right: calc(var(--wlew) + 6px); }
+.zdj-strzalka:hover { transform: scale(1.06); }
+@media (hover: hover) and (pointer: fine) { .zdj-pasek:hover .zdj-strzalka, .zdj-pasek:focus-within .zdj-strzalka { opacity: 1; } }
+@media (pointer: coarse) { .zdj-strzalka { display: none; } }
+.zdj-pasek[aria-busy="true"] .zdj-strzalka { display: none; }
+.zdj-pasek:not([data-wstecz]) .zdj-strzalka.wstecz, .zdj-pasek:not([data-dalej]) .zdj-strzalka.dalej { visibility: hidden; }
+/* Ładowanie: te same wymiary co zdjęcia – tekst pod paskiem nie skacze. */
+.zdj-kafel.szkielet { animation: szkielet-zdjec 1.2s ease-in-out infinite alternate; }
+.zdj-kafel.szkielet:nth-child(even) { animation-delay: .3s; }
+@media (prefers-reduced-motion: reduce) { .zdj-kafel.szkielet { animation: none; } .zdj-kafel img { transition: none; } }
+/* Miniatura nie przyszła – kafel zostaje, z odnośnikiem do źródła. */
+.zdj-kafel.pusty { display: grid; place-items: center; text-align: center; padding: 10px; background: var(--bg-sidebar); border: 1px dashed var(--border-strong); font-size: 12px; line-height: 1.35; color: var(--text-dim); text-decoration: none; }
+.zdj-kafel.pusty::after { display: none; }
+.zdj-kafel.pusty:has(.zdj-etykieta) { place-items: start center; padding-top: 16px; }   /* etykieta miejsca nie zasłania zdania */
+.zdj-kafel.pusty svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5; display: block; margin: 0 auto 6px; }
+/* Czego zabrakło – zdanie od Cosmosa, bez rundy modelu. */
+.cosmos-uwagi { margin: 12px 0 4px; }
+.zdj-brak { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.zdj-brak svg { flex: none; width: 16px; height: 16px; margin-top: 2px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; }
+/* Podgląd listy zdjęć: miejsce i „3 z 8”, strzałki na komputerze (na dotyku – przesunięcie palcem). */
+.img-viewer-gdzie { position: absolute; top: 14px; left: 16px; right: 170px; display: flex; flex-direction: column; gap: 2px; color: #F2F1EC; min-width: 0; }
+.img-viewer-gdzie[hidden] { display: none; }
+.img-viewer-gdzie b { font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.img-viewer-gdzie span { font-size: 11px; line-height: 1.3; color: #B9BBC2; }
+.img-viewer-nav {
+  position: absolute; top: 50%; translate: 0 -50%; width: 48px; height: 48px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .1); color: #fff;
+}
+.img-viewer-nav:hover { background: rgba(255, 255, 255, .18); }
+.img-viewer-nav[hidden] { display: none; }
+.img-viewer-nav.wstecz { left: 16px; }
+.img-viewer-nav.dalej { right: 16px; }
+.img-viewer-nav svg { width: 20px; height: 20px; }
+@media (pointer: coarse) { .img-viewer-nav { display: none; } }
+/* ==== koniec bloku paczki F (zdjęcia) ==== */
+
 /* Zdjęcia znalezione w internecie. Siatka, nie rząd – na telefonie rząd
-   miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa. */
+   miniatur robi się paskiem do przewijania w bok, czego nikt nie zauważa.
+   (Runda 10: siatka zostaje dla archiwum; zdjęcia z sieci stoją w pasku
+   wyżej – ucięty trzeci kafel załatwia „nikt nie zauważa”.) */
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -4874,4 +4995,55 @@ select::-ms-expand { display: none; }
   .ag-wl-fala .ag-wl-cecha input, .ag-wl-obraz input { margin-top: 4px; }
   .osoba-budzet-pole input { min-height: 44px; }
   .msg-bledu-akcje button { min-height: 44px; }
+}
+
+/* ==== paczka Z (runda 10): skład „Darmowe modele” – bramka, edytor roli ====
+   Makieta agencja-ux (makieta-bramki.html, blok „PROPOZYCJA CSS”). */
+/* Wybór składu: dwa gotowe składy jak .ag-segment, z kwotą pod nazwą.
+   Kwota siedzi TU – osobna linijka „koszt ok. …” w stopce znika, póki skład
+   jest jednym z dwóch gotowych. */
+.zespol-warianty {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  margin: 6px 0; padding: 3px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sidebar);
+}
+/* Komputer: segment nie rozciąga się na całą kolumnę 732 px – dwa pola po ~220 px. */
+@media (min-width: 521px) { .zespol-warianty { width: min(100%, 440px); } }
+.zespol-wariant {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+  min-height: 48px; padding: 6px 12px; border-radius: 9px; text-align: left; min-width: 0;
+  color: var(--text-dim); transition: background .2s, color .2s, box-shadow .2s;
+}
+.zespol-wariant b { font: 500 13px/1.3 var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.zespol-wariant > span { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font: 400 11px/1.35 var(--font-mono); color: var(--text-faint); white-space: nowrap; }
+/* Kropki silników wariantu – ten sam język co kropki w nagłówku bloku. */
+.zespol-wariant-kropki { display: inline-flex; gap: 3px; }
+.zespol-wariant-kropki i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--k); }
+.zespol-wariant:hover { color: var(--text); }
+.zespol-wariant[aria-checked="true"] { background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-soft); }
+.zespol-wariant[aria-checked="true"] > span { color: var(--text-dim); }
+.zespol-wariant:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+/* Uczciwe zdanie o jakości – informacja, nie ostrzeżenie: bez bursztynu. */
+.zespol-uwaga {
+  display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 2px;
+  font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
+}
+.zespol-uwaga svg { width: 15px; height: 15px; flex: none; margin-top: 2px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.zespol-uwaga small { display: block; color: var(--text-faint); font-size: 12px; }
+/* Zmiana modelu roli po przełączeniu – krótkie mignięcie pigułki, żeby było widać, CO się zmieniło. */
+.rola-model-btn.zmieniony { animation: pigulka-zmiana .6s ease; }
+@keyframes pigulka-zmiana {
+  0% { border-color: var(--k); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 22%, transparent); }
+  100% { border-color: var(--border); box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .rola-model-btn.zmieniony { animation: none; } }
+/* Edytor: przy nazwie grupy silnika – „bez opłat” / „płatny”; przy modelu – „polecany”. */
+.re-cena {
+  margin-left: auto; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border-strong);
+  font: 500 9.5px/1.5 var(--font-mono); letter-spacing: .04em; text-transform: none; color: var(--text-faint);
+}
+.re-polecany {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--k) 14%, transparent); color: var(--k-tekst);
+  font: 500 9.5px/1.6 var(--font-mono); vertical-align: 1px; word-break: normal; white-space: nowrap;
 }

@@ -64,8 +64,27 @@ function utworzProtokol() {
    */
   const ZNACZNIKI = ['SZUKAJ', 'SEARCH', 'GRAFIKA', 'PLAN', 'ARCHIWUM', 'OBRAZ', 'AKCJA'];
 
+  /* Nagłówki bloku notatek zespołu (lib/instrukcje-narzedzi.js bierze je stąd –
+     jedno źródło dla tego, co idzie do prowadzącego, i tego, co czyścimy z ekranu). */
+  const NAGLOWKI_ZESPOLU = { notatki: 'NOTATKI ZESPOŁU', wklady: 'ZESPÓŁ – WKŁADY', nieDotarlo: 'NIE DOTARŁO' };
+
+  /* RUSZTOWANIE, KTÓRE MODEL POTRAFI PRZEPISAĆ DO ODPOWIEDZI (runda 10).
+     Słabe modele naśladują format tego, co dostały: ramkę historii
+     „(pokazano zdjęcia: Taormina)”, znaczniki `<wklad rola=…>` i nagłówek
+     „NOTATKI ZESPOŁU – materiał roboczy…” (agencja-rozmowa, próby domk-echo
+     i wklad-echo). Czyścimy tylko linie, które w CAŁOŚCI są taką ramką –
+     nawias w środku zdania zostaje. */
+  const RAMKA_HISTORII = /^[ \t]*\((?:pokazano zdjęcia|wcześniejszy wynik narzędzia|tu użytkownik pokazał zdjęci)[^)\n]*\)[ \t]*$/gim;
+  const NAGLOWEK_ZESPOLU_RE = new RegExp(`^[ \\t]*(?:${Object.values(NAGLOWKI_ZESPOLU).join('|')})\\b[^\\n]*(?:\\n|$)`, 'gm');
+  function bezRusztowania(tekst) {
+    return tekst
+      .replace(/<\/?wklad\b[^>\n]*>/gi, '')
+      .replace(RAMKA_HISTORII, '')
+      .replace(NAGLOWEK_ZESPOLU_RE, '');
+  }
+
   function stripSearchMarker(s) {
-    let out = String(s || '');
+    let out = bezRusztowania(String(s || ''));
     const przed = out;
     /* Wywołanie narzędzia w formacie modeli z function callingiem
        (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes). Cosmos go nie
@@ -161,6 +180,137 @@ function utworzProtokol() {
       doBloku.get(najlepszy).push(q);
     }
     return bloki.map((b, i) => (doBloku.has(i) ? `${b}\n[GRAFIKA: ${doBloku.get(i).join('; ')}]` : b)).join('\n\n');
+  }
+
+  /* ============ ZDJĘCIA W JEDNEJ ODPOWIEDZI (runda 10) ============
+     Plan ze znacznikami [GRAFIKA:] był krojony na kawałki: tekst dnia, osobna
+     wiadomość ze zdjęciami, kolejny kawałek. Marcin: „grafiki powinny być
+     serwowane jak w ChatGPT, w poziomym scrollu, a nie w oddzielnej
+     odpowiedzi zawsze pod sobą”. Teraz tekst zostaje JEDEN, a przy każdym
+     zapytaniu zapisujemy, gdzie stał znacznik (`po`) i w której sekcji
+     (`sekcja` = liczba nagłówków przed nim) – z tego widok stawia pasek nad
+     treścią sekcji, a historia dla modelu wstawia znacznik z powrotem.
+
+     Ta sama funkcja liczy to w przeglądarce (narzędzie grafik) i na serwerze
+     (odpowiedź-sierota, lib/biegi.js) – inaczej zdjęcia z telefonu, który
+     zgasł w trakcie, stawałyby w innych miejscach niż te z otwartej karty. */
+  const MAX_ZNACZNIKOW_ZDJEC = 16;
+  const MAX_ZAPYTAN_ZDJEC = 24;
+  const ZAPYTAN_NA_ZNACZNIK = 4;
+  const NAGLOWEK_MD = /^#{1,4}\s+/;          // to samo, co renderMarkdown rysuje jako h1–h4
+  const PLOT_MD = /^```/;
+
+  /** Ile nagłówków Markdown stoi w `tekst` przed pozycją `po` – poza blokami
+   *  kodu i cytatami (renderMarkdown rysuje je inaczej). */
+  function sekcjaWPozycji(tekst, po) {
+    let wKodzie = false;
+    let ile = 0;
+    let pozycja = 0;
+    for (const linia of String(tekst || '').split('\n')) {
+      if (pozycja >= po) break;
+      if (PLOT_MD.test(linia)) wKodzie = !wKodzie;
+      else if (!wKodzie && NAGLOWEK_MD.test(linia)) ile++;
+      pozycja += linia.length + 1;
+    }
+    return ile;
+  }
+
+  /**
+   * Rozłóż odpowiedź ze znacznikami zdjęć na czysty tekst i miejsca zdjęć.
+   *
+   * @param {string} surowe tekst modelu (bez `<think>`)
+   * @returns {{ tresc: string, zdjecia: Array<{q: string, etykieta: string, po: number, sekcja: number}>, pominiete: string[] }}
+   */
+  function rozlozZdjecia(surowe) {
+    const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
+    const ZNAK = (n) => `${n}`;
+    const grupy = [];            // numer znacznika → zapytania
+    const pominiete = [];
+    const widziane = new Set();
+    let zapytan = 0;
+    let znacznikow = 0;
+    const linie = [];
+    for (const linia of String(surowe || '').split('\n')) {
+      const trafienia = [...linia.matchAll(WZ)];
+      if (!trafienia.length) { linie.push(linia); continue; }
+      /* Co zostaje z linii bez znacznika. Sam punktor („- [GRAFIKA: …]”) albo
+         pogrubienie wokół znacznika – linia wypada. Tekst obok znacznika
+         („Wieczór nad Isola Bella [GRAFIKA: Isola Bella]”) – zostaje,
+         a zdjęcia stają za tą linią. */
+      const reszta = linia.replace(WZ, '').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '');
+      if (!/^[ \t]*(?:[-*+•]|\d{1,3}[.)])?[ \t]*[*_`]*[ \t]*$/.test(reszta)) linie.push(reszta);
+      for (const t of trafienia) {
+        const numer = grupy.length;
+        const wziete = [];
+        for (const q of t[1].split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
+          const klucz = bezOgonkowKlient(q);
+          if (widziane.has(klucz)) continue;         // ta sama rzecz drugi raz w jednej odpowiedzi
+          widziane.add(klucz);
+          if (znacznikow >= MAX_ZNACZNIKOW_ZDJEC || zapytan >= MAX_ZAPYTAN_ZDJEC || wziete.length >= ZAPYTAN_NA_ZNACZNIK) {
+            pominiete.push(q);
+            continue;
+          }
+          wziete.push(q);
+          zapytan++;
+        }
+        if (wziete.length) znacznikow++;
+        grupy.push(wziete);
+        linie.push(ZNAK(numer));
+      }
+    }
+    /* Znacznik opakowany w ```blok``` (modele to lubią): po wycięciu zostaje
+       płot bez treści – wypada razem ze znacznikiem. */
+    const tylkoZnaki = /^(?:\d+|[ \t]*)$/;
+    for (let i = 0; i < linie.length; i++) {
+      if (!PLOT_MD.test(linie[i])) continue;
+      let j = i + 1;
+      while (j < linie.length && !/^```\s*$/.test(linie[j]) && tylkoZnaki.test(linie[j])) j++;
+      if (j < linie.length && j > i + 1 && /^```\s*$/.test(linie[j])) { linie[i] = ''; linie[j] = ''; i = j; }
+    }
+    // Pozostałe znaczniki (np. [PLAN:] w tej samej odpowiedzi) i rusztowanie – wspólnym czyszczeniem.
+    const czyste = stripSearchMarker(linie.join('\n'));
+    const wynik = [];
+    const kotwice = [];          // [numer znacznika, indeks linii w wyniku]
+    for (const linia of czyste.split('\n')) {
+      const m = linia.match(/^(\d+)$/);
+      if (m) { kotwice.push([Number(m[1]), wynik.length]); continue; }
+      const czysta = linia.replace(/\d+/g, '');
+      // Puste linie bez powtórek – po wycięciu znaczników zostawały dziury.
+      if (!czysta.trim() && (!wynik.length || !wynik[wynik.length - 1].trim())) continue;
+      wynik.push(czysta);
+    }
+    while (wynik.length && !wynik[wynik.length - 1].trim()) wynik.pop();
+    const tresc = wynik.join('\n');
+    const poczatki = [];
+    let suma = 0;
+    for (const l of wynik) { poczatki.push(suma); suma += l.length + 1; }
+    const zdjecia = [];
+    for (const [numer, linia] of kotwice) {
+      const po = linia < poczatki.length ? poczatki[linia] : tresc.length;
+      const sekcja = sekcjaWPozycji(tresc, po);
+      for (const q of grupy[numer] || []) zdjecia.push({ q, etykieta: q, po, sekcja });
+    }
+    return { tresc, zdjecia, pominiete };
+  }
+
+  /** Tekst z powrotem ZE znacznikami – dla modelu w historii rozmowy.
+   *  Model widzi własny protokół w miejscu, gdzie go postawił, a nie ramkę
+   *  „(pokazano zdjęcia: …)”, którą słabe modele przepisywały na ekran. */
+  function zeZnacznikamiZdjec(tresc, zdjecia) {
+    let tekst = String(tresc || '');
+    const poMiejscu = new Map();
+    for (const g of zdjecia || []) {
+      if (!g || !g.q) continue;
+      const po = Math.max(0, Math.min(tekst.length, Number(g.po) || 0));
+      if (!poMiejscu.has(po)) poMiejscu.set(po, []);
+      poMiejscu.get(po).push(g.q);
+    }
+    for (const po of [...poMiejscu.keys()].sort((a, b) => b - a)) {
+      const przed = tekst.slice(0, po);
+      const znacznik = `[GRAFIKA: ${poMiejscu.get(po).join('; ')}]`;
+      tekst = przed + (przed && !przed.endsWith('\n') ? '\n' : '') + znacznik + '\n' + tekst.slice(po);
+    }
+    return tekst.replace(/\n+$/, '');
   }
 
   /* ============ WYNIK ARCHIWUM → KONTEKST MODELU ============
@@ -831,6 +981,10 @@ function utworzProtokol() {
     ARCH_LIMIT_ZNAKOW,
     stripSearchMarker,
     wstawZnacznikiZdjec,
+    rozlozZdjecia,
+    zeZnacznikamiZdjec,
+    sekcjaWPozycji,
+    NAGLOWKI_ZESPOLU,
     rozdzielMyslenie,
     widokWToku,
     naKontekst,

@@ -131,7 +131,7 @@
     'pm.f3.h': 'app-store downloads',
     'pm.f3.p': 'Open the address, add it to your home screen and Cosmos works like an app.',
     'pm.f4.h': 'tool rounds in a single reply',
-    'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – images land under the finished plan points.',
+    'pm.f4.p': 'A plan, the archive and photos of each spot in one reply – a photo strip above each point of the plan.',
     'cta.h': 'Your Cosmos is ready.',
     'cta.p': 'Sign in and pick up the conversation exactly where it left off – on your computer, your phone or by voice.',
     'cta.zapr': 'Access is by invitation. <a href="https://www.linkedin.com/in/marcinprzybylski/" target="_blank" rel="noopener">Write to me<span class="sr"> (opens LinkedIn in a new tab)</span></a> and I’ll send you a link.',

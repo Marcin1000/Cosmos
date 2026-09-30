@@ -22,6 +22,10 @@
                 (POZIOMY – od najtańszego); dobór modeli do ról porównuje po nim
      myslenie   jak przełączyć myślenie (MYSLENIE niżej); brak pola = nie wiemy,
                 więc nikt niczego do zapytania nie dopisuje
+     pewne      false = cechy wpisane z pamięci (karta modelu, nie pomiar na
+                naszym koncie) – dobór do ról traktuje je ostrożniej, a sonda
+                „Sprawdź” ma pierwszeństwo; brak pola = sprawdzone
+     wolny      true = odpowiada wolno albo nie zawsze (dobór do ról odejmuje punkty)
      vramGb     lokalnie: ile pamięci karty zajmuje model w kwantyzacji Q4 –
                 liczba albo mapa rozmiarów {'8b': 6, '14b': 10} (vramDla)
      en         te same pola tekstowe po angielsku (opis, mocne, kontekst,
@@ -36,8 +40,10 @@
      no_think          „/think” albo „/no_think” w wiadomości system (Nano 9B v2, Super 49B v1.5, Qwen3)
      detailed          „detailed thinking on|off” w system (Super 49B v1)
      reasoning_effort  parametr reasoning_effort (GPT-5, seria o, gpt-oss)
-     zawsze            myśli zawsze, wyłączyć się nie da (DeepSeek R1) */
-const MYSLENIE = ['enable_thinking', 'no_think', 'detailed', 'reasoning_effort', 'zawsze'];
+     zawsze            myśli zawsze, wyłączyć się nie da (DeepSeek R1)
+     nigdy             nie myśli wcale (wersja instrukcyjna) – nie ma czego przełączać,
+                       a zespół nie daje mu budżetu na nieznane myślenie */
+const MYSLENIE = ['enable_thinking', 'no_think', 'detailed', 'reasoning_effort', 'zawsze', 'nigdy'];
 const POZIOMY = ['nano', 'mini', 'pelny', 'flagowy'];
 
 /* Wspólne pola dwóch wersji Super 49B: różnią się tylko przełącznikiem myślenia. */
@@ -66,6 +72,8 @@ const MODEL_CATALOG = [
     cechy: ['rozumowanie', 'narzędzia', 'polski', 'kod'],
     poziom: 'flagowy',
     myslenie: 'enable_thinking',
+    // Rola zespołu ma 90 s i 45 s ciszy – Ultra przegrywa z szybszym modelem o tych samych cechach.
+    wolny: true,
     uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada – do szybkich pytań weź Super 49B.',
     en: {
       opis: 'NVIDIA\'s flagship – best for work where quality matters more than time.',
@@ -78,15 +86,20 @@ const MODEL_CATALOG = [
     dopasuj: ['nemotron-3-super', 'super-120b'],
     nazwa: 'Nemotron 3 Super 120B',
     opis: 'Mocny, ale nierówny – zmierzone 0,5 s przy jednym przebiegu i 5,8 s przy drugim.',
-    mocne: ['codzienna praca', 'rozumowanie', 'wywoływanie narzędzi', 'dobra polszczyzna'],
+    mocne: ['codzienna praca', 'rozumowanie', 'wywoływanie narzędzi', 'kod'],
     kontekst: '1 mln tokenów',
-    cechy: ['rozumowanie', 'narzędzia', 'polski'],
+    /* Bez „polski”: transkrypcja planu Sycylii („odpoczek”, „scheduk”, „wieczorna
+       spacer”) pokazała błędy odmiany w długich tekstach (it-modele-open, runda 10).
+       „Kod” – z karty modelu NVIDII (z pamięci): bez niego programista szedł na 9B z domu. */
+    cechy: ['rozumowanie', 'narzędzia', 'kod'],
     poziom: 'pelny',
     myslenie: 'enable_thinking',
+    uwaga: 'Polszczyzna nierówna w długich tekstach – zdarzają się błędy odmiany.',
     en: {
       opis: 'Strong but uneven – measured 0.5 s on one run and 5.8 s on another.',
-      mocne: ['everyday work', 'reasoning', 'tool calling', 'good Polish'],
+      mocne: ['everyday work', 'reasoning', 'tool calling', 'code'],
       kontekst: '1M tokens',
+      uwaga: 'Uneven Polish in long texts – inflection mistakes happen.',
     },
   },
   {
@@ -251,6 +264,140 @@ const MODEL_CATALOG = [
       mocne: ['experiments', 'calibration tasks'],
       kontekst: 'medium',
       uwaga: 'For everyday work take Nano Omni or Nano 12B VL.',
+    },
+  },
+
+  // ---- inne modele z build.nvidia.com (darmowe na kluczu NVIDII) ----
+  /* Pula „Darmowe modele” zespołu (it-modele-open, runda 10). Cechy z kart
+     modeli i z pamięci – `pewne: false`: sonda „Sprawdź” na koncie ma
+     pierwszeństwo, a rola „oko” u modelu z wizją z pamięci dostaje mniej
+     punktów niż u zmierzonego. Brak `myslenie` = sposób myślenia nieznany –
+     zespół daje wtedy budżet jak modelowi myślącemu (lepiej za dużo niż
+     pusta notatka). Kolejność: „kimi-k2.5” przed „kimi-k2”. */
+  {
+    dopasuj: ['qwen3-coder'],
+    nazwa: 'Qwen3 Coder 480B',
+    opis: 'Duży model do kodu – pisze i poprawia programy, bez myślenia na głos.',
+    mocne: ['pisanie kodu', 'poprawki', 'długie pliki'],
+    kontekst: 'duży',
+    cechy: ['kod', 'narzędzia'],
+    poziom: 'flagowy',
+    myslenie: 'nigdy',
+    pewne: false,
+    en: {
+      opis: 'A large code model – writes and fixes programs, without thinking out loud.',
+      mocne: ['writing code', 'fixes', 'long files'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['qwen3-235b', 'qwen3-next'],
+    nazwa: 'Qwen3 235B',
+    opis: 'Duży Qwen3 z przełączanym myśleniem – mocny w rozumowaniu i narzędziach.',
+    mocne: ['rozumowanie', 'wywoływanie narzędzi', 'dłuższe analizy'],
+    kontekst: 'duży',
+    cechy: ['rozumowanie', 'narzędzia', 'polski'],
+    poziom: 'pelny',
+    myslenie: 'no_think',
+    pewne: false,
+    en: {
+      opis: 'A large Qwen3 with switchable thinking – strong at reasoning and tools.',
+      mocne: ['reasoning', 'tool calling', 'longer analyses'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['deepseek-v3'],
+    nazwa: 'DeepSeek V3',
+    opis: 'Duży model ogólny – mocny w kodzie i rozumowaniu, sam tekst.',
+    mocne: ['kod', 'rozumowanie', 'sprawdzanie cudzej pracy'],
+    kontekst: 'duży',
+    cechy: ['rozumowanie', 'narzędzia', 'kod', 'polski'],
+    poziom: 'flagowy',
+    pewne: false,
+    en: {
+      opis: 'A large general model – strong at code and reasoning, text only.',
+      mocne: ['code', 'reasoning', 'reviewing others’ work'],
+      kontekst: 'large',
+    },
+  },
+  {
+    // „glm-4.” – GLM-4.5/4.6/4.7 z chmury; lokalny glm4:9b (Ollama) to mały model, nie ten wpis.
+    dopasuj: ['glm-4.', 'glm-5'],
+    nazwa: 'GLM-4',
+    opis: 'Duży model Zhipu – rozumowanie, narzędzia i kod; myśli domyślnie.',
+    mocne: ['rozumowanie', 'kod', 'wywoływanie narzędzi'],
+    kontekst: 'duży',
+    cechy: ['rozumowanie', 'narzędzia', 'kod'],
+    poziom: 'flagowy',
+    myslenie: 'enable_thinking',
+    pewne: false,
+    en: {
+      opis: 'A large Zhipu model – reasoning, tools and code; thinks by default.',
+      mocne: ['reasoning', 'code', 'tool calling'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['kimi-k2.5', 'kimi-k2-5'],
+    nazwa: 'Kimi K2.5',
+    opis: 'Duży model wielomodalny Moonshot – widzi obrazy, pisze kod, rozumuje.',
+    mocne: ['analiza zdjęć', 'kod', 'rozumowanie'],
+    kontekst: 'duży',
+    cechy: ['wizja', 'rozumowanie', 'narzędzia', 'kod', 'polski'],
+    poziom: 'flagowy',
+    pewne: false,
+    en: {
+      opis: 'A large multimodal Moonshot model – sees images, writes code, reasons.',
+      mocne: ['photo analysis', 'code', 'reasoning'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['kimi-k2'],
+    nazwa: 'Kimi K2',
+    opis: 'Duży model tekstowy Moonshot – sprawny w kodzie i narzędziach.',
+    mocne: ['kod', 'wywoływanie narzędzi', 'pisanie'],
+    kontekst: 'duży',
+    cechy: ['narzędzia', 'kod', 'polski'],
+    poziom: 'flagowy',
+    pewne: false,
+    en: {
+      opis: 'A large Moonshot text model – capable at code and tools.',
+      mocne: ['code', 'tool calling', 'writing'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['llama-4-maverick', 'llama-4-scout'],
+    nazwa: 'Llama 4',
+    opis: 'Wielomodalna Llama (MoE) – szybka, widzi obrazy.',
+    mocne: ['szybkie odpowiedzi', 'opis zdjęć', 'wywoływanie narzędzi'],
+    kontekst: 'duży',
+    cechy: ['wizja', 'szybki', 'narzędzia'],
+    poziom: 'pelny',
+    myslenie: 'nigdy',
+    pewne: false,
+    en: {
+      opis: 'A multimodal Llama (MoE) – fast, sees images.',
+      mocne: ['quick answers', 'describing photos', 'tool calling'],
+      kontekst: 'large',
+    },
+  },
+  {
+    dopasuj: ['mistral-medium'],
+    nazwa: 'Mistral Medium 3',
+    opis: 'Model ogólny Mistrala – dobry w pisaniu; wagi nie są publiczne.',
+    mocne: ['pisanie', 'streszczenia', 'wywoływanie narzędzi'],
+    kontekst: 'duży',
+    cechy: ['narzędzia', 'polski'],
+    poziom: 'pelny',
+    myslenie: 'nigdy',
+    pewne: false,
+    en: {
+      opis: 'A general Mistral model – good at writing; its weights are not public.',
+      mocne: ['writing', 'summaries', 'tool calling'],
+      kontekst: 'large',
     },
   },
 

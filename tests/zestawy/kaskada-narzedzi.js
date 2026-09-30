@@ -43,8 +43,8 @@ const WZORCE = {
 
 /** Świeży zestaw narzędzi z atrapami. Każdy przypadek dostaje własny,
  *  żeby jeden nie widział śladów po drugim. */
-function stanowisko({ odpowiedzi = {} } = {}) {
-  const dziennik = { doModelu: [], wiadomosci: [], adresy: [], glos: [] };
+function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null } = {}) {
+  const dziennik = { doModelu: [], wiadomosci: [], adresy: [], glos: [], odswiezenia: 0 };
   const conv = { messages: [] };
 
   const narzedzia = utworzNarzedzia({
@@ -57,8 +57,17 @@ function stanowisko({ odpowiedzi = {} } = {}) {
     },
     stripSearchMarker: protokol.stripSearchMarker,
     readJsonSafe: async (r) => r.json(),
-    fetch: async (adres) => {
+    fetch: async (adres, opcje) => {
       dziennik.adresy.push(String(adres));
+      // Wolna sieć i „Zatrzymaj”: przerwane żądanie rzuca AbortError, jak prawdziwy fetch.
+      const przerwij = () => Object.assign(new Error('przerwano'), { name: 'AbortError' });
+      if (opcje && opcje.signal && opcje.signal.aborted) throw przerwij();
+      if (opoznienieMs) {
+        await new Promise((ok, zle) => {
+          const tm = setTimeout(ok, opoznienieMs);
+          if (opcje && opcje.signal) opcje.signal.addEventListener('abort', () => { clearTimeout(tm); zle(przerwij()); });
+        });
+      }
       // `__status` w odpowiedzi atrapy = inny kod HTTP (np. 202 z numerem zadania).
       const { __status: kod = 200, ...dane } = odpowiedzi[Object.keys(odpowiedzi).find((k) => String(adres).includes(k))]
         || { };
@@ -85,16 +94,20 @@ function stanowisko({ odpowiedzi = {} } = {}) {
         // Ta sama reguła co wstawTekstModelu w app.js: przepisanie = ten sam tekst albo ten sam początek.
         if (przepisanie(m.content, czysty)) { m.content = czysty; return m; }
       }
+      // Cała tura już stoi (jak w app.js) – drugi raz ten sam tekst nie wchodzi.
+      const tura = conv.messages.slice(odKtorej).filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status)
+        .map((m) => m.content).join('\n\n');
+      if (tenSamTekst(tura, czysty)) return null;
       const w = { role: 'assistant', content: czysty };
       conv.messages.push(w);
       return w;
     },
     WZORCE,
-    // Zapora na całej turze – prawdziwe porównanie z mowa.js, jak w app.js.
-    tekstTury: (c, od = 0) => c.messages.slice(od)
-      .filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status)
-      .map((m) => m.content).join('\n\n'),
-    tenSamTekst,
+    // Zdjęcia w jednej odpowiedzi – PRAWDZIWE funkcje protokołu, jak w app.js.
+    rozlozZdjecia: protokol.rozlozZdjecia,
+    sekcjaWPozycji: protokol.sekcjaWPozycji,
+    odswiezZdjecia: () => { dziennik.odswiezenia++; },
+    sygnal: sygnal ? () => sygnal : null,
   });
 
   const poNazwie = Object.fromEntries(narzedzia.map((n) => [n.nazwa, n]));
@@ -342,6 +355,17 @@ async function uruchom(st, nazwa, acc, stan) {
     if (st.poNazwie.szukaj.zawszeDozwolone) {
       fail.push('wyszukiwanie jest oznaczone jako zawsze dozwolone – pętla nie miałaby końca');
     }
+    /* Runda 10: zdjęcia KOŃCZĄ turę. Po nich model dostawał „ZDJĘCIA POKAZANE…
+       napisz domknięcie albo nic” i myślał pół minuty nad całym planem – to było
+       „wisi w poszukiwaniu zdjęć” ze zrzutu 4 Marcina. Po zdjęciach: zero
+       wiadomości dla modelu i `koniec`; wolno im też działać w ostatniej rundzie
+       (gotowy plan ze zdjęciami nie może przepaść na limicie). */
+    const stG = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: '/a', full: '/a1' }] } } });
+    const wynikG = await uruchom(stG, 'grafiki', 'Plan.\n[GRAFIKA: Wawel]');
+    console.log(`5. grafiki → ${wynikG && wynikG.akcja}, wiadomości dla modelu po zdjęciach: ${stG.dziennik.doModelu.length}`);
+    if (!wynikG || wynikG.akcja !== 'koniec') fail.push('zdjęcia nie kończą tury – po nich znowu pójdzie runda modelu');
+    if (stG.dziennik.doModelu.length) fail.push(`po zdjęciach model dostaje wynik narzędzia („${stG.dziennik.doModelu[0].tresc.slice(0, 40)}…”) – to zaproszenie do kolejnej rundy`);
+    if (!stG.poNazwie.grafiki.zawszeDozwolone) fail.push('zdjęcia nie są dozwolone w ostatniej rundzie – gotowy plan ze zdjęciami przepadłby na limicie');
   }
 
   /* --- 5b. Obraz, który generuje się dłużej, niż Cloudflare czeka --------
@@ -442,7 +466,8 @@ async function uruchom(st, nazwa, acc, stan) {
      żadnych zdjęć nigdzie".
 
      Tu sprawdzamy obie strony naraz: że plan się policzył ORAZ że zdjęcia
-     dotarły na ekran, każde pod swoim kawałkiem tekstu. */
+     dotarły – od rundy 10 w JEDNEJ wiadomości (tekst + `zdjecia` z miejscem
+     znacznika), każda grupa przy swoim punkcie. */
   {
     const st = stanowisko({
       odpowiedzi: {
@@ -454,10 +479,6 @@ async function uruchom(st, nazwa, acc, stan) {
     const acc = 'Plan wycieczki.\n\nDzień 2 – Palma.\n[GRAFIKA: Katedra La Seu]\n'
       + 'Dzień 6 – Es Trenc.\n[GRAFIKA: plaża Es Trenc]\n[PLAN: miejsce=Es Trenc]';
 
-    /* Samo narzędzie zdjęć: z tekstu ze znacznikami odtwarza układ
-       (kawałek planu, siatka pod nim). W app.js zdjęcia przy innym
-       narzędziu są ODKŁADANE do gotowej odpowiedzi – szkic sprzed danych
-       nie trafia na ekran – ale rozkład pod punktami robi dokładnie to. */
     const dopPlan = st.poNazwie.plan.dopasuj(acc);
     await st.poNazwie.plan.wykonaj({
       acc, dop: dopPlan, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,
@@ -467,25 +488,21 @@ async function uruchom(st, nazwa, acc, stan) {
       acc, dop: dopGraf, conv: st.conv, depth: 0, ostatnia: false, przed: '', stan,
     });
 
-    const siatki = st.conv.messages.filter((m) => m.content && m.content.photos);
-    const podpisy = siatki.map((m) => m.content.text);
-    console.log(`9. plan + grafiki w jednej odpowiedzi → siatek: ${siatki.length} `
-      + `(${podpisy.join(', ') || 'brak'})`);
-    if (siatki.length !== 2) {
-      fail.push(`z dwóch znaczników [GRAFIKA:] powstało ${siatki.length} siatek – `
+    const odpowiedzi = st.conv.messages.filter((m) => m.role === 'assistant' && !m.status);
+    const w = odpowiedzi.find((m) => Array.isArray(m.zdjecia)) || { zdjecia: [], content: '' };
+    const grupy = w.zdjecia.map((g) => `${g.q}:${g.stan}`);
+    console.log(`9. plan + grafiki w jednej odpowiedzi → wiadomości: ${odpowiedzi.length}, grupy: ${grupy.join(', ') || 'brak'}`);
+    if (w.zdjecia.filter((g) => g.stan === 'gotowe').length !== 2) {
+      fail.push(`z dwóch znaczników [GRAFIKA:] są ${w.zdjecia.length} grupy zdjęć – `
         + 'prośba o zdjęcia ginie, gdy w tej samej odpowiedzi jest inne narzędzie');
     }
+    if (odpowiedzi.length !== 1) fail.push(`odpowiedź rozpadła się na ${odpowiedzi.length} wiadomości – Kopiuj i Regeneruj złapią kawałek`);
 
-    /* Kolejność: tekst dnia, potem JEGO zdjęcia. Zbiorcza galeria na końcu
-       odrywa zdjęcia od punktów, których dotyczą. */
-    const uklad = st.conv.messages
-      .filter((m) => m.role === 'assistant')
-      .map((m) => (m.content && m.content.photos ? `[siatka ${m.content.text}]` : 'tekst'));
-    console.log(`   układ rozmowy: ${uklad.join(' → ')}`);
-    const iPalma = uklad.findIndex((x) => /Katedra/.test(x));
-    const iTrenc = uklad.findIndex((x) => /Es Trenc/.test(x));
-    if (iPalma < 0 || iTrenc < 0 || iPalma > iTrenc) {
-      fail.push('siatki nie stoją w kolejności znaczników z tekstu');
+    /* Kolejność i miejsce: zdjęcia Katedry po tekście dnia 2, przed dniem 6. */
+    const [g1, g2] = w.zdjecia;
+    const przed = (g) => String(w.content).slice(0, g ? g.po : 0);
+    if (!g1 || !g2 || g1.q !== 'Katedra La Seu' || !/Dzień 2/.test(przed(g1)) || /Dzień 6/.test(przed(g1)) || !/Dzień 6/.test(przed(g2))) {
+      fail.push('grupy zdjęć nie stoją przy punktach, pod którymi model postawił znaczniki');
     }
 
     // Znacznik nie ma prawa zostać w treści dla człowieka.
@@ -566,17 +583,16 @@ async function uruchom(st, nazwa, acc, stan) {
 
     /* --- 12. UKŁAD, O KTÓRY POPROSIŁ MARCIN -------------------------------
      „Chciałbym żeby działało tak, żeby od razu było: Dzień 1, Plan, Zdjęcia,
-     potem Dzień 2, Plan, Zdjęcia itd. – a nie jak jest teraz, czyli najpierw
-     opis, potem jakieś myślenie, potem zdjęcia."
-
-     Trzy rzeczy naraz, wszystkie widoczne w jego zapisie:
-       a) cały plan drukował się NAD przeplotem, więc stał na ekranie dwa razy,
-       b) limit sześciu siatek zostawiał dni 5-8 jednym blokiem na końcu,
-       c) po wyciętym znaczniku zostawał sam punkt listy – „puste punkty".
+     potem Dzień 2, Plan, Zdjęcia itd.” – i od rundy 10: „jak w ChatGPT,
+     w poziomym scrollu”, a nie w osobnych wiadomościach. Gwarancje:
+       a) plan stoi RAZ, w jednej wiadomości – bez krojenia,
+       b) każda grupa zdjęć ma miejsce (`po`) za tekstem SWOJEGO dnia, a przy
+          nagłówkach Markdown – numer sekcji, nad którą stanie pasek,
+       c) po wyciętym znaczniku nie zostaje pusty punkt listy.
 
      Ośmiodniowy plan, każdy dzień ze swoim znacznikiem zapisanym tak, jak
      robi to model: jako punkt listy. */
-  {
+  for (const naglowki of [false, true]) {
     const st = stanowisko({
       odpowiedzi: { '/api/search/images': { results: [{ thumb: '/a', title: 'x', source: 'https://e.pl' }] } },
     });
@@ -584,7 +600,8 @@ async function uruchom(st, nazwa, acc, stan) {
     const dni = ['Santa Ponsa zachód', 'plaża Ponent', 'Valldemossa klasztor',
       'Western Water Park', 'Katedra La Seu', 'Cap de Formentor',
       'jaskinie Drach', 'taras hotelowy'];
-    const acc = dni.map((q, i) => `**Dzień ${i + 1}**\n`
+    const tytul = (i) => (naglowki ? `### Dzień ${i + 1}` : `**Dzień ${i + 1}**`);
+    const acc = dni.map((q, i) => `${tytul(i)}\n`
       + `- Zwiedzanie i zdjęcia.\n`
       + `- **Ustawienia:** 24-105 mm f/4, ISO 200, 1/125 s.\n`
       + `- [GRAFIKA: ${q}]\n`).join('\n')
@@ -596,63 +613,26 @@ async function uruchom(st, nazwa, acc, stan) {
       przed: acc.replace(/\[GRAFIKA:[^\]]*\]/gi, '').trim(), stan,
     });
 
-    const widok = st.conv.messages
-      .filter((m) => m.role === 'assistant')
-      .map((m) => (m.content && m.content.photos
-        ? { typ: 'siatka', tekst: m.content.text }
-        : { typ: 'tekst', tekst: String(m.content || '') }));
-
-    console.log(`12. plan ośmiodniowy → wiadomości: ${widok.length}`);
-    const siatki = widok.filter((x) => x.typ === 'siatka');
-    console.log(`   siatek: ${siatki.length} z ${dni.length} dni`);
-    if (siatki.length !== dni.length) {
-      fail.push(`z ${dni.length} dni powstało ${siatki.length} siatek – reszta `
-        + 'wylądowałaby jednym blokiem na końcu');
-    }
-
-    /* (a) Żaden kawałek tekstu nie może zawierać CAŁEGO planu. Jeśli
-       w jednej wiadomości jest więcej niż jeden nagłówek dnia, znaczy to,
-       że plan wydrukował się hurtem obok przeplotu. */
-    const hurtem = widok.filter((x) => x.typ === 'tekst'
-      && (x.tekst.match(/\*\*Dzień \d/g) || []).length > 1);
-    console.log(`   wiadomości z więcej niż jednym dniem: ${hurtem.length}`);
-    if (hurtem.length) {
-      fail.push('cały plan stoi w jednej wiadomości obok pokrojonego – '
-        + 'użytkownik widzi go dwa razy');
-    }
-
-    /* (b) Kolejność: tekst dnia, potem JEGO siatka, potem następny dzień. */
-    let porzadek = true;
-    for (let i = 0; i < widok.length - 1; i++) {
-      if (widok[i].typ !== 'tekst') continue;
-      const nrDnia = (widok[i].tekst.match(/\*\*Dzień (\d)/) || [])[1];
-      if (!nrDnia) continue;
-      if (widok[i + 1].typ !== 'siatka' || widok[i + 1].tekst !== dni[Number(nrDnia) - 1]) {
-        porzadek = false;
-        fail.push(`po tekście dnia ${nrDnia} nie stoi jego siatka, tylko `
-          + `${widok[i + 1].typ} „${widok[i + 1].tekst.slice(0, 30)}"`);
-        break;
-      }
-    }
-    console.log(`   układ „dzień → jego zdjęcia": ${porzadek ? 'zachowany' : 'ZŁAMANY'}`);
-
-    /* (c) Puste punkty. Wiadomość bez ani jednej litery i cyfry nie ma prawa
-       trafić na ekran – a właśnie takie zostawały po wyciętych znacznikach. */
-    const puste = widok.filter((x) => x.typ === 'tekst' && !/\p{L}|\p{N}/u.test(x.tekst));
-    console.log(`   pustych wiadomości: ${puste.length}`);
-    if (puste.length) fail.push(`${puste.length} pustych punktów po wyciętych znacznikach`);
-
-    // I osierocone myślniki wewnątrz kawałków też nie.
-    const zMyslnikiem = widok.filter((x) => x.typ === 'tekst' && /^[ \t]*[-*•][ \t]*$/m.test(x.tekst));
-    if (zMyslnikiem.length) {
-      fail.push(`${zMyslnikiem.length} kawałków ma pusty punkt listy w środku`);
-    }
-
-    // Ogon (tabela podsumowania) ma zostać, na końcu.
-    const ostatni = widok[widok.length - 1];
-    if (!(ostatni.typ === 'tekst' && /Nastawy aparatu/.test(ostatni.tekst))) {
-      fail.push('podsumowanie z końca planu zniknęło albo nie stoi na końcu');
-    }
+    const odpowiedzi = st.conv.messages.filter((m) => m.role === 'assistant');
+    const w = odpowiedzi[0] || { content: '', zdjecia: [] };
+    const tekst = String(w.content);
+    const grupy = w.zdjecia || [];
+    console.log(`12${naglowki ? 'b (nagłówki ###)' : 'a (dni pogrubione)'}. plan ośmiodniowy → wiadomości: ${odpowiedzi.length}, grup zdjęć: ${grupy.length}, sekcje: ${grupy.map((g) => g.sekcja).join(',')}`);
+    if (odpowiedzi.length !== 1) fail.push(`12. plan rozpadł się na ${odpowiedzi.length} wiadomości zamiast jednej`);
+    if (grupy.length !== dni.length) fail.push(`12. z ${dni.length} dni jest ${grupy.length} grup zdjęć`);
+    // (a) plan raz
+    if ((tekst.match(/Dzień 1\b/g) || []).length !== 1) fail.push('12. plan stoi w odpowiedzi więcej niż raz');
+    // (b) grupa za tekstem swojego dnia, przed następnym
+    const zle = grupy.filter((g, i) => {
+      const przed = tekst.slice(0, g.po);
+      return g.q !== dni[i] || !przed.includes(`Dzień ${i + 1}`) || przed.includes(`Dzień ${i + 2}`);
+    });
+    if (zle.length) fail.push(`12. zdjęcia nie stoją przy swoim dniu: ${zle.map((g) => g.q).join(', ')}`);
+    const sekcjeOk = grupy.every((g, i) => g.sekcja === (naglowki ? i + 1 : 0));
+    if (!sekcjeOk) fail.push(`12. zła sekcja paska (${grupy.map((g) => g.sekcja).join(',')}) – przy nagłówkach pasek ma stanąć nad swoim dniem, bez nagłówków – na górze`);
+    // (c) puste punkty
+    if (/^[ \t]*[-*•][ \t]*$/m.test(tekst)) fail.push('12. pusty punkt listy po wyciętym znaczniku');
+    if (!/Nastawy aparatu[\s\S]*Tabela na końcu\.$/.test(tekst)) fail.push('12. podsumowanie z końca planu zniknęło albo nie stoi na końcu');
   }
 
   /* --- ZDJĘCIA ODŁOŻONE, A MODEL ZAPOMNIAŁ ZNACZNIKÓW -------------------
@@ -673,28 +653,25 @@ async function uruchom(st, nazwa, acc, stan) {
     if (wynik.replace(/\n\[GRAFIKA: [^\]]*\]/g, '') !== plan) fail.push('wstawianie znaczników zmieniło treść odpowiedzi');
   }
 
-  /* --- 13. Kawałki planu nie podmieniają się nawzajem; przepisany plan nie wchodzi drugi raz ---
-     Agencja, runda 7: kawałki szły przez zaporę przed powtórką, która przy
-     podobnym początku PODMIENIA wypowiedź. Dwa dni zaczynające się tym samym
-     zdaniem („Dzień w Palermo zaczynamy o świcie…”) – drugi nadpisywał
-     pierwszy i pół planu znikało. A gdy model po zdjęciach przepisał CAŁY
-     plan od nowa, stawał on drugi raz, bo żaden kawałek sam nie był „tym
-     samym tekstem”. */
+  /* --- 13. Tekst nie ginie i nie staje drugi raz ---------------------------
+     Agencja, runda 7: kawałki planu z tym samym początkiem nadpisywały się
+     nawzajem, a przepisany od nowa plan stawał drugi raz. Od rundy 10 tekst
+     jest jeden, ale gwarancje zostają: (a) nic z tekstu nie znika, (b) plan
+     przepisany przez model w tej samej turze nie staje drugi raz, a zdjęcia
+     nowego miejsca dochodzą do istniejącej odpowiedzi. */
   {
     const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: 't1', full: 'f1' }, { thumb: 't2', full: 'f2' }] } } });
-    // Wstęp dłuższy niż 160 znaków: zapora uznaje wtedy drugi kawałek za „przepisanie” pierwszego.
     const wstep = 'Dzień zaczynamy o świcie przy katedrze, zanim zjadą się autokary z turystami, a światło '
       + 'jest jeszcze miękkie i złote; statyw rozstawiamy po zachodniej stronie placu, przy fontannie.';
     const acc = `${wstep} Potem targ Ballarò i ulica Maqueda.\n[GRAFIKA: Katedra Palermo]\n`
       + `${wstep} Potem Monreale i widok na Conca d'Oro.\n[GRAFIKA: Monreale]\nMiłej podróży.`;
     await uruchom(st, 'grafiki', acc);
     const teksty = st.conv.messages.filter((m) => m.role === 'assistant' && typeof m.content === 'string').map((m) => m.content);
-    console.log(`13a. kawałki z tym samym początkiem → ${teksty.length} wypowiedzi tekstu`);
+    console.log(`13a. akapity z tym samym początkiem → ${teksty.length} wypowiedzi tekstu`);
     if (!teksty.some((x) => /Ballarò/.test(x)) || !teksty.some((x) => /Monreale i widok/.test(x))) {
-      fail.push('kawałek planu z tym samym początkiem nadpisał poprzedni – część odpowiedzi zniknęła');
+      fail.push('akapit z tym samym początkiem zniknął z odpowiedzi');
     }
 
-    // Tura ma już plan w kawałkach; model przepisuje całość z nowym miejscem.
     const dzien = (n, miejsce) => `**Dzień ${n} – ${miejsce}.** Rano spacer po starym mieście, w południe przerwa na granitę `
       + `w kawiarni przy placu, po południu punkt widokowy nad zatoką i zachód słońca z tarasu. Wieczorem kolacja w trattorii.`;
     const st2 = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: 'x1', full: 'y1' }] } } });
@@ -705,10 +682,91 @@ async function uruchom(st, nazwa, acc, stan) {
     const przed = ileTekstu();
     const przepisany = `${dzien(1, 'Palermo')}\n${dzien(2, 'Cefalù')}\n${dzien(3, 'Taormina')}\n[GRAFIKA: Taormina teatr grecki]`;
     await uruchom(st2, 'grafiki', przepisany, stan);
-    const siatki = st2.conv.messages.filter((m) => m.content && typeof m.content === 'object' && (m.content.photos || []).length).length;
-    console.log(`13b. plan przepisany od nowa → tekstu ${przed} → ${ileTekstu()}, siatek ${siatki}`);
+    const grupy = st2.conv.messages.flatMap((m) => (Array.isArray(m.zdjecia) ? m.zdjecia : [])).filter((g) => (g.photos || []).length).length;
+    console.log(`13b. plan przepisany od nowa → tekstu ${przed} → ${ileTekstu()}, grup ze zdjęciami ${grupy}`);
     if (ileTekstu() !== przed) fail.push('przepisany od nowa plan stanął w rozmowie drugi raz');
-    if (siatki !== 3) fail.push(`zdjęcia nowego miejsca nie doszły pod istniejący plan (siatek: ${siatki})`);
+    if (grupy !== 3) fail.push(`zdjęcia nowego miejsca nie doszły do istniejącej odpowiedzi (grup: ${grupy})`);
+  }
+
+  /* --- 14. rozlozZdjecia i historia ze znacznikami ------------------------
+     Ta sama funkcja liczy miejsca zdjęć w przeglądarce i na serwerze (sierota,
+     lib/biegi.js). Historia dla modelu wstawia jego WŁASNE znaczniki w te
+     miejsca – zamiast ramki „(pokazano zdjęcia: …)”, którą słabe modele
+     przepisywały na ekran. */
+  {
+    const surowe = 'Wstęp.\n\n### Dzień 1 – Taormina\n- Spacer.\n- [GRAFIKA: Taormina]\n\n```\n[GRAFIKA: Isola Bella]\n```\n### Dzień 2\nKoniec [GRAFIKA: Etna; Etna] i dalej.';
+    const r = protokol.rozlozZdjecia(surowe);
+    const opis = r.zdjecia.map((g) => `${g.q}@s${g.sekcja}`).join(', ');
+    console.log(`14. rozlozZdjecia → ${opis}; tekst ${JSON.stringify(r.tresc).slice(0, 80)}…`);
+    if (/GRAFIKA|```/.test(r.tresc)) fail.push('14. po rozłożeniu w tekście został znacznik albo pusty płot');
+    if (opis !== 'Taormina@s1, Isola Bella@s1, Etna@s2') fail.push(`14. złe grupy albo sekcje: ${opis}`);
+    if (!/Koniec i dalej\./.test(r.tresc)) fail.push('14. tekst obok znacznika w środku zdania zniknął');
+    const zPowrotem = protokol.zeZnacznikamiZdjec(r.tresc, r.zdjecia);
+    const powtorne = protokol.rozlozZdjecia(zPowrotem);
+    if (powtorne.tresc !== r.tresc || powtorne.zdjecia.map((g) => `${g.q}@${g.po}`).join() !== r.zdjecia.map((g) => `${g.q}@${g.po}`).join()) {
+      fail.push('14. historia ze znacznikami nie odtwarza tych samych miejsc – model zobaczy inną odpowiedź niż ta na ekranie');
+    }
+    const dlugi = Array.from({ length: 18 }, (_, i) => `Punkt ${i + 1}.\n[GRAFIKA: Miejsce ${i + 1}]`).join('\n');
+    const r18 = protokol.rozlozZdjecia(dlugi);
+    if (r18.zdjecia.length !== 16 || r18.pominiete.join() !== 'Miejsce 17,Miejsce 18') fail.push(`14. limit 16 znaczników: grup ${r18.zdjecia.length}, pominięte ${r18.pominiete.join()}`);
+  }
+
+  /* --- 15. „Zatrzymaj” w trakcie szukania zdjęć ---------------------------
+     Dawniej Stop czekał 18 s, aż dojdzie ostatnie z czternastu zapytań. Teraz
+     sygnał tury przerywa pobieranie: zapytania w toku padają, kolejnych nie ma,
+     a tekst odpowiedzi zostaje. */
+  {
+    const ctrl = new AbortController();
+    const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: '/a', full: '/a1' }] } }, opoznienieMs: 400, sygnal: ctrl.signal });
+    const acc = Array.from({ length: 10 }, (_, i) => `Dzień ${i + 1}.\n[GRAFIKA: Miejsce ${i + 1}]`).join('\n');
+    const start = Date.now();
+    const praca = uruchom(st, 'grafiki', acc);
+    setTimeout(() => ctrl.abort(), 100);
+    const wynik = await praca;
+    const czas = Date.now() - start;
+    const w = st.conv.messages.find((m) => Array.isArray(m.zdjecia)) || { zdjecia: [] };
+    const zapytan = st.dziennik.adresy.filter((a) => a.includes('/api/search/images')).length;
+    console.log(`15. Stop przy 10 miejscach → koniec po ${czas} ms, zapytań ${zapytan}, stany: ${[...new Set(w.zdjecia.map((g) => g.stan))].join(',')}`);
+    if (czas > 1000) fail.push(`15. „Zatrzymaj” nie przerywa szukania zdjęć (${czas} ms)`);
+    if (zapytan > 4) fail.push(`15. po „Zatrzymaj” poszły kolejne zapytania o zdjęcia (${zapytan})`);
+    if (!w.zdjecia.length || w.zdjecia.some((g) => g.stan !== 'przerwane')) fail.push('15. grupy po „Zatrzymaj” nie są oznaczone jako przerwane – szkielet wisiałby na zawsze');
+    if (!/Dzień 10/.test(String(w.content))) fail.push('15. po „Zatrzymaj” zniknął tekst odpowiedzi');
+    if (!wynik || wynik.akcja !== 'koniec') fail.push('15. po „Zatrzymaj” narzędzie nie kończy tury');
+  }
+
+  /* --- 16. Te same miejsca drugi raz: pamięć rozmowy, a na prośbę o inne – inne zdjęcia ---
+     „Zmień dzień 3” – model przepisuje plan z tymi samymi znacznikami: te same
+     zdjęcia, bez sieci. „Pokaż inne zdjęcia” – dalsze wyniki, których nie było. */
+  {
+    const wyniki = Array.from({ length: 16 }, (_, i) => ({ thumb: `/t${i}`, full: `/f${i}` }));
+    const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: wyniki } } });
+    await uruchom(st, 'grafiki', 'Plan.\n[GRAFIKA: Wawel]');
+    const pierwsze = st.conv.messages.find((m) => Array.isArray(m.zdjecia)).zdjecia[0].photos.map((f) => f.full).join();
+    st.conv.messages.push({ role: 'user', content: 'Zmień dzień 3 na Kazimierz' });
+    const zapytaniaPrzed = st.dziennik.adresy.length;
+    await uruchom(st, 'grafiki', 'Plan zmieniony.\n[GRAFIKA: Wawel]');
+    const drugie = st.conv.messages.filter((m) => Array.isArray(m.zdjecia)).pop().zdjecia[0].photos.map((f) => f.full).join();
+    const bezSieci = st.dziennik.adresy.length === zapytaniaPrzed;
+    st.conv.messages.push({ role: 'user', content: 'Pokaż inne zdjęcia Wawelu' });
+    await uruchom(st, 'grafiki', 'Proszę.\n[GRAFIKA: Wawel]');
+    const trzecie = st.conv.messages.filter((m) => Array.isArray(m.zdjecia)).pop().zdjecia[0].photos.map((f) => f.full);
+    console.log(`16. to samo miejsce: z pamięci ${bezSieci && drugie === pierwsze ? 'tak' : 'NIE'}; „inne zdjęcia”: ${trzecie.slice(0, 2).join(',')}…`);
+    if (!bezSieci || drugie !== pierwsze) fail.push('16. to samo miejsce w przepisanym planie idzie do sieci i daje inne zdjęcia');
+    if (trzecie.some((f) => pierwsze.split(',').includes(f))) fail.push('16. „pokaż inne zdjęcia” daje zdjęcia, które już były');
+  }
+
+  /* --- 17. „Do pobrania” – zdjęcia dochodzą bez modelu -----------------------
+     Odpowiedź-sierota (telefon zgaszony w trakcie planu) albo odświeżenie
+     w fazie zdjęć zapisują grupy jako „do-pobrania”; po otwarciu rozmowy
+     przeglądarka dociąga je sama. */
+  {
+    const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: '/a', full: '/a1' }] } } });
+    const w = { role: 'assistant', content: 'Plan.', zdjecia: [{ q: 'Etna', etykieta: 'Etna', po: 5, sekcja: 0, photos: [], stan: 'do-pobrania' }] };
+    st.conv.messages.push(w);
+    const bylo = await st.poNazwie.grafiki.dociagnij(st.conv, w);
+    console.log(`17. dociągnięcie „do-pobrania” → ${w.zdjecia[0].stan}, ${w.zdjecia[0].photos.length} zdjęć, zapytań do modelu: ${st.dziennik.doModelu.length}`);
+    if (!bylo || w.zdjecia[0].stan !== 'gotowe' || !w.zdjecia[0].photos.length) fail.push('17. zdjęcia „do pobrania” nie dochodzą po otwarciu rozmowy');
+    if (st.dziennik.doModelu.length) fail.push('17. dociąganie zdjęć zawołało model');
   }
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');

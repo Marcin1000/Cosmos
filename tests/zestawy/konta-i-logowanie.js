@@ -306,6 +306,12 @@ async function postaw(dataDir) {
   ok(stW.json.senses && stW.json.senses.online === true, 'właściciel widzi swoje zmysły jako działające');
   ok(stAni.json.senses && stAni.json.senses.online === false,
     'członek nie widzi ich jako dostępnych – przeglądarka nie skieruje do nich mowy ani kamery');
+  /* Stan silników z powodem (kontrakt K1, runda 10) – tylko u tego, kto ma
+     silnik; członek bez lokalnego GPU pola nie dostaje (punkt niżej). Tu
+     na porcie 9 nikt nie słucha: „odmowa”, bez adresu w odpowiedzi. */
+  ok(stW.json.local && stW.json.local.online === false && stW.json.local.powod === 'odmowa'
+    && !JSON.stringify(stW.json.local).includes('127.0.0.1'),
+    `właściciel dostaje stan lokalnego z powodem, bez adresu (${JSON.stringify(stW.json.local)})`);
   const cfgAni = await ania.zadaj('/api/config');
   const cfgW = await marcin.zadaj('/api/config');
   ok(!cfgAni.json.senses.baseUrl && cfgAni.json.studio.exportDir === null,

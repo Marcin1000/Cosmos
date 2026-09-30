@@ -60,6 +60,22 @@ const PRZYPADKI = [
     'płot z prawdziwym kodem zostaje nietknięty'],
   ['Tekst [w nawiasie] na końcu zdania.', 'Tekst [w nawiasie] na końcu zdania.',
     'nawias niebędący znacznikiem, blisko końca'],
+
+  /* --- RUSZTOWANIE, KTÓRE MODEL PRZEPISUJE (runda 10) ---------------------
+     Słabe modele naśladują to, co dostały: ramkę historii „(pokazano zdjęcia:
+     …)”, znaczniki notatek zespołu `<wklad …>` i nagłówek „NOTATKI ZESPOŁU –
+     materiał roboczy…” (agencja-rozmowa, próby domk-echo i wklad-echo). */
+  ['Plan gotowy.\n(pokazano zdjęcia: Taormina Sicily view)\nMiłej podróży.', 'Plan gotowy.\n\nMiłej podróży.',
+    'ramka historii „(pokazano zdjęcia: …)” skopiowana przez model'],
+  ['(wcześniejszy wynik narzędzia: wyszukiwanie grafik – już wykorzystany w odpowiedzi)\nOdpowiedź.', 'Odpowiedź.',
+    'ramka „(wcześniejszy wynik narzędzia: …)”'],
+  ['NOTATKI ZESPOŁU – materiał roboczy przygotowany do tego pytania przez pomocników.\n<wklad rola="Analityk" model="claude-sonnet-5">\nSyrakuzy leżą na wschodzie.\n</wklad>\nZESPÓŁ – WKŁADY. TERAZ napisz JEDNĄ odpowiedź\nOdpowiedź prowadzącego.',
+    'Syrakuzy leżą na wschodzie.\n\nOdpowiedź prowadzącego.', 'nagłówki i znaczniki notatek zespołu przepisane przez prowadzącego'],
+  // …i strona odwrotna: zwykłe zdania z tymi słowami zostają.
+  ['Zdjęcia (pokazano zdjęcia w galerii) są ostre.', 'Zdjęcia (pokazano zdjęcia w galerii) są ostre.',
+    'nawias „pokazano zdjęcia” w środku zdania zostaje'],
+  ['Notatki zespołu są wyżej, a wkład analityka – w bloku.', 'Notatki zespołu są wyżej, a wkład analityka – w bloku.',
+    'zwykłe zdanie o notatkach zespołu zostaje'],
 ];
 
 (async () => {
@@ -78,7 +94,7 @@ const PRZYPADKI = [
      i nie była już globalną deklaracją skryptu. Przeglądarka niczego tu nie
      wnosiła: to jest napis na wejściu i napis na wyjściu. */
   const { utworzProtokol } = require('../../public/protokol.js');
-  const { stripSearchMarker } = utworzProtokol();
+  const { stripSearchMarker, widokWToku } = utworzProtokol();
   for (const [wejscie, oczek, opis] of PRZYPADKI) {
     const got = stripSearchMarker(wejscie);
     const ok = got === oczek;
@@ -88,6 +104,16 @@ const PRZYPADKI = [
         + `spodziewane ${JSON.stringify(oczek)}`);
     }
   }
+  /* Te same ramki w trakcie pisania (widokWToku) i w tym, co czyta lektor
+     (stripForSpeech w app.js) – trzy drogi tekstu na ekran i do głosu. */
+  const rusztowanie = 'Plan.\n(pokazano zdjęcia: Isola Bella)\n<wklad rola="Badacz" model="x">\nNOTATKI ZESPOŁU – materiał roboczy.\nKoniec.';
+  const wToku = widokWToku(rusztowanie);
+  const doGlosu = await pg.evaluate((t) => stripForSpeech(t), rusztowanie);
+  const czyste = (x) => !/pokazano zdjęcia|<\/?wklad|NOTATKI ZESPOŁU/i.test(x) && /Plan/.test(x) && /Koniec/.test(x);
+  console.log(`1. ${czyste(wToku) ? 'ok ' : 'ŹLE'} – rusztowanie w trakcie pisania (widokWToku): ${JSON.stringify(wToku)}`);
+  console.log(`1. ${czyste(doGlosu) ? 'ok ' : 'ŹLE'} – rusztowanie w tym, co czyta lektor: ${JSON.stringify(doGlosu)}`);
+  if (!czyste(wToku)) fail.push(`ramka historii albo notatki zespołu widać w trakcie pisania: ${JSON.stringify(wToku)}`);
+  if (!czyste(doGlosu)) fail.push(`lektor czyta ramkę historii albo notatki zespołu: ${JSON.stringify(doGlosu)}`);
 
   /* --- 2. PRZERWANA ODPOWIEDŹ TEŻ PRZECHODZI PRZEZ CZYSZCZENIE ------------
      Jedyna droga, którą tekst z modelu trafiał na ekran surowy – i najczęstsza,

@@ -34,6 +34,8 @@ const ODRZUCONE_KLUCZ = {
   'budzet-dzienny': 'ag.odrzuconeBudzet',
   'budzet-miesieczny': 'ag.odrzuconeBudzet',
   'budzet-wyczerpany': 'ag.odrzuconeBudzet',
+  // Wariant „Darmowe modele” (K5): rola bez darmowego silnika.
+  'tylko-darmowe': 'ag.odrzuconeDarmowe',
 };
 
 /** Stan roli od serwera → stan wiersza (atrybut data-stan i klucz `ag.stan.*`). */
@@ -110,6 +112,62 @@ function odrzuconeZDanych(lista) {
 /** `wymagaZgody` z serwera: true albo 'chmura' (trasa planu), fałsz – wszystko inne. */
 const wymagaZgodyZ = (x) => x === true || x === 'chmura';
 
+/* ---------------------------------------------------------------------------
+   Skład „Darmowe modele” (K5, runda 10). Serwer liczy z tego samego planu drugi
+   wariant – te same role na chmurze NVIDIA i lokalnym GPU – i oddaje go obok
+   proponowanego: `darmowe: {role, odrzucone, szacunekZl, prowadzacyPlatny}`,
+   `skladDomyslny` (ustawienie osoby) i `kandydaci` (modele do edytora roli).
+   --------------------------------------------------------------------------- */
+
+/** Wariant darmowy z serwera → {role, odrzucone, prowadzacyPlatny, szacunekZl?, szacunekProwadzacyZl?} albo null. */
+function wariantDarmowy(d) {
+  if (!d || typeof d !== 'object') return null;
+  const role = roleZDanych(d.role);
+  if (!role.length) return null;
+  return {
+    role, odrzucone: odrzuconeZDanych(d.odrzucone), prowadzacyPlatny: d.prowadzacyPlatny === true,
+    ...(kwota(d.szacunekZl) !== undefined ? { szacunekZl: kwota(d.szacunekZl) } : {}),
+    ...(kwota(d.szacunekProwadzacyZl) !== undefined ? { szacunekProwadzacyZl: kwota(d.szacunekProwadzacyZl) } : {}),
+  };
+}
+
+/** Modele do edytora roli z serwera: {rola: [{silnik, model, darmowy}]} – tylko znane silniki, najwyżej 8 na rolę. */
+function kandydaciZDanych(d) {
+  if (!d || typeof d !== 'object') return null;
+  const wynik = {};
+  for (const [rola, lista] of Object.entries(d).slice(0, MAX_ROL_WIDOKU)) {
+    if (!Array.isArray(lista)) continue;
+    const ok = lista.filter((k) => k && SILNIKI_ZESPOLU.includes(k.silnik) && typeof k.model === 'string' && k.model).slice(0, 8)
+      .map((k) => ({ silnik: k.silnik, model: napis(k.model, 200), darmowy: !PLATNE_ZESPOLU.includes(k.silnik) }));
+    if (ok.length) wynik[napis(rola, 40)] = ok;
+  }
+  return Object.keys(wynik).length ? wynik : null;
+}
+
+/**
+ * Skład, od którego startuje bramka albo linijka „Mogę to sprawdzić zespołem”:
+ * przy ustawieniu „Darmowe modele” i istniejącym wariancie darmowym – darmowy,
+ * inaczej proponowany. `sklad` – `plan.sklad` z /api/zespol/plan albo stan
+ * propozycji z reduktora (oba mają role, darmowe, skladDomyslny, szacunekZl).
+ * @returns {{wariant: 'proponowany'|'darmowe', role: Array, szacunekZl: (number|undefined), tylkoDarmowe: boolean}}
+ */
+function skladStartowy(sklad) {
+  const s = sklad && typeof sklad === 'object' ? sklad : {};
+  const darmowe = wariantDarmowy(s.darmowe);
+  if (s.skladDomyslny === 'darmowy' && darmowe) {
+    return { wariant: 'darmowe', role: darmowe.role, odrzucone: darmowe.odrzucone, szacunekZl: darmowe.szacunekZl, tylkoDarmowe: true };
+  }
+  return { wariant: 'proponowany', role: roleZDanych(s.role), odrzucone: odrzuconeZDanych(s.odrzucone), szacunekZl: kwota(s.szacunekZl),
+    tylkoDarmowe: s.tylkoDarmowe === true };
+}
+
+/** Wszystkie role na modelu prowadzącego – „zespół” to jeden model w kilku czapkach. */
+const jedenModel = (role, prowadzacy) => Boolean(prowadzacy && (role || []).length
+  && role.every((r) => r && r.silnik === prowadzacy.silnik && r.model === prowadzacy.model));
+
+/** „0 zł” tylko, gdy CAŁA tura nic nie kosztuje (copywriter, agencja-ux): kwota 0 albo brak cennika przy darmowym prowadzącym. */
+const zeroZl = (w) => Boolean(w && (w.szacunekZl === 0 || (w.szacunekZl === undefined && !w.prowadzacyPlatny)));
+
 /**
  * Jedno zdarzenie biegu → stan tury. Czyste: zmienia tylko `st`.
  * Zwraca ogłoszenia dla czytnika ekranu: [{klucz, ...dane}] – najwyżej
@@ -128,11 +186,17 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
        solo – to nie jest praca zespołu, tylko linijka pod odpowiedzią. */
     if (d.propozycja) {
       const role = roleZDanych(d.role);
+      const darmowe = wariantDarmowy(d.darmowe);
+      const kandydaci = kandydaciZDanych(d.kandydaci);
       st.propozycja = role.length ? {
         role, odrzucone: odrzuconeZDanych(d.odrzucone),
         prowadzacy: d.prowadzacy && typeof d.prowadzacy === 'object' ? { silnik: silnikZespolu(d.prowadzacy.silnik), model: napis(d.prowadzacy.model, 200) } : null,
         daneWyjdaDo: Array.isArray(d.daneWyjdaDo) ? d.daneWyjdaDo.map((x) => napis(x, 40)) : [],
         ...(kwota(d.szacunekZl) !== undefined ? { szacunekZl: kwota(d.szacunekZl) } : {}),
+        ...(kwota(d.szacunekProwadzacyZl) !== undefined ? { szacunekProwadzacyZl: kwota(d.szacunekProwadzacyZl) } : {}),
+        // K5: wariant darmowy i ustawienie osoby – linijka pokazuje skład startowy (skladStartowy).
+        ...(darmowe ? { darmowe } : {}), ...(d.skladDomyslny === 'darmowy' ? { skladDomyslny: 'darmowy' } : {}),
+        ...(kandydaci ? { kandydaci } : {}),
         ...miejsceIKiedy(d),
       } : null;
       return ogl;
@@ -149,6 +213,8 @@ function zjedzZdarzenieZespolu(st, typ, d, teraz = Date.now()) {
     // Silniki, na które skład poszedłby za zgodą (do pytania głosem): tylko znane nazwy.
     st.silnikiZaZgoda = Array.isArray(d.silnikiZaZgoda) ? [...new Set(d.silnikiZaZgoda.filter((x) => SILNIKI_ZESPOLU.includes(x) && x !== 'local'))] : [];
     st.szacunekZl = kwota(d.szacunekZl);
+    // Tura na samych darmowych modelach (K5) – strażnik nie wpuścił płatnego silnika.
+    st.tylkoDarmowe = d.tylkoDarmowe === true;
     Object.assign(st, { miejsce: '', kiedy: '' }, miejsceIKiedy(d));
     if (st.role.length) {
       st.faza = 'role';
@@ -276,6 +342,7 @@ function wiadomoscNotatek(st, teraz = Date.now()) {
       ...(kwota(st.kosztProwadzacegoZl) !== undefined ? { kosztProwadzacegoZl: kwota(st.kosztProwadzacegoZl) } : {}),
       ...(st.kosztProwadzacegoSzac ? { kosztProwadzacegoSzac: true } : {}),
       ...(st.planPoliczony ? { planPoliczony: true } : {}),
+      ...(st.tylkoDarmowe ? { tylkoDarmowe: true } : {}),
       ...miejsceIKiedy(st),
     },
   };
@@ -316,6 +383,7 @@ function stanZWiadomosci(m) {
   if (kwota(z.kosztProwadzacegoZl) !== undefined) st.kosztProwadzacegoZl = kwota(z.kosztProwadzacegoZl);
   if (z.kosztProwadzacegoSzac === true) st.kosztProwadzacegoSzac = true;
   if (z.planPoliczony === true) st.planPoliczony = true;
+  if (z.tylkoDarmowe === true) st.tylkoDarmowe = true;
   Object.assign(st, miejsceIKiedy(z));
   return st;
 }
@@ -330,7 +398,8 @@ function skladDoWyslania(role) {
   return (role || []).filter((r) => r && r.rola && r.fala !== 3).map((r) => ({
     rola: r.rola,
     ...(r.zadanie ? { zadanie: String(r.zadanie).slice(0, 1000) } : {}),
-    ...(r.auto ? {} : r.silnik ? { silnik: r.silnik, model: r.model || '' } : {}),
+    // „Auto – najlepszy darmowy” (edytor w wariancie darmowym): serwer dobiera tylko spośród darmowych.
+    ...(r.auto ? (r.autoDarmowy ? { tylkoDarmowe: true } : {}) : r.silnik ? { silnik: r.silnik, model: r.model || '' } : {}),
   }));
 }
 
@@ -485,6 +554,7 @@ function utworzZespolWidok(z) {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     chmura: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5"/><path d="M12 12v8M9 15l3-3 3 3"/></svg>',
     klodka: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></svg>',
   };
 
   /** Element z atrybutami i dziećmi (napisy jako węzły tekstowe). */
@@ -544,12 +614,26 @@ function utworzZespolWidok(z) {
     if (w === 'gotowe') return t('ag.stan.gotowe', { s: sekundy(r.ms) });
     return t('ag.stan.' + w);
   }
+  /** Podpis modelu spoza list silników (kandydat z propozycji): cechy z katalogu (models.js), w Node – pusto. */
+  const opisModeluZ = (id, silnik) => {
+    if (typeof modelInfo !== 'function' || typeof CECHA_OPIS === 'undefined') return '';
+    const info = modelInfo(id, silnik);
+    if (!info || !Array.isArray(info.cechy)) return '';
+    return info.cechy.map((c) => (CECHA_OPIS[c] ? CECHA_OPIS[c][jezyk()] : '')).filter(Boolean).join(' · ');
+  };
+  /** Rola pominięta w wariancie darmowym, bo nie ma modelu z innej rodziny: „Recenzent: pominięta – …”. */
+  const tekstRodziny = (x) => `${nazwaRoli(x)}: ${t('ag.pominietaRodzina')}`;
+  /** Twarde spacje po jednoliterowych słowach w długim zdaniu (i18n.js; w Node go nie ma). */
+  const polskieSpacje = (tekst) => (jezyk() === 'pl' && typeof twardeSpacje === 'function' ? twardeSpacje(tekst) : tekst);
+
   /** Zdanie dla człowieka, czemu rola nie dała wkładu – z kodu, nie ze zdania serwera (PL). */
   function powodRoli(r) {
     if (!r.blad && !r.kod) return '';
     const kod = r.kod || '';
     if (kod === 'termin' || kod === 'czas') return t('ag.bladCzas', { s: sekundy(r.ms) });
     if (kod === 'uprawnienia') return t('ag.bladUprawnienia');
+    // Darmowa chmura NVIDIA ma limit zapytań na minutę – 429 mówi to wprost (K5).
+    if (kod === 'limit-dostawcy' && r.silnik === 'cloud') return t('ag.bladLimitDarmowy');
     if (kod === 'niedostepny' || kod === 'limit-dostawcy') return t('ag.bladNiedostepny');
     if (/^budzet/.test(kod)) return t('ag.bladBudzet');
     if (kod === 'pominieta' || kod === 'zatrzymana' || kod === 'scalono') return '';
@@ -738,6 +822,8 @@ function utworzZespolWidok(z) {
       dodatki.textContent = '';
       // Role odrzucone przed startem (auto: brak zgody, uprawnień, limitu).
       for (const x of st.odrzucone) {
+        // Recenzent pominięty w wariancie darmowym (ta sama rodzina co autorzy) – powód słowami.
+        if (x.kod === 'rodzina') { dodatki.append(h('div', { klasa: 'zespol-odrzucone' }, h('span', { tekst: tekstRodziny(x) }))); continue; }
         const klucz = ODRZUCONE_KLUCZ[x.kod];
         if (!klucz) continue;
         const wiersz = h('div', { klasa: 'zespol-odrzucone' },
@@ -846,19 +932,27 @@ function utworzZespolWidok(z) {
   // „Proponuj, gdy warto” – cicha linijka pod odpowiedzią solo
   // -------------------------------------------------------------------------
 
-  function sugestia(prop, { naUruchom, naZmien, naNieTeraz }) {
+  function sugestia(prop, { naUruchom, naZmien, naNieTeraz, naUruchomDarmowo }) {
     const d = h('div', { klasa: 'zespol-sugestia', role: 'group', 'aria-label': t('ag.sugestia') });
     const ik = doc().createElement('span');
     ik.innerHTML = IK.zespol;
     d.append(ik.firstChild, h('span', { tekst: t('ag.sugestia') }));
-    for (const r of prop.role) {
+    // Skład startowy: przy ustawieniu „Darmowe modele” – darmowy (K5); „Uruchom” w app.js bierze ten sam (skladStartowy).
+    const start = skladStartowy(prop);
+    for (const r of start.role) {
       d.append(h('span', { klasa: 'kto', styl: `--k:${kolorSilnika(r.silnik)}` }, h('i'), `${nazwaRoli(r)} · ${nazwaSilnika(r.silnik)}`,
         czyWlasnaRola(r) ? znakWlasnej() : null));
     }
     // Szacunek tylko, gdy coś kosztuje (płatny silnik); darmowy skład – bez kwoty.
-    const szac = kwota(prop.szacunekZl) !== undefined ? prop.szacunekZl : szacunekSkladu(prop.role);
+    const szac = kwota(start.szacunekZl) !== undefined ? start.szacunekZl : szacunekSkladu(start.role);
     if (szac > 0) d.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: zlOk(szac, true, 'ag.szacunek', 'ag.szacunekDokladny') }));
     d.append(przycisk('zespol-link zespol-uruchom', t('ag.uruchom'), naUruchom, { title: t('ag.uruchomTitle') }));
+    /* „Za 0 zł” – ten sam zespół na darmowych modelach, tylko gdy proponowany
+       kosztuje, a darmowy naprawdę nie (prowadzący też darmowy – copywriter). */
+    const darmowe = wariantDarmowy(prop.darmowe);
+    if (naUruchomDarmowo && start.wariant === 'proponowany' && darmowe && szac > 0 && zeroZl(darmowe)) {
+      d.append(przycisk('zespol-link zespol-darmowo', t('ag.uruchomDarmowo'), naUruchomDarmowo, { title: t('ag.uruchomDarmowoTitle') }));
+    }
     d.append(przycisk('zespol-link zespol-zmien', t('ag.zmien'), naZmien));
     d.append(przycisk('zamknij', '', naNieTeraz, { 'aria-label': t('ag.nieTeraz'), title: t('ag.nieTeraz'), ikona: IK.x }));
     return d;
@@ -870,27 +964,115 @@ function utworzZespolWidok(z) {
 
   /**
    * @param {object} p
-   * @param {Array}  p.role          [{rola, zadanie, silnik, model, auto?}]
+   * @param {Array}  p.role          skład proponowany [{rola, zadanie, silnik, model, auto?}]
+   * @param {object} p.darmowe       wariant „Darmowe modele” z serwera (K5: plan.sklad.darmowe) albo null
+   * @param {string} p.skladDomyslny 'darmowy' – bramka startuje od darmowego (ustawienie osoby)
+   * @param {string} p.wariant       wymuszony wariant startowy ('proponowany'|'darmowe'), np. po „Za 0 zł”
+   * @param {object} p.kandydaci     {rola: [{silnik, model, darmowy}]} – modele do edytora roli (plan.sklad.kandydaci)
+   * @param {number} p.szacunekProwadzacyZl koszt prowadzącego – kwota po ręcznej zmianie składu
    * @param {object} p.prowadzacy    {silnik, model}
    * @param {boolean} p.pytajOZgode  prowadzący lokalny i brak zgody na rozmowę
    * @param {Array}  p.lokalnie      skład „Tylko lokalnie” (z planu) albo null
    * @param {number} p.maxRol
    * @param {Array}  p.katalog       [{klucz, wymagaObrazu}]
-   * @param {Function} p.otworzEdytor (rola, przycisk, gotowe) => void
-   * @param {Function} p.naStart     ({role, zgoda}) => void
-   * @param {Function} p.naTylkoLokalnie (role) => void
+   * @param {Function} p.otworzEdytor (rola, przycisk, gotowe, dodatki) => void – `dodatki`
+   *                   ({kandydaci, polecany, trybDarmowy}) idą do edytor() bez zmian
+   * @param {Function} p.naStart     ({role, zgoda, tylkoDarmowe}) => void
+   * @param {Function} p.naTylkoLokalnie (role, {tylkoDarmowe}) => void
    * @param {Function} p.naBez       () => void
    */
   function propozycja(p) {
-    let role = p.role.map((r, i) => ({ ...r, r: r.r || `p${i + 1}` }));
+    const numeruj = (lista) => (lista || []).map((r, i) => ({ ...r, r: r.r || `p${i + 1}` }));
+    const kopia = (lista) => lista.map((r) => ({ ...r }));
+    const darmowe = wariantDarmowy(p.darmowe);
+    const kandydaci = kandydaciZDanych(p.kandydaci) || {};
+    /* Dwa gotowe składy (K5, makieta agencja-ux). Przy lokalnym prowadzącym
+       bez zgody serwer przeniósł role darmowe z chmury na lokalny – bramka
+       pokazuje darmowy skład ZA zgodą, a „Tylko lokalnie” – ten z planu
+       (tak samo jak proponowany: skladZaZgoda robi app.js). */
+    const warianty = {
+      proponowany: { role: numeruj(p.role), szacunekZl: kwota(p.szacunekZl), szacunekProwadzacyZl: kwota(p.szacunekProwadzacyZl),
+        lokalnie: p.lokalnie || null, odrzucone: [] },
+      ...(darmowe ? { darmowe: { ...darmowe, role: numeruj(p.pytajOZgode ? skladZaZgoda(darmowe.role) : darmowe.role),
+        lokalnie: p.pytajOZgode ? kopia(darmowe.role) : null } } : {}),
+    };
+    const segment = Boolean(warianty.darmowe);
+    // 'proponowany' | 'darmowe' | 'wlasny' (skład ruszony ręcznie – oba pola bez zaznaczenia).
+    let wariant = segment && (p.wariant === 'darmowe' || (p.wariant !== 'proponowany' && p.skladDomyslny === 'darmowy')) ? 'darmowe' : 'proponowany';
+    let ostatni = wariant;           // gotowy skład, z którego wziął się obecny (po ręcznej zmianie też)
+    let role = kopia(warianty[wariant].role);
+    let zmienione = new Set();       // pigułki do mignięcia po przełączeniu składu
     // Skład zmieniony w edytorze – szacunek całości z planu przestaje pasować.
     let zmieniony = false;
     const sekcja = h('section', { klasa: 'zespol', 'data-stan': 'propozycja', 'data-otwarty': 'true', 'aria-label': t('ag.zespol'), 'aria-live': 'off' });
     const sr = h('p', { klasa: 'zespol-sr', role: 'status' });
     const glowa = h('div', { klasa: 'zespol-glowa' });
+    const wybor = segment ? h('div', { klasa: 'zespol-warianty', role: 'radiogroup', 'aria-label': t('ag.wariant.grupa') }) : null;
     const lista = h('ol', { klasa: 'zespol-role' });
+    const uwaga = h('div', { klasa: 'zespol-uwaga-blok' });
     const stopka = h('div', { klasa: 'zespol-stopka' });
-    sekcja.append(sr, glowa, lista, stopka);
+    sekcja.append(sr, glowa, ...(wybor ? [wybor] : []), lista, uwaga, stopka);
+
+    const recznaZmiana = () => { zmieniony = true; if (segment) wariant = 'wlasny'; };
+    function ustawWariant(w, fokus = true) {
+      if (!warianty[w] || w === wariant) return;
+      const poprzednie = role;
+      role = kopia(warianty[w].role);
+      zmienione = new Set(role.map((r, i) => (poprzednie[i] && (poprzednie[i].silnik !== r.silnik || poprzednie[i].model !== r.model) ? i : -1)).filter((i) => i >= 0));
+      wariant = w; ostatni = w; zmieniony = false;
+      maluj();
+      if (fokus && wybor) wybor.querySelector(`[data-wariant="${w}"]`)?.focus();
+    }
+    /** Kwota gotowego składu w polu segmentu: „ok. 0,26 zł” albo „0 zł” (tylko gdy cała tura = 0). */
+    const kwotaWariantu = (w) => {
+      const x = warianty[w];
+      if (w === 'darmowe' && zeroZl(x)) return t('ag.zeroZl');
+      if (x.szacunekZl > 0) return zlOk(x.szacunekZl, true, 'ag.okZl');
+      return x.szacunekZl === 0 ? t('ag.zeroZl') : '';
+    };
+    function malujWybor() {
+      if (!wybor) return;
+      wybor.textContent = '';
+      for (const w of ['proponowany', 'darmowe']) {
+        const zazn = wariant === w;
+        const skupiony = zazn || (wariant === 'wlasny' && w === ostatni);
+        const b = h('button', { type: 'button', klasa: 'zespol-wariant', role: 'radio', 'aria-checked': String(zazn), 'data-wariant': w,
+          tabindex: skupiony ? '0' : '-1' });
+        const opis = h('span');
+        const kropki = h('span', { klasa: 'zespol-wariant-kropki', 'aria-hidden': 'true' });
+        for (const r of warianty[w].role) kropki.append(h('i', { styl: `--k:${kolorSilnika(r.silnik)}` }));
+        opis.append(kropki, kwotaWariantu(w));
+        b.append(h('b', { tekst: t(w === 'darmowe' ? 'ag.wariant.darmowe' : 'ag.wariant.proponowany') }), opis);
+        b.addEventListener('click', () => ustawWariant(w));
+        wybor.append(b);
+      }
+    }
+    // Strzałki przełączają jak w natywnym radio (dwa pola – „następne” to drugie).
+    if (wybor) {
+      wybor.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+        e.preventDefault();
+        const teraz = wariant === 'wlasny' ? ostatni : wariant;
+        ustawWariant(teraz === 'darmowe' ? 'proponowany' : 'darmowe');
+      });
+    }
+    function malujUwage() {
+      uwaga.textContent = '';
+      if (wariant !== 'darmowe') { uwaga.hidden = true; return; }
+      const w = warianty.darmowe;
+      // Uczciwe zdanie o jakości – informacja, nie ostrzeżenie (bez bursztynu); „jeden model” zamiast udawania zespołu.
+      const p1 = h('p', { klasa: 'zespol-uwaga' });
+      p1.innerHTML = IK.info;
+      const tekst = h('span', { tekst: polskieSpacje(t(jedenModel(role, p.prowadzacy) ? 'ag.darmowe.jedenModel' : 'ag.darmowe.opis')) });
+      if (w.prowadzacyPlatny) tekst.append(h('small', { tekst: t('ag.darmowe.prowadzacyPlatny', { silnik: nazwaSilnika(p.prowadzacy.silnik) }) }));
+      p1.append(tekst);
+      uwaga.append(p1);
+      for (const x of w.odrzucone) {
+        if (x.kod === 'rodzina') uwaga.append(h('div', { klasa: 'zespol-odrzucone' }, h('span', { tekst: tekstRodziny(x) })));
+        else if (x.kod === 'tylko-darmowe') uwaga.append(h('div', { klasa: 'zespol-odrzucone' }, h('span', { tekst: t('ag.odrzuconeDarmowe', { rola: nazwaRoli(x), silnik: nazwaSilnika(x.silnik || 'cloud') }) })));
+      }
+      uwaga.hidden = false;
+    }
 
     function maluj() {
       glowa.textContent = '';
@@ -900,33 +1082,43 @@ function utworzZespolWidok(z) {
       const kropki = h('span', { klasa: 'zespol-kropki', 'aria-hidden': 'true' });
       for (const r of role) kropki.append(h('i', { styl: `--k:${kolorSilnika(r.silnik)}` }));
       glowa.append(kropki);
+      malujWybor();
       lista.textContent = '';
-      role.forEach((r) => {
+      role.forEach((r, i) => {
         const nazwa = nazwaRoli(r);
         const li = h('li', { klasa: 'rola', 'data-r': r.r, 'data-rola': r.rola, 'data-silnik': r.silnik, 'data-stan': 'czeka' });
-        const btn = h('button', { type: 'button', klasa: 'rola-model-btn', 'aria-haspopup': 'listbox', 'aria-expanded': 'false',
+        const btn = h('button', { type: 'button', klasa: `rola-model-btn${zmienione.has(i) ? ' zmieniony' : ''}`, 'aria-haspopup': 'listbox', 'aria-expanded': 'false',
           'aria-label': `${t('ag.zmienModel', { rola: nazwa })}: ${nazwaSilnika(r.silnik)} ${krotkiModel(r.model)}` },
         h('span', { klasa: 'rola-silnik', tekst: nazwaSilnika(r.silnik) }), krotkiModel(r.model) || t('ag.set.auto'));
         btn.addEventListener('click', () => {
           btn.setAttribute('aria-expanded', 'true');
-          p.otworzEdytor(r, btn, (wybor) => {
+          const zGotowego = (warianty[ostatni] || warianty.proponowany).role.find((x) => x.rola === r.rola);
+          const trybDarmowy = wariant === 'darmowe' || (wariant === 'wlasny' && ostatni === 'darmowe');
+          p.otworzEdytor(r, btn, (w) => {
             btn.setAttribute('aria-expanded', 'false');
-            if (!wybor) return;
-            zmieniony = true;
-            if (wybor.usun) { role = role.filter((x) => x !== r); maluj(); return; }
-            // Inny model = inna cena; darmowy silnik to pewne 0 zł.
-            Object.assign(r, wybor.auto ? { auto: true, szacunekZl: undefined }
-              : { auto: false, silnik: wybor.silnik, model: wybor.model, szacunekZl: PLATNE_ZESPOLU.includes(wybor.silnik) ? undefined : 0 });
+            if (!w) return;
+            if (w.usun) { role = role.filter((x) => x !== r); recznaZmiana(); maluj(); return; }
+            const przed = `${r.auto ? 'auto' : `${r.silnik}|${r.model}`}|${Boolean(r.autoDarmowy)}`;
+            // Inny model = inna cena; darmowy silnik i „najlepszy darmowy” to pewne 0 zł.
+            Object.assign(r, w.auto ? { auto: true, autoDarmowy: w.tylkoDarmowe === true, szacunekZl: w.tylkoDarmowe === true ? 0 : undefined }
+              : { auto: false, autoDarmowy: false, silnik: w.silnik, model: w.model, szacunekZl: PLATNE_ZESPOLU.includes(w.silnik) ? undefined : 0 });
+            if (`${r.auto ? 'auto' : `${r.silnik}|${r.model}`}|${Boolean(r.autoDarmowy)}` !== przed) recznaZmiana();
             maluj();
+          }, {
+            kandydaci: kandydaci[r.rola] || [],
+            polecany: zGotowego && zGotowego.model ? { silnik: zGotowego.silnik, model: zGotowego.model } : null,
+            trybDarmowy,
           });
         });
         const wiersz = h('div', { klasa: 'rola-wiersz', title: r.zadanie || '' },
           h('span', { klasa: 'rola-nazwa', tekst: nazwa }, czyWlasnaRola(r) ? znakWlasnej() : null), btn,
-          przycisk('rola-usun', '', () => { zmieniony = true; role = role.filter((x) => x !== r); maluj(); }, { 'aria-label': t('ag.usun', { rola: nazwa }), ikona: IK.x }));
+          przycisk('rola-usun', '', () => { recznaZmiana(); role = role.filter((x) => x !== r); maluj(); }, { 'aria-label': t('ag.usun', { rola: nazwa }), ikona: IK.x }));
         if (czyWlasnaRola(r)) li.dataset.wlasna = 'true';
         li.append(h('span', { klasa: 'rola-kropka', 'aria-hidden': 'true' }), wiersz);
         lista.append(li);
       });
+      zmienione = new Set();
+      malujUwage();
       stopka.textContent = '';
       // Dodaj rolę – z katalogu, bez powtórzeń, do limitu.
       const wolne = (p.katalog || []).filter((k) => !role.some((r) => r.rola === k.klucz));
@@ -939,9 +1131,11 @@ function utworzZespolWidok(z) {
         for (const k of [...wolne.filter((x) => !czyWlasnaRola(x)), ...wolne.filter((x) => czyWlasnaRola(x))]) {
           const wl = czyWlasnaRola(k);
           const opcja = przycisk(`zespol-dodaj-opcja${wl ? ' wlasna' : ''}`, nazwaRoli({ rola: k.klucz, nazwa: k.nazwa }), () => {
-            zmieniony = true;
+            // Nowa rola w składzie darmowym dobiera się tylko spośród darmowych (0 zł pewne).
+            const darmowo = wariant === 'darmowe' || (wariant === 'wlasny' && ostatni === 'darmowe');
+            recznaZmiana();
             role.push({ rola: k.klucz, zadanie: '', silnik: p.prowadzacy.silnik, model: p.prowadzacy.model, auto: true, r: `p${Date.now()}`,
-              ...(wl ? { wlasna: true, nazwa: napis(k.nazwa, 60) } : {}) });
+              ...(darmowo ? { autoDarmowy: true, szacunekZl: 0 } : {}), ...(wl ? { wlasna: true, nazwa: napis(k.nazwa, 60) } : {}) });
             maluj();
           }, { role: 'menuitem', ...(wl ? { title: k.cel || '' } : {}) });
           if (wl) opcja.append(znakWlasnej());
@@ -962,20 +1156,28 @@ function utworzZespolWidok(z) {
         zg.append(tekst);
         stopka.append(zg);
       }
-      // Szacunek kosztu ról na płatnych silnikach – tylko gdy większy od zera.
-      const szac = !zmieniony && kwota(p.szacunekZl) !== undefined ? p.szacunekZl : szacunekSkladu(role);
-      if (szac > 0) stopka.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: zlOk(szac, true, 'ag.szacunek', 'ag.szacunekDokladny') }));
+      /* Kwota: przy dwóch gotowych składach stoi w segmencie (makieta UX);
+         w stopce tylko bez segmentu albo po ręcznej zmianie – wtedy role
+         + prowadzący (cała odpowiedź, ag.szacunekTitle), nie same role. */
+      if (!segment || wariant === 'wlasny') {
+        const gotowy = warianty[ostatni] || warianty.proponowany;
+        const zRol = szacunekSkladu(role);
+        const prow = kwota(gotowy.szacunekProwadzacyZl) !== undefined ? gotowy.szacunekProwadzacyZl : kwota(p.szacunekProwadzacyZl) || 0;
+        const szac = !zmieniony && kwota(gotowy.szacunekZl) !== undefined ? gotowy.szacunekZl : zRol === null ? null : kwota(zRol + prow);
+        if (szac > 0) stopka.append(h('span', { klasa: 'zespol-szacunek', title: t('ag.szacunekTitle'), tekst: zlOk(szac, true, 'ag.szacunek', 'ag.szacunekDokladny') }));
+      }
       const przyciski = h('div', { klasa: 'zespol-przyciski' });
       przyciski.append(przycisk('btn-ghost', t('ag.bez'), () => p.naBez()));
-      if (zgodaPotrzebna && p.lokalnie) przyciski.append(przycisk('btn-secondary', t('ag.tylkoLokalnie'), () => p.naTylkoLokalnie(p.lokalnie)));
-      const start = przycisk('btn-primary', t('ag.start'), () => p.naStart({ role, zgoda: zgodaPotrzebna }));
+      const lokalnie = (warianty[ostatni] || warianty.proponowany).lokalnie;
+      if (zgodaPotrzebna && lokalnie) przyciski.append(przycisk('btn-secondary', t('ag.tylkoLokalnie'), () => p.naTylkoLokalnie(lokalnie, { tylkoDarmowe: ostatni === 'darmowe' })));
+      const start = przycisk('btn-primary', t('ag.start'), () => p.naStart({ role, zgoda: zgodaPotrzebna, tylkoDarmowe: wariant === 'darmowe' }));
       start.disabled = !role.length;
       przyciski.append(start);
       stopka.append(przyciski);
     }
     maluj();
     setTimeout(() => { sr.textContent = t('ag.sr.czeka'); }, 60);
-    return { el: sekcja, get role() { return role; } };
+    return { el: sekcja, get role() { return role; }, get wariant() { return wariant; } };
   }
 
   // -------------------------------------------------------------------------
@@ -991,7 +1193,10 @@ function utworzZespolWidok(z) {
    * @param {Array}  e.bezDostepu    silniki, których osoba nie ma (członek)
    * @param {boolean} e.zUsun
    * @param {HTMLElement} e.kotwica
-   * @param {Function} e.gotowe      (wybor|null) => void
+   * @param {Function} e.gotowe      (wybor|null) => void – Auto w składzie darmowym: {auto:true, tylkoDarmowe:true}
+   * @param {Array}  e.kandydaci     modele z propozycji dla tej roli [{silnik, model, darmowy}] (K5) – na górze grup
+   * @param {object} e.polecany      {silnik, model} – model, który dobór dał tej roli (znacznik „polecany”)
+   * @param {boolean} e.trybDarmowy  skład „Darmowe modele”: Auto = „najlepszy darmowy”
    */
   function edytor(e) {
     for (const stary of doc().querySelectorAll('.rola-edytor, .re-tlo')) stary.remove();
@@ -1004,15 +1209,33 @@ function utworzZespolWidok(z) {
       if (e.kotwica && e.kotwica.isConnected) e.kotwica.focus();
       e.gotowe(wybor || null);
     };
-    const klawisz = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); zamknij(null); } };
+    /* Okno modalne trzyma fokus: Tab z ostatniego przycisku wraca na pierwszy,
+       Shift+Tab z pierwszego – na ostatni. Dawniej Tab wychodził do schowanego
+       panelu bocznego (agencja-frontend, runda 10). */
+    const fokusowalne = () => [...okno.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((x) => x.offsetParent !== null || x === doc().activeElement);
+    const klawisz = (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); zamknij(null); return; }
+      if (ev.key !== 'Tab') return;
+      const lista = fokusowalne();
+      if (!lista.length) return;
+      const pierwszy = lista[0]; const ostatni = lista[lista.length - 1];
+      const a = doc().activeElement;
+      if (!okno.contains(a)) { ev.preventDefault(); (ev.shiftKey ? ostatni : pierwszy).focus(); return; }
+      if (ev.shiftKey && a === pierwszy) { ev.preventDefault(); ostatni.focus(); } else if (!ev.shiftKey && a === ostatni) { ev.preventDefault(); pierwszy.focus(); }
+    };
     const poza = (ev) => { if (!okno.contains(ev.target) && ev.target !== e.kotwica) zamknij(null); };
     const glowa = h('div', { klasa: 're-glowa' }, h('h4', { tekst: e.tytul }),
       przycisk('icon-btn', '', () => zamknij(null), { 'aria-label': t('ag.re.zamknij'), ikona: IK.x }));
     const lista = h('div', { klasa: 're-lista', role: 'listbox', 'aria-label': t('ag.re.model') }, h('div', { klasa: 'model-lista-glowa', tekst: t('ag.re.model') }));
-    let wybor = e.wybrany ? { ...e.wybrany } : { auto: true };
-    const opcja = (nazwa, podpis, zaznaczona, na, auto = false) => {
+    const auto = e.trybDarmowy ? { auto: true, tylkoDarmowe: true } : { auto: true };
+    let wybor = e.wybrany ? { ...e.wybrany } : { ...auto };
+    const opcja = (nazwa, podpis, zaznaczona, na, czyAuto = false, polecany = false) => {
+      const nazwaEl = h('span', { klasa: `model-opcja-nazwa${czyAuto ? ' auto' : ''}`, tekst: nazwa });
+      // „polecany” – model, który dobór Cosmosa dał tej roli (słowo, nie kolor).
+      if (polecany) nazwaEl.append(h('span', { klasa: 're-polecany', tekst: t('ag.re.polecany') }));
       const b = h('button', { type: 'button', klasa: `model-opcja${zaznaczona ? ' wybrany' : ''}`, role: 'option', 'aria-selected': String(zaznaczona) },
-        h('span', { klasa: `model-opcja-nazwa${auto ? ' auto' : ''}`, tekst: nazwa }), h('span', { klasa: 'model-opcja-podpis', tekst: podpis || '' }));
+        nazwaEl, h('span', { klasa: 'model-opcja-podpis', tekst: podpis || '' }));
       b.addEventListener('click', () => {
         for (const x of lista.querySelectorAll('.model-opcja')) { x.classList.remove('wybrany'); x.setAttribute('aria-selected', 'false'); }
         b.classList.add('wybrany'); b.setAttribute('aria-selected', 'true');
@@ -1020,14 +1243,29 @@ function utworzZespolWidok(z) {
       });
       return b;
     };
-    lista.append(opcja(t('ag.re.auto'), e.autoPodpis || '', !e.wybrany, () => { wybor = { auto: true }; }, true));
-    for (const g of e.grupy) {
+    lista.append(opcja(t(e.trybDarmowy ? 'ag.re.autoDarmowy' : 'ag.re.auto'), e.autoPodpis || '', !e.wybrany, () => { wybor = { ...auto }; }, true));
+    /* Modele z propozycji (K5) na górze swojej grupy – dawniej edytor miał po
+       jednym modelu na silnik i darmowego analityka nie dało się wybrać ręcznie. */
+    const grupy = (e.grupy || []).map((g) => ({ silnik: g.silnik, modele: [...g.modele] }));
+    for (const k of [...(e.kandydaci || [])].reverse()) {
+      if (!k || !SILNIKI_ZESPOLU.includes(k.silnik) || !k.model) continue;
+      let g = grupy.find((x) => x.silnik === k.silnik);
+      if (!g) { g = { silnik: k.silnik, modele: [] }; grupy.push(g); }
+      const i = g.modele.findIndex((m) => m.id === k.model);
+      const m = i >= 0 ? g.modele.splice(i, 1)[0] : { id: k.model, podpis: opisModeluZ(k.model, k.silnik) };
+      g.modele.unshift(m);
+    }
+    grupy.sort((a, b) => SILNIKI_ZESPOLU.indexOf(a.silnik) - SILNIKI_ZESPOLU.indexOf(b.silnik));
+    for (const g of grupy) {
       if (!g.modele.length) continue;
-      lista.append(h('div', { klasa: 're-grupa', 'data-silnik': g.silnik, tekst: nazwaSilnika(g.silnik) }));
+      // Przy nazwie silnika: „bez opłat” / „płatny” – dziś trzeba było wiedzieć, że OpenAI i Claude kosztują.
+      lista.append(h('div', { klasa: 're-grupa', 'data-silnik': g.silnik }, nazwaSilnika(g.silnik),
+        h('span', { klasa: 're-cena', tekst: t(PLATNE_ZESPOLU.includes(g.silnik) ? 'ag.re.platny' : 'ag.re.bezOplat') })));
       const kontener = h('div', { 'data-silnik': g.silnik });
       for (const m of g.modele) {
         const zazn = Boolean(e.wybrany && e.wybrany.silnik === g.silnik && e.wybrany.model === m.id);
-        kontener.append(opcja(m.id, m.podpis, zazn, () => { wybor = { silnik: g.silnik, model: m.id }; }));
+        const pol = Boolean(e.polecany && e.polecany.silnik === g.silnik && e.polecany.model === m.id);
+        kontener.append(opcja(m.id, m.podpis, zazn, () => { wybor = { silnik: g.silnik, model: m.id }; }, false, pol));
       }
       lista.append(kontener);
     }
@@ -1067,7 +1305,7 @@ function utworzZespolWidok(z) {
    * @param {boolean} k.potwierdzaj
    * @param {Array}  k.katalog     klucze ról
    * @param {Array}  k.bezDostepu  silniki bez dostępu (członek)
-   * @param {Function} k.naZmiane  (zmiana) => void  – {tryb}|{maxRol}|{zgodaChmura}|{role}|{potwierdzaj}
+   * @param {Function} k.naZmiane  (zmiana) => void  – {tryb}|{maxRol}|{zgodaChmura}|{role}|{potwierdzaj}|{skladDomyslny}
    * @param {Function} k.otworzEdytor (rolaKlucz, przycisk, gotowe)
    */
   function panelUstawien(k) {
@@ -1114,6 +1352,26 @@ function utworzZespolWidok(z) {
     startSekcja.append(h('div', { klasa: 'set-wiersz' },
       h('span', { klasa: 'set-wiersz-tekst' }, h('span', { tekst: t('ag.set.maks') }), h('span', { klasa: 'field-hint', tekst: t('ag.set.maksHint') })), segment));
 
+    /* „Jaki skład proponować” (K5): od tego startuje bramka i tryb „Uruchamiaj
+       sam”; przy „Darmowe modele” Auto dobiera tylko darmowe. Dla osoby, która
+       wyłączyła „Pytaj przed startem”, to jedyna droga do 0 zł (agencja-frontend). */
+    const skladH = h('h3', { id: 'ag-sklad-h', tekst: t('ag.set.sklad.h') });
+    const skladSekcja = h('section', { klasa: 'set-sekcja field ag-sklad-sekcja', 'data-karta': 'agenci' },
+      skladH, h('p', { klasa: 'set-sekcja-opis', tekst: t('ag.set.sklad.opis') }));
+    const fsSklad = h('fieldset', { klasa: 'ag-tryby ag-sklady', 'aria-labelledby': 'ag-sklad-h' });
+    for (const w of ['proponowany', 'darmowy']) {
+      // data-pole – app.js oddaje fokus temu samemu polu po przebudowie panelu.
+      const input = h('input', { type: 'radio', name: 'ag-sklad', value: w, 'data-pole': `sklad-${w}` });
+      input.checked = (k.us.skladDomyslny === 'darmowy' ? 'darmowy' : 'proponowany') === w;
+      input.addEventListener('change', () => { if (input.checked) k.naZmiane({ skladDomyslny: w }); });
+      const klucz = w === 'darmowy' ? 'ag.set.sklad.darmowe' : 'ag.set.sklad.proponowany';
+      const tytul = h('span', { tekst: t(klucz) });
+      if (w === 'proponowany') tytul.append(h('span', { klasa: 'domyslne', tekst: t('ag.set.domyslne') }));
+      fsSklad.append(h('label', { klasa: 'ag-tryb' }, input, h('span', { klasa: 'kolko', 'aria-hidden': 'true' }),
+        h('span', { klasa: 'set-wiersz-tekst' }, tytul, h('span', { klasa: 'field-hint', tekst: t(`${klucz}Hint`) }))));
+    }
+    skladSekcja.append(fsSklad);
+
     const roleSekcja = h('section', { klasa: 'set-sekcja field', 'data-karta': 'agenci' },
       h('h3', { tekst: t('ag.set.role.h') }), h('p', { klasa: 'set-sekcja-opis', tekst: t('ag.set.role.opis') }));
     const ul = h('ul', { klasa: 'ag-role' });
@@ -1142,7 +1400,7 @@ function utworzZespolWidok(z) {
       roleSekcja.append(brak);
     }
     const budzetSekcja = k.budzet || k.stanBudzetu ? sekcjaBudzetu(k) : null;
-    kontener.append(trybSekcja, startSekcja, ...(budzetSekcja ? [budzetSekcja] : []), roleSekcja, sekcjaWlasnychRol(k));
+    kontener.append(trybSekcja, startSekcja, ...(budzetSekcja ? [budzetSekcja] : []), skladSekcja, roleSekcja, sekcjaWlasnychRol(k));
     return kontener;
   }
 
@@ -1429,6 +1687,7 @@ const CZYSTE_ZESPOLU = {
   skladDoWyslania, silnikiChmury, skladZaZgoda, turaMaNotatki, ileSkonczonych, czekaNaZgode, KONCOWE_STANY_ROLI, SILNIKI_ZESPOLU,
   kosztProwadzacego, kosztCaly, kosztSzacowany, skladBezPoprawki,
   rozpoznajZgode, echoPytaniaZgody, kwotaZl, szacunekSkladu, czyWlasnaRola, kosztTury, wymagaZgodyZ, maPowod, PLATNE_ZESPOLU,
+  wariantDarmowy, kandydaciZDanych, skladStartowy, jedenModel, zeroZl,
 };
 
 if (typeof window !== 'undefined') Object.assign(window, { utworzZespolWidok, ZESPOL: CZYSTE_ZESPOLU });

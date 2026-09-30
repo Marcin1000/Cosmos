@@ -3,16 +3,30 @@ const { srodowisko, przegladarka, maPrzegladarke, KORZEN } = require('../pomoc')
 const http = require('http');
 
 // atrapa: 3 sekundy ciszy, potem odpowiedź
+/* Drugi scenariusz („licznik-myslenia” w pytaniu) – zrzut 4 Marcina: nagłówki od razu,
+   JEDEN kawałek rozumowania i cisza. Licznik zerowany bez odmalowania stał
+   wtedy zamrożony („czekam na odpowiedź modelu… 23 s” obok „Myślę…”) przez
+   całe myślenie – to było „wisi po zdjęciach” (runda 10). */
 const mock = http.createServer((req, res) => {
   if (req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"data":[]}'); return;
   }
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
-  setTimeout(() => {
-    res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'Gotowe po czekaniu.' } }] }) + '\n\n');
-    res.write('data: [DONE]\n\n');
-    res.end();
-  }, 3500);
+  let body = '';
+  req.on('data', (c) => { body += c; });
+  req.on('end', () => {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+    const tresc = (t) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: t } }] }) + '\n\n');
+    if (/licznik-myslenia/.test(body)) {
+      setTimeout(() => res.write('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'Rozważam plan. ' } }] }) + '\n\n'), 1500);
+      setTimeout(() => { tresc('Przemyślane.'); res.write('data: [DONE]\n\n'); res.end(); }, 7500);
+      return;
+    }
+    setTimeout(() => {
+      tresc('Gotowe po czekaniu.');
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }, 3500);
+  });
 });
 
 mock.listen(7093, async () => {
@@ -50,6 +64,26 @@ mock.listen(7093, async () => {
   console.log(`2. po odpowiedzi: licznik=${after.note}, treść „${after.text.slice(0, 40)}"`);
   if (after.note) fail.push('licznik został po nadejściu odpowiedzi');
   if (!/Gotowe po czekaniu/.test(after.text)) fail.push('brak odpowiedzi');
+
+  /* 3. Samo myślenie: przez ciszę po pierwszym kawałku rozumowania na ekranie
+     ma się coś zmieniać – żywe „Myślę… N s” – a nie zamrożona liczba. */
+  await page.fill('#input', 'licznik-myslenia: rozważ ten plan');
+  await page.click('#send-btn');
+  await page.waitForFunction(() => /Rozważam/.test([...document.querySelectorAll('.msg-assistant .msg-content')].pop()?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  const probka = () => page.evaluate(() => {
+    const b = [...document.querySelectorAll('.msg-assistant .msg-content')].pop();
+    const s = b && b.querySelector('.think-block summary');
+    return { podsumowanie: s ? s.textContent : '', nota: b && b.querySelector('.wait-note') ? b.querySelector('.wait-note').textContent : '' };
+  });
+  await page.waitForTimeout(1200);
+  const p1 = await probka();
+  await page.waitForTimeout(2200);
+  const p2 = await probka();
+  console.log(`3. samo myślenie: „${p1.podsumowanie}” → „${p2.podsumowanie}”, notka: „${p2.nota}”`);
+  if (p1.podsumowanie === p2.podsumowanie && p1.nota === p2.nota) fail.push('przy samym myśleniu ekran stoi – licznik zamrożony, wygląda na zawieszenie');
+  if (!/\d+\s*s/.test(p2.podsumowanie)) fail.push('przy samym myśleniu nagłówek nie liczy sekund („Myślę… N s”)');
+  if (p2.nota) fail.push(`obok „Myślę…” wisi sprzeczna notka „${p2.nota}”`);
+  await page.waitForFunction(() => /Przemyślane/.test([...document.querySelectorAll('.msg-assistant .msg-content')].pop()?.textContent || ''), null, { timeout: 10000 }).catch(() => {});
 
   await browser.close();
   try { process.kill(-srv.pid); } catch { /* już nie żyje */ }

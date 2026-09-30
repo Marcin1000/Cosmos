@@ -43,7 +43,14 @@
  *  24. klatka z kamery do ślepego modelu spoza katalogu → ponowienie bez obrazu,
  *      następna klatka od razu bez obrazu,
  *  25. notka o obrazie liczona do okna lokalnego: prompt + limit odpowiedzi ≤ okno,
- *  26. manifest: silnik z wizją słyszy, że widzi obrazy, ślepy – że nie; nigdy oba. */
+ *  26. manifest: silnik z wizją słyszy, że widzi obrazy, ślepy – że nie; nigdy oba,
+ *  27. [DONE] bez zamknięcia połączenia (kontrakt K4, runda 10) → koniec od razu,
+ *      bez „Model zamilkł” pod gotową odpowiedzią – w biegu i w starej drodze bez biegu,
+ *  28. runda domknięcia po narzędziu (`runda: 'po-narzedziu'`, kontrakt K3) → bez
+ *      myślenia i z max_tokens ≤ 600; bez flagi – jak dotąd.
+ *   7. (runda 10, kontrakt K2) sierota z [SZUKAJ:] → treść bez polskiego zdania na
+ *      sztywno, flaga `przerwaneNarzedzie: 'szukaj'`; sierota z samymi [GRAFIKA:]
+ *      → zdjęcia „do-pobrania” w miejscach znaczników, bez flagi i bez zdania. */
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -88,10 +95,17 @@ const atrapa = http.createServer((req, res) => {
     let d = {}; try { d = JSON.parse(b); } catch { /* puste */ }
     const ost = [...(d.messages || [])].reverse().find((m) => m.role === 'user') || { content: '' };
     const t = typeof ost.content === 'string' ? ost.content : JSON.stringify(ost.content);
-    const slowo = (t.match(/przedpierwszym|przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat|sseauth|sseratelimit|sseserwer|ssekontekst|llamaerr|ollamaraw|eofprzedslowem|zerwanieprzed|spacjaprzed|pomiarprzeciaz|mysliblad|ponowsiec|odp401|bezkonca|vllmnowy|zaduzeobraz|bramapusta|ladujemodel|zimnystart|slepaklatka|oknobudzet|manifestslepy|manifestwidzi/) || [''])[0];
+    const slowo = (t.match(/przedpierwszym|przeciazony|brakgotowki|poczekajdlugo|bladwtrakcie|zadlugo|zdjecie|myslipocichu|wczesnystop|dubelbiegu|zlyformat|sseauth|sseratelimit|sseserwer|ssekontekst|llamaerr|ollamaraw|eofprzedslowem|zerwanieprzed|spacjaprzed|pomiarprzeciaz|mysliblad|ponowsiec|odp401|bezkonca|vllmnowy|zaduzeobraz|bramapusta|ladujemodel|zimnystart|slepaklatka|oknobudzet|manifestslepy|manifestwidzi|donebezzamkniecia|rundapo/) || [''])[0];
     if (slowo) { proby[slowo] = (proby[slowo] || 0) + 1; ostatnie[slowo] = d; (wszystkie[slowo] = wszystkie[slowo] || []).push(d); }
     const nr = proby[slowo];
     const sseStart = () => res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    // --- 27: pełna odpowiedź i [DONE], a połączenie zostaje otwarte (nigdy res.end)
+    if (slowo === 'donebezzamkniecia') {
+      sseStart();
+      return res.write(sse({ choices: [{ delta: { content: 'Pełna odpowiedź.' }, finish_reason: 'stop' }] }) + 'data: [DONE]\n\n');
+    }
+    // --- 28: runda domknięcia – atrapa tylko notuje ciało żądania
+    if (slowo === 'rundapo') { sseStart(); return res.end(dobra('Miłej podróży!')); }
     // --- 20: błędy w strumieniu po 200
     if (slowo === 'sseauth') { sseStart(); return res.end(sse({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } })); }
     if (slowo === 'sseratelimit') { sseStart(); return res.end(sse({ type: 'error', error: { type: 'rate_limit_error', message: 'Number of request tokens has exceeded your per-minute rate limit' } })); }
@@ -197,6 +211,14 @@ const atrapa = http.createServer((req, res) => {
     const sep = /crlf/.test(t) ? '\r\n\r\n' : '\n\n';
     const ch = (s) => `data: ${JSON.stringify({ choices: [{ delta: { content: s } }] })}${sep}`;
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    // --- 7 (K2): plan z samymi [GRAFIKA:], a karta zamknięta
+    if (/zdjeciawtle/.test(t)) {
+      setTimeout(() => {
+        res.write(ch('## Dzień 1 – Palermo\nKatedra rano, bilet 10 zł.\n- [GRAFIKA: Katedra w Palermo; Mercato Ballarò]\n\n## Dzień 2 – Cefalù\nPlaża do wieczora.\n[GRAFIKA: Cefalù]'));
+        res.end(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}${sep}data: [DONE]${sep}`);
+      }, 400);
+      return;
+    }
     if (/sierota/.test(t)) {
       setTimeout(() => {
         res.write(ch('Sprawdzę to.\n[SZUKAJ: pogoda Kraków]'));
@@ -307,6 +329,46 @@ async function czat(slowo, { bieg = los(), rozmowa = '', zerwijPoMs = 0, adres =
   const sierota = zPliku('rozmowasierota').messages.find((m) => m.role === 'assistant');
   ok(sierota && !/\[SZUKAJ/.test(sierota.content) && /Sprawdzę to/.test(sierota.content), `7. sierota bez znacznika (${sierota && JSON.stringify(sierota.content).slice(0, 80)})`);
   ok(sierota && sierota.silnik === 'cloud', `7. sierota z silnikiem (${sierota && sierota.silnik})`);
+  /* K2: zdanie o przerwanym narzędziu dokleja przeglądarka w języku interfejsu –
+     serwer zapisuje tylko nazwę narzędzia. Po polsku na sztywno widziała je
+     także osoba z interfejsem EN. */
+  ok(sierota && !/Tu miało zadziałać/.test(sierota.content) && sierota.przerwaneNarzedzie === 'szukaj',
+    `7. sierota z [SZUKAJ:] → flaga „szukaj”, bez zdania na sztywno (${sierota && JSON.stringify({ c: sierota.content, f: sierota.przerwaneNarzedzie })})`);
+
+  nowa('rozmowazdjecia');
+  await czat('zdjeciawtle', { rozmowa: 'rozmowazdjecia', zerwijPoMs: 100 });
+  await spij(2500);
+  const zZdj = zPliku('rozmowazdjecia').messages.find((m) => m.role === 'assistant');
+  const grupy = (zZdj && zZdj.zdjecia) || [];
+  ok(zZdj && !/GRAFIKA/.test(zZdj.content) && /Katedra rano, bilet 10 zł/.test(zZdj.content) && /Plaża do wieczora/.test(zZdj.content),
+    `7. sierota ze zdjęciami: cały plan bez znaczników (${zZdj && JSON.stringify(zZdj.content).slice(0, 90)})`);
+  ok(grupy.length === 3 && grupy.every((g) => g.stan === 'do-pobrania' && Array.isArray(g.photos) && !g.photos.length)
+    && grupy.map((g) => g.q).join('|') === 'Katedra w Palermo|Mercato Ballarò|Cefalù',
+    `7. sierota ze zdjęciami: trzy miejsca „do-pobrania” w kolejności znaczników (${JSON.stringify(grupy.map((g) => [g.q, g.stan]))})`);
+  ok(grupy.length === 3 && zZdj.content.slice(0, grupy[0].po).includes('bilet 10 zł') && !zZdj.content.slice(0, grupy[0].po).includes('Dzień 2')
+    && grupy[0].sekcja === 1 && grupy[2].sekcja === 2 && zZdj.content.slice(0, grupy[2].po).includes('Plaża do wieczora'),
+    `7. sierota ze zdjęciami: miejsca pod swoimi punktami (po ${grupy.map((g) => g.po)}, sekcje ${grupy.map((g) => g.sekcja)})`);
+  ok(zZdj && !zZdj.przerwaneNarzedzie && !/Tu miało/.test(zZdj.content) && zZdj.silnik === 'cloud',
+    `7. sierota ze zdjęciami: bez flagi i bez zdania o narzędziu – zdjęcia dojdą bez modelu (${zZdj && zZdj.przerwaneNarzedzie})`);
+
+  // --- 27: [DONE] = koniec, choć dostawca nie zamyka połączenia (limit ciszy w tym serwerze: 1,5 s)
+  w = await czat('donebezzamkniecia');
+  ok(w.koniec && !w.koniec.blad && /Pełna odpowiedź/.test(w.txt || '') && w.czas < 1200,
+    `27. [DONE] bez zamknięcia → koniec biegu bez błędu w ${w.czas} ms (${w.koniec && w.koniec.blad})`);
+  w = await czat('donebezzamkniecia', { bieg: '' });
+  ok(w.status === 200 && /Pełna odpowiedź/.test(w.txt || '') && w.czas < 1200,
+    `27. [DONE] bez zamknięcia, stara droga bez biegu → koniec w ${w.czas} ms`);
+
+  // --- 28: runda domknięcia po narzędziu – bez myślenia, krótko
+  const SUPER = 'nvidia/nemotron-3-super-120b-a12b';
+  await czat('rundapo', { dodatki: { runda: 'po-narzedziu', model: SUPER } });
+  const zFlaga = ostatnie.rundapo || {};
+  ok(zFlaga.max_tokens <= 600 && zFlaga.chat_template_kwargs && zFlaga.chat_template_kwargs.enable_thinking === false,
+    `28. runda po narzędziu → max_tokens ${zFlaga.max_tokens}, myślenie ${JSON.stringify(zFlaga.chat_template_kwargs)}`);
+  await czat('rundapo', { dodatki: { model: SUPER } });
+  const bezFlagi = ostatnie.rundapo || {};
+  ok(bezFlagi.max_tokens > 600 && !(bezFlagi.chat_template_kwargs && bezFlagi.chat_template_kwargs.enable_thinking === false),
+    `28. zwykła runda bez zmian → max_tokens ${bezFlagi.max_tokens}, myślenie ${JSON.stringify(bezFlagi.chat_template_kwargs)}`);
 
   // --- 8–10: ponawiać tylko to, co ponowienie może naprawić
   w = await czat('przeciazony');

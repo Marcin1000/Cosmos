@@ -1,22 +1,24 @@
-/* Zdjęcia znalezione w internecie mają WRÓCIĆ do rozmowy, a nie zawisnąć obok.
+/* Zdjęcia znalezione w internecie – w TEJ SAMEJ odpowiedzi i bez kolejnej rundy modelu.
 
    Marcin poprosił o plan tygodniowej wycieczki na Majorkę, a potem „ze
    zdjęciami proszę". Dostał osiem zdjęć jednej katedry, komunikat
-   „🖼️ Szukam zdjęć: Katedra La Seu Palma de Mallorca…" wiszący POD gotowymi
-   zdjęciami – i ciszę. Pozostałe sześć dni planu nie doczekało się niczego,
-   a zdjęcia nie zostały przypisane do żadnego przystanku.
+   „🖼️ Szukam zdjęć…" wiszący POD gotowymi zdjęciami – i ciszę.
 
-   Trzy osobne usterki, trzy osobne sprawdzenia:
+   Runda 10 (zgłoszenia 3 i 4): „agenci działają, na koniec rozmowy wisi
+   w poszukiwaniu zdjęć” i „zdjęcia jak w ChatGPT – w poziomym scrollu, a nie
+   w oddzielnej odpowiedzi”. Po zdjęciach model dostawał jeszcze jedną rundę
+   („ZDJĘCIA POKAZANE… napisz domknięcie albo nic”) – model myślący myślał nad
+   nią pół minuty. Tę rundę usunęliśmy: dawny punkt 3 („po zdjęciach model
+   dostaje głos”) pilnował właśnie usterki i jest teraz ODWRÓCONY.
 
-     1. Komunikat o trwającej czynności musi się DOMKNĄĆ. „Szukam…" pod
-        gotowymi zdjęciami to informacja nieprawdziwa.
-     2. Po pokazaniu zdjęć głos wraca do MODELU. Wcześniej pętla kończyła się
-        tutaj (`break`) i model nie miał już jak powiedzieć, co to za miejsca.
-     3. Powtórzona prośba o te same zdjęcia zostaje odcięta – inaczej model
-        potrafi zjeść wszystkie rundy na jednej katedrze.
-
-   Czwarta rzecz, z tej samej rozmowy: źródła. Model wypisywał „【1†L1-L4】",
-   czyli zapis, w który nie da się kliknąć. Instrukcja musi podawać format.
+     1. „Szukam zdjęć…” nie zostaje na ekranie, a paski mówią, czego dotyczą.
+     2. Zdjęcia obu miejsc są – w jednej odpowiedzi, w paskach nad treścią.
+     3. Po zdjęciach ZERO zapytań do modelu; pod odpowiedzią Kopiuj/Regeneruj,
+        żadnego wiersza „dane dla modelu” na końcu.
+     4. Jedno miejsce – jeden zestaw zdjęć (bez powtórki).
+     5. Wynik narzędzia nie udaje pytania użytkownika.
+     6. Kliknięcie w zdjęcie otwiera podgląd, a nie obcą stronę; strzałka →
+        idzie do następnego zdjęcia.
 */
 const { srodowisko, przegladarka, maPrzegladarke, KATALOG_ZRZUTOW } = require('../pomoc');
 
@@ -35,10 +37,11 @@ if (!maPrzegladarke()) {
   await pg.goto(env.adres + '/app', { waitUntil: 'load' });
   await pg.waitForTimeout(600);
 
+  let doModelu = 0;
+  pg.on('request', (r) => { if (/\/api\/chat$/.test(r.url()) && r.method() === 'POST') doModelu++; });
   await pg.fill('#input', 'pokaż zdjęcia miejsc z planu');
   await pg.press('#input', 'Enter');
 
-  // Trzy tury modelu plus dwa wyszukiwania – dajemy na to spokojnie czasu.
   for (let i = 0; i < 60; i++) {
     await pg.waitForTimeout(500);
     const trwa = await pg.evaluate(() => document.getElementById('stop-btn').style.display !== 'none');
@@ -48,55 +51,50 @@ if (!maPrzegladarke()) {
 
   const ekran = await pg.evaluate(() => ({
     teksty: [...document.querySelectorAll('.msg-assistant .msg-content')].map((e) => e.textContent.trim()),
-    siatki: document.querySelectorAll('.photo-grid, .msg-photos').length,
-    zdjecia: document.querySelectorAll('.msg-assistant img').length,
-    ruchy: [...document.querySelectorAll('.msg-search')].length,
+    odpowiedzi: document.querySelectorAll('.msg-assistant').length,
+    paski: [...document.querySelectorAll('.zdj-pasek')].map((p) => p.getAttribute('aria-label') || ''),
+    etykiety: [...document.querySelectorAll('.zdj-etykieta')].map((e) => e.textContent.trim()),
+    zdjecia: document.querySelectorAll('.zdj-kafel img').length,
+    wToku: document.querySelectorAll('.zdj-pasek[aria-busy="true"], .zdj-kafel.szkielet').length,
+    wiersze: [...document.querySelectorAll('.msg-search')].map((e) => e.textContent.trim()),
+    akcjePodZdjeciami: [...document.querySelectorAll('.msg-assistant')].filter((m) => m.querySelector('.zdj-pasek'))
+      .some((m) => m.querySelector('.msg-actions')),
   }));
 
   /* ---- 1. „Szukam zdjęć…" nie może zostać na ekranie ---- */
   const wiszace = ekran.teksty.filter((x) => /Szukam zdjęć/i.test(x));
-  console.log(`1. komunikatów „Szukam zdjęć…" na ekranie: ${wiszace.length}`);
-  if (wiszace.length) {
-    fail.push('„Szukam zdjęć…" wisi po znalezieniu zdjęć – komunikat o trwającej czynności się nie domyka');
+  console.log(`1. komunikatów „Szukam zdjęć…" na ekranie: ${wiszace.length}, pasków w toku: ${ekran.wToku}`);
+  if (wiszace.length || ekran.wToku) {
+    fail.push('„Szukam zdjęć…" / szkielet wisi po znalezieniu zdjęć – stan w toku się nie domyka');
   }
-  /* Czego zdjęcia dotyczą – MUSI być widać. Kiedyś mówił o tym jeden zbiorczy
-     komunikat („🖼️ Zdjęcia: Katedra La Seu, Es Trenc") nad wszystkimi siatkami
-     naraz. Zniknął razem z galerią na końcu odpowiedzi: teraz każda siatka
-     stoi pod swoim punktem planu i ma WŁASNY podpis. Gwarancja jest ta sama,
-     nośnik inny – więc i sprawdzenie musi patrzeć na nośnik, który istnieje. */
-  const podpisy = await pg.evaluate(() => [...document.querySelectorAll('.msg-assistant')]
-    .filter((m) => m.querySelector('.photo-grid, .msg-photos'))
-    .map((m) => (m.textContent || '').trim().slice(0, 60))
-    .filter(Boolean));
-  console.log(`   podpisów nad siatkami: ${podpisy.length} – ${podpisy.join(' | ') || 'BRAK'}`);
-  if (!podpisy.length) fail.push('po znalezieniu zdjęć nie ma żadnej informacji, czego dotyczą');
+  // Czego zdjęcia dotyczą – MUSI być widać: etykieta miejsca na pasku (dawniej podpis nad siatką).
+  console.log(`   paski: ${ekran.paski.join(' | ') || 'BRAK'}; etykiety: ${ekran.etykiety.join(', ')}`);
+  if (!ekran.etykiety.length) fail.push('po znalezieniu zdjęć nie ma żadnej informacji, czego dotyczą');
 
-  /* ---- 2. Zdjęcia są, i to obu miejsc ---- */
-  console.log(`2. zdjęć na ekranie: ${ekran.zdjecia}, zestawów: ${ekran.siatki}`);
+  /* ---- 2. Zdjęcia są, i to obu miejsc – w jednej odpowiedzi ---- */
+  console.log(`2. zdjęć na ekranie: ${ekran.zdjecia}, odpowiedzi Cosmosa: ${ekran.odpowiedzi}`);
   if (ekran.zdjecia < 2) fail.push('zdjęcia nie dotarły na ekran');
-  const oba = ['Katedra La Seu', 'Es Trenc'].filter((m) => ekran.teksty.some((x) => x.includes(m)));
-  console.log(`   miejsca wymienione na ekranie: ${oba.join(', ') || 'żadne'}`);
+  const oba = ['Katedra La Seu', 'Es Trenc'].filter((m) => ekran.etykiety.some((x) => x.includes(m)));
+  console.log(`   miejsca na paskach: ${oba.join(', ') || 'żadne'}`);
   if (oba.length < 2) {
     fail.push(`z dwóch miejsc w prośbie na ekranie jest ${oba.length} – model dostał zdjęcia jednego`);
   }
+  if (ekran.odpowiedzi !== 1) fail.push(`zdjęcia rozbiły odpowiedź na ${ekran.odpowiedzi} wiadomości – mają stać w jednej`);
 
-  /* ---- 3. Model DOKOŃCZYŁ odpowiedź po zdjęciach ----
-     To jest sedno zgłoszenia: zdjęcia bez słowa komentarza leżą obok planu
-     zamiast być do niego przypisane. */
-  const ostatni = ekran.teksty[ekran.teksty.length - 1] || '';
-  console.log(`3. ostatnia wypowiedź Cosmosa: „${ostatni.slice(0, 80)}"`);
-  if (!/Dzień 1/.test(ostatni)) {
-    fail.push('po pokazaniu zdjęć model nie dostał głosu – zdjęcia zostały bez przypisania do planu');
-  }
+  /* ---- 3. Po zdjęciach NIE MA kolejnej rundy modelu ----
+     Dawniej: „ZDJĘCIA POKAZANE… napisz domknięcie albo nic” i druga runda –
+     „wisi w poszukiwaniu zdjęć” ze zrzutu 4 Marcina. */
+  console.log(`3. zapytań do modelu w turze: ${doModelu}; wiersze narzędzi: ${ekran.wiersze.length}; akcje pod odpowiedzią ze zdjęciami: ${ekran.akcjePodZdjeciami}`);
+  if (doModelu !== 1) fail.push(`po zdjęciach model dostał kolejną rundę (zapytań: ${doModelu}) – to jest „wisi po zdjęciach”`);
+  if (ekran.wiersze.some((x) => /Zdjęcia z sieci|grafik/i.test(x))) fail.push('na końcu odpowiedzi stoi wiersz „dane dla modelu” o zdjęciach');
+  if (!ekran.akcjePodZdjeciami) fail.push('pod odpowiedzią ze zdjęciami nie ma Kopiuj/Zapamiętaj/Regeneruj');
 
   /* ---- 4. Powtórka odcięta: jeden zestaw zdjęć katedry, nie dwa ---- */
-  const katedra = ekran.teksty.filter((x) => x.trim() === 'Katedra La Seu Palma').length;
+  const katedra = ekran.etykiety.filter((x) => x.trim() === 'Katedra La Seu Palma').length;
   console.log(`4. zestawów zdjęć tej samej katedry: ${katedra}`);
   if (katedra > 1) fail.push('te same zdjęcia pokazane dwa razy – odcinanie powtórek nie działa');
 
-  /* ---- 5. Ruchy narzędzi siedzą w zwijanym bloku ----
-     Wynik narzędzia z rolą `user` bez flagi `search` rysuje się jako pytanie,
-     którego nikt nie zadał – to była osobna usterka i nie chcemy jej z powrotem. */
+  /* ---- 5. Ruchy narzędzi nie udają pytań użytkownika ---- */
   const udajacePytania = await pg.evaluate(() =>
     [...document.querySelectorAll('.msg-user .msg-content')]
       .map((e) => e.textContent.trim())
@@ -110,7 +108,7 @@ if (!maPrzegladarke()) {
      przejścia do źródła – bo teraz jak klikam na zdjęcie to automatycznie
      przechodzę do linka z tym zdjęciem w kolejnej zakładce". */
   const kartPrzed = pg.context().pages().length;
-  await pg.click('.photo-tile');
+  await pg.click('.zdj-kafel');
   await pg.waitForTimeout(400);
   const podglad = await pg.evaluate(() => {
     const box = document.getElementById('img-viewer');
@@ -140,6 +138,13 @@ if (!maPrzegladarke()) {
      są warunkiem legalnego użycia. */
   if (!podglad.podpis) fail.push('podgląd nie mówi, skąd jest zdjęcie ani na jakiej licencji');
 
+  // Kilka zdjęć – strzałka prowadzi do następnego, licznik mówi, które to z ilu.
+  const licznikPrzed = await pg.evaluate(() => document.getElementById('img-viewer-licznik').textContent);
+  await pg.keyboard.press('ArrowRight');
+  await pg.waitForTimeout(250);
+  const licznikPo = await pg.evaluate(() => document.getElementById('img-viewer-licznik').textContent);
+  console.log(`   licznik podglądu: „${licznikPrzed}” → strzałka → „${licznikPo}”`);
+  if (!/1\D+\d/.test(licznikPrzed) || !/2\D+\d/.test(licznikPo)) fail.push('w podglądzie nie da się przejść do następnego zdjęcia (strzałka →)');
   await pg.keyboard.press('Escape');
   await pg.waitForTimeout(300);
   const poEscape = await pg.evaluate(() => document.getElementById('img-viewer').style.display !== 'none');

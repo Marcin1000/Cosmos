@@ -31,7 +31,7 @@
    nazwa            identyfikator do dziennika i testów
    dopasuj(acc)     zwraca wynik `match` albo null
    zawszeDozwolone  true = wolno uruchomić także w ostatniej rundzie
-                    (dotyczy narzędzi KOŃCZĄCYCH turę: płótno, obraz)
+                    (dotyczy narzędzi KOŃCZĄCYCH turę: płótno, zdjęcia, obraz)
    gdyLimit(dop)    { tresc, etykieta } – co powiedzieć modelowi, gdy rund
                     już nie ma. Samo dokończenie odpowiedzi robi wywołujący,
                     w jednym miejscu dla wszystkich narzędzi.
@@ -115,6 +115,12 @@ async function czekajNaZadanie(odp, { pobierz, readJsonSafe, t, naPostep, spij, 
  * @param {number}   z.PORCJA_ARCHIWUM ile miniatur w porcji
  * @param {object}   z.WZORCE wyrażenia rozpoznające znaczniki
  * @param {Function} z.wstawTekstModelu tekst modelu do rozmowy, z zaporą przed powtórką
+ * @param {Function} z.rozlozZdjecia tekst ze znacznikami zdjęć → tekst + miejsca (protokol.js)
+ * @param {Function} z.sekcjaWPozycji ile nagłówków stoi przed pozycją (protokol.js)
+ * @param {Function} [z.odswiezZdjecia] (wiadomość, grupa) – podmień tylko pasek tej grupy
+ * @param {Function} [z.zapiszWkrotce] (rozmowa) – zapis z krótką zwłoką (po każdej grupie zdjęć)
+ * @param {Function} [z.sygnal] () → AbortSignal tury – „Zatrzymaj” przerywa pobieranie zdjęć
+ * @param {Function} [z.metaOdpowiedzi] () → { think, note } rundy, która napisała odpowiedź
  * @returns {Array<object>} narzędzia w kolejności sprawdzania
  */
 function utworzNarzedzia(z) {
@@ -123,11 +129,11 @@ function utworzNarzedzia(z) {
     stripSearchMarker, readJsonSafe, fetch: pobierz, webSearch,
     naKafelek, naKontekst, bezOgonkowKlient, zebranyMaterial,
     zastosujZmianePlotna, pokazPlotno, mowGlosem, PORCJA_ARCHIWUM, WZORCE,
-    wstawTekstModelu,
-    // cały tekst tury i porównanie „to ten sam tekst” (opcjonalne w testach)
-    tekstTury = null, tenSamTekst = null,
+    wstawTekstModelu, rozlozZdjecia, sekcjaWPozycji,
     // silnik tury – pasek postępu dostaje kropkę w jego kolorze (opcjonalne w testach)
     znakSilnika = null,
+    // zdjęcia w jednej odpowiedzi: podmiana jednego paska, zapis po grupie, Stop, myślenie rundy
+    odswiezZdjecia = null, zapiszWkrotce = null, sygnal = null, metaOdpowiedzi = null,
   } = z;
 
   /* Wiadomość „trwa czynność", którą trzeba będzie PRZEPISAĆ, gdy czynność
@@ -242,7 +248,7 @@ function utworzNarzedzia(z) {
          Wyszukiwanie tekstu zdjęć nie pokazuje – mówimy mu, czego użyć. */
       const oZdjecia = /(?<!\p{L})(zdj[eę]ci|zdjęć|fotografi|foto|obraz(y|ów)|grafik|photos?|images?|pictures?)/iu.test(q)
         ? '\n\nUWAGA: to wyszukiwanie TEKSTU – zdjęć nie pokazuje. Jeśli użytkownik chce zdjęć, '
-          + 'użyj [GRAFIKA: miejsce 1; miejsce 2; …] z konkretnymi zapytaniami (inny kadr, pora dnia, widok).'
+          + 'wstaw w osobnej linii [GRAFIKA: nazwa miejsca] – osobny znacznik na każde miejsce, przy „inne zdjęcia” z innym ujęciem.'
         : '';
       dodajWynikNarzedzia(k.conv, wyniki + uwaga + oZdjecia, q);
       return { akcja: 'dalej' };
@@ -463,214 +469,154 @@ function utworzNarzedzia(z) {
     },
   };
 
+  /* ============ ZDJĘCIA Z SIECI – W TEJ SAMEJ ODPOWIEDZI (runda 10) ============
+     Przez długi czas plan ze znacznikami był krojony: kawałek tekstu, osobna
+     wiadomość ze zdjęciami, kolejny kawałek – i na koniec jeszcze jedna runda
+     modelu z „ZDJĘCIA POKAZANE… napisz domknięcie albo nic”. Marcin: „na
+     koniec rozmowy wisi w poszukiwaniu zdjęć” – model myślący potrafił myśleć
+     pół minuty nad CAŁYM planem, żeby napisać „Miłej podróży!” albo nic,
+     a zaproszenie „poproś o brakujące” wciągało go w pętlę (przepisany plan,
+     pięć zapytań). Do tego Kopiuj/Zapamiętaj/Regeneruj działały na ostatnim
+     kawałku, a nie na planie.
+
+     Teraz: JEDNA wiadomość z całym tekstem i listą `zdjecia` (gdzie stał
+     znacznik i w której sekcji), zdjęcia dochodzą w pasku nad sekcją,
+     a tura się KOŃCZY – bez rundy modelu po zdjęciach. Czego nie znaleziono
+     albo co się nie zmieściło, mówi sam Cosmos pod odpowiedzią. Model
+     dowie się o zdjęciach z historii: w następnej turze zobaczy własne
+     znaczniki w miejscach, gdzie je postawił (app.js, toApiMessages). */
+
+  /** Czy człowiek prosi teraz o INNE zdjęcia (wtedy pamięć rozmowy nie wystarczy). */
+  function prosiOInne(conv) {
+    const pytanie = [...conv.messages].reverse().find((m) => m && m.role === 'user' && !m.search);
+    const tekst = pytanie ? (typeof pytanie.content === 'string' ? pytanie.content : (pytanie.content && pytanie.content.text) || '') : '';
+    return /(?<!\p{L})(inn\p{L}*|więcej|wiecej|kolejn\p{L}*|nowe|nowych|other|more|different|another)(?!\p{L})/iu.test(tekst);
+  }
+
+  /** Zdjęcia, które rozmowa już pokazała – i te same zapytania z wynikami. */
+  function pamiecZdjec(conv, pomin) {
+    const pokazane = new Set();
+    const zapytania = new Map();
+    for (const w of conv.messages) {
+      if (!w || w === pomin) continue;
+      // Stary zapis: osobna wiadomość { text: zapytanie, photos } (bez `dalej` – to archiwum).
+      const stare = w.content && typeof w.content === 'object' && !w.content.dalej ? (w.content.photos || []) : [];
+      for (const f of stare) pokazane.add(f.full || f.thumb);
+      if (stare.length && w.content.text) zapytania.set(bezOgonkowKlient(w.content.text), stare);
+      for (const g of Array.isArray(w.zdjecia) ? w.zdjecia : []) {
+        for (const f of g.photos || []) pokazane.add(f.full || f.thumb);
+        if ((g.photos || []).length) zapytania.set(bezOgonkowKlient(g.q), g.photos);
+      }
+    }
+    return { pokazane, zapytania };
+  }
+
+  /**
+   * Pobierz zdjęcia grup jednej wiadomości – najwyżej cztery zapytania naraz.
+   * Każda grupa, gdy przyjdzie, podmienia TYLKO swój pasek (`odswiezZdjecia`)
+   * i trafia do zapisu – odświeżenie strony w tej fazie nie gubi już
+   * pokazanych zdjęć (it-plynnosc, runda 10).
+   */
+  async function pobierzGrupy(conv, w, grupy) {
+    const syg = typeof sygnal === 'function' ? sygnal() : null;
+    const { pokazane, zapytania } = pamiecZdjec(conv, w);
+    const inne = prosiOInne(conv);
+    /* Dwadzieścia cztery zapytania z jednej odpowiedzi to było 144 równoległe
+       żądania z serwera: Brave odrzucał 23 z 24, a pięć osób naraz stawiało
+       pętlę zdarzeń (zespół IT, runda 7). */
+    const NARAZ = 4;
+    let wolne = NARAZ;
+    const kolejka = [];
+    const wezMiejsce = () => (wolne > 0 ? (wolne--, Promise.resolve()) : new Promise((r) => kolejka.push(r)));
+    const oddajMiejsce = () => { const nast = kolejka.shift(); if (nast) nast(); else wolne++; };
+    const odswiez = (g) => {
+      if (odswiezZdjecia) odswiezZdjecia(w, g); else renderMessages();
+      if (zapiszWkrotce) zapiszWkrotce(conv); else saveConversations();
+    };
+    await Promise.all(grupy.map(async (g) => {
+      await wezMiejsce();
+      try {
+        /* „Zatrzymaj”: kolejnych zapytań już nie ma, a to, co przyszło, zostaje.
+           Dawniej Stop czekał 18 s, aż dojdzie ostatnie z czternastu zapytań. */
+        if (syg && syg.aborted) { g.stan = 'przerwane'; odswiez(g); return; }
+        /* To samo miejsce, które rozmowa już pokazała (model przepisał plan
+           po „zmień dzień 3” z tymi samymi znacznikami) – te same zdjęcia,
+           bez sieci. Chyba że człowiek prosi właśnie o inne. */
+        const znane = !inne && zapytania.get(bezOgonkowKlient(g.q));
+        if (znane) { g.photos = znane.slice(0, 8); g.stan = 'gotowe'; odswiez(g); return; }
+        const d = await jsonem(`/api/search/images?q=${encodeURIComponent(g.q)}&ile=16`, syg ? { signal: syg } : undefined);
+        if (syg && syg.aborted && !(d.results || []).length) { g.stan = 'przerwane'; odswiez(g); return; }
+        // „Możesz wyszukać jakieś inne?” dawało te same osiem – bierzemy dalsze wyniki.
+        const wyniki = d.results || [];
+        const nowe = wyniki.filter((f) => !pokazane.has(f.full || f.thumb));
+        g.photos = (nowe.length ? nowe : wyniki).slice(0, 8);
+        g.stan = g.photos.length ? 'gotowe' : 'brak';
+        if (!g.photos.length && d.error) g.blad = true; else delete g.blad;
+        odswiez(g);
+      } finally { oddajMiejsce(); }
+    }));
+    saveConversations();
+  }
+
   const grafiki = {
     nazwa: 'grafiki',
+    /* Kończy turę (bez rundy modelu po zdjęciach), więc wolno jej działać także
+       w ostatniej rundzie. Wcześniej gotowa wersja planu ze zdjęciami, która
+       wypadła w ostatniej rundzie, była wyrzucana w całości i model pisał
+       drugi plan „bez zdjęć” (agencja-rozmowa, runda 10). */
+    zawszeDozwolone: true,
     dopasuj: (acc) => acc.match(WZORCE.GRAFIKA),
-    /* Limit rund wyczerpany, a model wciąż prosi o zdjęcia. Tak skończyła się
-       rozmowa o Majorce: ostatnią rzeczą na ekranie było „🖼️ Zdjęcia:
-       Andratx, Fornalutx…" i cisza – plan urwał się w połowie. */
-    gdyLimit: () => ({
-      tresc: 'LIMIT WYSZUKIWAŃ ZDJĘĆ WYCZERPANY – nie dostaniesz już kolejnych. '
-        + 'Nie używaj więcej [GRAFIKA:]. Dokończ teraz odpowiedź tekstem: domknij '
-        + 'plan i napisz wprost, dla których miejsc zdjęć nie pokazałeś, żeby '
-        + 'użytkownik mógł o nie poprosić osobno.',
-      etykieta: t('chat.photosQuery'),
-    }),
     async wykonaj(k) {
-      /* ZDJĘCIA STOJĄ TAM, GDZIE MODEL JE POSTAWIŁ.
+      const { tresc, zdjecia, pominiete } = rozlozZdjecia(k.acc);
+      const turaOd = k.conv.__turaOd || 0;
+      /* Miejsca, których zdjęcia już stoją w tej turze – drugi raz te same
+         to dla człowieka po prostu usterka. */
+      const nowe = zdjecia.filter((g) => !k.stan.grafiki.has(bezOgonkowKlient(g.q)));
 
-         Marcin o planie na Majorkę: „te zdjęcia powinny być pod konkretnym
-         dniem, a nie najpierw cały plan, a później same zdjęcia, bo traci się
-         nawiązanie do konkretnych punktów w planie". Miał rację – i nie był to
-         problem modelu, tylko tego narzędzia. Braliśmy PIERWSZY znacznik,
-         resztę odpowiedzi zlepialiśmy w jedną wiadomość, a siatki dokładaliśmy
-         hurtem na końcu. Stąd brała się też pusta sekcja „Propozycje zdjęć":
-         nagłówek zostawał, a znaczniki pod nim znikały bez śladu.
-
-         Teraz czytamy WSZYSTKIE znaczniki razem z ich miejscem w tekście
-         i odtwarzamy kolejność: kawałek planu, siatka pod nim, kolejny
-         kawałek, kolejna siatka. Wszystko w jednej rundzie, bo limit wynosi
-         cztery rundy na całą turę – przy rundzie na dzień siedmiodniowy plan
-         urwałby się w środę. */
-      const WZ = new RegExp(WZORCE.GRAFIKA.source, 'gi');
-      const segmenty = [];
-      let odKad = 0;
-      let m = null;
-      /* Szesnaście siatek i dwadzieścia cztery zapytania na odpowiedź. Przy
-         dziesięciu siatkach plan Sycylii zgubił Etnę, Katanię i plażę – bez
-         słowa: ich znaczniki lądowały w ogonie i znikały. Teraz to, co się
-         nie zmieściło, model dostaje z nazwy i może poprosić o to osobno. */
-      const MAX_SIATEK = 16;
-      const MAX_ZAPYTAN = 24;
-      const pominiete = [];
-      let zapytan = 0;
-      while ((m = WZ.exec(k.acc)) !== null) {
-        const zapytania = m[1].split(';').map((x) => x.trim()).filter(Boolean);
-        if (segmenty.length >= MAX_SIATEK || zapytan >= MAX_ZAPYTAN) {
-          pominiete.push(...zapytania);
-          // Tekst między pominiętymi znacznikami zostaje – znika tylko znacznik.
-          segmenty.push({ tekst: k.acc.slice(odKad, m.index), zapytania: [] });
-          odKad = m.index + m[0].length;
-          continue;
-        }
-        const wzięte = zapytania.slice(0, Math.min(4, MAX_ZAPYTAN - zapytan));
-        pominiete.push(...zapytania.slice(wzięte.length));
-        zapytan += wzięte.length;
-        segmenty.push({ tekst: k.acc.slice(odKad, m.index), zapytania: wzięte });
-        odKad = m.index + m[0].length;
+      /* Tekst przez zaporę przed powtórką: odpowiedź, która przepisuje wstęp
+         z wcześniejszej rundy (np. przed [SZUKAJ:]), PODMIENIA go zamiast
+         stawać obok. Gdy cała tura już jest na ekranie – zdjęcia idą do
+         ostatniej wypowiedzi, a tekst drugi raz nie wchodzi. */
+      let w = tresc.trim() ? wstawTekstModelu(k.conv, tresc, turaOd) : null;
+      if (!w && tresc.trim()) {
+        w = [...k.conv.messages.slice(turaOd)].reverse()
+          .find((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status && !m.error) || null;
       }
-      const ogon = k.acc.slice(odKad);
-
-      /* Miejsca, których zdjęcia już wiszą wyżej w tej turze. Model po
-         dostaniu wyniku lubi poprosić o to samo jeszcze raz – a drugi raz
-         te same zdjęcia to dla użytkownika po prostu usterka. */
-      const wszystkie = [];
-      for (const seg of segmenty) {
-        seg.zapytania = seg.zapytania.filter((q) => {
-          const klucz = bezOgonkowKlient(q);
-          if (k.stan.grafiki.has(klucz) || wszystkie.some((x) => bezOgonkowKlient(x) === klucz)) {
-            return false;
-          }
-          wszystkie.push(q);
-          return true;
-        });
+      if (!w) {
+        w = { role: 'assistant', content: tresc, ...(znakSilnika ? znakSilnika() : {}) };
+        k.conv.messages.push(w);
       }
-      if (!wszystkie.length) {
-        dodajWynikNarzedzia(k.conv,
-          'ZDJĘCIA TYCH MIEJSC JUŻ POKAZAŁEŚ. Nie proś o nie ponownie. Albo poproś '
-          + 'o INNE miejsca z planu, albo dokończ odpowiedź tekstem.',
-          t('chat.photosQuery'));
-        return { akcja: 'dalej' };
-      }
-
-      /* TEKST NIE ZNIKA NA CZAS SZUKANIA. Marcin o planie Sycylii: „w momencie,
-         kiedy szukał zdjęć, nagle cała jego odpowiedź zniknęła, po czym
-         pojawiła się wraz ze zdjęciami”. Wcześniej w miejsce odpowiedzi stawał
-         pasek „Szukam zdjęć…”, a plan wracał dopiero z gotowymi siatkami.
-         Teraz od razu stoi pokrojony plan, pod każdym punktem miejsce na
-         zdjęcia (szkielet siatki), a siatki wypełniają się, gdy przychodzą. */
-      /* Zdjęcia, które ta rozmowa już pokazała. „Możesz wyszukać jakieś
-         inne?” dawało te same osiem – teraz bierzemy dalsze wyniki. */
-      const juzPokazane = new Set();
-      for (const w of k.conv.messages) {
-        const fotki = w && w.content && typeof w.content === 'object' ? (w.content.photos || []) : [];
-        for (const f of fotki) juzPokazane.add(f.full || f.thumb);
-      }
-      const miejsca = new Map();
-      const oczyscKawalek = (tresc) => stripSearchMarker(tresc)
-        // Punkt listy, po którym nic nie zostało – na końcu i w środku.
-        .replace(/^[ \t]*[-*•]\s*$/gm, '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      /* Kawałki planu idą do rozmowy WPROST, nie przez zaporę przed powtórką.
-         Zapora porównuje z każdą wypowiedzią tury i przy podobnym początku
-         PODMIENIA starą – kawałek planu nadpisywał wtedy poprzedni kawałek
-         i część odpowiedzi znikała (agencja, runda 7). Powtórkę całego planu
-         łapiemy raz, na całości: plan przepisany od nowa nie wchodzi drugi raz,
-         a siatki dla nowych miejsc stają pod tym, co już jest na ekranie. */
-      const kawalki = [...segmenty.map((s) => oczyscKawalek(s.tekst)), oczyscKawalek(ogon)];
-      const calosc = kawalki.filter(Boolean).join('\n\n');
-      const planJuzJest = Boolean(tekstTury && tenSamTekst
-        && tenSamTekst(tekstTury(k.conv, k.conv.__turaOd || 0), calosc));
-      const dodajTekst = (czysty) => {
-        if (planJuzJest || !/\p{L}|\p{N}/u.test(czysty)) return;
-        k.conv.messages.push({ role: 'assistant', content: czysty, ...(znakSilnika ? znakSilnika() : {}) });
-      };
-      /* PUSTE PUNKTY PO WYCIĘTYCH ZNACZNIKACH.
-         Model pisze znacznik jako punkt listy: „- [GRAFIKA: …]". Po jego
-         usunięciu zostaje sam myślnik, a przy dwóch znacznikach pod rząd –
-         cała wiadomość złożona z jednego „-". Marcin: „są też jakieś
-         dodatkowe puste punkty". Ucinamy osierocone punkty listy i nie
-         wstawiamy kawałków, w których nie została ani jedna litera. */
-      segmenty.forEach((seg, i) => {
-        dodajTekst(kawalki[i]);
-        for (const q of seg.zapytania) {
-          /* Podpis nad siatką zostaje ZAWSZE, także przy jednym zestawie.
-             To on wiąże zdjęcia z punktem planu, pod którym stoją. */
-          const w = { role: 'assistant', content: { text: q, photos: [], szukam: true }, ...(znakSilnika ? znakSilnika() : {}) };
-          k.conv.messages.push(w);
-          miejsca.set(bezOgonkowKlient(q), w);
-        }
-      });
-      dodajTekst(kawalki[kawalki.length - 1]);
-      saveConversations();
-      renderMessages();
-
-      // Równolegle – inaczej trzy zapytania to trzy razy dłuższe czekanie.
-      // Każda siatka wskakuje na swoje miejsce, gdy tylko przyjdzie.
-      /* …ale najwyżej cztery naraz. Dwadzieścia cztery zapytania z jednej
-         odpowiedzi to było 144 równoległe żądania z serwera: Brave odrzucał
-         23 z 24, a pięć osób naraz stawiało pętlę zdarzeń (zespół IT, runda 7). */
-      const NARAZ = 4;
-      let wolne = NARAZ;
-      const kolejka = [];
-      const wezMiejsce = () => (wolne > 0 ? (wolne--, Promise.resolve()) : new Promise((r) => kolejka.push(r)));
-      const oddajMiejsce = () => { const nast = kolejka.shift(); if (nast) nast(); else wolne++; };
-      const zestawy = await Promise.all(wszystkie.map(async (q) => {
-        await wezMiejsce();
-        try { return await jednaSiatka(q); } finally { oddajMiejsce(); }
+      if (znakSilnika && !w.silnik) Object.assign(w, znakSilnika());
+      // Myślenie i notka o modelu z tej rundy – jak przy zwykłej odpowiedzi (domknijOdpowiedz).
+      const meta = metaOdpowiedzi ? metaOdpowiedzi() : null;
+      if (meta) for (const [klucz, wartosc] of Object.entries(meta)) if (wartosc) w[klucz] = wartosc;
+      /* Pozycje liczone względem `tresc`. Gdy zdjęcia trafiają do wypowiedzi
+         o innym brzmieniu (cała tura już stała), stają na jej końcu. */
+      const tenSam = w.content === tresc;
+      const koniec = String(w.content || '').length;
+      const grupy = nowe.map((g) => ({
+        q: g.q, etykieta: g.etykieta,
+        po: tenSam ? g.po : koniec,
+        sekcja: tenSam ? g.sekcja : sekcjaWPozycji(w.content, koniec),
+        photos: [], stan: 'szukam',
       }));
-      async function jednaSiatka(q) {
-        const d = await jsonem(`/api/search/images?q=${encodeURIComponent(q)}&ile=16`);
-        const nowe = (d.results || []).filter((f) => !juzPokazane.has(f.full || f.thumb));
-        const photos = (nowe.length ? nowe : (d.results || [])).slice(0, 8);
-        const w = miejsca.get(bezOgonkowKlient(q));
-        if (photos.length) w.content = { text: q, photos };
-        else {
-          const gdzie = k.conv.messages.indexOf(w);
-          if (gdzie >= 0) k.conv.messages.splice(gdzie, 1);
-        }
-        renderMessages();
-        return { q, photos, error: d.error || '' };
-      }
-      const znalezione = zestawy.filter((x) => x.photos.length);
-      saveConversations();
-      const uwagaPominiete = pominiete.length
-        ? `\nPOMINIĘTE (limit siatek w jednej odpowiedzi): ${pominiete.join(', ')}. Jeśli użytkownik ich `
-          + 'potrzebuje, poproś o nie JEDNYM znacznikiem [GRAFIKA: …] w kolejnej odpowiedzi.'
-        : '';
-
-      if (!znalezione.length) {
-        /* Niepowodzenie wraca do modelu tak samo jak wynik. Kiedyś kończyliśmy
-           tutaj: użytkownik dostawał „nie znalazłem", a model nie dowiadywał
-           się o niczym – i następne zdanie użytkownika trafiało w próżnię. */
-        const powod = zestawy.map((x) => x.error).filter(Boolean).join('; ');
-        /* Człowiekowi jedno zdanie, bez nazw usług i angielskich wyjątków
-           („searxng: The operation was aborted…”); powód techniczny idzie
-           tylko do modelu, niżej (agencja, runda 5). */
-        k.conv.messages.push({ role: 'assistant', content: t(powod ? 'chat.photosNoneErr' : 'chat.photosNoneEmpty'), status: true });
-        saveConversations();
-        renderMessages();
-        dodajWynikNarzedzia(k.conv,
-          `WYSZUKIWANIE GRAFIK NIE DAŁO WYNIKÓW dla: ${wszystkie.join(', ')}.\n`
-          + (powod ? `Powód techniczny: ${powod}\n` : '')
-          + 'Twoja odpowiedź jest już pokazana użytkownikowi – nie pisz jej od nowa. '
-          + 'Nie powtarzaj tego samego zapytania. Jeśli było ogólnikowe – spróbuj RAZ '
-          + 'konkretniejszego. Jeśli było już konkretne, nie szukaj ponownie: powiedz '
-          + 'wprost, że nie udało się znaleźć zdjęć, i zapytaj, czego dokładnie szukać.'
-          + uwagaPominiete,
-          t('chat.photosQuery'));
-        return { akcja: 'dalej' };
-      }
-
-      const poZapytaniu = new Map(znalezione.map((x) => [bezOgonkowKlient(x.q), x]));
-      for (const x of znalezione) k.stan.grafiki.add(bezOgonkowKlient(x.q));
+      if (grupy.length) w.zdjecia = [...(Array.isArray(w.zdjecia) ? w.zdjecia : []), ...grupy];
+      if (pominiete.length) w.zdjeciaPominiete = [...(w.zdjeciaPominiete || []), ...pominiete];
+      for (const g of grupy) k.stan.grafiki.add(bezOgonkowKlient(g.q));
       saveConversations();
       renderMessages();
-
-      const bezWynikow = wszystkie.filter((q) => !poZapytaniu.has(bezOgonkowKlient(q)));
-      dodajWynikNarzedzia(k.conv,
-        'ZDJĘCIA POKAZANE UŻYTKOWNIKOWI, KAŻDE POD SWOIM PUNKTEM PLANU (już je '
-        + 'widzi – nie opisuj ich po kolei, nie przypisuj ich jeszcze raz do dni '
-        + 'i nie rób z tego osobnej listy na końcu):\n'
-        + znalezione.map((x) => `• ${x.q} – ${x.photos.length} szt.`).join('\n')
-        + (bezWynikow.length ? `\nBEZ WYNIKÓW: ${bezWynikow.join(', ')}` : '')
-        + uwagaPominiete
-        + '\n\nJeśli odpowiedź jest kompletna – napisz krótkie domknięcie albo nic. '
-        + 'Jeśli w planie zostały przystanki bez zdjęć, poproś o nie JEDNYM '
-        + 'znacznikiem [GRAFIKA: a; b; c]. Nie proś ponownie o to, co już masz powyżej.',
-        t('chat.photosQuery'));
-      return { akcja: 'dalej' };
+      if (grupy.length) await pobierzGrupy(k.conv, w, grupy);
+      return { akcja: 'koniec', finalText: String(w.content || ''), zdjecia: grupy.some((g) => g.stan === 'gotowe') };
+    },
+    /** Zdjęcia zapisane jako „do pobrania” (odpowiedź-sierota z serwera,
+     *  odświeżenie strony w fazie zdjęć) – dociągane po otwarciu rozmowy,
+     *  bez modelu i bez kosztu. */
+    async dociagnij(conv, w) {
+      const grupy = (Array.isArray(w.zdjecia) ? w.zdjecia : []).filter((g) => g.stan === 'do-pobrania');
+      if (!grupy.length) return false;
+      for (const g of grupy) g.stan = 'szukam';
+      await pobierzGrupy(conv, w, grupy);
+      return true;
     },
   };
 

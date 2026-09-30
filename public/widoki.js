@@ -26,8 +26,8 @@
  * @param {Function} z.msgPhotos zdjęcia z wiadomości
  * @param {Function} z.msgDalej stan stronicowania wyniku archiwum
  * @param {number}   z.PORCJA_ARCHIWUM ile miniatur dobiera jedno kliknięcie
- * @returns {object} { runPanel, photosGrid, stopkaArchiwum, naKafelek,
- *                     openTextViewer, openImageViewer, closeImageViewer }
+ * @returns {object} { runPanel, photosGrid, pasekZdjec, stopkaArchiwum, naKafelek,
+ *                     openTextViewer, openImageViewer, przesunPodglad, closeImageViewer }
  */
 function utworzWidoki(z) {
   const {
@@ -177,6 +177,201 @@ function utworzWidoki(z) {
     return wrap;
   }
 
+  /* ============ PASEK ZDJĘĆ NAD SEKCJĄ ODPOWIEDZI (runda 10) ============
+     Zamiast siatki 2×4 w osobnej wiadomości pod każdym punktem planu (577 px
+     na miejsce, 62% wysokości rozmowy na telefonie) – poziomy pasek nad
+     treścią sekcji, której dotyczy, jak w ChatGPT (projekt agencja-ux,
+     makieta-karuzeli.html). Etykieta miejsca tylko na pierwszym kaflu,
+     źródło i licencja pod kursorem i w podglądzie.
+
+     Pamięć i sieć (it-plynnosc): pierwsze trzy kafle paska ładują się
+     natywnie leniwie, dalsze dopiero, gdy pasek przewinie się w ich stronę
+     (jeden IntersectionObserver na pasek, `root` = tor). Bez tego telefon
+     ściągał od razu 72 ze 112 miniatur planu. */
+  const IK_ZDJ = {
+    pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/></svg>',
+    lewo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    prawo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+    brak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 15l4-4 4 4 3-3 5 5"/><path d="M3 3l18 18"/></svg>',
+  };
+  const linkBezpieczny = (u) => (typeof u === 'string' && (/^https?:\/\//i.test(u) || /^\/(?!\/)/.test(u)) ? u : '');
+  const stronaZrodla = (p) => (typeof p.source === 'string' && /^https?:\/\//i.test(p.source) ? p.source : '');
+  const hostZdjecia = (p) => {
+    if (p.zrodlo) return p.zrodlo;
+    try { return new URL(p.source).hostname.replace(/^www\./, ''); } catch { return ''; }
+  };
+  const miniatura = (p) => (/^\/(?!\/)/.test(p.thumb || '') ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb || '')}`);
+
+  /** Wszystkie zdjęcia odpowiedzi w kolejności pasków – podgląd przewija przez całość. */
+  function zdjeciaOdpowiedzi(grupy) {
+    const lista = [];
+    for (const g of grupy) {
+      if (g.stan !== 'gotowe') continue;
+      const fotki = g.photos || [];
+      fotki.forEach((p, i) => lista.push({ p, g, i: i + 1, n: fotki.length }));
+    }
+    return lista;
+  }
+
+  /**
+   * Pasek jednej sekcji.
+   *
+   * @param {Array<object>} grupy grupy tej sekcji (`zdjecia` wiadomości, kolejność `po`)
+   * @param {Array<object>} wszystkie wszystkie grupy odpowiedzi – dla podglądu
+   * @returns {HTMLElement|null} `.zdj-pasek` albo null, gdy nie ma czego pokazać
+   */
+  function pasekZdjec(grupy, wszystkie = grupy) {
+    const gotowe = grupy.filter((g) => g.stan === 'gotowe' && (g.photos || []).length);
+    const czekaja = grupy.filter((g) => g.stan === 'szukam' || g.stan === 'do-pobrania');
+    if (!gotowe.length && !czekaja.length) return null;
+    const pasek = document.createElement('div');
+    pasek.className = 'zdj-pasek';
+    const tor = document.createElement('div');
+    tor.className = 'zdj-tor';
+    const miejsca = gotowe.map((g) => g.etykieta || g.q);
+    if (gotowe.length) {
+      pasek.setAttribute('role', 'region');
+      pasek.setAttribute('aria-label', t('photo.pasekMiejsca', { miejsca: miejsca.join(', ') }));
+    } else {
+      pasek.setAttribute('role', 'status');
+      pasek.setAttribute('aria-label', t('chat.photosLoading'));
+    }
+    if (czekaja.length) pasek.setAttribute('aria-busy', 'true');
+    const lista = zdjeciaOdpowiedzi(wszystkie);
+    for (const g of grupy) {
+      if (g.stan === 'szukam' || g.stan === 'do-pobrania') {
+        // Szkielet w wymiarach kafli – tekst pod paskiem nie skacze, gdy przyjdą zdjęcia.
+        for (let i = 0; i < 3; i++) {
+          const s = document.createElement('span');
+          s.className = 'zdj-kafel szkielet';
+          s.setAttribute('aria-hidden', 'true');
+          tor.appendChild(s);
+        }
+        continue;
+      }
+      if (g.stan !== 'gotowe') continue;
+      const etykieta = g.etykieta || g.q || '';
+      (g.photos || []).forEach((p, i) => {
+        const a = document.createElement('a');
+        a.className = 'zdj-kafel';
+        const zrodlo = stronaZrodla(p);
+        a.href = zrodlo || linkBezpieczny(p.full) || '#';
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        const host = hostZdjecia(p);
+        a.title = [etykieta, host, p.licencja].filter(Boolean).join(' · ');
+        if (i === 0) {
+          a.dataset.miejsceStart = '';
+          a.setAttribute('aria-label', t('photo.etykietaAria', { miejsce: etykieta, n: (g.photos || []).length }));
+        }
+        const img = document.createElement('img');
+        img.alt = etykieta || p.title || t('photo.found');
+        img.width = 208;
+        img.height = 156;
+        img.decoding = 'async';
+        const adres = miniatura(p);
+        if (tor.children.length < 3) { img.loading = 'lazy'; img.src = adres; } else img.dataset.src = adres;
+        let wprost = /^\/(?!\/)/.test(p.thumb || '');
+        img.addEventListener('error', () => {
+          // Proxy odmówiło – przeglądarka może pobrać obrazek sama; potem kafel z odnośnikiem.
+          if (!wprost && /^https:\/\//i.test(p.thumb || '')) { wprost = true; img.src = p.thumb; return; }
+          img.remove();
+          a.classList.add('pusty');
+          a.title = t('photo.niewczytaneTytul');
+          const info = document.createElement('span');
+          info.innerHTML = IK_ZDJ.brak;
+          info.append(document.createTextNode(t('photo.niewczytane')));
+          a.prepend(info);
+        });
+        a.appendChild(img);
+        if (host) {
+          const chip = document.createElement('span');
+          chip.className = 'zdj-zrodlo';
+          chip.textContent = host;
+          a.appendChild(chip);
+        }
+        if (i === 0 && etykieta) {
+          const et = document.createElement('span');
+          et.className = 'zdj-etykieta';
+          et.innerHTML = IK_ZDJ.pin;
+          const b = document.createElement('b');
+          b.textContent = etykieta;
+          et.appendChild(b);
+          a.appendChild(et);
+        }
+        const nr = lista.findIndex((x) => x.p === p);
+        a.addEventListener('click', (e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          otworzZdjeciaOdpowiedzi(lista, Math.max(0, nr));
+        });
+        tor.appendChild(a);
+      });
+    }
+    const krok = (kier) => tor.scrollBy({ left: kier * Math.max(120, tor.clientWidth - 60),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const strzalka = (klasa, ikona, klucz, kier) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `zdj-strzalka ${klasa}`;
+      b.innerHTML = ikona;
+      b.setAttribute('aria-label', t(klucz));
+      b.tabIndex = -1;      // strzałki są dla myszy; klawiatura ma ←/→ na kaflach
+      b.addEventListener('click', () => krok(kier));
+      return b;
+    };
+    pasek.append(tor, strzalka('wstecz', IK_ZDJ.lewo, 'photo.wstecz', -1), strzalka('dalej', IK_ZDJ.prawo, 'photo.dalej', 1));
+    const stan = () => {
+      pasek.toggleAttribute('data-wstecz', tor.scrollLeft > 4);
+      pasek.toggleAttribute('data-dalej', tor.scrollLeft + tor.clientWidth < tor.scrollWidth - 4);
+    };
+    tor.addEventListener('scroll', stan, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(stan).observe(tor);
+    // Jeden przystanek Tab na pasek, ←/→ Home/End między kaflami.
+    const kafle = [...tor.querySelectorAll('a.zdj-kafel')];
+    kafle.forEach((k, i) => k.setAttribute('tabindex', i === 0 ? '0' : '-1'));
+    tor.addEventListener('keydown', (e) => {
+      const i = kafle.indexOf(document.activeElement);
+      if (i < 0) return;
+      const cel = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: kafle.length - 1 }[e.key];
+      if (cel === undefined || !kafle[cel]) return;
+      e.preventDefault();
+      kafle[i].setAttribute('tabindex', '-1');
+      kafle[cel].setAttribute('tabindex', '0');
+      kafle[cel].focus({ preventScroll: true });
+      kafle[cel].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    const odlozone = tor.querySelectorAll('img[data-src]');
+    if (odlozone.length) {
+      const wczytaj = (img) => { img.src = img.dataset.src; img.removeAttribute('data-src'); };
+      if (typeof IntersectionObserver !== 'undefined') {
+        const io = new IntersectionObserver((wpisy) => {
+          for (const w of wpisy) if (w.isIntersecting) { wczytaj(w.target); io.unobserve(w.target); }
+        }, { root: tor, rootMargin: '0px 50% 0px 0px' });
+        odlozone.forEach((img) => io.observe(img));
+      } else odlozone.forEach(wczytaj);
+    }
+    return pasek;
+  }
+
+  /** Podgląd przez wszystkie zdjęcia odpowiedzi, od `nr`. */
+  function otworzZdjeciaOdpowiedzi(lista, nr) {
+    const wpisy = lista.map(({ p, g, i, n }) => {
+      const zrodlo = stronaZrodla(p);
+      return {
+        src: p.podglad || linkBezpieczny(p.full) || miniatura(p),
+        zapas: p.podglad ? '' : miniatura(p),
+        zrodlo: p.podglad ? '' : zrodlo,
+        tytul: p.title || '',
+        opis: [hostZdjecia(p), p.licencja].filter(Boolean).join(' · '),
+        miejsce: g.etykieta || g.q || '',
+        i, n,
+      };
+    });
+    if (!wpisy.length) return;
+    openImageViewer(wpisy[nr].src, { ...wpisy[nr], lista: wpisy, indeks: nr });
+  }
+
   /* Ile miniatur dobieramy jednym kliknięciem. Każda to osobne zapytanie do
      OneDrive w chwili wyświetlenia, więc porcja jest kompromisem: za mała każe
      klikać bez końca, za duża zamraża telefon na kilkanaście sekund. */
@@ -307,6 +502,13 @@ function utworzWidoki(z) {
    *                        `zrodlo` – strona, z której zdjęcie pochodzi;
    *                        `tytul`, `opis` – podpis pod obrazem
    */
+  /* LISTA W PODGLĄDZIE (runda 10): zdjęcia z paska odpowiedzi oglądane jedno
+     po drugim – strzałki, ←/→, przesunięcie palcem. Pełny plik wczytujemy
+     tylko dla bieżącego i sąsiednich (it-plynnosc: podgląd „przez wszystko”
+     ściągał jednym dotknięciem 112 oryginałów, 42 MB). */
+  let listaPodgladu = null;
+  let indeksPodgladu = 0;
+
   function openImageViewer(src, opcje = {}) {
     const box = $('img-viewer');
     const img = $('img-viewer-img');
@@ -320,7 +522,7 @@ function utworzWidoki(z) {
       img.onerror = () => { img.onerror = null; img.src = opcje.zapas; imageViewerSrc = opcje.zapas; };
     }
     img.src = src;
-    img.alt = opcje.tytul || '';
+    img.alt = opcje.tytul || opcje.miejsce || '';
 
     if (zrodlo) {
       zrodlo.hidden = !opcje.zrodlo;
@@ -332,8 +534,40 @@ function utworzWidoki(z) {
       podpis.hidden = !tekst;
     }
 
+    listaPodgladu = Array.isArray(opcje.lista) ? opcje.lista : null;
+    indeksPodgladu = Number(opcje.indeks) || 0;
+    const gdzie = $('img-viewer-gdzie');
+    if (gdzie) {
+      gdzie.hidden = !(listaPodgladu && opcje.miejsce);
+      if (!gdzie.hidden) {
+        $('img-viewer-miejsce').textContent = opcje.miejsce;
+        $('img-viewer-licznik').textContent = t('photo.licznik', { i: opcje.i || 1, n: opcje.n || 1 });
+      }
+    }
+    for (const [id, kier] of [['img-viewer-prev', -1], ['img-viewer-next', 1]]) {
+      const b = $(id);
+      if (b) b.hidden = !listaPodgladu || !listaPodgladu[indeksPodgladu + kier];
+    }
+    // Sąsiedzi naprzód – przesunięcie nie czeka na sieć, a dalsze zdjęcia nie ruszają.
+    if (listaPodgladu) {
+      for (const kier of [-1, 1]) {
+        const s = listaPodgladu[indeksPodgladu + kier];
+        if (s && s.src) { const wstepne = new Image(); wstepne.decoding = 'async'; wstepne.src = s.src; }
+      }
+    }
+
     box.style.display = '';
     imageViewerSrc = src;
+  }
+
+  /** Następne / poprzednie zdjęcie listy w podglądzie. */
+  function przesunPodglad(kier) {
+    if (!listaPodgladu) return false;
+    const nowy = indeksPodgladu + kier;
+    const w = listaPodgladu[nowy];
+    if (!w) return false;
+    openImageViewer(w.src, { ...w, lista: listaPodgladu, indeks: nowy });
+    return true;
   }
 
   function closeImageViewer() {
@@ -345,7 +579,33 @@ function utworzWidoki(z) {
     if (zrodlo) zrodlo.hidden = true;
     const podpis = $('img-viewer-caption');
     if (podpis) { podpis.textContent = ''; podpis.hidden = true; }
+    const gdzie = $('img-viewer-gdzie');
+    if (gdzie) gdzie.hidden = true;
+    for (const id of ['img-viewer-prev', 'img-viewer-next']) { const b = $(id); if (b) b.hidden = true; }
+    listaPodgladu = null;
     imageViewerSrc = '';
+  }
+
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    const otwarty = () => { const box = $('img-viewer'); return Boolean(box && box.style.display !== 'none' && listaPodgladu); };
+    document.addEventListener('keydown', (e) => {
+      if (!otwarty()) return;
+      if (e.key === 'ArrowRight' && przesunPodglad(1)) e.preventDefault();
+      if (e.key === 'ArrowLeft' && przesunPodglad(-1)) e.preventDefault();
+    });
+    let dotyk = null;
+    document.addEventListener('touchstart', (e) => {
+      if (!otwarty() || e.touches.length !== 1) { dotyk = null; return; }
+      dotyk = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      if (!dotyk || !otwarty()) return;
+      const k = e.changedTouches[0];
+      const dx = k.clientX - dotyk.x;
+      const dy = k.clientY - dotyk.y;
+      dotyk = null;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) przesunPodglad(dx < 0 ? 1 : -1);
+    }, { passive: true });
   }
 
   let imageViewerSrc = '';
@@ -377,6 +637,8 @@ function utworzWidoki(z) {
   return {
     runPanel,
     photosGrid,
+    pasekZdjec,
+    przesunPodglad,
     stopkaArchiwum,
     naKafelek,
     openTextViewer,

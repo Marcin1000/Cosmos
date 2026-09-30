@@ -753,8 +753,8 @@ const PORCJA_ARCHIWUM = 24;
    w `public/widoki.js` – patrz nagłówek tamtego pliku. Tutaj zostaje
    samo podpięcie ich do stanu aplikacji. */
 const {
-  runPanel, photosGrid, stopkaArchiwum, naKafelek,
-  openTextViewer, openImageViewer, closeImageViewer, downloadViewedImage,
+  runPanel, photosGrid, pasekZdjec, stopkaArchiwum, naKafelek,
+  openTextViewer, openImageViewer, przesunPodglad, closeImageViewer, downloadViewedImage,
 } = utworzWidoki({
   t, readJsonSafe, saveConversations, renderMessages,
   msgPhotos, msgDalej, PORCJA_ARCHIWUM,
@@ -795,6 +795,104 @@ function dopiszProwadzi(podpis) {
    starcie i zdejmuje na końcu. */
 let znakTury = null;
 const znakSilnika = () => znakTury || ({ silnik: endpoint, model: currentModel() || '' });
+
+/* ============ ZDJĘCIA W ODPOWIEDZI – paski nad sekcjami (runda 10) ============
+   Wiadomość z `zdjecia` (public/narzedzia.js) rysuje się RAZ: tekst Markdownem,
+   a paski wstawiamy za nagłówkiem sekcji, pod którym stał znacznik (sekcja 0 –
+   na samej górze, jak w ChatGPT). Tekst nie jest cięty, więc Kopiuj, Zapamiętaj,
+   Regeneruj i eksport biorą całą odpowiedź.
+
+   Paski PRZEŻYWAJĄ przebudowę rozmowy (it-plynnosc): każda przebudowa tworzyła
+   od nowa 112 miniatur planu i telefon ściągał je wszystkie, a przyjście zdjęć
+   jednego miejsca przebudowywało całą rozmowę. Teraz element paska z pamięci
+   wraca na swoje miejsce, a grupa, która przyszła, podmienia tylko swój pasek. */
+const elementyWiadomosci = new WeakMap();   // wiadomość → element .msg na ekranie
+const paskiPamiec = new WeakMap();          // wiadomość → Map(sekcja → { klucz, el })
+const kluczPaska = (grupy) => grupy.map((g) => `${g.q}|${g.stan}|${(g.photos || []).length}|${((g.photos || [])[0] || {}).thumb || ''}`).join('§');
+/** Stary zapis: zdjęcia z sieci jako osobna wiadomość { text: zapytanie, photos } (bez `dalej` – to archiwum). */
+const zdjeciaZSieci = (m) => Boolean(m && m.role === 'assistant' && !m.search && m.content && typeof m.content === 'object'
+  && Array.isArray(m.content.photos) && !m.content.dalej && !m.content.szukam && !m.content.run);
+/** Pierwszy blok treści odpowiedzi – nad nim staje pasek sekcji 0. */
+const pierwszyBlokTresci = (body) => [...body.children]
+  .find((c) => !c.matches('details.think-block, .model-note, .msg-docs, .msg-images, .zdj-pasek')) || null;
+
+function wstawPaski(body, m, zrodlo = m) {
+  const grupy = Array.isArray(m.zdjecia) ? m.zdjecia : [];
+  const naglowki = body.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4');
+  // Nagłówek, którego nie ma (inny Markdown niż przy zapisie) – pasek na górę, nie w próżnię.
+  const efektywna = (g) => { const n = Number(g.sekcja) || 0; return n > 0 && naglowki[n - 1] ? n : 0; };
+  const poSekcjach = new Map();
+  for (const g of [...grupy].sort((a, b) => (Number(a.po) || 0) - (Number(b.po) || 0))) {
+    const n = efektywna(g);
+    if (!poSekcjach.has(n)) poSekcjach.set(n, []);
+    poSekcjach.get(n).push(g);
+  }
+  let pamiec = paskiPamiec.get(zrodlo);
+  if (!pamiec) { pamiec = new Map(); paskiPamiec.set(zrodlo, pamiec); }
+  const zostaja = new Set();
+  for (const [n, gr] of [...poSekcjach].sort((a, b) => a[0] - b[0])) {
+    const klucz = kluczPaska(gr);
+    const zPamieci = pamiec.get(n);
+    let pasek = zPamieci && zPamieci.klucz === klucz ? zPamieci.el : null;
+    if (!pasek) {
+      pasek = pasekZdjec(gr, grupy);
+      if (pasek) { pasek.dataset.sekcja = String(n); pamiec.set(n, { klucz, el: pasek }); } else pamiec.delete(n);
+    }
+    const obecny = body.querySelector(`:scope > .zdj-pasek[data-sekcja="${n}"]`);
+    if (!pasek) { if (obecny) obecny.remove(); continue; }
+    zostaja.add(pasek);
+    if (obecny === pasek) continue;
+    if (obecny) obecny.replaceWith(pasek);
+    else if (n > 0) naglowki[n - 1].after(pasek);
+    else body.insertBefore(pasek, pierwszyBlokTresci(body));
+  }
+  for (const stary of body.querySelectorAll(':scope > .zdj-pasek')) if (!zostaja.has(stary)) stary.remove();
+  /* Czego zabrakło – mówi Cosmos, bez rundy modelu. Dawniej robił to model
+     w osobnej rundzie po zdjęciach („wisi w poszukiwaniu zdjęć”). */
+  const stare = body.querySelector(':scope > .cosmos-uwagi');
+  const uwagi = uwagiOdpowiedzi(m);
+  if (stare) stare.remove();
+  if (uwagi) {
+    const przed = body.querySelector(':scope > .run-panel, :scope > .msg-bledu-akcje');
+    body.insertBefore(uwagi, przed);
+  }
+}
+
+function uwagiOdpowiedzi(m) {
+  const grupy = Array.isArray(m.zdjecia) ? m.zdjecia : [];
+  const nazwy = (lista) => lista.map((g) => g.etykieta || g.q).join(', ');
+  const zdania = [];
+  const brak = grupy.filter((g) => g.stan === 'brak');
+  if (brak.length) {
+    // Wyszukiwarki nie odpowiadają – to co innego niż „nie ma takich zdjęć”.
+    const awaria = brak.every((g) => g.blad) && !grupy.some((g) => g.stan === 'gotowe');
+    zdania.push(awaria ? t('chat.photosNoneErr') : t('photo.bezWynikow', { miejsca: nazwy(brak) }));
+  }
+  const pominiete = Array.isArray(m.zdjeciaPominiete) ? m.zdjeciaPominiete.filter(Boolean) : [];
+  if (pominiete.length) zdania.push(t('photo.pominiete', { miejsca: pominiete.join(', ') }));
+  // Odpowiedź-sierota: narzędzie (szukanie, plan, archiwum) miało ruszyć, gdy aplikacja była zamknięta.
+  if (m.przerwaneNarzedzie) zdania.push(t('bieg.narzedzie'));
+  if (!zdania.length) return null;
+  const box = document.createElement('div');
+  box.className = 'cosmos-uwagi';
+  for (const zdanie of zdania) {
+    const p = document.createElement('p');
+    p.className = 'zdj-brak';
+    p.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+    const tekst = document.createElement('span');
+    tekst.textContent = zdanie;
+    p.appendChild(tekst);
+    box.appendChild(p);
+  }
+  return box;
+}
+
+/** Grupa zdjęć przyszła: podmień tylko paski tej wiadomości (bez przebudowy rozmowy). */
+function odswiezPaski(w) {
+  const msg = elementyWiadomosci.get(w);
+  const body = msg && msg.isConnected ? msg.querySelector('.msg-content') : null;
+  if (body) wstawPaski(body, w, w);
+}
 
 function messageElement(m, idx = -1, opcje = {}) {
   const role = m.role;
@@ -940,17 +1038,8 @@ function messageElement(m, idx = -1, opcje = {}) {
     const imgs = imagesHtml(images);
     body.prepend(imgs);
   }
+  // Siatka zostaje dla archiwum (z „pokaż kolejne”); zdjęcia z sieci stoją w paskach nad sekcjami.
   const photos = msgPhotos(m);
-  // Siatka w drodze: szkielet w miejscu, gdzie za chwilę staną zdjęcia (narzedzia.js).
-  if (!photos.length && toSzkielet(m)) {
-    const szkielet = document.createElement('div');
-    szkielet.className = 'photo-grid szukam';
-    szkielet.setAttribute('aria-label', t('chat.photosLoading'));
-    // Tyle pól, ile zdjęć przyjdzie (8) – przy czterech tekst pod siatką skakał o 190–340 px.
-    szkielet.setAttribute('role', 'status');
-    for (let i = 0; i < 8; i++) szkielet.appendChild(document.createElement('span'));
-    body.appendChild(szkielet);
-  }
   if (photos.length) {
     body.appendChild(photosGrid(photos));
     const dalej = stopkaArchiwum(m);
@@ -976,6 +1065,9 @@ function messageElement(m, idx = -1, opcje = {}) {
     }
     body.prepend(lista);
   }
+  if ((Array.isArray(m.zdjecia) && m.zdjecia.length) || (m.zdjeciaPominiete || []).length || m.przerwaneNarzedzie) {
+    wstawPaski(body, m, opcje.zrodlo || m);
+  }
 
   const col = document.createElement('div');
   col.className = 'msg-kolumna';
@@ -989,7 +1081,7 @@ function messageElement(m, idx = -1, opcje = {}) {
   /* Przyciski tylko pod OSTATNIĄ wypowiedzią tury. Pasek postępu („Szukam…")
      i kroki pośrednie to nie odpowiedź – pięć „Regeneruj" pod jedną
      odpowiedzią i „Zapamiętaj" przy „Przeszukuję archiwum…" to szum. */
-  const nastepna = idx >= 0 ? activeConv()?.messages[idx + 1] : null;
+  const nastepna = idx >= 0 ? nastepnaWidoczna(activeConv()?.messages || [], idx) : null;
   const srodekTury = m.status || (nastepna && (nastepna.role === 'assistant'
     || (nastepna.role === 'user' && nastepna.search)));
   col.append(body);
@@ -997,8 +1089,10 @@ function messageElement(m, idx = -1, opcje = {}) {
     const nota = zespolWidok.notaBezWkladu(stZespolu, () => ponowZespolem(opcje.notatki.idx, { sklad: ZESPOL.skladDoWyslania(stZespolu.role) }));
     if (nota) col.append(nota);
   }
-  if (!srodekTury) col.append(messageActions(text, { copy: true, role: 'assistant', idx, zespol: Boolean(stZespolu) || opcje.poZespole }));
+  // Stara odpowiedź sklejona z kawałków: „Regeneruj” tnie od PIERWSZEGO kawałka, nie od ostatniego.
+  if (!srodekTury) col.append(messageActions(text, { copy: true, role: 'assistant', idx: opcje.idxAkcji ?? idx, zespol: Boolean(stZespolu) || opcje.poZespole }));
   msg.appendChild(col);
+  elementyWiadomosci.set(opcje.zrodlo || m, msg);
   return msg;
 }
 
@@ -1020,9 +1114,12 @@ function messageActions(text, { copy, role, idx = -1, zespol = false }) {
   }
 
   if (text.trim()) {
+    /* Ikony liniowe (maski SVG jak reszta interfejsu), nie znaki „✦ ✎ ↻” –
+       miały inną grubość i linię bazową, a Android rysował je jako emoji
+       (agencja-ux, runda 10; zrzut 3 Marcina). */
     const remBtn = document.createElement('button');
-    remBtn.className = 'msg-action-btn';
-    remBtn.innerHTML = t('remember');
+    remBtn.className = 'msg-action-btn ik ik-iskra';
+    remBtn.textContent = t('remember');
     remBtn.addEventListener('click', async () => {
       remBtn.disabled = true;
       try {
@@ -1044,8 +1141,8 @@ function messageActions(text, { copy, role, idx = -1, zespol = false }) {
   // Regeneruj – dla wiadomości asystenta (usuwa ją i generuje na nowo)
   if (role === 'assistant' && idx >= 0) {
     const regen = document.createElement('button');
-    regen.className = 'msg-action-btn';
-    regen.innerHTML = '↻ ' + t('regenerate');
+    regen.className = 'msg-action-btn ik ik-odswiez';
+    regen.textContent = t('regenerate');
     // Pod odpowiedzią zespołu „Regeneruj” pisze od nowa z tych samych notatek (bez drugiego zespołu).
     if (zespol) regen.title = t('ag.regenerujTitle');
     regen.addEventListener('click', () => regenerateFrom(idx));
@@ -1055,8 +1152,8 @@ function messageActions(text, { copy, role, idx = -1, zespol = false }) {
   // Edytuj – dla wiadomości użytkownika (wczytuje do pola, obcina dalej)
   if (role === 'user' && idx >= 0) {
     const edit = document.createElement('button');
-    edit.className = 'msg-action-btn';
-    edit.innerHTML = '✎ ' + t('editMsg');
+    edit.className = 'msg-action-btn ik ik-pedzel';
+    edit.textContent = t('editMsg');
     edit.addEventListener('click', () => editFrom(idx));
     actions.appendChild(edit);
   }
@@ -1192,6 +1289,81 @@ function editFrom(idx) {
   el.input.focus();
 }
 
+/* Wiersz „Zdjęcia z sieci – dane dla modelu” to kuchnia, nie treść. W starych
+   rozmowach kończył odpowiedź (zrzut 4 Marcina), a pod nim nie było już ani
+   Kopiuj, ani Regeneruj – wiersz uchodził za środek tury. */
+const ukrytyWynikZdjec = (m) => Boolean(m && m.search && m.narzedzie === 'grafiki');
+/** Następna wiadomość, którą widać na ekranie (bez ukrytych wierszy narzędzia zdjęć). */
+function nastepnaWidoczna(wiadomosci, idx) {
+  for (let i = idx + 1; i < wiadomosci.length; i++) {
+    if (!ukrytyWynikZdjec(wiadomosci[i]) && !toSzkielet(wiadomosci[i])) return wiadomosci[i];
+  }
+  return null;
+}
+
+/** Rozmowa do wyświetlenia. Stary zapis planu pokrojonego siatkami (kawałki
+ *  tekstu i osobne wiadomości { text: zapytanie, photos }) staje się JEDNĄ
+ *  odpowiedzią z paskami – bez migracji zapisanych rozmów (runda 10). Model
+ *  i tak dostawał te kawałki sklejone w jedną wypowiedź (toApiMessages).
+ *  @returns {Array<{m: object, idx: number, idxAkcji?: number, zrodlo?: object}>} */
+function jednostkiRozmowy(wiadomosci) {
+  const wynik = [];
+  const kawalek = (m) => Boolean(m && m.role === 'assistant' && !m.status && !m.error && !m.search && !m.komunikatCosmosa
+    && !Array.isArray(m.zdjecia) && (typeof m.content === 'string' || zdjeciaZSieci(m)));
+  for (let i = 0; i < wiadomosci.length; i++) {
+    const m = wiadomosci[i];
+    if (!kawalek(m)) { wynik.push({ m, idx: i }); continue; }
+    const czlonkowie = [i];
+    for (let j = i + 1; j < wiadomosci.length; j++) {
+      if (ukrytyWynikZdjec(wiadomosci[j]) || toSzkielet(wiadomosci[j])) continue;
+      if (!kawalek(wiadomosci[j])) break;
+      czlonkowie.push(j);
+    }
+    if (!czlonkowie.some((k) => zdjeciaZSieci(wiadomosci[k]))) { wynik.push({ m, idx: i }); continue; }
+    let tekst = '';
+    const zdjecia = [];
+    const pierwszaZ = (pole) => czlonkowie.map((k) => wiadomosci[k][pole]).find(Boolean);
+    for (const k of czlonkowie) {
+      const w = wiadomosci[k];
+      if (zdjeciaZSieci(w)) {
+        const q = String(w.content.text || '');
+        zdjecia.push({ q, etykieta: q, po: tekst.length, photos: w.content.photos, stan: w.content.photos.length ? 'gotowe' : 'brak' });
+        continue;
+      }
+      const c = String(w.content || '');
+      if (c.trim()) tekst = tekst ? `${tekst}\n\n${c}` : c;
+    }
+    for (const g of zdjecia) g.sekcja = sekcjaWPozycji(tekst, g.po);
+    const sklejona = {
+      role: 'assistant', content: tekst, zdjecia,
+      silnik: pierwszaZ('silnik'), model: pierwszaZ('model'), think: pierwszaZ('think'), note: pierwszaZ('note'),
+    };
+    const ostatni = czlonkowie[czlonkowie.length - 1];
+    wynik.push({ m: sklejona, idx: ostatni, idxAkcji: i, zrodlo: m });
+    i = ostatni;
+  }
+  return wynik;
+}
+
+/** Zdjęcia zapisane „do pobrania” (sierota z serwera, odświeżenie w fazie
+ *  zdjęć) – dociągane po otwarciu rozmowy, bez modelu i bez kosztu. */
+const dociagane = new WeakSet();
+function dociagnijZdjecia(conv) {
+  if (!conv || isGenerating) return;
+  const doPobrania = conv.messages.filter((m) => Array.isArray(m.zdjecia) && !dociagane.has(m)
+    && m.zdjecia.some((g) => g.stan === 'do-pobrania'));
+  if (!doPobrania.length) return;
+  // Po bieżącym zadaniu: renderMessages bywa wołane, zanim rejestr narzędzi powstanie.
+  setTimeout(() => {
+    const g = NARZEDZIA.find((n) => n.nazwa === 'grafiki');
+    for (const m of doPobrania) {
+      if (dociagane.has(m)) continue;
+      dociagane.add(m);
+      g.dociagnij(conv, m).finally(() => dociagane.delete(m));
+    }
+  }, 0);
+}
+
 function renderMessages({ przewin = true } = {}) {
   const conv = activeConv();
   // Kto czyta wyżej, zostaje tam po przebudowie – bez tego innerHTML = '' ustawiał widok na samą górę.
@@ -1213,9 +1385,10 @@ function renderMessages({ przewin = true } = {}) {
      błędu) swojej tury; bez odpowiedzi – własna karta z samym blokiem. */
   let notatki = null;
   let poZespole = false;
-  conv.messages.forEach((m, idx) => {
+  jednostkiRozmowy(conv.messages).forEach(({ m, idx, idxAkcji, zrodlo }) => {
     // Szkielet siatki po przerwanym szukaniu – nic już na niego nie przyjdzie.
     if (toSzkielet(m) && !isGenerating) return;
+    if (ukrytyWynikZdjec(m)) return;
     if (m.search && m.narzedzie === 'zespol') {
       if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
       notatki = { m, idx };
@@ -1229,11 +1402,12 @@ function renderMessages({ przewin = true } = {}) {
     }
     const dlaZespolu = notatki && m.role === 'assistant' && !m.status ? notatki : null;
     if (dlaZespolu) notatki = null;
-    const e = messageElement(m, idx, { notatki: dlaZespolu, poZespole });
+    const e = messageElement(m, idx, { notatki: dlaZespolu, poZespole, idxAkcji, zrodlo });
     if (e) el.messages.appendChild(e);
   });
   if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
   dolozPropozycjeZespolu(conv);
+  dociagnijZdjecia(conv);
   if (przewin) scrollToBottom(true);
   else { el.chatScroll.scrollTop = byloScroll; ostatniScrollTop = byloScroll; }
 }
@@ -1348,8 +1522,17 @@ const PREFIKSY_NARZEDZI = [
    wisiał po przerwaniu albo odświeżeniu na zawsze jako cztery szare pola
    (agencja, runda 7) – dlatego do zapisu idzie rozmowa bez nich. */
 function toSzkielet(m) { return Boolean(m && m.content && typeof m.content === 'object' && m.content.szukam); }
+/* Grupa zdjęć w drodze („szukam”) idzie do zapisu jako „do-pobrania”: karta
+   ubita przez Androida w fazie zdjęć gubiła WSZYSTKIE zdjęcia tury, także te
+   już pokazane (it-plynnosc, runda 10). Po powrocie brakujące dociągają się same. */
+const wLocie = (m) => Array.isArray(m.zdjecia) && m.zdjecia.some((g) => g.stan === 'szukam');
 function doZapisu(conv) {
-  return conv.messages.some(toSzkielet) ? { ...conv, messages: conv.messages.filter((m) => !toSzkielet(m)) } : conv;
+  if (!conv.messages.some((m) => toSzkielet(m) || wLocie(m))) return conv;
+  return {
+    ...conv,
+    messages: conv.messages.filter((m) => !toSzkielet(m)).map((m) => (wLocie(m)
+      ? { ...m, zdjecia: m.zdjecia.map((g) => (g.stan === 'szukam' ? { ...g, stan: 'do-pobrania' } : g)) } : m)),
+  };
 }
 
 function naprawStareRuchyNarzedzi(conv) {
@@ -1882,8 +2065,13 @@ function toApiMessages(conv) {
     // Zespół zatrzymany przed prowadzącym – wiadomość bez notatek jest tylko dla oczu.
     if (m.narzedzie === 'zespol' && !String(m.content || '').trim()) return;
     let text = msgText(m);
-    // Siatka zdjęć ma w treści samo zapytanie – bez ramki model brał je za swoje zdanie.
-    if (m.role === 'assistant' && msgPhotos(m).length) text = `(pokazano zdjęcia: ${text || 'bez podpisu'})`;
+    /* ZDJĘCIA W HISTORII = WŁASNE ZNACZNIKI MODELU w miejscu, gdzie je postawił
+       (runda 10). Dawniej ramka „(pokazano zdjęcia: …)” w jego wypowiedzi –
+       słabe modele przepisywały ją na ekran (agencja-rozmowa, próba domk-echo).
+       Znacznik powtórzony przez model to zwykłe wołanie narzędzia, nigdy tekst. */
+    if (m.role === 'assistant' && Array.isArray(m.zdjecia) && m.zdjecia.length) text = zeZnacznikamiZdjec(text, m.zdjecia);
+    // Stary zapis: osobna wiadomość ze zdjęciami (zapytanie w `text`) – też jako znacznik.
+    else if (zdjeciaZSieci(m)) text = text ? `[GRAFIKA: ${text}]` : '';
     const images = i === granica ? msgImages(m) : [];
     if (i !== granica && msgImages(m).length && m.role === 'user') {
       text = `(tu użytkownik pokazał zdjęcie${msgImages(m).length > 1 ? 'a' : ''})` + (text ? `\n${text}` : '');
@@ -2165,7 +2353,10 @@ async function streamOnce(conv, opcje = {}) {
   kolumna.appendChild(body);
   msg.appendChild(kolumna);
   el.messages.appendChild(msg);
-  scrollToBottom(true);
+  /* Na dół wymuszenie tylko przy świeżo wysłanym pytaniu. Kolejna runda
+     kaskady (po wyszukaniu, po planie) ściągała na sam dół kogoś, kto
+     przewinął w górę i czytał – skok o 12 tys. px (it-plynnosc, runda 10). */
+  scrollToBottom(opcje.nowaTura === true);
 
   abortController = new AbortController();
   let acc = '';
@@ -2187,9 +2378,15 @@ async function streamOnce(conv, opcje = {}) {
   let naglowkiPrzyszly = false;
   const zt = opcje.zespolTury || null;
   const waitTimer = setInterval(() => {
-    if (acc || think) { clearInterval(waitTimer); waitNote = ''; return; }
+    /* Treść płynie – licznik znika. Samo wyzerowanie notki bez odmalowania
+       zostawiało na ekranie zamrożone „czekam na odpowiedź modelu… 23 s” obok
+       „Myślę…” – to było „wisi” ze zrzutu 4 Marcina (runda 10). */
+    if (rozdzielMyslenie(acc).tresc.trim()) { clearInterval(waitTimer); if (waitNote) { waitNote = ''; schedulePaint(); } return; }
     // Zespół pracuje: postęp pokazuje blok, „model myśli… 40 s” byłoby nieprawdą.
     if (zt && zt.st.role.length && zt.st.faza !== 'prowadzacy') { if (waitNote) { waitNote = ''; schedulePaint(); } return; }
+    /* Samo myślenie (model rozumujący potrafi myśleć minutę z jednym kawałkiem
+       w buforze dostawcy): licznik żyje w nagłówku myślenia – „Myślę… 31 s”. */
+    if (think || rozdzielMyslenie(acc).think) { waitNote = ''; schedulePaint(); return; }
     const s = Math.round((Date.now() - started) / 1000);
     const klucz = naglowkiPrzyszly ? 'chat.stillWorking' : ep === 'local' ? 'chat.waitLocal' : 'chat.waitStart';
     /* 15 s czekania na lokalny model (zimny start, dom się budzi): wyjście do
@@ -2209,6 +2406,7 @@ async function streamOnce(conv, opcje = {}) {
      kosztem – wątek ma zawsze co najmniej tyle wolnego, ile zjadło malowanie. */
   let czasMalowania = 0;
   let ostatnieMalowanie = 0;
+  const paskiStrumienia = {};   // pamięć szkieletów pasków tego strumienia (wstawPaski)
   const paint = () => {
     renderQueued = false;
     const t0 = performance.now();
@@ -2221,14 +2419,21 @@ async function streamOnce(conv, opcje = {}) {
     const calyThink = [think, thinkWTresci].filter(Boolean).join('\n');
     const head = calyThink
       ? '<details class="think-block">'
-        + `<summary>${escapeHtml(t(widok ? 'think.done' : 'think.live'))}</summary>`
+        + `<summary>${escapeHtml(widok ? t('think.done') : t('think.liveCzas', { s: Math.round((Date.now() - started) / 1000) }))}</summary>`
         + `<pre>${escapeHtml(calyThink)}</pre></details>`
       : '';
     body.innerHTML = head + `<div class="strumien-tresc">${renderMarkdown(widok)}</div>` + waitNote;
+    const tresc = body.querySelector('.strumien-tresc');
+    /* Szkielet paska zdjęć od chwili, gdy znacznik stanął pod nagłówkiem – nie
+       dopiero po końcu odpowiedzi. Inaczej paski wyrastały nad tekstem, który
+       ktoś właśnie czytał, i akapit uciekał o 800–1960 px (it-plynnosc). */
+    if (/GRAFIKA/i.test(acc)) {
+      const { zdjecia } = rozlozZdjecia(rozdzielMyslenie(acc).tresc);
+      if (zdjecia.length) wstawPaski(tresc, { zdjecia: zdjecia.map((g) => ({ ...g, photos: [], stan: 'szukam' })) }, paskiStrumienia);
+    }
     /* Kursor na końcu OSTATNIEGO zdania, nie w osobnej linii pod tekstem –
        jak na stronie produktowej. Szukamy ostatniego bloku tekstu (akapit,
        punkt listy, nagłówek); bloki kodu zostawiamy w spokoju. */
-    const tresc = body.querySelector('.strumien-tresc');
     const kursor = document.createElement('span');
     kursor.className = 'cursor-blink';
     const koniec = tresc.lastElementChild;
@@ -2463,6 +2668,8 @@ async function streamOnce(conv, opcje = {}) {
       if (kodBiegu.kod) Object.assign(e, kodBiegu, zt && zt.st.role.length ? { zespolNotatki: true } : {});
       throw e;
     }
+    // Silnik właśnie odpowiedział – kropka plakietki nie może twierdzić, że go nie ma.
+    zanotujKontakt(ep);
     // `<think>` w treści to myślenie, nie odpowiedź – i nie wolno z niego
     // wyławiać znaczników narzędzi.
     {
@@ -2643,6 +2850,7 @@ const {
   SEARCH_MARKER_RE, IMAGE_MARKER_RE, PHOTO_MARKER_RE, RUN_FENCE_RE,
   CANVAS_NEW_RE, CANVAS_PATCH_RE, ARCHIVE_RE, PLAN_RE, ACTION_RE,
   ZNACZNIKI, ARCH_LIMIT_ZNAKOW, stripSearchMarker, rozdzielMyslenie, widokWToku, wstawZnacznikiZdjec, naKontekst, bezOgonkowKlient,
+  rozlozZdjecia, zeZnacznikamiZdjec, sekcjaWPozycji,
   scalRozmowy, granicaPonowienia, jednostkiNaGlos, bezZrodel, adresDoOtwarcia, czyOtworz, liczbyNaGlos,
   adresPrywatny, rozbrojZnaczniki,
 } = utworzProtokol();
@@ -3322,9 +3530,21 @@ const NARZEDZIA = utworzNarzedzia({
   },
   PORCJA_ARCHIWUM,
   wstawTekstModelu,
-  tekstTury,
-  tenSamTekst: (...a) => tenSamTekst(...a),
+  rozlozZdjecia,
+  sekcjaWPozycji,
   znakSilnika,
+  /* Zdjęcia w jednej odpowiedzi (runda 10): grupa, która przyszła, podmienia
+     tylko swój pasek (bez przebudowy rozmowy – leniwe ładowanie i miejsce
+     czytającego zostają), zapis po każdej grupie, „Zatrzymaj” przerywa
+     pobieranie, a myślenie rundy trafia do wiadomości jak przy zwykłej odpowiedzi. */
+  odswiezZdjecia: (w) => odswiezPaski(w),
+  zapiszWkrotce: (c, teraz = false) => {
+    if (teraz) saveConversations(true, c);
+    else if (c === activeConversation) saveConversationsSoon();
+    else saveConversations(false, c);
+  },
+  sygnal: () => (abortTury ? abortTury.signal : null),
+  metaOdpowiedzi: () => ({ think: lastThink, note: lastModelNote }),
   WZORCE: {
     SZUKAJ: SEARCH_MARKER_RE,
     ARCHIWUM: ARCHIVE_RE,
@@ -3409,7 +3629,7 @@ async function domknijOdpowiedz(conv, surowe) {
   if (!tresc && !akcja) {
     const tura = conv.messages.slice(conv.__turaOd || 0);
     const widac = (m) => m.role === 'assistant' && !m.status && !m.error
-      && (msgText(m).trim() || (m.content && typeof m.content === 'object'
+      && (msgText(m).trim() || (Array.isArray(m.zdjecia) && m.zdjecia.length) || (m.content && typeof m.content === 'object'
         && ((m.content.photos || []).length || (m.content.images || []).length)));
     if (tura.some(widac)) {
       saveConversations();
@@ -3478,6 +3698,8 @@ async function runGeneration(conv, podpiecie = null) {
   pokazChmureWGlosie(false);
   isGenerating = true;
   turaPrzerwana = false;
+  // Sygnał całej tury – „Zatrzymaj” przerywa też to, co dzieje się po strumieniu (zdjęcia).
+  abortTury = new AbortController();
   dopiskiTury = 0;
   setGeneratingUI(true);
   if (voiceMode) setVoiceState('thinking');
@@ -3524,7 +3746,7 @@ async function runGeneration(conv, podpiecie = null) {
          odpowiedzi, która już powstaje. Kolejne rundy pętli narzędzi to nowe
          zapytania do modelu i mają dostać własne biegi. Zespół też tylko tu. */
       let acc = await streamOnce(conv, depth === 0
-        ? { ...(podpiecie || {}), zespol: podpiecie ? undefined : zespolWyslij, zespolTury: zt } : {});
+        ? { ...(podpiecie || {}), zespol: podpiecie ? undefined : zespolWyslij, zespolTury: zt, nowaTura: true } : {});
       // Notatki zespołu PRZED odpowiedzią prowadzącego – jak wynik narzędzia.
       if (depth === 0) zapiszNotatkiTury(conv, zt, stan);
       const ostatnia = depth === MAX_SEARCHES;
@@ -3688,6 +3910,8 @@ async function runGeneration(conv, podpiecie = null) {
       // Zimny start też: model ładuje się minutami, a chmura odpowie od razu (zespół IT, runda 9).
       // Budżet na płatne modele wyczerpany (429): chmura NVIDIA nie liczy się do budżetu – to samo jednym kliknięciem.
       const budzet = /^budzet/.test(err.kod || '');
+      // Lokalny nie odpowiedział na czat – kropka gaśnie od razu, nie po 30 s.
+      if (['lokalny-niedostepny', 'zimny-start'].includes(err.kod)) oznaczNiedostepny(znakSilnika().silnik);
       const zapasChmura = (['lokalny-niedostepny', 'zimny-start'].includes(err.kod) || (budzet && endpoint !== 'cloud')) && epConfig('cloud').hasApiKey;
       const tekstBledu = bladSilnikaPoLudzku(err, zapasChmura);
       conv.messages.push({ role: 'assistant', content: `⚠︎ ${tekstBledu}`, error: true,
@@ -3711,6 +3935,7 @@ async function runGeneration(conv, podpiecie = null) {
     odlaczanie = false;
     isGenerating = false;
     abortController = null;
+    abortTury = null;
     znakTury = null;
     clearInterval(zt.tik);
     glosZespolu(null);
@@ -3745,7 +3970,7 @@ async function runGeneration(conv, podpiecie = null) {
          wtedy albo mówił samo „Miłej podróży!” (agencja, runda 7). Czytamy
          cały tekst tury i mówimy, że zdjęcia są na ekranie. */
       const tura = conv.messages.slice(conv.__turaOd || 0);
-      if (tura.some((m) => msgPhotos(m).length)) {
+      if (tura.some((m) => msgPhotos(m).length || (Array.isArray(m.zdjecia) && m.zdjecia.some((g) => g.stan === 'gotowe')))) {
         finalText = [tekstTury(conv, conv.__turaOd || 0) || finalText, t('voice.photosOnScreen')].filter(Boolean).join('\n\n');
       }
       if (finalText) {
@@ -3774,6 +3999,7 @@ async function runGeneration(conv, podpiecie = null) {
    model drugi raz, płatnie, o odpowiedź, której nikt już nie chciał
    (agencja, runda 5). Flaga tury zamyka pętlę po bieżącym kroku. */
 let turaPrzerwana = false;
+let abortTury = null;          // AbortController całej tury (runGeneration)
 let voiceKoniecMowienia = 0;   // kiedy Cosmos skończył czytać odpowiedź (zapora echa)
 
 /** „Wyślij przez Chmurę” w trakcie czekania na lokalny: zatrzymaj, przełącz
@@ -3807,6 +4033,8 @@ function stopGeneration() {
   }
   zapamietajBieg(null);
   if (abortController) abortController.abort();
+  // Zdjęcia, które jeszcze nie przyszły, już nie przyjdą – tura kończy się od razu.
+  if (abortTury) abortTury.abort();
 }
 
 function setGeneratingUI(generating) {
@@ -4478,6 +4706,9 @@ function closeCamera() {
 
 $('img-viewer-close').addEventListener('click', closeImageViewer);
 $('img-viewer-download').addEventListener('click', downloadViewedImage);
+// Zdjęcia z paska odpowiedzi: poprzednie / następne (klawiatura i palec – widoki.js).
+$('img-viewer-prev')?.addEventListener('click', () => przesunPodglad(-1));
+$('img-viewer-next')?.addEventListener('click', () => przesunPodglad(1));
 // kliknięcie w tło zamyka; kliknięcie w sam obraz albo pasek – nie
 $('img-viewer').addEventListener('click', (e) => {
   if (e.target === $('img-viewer')) closeImageViewer();
@@ -6636,7 +6867,8 @@ function exportConversation() {
   const conv = activeConv();
   if (!conv || !conv.messages.length) return;
   const lines = [`# ${conv.title || 'Cosmos'}`, ''];
-  for (const m of conv.messages) {
+  // Stary plan pokrojony siatkami – jak na ekranie: jedna odpowiedź, jedna linia o zdjęciach.
+  for (const { m } of jednostkiRozmowy(conv.messages)) {
     if (m.error) continue;
     const who = m.role === 'user' ? t('exportYou') : 'Cosmos';
     if (m.search) continue;
@@ -6653,12 +6885,17 @@ function exportConversation() {
     const tekst = msgText(m);
     const imgs = msgImages(m);
     const foty = msgPhotos(m);
-    if (!tekst && !imgs.length && !foty.length) continue;
+    /* Zdjęcia z sieci: JEDNA linia na odpowiedź, z nazwami miejsc – zapis mówi,
+       co było na zdjęciach, a nie „8 × zdjęcie w rozmowie” pod każdym punktem. */
+    const grupy = (Array.isArray(m.zdjecia) ? m.zdjecia : []).filter((g) => g.stan === 'gotowe' && (g.photos || []).length);
+    if (!tekst && !imgs.length && !foty.length && !grupy.length) continue;
     lines.push(`**${who}:**`, '');
     if (tekst) lines.push(tekst, '');
-    if (foty.length) {
-      lines.push(`_(${t('export.photos', { n: foty.length })})_`, '');
+    if (grupy.length) {
+      lines.push(`_(${t('export.zdjecia', { n: grupy.reduce((s, g) => s + g.photos.length, 0), miejsca: grupy.map((g) => g.etykieta || g.q).join(', ') })})_`, '');
     }
+    // Miniatury z archiwum (własne pliki) – jak dotąd.
+    if (foty.length) lines.push(`_(${t('export.photos', { n: foty.length })})_`, '');
     if (imgs.length) lines.push(`_(${imgs.length} × ${t('attachment')})_`, '');
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
@@ -6822,6 +7059,8 @@ function setEndpoint(name) {
     b.classList.toggle('active', b.dataset.endpoint === name);
   });
   updateModelBadge();
+  // Zakładka silnika, który ostatnio „nie odpowiadał” – sprawdzamy od razu, nie za 30 s.
+  if (stanSilnikow[name] === 'offline' || stanSilnikow[name] === 'nieznany') odswiezStanGdyTrzeba(name);
 }
 
 // ----------------------------------------------------------------
@@ -7728,17 +7967,69 @@ $('polish-btn').addEventListener('click', polishPrompt);
    kolor silnika nawet przy „Chmura NVIDIA – brak klucza" w panelu stanu –
    dwa sprzeczne sygnały. Teraz gaśnie, gdy silnik jest niedostępny. */
 var stanSilnikow = {};   // var: updateModelBadge bywa wołane przed tą linią (start aplikacji)
+/* Powód z /api/status (K1): „termin”, „klucz”, „odmowa”, „uspiony”, „http-404”.
+   Kropka gaśnie TYLKO przy pewnym „offline” (online === false). „Nie wiadomo”
+   (null – np. sprawdzenie nie zmieściło się w terminie) zostawia kolor silnika:
+   zrzut 2 Marcina pokazywał szarą kropkę przy lokalnym, który właśnie
+   odpowiadał (runda 10). */
+var powodSilnikow = {};
+/* Udana odpowiedź silnika – ostatni kontakt. Przez 2 minuty sprawdzenie co
+   30 s nie obniża stanu do „offline” (inaczej kropka migałaby po każdym
+   wolnym GET /models; it-plynnosc). */
+var ostatniKontakt = {};
+const KONTAKT_WAZNY_MS = 120000;
+function zanotujKontakt(silnik) {
+  if (!silnik) return;
+  ostatniKontakt[silnik] = Date.now();
+  if (stanSilnikow[silnik] !== 'ok') { stanSilnikow[silnik] = 'ok'; powodSilnikow[silnik] = ''; updateModelBadge(); }
+}
+function oznaczNiedostepny(silnik) {
+  if (!silnik) return;
+  ostatniKontakt[silnik] = 0;
+  stanSilnikow[silnik] = 'offline';
+  powodSilnikow[silnik] = '';
+  updateModelBadge();
+}
+const POWODY_KROPKI = ['termin', 'klucz', 'odmowa', 'uspiony'];
+// Termin sprawdzenia w /api/status: lokalny przez Tailscale dostaje dłużej (server.js).
+const terminSprawdzenia = (silnik) => (silnik === 'local' ? 8 : 5);
+function podpowiedzKropki(stan, powodSurowy, silnik) {
+  // „http-404”, „http-502” … – serwer odpowiedział, ale nie tak, jak trzeba: dla człowieka „nie da się połączyć”.
+  const powod = /^http-/.test(powodSurowy || '') ? 'odmowa' : powodSurowy;
+  if (stan === 'bez-klucza') return t('stat.noKey');
+  if (stan === 'brak-dostepu') return t('stat.notForYou');
+  const zdanie = () => t(`stat.powod.${powod}`, { s: terminSprawdzenia(silnik) });
+  if (stan === 'offline') return POWODY_KROPKI.includes(powod) ? zdanie() : t('stat.powod.inny');
+  // Nie wiadomo (termin sprawdzenia) – kolor zostaje, ale mówimy, co się dzieje.
+  if (stan === 'nieznany' && POWODY_KROPKI.includes(powod)) return zdanie();
+  return '';
+}
 
 function updateModelBadge() {
   const model = currentModel() || t('chat.modelNotSet');
   const labels = { cloud: t('tabCloud'), local: t('tabLocal'), openai: 'OpenAI', claude: 'Claude' };
   el.topbarModel.textContent = `${model} · ${labels[endpoint] || endpoint}`;
   const stan = stanSilnikow[endpoint];
-  el.topbarModel.classList.toggle('niedostepny', stan === 'bez-klucza' || stan === 'offline');
-  el.topbarModel.title = stan === 'bez-klucza' ? t('stat.noKey') : stan === 'offline' ? t('stat.offline') : '';
+  const zgaszona = stan === 'bez-klucza' || stan === 'offline' || stan === 'brak-dostepu';
+  el.topbarModel.classList.toggle('niedostepny', zgaszona);
+  el.topbarModel.title = podpowiedzKropki(stan, powodSilnikow[endpoint], endpoint);
+  // Kropka powitania z TEGO SAMEGO stanu – dwa sprzeczne sygnały na jednym ekranie (zrzut 2).
+  const kropka = document.querySelector('.welcome-kropka');
+  if (kropka) kropka.classList.toggle('niedostepny', zgaszona);
   el.welcomeModel.textContent = model;
   el.welcomeModel.title = model;   // na telefonie nazwa bywa ucięta wielokropkiem
 }
+
+/* Świeży stan przy powrocie do aplikacji i przy przełączeniu na silnik,
+   który nie jest „ok” – nie częściej niż co 10 s: każde sprawdzenie odpytuje
+   wszystkie silniki i trwa do kilku sekund (it-plynnosc). */
+let ostatnieSprawdzenie = 0;
+function odswiezStanGdyTrzeba(silnik) {
+  if (Date.now() - ostatnieSprawdzenie < 10000) return;
+  if (silnik && stanSilnikow[silnik] === 'ok') return;
+  refreshStatus();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') odswiezStanGdyTrzeba(); });
 
 /* WYBÓR MODELU Z PLAKIETKI. Model zmieniało się tylko w Ustawieniach → Silniki;
    plakietka w prawym górnym rogu pokazywała go, ale nic nie robiła (Marcin).
@@ -7922,6 +8213,7 @@ function zglosOsiagalnosc(ok, start) {
 async function refreshStatusWlasciwe() {
   const nr = ++statusNr;
   const start = performance.now();
+  ostatnieSprawdzenie = Date.now();
   try {
     const res = await fetch('/api/status');
     const st = await res.json();
@@ -7937,10 +8229,23 @@ async function refreshStatusWlasciwe() {
        „Lokalny GPU offline”, choć działał, tylko nie dla niej (agencja, runda 5). */
     if (!st.local) setStatusRow(el.statusLocal, 'brak', t('stat.notForYou'));
     else setStatusRow(el.statusLocal, st.local.online === true, st.local.online ? t('stat.online') : t('stat.offline'));
-    stanSilnikow = {
-      cloud: cloudCfg.hasApiKey ? (st.cloud?.online === true ? 'ok' : 'offline') : 'bez-klucza',
-      local: st.local?.online === true ? 'ok' : 'offline',
+    /* K1: true = żyje, false = na pewno nie, null = nie wiadomo (termin).
+       Silnik, który odpowiedział w ostatnich 2 minutach, zostaje „ok”. */
+    const stanZ = (silnik, s) => {
+      const swiezy = Date.now() - (ostatniKontakt[silnik] || 0) < KONTAKT_WAZNY_MS;
+      if (s?.online === true || swiezy) return 'ok';
+      return s?.online === false ? 'offline' : 'nieznany';
     };
+    const nowy = {
+      cloud: cloudCfg.hasApiKey ? stanZ('cloud', st.cloud) : 'bez-klucza',
+      // Członek bez przyznanego lokalnego: „niedostępne dla Ciebie”, nie „offline”.
+      local: st.local ? stanZ('local', st.local) : 'brak-dostepu',
+    };
+    // OpenAI i Claude – gdy serwer je sprawdza; inaczej zostaje stan z ostatniej odpowiedzi czatu.
+    for (const k of ['openai', 'claude']) if (st[k] && typeof st[k] === 'object') nowy[k] = stanZ(k, st[k]);
+    stanSilnikow = { ...stanSilnikow, ...nowy };
+    powodSilnikow = { ...powodSilnikow };
+    for (const k of Object.keys(nowy)) powodSilnikow[k] = String((st[k] && st[k].powod) || '');
     updateModelBadge();
     // `tylkoWlasciciel`: zmysły działają, ale nie dla tej osoby – inne zdanie niż „komputer nie odpowiada”.
     senses = { online: st.senses?.online === true, caps: st.senses?.caps || {}, tylkoWlasciciel: st.senses?.tylkoWlasciciel === true, znany: true };
