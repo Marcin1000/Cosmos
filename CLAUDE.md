@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 156 zestawów + 10 selftestów Pythona, ~12 min
+npm test                  # 158 zestawów + 10 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -228,6 +228,10 @@ błąd w tym kodzie.
 do czterech rund. Zanim to powstało, model prosił o plan i o zdjęcia, a dostawał tylko plan;
 przy ponownej prośbie generował plan od nowa i Marcin dostawał trzy plany i zero zdjęć.
 Grafiki lecą **po** zwycięskim narzędziu, żeby zdjęcia trafiły pod gotowe punkty planu.
+Grafiki **kończą turę** (`akcja: 'koniec'`): zdjęcia dokładają się do tej samej wiadomości
+asystenta jako `zdjecia: [{q, etykieta, po, sekcja, photos, stan}]` i stoją w poziomym pasku
+nad odpowiedzią albo pod nagłówkiem sekcji. Dawniej po zdjęciach szła druga runda modelu –
+wyglądało to na zawieszenie rozmowy („wisi w poszukiwaniu zdjęć”).
 
 Wzorce znaczników są tolerancyjne (spacja po nawiasie, nawiasy i dwukropek pełnej
 szerokości `【SZUKAJ：…】`, jak piszą małe modele lokalne i Qwen) – nowy znacznik buduj

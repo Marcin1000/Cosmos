@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="156 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-156-5E9E3A?style=flat-square">
+  <img alt="158 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-158-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 156 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 158 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 156 zestawów + 10 selftestów Pythona (~12 min)
+npm test                  # 158 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -231,7 +231,9 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
 - ☁️ / 🖥️ **Tryb hybrydowy** – przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym.
   Po dodaniu klucza dochodzą osobne zakładki **OpenAI** i **Claude** (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`) – każda z własnym modelem
-- 🛰️ Monitor statusu silników i zmysłów na żywo w panelu bocznym
+- 🛰️ Monitor statusu silników i zmysłów na żywo w panelu bocznym; kropka w prawym górnym
+  rogu jest w kolorze silnika (lokalny GPU – niebieska), gdy silnik odpowiada, a szara z powodem
+  w podpowiedzi (np. „brak odpowiedzi w 8 s”), gdy nie
 - 🧠 **Modele rozumujące** – tok myślenia widoczny na żywo w zwijanym bloku; gdy model
   zużyje cały budżet na myślenie, Cosmos pokazuje to myślenie zamiast pustej odpowiedzi
 - ✦ **Dopracowanie promptu** – przycisk obok mikrofonu przepisuje podyktowaną wypowiedź
@@ -282,8 +284,10 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
 - 🔎 **Wyszukiwanie z Google** – z kluczem `SERPER_API_KEY` (serper.dev, wyniki Google)
   albo `BRAVE_API_KEY` (Brave Search) w `.env` strony i zdjęcia przychodzą z tych
   wyszukiwarek, a zdjęcia miejsc przeplatają się z Wikimedia Commons. Bez klucza –
-  jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia w odpowiedzi nie zasłaniają planu:
-  tekst stoi, a siatki wskakują pod swoje punkty, gdy przychodzą; „pokaż inne zdjęcia”
+  jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia stoją **w tej samej odpowiedzi** – jak
+  w ChatGPT: poziomy pasek przewijany palcem nad odpowiedzią (albo pod nagłówkiem punktu,
+  którego dotyczą), podpisany nazwą miejsca. Tekst stoi, a paski wypełniają się, gdy
+  zdjęcia przychodzą; po zdjęciach tura się kończy – bez drugiej rundy modelu; „pokaż inne zdjęcia”
   daje zdjęcia, których w rozmowie jeszcze nie było. Klucz płacisz Ty: członek korzysta
   z Serpera i Brave'a tylko z przyznaniem **Wyszukiwarki (Google)** w panelu Dostęp i do
   limitu (`COSMOS_SZUKANIE_NA_MINUTE`, `COSMOS_SZUKANIE_NA_DOBE`); bez przyznania ma
@@ -559,6 +563,12 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
   najwyżej 3 role – dobiera krótki planista, a **model do każdej roli dobiera Cosmos**: Twój wybór →
   Twoje uprawnienia → w czym model jest dobry (wyniki „Sprawdź”, katalog) → model prowadzącego.
   Przed startem możesz skład zmienić: inny model do roli, „Auto”, usuń albo dodaj rolę.
+- **Darmowe modele:** obok proponowanego składu Cosmos daje drugi – **„Darmowe modele”**: te
+  same role na najlepiej dopasowanych modelach open source (chmura NVIDIA, lokalny GPU), za 0 zł.
+  Uczciwie mówi, że trzeba się liczyć ze słabszą odpowiedzią. W bramce przełączasz składy jednym
+  kliknięciem, pod odpowiedzią solo jest link **„Za 0 zł”**, a w Ustawienia → Agenci → **Jaki skład
+  proponować** możesz ustawić darmowy jako domyślny – wtedy rolom na „Auto” serwer dobiera tylko
+  darmowe silniki.
 - **Fotograf nie zgaduje liczb.** Planista podaje miejsce i czas, Cosmos liczy plan (Słońce,
   złota i niebieska godzina, pogoda, nastawy w Twoim sprzęcie) tak samo jak przy „[PLAN:]”,
   a fotograf pracuje wyłącznie na tych liczbach (plan dla zdjęć, wideo tylko na prośbę o film;
@@ -1501,7 +1511,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 156 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 158 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

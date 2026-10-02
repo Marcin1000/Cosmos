@@ -429,7 +429,7 @@ const w19 = (async () => {
     'ag.pominietaRodzina', 'ag.odrzuconeDarmowe', 'ag.bladLimitDarmowy', 'ag.uruchomDarmowo', 'ag.uruchomDarmowoTitle', 'ag.re.bezOplat', 'ag.re.platny', 'ag.re.polecany',
     'ag.re.autoDarmowy', 'ag.set.sklad.h', 'ag.set.sklad.opis', 'ag.set.sklad.proponowany', 'ag.set.sklad.proponowanyHint', 'ag.set.sklad.darmowe', 'ag.set.sklad.darmoweHint'];
   const brak24 = klucze.filter((k) => !I18N.pl[k] || !I18N.en[k] || I18N.pl[k] === I18N.en[k]);
-  ok(!brak24.length && !klucze.some((k) => /—/.test(I18N.pl[k] + I18N.en[k])), `W24. ${klucze.length} kluczy składu darmowego w PL i EN, przetłumaczone${brak24.length ? ` – brak: ${brak24.join(', ')}` : ''}`);
+  ok(!brak24.length && !klucze.some((k) => /\u2014/.test(I18N.pl[k] + I18N.en[k])), `W24. ${klucze.length} kluczy składu darmowego w PL i EN, przetłumaczone${brak24.length ? ` – brak: ${brak24.join(', ')}` : ''}`);
 }
 
 w19.then(() => {
