@@ -160,6 +160,20 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     && U.rodzinaModelu('nvidia/llama-3.3-nemotron-super-49b-v1.5') === 'nemotron' && U.rodzinaModelu('openai/gpt-oss-120b') === 'openai'
     && U.rodzinaModelu('gpt-4o') === 'openai' && U.rodzinaModelu('claude-sonnet-5') === 'claude' && U.rodzinaModelu('qwen3:8b') === 'qwen',
     'C12b. rodzina modelu (Llama-Nemotron to Nemotron, gpt-oss to OpenAI) i premia za inną rodzinę niż autorzy notatek');
+  /* C14 (runda 11, W1.11): dobór płatny – premia za sondę tylko dla darmowych, remis rozstrzyga cena.
+     Dawniej sprawdzony Sonnet dostawał +2 i zabierał wszystkie role tańszemu GPT-5.4 (6:6 przed sondą). */
+  {
+    const prowC = { id: 'nvidia/nemotron-3-super-120b-a12b', silnik: 'cloud' };
+    const sonnet = k('claude-sonnet-5', 'claude', { sprawdzenie: { rozmowa: true, obrazy: 'pewne', czas: 900 } });
+    const gpt54 = k('gpt-5.4', 'openai');
+    const cenaC = (id) => ({ 'gpt-5.4': 1.25 + 4 * 10, 'claude-sonnet-5': 3 + 4 * 15 })[id] ?? null;
+    const oC = { prowadzacy: prowC, cena: cenaC };
+    const darmSpr = k('nvidia/nemotron-3-super-120b-a12b', 'cloud', { sprawdzenie: { rozmowa: true, obrazy: 'nie', czas: 900 } });
+    ok(U.ocenKandydata('analityk', sonnet, oC) === U.ocenKandydata('analityk', gpt54, oC)
+      && U.dobierzModel('analityk', [sonnet, gpt54], oC)?.id === 'gpt-5.4' && U.rankingModeli('analityk', [sonnet, gpt54], oC)[0].k.id === 'gpt-5.4'
+      && U.ocenKandydata('analityk', darmSpr, oC) - U.ocenKandydata('analityk', k('nvidia/nemotron-3-super-120b-a12b', 'cloud'), oC) === 2,
+      'C14. płatny: sonda nie daje punktów, remis → tańszy (GPT-5.4 przed sprawdzonym Sonnetem); darmowy dalej +2 za sondę');
+  }
   // C13: Ultra ma te same cechy analityka co Super 49B, ale jest „wolny” – pierwszy na liście i tak przegrywa.
   ok(U.umiejetnosci('nvidia/nemotron-3-ultra-550b', 'cloud').wolny === true
     && U.dobierzModel('analityk', [k('nvidia/nemotron-3-ultra-550b', 'cloud'), k('nvidia/llama-3.3-nemotron-super-49b-v1.5', 'cloud')])?.id
@@ -232,6 +246,14 @@ function wymiaryPng(dataUrl) {
     && U.awariaModelu(404, 'model "qwen3:8b" not found, try pulling it first')
     && !U.awariaModelu(404, '404 page not found') && !U.awariaModelu(500, 'end of life') && !U.awariaModelu(429, 'not found for account'),
     'E6. awariaModelu: 410 i 404 o modelu – tak; gołe 404 (zły adres), 500, 429 – nie');
+  {
+    // E7 (runda 11, W1.9): podpowiedź i „trwały błąd” znają 410 Gone (model wycofany przez dostawcę).
+    const { modelErrorHint, bladTrwaly } = require(path.join(KORZEN, 'lib/rdzen.js'));
+    const h410 = modelErrorHint('cloud', 'nvidia/x', 410, { tresc: 'Gone' });
+    const h404 = modelErrorHint('cloud', 'nvidia/x', 404, { tresc: 'The model has reached its end of life on 2026-08-26' });
+    ok(/wycofał/.test(h410) && /wycofał/.test(h404) && bladTrwaly(410, 'Gone') && !bladTrwaly(429, 'rate'),
+      `E7. 410 i 404 „end of life” → „Dostawca wycofał ten model”, błąd trwały (${h410.trim().slice(0, 50)})`);
+  }
   fs.rmSync(kat, { recursive: true, force: true });
 }
 

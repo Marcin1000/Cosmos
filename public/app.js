@@ -2474,14 +2474,17 @@ async function streamOnce(conv, opcje = {}) {
   // Model rozumujący potrafi milczeć kilkadziesiąt sekund, a pusty dymek
   // z migającym kursorem wygląda jak zawieszenie. Licznik pokazuje, że praca
   // trwa – i ile już trwa.
-  const started = Date.now();
+  /* Początek odliczania. W turze zespołu zerowany, gdy rusza prowadzący
+     (zdarzenie `faza`) – „Myślę… 16 s” w pierwszej sekundzie myślenia liczyło
+     czas ról (it-plynnosc, runda 11). */
+  let started = Date.now();
   let waitNote = '';
   /* Zanim dostawca odpowie nagłówkami, model jeszcze nie „myśli”: łączymy
      się albo lokalny model ładuje się do pamięci karty (zimny start) – napis
      „model myśli… 45 s” był wtedy nieprawdą (zespół IT, runda 5). */
   let naglowkiPrzyszly = false;
   const zt = opcje.zespolTury || null;
-  const waitTimer = setInterval(() => {
+  const tykniecie = () => {
     /* Treść płynie – licznik znika. Samo wyzerowanie notki bez odmalowania
        zostawiało na ekranie zamrożone „czekam na odpowiedź modelu… 23 s” obok
        „Myślę…” – to było „wisi” ze zrzutu 4 Marcina (runda 10). */
@@ -2499,7 +2502,11 @@ async function streamOnce(conv, opcje = {}) {
       ? ` <button type="button" class="msg-action-btn msg-przez-chmure wait-przez-chmure">${escapeHtml(t('chat.przezChmure'))}</button>` : '';
     waitNote = `<div class="wait-note mono">${escapeHtml(t(klucz, { s }))}${chmura}</div>`;
     schedulePaint();
-  }, 1000);
+  };
+  /* Jeden wiersz stanu od pierwszej chwili – „Łączę z modelem… 0 s”, potem ten
+     sam zegar jako „Myślę… N s” (agencja-ux, decyzja 3B). Pierwsze tyknięcie
+     od razu, nie po sekundzie pustego dymka z samotnym kursorem. */
+  const waitTimer = setInterval(tykniecie, 1000);
   body.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('.wait-przez-chmure')) przezChmureWTrakcie(conv);
   });
@@ -2526,7 +2533,10 @@ async function streamOnce(conv, opcje = {}) {
         + `<summary>${escapeHtml(widok ? t('think.done') : t('think.liveCzas', { s: Math.round((Date.now() - started) / 1000) }))}</summary>`
         + `<pre>${escapeHtml(calyThink)}</pre></details>`
       : '';
-    body.innerHTML = head + `<div class="strumien-tresc">${renderMarkdown(widok)}</div>` + waitNote;
+    /* Wiersz stanu NAD treścią i nigdy obok „Myślę…” – dawniej notka z
+       poprzedniego tyknięcia stała do sekundy razem z nagłówkiem myślenia
+       (dwa wskaźniki naraz, agencja-frontend P1). */
+    body.innerHTML = head + (calyThink ? '' : waitNote) + `<div class="strumien-tresc">${renderMarkdown(widok)}</div>`;
     const tresc = body.querySelector('.strumien-tresc');
     /* Szkielet paska zdjęć od chwili, gdy znacznik stanął pod nagłówkiem – nie
        dopiero po końcu odpowiedzi. Inaczej paski wyrastały nad tekstem, który
@@ -2544,7 +2554,8 @@ async function streamOnce(conv, opcje = {}) {
     const bloki = koniec && !/^(PRE|TABLE|DIV)$/.test(koniec.tagName)
       ? koniec.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6') : [];
     const cel = bloki.length ? bloki[bloki.length - 1] : (koniec && /^(P|H[1-6])$/.test(koniec.tagName) ? koniec : tresc);
-    cel.appendChild(kursor);
+    // Samotny kursor w pustej linii obok wiersza stanu wyglądał jak drugi wskaźnik.
+    if (widok.trim() || !(calyThink || waitNote)) cel.appendChild(kursor);
     scrollToBottom();
     ostatnieMalowanie = performance.now();
     czasMalowania = ostatnieMalowanie - t0;
@@ -2556,6 +2567,7 @@ async function streamOnce(conv, opcje = {}) {
     if (zostalo > 0) setTimeout(() => requestAnimationFrame(paint), zostalo);
     else requestAnimationFrame(paint);
   };
+  tykniecie();
 
   /* Podpięcie do biegu, który już trwa (po odświeżeniu strony), albo nowy
      bieg. W obu razach numer znamy PRZED wysłaniem żądania – inaczej zerwanie
@@ -2679,6 +2691,8 @@ async function streamOnce(conv, opcje = {}) {
         if (typ === 'luka') { acc += t('bieg.luka') + '\n\n'; schedulePaint(); continue; }
         // Zdarzenia zespołu (bez `choices`) – skład, role, faza prowadzącego.
         if (ZDARZENIA_ZESPOLU.has(typ)) {
+          // Prowadzący rusza – jego licznik liczy od teraz, nie od startu ról.
+          if (typ === 'faza') started = Date.now();
           if (zt) zespolZdarzenie(zt, typ, data, { kolumna, body, podpis });
           continue;
         }
@@ -2694,12 +2708,15 @@ async function streamOnce(conv, opcje = {}) {
           const delta = d.content ?? json.choices?.[0]?.text ?? '';
           // różni dostawcy nazywają to pole inaczej
           const reason = d.reasoning_content ?? d.reasoning ?? '';
+          // Pierwszy kawałek myślenia albo treści gasi wiersz czekania od razu, nie przy tyknięciu zegara.
           if (reason) {
             think += reason;
+            waitNote = '';
             schedulePaint();
           }
           if (delta) {
             acc += delta;
+            waitNote = '';
             schedulePaint();
           }
         } catch { /* niepełny fragment – pomijamy */ }

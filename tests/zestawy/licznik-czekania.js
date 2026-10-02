@@ -68,8 +68,37 @@ mock.listen(7093, async () => {
   /* 3. Samo myślenie: przez ciszę po pierwszym kawałku rozumowania na ekranie
      ma się coś zmieniać – żywe „Myślę… N s” – a nie zamrożona liczba. */
   await page.fill('#input', 'licznik-myslenia: rozważ ten plan');
+  /* Każda klatka od kliknięcia (runda 11, P1): JEDEN wskaźnik naraz – wiersz
+     stanu „Łączę z modelem…” od pierwszej chwili, NAD treścią, i nigdy razem
+     z „Myślę…”. Próbki co sekundę nie łapały okna < 1 s z dwoma wskaźnikami. */
+  await page.evaluate(() => {
+    window.__klatki = [];
+    const t0 = performance.now();
+    const tik = () => {
+      const b = document.querySelector('#messages .msg.nowa .msg-content');
+      if (b) {
+        const n = b.querySelector('.wait-note');
+        window.__klatki.push({ ms: performance.now() - t0, nota: n ? n.textContent : '', mysle: Boolean(b.querySelector('.think-block')),
+          nadTrescia: n ? Boolean(n.compareDocumentPosition(b.querySelector('.strumien-tresc')) & Node.DOCUMENT_POSITION_FOLLOWING) : null,
+          samKursor: Boolean(n && b.querySelector('.strumien-tresc > .cursor-blink, .strumien-tresc .cursor-blink')) });
+      }
+      if (window.__klatki.length < 4000) requestAnimationFrame(tik);
+    };
+    requestAnimationFrame(tik);
+  });
   await page.click('#send-btn');
   await page.waitForFunction(() => /Rozważam/.test([...document.querySelectorAll('.msg-assistant .msg-content')].pop()?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  const kl = await page.evaluate(() => window.__klatki);
+  const pierwszaNota = kl.find((k) => k.nota);
+  const dwa = kl.filter((k) => k.nota && k.mysle);
+  const odDymka = pierwszaNota && kl.length ? pierwszaNota.ms - kl[0].ms : Infinity;
+  console.log(`2b. klatek ${kl.length}; pierwszy wiersz stanu ${Math.round(odDymka)} ms po pojawieniu się dymka („${pierwszaNota ? pierwszaNota.nota : ''}”), dwa wskaźniki w ${dwa.length} klatkach`);
+  if (odDymka > 300) fail.push('wiersz stanu nie stoi od pierwszej chwili (pusty dymek z kursorem)');
+  if (pierwszaNota && !/^Łączę z modelem… \d+ s/.test(pierwszaNota.nota)) fail.push(`wiersz stanu nie mówi „Łączę z modelem…” („${pierwszaNota.nota}”)`);
+  if (dwa.length) fail.push(`„Myślę…” i wiersz czekania naraz w ${dwa.length} klatkach`);
+  if (kl.some((k) => k.nota && k.nadTrescia === false)) fail.push('wiersz stanu pod treścią, nie nad nią');
+  if (kl.some((k) => k.samKursor)) fail.push('samotny kursor obok wiersza stanu (drugi wskaźnik)');
   const probka = () => page.evaluate(() => {
     const b = [...document.querySelectorAll('.msg-assistant .msg-content')].pop();
     const s = b && b.querySelector('.think-block summary');

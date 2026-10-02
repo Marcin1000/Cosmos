@@ -824,6 +824,26 @@ async function nowaRozmowa(id, pytanie) {
       ok(ids.every((id) => w[`cloud|${id}`] && w[`cloud|${id}`].rozmowa === true) && !JSON.stringify(w).includes('127.0.0.1'),
         `O25. sonda zalecanych przy starcie: ${ids.filter((id) => w[`cloud|${id}`]).length}/${ids.length} w rejestrze (bez adresów)`);
     }
+    {
+      /* O26 (runda 11, W1.10): przerwana odpowiedź prowadzącego w turze zespołu kieruje do
+         „Złóż ponownie” (notatki zostają), a zwykły czat – do „Ponów”. Wprost na lib/czat.js. */
+      const C = require(path.join(KORZEN, 'lib/czat.js'));
+      const powody = [];
+      const czatU = C.utworz({ biegi: { zakoncz: (b, p) => powody.push(p), dopisz: () => {}, dopiszZdarzenie: () => {} }, scrubSecrets: (t) => t, U: () => ({}) });
+      const strumien = () => new Response(new ReadableStream({ start(c) {
+        c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Początek odpowiedzi ' } }] })}\n\n`));
+        c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: { message: 'coś dziwnego' } })}\n\n`));
+        c.close();
+      } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      const opcje = () => ({ ep: { label: 'x', baseUrl: 'http://x' }, model: 'm', payload: { endpoint: 'cloud' }, abort: new AbortController(),
+        zegar: C.zegarCiszy(new AbortController()) });
+      const log = console.warn; console.warn = () => {};
+      await czatU.pompujDoBiegu({ id: 'z', tekst: '', zespol: { faza: 'prowadzacy' } }, strumien(), opcje());
+      await czatU.pompujDoBiegu({ id: 's', tekst: '' }, strumien(), opcje());
+      console.warn = log;
+      ok(/Złóż ponownie/.test(powody[0] || '') && !/Ponów/.test(powody[0] || '') && /Ponów/.test(powody[1] || ''),
+        `O26. przerwany prowadzący zespołu → „Złóż ponownie”, zwykły czat → „Ponów” (${powody.map((x) => x.slice(0, 70)).join(' | ')})`);
+    }
   } catch (err) {
     fail.push(`wyjątek: ${err.stack || err.message}`);
   } finally {
