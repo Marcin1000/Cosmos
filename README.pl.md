@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="158 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-158-5E9E3A?style=flat-square">
+  <img alt="160 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-160-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 158 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 160 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 158 zestawów + 10 selftestów Pythona (~12 min)
+npm test                  # 160 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -287,7 +287,9 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   jak dotąd DuckDuckGo, Commons i Openverse. Zdjęcia stoją **w tej samej odpowiedzi** – jak
   w ChatGPT: poziomy pasek przewijany palcem nad odpowiedzią (albo pod nagłówkiem punktu,
   którego dotyczą), podpisany nazwą miejsca. Tekst stoi, a paski wypełniają się, gdy
-  zdjęcia przychodzą; po zdjęciach tura się kończy – bez drugiej rundy modelu; „pokaż inne zdjęcia”
+  zdjęcia przychodzą; po zdjęciach tura się kończy – bez drugiej rundy modelu. Plan na kilka dni
+  model pisze dzień po dniu („### Dzień 1 · Palermo · zwiedzanie”, pod nim zdjęcia, „Światło:”
+  i „Aparat:”), a szeroka tabela na telefonie rysuje się jako karty dni; „pokaż inne zdjęcia”
   daje zdjęcia, których w rozmowie jeszcze nie było. Klucz płacisz Ty: członek korzysta
   z Serpera i Brave'a tylko z przyznaniem **Wyszukiwarki (Google)** w panelu Dostęp i do
   limitu (`COSMOS_SZUKANIE_NA_MINUTE`, `COSMOS_SZUKANIE_NA_DOBE`); bez przyznania ma
@@ -556,8 +558,10 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
 - **Jak poprosić:** przycisk z dwiema osobami w polu wiadomości (działa na jedną wiadomość) albo
   słowa „zrób to zespołem”, „niech agenci…”. W trybie **„Proponuj, gdy warto”** (domyślny) model
   odpowiada od razu, a pod odpowiedzią pojawia się cicha linijka „Mogę to sprawdzić zespołem…”
-  z przyciskami **Uruchom · Zmień · ×**. „Uruchom” zastępuje odpowiedź wersją zespołową – pod
-  jednym pytaniem zawsze jest jedna odpowiedź.
+  z przyciskami **Odpowiedz zespołem · Zmień · ×**. Wersja zespołowa zastępuje odpowiedź – pod
+  jednym pytaniem zawsze jest jedna odpowiedź, a poprzednia zostaje zwinięta nad nią jako
+  „Odpowiedź bez zespołu” (jedno kliknięcie, żeby ją przeczytać). Stopka bloku podaje koszt całej
+  odpowiedzi, razem z zastąpioną wersją i każdą rundą prowadzącego.
 - **Role:** badacz (szuka w sieci), sprzętowiec, programista, oko (zdjęcia), analityk, recenzent
   (sprawdza pozostałych), **fotograf** (nastawy i godziny z policzonego planu zdjęciowego). Skład –
   najwyżej 3 role – dobiera krótki planista, a **model do każdej roli dobiera Cosmos**: Twój wybór →
@@ -568,12 +572,19 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
   Uczciwie mówi, że trzeba się liczyć ze słabszą odpowiedzią. W bramce przełączasz składy jednym
   kliknięciem, pod odpowiedzią solo jest link **„Za 0 zł”**, a w Ustawienia → Agenci → **Jaki skład
   proponować** możesz ustawić darmowy jako domyślny – wtedy rolom na „Auto” serwer dobiera tylko
-  darmowe silniki.
+  darmowe silniki. Zalecany model open source trafia do składu dopiero po udanej sondzie na Twoim
+  kluczu (serwer sprawdza listę przy starcie i raz na dobę), a model, który NVIDIA wycofała (odpowiedź
+  410), zostaje zapamiętany i nie wraca w następnej turze. Gdy rola musi przejść na zapasowy model,
+  blok pokazuje jedną cichą notę „Niedostępne: … – role na zapasowym modelu”.
 - **Fotograf nie zgaduje liczb.** Planista podaje miejsce i czas, Cosmos liczy plan (Słońce,
   złota i niebieska godzina, pogoda, nastawy w Twoim sprzęcie) tak samo jak przy „[PLAN:]”,
   a fotograf pracuje wyłącznie na tych liczbach (plan dla zdjęć, wideo tylko na prośbę o film;
   przy samej dacie – na złotą godzinę). Gdy planu nie da się policzyć, pisze, że planu nie
-  policzono, i nie podaje godzin. Główny model nie liczy wtedy drugiego planu.
+  policzono, i nie podaje godzin. Plan liczy się dla miejsca i czasu z pytania: „za rok we
+  wrześniu” to 15 września przyszłego roku w strefie tego miejsca, a pytanie o wyjazd bez miejsca nie
+  dostaje planu Twojej lokalizacji. Blok „Zespół” mówi, dla czego plan policzono („Plan zdjęciowy ·
+  Taormina · 15 wrz 2027”). Główny model w turze zespołu nie ma narzędzia planu, więc nie liczy
+  drugiego i nie pisze odpowiedzi od nowa.
 - **Poprawka kodu po recenzji:** gdy w składzie są programista i recenzent, a recenzent ma uwagi,
   programista dostaje jedną rundę na poprawienie wskazanych problemów. Prowadzący dostaje wersję
   poprawioną tylko wtedy, gdy przyszedł pełny kod – urwana albo skrócona poprawka przepada
@@ -1441,7 +1452,7 @@ czyli czas do ostatniego znaku krótkiej odpowiedzi.
 | **Rozmowa (tempo)** | `nvidia/nemotron-3-super-120b-a12b` | 4,4 · 1,2 · 1,3 s · kontekst 1M, ale 12 mld aktywnych |
 | **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 1,7 · 1,9 · 1,0 s · czyta też wideo |
 | Najszybszy sensowny | `openai/gpt-oss-20b` | 1,0 · 1,5 · 1,7 s |
-| Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 · 1,2 · 2,5 s |
+| Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 · 1,2 · 2,5 s · **wycofany przez NVIDIĘ 26.08.2026 (410)** |
 | Bardzo szybki, słaby po polsku | `nvidia/nemotron-mini-4b-instruct` | 0,3 · 0,3 · 0,4 s |
 
 **Ultra czy Super – to jest realny wybór, nie oczywistość.** Super odpowiada
@@ -1511,7 +1522,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 158 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 160 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

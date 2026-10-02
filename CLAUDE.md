@@ -64,7 +64,7 @@ w **Ustawienia → Zmysły**. Agenta instaluje jedno polecenie, które podaje ap
 ## Testy i audyt
 
 ```bash
-npm test                  # 158 zestawów + 10 selftestów Pythona, ~12 min
+npm test                  # 160 zestawów + 10 selftestów Pythona, ~12 min
 npm run test:szybkie      # tylko bez przeglądarki, ~30 s
 npm test -- plener mowa   # zestawy, których nazwa zawiera te słowa
 npm run audyt             # audyt repozytorium: martwe klucze i18n, sekrety, spójność dokumentacji
@@ -232,6 +232,12 @@ Grafiki **kończą turę** (`akcja: 'koniec'`): zdjęcia dokładają się do tej
 asystenta jako `zdjecia: [{q, etykieta, po, sekcja, photos, stan}]` i stoją w poziomym pasku
 nad odpowiedzią albo pod nagłówkiem sekcji. Dawniej po zdjęciach szła druga runda modelu –
 wyglądało to na zawieszenie rozmowy („wisi w poszukiwaniu zdjęć”).
+Znacznik, który nic nie wnosi (plan już policzony przez fotografa, powtórzone wyszukanie, plan
+albo archiwum), stojący PO gotowej odpowiedzi, jest wycinany, a tura się kończy
+(`zakonczTekstem` w `public/narzedzia.js`) – dawniej zamawiał drugą rundę, która pisała odpowiedź
+od zera i drugi raz płaciła. Dlatego instrukcje SZUKAJ i PLAN każą napisać SAM znacznik, a prowadzący
+w turze zespołu w ogóle nie dostaje opisu PLAN. Gwarancję „widoczny tekst nigdy nie maleje w turze”
+pilnuje zestaw `odpowiedz-bez-resetu`.
 
 Wzorce znaczników są tolerancyjne (spacja po nawiasie, nawiasy i dwukropek pełnej
 szerokości `【SZUKAJ：…】`, jak piszą małe modele lokalne i Qwen) – nowy znacznik buduj

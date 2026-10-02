@@ -242,6 +242,20 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
     page.on('pageerror', (e) => bledy.push(e.message));
     await page.goto(`${ADRES}/app`, { waitUntil: 'load' });
     await page.waitForSelector('.app.gotowa', { timeout: 15000 }).catch(() => {});
+    /* ZRZUTY=<katalog> – zrzuty do przeglądu (jasny/ciemny, 390 i 1440 px); bez zmiennej nic. */
+    const zrzut = async (nazwa) => {
+      if (!process.env.ZRZUTY) return;
+      for (const [szer, wys] of [[390, 800], [1440, 900]]) {
+        await page.setViewportSize({ width: szer, height: wys });
+        for (const motyw of ['light', 'dark']) {
+          await page.emulateMedia({ colorScheme: motyw });
+          await spij(250);
+          await page.screenshot({ path: require('path').join(process.env.ZRZUTY, `w4-${nazwa}-${motyw}-${szer}.png`) });
+        }
+      }
+      await page.setViewportSize({ width: 390, height: 800 });
+      await page.emulateMedia({ colorScheme: 'light' });
+    };
     const nowaRozmowa = async () => { await page.evaluate(() => newConversation()); await spij(150); };
     const koniec = () => page.evaluate(() => {
       const karty = [...document.querySelectorAll('#messages .msg-assistant:not(.msg-status)')];
@@ -258,6 +272,8 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
 
     // ---------------------------------------------------------------- G1
     const g1 = await tura(page, 'scena-szkic Wybieram się na Sycylię za rok we wrześniu, plan tygodnia ze zdjęciami.');
+    await page.evaluate(() => { const d = document.querySelector('#messages .wersja-poprzednia'); if (d) d.scrollIntoView({ block: 'start' }); });
+    await zrzut('szkic-zwiniety');
     const k1 = await koniec();
     ok(g1.max > 900 && !g1.spadki.length, `G1a. szkic przy odłożonych zdjęciach: tekst nie spada ani razu (max ${g1.max}, spadki: ${g1.spadki.join('; ') || 'brak'})`);
     ok(k1.tabele === 0 && k1.dzien.length >= 3, `G1b. na końcu na wierzchu JEDEN plan – gotowa wersja dzień po dniu (tabel na wierzchu: ${k1.tabele}, nagłówków dni: ${k1.dzien.length})`);
@@ -300,6 +316,8 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
     ok(g4.max > 400 && !g4.spadki.length && /Morskie Oko o zachodzie/.test(k4.ekran), `G4b. tekst prowadzącego zostaje, bez spadku (max ${g4.max}, spadki: ${g4.spadki.join('; ') || 'brak'})`);
     ok(!/PLAN JEST JUŻ POLICZONY|dane dla modelu/i.test(k4.ekran) && !/\[PLAN:/.test(k4.ekran),
       `G4c. ani polecenie dla modelu, ani znacznik nie stoją na ekranie (sterowanie w rozmowie: ${wRozmowie.filter((m) => m.st).length})`);
+    await page.evaluate(() => { const z = document.querySelector('#messages .zespol'); if (z && z.dataset.otwarty === 'false') z.querySelector('.zespol-glowa').click(); z && z.scrollIntoView({ block: 'start' }); });
+    await zrzut('zespol-plan');
     const plan4 = await page.evaluate(() => (document.querySelector('#messages .zespol .zespol-plan') || {}).textContent || '');
     ok(/^Plan zdjęciowy · Morskie Oko(, Tatry)? · 1 paź 2026$/.test(plan4), `G4d. blok zespołu mówi, dla czego policzono plan (K4): „${plan4}”`);
 
@@ -308,6 +326,8 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
     // Skład z edycji: analityk na modelu, którego dostawca już nie ma (404) – zapas.
     await page.evaluate(() => { zespolNaTure = { sklad: [{ rola: 'analityk', silnik: 'cloud', model: 'nvidia/model-wycofany-49b' }, { rola: 'recenzent' }] }; });
     await tura(page, 'scena-zapas Porównaj ceny dwóch obiektywów.');
+    await page.evaluate(() => { const z = document.querySelector('#messages .zespol'); if (z && z.dataset.otwarty === 'false') z.querySelector('.zespol-glowa').click(); z && z.scrollIntoView({ block: 'start' }); });
+    await zrzut('zespol-zapas');
     const z8 = await page.evaluate(() => ({
       nota: [...document.querySelectorAll('#messages .zespol .zespol-zapas')].map((x) => x.textContent),
       uwagi: [...document.querySelectorAll('#messages .zespol .rola-uwaga')].filter((x) => !x.hidden).map((x) => x.textContent),
@@ -363,6 +383,9 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
       await spij(300);
       await page.waitForFunction(() => !isGenerating, null, { timeout: 30000 });
       await spij(800);
+      await page.evaluate(() => { const d = document.querySelector('#messages .wersja-poprzednia'); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } });
+      await zrzut('bez-zespolu-rozwinieta');
+      await page.evaluate(() => { const d = document.querySelector('#messages .wersja-poprzednia'); if (d) d.open = false; });
       const po7 = await licznik();
       const s7 = await stopka();
       const k7 = await koniec();
@@ -490,7 +513,7 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
       const wTrakcie = await p14.evaluate(() => ({ bledy: activeConversation.messages.filter((m) => m.error).map((m) => ({ bieg: Boolean(m.bieg), t: String(m.content).slice(0, 60) })),
         urywek: activeConversation.messages.filter((m) => m.role === 'assistant' && !m.error).map((m) => ({ bieg: Boolean(m.bieg), n: String(m.content).length })),
         biegZapamietany: Boolean(localStorage.getItem('cosmos.bieg')), id: activeConversation.id }));
-      ok(wTrakcie.bledy.length === 1 && wTrakcie.bledy[0].bieg && /wrócę po nią/.test(wTrakcie.bledy[0].t) && wTrakcie.urywek.every((u) => u.bieg) && wTrakcie.biegZapamietany,
+      ok(wTrakcie.bledy.length === 1 && wTrakcie.bledy[0].bieg && /pisze się dalej/.test(wTrakcie.bledy[0].t) && wTrakcie.urywek.every((u) => u.bieg) && wTrakcie.biegZapamietany,
         `G14a. bez sieci dłużej niż czeka klient: urywek i błąd niosą bieg (K8), bieg zapamiętany, komunikat „wrócę po nią” (${JSON.stringify(wTrakcie)})`);
       await spij(12000);                   // serwer kończy (~8 s) i po 1,5 s zapisuje odpowiedź sam
       odetnijSiec(false);

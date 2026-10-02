@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-product%20page-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Runtime dependencies: zero" src="https://img.shields.io/badge/runtime%20deps-0-2F6FEB?style=flat-square">
-  <img alt="158 test suites" src="https://img.shields.io/badge/test%20suites-158-5E9E3A?style=flat-square">
+  <img alt="160 test suites" src="https://img.shields.io/badge/test%20suites-160-5E9E3A?style=flat-square">
   <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.pl.md"><img alt="Polska wersja" src="https://img.shields.io/badge/README-polski-C8643B?style=flat-square"></a>
 </p>
@@ -104,7 +104,7 @@ no dependency tree to audit and nothing that breaks overnight. Python sensors ar
 the deliberate exception – nobody should write an object detector from scratch –
 and they live in a separate process on a separate machine.
 
-**Tests measure behaviour, never source text.** 158 suites plus 10 Python
+**Tests measure behaviour, never source text.** 160 suites plus 10 Python
 selftests. This was learned the expensive way: source-text assertions broke six
 times in a single refactor while the functions they guarded worked perfectly. A
 test that fails when nothing is wrong teaches you to ignore it. Every suite now
@@ -263,6 +263,17 @@ open-source models (NVIDIA cloud, local GPU), with an honest note that answers m
 no extra cost. It is one click in the gate, a "For PLN 0" link under a solo answer, or the default
 in Settings – then the server only picks free engines for roles on "Auto".
 
+The next round of field reports fixed what that looked like on a phone. An answer that "reset"
+and streamed again from scratch turned out to be the lead model writing a full reply and then a
+`[PLAN:]` tag, which ordered a second, paid round that never saw the first one; now a redundant
+tag after a finished answer is cut and the turn ends, the lead in a team turn has no plan tool at
+all, and tool instructions ask for the tag alone. The photographer's golden hours were Warsaw's,
+today – the planner left place and date empty – so "next September" now resolves to the 15th of
+that month in the destination's time zone, and a trip question without a place gets no plan
+rather than the home one. Recommended free models are used only after a probe succeeds on the
+person's key: six of them had been retired by NVIDIA (HTTP 410) and every role silently fell back
+to the lead model.
+
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is
 a genuine limitation for outside readers – the reasoning is dense and it is all
@@ -349,7 +360,7 @@ node server.js            # http://localhost:3000 (product page), /app (Cosmos)
 That is the whole install. No build step, no package manager, no container.
 
 ```bash
-npm test                  # 158 suites + 10 Python selftests (~12 min)
+npm test                  # 160 suites + 10 Python selftests (~12 min)
 npm run test:szybkie      # non-browser suites only (~30 s)
 node scripts/audyt.js     # 15 static audit sections (~40 s)
 ```
@@ -405,7 +416,7 @@ public/              client: state, tools, view builders, protocol, text, speech
 public/strona/       product page at / (the app is at /app)
 senses/              Python sensors: vision, speech, depth (separate machine)
 mcp/                 MCP bridge – exposes Cosmos tools to other agents
-tests/               158 behaviour suites, mock upstreams, fake DOM
+tests/               160 behaviour suites, mock upstreams, fake DOM
 scripts/audyt.js     static audit, including an audit of itself
 ```
 
