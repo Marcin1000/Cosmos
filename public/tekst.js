@@ -206,11 +206,26 @@ function utworzTekst(z) {
           rows.push(splitRow(lines[i]));
           i++;
         }
-        let table = '<table><thead><tr>';
+        /* SZEROKA TABELA (≥ 4 kolumny, runda 11, kontrakt K5). Plan dnia
+           „Dzień | Miejsce | Światło | Aparat” na telefonie przewijał się w bok
+           i był nieczytelny. Klasa `tabela-szeroka` + `data-label` (nagłówek
+           kolumny, bez Markdownu) pozwalają stylom (style.css) narysować wiersz
+           jako kartę; `data-pierwsza="liczba"` – gdy pierwsza kolumna to numer
+           („1”, „**2**”, „3.”), karta zaczyna się od „Dzień 1”. Węższe tabele
+           i komputer – bez zmian. */
+        const szeroka = headers.length >= 4;
+        const etykieta = (h) => escapeHtml(h.replace(/\*\*|__|[*_`]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim());
+        const etykiety = headers.map(etykieta);
+        const liczbowa = szeroka && rows.length > 0 && rows.every((r) => /^\s*(?:\*\*|__)?\d{1,3}[.)]?(?:\*\*|__)?\s*$/.test(r[0] || ''));
+        let table = szeroka
+          ? `<table class="tabela-szeroka"${liczbowa ? ' data-pierwsza="liczba"' : ''}><thead><tr>`
+          : '<table><thead><tr>';
         table += headers.map((h) => `<th>${renderInline(h)}</th>`).join('');
         table += '</tr></thead><tbody>';
         for (const row of rows) {
-          table += '<tr>' + row.map((c) => `<td>${renderInline(c)}</td>`).join('') + '</tr>';
+          table += '<tr>' + row.map((c, k) => (szeroka && etykiety[k]
+            ? `<td data-label="${etykiety[k]}">${renderInline(c)}</td>`
+            : `<td>${renderInline(c)}</td>`)).join('') + '</tr>';
         }
         table += '</tbody></table>';
         html.push(table);

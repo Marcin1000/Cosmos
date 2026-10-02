@@ -942,9 +942,13 @@ function messageElement(m, idx = -1, opcje = {}) {
   /* Notatki zespołu nie dostają własnego dymka – ich blok rysuje się
      w następnej odpowiedzi prowadzącego (renderMessages). */
   if (m.search && m.narzedzie === 'zespol') return null;
+  // Polecenie dla modelu (K1) – „plan już policzony” na ekranie to kuchnia, nie treść.
+  if (m.search && m.sterowanie) return null;
 
   if (m.search) {
     msg.className = 'msg msg-search';
+    // Ikona zależna od narzędzia (plan – słońce zamiast lupy, agencja-ux, runda 11).
+    if (m.narzedzie) msg.dataset.narzedzie = m.narzedzie;
     msg.innerHTML =
       `<details class="search-results"><summary>${(!m.narzedzie || m.narzedzie === 'szukaj')
         ? t('chat.searchResults', { q: escapeHtml(m.searchQuery || '') })
@@ -1084,6 +1088,8 @@ function messageElement(m, idx = -1, opcje = {}) {
   const nastepna = idx >= 0 ? nastepnaWidoczna(activeConv()?.messages || [], idx) : null;
   const srodekTury = m.status || (nastepna && (nastepna.role === 'assistant'
     || (nastepna.role === 'user' && nastepna.search)));
+  // Zastąpiona wersja (odpowiedź solo przed zespołem, szkic przed danymi) – na górze tej samej karty.
+  col.append(...wersjePoprzednie(m));
   col.append(body);
   if (stZespolu) {
     const nota = zespolWidok.notaBezWkladu(stZespolu, () => ponowZespolem(opcje.notatki.idx, { sklad: ZESPOL.skladDoWyslania(stZespolu.role) }));
@@ -1094,6 +1100,41 @@ function messageElement(m, idx = -1, opcje = {}) {
   msg.appendChild(col);
   elementyWiadomosci.set(opcje.zrodlo || m, msg);
   return msg;
+}
+
+/** Poprzednie wersje odpowiedzi (K6) – zwinięta linijka na górze karty:
+ *  kropka w kolorze STAREGO silnika, powód i „20:05 · 1 240 znaków”.
+ *  Rozwinięta – stara treść przygaszona (agencja-ux, decyzja 4). */
+function wersjePoprzednie(m) {
+  const lista = Array.isArray(m.poprzednie) ? m.poprzednie.filter((p) => p && String(p.content || '').trim()) : [];
+  return lista.map((p) => {
+    const d = document.createElement('details');
+    d.className = 'wersja-poprzednia';
+    if (p.silnik) d.style.setProperty('--kw', `var(--k-${p.silnik === 'cloud' ? 'nvidia' : p.silnik})`);
+    const s = document.createElement('summary');
+    const kropka = document.createElement('span');
+    kropka.className = 'kropka';
+    const tytul = document.createElement('span');
+    tytul.className = 'tytul';
+    tytul.textContent = t(p.powod === 'bez-zespolu' ? 'wersja.bezZespolu' : p.powod === 'szkic' ? 'wersja.szkic' : 'wersja.poprzednia');
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    const jezyk = getLang() === 'en' ? 'en-GB' : 'pl-PL';
+    const czas = p.kiedy ? new Date(p.kiedy).toLocaleTimeString(jezyk, { hour: '2-digit', minute: '2-digit' }) : '';
+    meta.textContent = [
+      p.silnik ? nazwaSilnika(p.silnik) : '',
+      p.powod === 'przerwana' ? t('wersja.przerwana') : '',
+      czas,
+      t('doc.chars', { n: String(p.content).length.toLocaleString(jezyk) }),
+      typeof p.kosztZl === 'number' && p.kosztZl > 0 ? ZESPOL.kwotaZl(p.kosztZl, getLang()) : '',
+    ].filter(Boolean).join(' · ');
+    s.append(kropka, tytul, meta);
+    const tresc = document.createElement('div');
+    tresc.className = 'tresc md';
+    tresc.innerHTML = renderMarkdown(stripSearchMarker(String(p.content)));
+    d.append(s, tresc);
+    return d;
+  });
 }
 
 function messageActions(text, { copy, role, idx = -1, zespol = false }) {
@@ -1292,7 +1333,7 @@ function editFrom(idx) {
 /* Wiersz „Zdjęcia z sieci – dane dla modelu” to kuchnia, nie treść. W starych
    rozmowach kończył odpowiedź (zrzut 4 Marcina), a pod nim nie było już ani
    Kopiuj, ani Regeneruj – wiersz uchodził za środek tury. */
-const ukrytyWynikZdjec = (m) => Boolean(m && m.search && m.narzedzie === 'grafiki');
+const ukrytyWynikZdjec = (m) => Boolean(m && m.search && (m.narzedzie === 'grafiki' || m.sterowanie));
 /** Następna wiadomość, którą widać na ekranie (bez ukrytych wierszy narzędzia zdjęć). */
 function nastepnaWidoczna(wiadomosci, idx) {
   for (let i = idx + 1; i < wiadomosci.length; i++) {
@@ -1402,6 +1443,14 @@ function renderMessages({ przewin = true } = {}) {
       if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
       notatki = null;
       poZespole = false;
+    }
+    /* Prawdziwy wynik narzędzia albo pasek postępu, zanim prowadzący cokolwiek
+       napisał (sam znacznik): blok zespołu staje PRZED nimi, we własnej karcie –
+       tak jak szedł na żywo (zespół pracował pierwszy). Dawniej ślad planu
+       stał nad blokiem (agencja-frontend, runda 11). */
+    if (notatki && (m.status || m.search)) {
+      el.messages.appendChild(kartaSamegoZespolu(notatki, { bezBledu: true }));
+      notatki = null;
     }
     const dlaZespolu = notatki && m.role === 'assistant' && !m.status ? notatki : null;
     if (dlaZespolu) notatki = null;
@@ -2314,6 +2363,17 @@ function glosBledu(err) {
 
 const BIEG_PROB = 6;
 
+/* Licznik kosztu bieżącej tury (runGeneration): wszystkie wywołania modelu
+   prowadzącego – runda 0, rundy kaskady, dokończenia po „length”. Przy turze
+   zespołu suma trafia do stanu zespołu (stopka „cała odpowiedź”). */
+let licznikKosztuTury = null;          // { zl, szac, zt }
+function doliczKosztTury(zl, szacowany) {
+  if (!licznikKosztuTury) return;
+  licznikKosztuTury.zl = Math.round((licznikKosztuTury.zl + zl) * 10000) / 10000;
+  if (szacowany) licznikKosztuTury.szac = true;
+  if (licznikKosztuTury.zt) ZESPOL.kosztProwadzacego(licznikKosztuTury.zt.st, zl, szacowany);
+}
+
 let biegBiezacy = null;      // { id, convId, ostatnie }
 
 function nowyBiegId() {
@@ -2571,8 +2631,10 @@ async function streamOnce(conv, opcje = {}) {
             /* Kod błędu (np. budzet-wyczerpany prowadzącego zespołu) – zdanie
                w języku interfejsu i „Wyślij przez Chmurę”, jak przy 429 czatu. */
             kodBiegu = { kod: String(k.kod || ''), ...(k.okres ? { okres: String(k.okres) } : {}), ...(k.limit ? { limit: String(k.limit) } : {}) };
-            // Koszt odpowiedzi prowadzącego (C2) – do stopki zespołu „cała odpowiedź”.
-            if (zt && typeof k.kosztZl === 'number' && k.kosztZl > 0) ZESPOL.kosztProwadzacego(zt.st, k.kosztZl, k.kosztSzacowany === true);
+            /* Koszt tego wywołania (C2) – do JEDNEGO licznika tury: rundy kaskady
+               i dokończenia też płacą, a stopka „cała odpowiedź” pokazywała tylko
+               rundę 0 (~70% rachunku, it-modele-komercyjne, runda 11). */
+            if (typeof k.kosztZl === 'number' && k.kosztZl > 0) doliczKosztTury(k.kosztZl, k.kosztSzacowany === true);
           } catch { /* bez szczegółów */ }
           continue;
         }
@@ -3048,12 +3110,13 @@ function blokZapisanegoZespolu(notatki, st = ZESPOL.stanZWiadomosci(notatki.m)) 
 }
 
 /** Notatki bez odpowiedzi (restart w fazie ról, Stop) – karta z samym blokiem. */
-function kartaSamegoZespolu(notatki) {
+function kartaSamegoZespolu(notatki, { bezBledu = false } = {}) {
   const st = ZESPOL.stanZWiadomosci(notatki.m);
   const p = st.prowadzacy || {};
   const { msg, kolumna } = kartaOdpowiedzi(p.silnik || '', p.model || '');
   kolumna.appendChild(blokZapisanegoZespolu(notatki, st));
-  if (String(notatki.m.content || '').trim() && !isGenerating) {
+  // `bezBledu`: prowadzący pisze dalej (po narzędziu) – to nie jest „nie złożył odpowiedzi”.
+  if (!bezBledu && String(notatki.m.content || '').trim() && !isGenerating) {
     kolumna.appendChild(zespolWidok.bladScalenia(p.silnik || 'cloud', () => zlozPonownie(notatki.idx)));
   }
   return msg;
@@ -3062,7 +3125,20 @@ function kartaSamegoZespolu(notatki) {
 /** Nowa tura zespołu zamiast wszystkiego po pytaniu (jedno pytanie = jedna odpowiedź). */
 function zespolOdPytania(conv, prosba) {
   if (!conv || isGenerating) return;
-  conv.messages = conv.messages.slice(0, granicaTury(conv) + 1);
+  /* Odpowiedź solo nie znika bez słowa (K6, runda 11): zwija się do „Odpowiedź
+     bez zespołu” na górze karty odpowiedzi zespołu, a jej koszt wchodzi do
+     „cała odpowiedź”. Dawniej o zastąpieniu mówił tylko dymek przycisku. */
+  const od = granicaTury(conv) + 1;
+  const solo = conv.messages.slice(od).filter((m) => m.role === 'assistant' && !m.status && !m.error
+    && typeof m.content === 'string' && m.content.trim());
+  zastapioneNaTure = solo.length ? {
+    conv,
+    usuniete: conv.messages.slice(od),
+    kosztZl: solo.reduce((s, m) => s + (typeof m.kosztZl === 'number' ? m.kosztZl : 0), 0),
+    poprzednie: solo.flatMap((m) => [...(Array.isArray(m.poprzednie) ? m.poprzednie : []),
+      { content: m.content, silnik: m.silnik, model: m.model, powod: 'bez-zespolu', kosztZl: m.kosztZl, kiedy: m.kiedy }]),
+  } : null;
+  conv.messages = conv.messages.slice(0, od);
   propozycjaZespolu = null;
   zespolNaTure = prosba;
   saveConversations();
@@ -3686,7 +3762,7 @@ function wstawTekstModelu(conv, tresc, odKtorej = 0) {
      siatkami zdjęć). Żaden kawałek sam nie jest „tym samym tekstem", ale
      wszystkie razem – tak. Kawałki już są na ekranie, drugi plan nie. */
   if (tenSamTekst(tekstTury(conv, odKtorej), czysty)) return null;
-  const wiadomosc = { role: 'assistant', content: czysty, ...znakSilnika() };
+  const wiadomosc = { role: 'assistant', content: czysty, kiedy: Date.now(), ...znakSilnika() };
   conv.messages.push(wiadomosc);
   return dolozZastapione(conv, wiadomosc);
 }
@@ -3816,6 +3892,9 @@ async function runGeneration(conv, podpiecie = null) {
   zespolNaTure = null;
   propozycjaZespolu = null;
   const zt = { st: ZESPOL.nowyStanTury(), ui: null, zapisane: false, tik: null, conv, zgodaGlos: null };
+  licznikKosztuTury = { zl: 0, szac: false, zt };
+  // Odpowiedź solo zastąpiona tą turą była zapłacona – jej koszt idzie do „cała odpowiedź”.
+  if (zastapioneNaTure && zastapioneNaTure.conv === conv && zastapioneNaTure.kosztZl > 0) ZESPOL.kosztZastapionej(zt.st, zastapioneNaTure.kosztZl);
   // Wyszukiwanie badacza już jest w notatkach – ten sam [SZUKAJ:] od prowadzącego dostaje „już wyszukałeś”.
   const notatkiTury = conv.messages.slice(granicaTury(conv)).find((m) => m.narzedzie === 'zespol');
   if (notatkiTury && notatkiTury.zespol && notatkiTury.zespol.szukaj) stan.szukaj = new Set([odciskZapytania(notatkiTury.zespol.szukaj)]);
@@ -4037,6 +4116,7 @@ async function runGeneration(conv, podpiecie = null) {
       }
     }
   } finally {
+    domknijKosztIZastapione(conv, zt);
     const odlaczony = odlaczanie;
     odlaczanie = false;
     isGenerating = false;
@@ -4096,6 +4176,35 @@ async function runGeneration(conv, podpiecie = null) {
          ekranu. W trybie głosowym jej nie ruszamy – tam rozmowa idzie
          mikrofonem i dorzucanie pisanych wiadomości mieszałoby dwa kanały. */
       ruszKolejke();
+    }
+  }
+}
+
+/** Koniec tury: koszt wszystkich wywołań do odpowiedzi i do notatek zespołu;
+ *  odpowiedź solo, która nie znalazła nowej wypowiedzi (błąd, Stop), wraca. */
+function domknijKosztIZastapione(conv, zt) {
+  const tura = conv.messages.slice(conv.__turaOd || 0);
+  const odp = [...tura].reverse().find((m) => m.role === 'assistant' && !m.status && !m.error && typeof m.content === 'string');
+  if (licznikKosztuTury && licznikKosztuTury.zl > 0 && odp) {
+    // Koszt tej odpowiedzi – gdy zespół ją kiedyś zastąpi, wejdzie do „cała odpowiedź”.
+    odp.kosztZl = Math.round(((typeof odp.kosztZl === 'number' ? odp.kosztZl : 0) + licznikKosztuTury.zl) * 10000) / 10000;
+  }
+  const notatki = tura.find((m) => m.narzedzie === 'zespol' && m.zespol);
+  if (notatki && zt) {
+    const st = zt.st;
+    if (typeof st.kosztProwadzacegoZl === 'number') notatki.zespol.kosztProwadzacegoZl = st.kosztProwadzacegoZl;
+    if (st.kosztProwadzacegoSzac) notatki.zespol.kosztProwadzacegoSzac = true;
+    if (typeof st.kosztZastapionejZl === 'number' && st.kosztZastapionejZl > 0) notatki.zespol.kosztZastapionejZl = st.kosztZastapionejZl;
+  }
+  licznikKosztuTury = null;
+  const z = zastapioneNaTure;
+  if (z && z.conv === conv) {
+    zastapioneNaTure = null;
+    if (odp) z.poprzednie.forEach((p) => dodajPoprzednia(odp, p));
+    else {
+      // Zespół nie napisał odpowiedzi – odpowiedź solo wraca na swoje miejsce (zaraz po pytaniu).
+      const i = conv.messages.indexOf(tura[0]);
+      conv.messages.splice(i < 0 ? conv.messages.length : i, 0, ...z.usuniete);
     }
   }
 }
@@ -6996,6 +7105,11 @@ function exportConversation() {
     const grupy = (Array.isArray(m.zdjecia) ? m.zdjecia : []).filter((g) => g.stan === 'gotowe' && (g.photos || []).length);
     if (!tekst && !imgs.length && !foty.length && !grupy.length) continue;
     lines.push(`**${who}:**`, '');
+    // Zastąpione wersje (K6) – jedna linijka bez treści, jak zwinięta na ekranie.
+    for (const p of Array.isArray(m.poprzednie) ? m.poprzednie : []) {
+      lines.push(`> _${t(p.powod === 'bez-zespolu' ? 'wersja.bezZespolu' : p.powod === 'szkic' ? 'wersja.szkic' : 'wersja.poprzednia')}`
+        + ` (${t('doc.chars', { n: String(p.content || '').length })}) – ${t('wersja.zwinieta')}_`, '');
+    }
     if (tekst) lines.push(tekst, '');
     if (grupy.length) {
       lines.push(`_(${t('export.zdjecia', { n: grupy.reduce((s, g) => s + g.photos.length, 0), miejsca: grupy.map((g) => g.etykieta || g.q).join(', ') })})_`, '');

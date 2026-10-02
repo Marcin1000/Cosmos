@@ -141,6 +141,11 @@ function utworzNarzedzia(z) {
     // zdjęcia w jednej odpowiedzi: podmiana jednego paska, zapis po grupie, Stop, myślenie rundy
     odswiezZdjecia = null, zapiszWkrotce = null, sygnal = null, metaOdpowiedzi = null,
   } = z;
+  /* Wyszukiwanie zapisane po swojemu (bez dwukropka, `<tool_call>`, `<TOOLCALL>`)
+     – protokol.js. W przeglądarce `utworzProtokol` jest globalny (protokol.js
+     ładuje się przed tym plikiem), test może podać funkcję wprost. */
+  const natywneSzukanie = z.natywneSzukanie
+    || (typeof utworzProtokol === 'function' ? utworzProtokol().natywneSzukanie : null);
 
   /* Wiadomość „trwa czynność", którą trzeba będzie PRZEPISAĆ, gdy czynność
      się skończy. Wisiała kiedyś w rozmowie na zawsze jako „Szukam zdjęć…"
@@ -279,7 +284,9 @@ function utworzNarzedzia(z) {
 
   const szukaj = {
     nazwa: 'szukaj',
-    dopasuj: (acc) => acc.match(WZORCE.SZUKAJ),
+    /* Słaby model napisał „[SZUKAJ pogoda]” albo natywne `<tool_call>` – dawniej
+       znikało z ekranu, a zostawała sama obietnica „Sprawdzę.” (runda 11). */
+    dopasuj: (acc) => acc.match(WZORCE.SZUKAJ) || (natywneSzukanie ? natywneSzukanie(acc) : null),
     gdyLimit: (dop) => ({ tresc: t('search.enough'), etykieta: dop[1].trim(), sterowanie: true }),
     async wykonaj(k) {
       const q = k.dop[1].trim();

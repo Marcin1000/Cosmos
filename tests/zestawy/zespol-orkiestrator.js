@@ -248,9 +248,14 @@ async function nowaRozmowa(id, pytanie) {
       const st = stanyKoncowe(w);
       const zapas = zd(w, 'rola').find((e) => e.r === 'r1' && e.stan === 'zapas');
       const z = await zadania();
-      ok(zapas && zapas.silnik === 'cloud' && st.r1 === 'gotowa', `O4a. 500 → zapas na modelu prowadzącego, rola gotowa (${st.r1})`);
+      ok(zapas && zapas.silnik === 'cloud' && st.r1 === 'gotowa' && zapas.kod === 'blad'
+        && zapas.zamiast && zapas.zamiast.silnik === 'openai' && zapas.zamiast.model === 'gpt-4o-mini',
+        `O4a. 500 → zapas na modelu prowadzącego, rola gotowa (${st.r1}); K3: kod „blad” i model pierwotny (${JSON.stringify(zapas && { kod: zapas.kod, zamiast: zapas.zamiast })})`);
       const pr = zd(w, 'rola').filter((e) => e.r === 'r2' && e.ms !== undefined).pop() || {};
-      ok(st.r2 === 'blad' && pr.kod === 'czas', `O4b. cisza → rola kończy się po terminie ciszy (${st.r2}, ${pr.kod})`);
+      const zapasCiszy = zd(w, 'rola').find((e) => e.r === 'r2' && e.stan === 'zapas');
+      // Runda 11 (W1.5): cisza przed pierwszym bajtem → zapas; zapas też milczy → błąd po terminie ciszy.
+      ok(st.r2 === 'blad' && pr.kod === 'czas' && zapasCiszy && zapasCiszy.kod === 'cisza' && zapasCiszy.silnik === 'cloud',
+        `O4b. cisza przed pierwszym bajtem → zapas (kod ${zapasCiszy && zapasCiszy.kod}); milczy i zapas → błąd po terminie ciszy (${st.r2}, ${pr.kod})`);
       ok(w.koniec && w.koniec.blad === '' && /wkładów: 2/.test(w.tekst) && ms < 8000, `O4c. tura bez błędu w ${ms} ms, prowadzący z 2 wkładami`);
       const prow = z.find((x) => x.rodzaj === 'prowadzacy');
       ok(prow && /NIE DOTARŁO: Programista/.test(prow.ostatnia), 'O4d. prowadzący dostaje „NIE DOTARŁO: Programista”');
@@ -259,8 +264,30 @@ async function nowaRozmowa(id, pytanie) {
         { rola: 'analityk', silnik: 'openai', model: 'gpt-4o-mini' }, { rola: 'recenzent', silnik: 'cloud' }] } });
       const z2 = await zadania();
       const proby = z2.filter((x) => x.silnik === 'openai' && x.rola === 'ANALITYK').length;
-      ok(proby === 2 && stanyKoncowe(w2).r1 === 'gotowa' && zd(w2, 'rola').some((e) => e.r === 'r1' && e.stan === 'zapas'),
-        `O4e. 429: bez ponowień w zapytajModel, raz z powrotem do kolejki, potem zapas (żądań do OpenAI: ${proby})`);
+      ok(proby === 2 && stanyKoncowe(w2).r1 === 'gotowa' && zd(w2, 'rola').some((e) => e.r === 'r1' && e.stan === 'zapas' && e.kod === 'limit'),
+        `O4e. 429: bez ponowień w zapytajModel, raz z powrotem do kolejki, potem zapas z kodem „limit” (żądań do OpenAI: ${proby})`);
+      await zeruj();
+      const w3 = await tura({ messages: [{ role: 'user', content: 'Wisi: rola-cisza:ANALITYK@openai' }], zespol: { sklad: [
+        { rola: 'analityk', silnik: 'openai', model: 'gpt-4o-mini' }, { rola: 'recenzent', silnik: 'cloud' }] } });
+      const kon3 = zd(w3, 'rola').filter((e) => e.r === 'r1' && e.ms !== undefined).pop() || {};
+      ok(stanyKoncowe(w3).r1 === 'gotowa' && kon3.zapas && kon3.zapas.kod === 'cisza' && kon3.zapas.silnik === 'cloud'
+        && kon3.zapas.zamiast && kon3.zapas.zamiast.model === 'gpt-4o-mini' && /wkładów: 2/.test(w3.tekst),
+        `O4f. model milczący przed pierwszym bajtem → zapas na modelu prowadzącego, rola gotowa (${stanyKoncowe(w3).r1}, ${JSON.stringify(kon3.zapas || null)})`);
+      // O4g/h (runda 11, W1.6): recenzent nie ląduje na zapasie z rodziny autorów notatek.
+      await zeruj();
+      const w4 = await tura({ messages: [{ role: 'user', content: 'Recenzja: rola-500:RECENZENT@openai' }], zespol: { sklad: [
+        { rola: 'analityk', silnik: 'cloud' }, { rola: 'recenzent', silnik: 'openai', model: 'gpt-4o-mini' }] } });
+      const z4r = await zadania();
+      const kon4 = zd(w4, 'rola').filter((e) => e.r === 'r2' && e.ms !== undefined).pop() || {};
+      ok(stanyKoncowe(w4).r1 === 'gotowa' && kon4.stan === 'blad' && kon4.kod === 'rodzina' && !zd(w4, 'rola').some((e) => e.r === 'r2' && e.stan === 'zapas')
+        && !z4r.some((x) => x.rola === 'RECENZENT' && x.silnik === 'cloud') && w4.koniec && w4.koniec.blad === '',
+        `O4g. recenzent bez zapasu z rodziny autorów (Nemotron) – recenzja pominięta z kodem „rodzina” (${kon4.stan}, ${kon4.kod})`);
+      await zeruj();
+      const w5 = await tura({ messages: [{ role: 'user', content: 'Recenzja: rola-500:RECENZENT@claude' }], zespol: { sklad: [
+        { rola: 'analityk', silnik: 'openai', model: 'gpt-4o-mini' }, { rola: 'recenzent', silnik: 'claude', model: 'claude-haiku-4-5' }] } });
+      const kon5 = zd(w5, 'rola').filter((e) => e.r === 'r2' && e.ms !== undefined).pop() || {};
+      ok(kon5.stan === 'gotowa' && kon5.zapas && kon5.zapas.silnik === 'cloud',
+        `O4h. autorzy z innej rodziny (OpenAI) – recenzent dalej ma zapas na Nemotronie prowadzącego (${kon5.stan}, ${JSON.stringify(kon5.zapas || null)})`);
     }
 
     // ------------------------------------------------------------ O5 Stop
@@ -655,17 +682,52 @@ async function nowaRozmowa(id, pytanie) {
         && /obejrzała go rola zespołu „Oko”/i.test(pr22.system) && /wkładów: 2/.test(w22.tekst),
         `O22. obraz → rola „oko” (${oko && `${oko.silnik}:${oko.model}`}), prowadzący na modelu tekstowym bez obrazu (${pr22 && pr22.model}, obraz: ${pr22 && pr22.obraz}; status ${w22.status})`);
 
-      // O23: tura „tylko darmowe” przy płatnym prowadzącym – zalecany model spoza konta (404) spada na darmowy zapas, nie na Claude'a.
+      /* O22b (runda 11, W1.4): model oka niedostępny (404), a silnik zapasu nie ma modelu wizyjnego –
+         bez zapasu na ślepym prowadzącym (opisałby zdjęcie z wyobraźni); prowadzący bez obrazu
+         dostaje zdanie, że obrazu nikt nie obejrzał (nie „Obejrzała go rola Oko”), tura bez błędu. */
       await zeruj();
-      const w23 = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy? model-404:super-49b' }],
+      const w22b = await tura({ messages: [{ role: 'user', content: [{ type: 'text', text: 'Co jest na tym zdjęciu? plan-oko model-404:gpt-4o-mini' },
+        { type: 'image_url', image_url: { url: PNG_SONDY_WZROKU } }] }], zespol: { uruchom: true } });
+      const z22b = await zadania();
+      const pr22b = z22b.find((x) => x.rodzaj === 'prowadzacy') || { system: '' };
+      const okoR = (sklad(w22b).role.find((r) => r.rola === 'oko') || {}).r;
+      ok(w22b.status === 200 && okoR && !zd(w22b, 'rola').some((e) => e.r === okoR && e.stan === 'zapas') && stanyKoncowe(w22b)[okoR] === 'blad'
+        && !z22b.some((x) => x.rola === 'OKO' && x.silnik === 'cloud') && pr22b.system && !pr22b.obraz
+        && /nie udało się go obejrzeć/.test(pr22b.system) && !/Obejrzała go rola/.test(pr22b.system) && w22b.koniec && w22b.koniec.blad === '',
+        `O22b. oko bez modelu wizyjnego na zapas – bez zapasu na ślepym modelu, prowadzący wie, że obrazu nie obejrzano (${okoR}: ${stanyKoncowe(w22b)[okoR]}; koniec: ${w22b.koniec && w22b.koniec.blad})`);
+
+      /* O23: tura „tylko darmowe” przy płatnym prowadzącym. Runda 11 (W1.3): zalecany
+         model wchodzi do puli dopiero po udanej sondzie; rola, której model odpowiada
+         404 „Not found for account”, schodzi na darmowy zapas z kodem „wycofany”
+         (K3), a rejestr zapamiętuje awarię – następny skład go nie bierze. */
+      const ULTRA = 'nvidia/nemotron-3-ultra-550b-a55b'; const DSV4 = 'deepseek-ai/deepseek-v4.1-flash';
+      const { ZALECANE_DARMOWE } = require(path.join(KORZEN, 'lib/umiejetnosci.js'));
+      const zalecane = new Set(Object.values(ZALECANE_DARMOWE).flat().filter((id) => id !== 'nvidia/nemotron-3-super-120b-a12b'));
+      const planD = async () => (await post('/api/zespol/plan', { messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy?' }], endpoint: 'claude',
+        sklad: [{ rola: 'analityk' }, { rola: 'recenzent' }], tylkoDarmowe: true })).json();
+      const rejestr = () => { try { return JSON.parse(fs.readFileSync(path.join(srv.katalogDanych, 'konta', 'modele-sprawdzone.json'), 'utf8')).sprawdzone || {}; } catch { return {}; } };
+      const przed = await planD();
+      const kandPrzed = Object.values((przed.sklad || {}).kandydaci || {}).flat().map((k) => k.model);
+      ok(przed.sklad && przed.sklad.role.length && !przed.sklad.role.some((r) => zalecane.has(r.model)) && !kandPrzed.some((m) => zalecane.has(m)),
+        `O23a. bez sondy zalecane darmowe (dawniej wycofane przez NVIDIĘ) nie wchodzą do puli (${przed.sklad && przed.sklad.role.map((r) => r.model).join(',')})`);
+      for (const model of [ULTRA, DSV4]) await post('/api/models/check', { endpoint: 'cloud', model });
+      await zeruj();
+      const w23 = await tura({ endpoint: 'claude', messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy? model-404:ultra-550b' }],
         zespol: { sklad: [{ rola: 'analityk' }, { rola: 'recenzent' }], tylkoDarmowe: true } });
       const z23 = await zadania();
       const s23 = sklad(w23);
       const zapas23 = zd(w23, 'rola').find((e) => e.stan === 'zapas');
       ok(w23.status === 200 && s23.tylkoDarmowe === true && s23.role.length === 2 && s23.role.every((r) => ['cloud', 'local'].includes(r.silnik))
+        && s23.role[0].model === ULTRA
         && !z23.some((x) => x.rodzaj === 'rola' && ['claude', 'openai'].includes(x.silnik)) && z23.some((x) => x.rodzaj === 'prowadzacy' && x.silnik === 'claude')
-        && zapas23 && zapas23.silnik === 'cloud' && stanyKoncowe(w23).r1 === 'gotowa',
-        `O23. „tylko darmowe” z prowadzącym Claude: role na chmurze NVIDIA, 404 → zapas na domyślnym modelu chmury, zero ról na płatnych (${z23.filter((x) => x.rodzaj === 'rola').map((x) => `${x.rola}@${x.silnik}:${x.model}`).join(', ')})`);
+        && zapas23 && zapas23.silnik === 'cloud' && zapas23.kod === 'wycofany' && zapas23.zamiast && zapas23.zamiast.model === ULTRA
+        && stanyKoncowe(w23).r1 === 'gotowa',
+        `O23. „tylko darmowe” z prowadzącym Claude: zalecany po sondzie, 404 → zapas „wycofany” na domyślnym modelu chmury, zero ról na płatnych (${z23.filter((x) => x.rodzaj === 'rola').map((x) => `${x.rola}@${x.silnik}:${x.model}`).join(', ')})`);
+      const po = await planD();
+      const wpis = rejestr()[`cloud|${ULTRA}`] || {};
+      ok(wpis.rozmowa === false && po.sklad && po.sklad.role.length && !po.sklad.role.some((r) => r.model === ULTRA)
+        && po.sklad.role.some((r) => r.model === DSV4),
+        `O23b. pamięć awarii: 404 roli zapisany jak nieudana sonda, następny skład bez tego modelu (${po.sklad && po.sklad.role.map((r) => r.model).join(',')})`);
 
       // O24: plan dla bramki – oba składy, kandydaci do edytora i ustawienie osoby; „Darmowe modele” nie zmienia proponowanego.
       const plan = async () => (await post('/api/zespol/plan', { messages: [{ role: 'user', content: 'Jak rozłożyć budżet domowy na trzy cele?' }], endpoint: 'cloud',
@@ -732,13 +794,26 @@ async function nowaRozmowa(id, pytanie) {
     // ------------------------------------------------------------ O13g za mało czasu na poprawkę
     zabij(srv);
     for (let i = 0; i < 60 && srv.exitCode === null; i++) await spij(100);
-    srv = serwerCosmosa(PORT, { ...env, COSMOS_ZESPOL_MIN_NA_POPRAWKE_MS: '60000' });
+    // Sonda zalecanych przy starcie – na atrapie tylko na jawne COSMOS_SONDA_ZALECANYCH_PO_MS (O25).
+    srv = serwerCosmosa(PORT, { ...env, COSMOS_ZESPOL_MIN_NA_POPRAWKE_MS: '60000', COSMOS_SONDA_ZALECANYCH_PO_MS: '100',
+      COSMOS_SONDA_ZALECANYCH_PRZERWA_MS: '0' });
     if (!await czekajNa(ADRES)) throw new Error('serwer (bez czasu na poprawkę) nie wstał');
     {
       await zeruj();
       const w = await tura({ messages: [{ role: 'user', content: 'plan-kod napisz funkcję' }], zespol: { uruchom: true } });
       ok(stanyKoncowe(w).r2 === 'gotowa' && !zd(w, 'rola').some((e) => e.r === 'r1p') && !(await zadania()).some((x) => x.poprawka),
         'O13g. do końca fazy zostało mniej niż próg – bez poprawki kodu');
+    }
+    {
+      // O25 (runda 11, W1.3): sonda zalecanych darmowych w tle po starcie – każdy zalecany ma świeży wynik w rejestrze.
+      const { ZALECANE_DARMOWE } = require(path.join(KORZEN, 'lib/umiejetnosci.js'));
+      const ids = [...new Set(Object.values(ZALECANE_DARMOWE).flat())];
+      const plik = path.join(srv.katalogDanych, 'konta', 'modele-sprawdzone.json');
+      const wpisy = () => { try { return JSON.parse(fs.readFileSync(plik, 'utf8')).sprawdzone || {}; } catch { return {}; } };
+      for (let i = 0; i < 50 && !ids.every((id) => wpisy()[`cloud|${id}`]); i++) await spij(100);
+      const w = wpisy();
+      ok(ids.every((id) => w[`cloud|${id}`] && w[`cloud|${id}`].rozmowa === true) && !JSON.stringify(w).includes('127.0.0.1'),
+        `O25. sonda zalecanych przy starcie: ${ids.filter((id) => w[`cloud|${id}`]).length}/${ids.length} w rejestrze (bez adresów)`);
     }
   } catch (err) {
     fail.push(`wyjątek: ${err.stack || err.message}`);

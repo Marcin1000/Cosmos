@@ -1241,6 +1241,45 @@ function podpowiedzSprawdzenia(ep, nazwa, model, wynik) {
   return modelErrorHint(nazwa, model, wynik.status, { tresc: wynik.error, baseUrl: ep.baseUrl }).trim();
 }
 
+/* Sonda w tle zalecanych darmowych modeli zespołu (it-modele-open, runda 11).
+   NVIDIA wycofuje modele (410 Gone) i bramkuje nowsze (404 „Not found for
+   account”) – skład „Za 0 zł” bierze zalecany model dopiero po świeżej udanej
+   sondzie (lib/zespol.js pulaDarmowa), więc sondujemy je sami: przy starcie
+   i raz na dobę, po jednym, tylko te bez świeżego wyniku. max_tokens 1,
+   darmowe; cisza, limit i brak sieci nic nie zapisują. Tylko dla prawdziwej
+   chmury NVIDIA (identyfikatory z build.nvidia.com) – inny adres (NIM, atrapa)
+   tylko na jawne COSMOS_SONDA_ZALECANYCH_PO_MS. */
+let sondaZalecanychTrwa = false;
+const PRZERWA_SONDY_ZALECANYCH_MS = (() => { const n = Number(process.env.COSMOS_SONDA_ZALECANYCH_PRZERWA_MS); return Number.isFinite(n) && n >= 0 && process.env.COSMOS_SONDA_ZALECANYCH_PRZERWA_MS ? n : 1500; })();
+async function sondujZalecane() {
+  const ep = ENDPOINTS.cloud;
+  if (!ep || !ep.apiKey || sondaZalecanychTrwa || zamykanie) return;
+  if (!String(ep.baseUrl || '').includes('integrate.api.nvidia.com') && !process.env.COSMOS_SONDA_ZALECANYCH_PO_MS) return;
+  sondaZalecanychTrwa = true;
+  try {
+    const ids = [...new Set(Object.values(umiejetnosci_.ZALECANE_DARMOWE).flat())];
+    const oko = new Set(umiejetnosci_.ZALECANE_DARMOWE.oko || []);
+    for (const model of ids) {
+      if (zamykanie) break;
+      if (rejestrModeli.sprawdzenie('cloud', model)) continue;
+      const doKiedy = Date.now() + 30_000;
+      const text = await probeModel(ep, model, false, doKiedy).catch(() => ({ ok: false, timeout: true }));
+      if (!(text.ok || (!text.timeout && !text.limit && !text.siec))) continue;
+      const vision = text.ok && oko.has(model) ? await probeModel(ep, model, true, doKiedy).catch(() => ({ ok: false })) : { ok: false };
+      const obrazy = text.ok && oko.has(model) ? umiejetnosci_.ocenSondeWzroku(vision, model, 'cloud') : 'nie';
+      const blad = rejestrModeli.zapiszSprawdzenie({ silnik: 'cloud', model, rozmowa: text.ok, obrazy, czas: text.czas });
+      console.log(`Sonda zalecanego ${model}: ${text.ok ? 'działa' : `odmowa (HTTP ${text.status})`}${blad ? ` – zapis: ${blad.message}` : ''}`);
+      // Darmowy klucz NVIDIA ma limit zapytań na minutę – po jednym, z przerwą.
+      await new Promise((ok) => { setTimeout(ok, PRZERWA_SONDY_ZALECANYCH_MS).unref?.(); });
+    }
+  } finally { sondaZalecanychTrwa = false; }
+}
+{
+  const po = Number(process.env.COSMOS_SONDA_ZALECANYCH_PO_MS);
+  setTimeout(() => { sondujZalecane().catch(() => {}); }, Number.isFinite(po) && po >= 0 ? po : 20_000).unref();
+  setInterval(() => { sondujZalecane().catch(() => {}); }, 24 * 3600 * 1000).unref();
+}
+
 async function handleModelCheck(req, res) {
   let data;
   try { data = await readJson(req); } catch { return sendJson(res, 400, { error: 'Nieprawidłowy JSON.' }); }

@@ -112,6 +112,7 @@ function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null, znakSiln
     sygnal: sygnal ? () => sygnal : null,
     znakSilnika,
     metaOdpowiedzi,
+    natywneSzukanie: protokol.natywneSzukanie,
   });
 
   const poNazwie = Object.fromEntries(narzedzia.map((n) => [n.nazwa, n]));
@@ -872,6 +873,21 @@ async function uruchom(st, nazwa, acc, stan) {
       console.log(`18g. kart tekstu: zapowiedź ${asystent(st).length}, treść ${asystent(st2).length}`);
       if (asystent(st).length) fail.push('18g. zapowiedź „potrzebuję aktualnych informacji” stoi jako osobna karta nad paskiem „Szukam…”');
       if (asystent(st2).length !== 1) fail.push('18g. tekst z treścią przed wyszukaniem zniknął');
+    }
+  }
+
+  /* --- 19. Słaby model pisze wyszukiwanie po swojemu – narzędzie i tak rusza ---
+     „[SZUKAJ pogoda]” bez dwukropka albo natywne `<TOOLCALL>[…]` (Nemotron Nano
+     9B v2, domyślny model lokalny): dawniej znikało z ekranu, a zostawała sama
+     obietnica „Sprawdzę.” bez wyniku (runda 11). */
+  {
+    for (const acc of ['Sprawdzę.\n<TOOLCALL>[{"name": "search", "arguments": {"query": "pogoda Taormina"}}]</TOOLCALL>',
+      'Sprawdzę.\n[SZUKAJ pogoda Taormina]']) {
+      const st = stanowisko();
+      const w = await uruchom(st, 'szukaj', acc);
+      const wynik = st.dziennik.doModelu.map((x) => x.tresc).join(' ');
+      console.log(`19. ${acc.split('\n')[1].slice(0, 12)}… → ${w ? w.akcja : 'narzędzie nie ruszyło'}`);
+      if (!w || !/WYNIKI DLA: pogoda Taormina/.test(wynik)) fail.push(`19. wyszukiwanie zapisane po swojemu nie rusza: ${acc.split('\n')[1].slice(0, 30)}`);
     }
   }
 

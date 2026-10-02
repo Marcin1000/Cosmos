@@ -228,5 +228,32 @@ for (const n of zle) fail.push(`składnia „${n}" przestała się renderować`)
   if (pliki.length !== 8) fail.push(`zebranyMaterial oddaje ${pliki.length} plików zamiast ośmiu`);
 }
 
+/* --- 6. SZEROKA TABELA JAKO KARTY (runda 11, kontrakt K5) --------------
+   Plan „Dzień | Miejsce | Światło | Aparat” na telefonie przewijał się w bok.
+   Tabela ≥ 4 kolumn dostaje klasę `tabela-szeroka`, a każda komórka – nagłówek
+   swojej kolumny w `data-label` (z niego style rysują kartę wiersza). Nagłówek
+   to tekst od modelu w ATRYBUCIE, więc musi być bez Markdownu i oczyszczony. */
+{
+  const szer = T.renderMarkdown('| Dzień | **Miejsce** / aktywność | Światło | Aparat |\n|---|---|---|---|\n'
+    + '| **1** | Taormina | 18:33 | f/8 |\n| 2. | Etna | 17:00 | ND |');
+  const etykiety = [...szer.matchAll(/<td data-label="([^"]*)">/g)].map((m) => m[1]);
+  console.log(`6. tabela 4 kolumny: klasa ${/class="tabela-szeroka"/.test(szer) ? 'tak' : 'NIE'}, etykiety ${etykiety.slice(0, 4).join(' | ')}`);
+  if (!/<table class="tabela-szeroka"/.test(szer)) fail.push('tabela ≥ 4 kolumn bez klasy `tabela-szeroka` – na telefonie przewija się w bok');
+  if (etykiety.join('|') !== 'Dzień|Miejsce / aktywność|Światło|Aparat|Dzień|Miejsce / aktywność|Światło|Aparat') {
+    fail.push(`komórki szerokiej tabeli bez nagłówka kolumny w data-label (albo z Markdownem): ${etykiety.join('|')}`);
+  }
+  if (!/data-pierwsza="liczba"/.test(szer)) fail.push('pierwsza kolumna z numerem dnia („**1**”, „2.”) nie jest oznaczona data-pierwsza="liczba"');
+  const slowna = T.renderMarkdown('| Miejsce | Kiedy | Światło | Aparat |\n|---|---|---|---|\n| Taormina | rano | miękkie | f/8 |');
+  if (/data-pierwsza/.test(slowna)) fail.push('data-pierwsza="liczba" przy pierwszej kolumnie, która nie jest numerem');
+  const waska = T.renderMarkdown('| a | b | c |\n|---|---|---|\n| 1 | 2 | 3 |');
+  if (/tabela-szeroka|data-label/.test(waska)) fail.push('tabela 3-kolumnowa zmieniona – ma zostać zwykłą tabelą');
+  // Nagłówek z HTML-em od modelu: w atrybucie tylko jako tekst.
+  const wrogi = T.renderMarkdown('| a"><img src=x onerror=alert(1)> | b | c | d |\n|-|-|-|-|\n| x | y | z | w |');
+  // (detektor `zarzuty` widzi „onerror=” także w środku cudzysłowu – tu patrzymy na kształt znacznika)
+  const komorki = wrogi.match(/<td\b[^>]*>/g) || [];
+  const zly = /<img/i.test(wrogi) || komorki.length !== 4 || komorki.some((k) => !/^<td data-label="[^"<>]*">$/.test(k));
+  if (zly) fail.push(`nagłówek kolumny wyrywa się z atrybutu data-label: ${wrogi.slice(0, 160)}`);
+}
+
 console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nTEKST NIE WPUSZCZA OK');
 process.exit(fail.length ? 1 : 0);

@@ -87,9 +87,12 @@ function utworzProtokol() {
     let out = bezRusztowania(String(s || ''));
     const przed = out;
     /* Wywołanie narzędzia w formacie modeli z function callingiem
-       (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes). Cosmos go nie
-       wykonuje, a stało na ekranie jako JSON. Urwane na końcu też znika. */
-    out = out.replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)|<\/tool_call>/gi, '');
+       (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes, Nemotron 3;
+       `<TOOLCALL>[…]</TOOLCALL>` – Llama-Nemotron i Nemotron Nano 9B v2,
+       domyślny model lokalny). Stało na ekranie jako JSON (runda 11).
+       Urwane na końcu też znika. Wyszukiwanie z takiego wywołania rusza
+       mimo to – `natywneSzukanie` niżej. */
+    out = out.replace(/<(tool_call|toolcall)>[\s\S]*?(?:<\/\1>|$)|<\/(?:tool_call|toolcall)>/gi, '');
     // Akcja z odnośnikiem Markdown w treści – ogólny wzorzec niżej urwałby ją na „]” linku.
     out = out.replace(new RegExp(`${OTW}AKCJA${DWUKROPEK}(?:${LINK_MD}|${TRESC})*?${LINK_MD}(?:${LINK_MD}|${TRESC})*${ZAM}`, 'gi'), '');
     for (const z of ZNACZNIKI) {
@@ -121,7 +124,78 @@ function utworzProtokol() {
       .replace(/\*\*\s*\*\*|(?<![`\w])``(?!`)/g, '');
     // Płot urwany razem ze znacznikiem: nieparzysta liczba płotów, ostatni pusty.
     if (((out.match(/```/g) || []).length % 2) === 1) out = out.replace(/```[a-zA-Z-]*\s*$/, '');
-    return out.trim();
+    return ujednolicPismo(out).trim();
+  }
+
+  /* ============ MIESZANE PISMO W SŁOWIE (runda 11, R5) ============
+     „Monte τauro” – model (próbkowanie, token z innego alfabetu o tym samym
+     brzmieniu) wstawił grecką literę w łacińskie słowo. Na ekranie wygląda to
+     jak literówka, a czytnik ekranu i lektor czytają „tau”. Poprawiamy TYLKO
+     słowo, które ma ≥ 3 litery łacińskie i najwyżej dwie greckie/cyrylickie
+     z listy jednoznacznych sobowtórów. Całe słowa greckie i rosyjskie, symbole
+     (τ = RC, λ/2), jednostki (μm, kΩ, ΔT, ΔEV), kod i adresy – bez zmian.
+     Szybka ścieżka: tekst bez greki i cyrylicy (prawie każdy) wraca od razu. */
+  const SOBOWTORY = {
+    // grecki: wyglądają jak łacińskie (bez μ, ν, ρ, υ, χ, π, Ω, Δ – jednostki i dwuznaczne)
+    'α': 'a', 'ε': 'e', 'ι': 'i', 'κ': 'k', 'ο': 'o', 'τ': 't', 'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H',
+    'Ι': 'I', 'Κ': 'K', 'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Χ': 'X', 'Υ': 'Y',
+    // cyrylica: identyczne kształty
+    'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x', 'і': 'i', 'ј': 'j', 'ѕ': 's',
+    'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'Х': 'X',
+    'І': 'I', 'Ј': 'J', 'Ѕ': 'S',
+  };
+  const PISMO_OBCE = /[\p{Script=Greek}\p{Script=Cyrillic}]/u;
+  const PISMO_LACINSKIE = /\p{Script=Latin}/u;
+  function naprawSlowo(slowo) {
+    const litery = [...slowo];
+    const obce = litery.filter((z) => PISMO_OBCE.test(z));
+    const lacinskie = litery.filter((z) => PISMO_LACINSKIE.test(z));
+    if (!obce.length || lacinskie.length < 3 || obce.length > 2) return slowo;
+    if (obce.some((z) => !SOBOWTORY[z])) return slowo;
+    /* Wielka obca litera to zwykle symbol – zostaje. Wyjątek: słowo pisane jak
+       nazwa, wielka na początku i reszta małe („Τeatro”, „Сefalù”). */
+    if (obce.some((z) => z !== z.toLowerCase()) && !/^\p{Lu}[\p{Ll}\p{M}]{2,}$/u.test(slowo)) return slowo;
+    return litery.map((z) => SOBOWTORY[z] || z).join('');
+  }
+  function ujednolicPismo(tekst) {
+    const s = String(tekst || '');
+    if (!PISMO_OBCE.test(s)) return s;
+    // Bloki kodu, kod w linii, adresy i cele odnośników zostają nietknięte.
+    return s.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`|https?:\/\/\S+|\]\([^)\n]*\))/)
+      .map((kawalek, i) => (i % 2 ? kawalek : kawalek.replace(/[\p{L}\p{M}]+/gu, naprawSlowo))).join('');
+  }
+
+  /* ============ WYSZUKIWANIE ZAPISANE PO SWOJEMU (runda 11) ============
+     Słabe modele gubią protokół na dwa sposoby: „[SZUKAJ pogoda Taormina]” bez
+     dwukropka albo natywne wywołanie narzędzia – `<tool_call>{json}</tool_call>`
+     (Qwen, Hermes), `<tool_call><function=search><parameter=query>…` (Nemotron 3,
+     Qwen3-Coder), `<TOOLCALL>[{json}]</TOOLCALL>` (Llama-Nemotron, Nano 9B v2).
+     Czyszczenie zdejmowało je z ekranu, ale narzędzie nie ruszało – zostawała
+     sama obietnica „Sprawdzę.” bez wyniku (agencja-rozmowa, znaczniki-slabe.js).
+     Zwraca to samo co `match`: [cały fragment, zapytanie] albo null. */
+  const NAZWY_SZUKANIA = /^(?:search|web_search|websearch|internet_search|google_search|brave_search|search_web|szukaj|wyszukaj)$/i;
+  function natywneSzukanie(acc) {
+    const s = String(acc || '');
+    for (const m of s.matchAll(/<(tool_call|toolcall)>([\s\S]*?)<\/\1>/gi)) {
+      const wnetrze = m[2].trim();
+      let q = null;
+      const xml = wnetrze.match(/<function=([\w.-]+)>[\s\S]*?<parameter=(?:query|q|search_query|zapytanie)>\s*([\s\S]*?)\s*<\/parameter>/i);
+      if (xml) {
+        if (NAZWY_SZUKANIA.test(xml[1])) q = xml[2];
+      } else {
+        try {
+          let j = JSON.parse(wnetrze);
+          if (Array.isArray(j)) j = j.find((x) => x && NAZWY_SZUKANIA.test(String(x.name || ''))) || null;
+          let arg = j && (j.arguments || j.parameters);
+          if (typeof arg === 'string') arg = JSON.parse(arg);
+          if (j && NAZWY_SZUKANIA.test(String(j.name || '')) && arg) q = arg.query || arg.q || arg.search_query || arg.zapytanie;
+        } catch { /* nie JSON – nie wywołanie wyszukiwania */ }
+      }
+      q = String(q || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (q) return Object.assign([m[0], q], { index: m.index, input: s });
+    }
+    // Bez dwukropka – tylko nazwa WIELKIMI literami („[Szukaj w Google]” w zdaniu to tekst).
+    return s.match(new RegExp(`${OTW}(?:SZUKAJ|SEARCH)\\s+(${TRESC}+?)${ZAM}(?!\\()`));
   }
 
   /** Rozdziel treść modelu na myślenie i odpowiedź.
@@ -133,9 +207,13 @@ function utworzProtokol() {
     let think = '';
     let wejscie = String(acc || '');
     // samo zamknięcie bez otwarcia (otwarcie siedziało w szablonie czatu, np. R1/QwQ)
-    const z = wejscie.search(/<\/think>/i);
-    if (z >= 0 && !/<think>/i.test(wejscie.slice(0, z))) { think = wejscie.slice(0, z); wejscie = wejscie.slice(z + 8); }
-    const tresc = wejscie.replace(/<think>([\s\S]*?)(<\/think>|$)/gi, (_, w) => { think += w; return ''; });
+    // `<thinking>` – tak piszą Claude i modele uczone na jego zapisach (runda 11).
+    const z = wejscie.match(/<\/think(?:ing)?>/i);
+    if (z && !/<think(?:ing)?>/i.test(wejscie.slice(0, z.index))) {
+      think = wejscie.slice(0, z.index);
+      wejscie = wejscie.slice(z.index + z[0].length);
+    }
+    const tresc = wejscie.replace(/<(think|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi, (_, _n, w) => { think += w; return ''; });
     return { think: think.trim(), tresc: tresc.replace(/^\s+/, '') };
   }
 
@@ -146,10 +224,11 @@ function utworzProtokol() {
     let t = stripSearchMarker(rozdzielMyslenie(acc).tresc);
     const m = t.match(/[[【]\s*([A-ZĄĆĘŁŃÓŚŹŻ]{0,8})$/i);
     if (m && ZNACZNIKI.some((zn) => zn.startsWith(m[1].toUpperCase()))) t = t.slice(0, m.index);
-    // Urwany początek „<tool_call>” też nie mignie na ekranie.
-    const ogon = t.match(/<[a-z_]{0,9}$/i);
-    if (ogon && '<tool_call>'.startsWith(ogon[0].toLowerCase())) t = t.slice(0, ogon.index);
-    return t.replace(/<\/?t?h?i?n?k?$/i, '');
+    // Urwany początek „<tool_call>”, „<TOOLCALL>” i „<thinking>” też nie mignie na ekranie.
+    const ogon = t.match(/<\/?[a-z_]{0,9}$/i);
+    if (ogon && ['<tool_call>', '<toolcall>', '<thinking>', '</thinking>', '</think>']
+      .some((z) => z.startsWith(ogon[0].toLowerCase()))) t = t.slice(0, ogon.index);
+    return t;
   }
 
   /** Wstaw znaczniki zdjęć pod akapitami, których dotyczą.
@@ -438,7 +517,12 @@ function utworzProtokol() {
     const m = wiadomosci[idx];
     if (!m || !m.error) return idx;
     for (let i = idx - 1; i >= 0; i--) {
-      if (wiadomosci[i].role === 'user' && !wiadomosci[i].search) return i + 1;
+      const w = wiadomosci[i];
+      /* Notatki zespołu z treścią zostają: role już policzyły (i zapłaciły),
+         a padł tylko prowadzący. „Ponów” pisze odpowiedź na tych samych
+         notatkach; nowy skład to „Złóż ponownie” (runda 11, it-modele-komercyjne). */
+      if (w.narzedzie === 'zespol' && typeof w.content === 'string' && w.content.trim()) return i + 1;
+      if (w.role === 'user' && !w.search) return i + 1;
     }
     return idx;
   }
@@ -454,9 +538,18 @@ function utworzProtokol() {
     let wspolne = 0;
     while (wspolne < a.length && wspolne < b.length && podpis(a[wspolne]) === podpis(b[wspolne])) wspolne++;
     const zSerwera = new Set(b.map(podpis));
-    const tutajPo = a.slice(wspolne).filter((m) => !zSerwera.has(podpis(m)));
+    /* K8 (runda 11): karta straciła sieć w trakcie biegu X i została z urywkiem
+       albo błędem (oba niosą `bieg: X`), a serwer dokończył odpowiedź i zapisał
+       ją jako sierotę z tym samym biegiem. Wtedy wygrywa serwer – pełna, policzona
+       odpowiedź – a urywek i błąd karty wypadają. Wcześniej było odwrotnie
+       i pierwszy zapis karty kasował pełną odpowiedź na serwerze. */
+    const biegiSerwera = new Set(b.slice(wspolne).map((m) => m.bieg).filter(Boolean));
+    const przegrane = new Set(a.slice(wspolne)
+      .filter((m) => m.bieg && m.error && biegiSerwera.has(m.bieg)).map((m) => m.bieg));
+    const tutajPo = a.slice(wspolne)
+      .filter((m) => !zSerwera.has(podpis(m)) && !(m.bieg && przegrane.has(m.bieg)));
     const mamSwojaOdpowiedz = tutajPo.some((m) => m.role === 'assistant');
-    const serwerPo = b.slice(wspolne).filter((m) => !(m.bieg && mamSwojaOdpowiedz));
+    const serwerPo = b.slice(wspolne).filter((m) => !(m.bieg && mamSwojaOdpowiedz && !przegrane.has(m.bieg)));
     return { ...serwer, ...tutaj, messages: [...b.slice(0, wspolne), ...serwerPo, ...tutajPo] };
   }
 
@@ -990,6 +1083,8 @@ function utworzProtokol() {
     ZNACZNIKI,
     ARCH_LIMIT_ZNAKOW,
     stripSearchMarker,
+    ujednolicPismo,
+    natywneSzukanie,
     wstawZnacznikiZdjec,
     rozlozZdjecia,
     zeZnacznikamiZdjec,

@@ -432,6 +432,47 @@ const w19 = (async () => {
   ok(!brak24.length && !klucze.some((k) => /\u2014/.test(I18N.pl[k] + I18N.en[k])), `W24. ${klucze.length} kluczy składu darmowego w PL i EN, przetłumaczone${brak24.length ? ` – brak: ${brak24.join(', ')}` : ''}`);
 }
 
+// ------------------------------------------------------------------ W25–W27 (runda 11)
+{
+  /* W25. K3: zdarzenie `zapas` z kodem i modelem pierwotnym od serwera – kod
+     to powód zapasu (rola nie staje się błędem), model pierwotny przechodzi
+     przez zapis notatek i odczyt (także zapis sieroty serwera: `zamiast`). */
+  const s25 = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s25, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'cloud', model: 'nvidia/nemotron-3-super' },
+    role: [{ r: 'r1', rola: 'badacz', silnik: 'cloud', model: 'nvidia/llama-3.3-nemotron-super-49b-v1.5' }], odrzucone: [] });
+  Z.zjedzZdarzenieZespolu(s25, 'rola', { r: 'r1', stan: 'zapas', silnik: 'cloud', model: 'nvidia/nemotron-3-super', kod: 'wycofany',
+    zamiast: { silnik: 'cloud', model: 'nvidia/llama-3.3-nemotron-super-49b-v1.5' } });
+  const r25 = s25.role[0];
+  ok(r25.zapas.kod === 'wycofany' && r25.zapas.po.model === 'nvidia/llama-3.3-nemotron-super-49b-v1.5' && !r25.kod && Z.stanWidoku(r25.stan) === 'pracuje',
+    `W25a. zapas: kod 'wycofany' i model pierwotny w stanie, rola nie jest błędem (${JSON.stringify(r25.zapas)})`);
+  const o25 = Z.stanZWiadomosci(Z.wiadomoscNotatek(s25));
+  const sierota = Z.stanZWiadomosci({ content: 'N', zespol: { v: 1, prowadzacy: { silnik: 'cloud', model: 'm' }, wklady: [{ r: 'r1', rola: 'badacz', silnik: 'cloud', model: 'nvidia/nemotron-3-super', stan: 'gotowa', tresc: 'x',
+    zapas: { silnik: 'cloud', model: 'nvidia/nemotron-3-super', zamiast: { silnik: 'cloud', model: 'stary/model-410' }, kod: 'wycofany' } }] } });
+  ok(o25.role[0].zapas.kod === 'wycofany' && o25.role[0].zapas.po.model === r25.zapas.po.model
+    && sierota.role[0].zapas.po.model === 'stary/model-410' && sierota.role[0].zapas.kod === 'wycofany',
+    'W25b. zapas z kodem i modelem pierwotnym przez zapis notatek i z zapisu sieroty serwera (`zamiast`)');
+  /* W26. K4: `faza.plan` – miejsce i chwila planu fotografa w stanie i w zapisie. */
+  const s26 = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s26, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'cloud', model: 'm' }, role: [{ r: 'r1', rola: 'fotograf', silnik: 'cloud', model: 'm' }], odrzucone: [] });
+  Z.zjedzZdarzenieZespolu(s26, 'faza', { faza: 'prowadzacy', t: 10, notatki: 'N', planPoliczony: true, plan: { miejsce: 'Taormina', kiedy: '2027-09-15T18:30', strefa: 'Europe/Rome' } });
+  const o26 = Z.stanZWiadomosci(Z.wiadomoscNotatek(s26));
+  ok(s26.plan && s26.plan.miejsce === 'Taormina' && o26.plan && o26.plan.kiedy === '2027-09-15T18:30' && o26.planPoliczony === true,
+    `W26. plan fotografa (K4) w stanie i po odczycie notatek (${JSON.stringify(o26.plan)})`);
+  /* W27. koszt: każde wywołanie prowadzącego DODAJE się do „cała odpowiedź”,
+     zastąpiona odpowiedź solo też; przez zapis i odczyt notatek. */
+  const s27 = Z.nowyStanTury(0);
+  Z.zjedzZdarzenieZespolu(s27, 'sklad', { v: 1, zrodlo: 'plan', prowadzacy: { silnik: 'claude', model: 'c' }, role: [{ r: 'r1', rola: 'analityk', silnik: 'claude', model: 'c' }], odrzucone: [] });
+  Z.zjedzZdarzenieZespolu(s27, 'faza', { faza: 'prowadzacy', t: 10, notatki: 'N', kosztZl: 0.2 });
+  Z.kosztProwadzacego(s27, 0.15); Z.kosztProwadzacego(s27, 0.1); Z.kosztZastapionej(s27, 0.14);
+  const o27 = Z.stanZWiadomosci(Z.wiadomoscNotatek(s27));
+  ok(Z.kosztCaly(s27) === 0.59 && Z.kosztCaly(o27) === 0.59 && o27.kosztZastapionejZl === 0.14,
+    `W27. cała odpowiedź = role 0,20 + prowadzący 0,15 + 0,10 + zastąpiona 0,14 = 0,59 (${Z.kosztCaly(s27)}, po odczycie ${Z.kosztCaly(o27)})`);
+  const k27 = ['ag.zapasNota', 'ag.zapasNotaWiele', 'ag.zapasPowod.wycofany', 'ag.zapasPowod.cisza', 'ag.zapasPowod.limit', 'ag.zapasPowod.blad',
+    'ag.planLinia', 'ag.planTutaj', 'ag.planTeraz', 'ag.kosztZastapiona', 'wersja.poprzednia', 'wersja.bezZespolu', 'wersja.szkic', 'wersja.przerwana', 'wersja.zwinieta'];
+  const brak27 = k27.filter((k) => !I18N.pl[k] || !I18N.en[k] || I18N.pl[k] === I18N.en[k]);
+  ok(!brak27.length, `W27b. klucze noty zapasu, planu, kosztu i poprzedniej wersji w PL i EN${brak27.length ? ` – brak: ${brak27.join(', ')}` : ''}`);
+}
+
 w19.then(() => {
   console.log(bledy.length ? `\nDO POPRAWY:\n- ${bledy.join('\n- ')}` : '\nzespol-widok OK');
   process.exit(bledy.length ? 1 : 0);

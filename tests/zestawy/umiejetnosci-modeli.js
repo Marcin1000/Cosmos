@@ -142,15 +142,20 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     && U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), { prowadzacy: prow4o }) !== null
     && U.ocenKandydata('analityk', k('claude-haiku-4-5', 'claude'), { prowadzacy: prow4o, cena }) !== null,
     'C11. zapora porównuje cenę: Sonnet droższy od gpt-4o odpada, tańszy Haiku przechodzi');
-  // C12: wariant darmowy – płatny odpada, zalecenia na rolę, recenzent z innej rodziny, wizja z pamięci ostrożniej.
-  const pulaD = ['nvidia/nemotron-3-super-120b-a12b', 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'deepseek-ai/deepseek-v3.2', 'qwen/qwen3-235b-a22b',
-    'moonshotai/kimi-k2.5', 'nvidia/nemotron-nano-12b-v2-vl', 'openai/gpt-oss-120b'].map((id) => k(id, 'cloud'));
+  /* C12: wariant darmowy – płatny odpada, zalecenia na rolę, recenzent z innej rodziny, wizja z sondy przed domysłem.
+     Runda 11: lista zalecanych bez sześciu modeli wycofanych przez NVIDIĘ 26.08.2026 (HTTP 410). */
+  const WYCOFANE = ['nvidia/llama-3.3-nemotron-super-49b-v1.5', 'nvidia/nemotron-3-nano-30b-a3b', 'qwen/qwen3-coder-480b-a35b-instruct',
+    'openai/gpt-oss-120b', 'nvidia/nemotron-nano-12b-v2-vl', 'meta/llama-4-maverick-17b-128e-instruct'];
+  const pulaD = ['nvidia/nemotron-3-super-120b-a12b', 'nvidia/nemotron-3-ultra-550b-a55b', 'deepseek-ai/deepseek-v4.1-flash', 'google/gemma-4-31b-it',
+    'moonshotai/kimi-k3', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'mistralai/mistral-medium-3-instruct']
+    .map((id) => k(id, 'cloud', id.includes('omni') ? { sprawdzenie: { rozmowa: true, obrazy: 'pewne' } } : {}));
   const oD = { prowadzacy: super120, tylkoDarmowe: true };
-  ok(U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), oD) === null
-    && U.dobierzModel('analityk', [k('claude-sonnet-5', 'claude'), ...pulaD], oD)?.id === 'nvidia/llama-3.3-nemotron-super-49b-v1.5'
-    && U.dobierzModel('recenzent', pulaD, { ...oD, rodzinyNotatek: ['nemotron'] })?.id === 'deepseek-ai/deepseek-v3.2'
-    && U.dobierzModel('oko', pulaD, oD)?.id === 'nvidia/nemotron-nano-12b-v2-vl',
-    'C12. „tylko darmowe”: płatny odpada, analityk → Super 49B v1.5, recenzent spoza Nemotrona, oko → zmierzony 12B VL przed Kimi z pamięci');
+  ok(!Object.values(U.ZALECANE_DARMOWE).flat().some((id) => WYCOFANE.includes(id))
+    && U.ocenKandydata('analityk', k('claude-sonnet-5', 'claude'), oD) === null
+    && U.dobierzModel('analityk', [k('claude-sonnet-5', 'claude'), ...pulaD], oD)?.id === 'nvidia/nemotron-3-ultra-550b-a55b'
+    && U.dobierzModel('recenzent', pulaD, { ...oD, rodzinyNotatek: ['nemotron'] })?.id === 'deepseek-ai/deepseek-v4.1-flash'
+    && U.dobierzModel('oko', pulaD.filter((x) => !x.id.includes('deepseek')), oD)?.id === 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+    'C12. „tylko darmowe”: bez modeli wycofanych (410), płatny odpada, analityk → zalecany Ultra, recenzent spoza Nemotrona, oko → zmierzony Omni');
   ok(U.ocenKandydata('recenzent', pulaD[2], { ...oD, rodzinyNotatek: ['nemotron'] }) - U.ocenKandydata('recenzent', pulaD[2], oD) === 2
     && U.rodzinaModelu('nvidia/llama-3.3-nemotron-super-49b-v1.5') === 'nemotron' && U.rodzinaModelu('openai/gpt-oss-120b') === 'openai'
     && U.rodzinaModelu('gpt-4o') === 'openai' && U.rodzinaModelu('claude-sonnet-5') === 'claude' && U.rodzinaModelu('qwen3:8b') === 'qwen',
@@ -216,6 +221,17 @@ function wymiaryPng(dataUrl) {
   r2.zapiszDostawce('claude', [{ id: 'claude-x', max_input_tokens: 200000, capabilities: { image_input: { supported: false } } }, { id: 'bez-caps' }]);
   ok(r2.umiejetnosciModelu('claude-x', 'claude').okno === 200000 && r2.umiejetnosciModelu('claude-x', 'claude').wizja === false
     && r2.dostawca('claude', 'bez-caps') === null, 'F3. rejestr: capabilities trafiają do umiejetnosci()');
+  // E5 (runda 11): pamięć awarii – model wycofany (410) albo spoza konta (404) zapisany jak nieudana sonda.
+  r2.zapiszSprawdzenie({ silnik: 'cloud', model: 'stary/model', rozmowa: true, obrazy: 'nie', czas: 300 });
+  const bladA = r2.zapiszAwarie({ silnik: 'cloud', model: 'stary/model' });
+  ok(bladA === null && r2.sprawdzenie('cloud', 'stary/model').rozmowa === false && r2.umiejetnosciModelu('stary/model', 'cloud').rozmowa === false
+    && U.dobierzModel('analityk', [{ id: 'stary/model', silnik: 'cloud', umiejetnosci: r2.umiejetnosciModelu('stary/model', 'cloud') }]) === null,
+    'E5. zapiszAwarie: model po 410/404 nie przechodzi doboru, dopóki sonda nie powie inaczej');
+  ok(U.awariaModelu(410, '') && U.awariaModelu(404, "Function 'x': Not found for account 'abc'")
+    && U.awariaModelu(404, 'The model nvidia/x has reached its end of life on 2026-08-26 and is no longer available')
+    && U.awariaModelu(404, 'model "qwen3:8b" not found, try pulling it first')
+    && !U.awariaModelu(404, '404 page not found') && !U.awariaModelu(500, 'end of life') && !U.awariaModelu(429, 'not found for account'),
+    'E6. awariaModelu: 410 i 404 o modelu – tak; gołe 404 (zły adres), 500, 429 – nie');
   fs.rmSync(kat, { recursive: true, force: true });
 }
 

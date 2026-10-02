@@ -286,6 +286,35 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     ok(odrzucone && bieg.tekst === '' && biegi.trescZBloku(bieg.zdarzenia[0]) === '',
       'G4. zdarzenie z kluczem choices odrzucone; tekst roli nie wchodzi do odpowiedzi biegu');
     b.zakoncz(bieg, '');
+
+    /* G5 (runda 11): po zapełnieniu bufora numery zdarzeń rosną dalej, a wznowienie
+       dostaje `luka` z zakresem – dawniej wszystkie dalsze zdarzenia miały ten sam
+       numer i wznowienie gubiło resztę odpowiedzi. Moduł świeży, z małym buforem. */
+    const sciezkaB = require.resolve(path.join(KORZEN, 'lib/biegi.js'));
+    const stareB = require.cache[sciezkaB]; delete require.cache[sciezkaB];
+    process.env.COSMOS_BIEG_MAX_ZDARZEN = '3';
+    const biegiM = require(sciezkaB);
+    delete process.env.COSMOS_BIEG_MAX_ZDARZEN; require.cache[sciezkaB] = stareB;
+    const bm = biegiM.utworz({});
+    const u = { id: 'x', rola: 'wlasciciel' };
+    const ramki = (od) => {
+      let out = '';
+      const res = { writeHead() {}, flushHeaders() {}, write(x) { out += x; }, end() {}, on() {} };
+      wKontekscie(u, () => bm.podepnij('bieg-maly', od, res));
+      return out;
+    };
+    const bg = wKontekscie(u, () => bm.zacznij({ id: 'bieg-maly', model: 'm', silnik: 'cloud' }));
+    const zywy = ramki(0);   // widz podpięty od początku – dostaje zdarzenia na żywo
+    let naZywo = '';
+    for (const w of bg.widzowie) { const stare = w.write; w.write = (x) => { naZywo += x; return stare(x); }; }
+    for (let i = 0; i < 6; i++) bm.dopisz(bg, `data: ${JSON.stringify({ choices: [{ delta: { content: `k${i} ` } }] })}`);
+    bm.zakoncz(bg, '');
+    const odZera = ramki(0); const odPieciu = ramki(5); const odCzterech = ramki(4);
+    const idy = (t) => (t.match(/^id: (\d+)$/gm) || []).map((x) => Number(x.slice(4)));
+    const listaB = wKontekscie(u, () => bm.lista()).find((x) => x.id === 'bieg-maly') || {};
+    ok(biegiM.MAX_ZDARZEN === 3 && zywy === '' && idy(naZywo).join() === '0,1,2,3,4,5' && idy(odZera).join() === '0,1,2' && /event: luka\ndata: \{"powod":"bufor","od":3,"do":5\}/.test(odZera)
+      && /"od":5,"do":5/.test(odPieciu) && /"od":4,"do":5/.test(odCzterech) && !/k5/.test(odPieciu) && listaB.zdarzen === 6 && bg.tekst.includes('k5'),
+      `G5. bufor pełny: numery rosną (zdarzeń ${listaB.zdarzen}), wznowienie dostaje lukę z zakresem w miejscu dziury, tekst biegu cały (${JSON.stringify(odPieciu.slice(0, 80))})`);
   }
 
 
@@ -544,6 +573,37 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     ok(zapytan === 1 && M.uslugaNiedostepna() && Math.max(...czasy) < 1200,
       `M2. milczący geokoder: jedno zapytanie, reszta kolejki odpada na bezpieczniku (${zapytan} zapytań, najdłużej ${Math.max(...czasy)} ms)`);
     milczek.close(); milczek.closeAllConnections?.();
+
+    /* M3 (runda 11): zapytanie krajowe bierze tylko MIEJSCE (place, boundary,
+       natural…), nie dowolny obiekt – „Palermo” w Polsce to pizzeria i ulica,
+       więc plan liczył się dla Warszawy zamiast dla Sycylii. */
+    const pytania = [];
+    const geo = http.createServer((req, res) => {
+      const u = new URL(req.url, 'http://x');
+      const q = u.searchParams.get('q'); const kraj = u.searchParams.get('countrycodes') || '';
+      pytania.push(`${q}|${kraj}`);
+      const W = {
+        'Palermo|pl': [{ category: 'amenity', type: 'restaurant', lat: '52.23', lon: '21.01', display_name: 'Pizzeria Palermo, Warszawa' },
+          { category: 'highway', type: 'residential', lat: '50.06', lon: '19.94', display_name: 'Palermo, Kraków' }],
+        'Palermo|': [{ category: 'place', type: 'city', lat: '38.1157', lon: '13.3615', display_name: 'Palermo, Sycylia, Włochy' }],
+        'Zakopane|pl': [{ category: 'boundary', type: 'administrative', lat: '49.2992', lon: '19.9496', display_name: 'Zakopane, małopolskie' }],
+      };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(W[`${q}|${kraj}`] || []));
+    });
+    await new Promise((ok_) => geo.listen(0, '127.0.0.1', ok_));
+    process.env.GEOCODE_SEARCH_URL = `http://127.0.0.1:${geo.address().port}/szukaj`;
+    process.env.GEOCODE_COUNTRY = 'pl';
+    delete require.cache[require.resolve(path.join(KORZEN, 'lib/miejsca.js'))];
+    const M3 = require(path.join(KORZEN, 'lib/miejsca.js'));
+    const palermo = await M3.wspolrzedneMiejsca('Palermo');
+    const zakopane = await M3.wspolrzedneMiejsca('Zakopane');
+    ok(palermo && Math.abs(palermo.lat - 38.12) < 0.01 && zakopane && Math.abs(zakopane.lat - 49.3) < 0.01
+      && pytania.filter((x) => x.startsWith('Zakopane')).length === 1,
+      `M3. geokoder w kraju: pizzeria i ulica „Palermo” odrzucone → Palermo na Sycylii (${palermo && palermo.lat}); Zakopane z kraju jednym zapytaniem (${pytania.join(', ')})`);
+    geo.close(); geo.closeAllConnections?.();
+    delete process.env.GEOCODE_SEARCH_URL; delete process.env.GEOCODE_COUNTRY; delete process.env.GEOCODE_TIMEOUT_MS;
+    delete require.cache[require.resolve(path.join(KORZEN, 'lib/miejsca.js'))];
   }
 
   // ------------------------------------------------------------------ N. skład „Darmowe modele” (runda 10, paczka Z)
@@ -570,11 +630,12 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
       const d1 = s1.darmowe;
       const rec1 = d1 && d1.role.find((r) => r.rola === 'recenzent');
       ok(s1.role.some((r) => r.silnik === 'claude') && d1 && d1.role.length === 2 && d1.role.every((r) => !PLATNE.includes(r.silnik))
-        && d1.role[0].model === 'nvidia/llama-3.3-nemotron-super-49b-v1.5' && rec1 && !['nemotron'].includes(rodzinaModelu(rec1.model))
+        // Runda 11: zalecane darmowe dopiero po udanej sondzie (tu rejestru brak) – analityk na modelu chmury z .env.
+        && d1.role[0].model === chmura.model && rec1 && !['nemotron'].includes(rodzinaModelu(rec1.model))
         && d1.szacunekZl === 0 && d1.prowadzacyPlatny === false && s1.tylkoDarmowe === false,
-        `N1. wariant „Darmowe modele” obok proponowanego: role na chmurze NVIDIA, analityk Super 49B, recenzent spoza Nemotrona, 0 zł (${d1 && d1.role.map((r) => `${r.rola}:${r.model}`).join(', ')})`);
+        `N1. wariant „Darmowe modele” obok proponowanego: role na chmurze NVIDIA, analityk na modelu chmury (zalecane tylko po sondzie), recenzent spoza Nemotrona, 0 zł (${d1 && d1.role.map((r) => `${r.rola}:${r.model}`).join(', ')})`);
       const k1 = (s1.kandydaci || {}).analityk || [];
-      ok(k1.some((x) => x.model === 'claude-sonnet-5' && !x.darmowy) && k1.some((x) => x.model === 'nvidia/llama-3.3-nemotron-super-49b-v1.5' && x.darmowy)
+      ok(k1.some((x) => x.model === 'claude-sonnet-5' && !x.darmowy) && k1.some((x) => x.model === chmura.model && x.darmowy)
         && k1.length > 2, `N1b. kandydaci do edytora roli z obu pul, z flagą „darmowy” (${k1.map((x) => x.model).join(', ')})`);
       // N2: płatny prowadzący – darmowy wariant kosztuje tyle, co prowadzący (nigdy fałszywe 0 zł).
       const s2 = await sklad(claude);
