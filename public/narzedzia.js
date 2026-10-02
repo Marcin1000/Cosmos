@@ -32,10 +32,16 @@
    dopasuj(acc)     zwraca wynik `match` albo null
    zawszeDozwolone  true = wolno uruchomić także w ostatniej rundzie
                     (dotyczy narzędzi KOŃCZĄCYCH turę: płótno, zdjęcia, obraz)
-   gdyLimit(dop)    { tresc, etykieta } – co powiedzieć modelowi, gdy rund
-                    już nie ma. Samo dokończenie odpowiedzi robi wywołujący,
+   gdyLimit(dop)    { tresc, etykieta, sterowanie } – co powiedzieć modelowi, gdy
+                    rund już nie ma. Samo dokończenie odpowiedzi robi wywołujący,
                     w jednym miejscu dla wszystkich narzędzi.
    wykonaj(k)       robi robotę; zwraca { akcja: 'dalej' | 'koniec', finalText? }
+                    'koniec' z `finalText` = tekst odpowiedzi JUŻ stoi w rozmowie
+                    (także gdy narzędzie okazało się zbędne – kontrakt K2)
+
+   Wynik narzędzia, który jest tylko poleceniem dla modelu („to zapytanie już
+   wyszukałeś”), idzie przez `dodajWynikNarzedzia(conv, tresc, etykieta,
+   { sterowanie: true })` – widok go nie rysuje (kontrakt K1).
 
    `k` to kontekst jednego wywołania:
      { acc, dop, conv, depth, ostatnia, przed, stan }
@@ -146,7 +152,10 @@ function utworzNarzedzia(z) {
        kopię – Marcin dostał w ten sposób trzy identyczne plany Majorki.
        Rozdzielone, tekst przechodzi przez zaporę `wstawTekstModelu`, która
        przepisaną wersję PODMIENIA zamiast dokładać. */
-    if (przed) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
+    /* Sama zapowiedź („Aby przygotować…, potrzebuję aktualnych informacji”) nie jest
+       odpowiedzią – pasek „Szukam…” mówi to samo; nie stawiamy jej jako osobnej
+       karty (runda 11, R5). Tekst z treścią (akapity, lista, tabela) – jak dawniej. */
+    if (przed && !tylkoZapowiedz(przed)) wstawTekstModelu(conv, przed, conv.__turaOd || 0);
     // `status` – pasek postępu, nie wypowiedź: nie wraca do modelu jako jego
     // własne słowa i nie dostaje przycisków „Zapamiętaj" / „Regeneruj".
     const wiadomosc = { role: 'assistant', content: tekst, status: true, ...(znakSilnika ? znakSilnika() : {}) };
@@ -206,12 +215,72 @@ function utworzNarzedzia(z) {
     }
   }
 
+  /* ============ NARZĘDZIE ZBĘDNE W TURZE (runda 11, R1, kontrakt K2) ============
+     Prowadzący zespołu napisał całą odpowiedź, a na końcu [PLAN:] – choć plan
+     policzył już fotograf. Kaskada mówiła modelowi „plan już policzony, dokończ”
+     i zamawiała drugą rundę: tekst pierwszej znikał z ekranu, model pisał (i liczył
+     za) całość drugi raz, często inaczej (Marcin: „odpowiedź resetuje się i pisze
+     od nowa”). To samo przy powtórzonym wyszukaniu, archiwum i planie.
+     Teraz: gdy przed zbędnym znacznikiem stoi GOTOWA odpowiedź, znacznik wypada,
+     tekst zostaje jako odpowiedź tury i tura się kończy – bez drugiej rundy. */
+
+  /** Gotowa odpowiedź, a nie zapowiedź „sprawdzę…”: długa albo z nagłówkiem/tabelą. */
+  function jestOdpowiedzia(tekst) {
+    const s = String(tekst || '').trim();
+    return s.length >= 400 || (s.length >= 160 && /^#{1,4}\s|^\s*\|.*\|/m.test(s));
+  }
+
+  /** Sama zapowiedź czynności („Sprawdzę…”, „Aby przygotować plan, potrzebuję…”). */
+  function tylkoZapowiedz(tekst) {
+    const s = String(tekst || '').trim();
+    return s.length < 320 && !/\n\s*\n/.test(s) && !/^#{1,4}\s|^\s*(?:[-*•|]|\d{1,3}[.)])/m.test(s)
+      && /(?<!\p{L})(?:potrzebuj|sprawdz|wyszuk|poszuk|zajrz|przygotuj|let me|i'll check|i will check)\p{L}*/iu.test(s);
+  }
+
+  /** Tekst modelu sprzed znacznika – ze WSZYSTKICH znaczników wyczyszczony.
+   *  `k.przed` bywa pusty (app.js nie pokazuje szkicu, gdy w odpowiedzi są zdjęcia). */
+  const tekstPrzed = (k) => stripSearchMarker(String(k.acc || '').replace(k.dop[0], ''));
+
+  /** Polecenie dla modelu (nie wynik dla człowieka) – kontrakt K1: `sterowanie: true`,
+   *  widok go nie rysuje. Tekst sprzed znacznika, jeśli coś niesie, zostaje na
+   *  ekranie i w historii – druga runda go widzi i nie pisze wszystkiego od nowa. */
+  function sterowanie(k, tresc, etykieta) {
+    const przed = tekstPrzed(k);
+    if (przed && !tylkoZapowiedz(przed)) {
+      const w = wstawTekstModelu(k.conv, przed, k.conv.__turaOd || 0);
+      if (w && znakSilnika && !w.silnik) Object.assign(w, znakSilnika());
+    }
+    dodajWynikNarzedzia(k.conv, tresc, etykieta, { sterowanie: true });
+    return { akcja: 'dalej' };
+  }
+
+  /** K2: znacznik zbędny, przed nim gotowa odpowiedź → `{ akcja: 'koniec', finalText }`.
+   *  Zwraca null, gdy tekst przed znacznikiem odpowiedzią nie jest (wtedy runda idzie dalej). */
+  async function zakonczTekstem(k) {
+    const bezZnacznika = String(k.acc || '').replace(k.dop[0], '');
+    const tekst = stripSearchMarker(bezZnacznika);
+    if (!jestOdpowiedzia(tekst)) return null;
+    /* W tej samej odpowiedzi są zdjęcia – idą przez narzędzie zdjęć: ono stawia
+       tekst i paski w jednej wiadomości i samo kończy turę. */
+    const dopZdjec = WZORCE.GRAFIKA && bezZnacznika.match(WZORCE.GRAFIKA);
+    if (dopZdjec) return grafiki.wykonaj({ ...k, acc: bezZnacznika, dop: dopZdjec, przed: '' });
+    const w = wstawTekstModelu(k.conv, tekst, k.conv.__turaOd || 0);
+    if (w) {
+      if (znakSilnika && !w.silnik) Object.assign(w, znakSilnika());
+      const meta = metaOdpowiedzi ? metaOdpowiedzi() : null;
+      if (meta) for (const [klucz, wartosc] of Object.entries(meta)) if (wartosc) w[klucz] = wartosc;
+    }
+    saveConversations();
+    renderMessages();
+    return { akcja: 'koniec', finalText: tekst };
+  }
+
   /* ---------------------------------------------------------------- */
 
   const szukaj = {
     nazwa: 'szukaj',
     dopasuj: (acc) => acc.match(WZORCE.SZUKAJ),
-    gdyLimit: (dop) => ({ tresc: t('search.enough'), etykieta: dop[1].trim() }),
+    gdyLimit: (dop) => ({ tresc: t('search.enough'), etykieta: dop[1].trim(), sterowanie: true }),
     async wykonaj(k) {
       const q = k.dop[1].trim();
       /* To samo zapytanie drugi raz w tej turze. Model potrafił zawołać
@@ -221,11 +290,10 @@ function utworzNarzedzia(z) {
       const odcisk = bezOgonkowKlient(q).toLowerCase().replace(/\s+/g, ' ');
       if (!k.stan.szukaj) k.stan.szukaj = new Set();
       if (k.stan.szukaj.has(odcisk)) {
-        dodajWynikNarzedzia(k.conv,
+        return (await zakonczTekstem(k)) || sterowanie(k,
           'TO ZAPYTANIE JUŻ WYSZUKAŁEŚ W TEJ TURZE i masz wyniki wyżej. Nie szukaj go '
           + 'ponownie: odpowiedz na ich podstawie albo zapytaj o coś innego.',
           q);
-        return { akcja: 'dalej' };
       }
       k.stan.szukaj.add(odcisk);
       /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
@@ -284,24 +352,22 @@ function utworzNarzedzia(z) {
          i wolno je zadać. Rozróżnienie idzie więc po WYNIKU, nie po liczbie
          wywołań. */
       if (k.stan.archiwumZWynikiem) {
-        dodajWynikNarzedzia(k.conv,
+        return (await zakonczTekstem(k)) || sterowanie(k,
           'MASZ JUŻ WYNIK Z ARCHIWUM w tej turze i on odpowiada na pytanie '
           + 'użytkownika. Nie odpytuj archiwum drugi raz – napisz odpowiedź '
           + 'na podstawie tego, co dostałeś powyżej. Kolejne zapytanie tylko '
           + 'wydłuża czekanie i kończy się drugą, prawie taką samą odpowiedzią.',
           t('chat.archiveQuery'));
-        return { akcja: 'dalej' };
       }
 
       const odcisk = `${grupuj}|${[...q.entries()].sort().map(([a, b]) => `${a}=${b}`).join('&')}`;
       if (k.stan.archiwum.has(odcisk)) {
-        dodajWynikNarzedzia(k.conv,
+        return (await zakonczTekstem(k)) || sterowanie(k,
           'UWAGA: to jest DOKŁADNIE to samo zapytanie do archiwum, które przed '
           + 'chwilą wykonałeś, i da ten sam wynik. Nie powtarzaj go. Albo zmień '
           + 'filtry, albo odpowiedz tym, co już wiesz, i napisz wprost, czego '
           + 'nie udało się znaleźć.',
           t('chat.archiveQuery'));
-        return { akcja: 'dalej' };
       }
       k.stan.archiwum.add(odcisk);
 
@@ -375,21 +441,21 @@ function utworzNarzedzia(z) {
          plan z innymi godzinami i nastawami pod notatkami byłby sprzeczny.
          Jedyną zaporą było zdanie w notatkach, a słaby prowadzący i tak pisał
          [PLAN:] (agencja-rozmowa, etap 5). */
+      /* Runda 11 (K2): gdy przed znacznikiem stoi już cała odpowiedź, znacznik
+         wypada i tura się kończy – druga runda pisała wszystko od nowa. */
       if (k.stan.planZespolu) {
-        dodajWynikNarzedzia(k.conv,
+        return (await zakonczTekstem(k)) || sterowanie(k,
           'PLAN JEST JUŻ POLICZONY w notatkach fotografa wyżej. Nie licz go drugi raz – '
           + 'godziny i nastawy przepisz z notatki i dokończ odpowiedź.',
           t('chat.planQuery'));
-        return { akcja: 'dalej' };
       }
       const odcisk = bezOgonkowKlient(JSON.stringify(parametry));
       if (k.stan.plan.has(odcisk)) {
-        dodajWynikNarzedzia(k.conv,
+        return (await zakonczTekstem(k)) || sterowanie(k,
           'TEN PLAN JUŻ POLICZYŁEŚ W TEJ TURZE i masz jego dane wyżej. Nie proś '
           + 'o niego ponownie i NIE PRZEPISUJ całej odpowiedzi od nowa – dopisz '
           + 'tylko to, czego jeszcze nie napisałeś, albo zakończ.',
           t('chat.planQuery'));
-        return { akcja: 'dalej' };
       }
       k.stan.plan.add(odcisk);
 

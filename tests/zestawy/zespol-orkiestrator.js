@@ -448,8 +448,45 @@ async function nowaRozmowa(id, pytanie) {
       const f2 = z2.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
       const pr2 = z2.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
       ok(/brak – plan nie został policzony: nie znaleziono miejsca „Atlantyda Zaginiona”/.test(f2.ostatnia) && !/SPRÓBUJ|Plener →/.test(f2.ostatnia)
-        && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia),
-        'O14d. nieznane miejsce: fotograf dostaje krótkie „brak planu” dla roli (bez poleceń dla człowieka), prowadzący nie dostaje zakazu liczenia');
+        && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia) && /Planu zdjęciowego nie policzono \(nie znaleziono miejsca/.test(pr2.ostatnia),
+        'O14d. nieznane miejsce: fotograf dostaje krótkie „brak planu” dla roli (bez poleceń dla człowieka), prowadzący wie, że planu nie ma i godzin nie zgaduje');
+
+      /* Runda 11 (R1, R3). Zapisana lokalizacja (dom) – wtedy instrukcja PLAN
+         w ogóle trafia do zwykłego czatu, a plan „bez miejsca” liczyłby się dla domu. */
+      await post('/api/location', { location: 'Warszawa', lat: 52.2297, lon: 21.0122 });
+      await zeruj();
+      const solo = await tura({ messages: [{ role: 'user', content: 'Kiedy dziś złota godzina?' }] });
+      const prSolo = (await zadania()).find((x) => x.rodzaj === 'prowadzacy') || { system: '' };
+      await zeruj();
+      const wp = await tura({ messages: [{ role: 'user', content: 'plan-foto kiedy złota godzina?' }], zespol: { uruchom: true } });
+      const zp = await zadania();
+      const prP = zp.find((x) => x.rodzaj === 'prowadzacy') || { system: '', ostatnia: '' };
+      ok(solo.status === 200 && /NARZĘDZIE – PLAN ZDJĘCIOWY/.test(prSolo.system) && wp.status === 200 && zp.some((x) => x.rola === 'FOTOGRAF')
+        && !/PLAN ZDJĘCIOWY/.test(prP.system),
+        'O14i. R1: prowadzący w turze zespołu NIE dostaje opisu narzędzia [PLAN:] (zwykły czat z lokalizacją dostaje)');
+      const fazaP = zd(wp, 'faza')[0] || {};
+      const planK4 = fazaP.plan || {};
+      ok(fazaP.planPoliczony === true && /Morskie Oko/.test(planK4.miejsce || '') && /^2026-10-01T\d{2}:\d{2}/.test(planK4.kiedy || '')
+        && planK4.strefa === 'Europe/Warsaw' && /01\.10\.2026/.test(planK4.chwila || '')
+        && /Plan zdjęciowy policzono dla: Morskie Oko[^.]*01\.10\.2026/.test(prP.ostatnia) && /inne miejsce albo inny czas/.test(prP.ostatnia),
+        `O14j. K4: faza niesie plan {miejsce, kiedy, strefa, chwila} (${JSON.stringify(planK4)}); prowadzący dostaje zakres planu od Cosmosa`);
+      await zeruj();
+      const ww = await tura({ messages: [{ role: 'user', content: 'Jadę na Sycylię, kiedy tam złota godzina?' }],
+        zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }] } });
+      const zw = await zadania();
+      const fw2 = zw.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      const prW = zw.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      ok(/plan nie został policzony: pytanie dotyczy wyjazdu/.test(fw2.ostatnia) && !/52\.2297|"godziny"/.test(fw2.ostatnia)
+        && !(zd(ww, 'faza')[0] || {}).planPoliczony && /Planu zdjęciowego nie policzono \(pytanie dotyczy wyjazdu/.test(prW.ostatnia),
+        'O14k. R3: pytanie o wyjazd bez miejsca – brak planu (nie plan domu), prowadzący wie, że godzin nie ma');
+      await zeruj();
+      await tura({ messages: [{ role: 'user', content: 'Zachód słońca nad Morskim Okiem we wrześniu 2027 – kiedy?' }],
+        zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }], miejsce: 'Morskie Oko' } });
+      const zt = await zadania();
+      const ft = zt.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
+      ok(/plan nie został policzony: pytanie podaje termin/.test(ft.ostatnia) && !zt.some((x) => x.rodzaj === 'geokod'),
+        'O14l. R3: termin w pytaniu, a planista nie dał „kiedy” – brak planu (nie plan na dziś)');
+      await post('/api/location', { location: '' });
     }
 
     // ------------------------------------------------------------ O15 własna rola

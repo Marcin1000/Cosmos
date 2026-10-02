@@ -107,6 +107,17 @@ async function zadaj(sciezka, dane) {
     const planK = await zadaj('/api/plan', { miejsce: 'Krakow', kiedy: '2026-10-02T19:00', zachmurzenie: 'lekkie' });
     ok(planK.json.kiedy === '2026-10-02T17:00:00.000Z', `3. „19:00" w Krakowie to 17:00Z (${planK.json.kiedy})`);
 
+    /* ---- 3b. Sam miesiąc i zły zapis daty (runda 11, R3) ----
+       „2027-09” dawało 1.09 02:00 (new Date), czyli plan na noc pierwszego dnia. */
+    const planM = await zadaj('/api/plan', { miejsce: 'Krakow', kiedy: '2027-09', zachmurzenie: 'lekkie' });
+    ok(planM.kod === 200 && planM.json.kiedy === '2027-09-15T10:00:00.000Z', `3b. „2027-09” = 15 września 12:00 czasu miejsca (${planM.kod}, ${planM.json.kiedy})`);
+    const planD = await zadaj('/api/plan', { miejsce: 'Reykjavik', kiedy: '2027-09-15', zachmurzenie: 'lekkie' });
+    ok(planD.json.kiedy === '2027-09-15T12:00:00.000Z', `3b. sama data = 12:00 czasu miejsca (${planD.json.kiedy})`);
+    const zle = await Promise.all(['jutro', '15.09.2027', 'Sep 15 2027', '2027-02-30'].map((k) => zadaj('/api/plan', { miejsce: 'Krakow', kiedy: k, zachmurzenie: 'lekkie' })));
+    ok(zle.every((r) => r.kod === 400), `3b. zapis bez strefy w innym formacie i 30 lutego → 400 „Zła data” (${zle.map((r) => r.kod).join('/')})`);
+    const zStrefa = await zadaj('/api/plan', { miejsce: 'Krakow', kiedy: '2026-10-02T17:00:00.000Z', zachmurzenie: 'lekkie' });
+    ok(zStrefa.json.kiedy === '2026-10-02T17:00:00.000Z', `3b. data z oznaczeniem strefy (Z) przechodzi bez zmian (${zStrefa.json.kiedy})`);
+
     /* ---- 4. Wnętrze nie czeka na pogodę ---- */
     pogodaWisi = true;
     const wn = await zadaj('/api/plan', { zachmurzenie: 'wnetrze', lat: 50.1, lon: 20.1 });

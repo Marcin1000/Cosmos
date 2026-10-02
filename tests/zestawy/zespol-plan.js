@@ -667,6 +667,38 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     }
   }
 
+  // ------------------------------------------------------------------ O. R3: data i miejsce wyjazdu (runda 11)
+  {
+    const teraz = new Date(2026, 9, 2, 20, 30); // 2.10.2026, jak w zgłoszeniu Marcina
+    const pyt = 'Zaplanuj zespołem wyjazd na Sycylię za rok we wrześniu, z planem zdjęć';
+    ok(P.chwilaZPytania(pyt, teraz) === '2027-09-15' && P.chwilaZPytania('we wrześniu 2028', teraz) === '2028-09-15'
+      && P.chwilaZPytania('za rok w październiku', teraz) === '2027-10-15' && P.chwilaZPytania('w październiku', teraz) === '2026-10-15'
+      && P.chwilaZPytania('w maju', teraz) === '2027-05-15' && P.chwilaZPytania('15 września', teraz) === '2027-09-15'
+      && P.chwilaZPytania('jutro rano', teraz) === '2026-10-03' && P.chwilaZPytania('złota godzina teraz', teraz) === ''
+      && P.chwilaZPytania('co mają w menu', teraz) === '',
+      `O1. data z pytania: „za rok we wrześniu” → 2027-09-15, miesiąc miniony → przyszły rok, „teraz” → puste (${P.chwilaZPytania(pyt, teraz)})`);
+    ok(P.poprawnaChwila('2027-09') === '2027-09-15' && P.poprawnaChwila('2027-13') === '',
+      'O2. planista z samym miesiącem RRRR-MM → 15. dzień (dawniej odrzucony jako nieczytelny)');
+    const pusty = P.parsujPlan('{"role": ["fotograf"], "miejsce": "Taormina", "kiedy": ""}', { pytanie: pyt, teraz });
+    const zly = P.parsujPlan('{"role": ["fotograf"], "miejsce": "Taormina", "kiedy": "wrzesień"}', { pytanie: pyt, teraz });
+    const pomylony = P.parsujPlan('{"role": ["fotograf"], "miejsce": "Taormina", "kiedy": "2026-09-15T18:30"}', { pytanie: pyt, teraz });
+    const zgodny = P.parsujPlan('{"role": ["fotograf"], "miejsce": "Taormina", "kiedy": "2027-09-20T18:30"}', { pytanie: pyt, teraz });
+    const samRok = P.parsujPlan('{"role": ["fotograf"], "kiedy": "2027-09-15"}', { pytanie: 'a za rok?', teraz });
+    const bezFot = P.parsujPlan('{"role": ["badacz"]}', { pytanie: pyt, teraz });
+    ok(pusty.plan.kiedy === '2027-09-15' && zly.plan.kiedy === '2027-09-15' && !zly.plan.kiedyBledne
+      && pomylony.plan.kiedy === '2027-09-15' && zgodny.plan.kiedy === '2027-09-20T18:30' && samRok.plan.kiedy === '2027-09-15'
+      && !bezFot.plan.kiedy,
+      `O3. planista bez daty, z nieczytelną albo pomyloną (rok 2026 przy „za rok”) → data z pytania; zgodna – zostaje z godziną (${pusty.plan.kiedy}/${zly.plan.kiedy}/${pomylony.plan.kiedy}/${zgodny.plan.kiedy})`);
+    const zap = P.zapasowyPlan(pyt, P.bramka('Złota godzina i zdjęcia za rok we wrześniu', { tryb: 'sam' }), { jawna: true, teraz });
+    ok(zap.role.some((r) => r.rola === 'fotograf') && zap.kiedy === '2027-09-15' && zap.miejsce === '',
+      `O4. skład z heurystyki z fotografem: kiedy z pytania (${zap.kiedy}), miejsca nie zgaduje`);
+    const sys = P.promptPlanisty({ pytanie: pyt })[0].content;
+    ok(/15\. dzień/.test(sys) && /\+ 1/.test(sys) && /ZAWSZE wpisz miejsce/.test(sys) && /puste TYLKO, gdy pytanie dotyczy teraz/.test(sys) && !/puste = teraz/.test(sys),
+      'O5. planista: sam miesiąc = 15. dzień, „za rok” = rok + 1, miejsce zawsze przy wyjeździe, puste tylko dla „teraz”');
+    ok(P.oWyjazd(pyt) && P.oWyjazd('plan na 5 dni po Toskanii') && !P.oWyjazd('O której jest złota godzina?'),
+      'O6. oWyjazd: wyjazd i plan na dni – tak, samo pytanie o światło – nie');
+  }
+
   skonczone = true;
   console.log(fail.length ? `\nDO POPRAWY:\n- ${fail.join('\n- ')}` : '\nzespol-plan OK');
   process.exit(fail.length ? 1 : 0);

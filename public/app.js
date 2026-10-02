@@ -1364,6 +1364,9 @@ function dociagnijZdjecia(conv) {
   }, 0);
 }
 
+/** Karta odpowiedzi, która właśnie się pisze (streamOnce): { el, conv } – do odłożenia z powrotem po przebudowie. */
+let zywyDymek = null;
+
 function renderMessages({ przewin = true } = {}) {
   const conv = activeConv();
   // Kto czyta wyżej, zostaje tam po przebudowie – bez tego innerHTML = '' ustawiał widok na samą górę.
@@ -1406,6 +1409,11 @@ function renderMessages({ przewin = true } = {}) {
     if (e) el.messages.appendChild(e);
   });
   if (notatki) el.messages.appendChild(kartaSamegoZespolu(notatki));
+  /* Żywy dymek (streamOnce) nie należy do conv.messages, więc przebudowa
+     w trakcie rundy (zapis z 409, wynik narzędzia, zmiana bloku) wyrzucała
+     go z DOM-u: myślenie i tekst pisały się dalej do odłączonego elementu,
+     a na ekranie było pusto do końca tury (agencja-frontend, runda 11, P2). */
+  if (isGenerating && zywyDymek && zywyDymek.conv === conv && !zywyDymek.el.isConnected) el.messages.appendChild(zywyDymek.el);
   dolozPropozycjeZespolu(conv);
   dociagnijZdjecia(conv);
   if (przewin) scrollToBottom(true);
@@ -2353,6 +2361,7 @@ async function streamOnce(conv, opcje = {}) {
   kolumna.appendChild(body);
   msg.appendChild(kolumna);
   el.messages.appendChild(msg);
+  zywyDymek = { el: msg, conv };
   /* Na dół wymuszenie tylko przy świeżo wysłanym pytaniu. Kolejna runda
      kaskady (po wyszukaniu, po planie) ściągała na sam dół kogoś, kto
      przewinął w górę i czytał – skok o 12 tys. px (it-plynnosc, runda 10). */
@@ -2654,6 +2663,7 @@ async function streamOnce(conv, opcje = {}) {
       }
     }
     clearInterval(waitTimer);
+    if (zywyDymek && zywyDymek.el === msg) zywyDymek = null;
     zapamietajBieg(null);
     /* „Mam tę odpowiedź." Bez tego serwer po dwudziestu sekundach dopisze ją
        do rozmowy jeszcze raz, bo z jego strony wygląda to jak odpowiedź, po
@@ -2691,6 +2701,7 @@ async function streamOnce(conv, opcje = {}) {
     return acc;
   } catch (err) {
     clearInterval(waitTimer);
+    if (zywyDymek && zywyDymek.el === msg) zywyDymek = null;
     zapamietajBieg(null);
     // Przerwanie i zerwanie też niosą to, co już przyszło.
     if (err.partial === undefined) err.partial = err.name === 'AbortError' ? acc : rozdzielMyslenie(acc).tresc;
@@ -3519,10 +3530,15 @@ function migrujPotwierdzaj() {
    Dlatego wszystkie ruchy narzędzi idą tędy i flagi nie da się pominąć. */
 // Które narzędzie właśnie pracuje – żeby wynik archiwum nie był podpisany „Wyniki wyszukiwania".
 let narzedzieTeraz = '';
-function dodajWynikNarzedzia(conv, tresc, etykieta) {
-  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta, narzedzie: narzedzieTeraz || undefined });
+function dodajWynikNarzedzia(conv, tresc, etykieta, opcje = {}) {
+  /* `sterowanie` (K1): polecenie dla modelu („plan już policzony”, „to zapytanie
+     już wyszukałeś”), a nie wynik dla człowieka – model je dostaje, ekran nie. */
+  conv.messages.push({ role: 'user', content: tresc, search: true, searchQuery: etykieta, narzedzie: narzedzieTeraz || undefined,
+    ...(opcje && opcje.sterowanie ? { sterowanie: true } : {}) });
   saveConversations();
-  renderMessages();
+  /* Wynik narzędzia nie ściąga na dół kogoś, kto przewinął w górę i czyta
+     (it-plynnosc, runda 11) – na dół tylko ten, kto już tam jest. */
+  renderMessages({ przewin: sledzeDol });
 }
 
 /* Rejestr narzędzi. Budowany RAZ, przy wczytaniu skryptu – zależności są
@@ -3617,16 +3633,54 @@ function tekstTury(conv, odKtorej = 0) {
     .map((m) => m.content).join('\n\n');
 }
 
+/* SZKIC NIE ZNIKA (R1, runda 11). Szkic to tekst postawiony przed znacznikiem
+   w rundzie, po której model dostał „napisz gotową odpowiedź” (zdjęcia
+   odłożone do wersji z danymi). Dawniej nie szedł na ekran wcale: człowiek
+   czytał 1017 znaków planu, a po sekundzie miał pusty pasek „Liczę światło…”
+   i odpowiedź płynącą od zera. Teraz szkic stoi do końca, a gotowa wersja go
+   zastępuje – stara treść zwija się do „Poprzedniej wersji” w tej samej
+   karcie (agencja-ux, decyzja 4), więc nic przeczytanego nie znika bez słowa. */
+const szkiceTury = new WeakSet();
+
+/** Zamień treść wiadomości `i` na nową wersję; widzianą starą odłóż do `poprzednie`.
+ *  Wiadomość idzie na koniec rozmowy – tam, gdzie przed chwilą pisała się nowa
+ *  wersja (żywy dymek), a nie nad paskami narzędzi, gdzie stał szkic. */
+function zastapTekstModelu(conv, i, czysty, powod) {
+  const m = conv.messages[i];
+  const stara = String(m.content || '');
+  szkiceTury.delete(m);
+  /* Krótki wstęp („Sprawdzę jeszcze jedno.”) i dalszy ciąg tego samego tekstu
+     to nie jest inna wersja – zwinięta linijka byłaby szumem. */
+  const A = stara.trim();
+  if (A.length >= 200 && !czysty.trim().startsWith(A)) {
+    dodajPoprzednia(m, { content: stara, silnik: m.silnik, model: m.model, powod });
+  }
+  m.content = czysty;
+  if (i !== conv.messages.length - 1) {
+    conv.messages.splice(i, 1);
+    conv.messages.push(m);
+  }
+  return m;
+}
+
+/** Dopisz poprzednią wersję odpowiedzi (K6): tylko do widoku i eksportu, nigdy do modelu. */
+function dodajPoprzednia(m, { content, silnik, model, powod, kosztZl, kiedy }) {
+  if (!String(content || '').trim()) return;
+  m.poprzednie = [...(Array.isArray(m.poprzednie) ? m.poprzednie : []), {
+    content: String(content), powod: powod || 'przepisana', kiedy: kiedy || Date.now(),
+    ...(silnik ? { silnik } : {}), ...(model ? { model } : {}),
+    ...(typeof kosztZl === 'number' && kosztZl > 0 ? { kosztZl } : {}),
+  }];
+}
+
 function wstawTekstModelu(conv, tresc, odKtorej = 0) {
   const czysty = String(tresc || '');
   if (!czysty.trim()) return null;
   for (let i = conv.messages.length - 1; i >= odKtorej; i--) {
     const m = conv.messages[i];
     if (m.role !== 'assistant' || typeof m.content !== 'string') continue;
-    if (przepisanie(m.content, czysty)) {
-      m.content = czysty;
-      return m;
-    }
+    if (szkiceTury.has(m)) return dolozZastapione(conv, zastapTekstModelu(conv, i, czysty, 'szkic'));
+    if (przepisanie(m.content, czysty)) return dolozZastapione(conv, zastapTekstModelu(conv, i, czysty, 'przepisana'));
   }
   /* Przepisana CAŁOŚĆ tury, która wcześniej stała w kawałkach (plan pokrojony
      siatkami zdjęć). Żaden kawałek sam nie jest „tym samym tekstem", ale
@@ -3634,7 +3688,19 @@ function wstawTekstModelu(conv, tresc, odKtorej = 0) {
   if (tenSamTekst(tekstTury(conv, odKtorej), czysty)) return null;
   const wiadomosc = { role: 'assistant', content: czysty, ...znakSilnika() };
   conv.messages.push(wiadomosc);
-  return wiadomosc;
+  return dolozZastapione(conv, wiadomosc);
+}
+
+/* Odpowiedź solo zastąpiona odpowiedzią zespołu („Odpowiedz zespołem”, „Za 0 zł”)
+   czeka tu na pierwszą wypowiedź nowej tury – wiadomość powstaje dopiero
+   w domknijOdpowiedz/wstawTekstModelu (K6, runda 11). */
+let zastapioneNaTure = null;     // { conv, poprzednie: [...] }
+function dolozZastapione(conv, m) {
+  if (m && zastapioneNaTure && zastapioneNaTure.conv === conv) {
+    for (const p of zastapioneNaTure.poprzednie) dodajPoprzednia(m, p);
+    zastapioneNaTure = null;
+  }
+  return m;
 }
 
 async function domknijOdpowiedz(conv, surowe) {
@@ -3837,9 +3903,16 @@ async function runGeneration(conv, podpiecie = null) {
             + 'Dokończ teraz odpowiedź tekstem na podstawie tego, co już masz, a jeśli '
             + 'czegoś nie zdążyłeś sprawdzić, powiedz to jednym zdaniem.',
           etykieta: uzyte.nazwa,
+          sterowanie: true,
         };
         narzedzieTeraz = uzyte.nazwa;
-        dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta);
+        // Tekst sprzed znacznika zostaje na ekranie – przebudowa nie może go zabrać (R1).
+        const przedLimitem = stripSearchMarker(acc.replace(dop[0], ''));
+        if (przedLimitem.trim()) {
+          const w = wstawTekstModelu(conv, przedLimitem, conv.__turaOd || 0);
+          if (w) Object.assign(w, { think: lastThink, note: lastModelNote, ...znakSilnika() });
+        }
+        dodajWynikNarzedzia(conv, limit.tresc, limit.etykieta, { sterowanie: limit.sterowanie === true });
         const ostatniaTresc = await streamOnce(conv);
         finalText = await domknijOdpowiedz(conv, ostatniaTresc);
         break;
@@ -3863,9 +3936,11 @@ async function runGeneration(conv, podpiecie = null) {
         ? NARZEDZIA.find((n) => n.nazwa === 'grafiki')
         : null;
       const dopGrafiki = grafikiTez && grafikiTez.dopasuj(acc);
+      /* Tekst sprzed znacznika idzie na ekran ZAWSZE – także jako szkic przy
+         odłożonych zdjęciach. Schowany dawał reset: 1017 znaków → pusty pasek
+         i odpowiedź od zera (R1, runda 11). Gotowa wersja go zastąpi – patrz
+         `szkiceTury` przy wstawTekstModelu. */
       const przedTekst = stripSearchMarker(acc.replace(dop[0], ''));
-      // Szkic przy odłożonych zdjęciach nie idzie na ekran – patrz niżej.
-      const przedDoPokazania = dopGrafiki ? '' : przedTekst;
 
       narzedzieTeraz = uzyte.nazwa;
       const wynik = await uzyte.wykonaj({
@@ -3875,7 +3950,7 @@ async function runGeneration(conv, podpiecie = null) {
         depth,
         ostatnia,
         // Tekst modelu sprzed znacznika – WSZYSTKIE znaczniki wyczyszczone.
-        przed: przedDoPokazania,
+        przed: przedTekst,
         stan,
       });
       if (turaPrzerwana) break;
@@ -3895,12 +3970,17 @@ async function runGeneration(conv, podpiecie = null) {
         for (const g of acc.matchAll(WZ)) {
           for (const q of g[1].split(';').map((x) => x.trim()).filter(Boolean)) stan.grafikiOdlozone.add(q);
         }
+        /* To, co stoi teraz w turze, jest szkicem: model napisze gotową wersję
+           i ona go zastąpi (a szkic zwinie się do „Poprzedniej wersji”). */
+        for (const m of conv.messages.slice(conv.__turaOd || 0)) {
+          if (m.role === 'assistant' && typeof m.content === 'string' && !m.status && !m.error && m.content.trim()) szkiceTury.add(m);
+        }
         narzedzieTeraz = 'grafiki';
         dodajWynikNarzedzia(conv,
           'ZDJĘCIA JESZCZE NIE POKAZANE. Napisz teraz gotową odpowiedź na podstawie danych powyżej '
           + 'i postaw [GRAFIKA: …] pod właściwymi punktami – tak jak w szkicu, ale w ostatecznej wersji. '
           + 'Nie powtarzaj szkicu.',
-          t('chat.photosQuery'));
+          t('chat.photosQuery'), { sterowanie: true });
       }
     }
   } catch (err) {

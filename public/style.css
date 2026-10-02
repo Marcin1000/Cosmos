@@ -151,9 +151,16 @@ kbd {
   color: var(--text-faint);
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
+/* Własny pasek przewijania tylko przy myszy. Na Androidzie stylowany
+   ::-webkit-scrollbar przestaje być systemową nakładką i zabiera 8 px
+   szerokości: kolumna 328 → 320 px, „Od czego zaczynamy?” łamało się na dwie
+   linie, a karty rozmowy miały 14 px marginesu z lewej i 22 px z prawej
+   (runda 11, zrzuty Marcina). Bez stylu dotyk dostaje nakładkę: 0 px. */
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
 ::selection { background: var(--accent-glow); }
 
 .app { display: flex; height: 100vh; height: 100dvh; }
@@ -662,6 +669,9 @@ body::after {
    w ciemnym bez zmian (agencja-ux, kontrast-gradientu.js). */
 .welcome h1 em {
   font-style: normal;
+  /* Gdyby nagłówek jednak się złamał (320 px bez klawiatury): każda linia
+     dostaje pełny przelew koloru, nie dalszy ciąg z poprzedniej. */
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
   background: linear-gradient(100deg, var(--k-nvidia-tekst) 0%, var(--k-local-tekst) 25%, var(--k-claude-tekst) 50%, var(--k-local-tekst) 75%, var(--k-nvidia-tekst) 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -727,6 +737,15 @@ body::after {
   box-shadow: var(--shadow-soft);
 }
 .suggestion:hover::after { transform: translate(4px, -50%); color: var(--text); }
+/* Wpisany tekst = podpowiedzi znikają. Z klawiaturą karty stoją tuż nad polem,
+   a dotknięcie podpowiedzi wysyła ją od razu – jedno przypadkowe muśnięcie
+   i zaczęte zdanie przepadało. `visibility`, nie `display`: miejsce zostaje,
+   nic nie podskakuje (runda 11). */
+.suggestions { transition: opacity .15s; }
+.main:has(#input:not(:placeholder-shown)) .suggestions {
+  visibility: hidden; opacity: 0;
+  transition: opacity .15s, visibility 0s .15s;
+}
 
 /* ---------- wiadomości ---------- */
 
@@ -3486,6 +3505,10 @@ body::after {
     padding: 12px 16px;
     min-height: 100%;
     display: flex; flex-direction: column; justify-content: center;
+    /* Nagłówek liczony od szerokości kolumny powitania (cqi), nie okna (vw):
+       pasek przewijania, powiększenie wyświetlania Androida (~353 px) i panel
+       nie łamią już „Od czego zaczynamy?” na dwie linie (runda 11). */
+    container-type: inline-size;
   }
   /* Zorza ma 420 px – na niskim telefonie wystawała pod powitaniem i sama
      dawała coś do przewinięcia. */
@@ -3495,7 +3518,11 @@ body::after {
   /* Rozstrzelenie .3em było reliktem dawnego logotypu „C O S M O S” –
      nagłówek czytał się jako „O d  c z e g o”. Teraz tak jak h1 strony
      na telefonie: ciasno i duże. */
-  .welcome h1 { font-size: clamp(30px, 9vw, 38px); letter-spacing: -.04em; padding-left: 0; margin-bottom: 12px; }
+  .welcome h1 {
+    font-size: clamp(30px, 9vw, 38px);              /* przeglądarka bez cqi */
+    font-size: clamp(26px, 9.6cqi, 38px);           /* 328 px kolumny → 31,5 px, napis ~313 px */
+    letter-spacing: -.04em; padding-left: 0; margin-bottom: 12px;
+  }
   /* Identyfikatory modeli bywają dłuższe niż ekran – jeden wiersz z wielokropkiem,
      pełna nazwa w podpowiedzi (title) i na plakietce u góry. */
   .welcome-sub {
@@ -3552,6 +3579,62 @@ body::after {
   .suggestion::after { content: none; }
   .disclaimer { display: none; }
   .messages:empty { padding: 0; }
+}
+
+/* Powitanie przy otwartej klawiaturze (runda 11, zrzuty Marcina 2dce7c26 →
+   9b5758cf). index.html ma interactive-widget=resizes-content, więc na
+   Androidzie klawiatura zmniejsza widok układu: na rozmowę zostaje ~160 px,
+   a pełne powitanie potrzebuje ~300. Zostaje to, co niesie ekran: pytanie
+   w JEDNEJ linii i te same karty 2×2. Znak, etykieta i nazwa modelu
+   powtarzają pasek górny, zorza w tej wysokości dawała tylko twarde krawędzie
+   światła, a uwaga o błędach wraca, gdy klawiatura się schowa. iOS ignoruje
+   interactive-widget – tam to samo włącza klasa `klawiatura` na <html>
+   (app.js, z visualViewport; kontrakt K7). Pilnuje powitanie-bez-przewijania
+   (okna 360×410 i 360×380, widoczne paski). */
+@media (max-width: 720px) and (max-height: 550px) {
+  .welcome { padding: 8px 16px; }
+  .welcome-zorza, .welcome-icon, .welcome-et, .welcome-sub, .disclaimer { display: none; }
+  .welcome h1 {
+    font-size: clamp(22px, 7.2vw, 28px);            /* 360 px → 25,9 px, napis ~260 px */
+    letter-spacing: -.035em; line-height: 1.1;
+    white-space: nowrap;                            /* nigdy „Od czego / zaczynamy?” */
+    margin-bottom: 14px;
+    animation: zwarte-wejscie .2s cubic-bezier(.2, .7, .1, 1) both;
+  }
+  .suggestions { animation: zwarte-wejscie .2s cubic-bezier(.2, .7, .1, 1) .04s both; }
+}
+@media (max-width: 720px) {
+  html.klawiatura .welcome { padding: 8px 16px; justify-content: flex-end; }
+  html.klawiatura .welcome-zorza, html.klawiatura .welcome-icon, html.klawiatura .welcome-et,
+  html.klawiatura .welcome-sub, html.klawiatura .disclaimer { display: none; }
+  html.klawiatura .welcome h1 {
+    font-size: clamp(22px, 7.2vw, 28px);
+    letter-spacing: -.035em; line-height: 1.1; white-space: nowrap; margin-bottom: 14px;
+  }
+}
+/* Bardzo nisko (większa klawiatura, pole w dwóch liniach): karty 2×2 by się
+   nie zmieściły – jeden rząd pigułek przewijany palcem, od krawędzi do krawędzi. */
+@media (max-width: 720px) and (max-height: 395px) {
+  .suggestions {
+    display: flex; gap: 8px;
+    margin: 0 -16px; padding: 0 16px;
+    overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    scroll-padding-inline: 16px; scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 36px), transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 36px), transparent);
+  }
+  .suggestions::-webkit-scrollbar { display: none; }
+  .suggestion {
+    flex: none; display: inline-flex; align-items: center;
+    min-height: 40px; padding: 0 16px; border-radius: 999px;
+    font-size: 13px; line-height: 1.2; white-space: nowrap;
+    scroll-snap-align: start;
+  }
+  .suggestion::after { content: none; }
+}
+@keyframes zwarte-wejscie { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .welcome h1, .suggestions { animation: none !important; }
 }
 
 /* Wąskie telefony (Galaxy S, iPhone mini): przełącznik ma własny wiersz,
@@ -3739,17 +3822,31 @@ body::after {
 }
 
 /* Licznik czekania – model rozumujący potrafi milczeć kilkadziesiąt sekund
-   i bez tego pusty dymek wygląda jak zawieszona aplikacja. */
+   i bez tego pusty dymek wygląda jak zawieszona aplikacja. Runda 11: JEDEN
+   wiersz stanu nad treścią, tam gdzie potem stanie „Myślę…”, z pulsującą
+   kropką w kolorze silnika (ten sam puls co kropka pracującej roli) –
+   „Łączę z modelem… 2 s” → „Myślę… 3 s” jednym zegarem. */
 .wait-note {
-  margin-top: 6px;
-  font-size: 11.5px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  margin: 2px 0 6px; padding: 2px 0;
+  font-size: 11.5px; line-height: 1.4; letter-spacing: .02em;
   color: var(--text-faint);
-  letter-spacing: .02em;
 }
+.wait-note::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--k, var(--k-akt));
+  animation: rola-puls 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .wait-note::before { animation: none; } }
+/* Nowa próba tej samej odpowiedzi („Piszę od nowa… 3 s”) – o ton mocniej. */
+.wait-note.od-nowa { color: var(--text-dim); }
+/* Kursor bez tekstu nie stoi sam w osobnej linii, gdy jest wiersz stanu
+   albo „Myślę…” (zrzut Marcina c02260ed). */
+.msg-content:has(> .wait-note, > .think-block) > .strumien-tresc:has(> .cursor-blink:only-child) { display: none; }
 /* „Wyślij przez Chmurę” w liczniku czekania na lokalny: zwykła czcionka
    (licznik jest mono), odstęp od liczby, obrys jak pod błędem. */
 .wait-note .wait-przez-chmure {
-  margin-left: 10px; padding: 3px 11px; vertical-align: 1px;
+  margin-left: 2px; padding: 3px 11px; vertical-align: 1px;
   font-family: var(--font-sans); font-size: 12px; letter-spacing: 0; color: var(--text);
   border: 1px solid color-mix(in srgb, var(--k-nvidia) 55%, var(--border-strong));
   border-radius: 999px;
@@ -4749,7 +4846,11 @@ select::-ms-expand { display: none; }
 
 /* Zastępstwo z planu („zamiast X”) i zapas po awarii – osobna linijka,
    żeby na telefonie nie ucięła się w wielokropku razem z modelem. */
-.rola-uwaga { margin: -3px 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--warning-tekst); }
+.rola-uwaga { margin: -3px 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--text-faint); }
+/* Bursztyn tylko tam, gdzie człowiek może coś zmienić: „– budżet wyczerpany”.
+   Zapas po awarii nie wymaga decyzji – mówi o nim jedna cicha nota na blok
+   (.zespol-zapas, runda 11). */
+.rola-uwaga.budzet { color: var(--warning-tekst); }
 /* Rola odrzucona przed startem (auto: brak zgody, uprawnień, limitu) –
    wiersz bez gałęzi: nie pracowała, więc nie odchodzi od nici. */
 .zespol-odrzucone {
@@ -5047,3 +5148,125 @@ select::-ms-expand { display: none; }
   background: color-mix(in srgb, var(--k) 14%, transparent); color: var(--k-tekst);
   font: 500 9.5px/1.6 var(--font-mono); vertical-align: 1px; word-break: normal; white-space: nowrap;
 }
+
+/* ============================ RUNDA 11 ============================ */
+
+/* ---------- blok zespołu: jedna cicha nota o zapasie (K3) ----------
+   Dawniej przy KAŻDEJ roli bursztynowe „zapas – X nie odpowiedział”: u Marcina
+   trzy razy po dwie linie bursztynu, choć model był po prostu wycofany (410).
+   Teraz jedna nota pod listą ról, zebrana po modelach, które zawiodły
+   („Niedostępne: X, Y – role na zapasowym modelu.”). Treść składa
+   zespol-widok.js; kontrast text-dim 6,2:1 jasny / 7,0:1 ciemny. */
+.zespol-zapas {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin: 4px 0 2px; padding-left: 18px;              /* w osi nazw ról */
+  font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
+}
+.zespol-zapas svg { width: 14px; height: 14px; flex: none; margin: 2px 4px 0 -18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.zespol-zapas .model { font: 400 11.5px/1.5 var(--font-mono); color: inherit; overflow-wrap: anywhere; }
+/* Zwinięty blok to jedna linijka – nota wraca po rozwinięciu. */
+.zespol[data-otwarty="false"] .zespol-zapas { display: none; }
+@media (orientation: landscape) and (max-height: 500px) { .zespol-zapas { padding-left: 2px; } .zespol-zapas svg { margin-left: 0; } }
+
+/* ---------- ślad planu zdjęciowego (K4) ----------
+   Słońce zamiast lupy przy wyniku planu (msg-search z data-narzedzie="plan"). */
+.msg-search[data-narzedzie="plan"] .search-results summary {
+  --ik: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6'/%3E%3C/svg%3E");
+}
+
+/* ---------- szeroka tabela na telefonie = karty wierszy (K5) ----------
+   Plan na tydzień przychodził tabelą 566 px w dymku 274 px – widać było 2 z 5
+   kolumn i przewijanie w bok. tekst.js oznacza tabelę ≥ 4 kolumn klasą
+   `tabela-szeroka`, komórki `data-label` (nagłówek kolumny), a gdy pierwsza
+   kolumna to numer – `data-pierwsza="liczba"`. Komputer i tabele 2–3
+   kolumnowe bez zmian. */
+@media (max-width: 600px) {
+  .md table.tabela-szeroka {
+    display: block; width: auto; max-width: none; overflow: visible;
+    border: 0; border-radius: 0; background: none; margin: 4px 0 14px;
+  }
+  .md table.tabela-szeroka thead { display: none; }
+  .md table.tabela-szeroka tbody { display: flex; flex-direction: column; gap: 10px; }
+  .md table.tabela-szeroka tr {
+    display: block; padding: 0 14px 12px;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--bg-elevated);
+  }
+  .md table.tabela-szeroka td {
+    display: block; padding: 10px 0 0; border: 0;
+    font-size: 14px; line-height: 1.5; text-align: left;
+  }
+  /* Etykieta kolumny nad wartością – cicha, zwykłym pismem (28 etykiet
+     wersalikami krzyczało głośniej niż treść). text-dim na bg-elevated:
+     6,18:1 jasny, 7,00:1 ciemny. */
+  .md table.tabela-szeroka tr:not(.zdj-wiersz) > td::before {
+    content: attr(data-label); display: block; margin-bottom: 1px;
+    font: 500 12px/1.4 var(--font-sans); color: var(--text-dim);
+  }
+  /* Pierwsza komórka = tytuł karty, oddzielony kreską. */
+  .md table.tabela-szeroka tr:not(.zdj-wiersz) > td:first-child {
+    padding: 12px 0 8px; border-bottom: 1px solid var(--border);
+    font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  .md table.tabela-szeroka tr:not(.zdj-wiersz) > td:first-child::before { display: none; }
+  /* „Dzień” + „1” = „Dzień 1” w jednej linii, nie etykieta nad samotną cyfrą. */
+  .md table.tabela-szeroka[data-pierwsza="liczba"] tr:not(.zdj-wiersz) > td:first-child::before {
+    display: inline; content: attr(data-label) "\00a0"; margin: 0;
+    font: inherit; color: inherit;
+  }
+  .md table.tabela-szeroka td:first-child strong { font-weight: inherit; }
+  .md table.tabela-szeroka td:empty { display: none; }
+}
+/* Wiersz zdjęć pod wierszem dnia (gdy wstawPaski wstawi tr.zdj-wiersz). */
+.md table tr.zdj-wiersz > td { padding: 0 14px 12px; }
+.md table tr:has(+ tr.zdj-wiersz) > td { border-bottom: 0; }
+/* Pasek nie może rozepchnąć tabeli `width: max-content` do sumy kafli. */
+.md table tr.zdj-wiersz .zdj-pasek { contain: inline-size; margin: 0; --wlew: 0px; }
+@media (max-width: 600px) {
+  .md table.tabela-szeroka tr:has(+ tr.zdj-wiersz) { border-bottom: 0; border-radius: 14px 14px 0 0; padding-bottom: 10px; }
+  .md table.tabela-szeroka tr.zdj-wiersz {
+    margin-top: -10px; padding: 0 0 14px 14px;          /* -10px = odstęp kart */
+    border-top: 0; border-radius: 0 0 14px 14px;
+  }
+  .md table.tabela-szeroka tr.zdj-wiersz > td { padding: 0; border: 0; }
+}
+/* Plan dzień po dniu w nagłówkach: odstęp przed dniem większy niż wewnątrz
+   dnia – oko łapie „Dzień 3” przy szybkim przewijaniu. */
+.msg-assistant .md > h3:not(:first-child) { margin-top: 26px; }
+.msg-assistant .md > h3 + .zdj-pasek { margin-top: 8px; }
+
+/* ---------- poprzednia wersja odpowiedzi (K6) ----------
+   Tekst, który człowiek widział, nie znika bez słowa: zastąpiona odpowiedź
+   („Odpowiedz zespołem”, „Za 0 zł”, przerwana próba) zwija się do jednej
+   linijki na górze tej samej karty. Kropka i nić w kolorze STAREGO silnika
+   (--kw), karta – w kolorze nowego. */
+.wersja-poprzednia { margin: 2px 0 10px; font-size: 13px; color: var(--text-dim); }
+.wersja-poprzednia > summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px;
+  min-height: 36px; padding: 6px 12px 6px 10px; cursor: pointer; list-style: none;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+  transition: border-color .2s, background-color .2s;
+}
+.wersja-poprzednia > summary::-webkit-details-marker { display: none; }
+.wersja-poprzednia > summary:hover { border-color: var(--border-strong); }
+.wersja-poprzednia > summary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* Strzałka maską SVG, nie znakiem – Android maluje ▸ kolorowym emoji. */
+.wersja-poprzednia > summary::before {
+  content: ""; flex: none; width: 12px; height: 12px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform .2s cubic-bezier(.2, .7, .1, 1);
+}
+.wersja-poprzednia[open] > summary::before { transform: rotate(90deg); }
+.wersja-poprzednia .kropka { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--kw, var(--text-faint)); }
+.wersja-poprzednia .tytul { color: var(--text); font-weight: 500; }
+.wersja-poprzednia .meta { font: 400 11px/1.4 var(--font-mono); color: var(--text-faint); }
+/* Rozwinięta: stara treść przygaszona, z cienką nicią starego silnika. */
+.wersja-poprzednia > .tresc {
+  margin: 8px 0 2px; padding: 4px 0 4px 12px; max-height: 260px; overflow: auto;
+  border-left: 2px solid var(--kw, var(--border-strong));
+  font-size: 13.5px; line-height: 1.55; color: var(--text-dim);
+}
+.wersja-poprzednia > .tresc table { opacity: .85; }
+@media (prefers-reduced-motion: reduce) { .wersja-poprzednia > summary::before { transition: none; } }

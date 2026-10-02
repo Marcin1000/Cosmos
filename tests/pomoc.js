@@ -38,9 +38,18 @@ function maPrzegladarke() {
   return Boolean(CHROMIUM);
 }
 
+/* `paskiPrzewijania: true` – Chromium z prawdziwymi paskami przewijania.
+   Playwright bez okna dodaje `--hide-scrollbars`, więc żaden zestaw nie
+   widział, że stylowany ::-webkit-scrollbar zabiera na telefonie 8 px
+   szerokości i łamie nagłówek powitania (runda 11). Telefon paska nie ukrywa.
+   Domyślnie bez zmian – inne zestawy liczą geometrię bez paska. */
 async function przegladarka(opcje = {}) {
   const { chromium } = require('playwright');
-  return chromium.launch({ executablePath: CHROMIUM, ...opcje });
+  const { paskiPrzewijania, ...reszta } = opcje;
+  const ignoreDefaultArgs = paskiPrzewijania
+    ? [...(Array.isArray(reszta.ignoreDefaultArgs) ? reszta.ignoreDefaultArgs : []), '--hide-scrollbars']
+    : reszta.ignoreDefaultArgs;
+  return chromium.launch({ executablePath: CHROMIUM, ...reszta, ...(ignoreDefaultArgs ? { ignoreDefaultArgs } : {}) });
 }
 
 // ---------------------------------------------------------------------------

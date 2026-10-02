@@ -225,6 +225,7 @@ function utworzProtokol() {
     const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
     const ZNAK = (n) => `${n}`;
     const grupy = [];            // numer znacznika → zapytania
+    const etykiety = [];         // numer znacznika → podpis z punktu listy (runda 11)
     const pominiete = [];
     const widziane = new Set();
     let zapytan = 0;
@@ -238,9 +239,14 @@ function utworzProtokol() {
          („Wieczór nad Isola Bella [GRAFIKA: Isola Bella]”) – zostaje,
          a zdjęcia stają za tą linią. */
       const reszta = linia.replace(WZ, '').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '');
-      if (!/^[ \t]*(?:[-*+•]|\d{1,3}[.)])?[ \t]*[*_`]*[ \t]*$/.test(reszta)) linie.push(reszta);
+      /* Punkt listy, w którym po znaczniku została sama etykieta („- Palermo – centrum:
+         [GRAFIKA: …]”, „- **Etna**:”) – na ekranie stał pusty punkt z dwukropkiem nad
+         paskiem (runda 11, R2). Etykieta staje się podpisem paska, punkt wypada. */
+      const etyk = reszta.match(/^[ \t]*(?:[-*+•]|\d{1,3}[.)])[ \t]+[*_]*[ \t]*([^\n]{2,80}?)[ \t]*[*_]*[ \t]*[:\u2013\u2014-][ \t]*[*_]*[ \t]*$/);
+      if (!etyk && !/^[ \t]*(?:[-*+•]|\d{1,3}[.)])?[ \t]*[*_`]*[ \t]*$/.test(reszta)) linie.push(reszta);
       for (const t of trafienia) {
         const numer = grupy.length;
+        if (etyk) etykiety[numer] = etyk[1].replace(/[*_]+/g, '').trim();
         const wziete = [];
         for (const q of t[1].split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
           const klucz = bezOgonkowKlient(q);
@@ -288,7 +294,11 @@ function utworzProtokol() {
     for (const [numer, linia] of kotwice) {
       const po = linia < poczatki.length ? poczatki[linia] : tresc.length;
       const sekcja = sekcjaWPozycji(tresc, po);
-      for (const q of grupy[numer] || []) zdjecia.push({ q, etykieta: q, po, sekcja });
+      /* Podpis z punktu listy tylko dla grupy z jednym zapytaniem – przy kilku
+         każde ma własny pasek i własną nazwę. */
+      const lista = grupy[numer] || [];
+      const podpis = etykiety[numer] && lista.length === 1 ? etykiety[numer] : null;
+      for (const q of lista) zdjecia.push({ q, etykieta: podpis || q, po, sekcja });
     }
     return { tresc, zdjecia, pominiete };
   }

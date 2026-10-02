@@ -43,7 +43,7 @@ const WZORCE = {
 
 /** Świeży zestaw narzędzi z atrapami. Każdy przypadek dostaje własny,
  *  żeby jeden nie widział śladów po drugim. */
-function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null } = {}) {
+function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null, znakSilnika = null, metaOdpowiedzi = null } = {}) {
   const dziennik = { doModelu: [], wiadomosci: [], adresy: [], glos: [], odswiezenia: 0 };
   const conv = { messages: [] };
 
@@ -51,9 +51,11 @@ function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null } = {}) {
     t: (klucz, v) => (v ? `${klucz}(${Object.values(v).join(',')})` : klucz),
     saveConversations: () => {},
     renderMessages: () => {},
-    dodajWynikNarzedzia: (c, tresc, etykieta) => {
-      dziennik.doModelu.push({ tresc, etykieta });
-      c.messages.push({ role: 'user', content: tresc, search: true });
+    dodajWynikNarzedzia: (c, tresc, etykieta, opcje) => {
+      // Czwarty argument (kontrakt K1): `sterowanie` = polecenie dla modelu, widok go nie rysuje.
+      const ster = Boolean(opcje && opcje.sterowanie);
+      dziennik.doModelu.push({ tresc, etykieta, sterowanie: ster });
+      c.messages.push({ role: 'user', content: tresc, search: true, ...(ster ? { sterowanie: true } : {}) });
     },
     stripSearchMarker: protokol.stripSearchMarker,
     readJsonSafe: async (r) => r.json(),
@@ -108,6 +110,8 @@ function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null } = {}) {
     sekcjaWPozycji: protokol.sekcjaWPozycji,
     odswiezZdjecia: () => { dziennik.odswiezenia++; },
     sygnal: sygnal ? () => sygnal : null,
+    znakSilnika,
+    metaOdpowiedzi,
   });
 
   const poNazwie = Object.fromEntries(narzedzia.map((n) => [n.nazwa, n]));
@@ -767,6 +771,108 @@ async function uruchom(st, nazwa, acc, stan) {
     console.log(`17. dociągnięcie „do-pobrania” → ${w.zdjecia[0].stan}, ${w.zdjecia[0].photos.length} zdjęć, zapytań do modelu: ${st.dziennik.doModelu.length}`);
     if (!bylo || w.zdjecia[0].stan !== 'gotowe' || !w.zdjecia[0].photos.length) fail.push('17. zdjęcia „do pobrania” nie dochodzą po otwarciu rozmowy');
     if (st.dziennik.doModelu.length) fail.push('17. dociąganie zdjęć zawołało model');
+  }
+
+  /* --- 18. NARZĘDZIE ZBĘDNE PO GOTOWEJ ODPOWIEDZI KOŃCZY TURĘ (runda 11, R1, K2) ---
+     Prowadzący zespołu napisał cały plan, a na końcu [PLAN:], choć plan policzył
+     już fotograf. Kaskada zamawiała drugą rundę: tekst znikał z ekranu, model
+     pisał i liczył całość drugi raz („odpowiedź resetuje się”). Teraz znacznik
+     wypada, tekst zostaje odpowiedzią tury, drugiej rundy nie ma. */
+  {
+    const ODPOWIEDZ = '### Dzień 1 · Taormina · zwiedzanie\n'
+      + 'Rano Teatro Greco, zanim przyjdą wycieczki; po południu spacer Corso Umberto i zejście do Isola Bella. '
+      + 'Wieczorem złota godzina nad zatoką – najlepszy kadr z tarasu przy Piazza IX Aprile.\n'
+      + '- Światło: złota godzina 18:33–19:08, niebieska do 19:35.\n'
+      + '- Aparat: 24-105 f/4, statyw, ISO 100, f/8, czas z pomiaru; filtr ND przy morzu.\n\n'
+      + '### Dzień 2 · Etna · odpoczynek\n'
+      + 'Wjazd kolejką na Montagnola, krótki spacer po kraterach Silvestri, wieczorem powrót do Taorminy.\n'
+      + '- Światło: miękkie po 17:00, mgła na szczycie rano.\n'
+      + '- Aparat: szeroki kąt, polaryzator, zapasowa bateria – zimno na wysokości.';
+    const stanT = (dod = {}) => ({ archiwum: new Set(), grafiki: new Set(), plan: new Set(), ...dod });
+    const asystent = (st) => st.conv.messages.filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status);
+
+    // a) plan policzony przez fotografa + gotowa odpowiedź → koniec, bez /api/plan, bez polecenia dla modelu
+    {
+      const st = stanowisko({ znakSilnika: () => ({ silnik: 'claude', model: 'claude-sonnet-5' }), metaOdpowiedzi: () => ({ think: 'MYŚL', note: '' }) });
+      const w = await uruchom(st, 'plan', `${ODPOWIEDZ}\n\n[PLAN: miejsce=Taormina kiedy=2027-09-15]`, stanT({ planZespolu: true }));
+      const odp = asystent(st);
+      console.log(`18a. plan zespołu + gotowa odpowiedź → ${w && w.akcja}, wiadomości asystenta: ${odp.length}, do modelu: ${st.dziennik.doModelu.length}`);
+      if (!w || w.akcja !== 'koniec') fail.push('18a. zbędny [PLAN:] po gotowej odpowiedzi nie kończy tury – druga runda napisze wszystko od nowa');
+      if (st.dziennik.adresy.some((a) => a.includes('/api/plan'))) fail.push('18a. plan policzony drugi raz mimo planu fotografa');
+      if (st.dziennik.doModelu.length) fail.push('18a. model dostał polecenie – czyli będzie druga runda');
+      if (odp.length !== 1 || !/Teatro Greco/.test(odp[0].content) || /\[PLAN/i.test(odp[0].content)) fail.push('18a. gotowa odpowiedź nie stoi w rozmowie (albo stoi ze znacznikiem)');
+      if (w && (/\[PLAN/i.test(w.finalText) || !/Etna/.test(w.finalText))) fail.push('18a. finalText ze znacznikiem albo bez treści odpowiedzi');
+      if (odp[0] && (odp[0].silnik !== 'claude' || odp[0].think !== 'MYŚL')) fail.push('18a. odpowiedź bez znaku silnika albo myślenia rundy');
+    }
+    // b) sama zapowiedź przed znacznikiem → runda idzie dalej, polecenie z `sterowanie`, zapowiedź nie staje się kartą
+    {
+      const st = stanowisko();
+      const w = await uruchom(st, 'plan', 'Sprawdzę jeszcze plan.\n[PLAN: miejsce=Taormina]', stanT({ planZespolu: true }));
+      console.log(`18b. sama zapowiedź → ${w && w.akcja}, sterowanie: ${st.dziennik.doModelu.map((x) => x.sterowanie).join()}`);
+      if (!w || w.akcja !== 'dalej') fail.push('18b. przy samej zapowiedzi tura nie idzie dalej – odpowiedzi nie byłoby wcale');
+      if (!st.dziennik.doModelu.length || !st.dziennik.doModelu.every((x) => x.sterowanie)) fail.push('18b. polecenie „plan już policzony” bez `sterowanie: true` (K1) – stanie na ekranie');
+      if (asystent(st).length) fail.push('18b. zapowiedź „Sprawdzę…” stała się osobną kartą');
+    }
+    // c) szkic z treścią, ale nie pełna odpowiedź → zostaje w rozmowie (druga runda go widzi), runda dalej
+    {
+      const st = stanowisko();
+      const szkic = 'Taormina we wrześniu to dobry wybór: ciepłe morze, mniej ludzi niż w sierpniu, długie złote godziny nad zatoką.';
+      const w = await uruchom(st, 'plan', `${szkic}\n[PLAN: miejsce=Taormina]`, stanT({ planZespolu: true }));
+      const odp = asystent(st);
+      if (!w || w.akcja !== 'dalej' || odp.length !== 1 || !/ciepłe morze/.test(odp[0].content)) fail.push('18c. szkic sprzed zbędnego znacznika znika – druga runda pisze bez niego');
+    }
+    // d) gotowa odpowiedź + [PLAN:] + [GRAFIKA:] → zdjęcia w tej samej wiadomości, tura kończy się
+    {
+      const st = stanowisko({ odpowiedzi: { '/api/search/images': { results: [{ thumb: '/t', full: '/f' }] } } });
+      const acc = ODPOWIEDZ.replace('### Dzień 2', '[GRAFIKA: Teatro Greco Taormina]\n\n### Dzień 2') + '\n[PLAN: miejsce=Taormina]';
+      const w = await uruchom(st, 'plan', acc, stanT({ planZespolu: true }));
+      const odp = asystent(st);
+      const zdj = odp[0] && odp[0].zdjecia;
+      console.log(`18d. z [GRAFIKA:] → ${w && w.akcja}, grup zdjęć: ${(zdj || []).length}`);
+      if (!w || w.akcja !== 'koniec' || odp.length !== 1 || !zdj || zdj[0].q !== 'Teatro Greco Taormina') fail.push('18d. zbędny [PLAN:] z [GRAFIKA:] – zdjęcia nie trafiają do gotowej odpowiedzi albo tura idzie dalej');
+      if (st.dziennik.adresy.some((a) => a.includes('/api/plan'))) fail.push('18d. plan policzony drugi raz');
+      if (odp[0] && /\[(PLAN|GRAFIKA)/i.test(odp[0].content)) fail.push('18d. znacznik na ekranie');
+    }
+    // e) powtórzone wyszukanie / archiwum / plan po gotowej odpowiedzi → koniec
+    {
+      const st = stanowisko();
+      const stan = stanT({ szukaj: new Set(['pogoda taormina']) });
+      const w = await uruchom(st, 'szukaj', `${ODPOWIEDZ}\n[SZUKAJ: pogoda Taormina]`, stan);
+      if (!w || w.akcja !== 'koniec' || st.dziennik.doModelu.length) fail.push('18e. powtórzone [SZUKAJ:] po gotowej odpowiedzi zamawia drugą rundę');
+      const st2 = stanowisko();
+      const w2 = await uruchom(st2, 'archiwum', `${ODPOWIEDZ}\n[ARCHIWUM: rok=2024]`, stanT({ archiwumZWynikiem: true }));
+      if (!w2 || w2.akcja !== 'koniec' || st2.dziennik.adresy.length) fail.push('18e. drugie [ARCHIWUM:] po gotowej odpowiedzi zamawia drugą rundę');
+      const st3 = stanowisko({ odpowiedzi: { '/api/plan': { ok: true } } });
+      const stan3 = stanT();
+      await uruchom(st3, 'plan', '[PLAN: miejsce=Taormina]', stan3);
+      const w3 = await uruchom(st3, 'plan', `${ODPOWIEDZ}\n[PLAN: miejsce=Taormina]`, stan3);
+      if (!w3 || w3.akcja !== 'koniec' || st3.dziennik.adresy.filter((a) => a.includes('/api/plan')).length !== 1) fail.push('18e. powtórzony [PLAN:] po gotowej odpowiedzi zamawia drugą rundę');
+    }
+    // f) K1: każde polecenie-sterowanie ma `sterowanie: true`, a prawdziwy wynik narzędzia – nie
+    {
+      const st = stanowisko({ odpowiedzi: { '/api/plan': { ok: true }, '/api/archive': { wyniki: [{ id: 1 }], znaleziono: 1 } } });
+      const stan = stanT();
+      await uruchom(st, 'szukaj', '[SZUKAJ: Etna]', stan);
+      await uruchom(st, 'szukaj', '[SZUKAJ: Etna]', stan);
+      await uruchom(st, 'archiwum', '[ARCHIWUM: rok=2024]', stan);
+      await uruchom(st, 'archiwum', '[ARCHIWUM: rok=2023]', stan);
+      await uruchom(st, 'plan', '[PLAN: miejsce=Etna]', stan);
+      await uruchom(st, 'plan', '[PLAN: miejsce=Etna]', stan);
+      const ster = st.dziennik.doModelu.map((x) => `${x.sterowanie ? 'S' : 'W'}`).join('');
+      console.log(`18f. kolejność wyników (W – wynik, S – sterowanie): ${ster}`);
+      if (ster !== 'WSWSWS') fail.push(`18f. flaga \`sterowanie\` nie odróżnia poleceń od wyników (${ster}, oczekiwane WSWSWS)`);
+      if (!st.poNazwie.szukaj.gdyLimit(['', 'x']).sterowanie) fail.push('18f. komunikat o limicie rund bez `sterowanie`');
+    }
+    // g) R5: sama zapowiedź przed wyszukaniem nie staje się osobną kartą; tekst z treścią – tak
+    {
+      const st = stanowisko();
+      await uruchom(st, 'szukaj', 'Aby przygotować plan, potrzebuję aktualnych informacji o godzinach otwarcia.\n[SZUKAJ: Teatro Greco godziny]');
+      const st2 = stanowisko();
+      await uruchom(st2, 'szukaj', 'Teatro Greco to najlepszy punkt widokowy w Taorminie.\n\nGodziny otwarcia zmieniają się sezonowo.\n[SZUKAJ: Teatro Greco godziny]');
+      console.log(`18g. kart tekstu: zapowiedź ${asystent(st).length}, treść ${asystent(st2).length}`);
+      if (asystent(st).length) fail.push('18g. zapowiedź „potrzebuję aktualnych informacji” stoi jako osobna karta nad paskiem „Szukam…”');
+      if (asystent(st2).length !== 1) fail.push('18g. tekst z treścią przed wyszukaniem zniknął');
+    }
   }
 
   console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nKASKADA NARZĘDZI OK');
