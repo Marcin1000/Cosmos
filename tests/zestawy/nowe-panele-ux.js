@@ -98,13 +98,17 @@ const WASKI = { width: 360, height: 740 };
   await pg.waitForTimeout(300);
   await wBok('wiadomość z dokumentem i zdjęciami');
   await wystaje('.doc-chip', 'kafelek dokumentu');
-  await wystaje('.photo-grid', 'siatka zdjęć');
-  const kolumny = await pg.evaluate(() => {
-    const g = document.querySelector('.photo-grid');
-    return g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : 0;
+  /* Zdjęcia z sieci stoją w poziomym pasku nad odpowiedzią (runda 10, jak w ChatGPT):
+     pasek nie wystaje poza ekran, a osiem miniatur przewija się w bok, nie łamie w kolumnę. */
+  await wystaje('.zdj-pasek', 'pasek zdjęć');
+  const pasek = await pg.evaluate(() => {
+    const g = document.querySelector('.zdj-pasek');
+    const sc = g && ([g, ...g.querySelectorAll('*')].find((x) => x.scrollWidth > x.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(x).overflowX)));
+    const img = g ? [...g.querySelectorAll('img')].map((x) => x.getBoundingClientRect()) : [];
+    return { jest: Boolean(g), przewija: Boolean(sc), jedenRzad: img.length > 1 && img.every((r) => Math.abs(r.top - img[0].top) < 2) };
   });
-  console.log(`   siatka zdjęć: ${kolumny} kolumny`);
-  if (kolumny < 2) fail.push('siatka zdjęć zwinęła się do jednej kolumny – miniatury są za duże');
+  console.log(`   pasek zdjęć: ${JSON.stringify(pasek)}`);
+  if (!pasek.jest || !pasek.przewija || !pasek.jedenRzad) fail.push(`zdjęcia nie stoją w poziomym, przewijanym pasku (${JSON.stringify(pasek)})`);
   await pg.screenshot({ path: `${KATALOG_ZRZUTOW}/ux-zalaczniki-360.png` });
 
   // 4. panel wyniku programu – długie linie muszą się zawijać, nie rozpychać
