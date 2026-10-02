@@ -271,7 +271,8 @@ function ponowNiezapisane() {
     if (c) zapiszNaSerwerze(id, c); else oznaczNiezapisana(id, null);
   }
 }
-window.addEventListener('online', ponowNiezapisane);
+// Najpierw powrót po odpowiedź porzuconą bez sieci, dopiero potem zapis kopii z przeglądarki.
+window.addEventListener('online', () => { wznowPorzucony().finally(ponowNiezapisane); });
 $('zapis-retry')?.addEventListener('click', ponowNiezapisane);
 if (niezapisane().size) {
   const pasek = $('zapis-bar');
@@ -282,6 +283,7 @@ if (niezapisane().size) {
 /* Powrót do karty (telefon wyjęty z kieszeni): świeża wersja aktywnej
    rozmowy, zanim ktoś zacznie pisać do nieaktualnej. */
 document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && !isGenerating && await wznowPorzucony()) return;
   if (document.visibilityState !== 'visible' || !activeId || isGenerating) return;
   const id = activeId;
   try {
@@ -919,6 +921,7 @@ function messageElement(m, idx = -1, opcje = {}) {
 
   const msg = document.createElement('div');
   msg.className = `msg msg-${role}` + (isError ? ' msg-error' : '') + (m.status ? ' msg-status' : '');
+  if (idx >= 0) msg.dataset.idx = String(idx);
 
   if (role === 'assistant') {
     const avatar = document.createElement('div');
@@ -1440,6 +1443,25 @@ function dociagnijZdjecia(conv) {
   }, 0);
 }
 
+/* Fokus klawiatury przeżywa przebudowę rozmowy: ta sama kontrolka tej samej
+   wiadomości (data-idx). Dawniej `innerHTML = ''` zrzucał go na <body> i następny
+   Tab zaczynał od góry strony (agencja-frontend, runda 11). */
+function zapamietajFokus() {
+  const a = document.activeElement;
+  if (!a || a === el.messages || !el.messages.contains(a)) return null;
+  const karta = a.closest('[data-idx]');
+  if (!karta) return null;
+  const sel = a.tagName.toLowerCase() + [...a.classList].map((k) => `.${CSS.escape(k)}`).join('');
+  const n = [...karta.querySelectorAll(sel)].indexOf(a);
+  return { idx: karta.dataset.idx, sel, n };
+}
+function przywrocFokus(f) {
+  if (!f) return;
+  const karta = el.messages.querySelector(`[data-idx="${f.idx}"]`);
+  const cel = karta && karta.querySelectorAll(f.sel)[f.n];
+  if (cel) cel.focus({ preventScroll: true });
+}
+
 /** Karta odpowiedzi, która właśnie się pisze (streamOnce): { el, conv } – do odłożenia z powrotem po przebudowie. */
 let zywyDymek = null;
 
@@ -1450,6 +1472,7 @@ function renderMessages({ przewin = true } = {}) {
   // Płótno należy do rozmowy, więc przy przełączeniu musi się przełączyć –
   // inaczej przy nowej rozmowie zostaje na ekranie cudzy dokument.
   pokazPlotno(conv);
+  const fokus = zapamietajFokus();
   el.messages.innerHTML = '';
   const hasMessages = conv && conv.messages.length > 0;
   el.welcome.style.display = hasMessages ? 'none' : '';
@@ -1500,6 +1523,7 @@ function renderMessages({ przewin = true } = {}) {
   if (isGenerating && zywyDymek && zywyDymek.conv === conv && !zywyDymek.el.isConnected) el.messages.appendChild(zywyDymek.el);
   dolozPropozycjeZespolu(conv);
   dociagnijZdjecia(conv);
+  przywrocFokus(fokus);
   if (przewin) scrollToBottom(true);
   else { el.chatScroll.scrollTop = byloScroll; ostatniScrollTop = byloScroll; }
 }
@@ -1526,7 +1550,12 @@ function scrollToBottom(force = false) {
 
 el.chatScroll.addEventListener('scroll', () => {
   const sc = el.chatScroll;
-  if (sc.scrollTop < ostatniScrollTop - 4) sledzeDol = false;
+  /* Ruch w górę, który kończy się DOKŁADNIE na dole, to nie człowiek, tylko
+     przeglądarka przycinająca przewinięcie po skurczeniu treści (zwinięty blok
+     zespołu, zniknięty szkielet, zwinięte „Myślę…”). Dawniej wyłączało to
+     jazdę na dole na resztę tury (it-plynnosc, runda 11). */
+  const naSamymDole = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 2;
+  if (sc.scrollTop < ostatniScrollTop - 4 && !naSamymDole) sledzeDol = false;
   else if (przyDole()) sledzeDol = true;
   ostatniScrollTop = sc.scrollTop;
 }, { passive: true });
@@ -2397,6 +2426,8 @@ function glosBledu(err) {
 }
 
 const BIEG_PROB = 6;
+// Jak długo wracamy do biegu po zerwanym połączeniu, zanim pokażemy błąd (bieg i tak zostaje zapamiętany).
+const BIEG_PRZERWA_MS = 120000;
 
 /* Licznik kosztu bieżącej tury (runGeneration): wszystkie wywołania modelu
    prowadzącego – runda 0, rundy kaskady, dokończenia po „length”. Przy turze
@@ -2753,9 +2784,16 @@ async function streamOnce(conv, opcje = {}) {
          `getReader()` na starym, zablokowanym strumieniu – dawniej przerwa
          w Wi-Fi dłuższa niż pół sekundy kończyła się angielskim „Failed to
          execute 'getReader'…” zamiast wznowieniem (zespół IT, runda 5). */
+      const przerwaOd = Date.now();
       for (;;) {
-        if (++proby > BIEG_PROB) {
-          if (rozlaczone) throw new Error(t('bieg.zerwane'));
+        /* Zerwane połączenie: próbujemy przez BIEG_PRZERWA_MS (czas, nie liczba
+           prób – winda, tunel, przełączenie Wi-Fi→LTE trwają dłużej niż 6 prób
+           w ~23 s). Potem bieg NIE jest zapominany: odpowiedź pisze się dalej na
+           serwerze i wracamy po nią, gdy sieć wróci (it-plynnosc, runda 11). */
+        ++proby;
+        const przerwa = typeof window.COSMOS_PRZERWA_BIEGU_MS === 'number' ? window.COSMOS_PRZERWA_BIEGU_MS : BIEG_PRZERWA_MS;   // zestaw testów skraca
+        if (rozlaczone ? (proby > 2 && Date.now() - przerwaOd > przerwa) : proby > BIEG_PROB) {
+          if (rozlaczone) throw Object.assign(new Error(t('bieg.porzucony')), { porzucony: true });
           break petla;               // serwer bez biegów – kończymy po staremu
         }
         await pauza(Math.min(8000, 500 * 2 ** (proby - 1)));
@@ -2816,7 +2854,11 @@ async function streamOnce(conv, opcje = {}) {
   } catch (err) {
     clearInterval(waitTimer);
     if (zywyDymek && zywyDymek.el === msg) zywyDymek = null;
-    zapamietajBieg(null);
+    /* K8: urywek i karta błędu niosą numer biegu – przy scalaniu z serwerem pełna
+       odpowiedź-sierota tego biegu wygrywa z nimi (protokol.js, scalRozmowy). */
+    if (!err.bieg && !podpiecie) err.bieg = biegId;
+    // Porzucony po długiej przerwie w sieci: bieg zostaje – wznowPorzucony wróci po odpowiedź.
+    if (!err.porzucony) zapamietajBieg(null);
     // Przerwanie i zerwanie też niosą to, co już przyszło.
     if (err.partial === undefined) err.partial = err.name === 'AbortError' ? acc : rozdzielMyslenie(acc).tresc;
     /* Brak sieci: przeglądarka mówi „Failed to fetch" po angielsku i nie mówi,
@@ -2824,6 +2866,7 @@ async function streamOnce(conv, opcje = {}) {
     if (err.name === 'TypeError' && /fetch|network|load failed/i.test(err.message || '')) {
       const poLudzku = new Error(t('chat.offlineSend'));
       poLudzku.partial = err.partial;
+      poLudzku.bieg = err.bieg;
       throw poLudzku;
     }
     throw err;
@@ -2871,6 +2914,53 @@ async function wznowBieg() {
      wznowieniu bez przeładowania (zerwane Wi-Fi), gdzie początek już jest
      narysowany, i tam siedzi w pamięci, nie w localStorage. */
   await runGeneration(cel, { bieg: zapis.id, od: 0 });
+}
+
+/** Odpowiedź porzucona po długiej przerwie w sieci (karta została z urywkiem
+ *  i błędem z `bieg`). Gdy bieg jeszcze trwa – urywek i błąd ustępują, a my
+ *  podpinamy się od początku; gdy skończył i serwer go zapisał – bierzemy
+ *  rozmowę z serwera (pełna odpowiedź wygrywa przy scalaniu, K8). Zwraca true,
+ *  gdy coś zrobiło. Bez tego powrót sieci wysyłał urywek i nadpisywał nim
+ *  pełną, zapłaconą odpowiedź (it-plynnosc, runda 11). */
+let wznawiamPorzucony = false;
+async function wznowPorzucony() {
+  if (isGenerating || wznawiamPorzucony) return false;
+  let zapis = null;
+  try { zapis = JSON.parse(localStorage.getItem(BIEG_KLUCZ) || 'null'); } catch { /* śmieci */ }
+  const conv = activeConversation;
+  if (!zapis || !zapis.id || !conv || conv.id !== zapis.convId) return false;
+  if (!conv.messages.some((m) => m.bieg === zapis.id && m.error)) return false;
+  wznawiamPorzucony = true;
+  try {
+    let dane;
+    try {
+      const r = await fetch('/api/chat/biegi');
+      if (!r.ok) return false;
+      dane = await r.json();
+    } catch { return false; }                // sieci jeszcze nie ma
+    if (isGenerating || activeConversation !== conv) return false;
+    const b = (dane.biegi || []).find((x) => x.id === zapis.id);
+    if (b && (b.trwa || !b.zapisany)) {
+      conv.messages = conv.messages.filter((m) => m.bieg !== zapis.id);
+      renderMessages({ przewin: sledzeDol });
+      await runGeneration(conv, { bieg: zapis.id, od: 0 });
+      return true;
+    }
+    zapamietajBieg(null);
+    // Zapisany przez serwer: świeża rozmowa z serwera, scalona – pełna odpowiedź wypiera urywek.
+    try {
+      const r = await fetch(`/api/conversations?id=${encodeURIComponent(conv.id)}`);
+      if (r.ok && activeConversation === conv && !isGenerating) {
+        const zSerwera = naprawStareRuchyNarzedzi(await r.json());
+        wersjaNaSerwerze.set(conv.id, zSerwera.updatedAt);
+        activeConversation = scalRozmowy(conv, zSerwera);
+        saveConversations(true, activeConversation);
+        renderMessages({ przewin: sledzeDol });
+        return true;
+      }
+    } catch { /* offline */ }
+    return false;
+  } finally { wznawiamPorzucony = false; }
 }
 
 // Model, który faktycznie odpowiedział, gdy różni się od wybranego.
@@ -4140,7 +4230,8 @@ async function runGeneration(conv, podpiecie = null) {
          razem z błędem, choć bywał długi i kompletny w trzech czwartych. */
       zapiszNotatkiTury(conv, zt, stan);
       const czesc = stripSearchMarker(err.partial || '');
-      if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika() });
+      const bieg = err.bieg ? { bieg: err.bieg } : {};
+      if (czesc) conv.messages.push({ role: 'assistant', content: czesc, ...znakSilnika(), ...bieg });
       /* Komputer domowy nie odpowiada: pod błędem przycisk „Wyślij przez Chmurę”.
          Bez samoczynnego przełączania – chmura to inny koszt i inna prywatność,
          więc decyduje człowiek jednym kliknięciem (Marcin, runda 8). */
@@ -4155,7 +4246,7 @@ async function runGeneration(conv, podpiecie = null) {
         // Budżet: zdanie klienta mówi wszystko, a zdanie serwera jest po polsku (w EN było polskim `title`).
         ...(tekstBledu !== err.message && !budzet ? { szczegol: err.message } : {}),
         ...(err.trwaly || budzet ? { trwaly: true } : {}), ...(budzet ? { budzet: err.limit === 'wlasciciel' ? 'wlasciciel' : 'wlasny' } : {}),
-        ...(zapasChmura ? { zapas: 'cloud' } : {}) });
+        ...(zapasChmura ? { zapas: 'cloud' } : {}), ...bieg });
       saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
          powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
@@ -4197,6 +4288,7 @@ async function runGeneration(conv, podpiecie = null) {
     /* Koniec odpowiedzi nie ściąga na dół kogoś, kto przewinął do początku,
        żeby czytać – tak było: 5600 px lotu w dół w chwili zakończenia. */
     renderMessages({ przewin: sledzeDol });
+    oglosKoniecTury(conv);
     if (zt.zgodaGlos) {
       /* Pytanie o zgodę głosem, potem ta sama tura od nowa (z chmurą, lokalnie
          albo bez agentów). Kto w tej chwili wyszedł z głosu – dostaje zwykłą bramkę. */
@@ -4223,7 +4315,11 @@ async function runGeneration(conv, podpiecie = null) {
       if (voiceMode) startQueryListening(); // rozmowa trwa – pytanie uzupełniające bez wake word
     } else {
       if (settings.speak && finalText) speakText(finalText);
-      el.input.focus();
+      /* Fokus do pola tylko wtedy, gdy nie stał gdzie indziej. Kto czytał
+         rozmowę klawiaturą (np. „Kopiuj” poprzedniej odpowiedzi), zostaje tam –
+         dawniej koniec tury przerzucał go na dół (agencja-frontend, runda 11). */
+      const a = document.activeElement;
+      if (!a || a === document.body || a === el.input) el.input.focus();
       /* Kolejka rusza dopiero TU, po `isGenerating = false` i po odmalowaniu
          ekranu. W trybie głosowym jej nie ruszamy – tam rozmowa idzie
          mikrofonem i dorzucanie pisanych wiadomości mieszałoby dwa kanały. */
@@ -4304,7 +4400,34 @@ function stopGeneration() {
   if (abortTury) abortTury.abort();
 }
 
+/* CZYTNIK EKRANU W TURZE (P3, runda 11). #messages to region na żywo, a każda
+   klatka strumienia i każda przebudowa „dodawały” węzły – czytnik dostawał
+   ~180 razy więcej znaków, niż miała odpowiedź. Przez całą turę region jest
+   `aria-busy`, a na końcu pada JEDNO zdanie w osobnym regionie statusu. */
+function regionStatusu() {
+  let r = document.getElementById('sr-odpowiedz');
+  if (!r) {
+    r = document.createElement('div');
+    r.id = 'sr-odpowiedz';
+    r.setAttribute('role', 'status');
+    r.setAttribute('aria-live', 'polite');
+    r.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;';
+    document.body.appendChild(r);
+  }
+  return r;
+}
+function oglosKoniecTury(conv) {
+  if (!conv || conv !== activeConv()) return;
+  const ost = conv.messages[conv.messages.length - 1];
+  const tekst = t(ost && ost.error ? 'chat.srBlad' : turaPrzerwana ? 'chat.srZatrzymana' : 'chat.srGotowa');
+  const r = regionStatusu();
+  r.textContent = '';
+  setTimeout(() => { r.textContent = tekst; }, 50);
+}
+
 function setGeneratingUI(generating) {
+  if (generating) el.messages.setAttribute('aria-busy', 'true');
+  else el.messages.removeAttribute('aria-busy');
   el.sendBtn.style.display = generating ? 'none' : '';
   el.stopBtn.style.display = generating ? '' : 'none';
   updateSendButton();

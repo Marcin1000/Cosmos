@@ -34,6 +34,7 @@ const http = require('http');
 const { serwerCosmosa, czekajNa, zwolnijPorty, przegladarka, wynik } = require('../pomoc');
 
 const PORT = 3671;
+const POSREDNIK = 3672;      // pośrednik TCP przed Cosmosem – „winda”: zrywa połączenia i odcina sieć
 const ATRAPA = 7671;
 const ADRES = `http://127.0.0.1:${PORT}`;
 const w = wynik('odpowiedz-bez-resetu');
@@ -153,6 +154,7 @@ const atrapa = http.createServer((req, res) => {
     if (sc === 'szkic') return strumien(res, zdjeciaNie ? PLAN1_DNI : `${PLAN0}\n[PLAN: miejsce=Palermo kiedy=2027-09-15T18:30]\n[GRAFIKA: Katedra Palermo; Etna]`);
     if (sc === 'przepis') return strumien(res, danePlanu ? PLAN0.replace('06:45', '06:40').replace('19:00-19:30', '19:08') : `${PLAN0}\n[PLAN: miejsce=Palermo kiedy=2027-09-15T18:30]`);
     if (sc === 'dymek') return strumien(res, DLUGI, 30);
+    if (sc === 'wolny') return strumien(res, `${DLUGI}KONIEC-ODPOWIEDZI`, 25);
     if (sc === 'zespol') return strumien(res, ZESPOL_ODP);
     if (sc === 'zapas') return strumien(res, 'Odpowiedź zespołu po zapasie roli.');
     return strumien(res, 'Cześć z atrapy.');
@@ -200,7 +202,20 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
 }
 
 (async () => {
-  await zwolnijPorty([PORT, ATRAPA]);
+  await zwolnijPorty([PORT, ATRAPA, POSREDNIK]);
+  const net = require('net');
+  const gniazda = new Set();
+  let bezSieci = false;
+  const posrednik = net.createServer((we) => {
+    if (bezSieci) { we.destroy(); return; }
+    const wy = net.connect(PORT, '127.0.0.1');
+    gniazda.add(we); gniazda.add(wy);
+    we.pipe(wy); wy.pipe(we);
+    const zamknij = () => { we.destroy(); wy.destroy(); gniazda.delete(we); gniazda.delete(wy); };
+    we.on('error', zamknij); wy.on('error', zamknij); we.on('close', zamknij); wy.on('close', zamknij);
+  });
+  await new Promise((r) => posrednik.listen(POSREDNIK, '127.0.0.1', r));
+  const odetnijSiec = (tak) => { bezSieci = tak; if (tak) for (const g of gniazda) g.destroy(); };
   await new Promise((r) => atrapa.listen(ATRAPA, '127.0.0.1', r));
   serwerCosmosa(PORT, {
     NVIDIA_API_KEY: 'test-nvidia', NEMOTRON_BASE_URL: `http://127.0.0.1:${ATRAPA}/v1`,
@@ -210,6 +225,7 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
     // Zdjęcia nie są tu sprawdzane – źródła odpowiadają od razu pustką.
     IMAGE_SEARCH_URL: `http://127.0.0.1:${ATRAPA}/brak`, COMMONS_API_URL: `http://127.0.0.1:${ATRAPA}/brak`,
     OPENVERSE_API_URL: `http://127.0.0.1:${ATRAPA}/brak`, SEARCH_URL: `http://127.0.0.1:${ATRAPA}/brak`,
+    COSMOS_BIEG_SIEROTA_MS: '1500',
   });
   if (!(await czekajNa(`${ADRES}/api/config`))) { w.zapisz('serwer nie wstał'); return w.zakoncz(); }
   const b = await przegladarka();
@@ -357,6 +373,59 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
         `G7c. „cała odpowiedź” z kosztem zastąpionej odpowiedzi = przyrost licznika od pytania solo (stopka „${s7}”, licznik +${(po7 - przed7).toFixed(4)} zł)`);
     }
 
+    // ---------------------------------------------------------------- G12
+    {
+      /* P3: czytnik ekranu – region rozmowy `aria-busy` przez turę, na końcu jedno
+         zdanie w role=status; fokus klawiatury przeżywa przebudowy i koniec tury. */
+      await nowaRozmowa();
+      await tura(page, 'Cześć');
+      await page.focus('#messages .msg-assistant .msg-actions .msg-action-btn');
+      const przed12 = await page.evaluate(() => document.activeElement.closest('[data-idx]')?.dataset.idx);
+      await page.evaluate(() => { el.input.value = 'scena-przepis Plan na Sycylię z nastawami aparatu.'; sendMessage(); });
+      const probki = [];
+      for (let i = 0; i < 300; i++) {
+        const p12 = await page.evaluate(() => ({ busy: document.getElementById('messages').getAttribute('aria-busy'), gen: isGenerating,
+          fokus: document.activeElement === document.body ? 'body' : document.activeElement.id || document.activeElement.className,
+          idx: document.activeElement.closest('[data-idx]')?.dataset.idx }));
+        probki.push(p12);
+        if (!p12.gen && i > 5) break;
+        await spij(80);
+      }
+      await spij(300);
+      const koniec12 = await page.evaluate(() => ({ busy: document.getElementById('messages').getAttribute('aria-busy'), sr: (document.getElementById('sr-odpowiedz') || {}).textContent || '',
+        fokus: document.activeElement.className, idx: document.activeElement.closest('[data-idx]')?.dataset.idx }));
+      const wTurze = probki.filter((x) => x.gen);
+      ok(wTurze.length > 3 && wTurze.every((x) => x.busy === 'true') && koniec12.busy === null && koniec12.sr === 'Odpowiedź gotowa.',
+        `G12a. #messages aria-busy przez całą turę (${wTurze.length} próbek), po niej zdjęte; jedno zdanie statusu „${koniec12.sr}”`);
+      ok([...wTurze, koniec12].every((x) => x.idx === przed12 && /msg-action-btn/.test(x.fokus)),
+        `G12b. fokus zostaje na „Kopiuj” poprzedniej odpowiedzi przez przebudowy i po końcu tury (${JSON.stringify([...new Set([...wTurze, koniec12].map((x) => `${x.idx}:${String(x.fokus).slice(0, 30)}`))])})`);
+    }
+
+    // ---------------------------------------------------------------- G13
+    {
+      /* Skurczenie treści przy dole (zwinięty blok zespołu) nie wyłącza jazdy na
+         dole – kolejna porcja odpowiedzi dalej jest widoczna. */
+      const z13 = await page.evaluate(async () => {
+        const kl = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
+        const blok = document.createElement('div');
+        blok.style.height = '900px';
+        el.messages.appendChild(blok);
+        scrollToBottom(true);
+        await kl();
+        blok.style.height = '300px';           // blok zespołu się zwija
+        await kl(); await kl();
+        const poZwinieciu = sledzeDol;
+        blok.style.height = '1500px';          // odpowiedź rośnie
+        scrollToBottom();
+        await kl();
+        const sc = el.chatScroll;
+        const odDolu = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+        blok.remove();
+        return { poZwinieciu, odDolu };
+      });
+      ok(z13.poZwinieciu === true && z13.odDolu < 5, `G13. zwinięcie treści przy dole nie wyłącza śledzenia dołu (${JSON.stringify(z13)})`);
+    }
+
     // ---------------------------------------------------------------- G9, G10
     {
       /* G9. K7: iOS nie zmniejsza okna przy klawiaturze – mówi o niej tylko
@@ -401,12 +470,50 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
       await c9.close();
     }
 
+    // ---------------------------------------------------------------- G14
+    {
+      /* Sieć znika na dłużej niż klient czeka (winda, tunel), JS działa dalej.
+         Serwer dokańcza odpowiedź i zapisuje ją sam; po powrocie sieci pełna
+         odpowiedź wygrywa z urywkiem i kartą błędu (K8) – także w pliku na serwerze.
+         Dawniej zapis kopii z przeglądarki (urywek) nadpisywał pełną odpowiedź. */
+      const c14 = await b.newContext({ viewport: { width: 390, height: 800 }, serviceWorkers: 'block' });
+      await c14.addInitScript(() => { window.COSMOS_PRZERWA_BIEGU_MS = 2500; try { localStorage.setItem('cosmos.lang', 'pl'); } catch { /* */ } });
+      const p14 = await c14.newPage();
+      p14.on('pageerror', (e) => bledy.push(e.message));
+      await p14.goto(`http://127.0.0.1:${POSREDNIK}/app`, { waitUntil: 'load' });
+      await p14.waitForSelector('.app.gotowa', { timeout: 15000 }).catch(() => {});
+      await p14.fill('#input', 'scena-wolny Opowiedz powoli.');
+      await p14.press('#input', 'Enter');
+      await p14.waitForFunction(() => (document.querySelector('#messages .msg.nowa .strumien-tresc') || {}).textContent?.length > 200, null, { timeout: 15000 }).catch(() => {});
+      odetnijSiec(true);
+      await p14.waitForFunction(() => !isGenerating, null, { timeout: 30000 }).catch(() => {});
+      const wTrakcie = await p14.evaluate(() => ({ bledy: activeConversation.messages.filter((m) => m.error).map((m) => ({ bieg: Boolean(m.bieg), t: String(m.content).slice(0, 60) })),
+        urywek: activeConversation.messages.filter((m) => m.role === 'assistant' && !m.error).map((m) => ({ bieg: Boolean(m.bieg), n: String(m.content).length })),
+        biegZapamietany: Boolean(localStorage.getItem('cosmos.bieg')), id: activeConversation.id }));
+      ok(wTrakcie.bledy.length === 1 && wTrakcie.bledy[0].bieg && /wrócę po nią/.test(wTrakcie.bledy[0].t) && wTrakcie.urywek.every((u) => u.bieg) && wTrakcie.biegZapamietany,
+        `G14a. bez sieci dłużej niż czeka klient: urywek i błąd niosą bieg (K8), bieg zapamiętany, komunikat „wrócę po nią” (${JSON.stringify(wTrakcie)})`);
+      await spij(12000);                   // serwer kończy (~8 s) i po 1,5 s zapisuje odpowiedź sam
+      odetnijSiec(false);
+      await p14.evaluate(() => window.dispatchEvent(new Event('online')));
+      await p14.waitForFunction(() => !activeConversation.messages.some((m) => m.error) && !isGenerating, null, { timeout: 15000 }).catch(() => {});
+      await spij(1500);
+      const po = await p14.evaluate(async (id) => {
+        const naEkranie = activeConversation.messages.filter((m) => m.role === 'assistant').map((m) => ({ e: Boolean(m.error), n: String(m.content).length, k: /KONIEC-ODPOWIEDZI/.test(m.content) }));
+        const zSerwera = await (await fetch(`/api/conversations?id=${encodeURIComponent(id)}`)).json();
+        return { naEkranie, serwer: zSerwera.messages.filter((m) => m.role === 'assistant').map((m) => ({ e: Boolean(m.error), k: /KONIEC-ODPOWIEDZI/.test(m.content) })) };
+      }, wTrakcie.id);
+      ok(po.naEkranie.length === 1 && po.naEkranie[0].k && !po.naEkranie[0].e && po.serwer.length === 1 && po.serwer[0].k && !po.serwer[0].e,
+        `G14b. po powrocie sieci pełna odpowiedź na ekranie i w pliku na serwerze, bez urywka i błędu (${JSON.stringify(po)})`);
+      await c14.close();
+    }
+
     ok(!bledy.length, `brak błędów JS (${bledy.slice(0, 3).join(' | ')})`);
   } catch (e) {
     w.zapisz(`wyjątek: ${e.stack || e.message}`);
   } finally {
     await b.close();
     atrapa.close();
+    posrednik.close();
   }
   w.zakoncz();
 })();

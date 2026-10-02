@@ -46,16 +46,20 @@
 const MYSLENIE = ['enable_thinking', 'no_think', 'detailed', 'reasoning_effort', 'zawsze', 'nigdy'];
 const POZIOMY = ['nano', 'mini', 'pelny', 'flagowy'];
 
-/* Wspólne pola dwóch wersji Super 49B: różnią się tylko przełącznikiem myślenia. */
+/* Wspólne pola dwóch wersji Super 49B: różnią się tylko przełącznikiem myślenia.
+   Runda 11: NVIDIA wycofała go z chmury (410 „end of life”) – bez pochwał,
+   z uwagą; wpis zostaje dla własnego NIM i starych ustawień. */
 const SUPER_49B = {
   nazwa: 'Llama 3.3 Nemotron Super 49B',
-  opis: 'Najlepszy wybór do rozmowy: 0,3–0,4 s do pierwszego znaku, powtarzalnie.',
+  opis: 'Llama 3.3 Nemotron 49B – szybki model rozmowy z poprzedniej generacji.',
   mocne: ['codzienna rozmowa', 'dłuższe teksty', 'rozumowanie', 'kod'],
   kontekst: 'duży',
   cechy: ['szybki', 'rozumowanie', 'narzędzia', 'polski', 'kod'],
   poziom: 'pelny',
+  uwaga: 'W chmurze NVIDIA wycofany 26.08.2026 (HTTP 410) – działa tylko z własnego serwera NIM. W chmurze weź Nemotron 3 Super.',
   en: {
-    opis: 'The best pick for conversation: 0.3–0.4 s to the first character, consistently.',
+    opis: 'Llama 3.3 Nemotron 49B – a fast previous-generation conversation model.',
+    uwaga: 'Retired from the NVIDIA cloud on 2026-08-26 (HTTP 410) – works only from your own NIM server. In the cloud take Nemotron 3 Super.',
     mocne: ['everyday conversation', 'longer texts', 'reasoning', 'code'],
     kontekst: 'large',
   },
@@ -74,12 +78,12 @@ const MODEL_CATALOG = [
     myslenie: 'enable_thinking',
     // Rola zespołu ma 90 s i 45 s ciszy – Ultra przegrywa z szybszym modelem o tych samych cechach.
     wolny: true,
-    uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada – do szybkich pytań weź Super 49B.',
+    uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada – do szybkich pytań weź Nemotron 3 Super.',
     en: {
       opis: 'NVIDIA\'s flagship – best for work where quality matters more than time.',
       mocne: ['hard reasoning', 'long analyses', 'best Polish', 'multi-step code'],
       kontekst: '1M tokens',
-      uwaga: 'Slowest of the family and doesn\'t always answer – for quick questions take Super 49B.',
+      uwaga: 'Slowest of the family and doesn\'t always answer – for quick questions take Nemotron 3 Super.',
     },
   },
   {
@@ -135,13 +139,15 @@ const MODEL_CATALOG = [
   {
     dopasuj: ['nemotron-nano-12b-v2-vl', '12b-v2-vl'],
     nazwa: 'Nemotron Nano 12B VL',
-    opis: 'Najpewniejszy model wizyjny: 0,2–0,3 s, odpowiadał w każdym pomiarze.',
+    opis: 'Model wizyjny NVIDII 12B poprzedniej generacji.',
     mocne: ['porównywanie zdjęć', 'czytanie tekstu z obrazu', 'kontrola jakości ujęć'],
     kontekst: 'średni',
     cechy: ['wizja'],
     poziom: 'mini',
+    uwaga: 'W chmurze NVIDIA wycofany 26.08.2026 (HTTP 410). Do zdjęć weź Nemotron 3 Nano Omni.',
     en: {
-      opis: 'The most reliable vision model: 0.2–0.3 s, answered in every measurement.',
+      opis: 'NVIDIA\'s previous-generation 12B vision model.',
+      uwaga: 'Retired from the NVIDIA cloud on 2026-08-26 (HTTP 410). For photos take Nemotron 3 Nano Omni.',
       mocne: ['comparing photos', 'reading text from images', 'checking shot quality'],
       kontekst: 'medium',
     },
@@ -156,12 +162,12 @@ const MODEL_CATALOG = [
     poziom: 'mini',
     myslenie: 'enable_thinking',
     vramGb: 18,
-    uwaga: 'MoE zmniejsza obliczenia, nie pamięć – lokalnie potrzebuje ~16–18 GB VRAM.',
+    uwaga: 'W chmurze NVIDIA wycofany 26.08.2026 (HTTP 410) – zostaje lokalnie. MoE zmniejsza obliczenia, nie pamięć – lokalnie potrzebuje ~16–18 GB VRAM.',
     en: {
       opis: 'Light MoE model – fast, a sensible quality trade-off.',
       mocne: ['quick answers', 'simple tasks', 'summaries'],
       kontekst: 'large',
-      uwaga: 'MoE cuts compute, not memory – locally it needs ~16–18 GB of VRAM.',
+      uwaga: 'Retired from the NVIDIA cloud on 2026-08-26 (HTTP 410) – stays local. MoE cuts compute, not memory – locally it needs ~16–18 GB of VRAM.',
     },
   },
   {
@@ -258,12 +264,12 @@ const MODEL_CATALOG = [
     mocne: ['eksperymenty', 'zadania kalibracyjne'],
     kontekst: 'średni',
     cechy: ['wizja'],
-    uwaga: 'Do codziennej pracy weź Nano Omni albo Nano 12B VL.',
+    uwaga: 'Do codziennej pracy weź Nemotron 3 Nano Omni.',
     en: {
       opis: 'NVIDIA research model – reads images, but isn\'t a general-purpose model.',
       mocne: ['experiments', 'calibration tasks'],
       kontekst: 'medium',
-      uwaga: 'For everyday work take Nano Omni or Nano 12B VL.',
+      uwaga: 'For everyday work take Nemotron 3 Nano Omni.',
     },
   },
 
@@ -284,8 +290,10 @@ const MODEL_CATALOG = [
     poziom: 'flagowy',
     myslenie: 'nigdy',
     pewne: false,
+    uwaga: 'Wersja 480B wycofana z chmury NVIDIA 26.08.2026 (HTTP 410).',
     en: {
       opis: 'A large code model – writes and fixes programs, without thinking out loud.',
+      uwaga: 'The 480B version was retired from the NVIDIA cloud on 2026-08-26 (HTTP 410).',
       mocne: ['writing code', 'fixes', 'long files'],
       kontekst: 'large',
     },
@@ -378,8 +386,10 @@ const MODEL_CATALOG = [
     poziom: 'pelny',
     myslenie: 'nigdy',
     pewne: false,
+    uwaga: 'Maverick wycofany z chmury NVIDIA 26.08.2026 (HTTP 410).',
     en: {
       opis: 'A multimodal Llama (MoE) – fast, sees images.',
+      uwaga: 'Maverick was retired from the NVIDIA cloud on 2026-08-26 (HTTP 410).',
       mocne: ['quick answers', 'describing photos', 'tool calling'],
       kontekst: 'large',
     },
@@ -448,12 +458,12 @@ const MODEL_CATALOG = [
     poziom: 'mini',
     myslenie: 'reasoning_effort',
     vramGb: 14,
-    uwaga: 'Zdjęć nie widzi – do nich weź model wizyjny (Nano Omni, 12B VL, lokalnie qwen2.5vl).',
+    uwaga: 'Zdjęć nie widzi – do nich weź model wizyjny (Nemotron 3 Nano Omni, lokalnie qwen2.5vl).',
     en: {
       opis: 'Open OpenAI model with visible reasoning – text only.',
       mocne: ['reasoning', 'code', 'step-by-step explanations'],
       kontekst: 'large',
-      uwaga: 'It cannot see photos – use a vision model for them (Nano Omni, 12B VL, locally qwen2.5vl).',
+      uwaga: 'It cannot see photos – use a vision model for them (Nemotron 3 Nano Omni, locally qwen2.5vl).',
     },
   },
   {
@@ -466,8 +476,10 @@ const MODEL_CATALOG = [
     poziom: 'pelny',
     myslenie: 'reasoning_effort',
     vramGb: 65,
+    uwaga: 'Wersja 120B wycofana z chmury NVIDIA 26.08.2026 (HTTP 410) – działa lokalnie.',
     en: {
       opis: 'The larger open OpenAI model with visible reasoning – text only.',
+      uwaga: 'The 120B version was retired from the NVIDIA cloud on 2026-08-26 (HTTP 410) – it still runs locally.',
       mocne: ['reasoning', 'code', 'longer analyses'],
       kontekst: 'large',
     },

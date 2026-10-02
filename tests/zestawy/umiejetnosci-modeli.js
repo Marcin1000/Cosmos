@@ -84,6 +84,20 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     'A17. sposób myślenia nieznany (wpis z pamięci bez `myslenie`, model spoza katalogu), „nigdy” i znany – znane; wizja z pamięci oznaczona');
 }
 
+// A18 (runda 11, W1.12): modele wycofane z chmury NVIDIA (410) bez pochwał, z uwagą PL i EN.
+{
+  const martwe = ['nvidia/llama-3.3-nemotron-super-49b-v1.5', 'nvidia/nemotron-3-nano-30b-a3b', 'qwen/qwen3-coder-480b-a35b-instruct',
+    'openai/gpt-oss-120b', 'nvidia/nemotron-nano-12b-v2-vl', 'meta/llama-4-maverick-17b-128e-instruct'];
+  const zle = martwe.filter((id) => {
+    const w = M.modelInfo(id) || {};
+    const en = (M.MODEL_CATALOG.find((e) => e.nazwa === w.nazwa && e.en) || {}).en || {};
+    return !/410/.test(w.uwaga || '') || !/410/.test(en.uwaga || '') || /najlepszy|najpewniejszy/i.test(w.opis || '') || /best pick|most reliable/i.test(en.opis || '');
+  });
+  const katalogTekst = JSON.stringify(M.MODEL_CATALOG);
+  ok(!zle.length && !/weź Super 49B|Nano 12B VL\./.test(katalogTekst),
+    `A18. modele wycofane z chmury NVIDIA: uwaga o 410 (PL i EN), bez „najlepszy”/„najpewniejszy”${zle.length ? `: ${zle.join(', ')}` : ''}`);
+}
+
 // ------------------------------------------------------------------ B. umiejetnosci
 {
   const u1 = U.umiejetnosci('openai/gpt-oss-20b', 'cloud', { sprawdzenie: { rozmowa: true, obrazy: 'pewne' } });

@@ -704,6 +704,10 @@ const I18N = {
     'chat.stopped': 'Zatrzymane w trakcie odpowiedzi.',
     // Poprzednia wersja odpowiedzi – zwinięta linijka na górze karty (runda 11, K6)
     'wersja.poprzednia': 'Poprzednia wersja',
+    // Jedno zdanie dla czytnika ekranu na końcu tury (runda 11, P3)
+    'chat.srGotowa': 'Odpowiedź gotowa.',
+    'chat.srBlad': 'Odpowiedź nie powstała – szczegóły w rozmowie.',
+    'chat.srZatrzymana': 'Odpowiedź zatrzymana.',
     'wersja.bezZespolu': 'Odpowiedź bez zespołu',
     'wersja.szkic': 'Szkic przed danymi',
     'wersja.przerwana': 'przerwana',
@@ -885,7 +889,7 @@ const I18N = {
     'bieg.luka': '_(początek tej odpowiedzi powstał, gdy aplikacja była zamknięta albo w tle – serwer go już nie pamięta)_',
     // paczka F (runda 10): zdanie przy odpowiedzi-sierocie z przerwanym narzędziem (flaga przerwaneNarzedzie)
     'bieg.narzedzie': 'Tu miało zadziałać narzędzie (wyszukiwanie, archiwum albo plan), ale aplikacja była wtedy zamknięta albo w tle. Wyślij pytanie jeszcze raz.',
-    'bieg.zerwane': 'Połączenie z serwerem zerwane i nie udało się wrócić do odpowiedzi. Odpowiedź mogła powstać do końca – odśwież stronę.',
+    'bieg.porzucony': 'Nie ma połączenia z serwerem. Odpowiedź pisze się dalej na serwerze – wrócę po nią, gdy sieć wróci.',
     'chat.imageSaved': 'Gotowe – obraz zapisany w Bazie wiedzy.',
     'chat.imageDone': 'Obraz gotowy i zapisany w bazie wiedzy.',
     'chat.imageErr': '⚠︎ Generowanie obrazu nie powiodło się: {msg}',
@@ -2131,6 +2135,9 @@ const I18N = {
     'voice.errConnChmura': 'The home computer is not responding. You can send the question via Cloud – the button is under the answer.',
     'chat.stopped': 'Stopped mid-answer.',
     'wersja.poprzednia': 'Previous version',
+    'chat.srGotowa': 'Answer ready.',
+    'chat.srBlad': 'No answer – details in the conversation.',
+    'chat.srZatrzymana': 'Answer stopped.',
     'wersja.bezZespolu': 'Answer without the team',
     'wersja.szkic': 'Draft before the data',
     'wersja.przerwana': 'interrupted',
@@ -2308,7 +2315,7 @@ const I18N = {
     'bieg.luka': '_(the beginning of this answer was produced while the app was closed or in the background – the server no longer keeps it)_',
     // paczka F (runda 10): zdanie przy odpowiedzi-sierocie z przerwanym narzędziem (flaga przerwaneNarzedzie)
     'bieg.narzedzie': 'A tool was meant to run here (search, archive or plan), but the app was closed or in the background at the time. Send the question again.',
-    'bieg.zerwane': 'Lost the connection and could not rejoin the answer. It may have finished on the server – reload the page.',
+    'bieg.porzucony': 'No connection to the server. The answer keeps being written there – I’ll fetch it when the network is back.',
     'chat.imageSaved': 'Done – image saved to the Knowledge base.',
     'chat.imageDone': 'I generated the image and saved it to the knowledge base.',
     'chat.imageErr': '⚠︎ Image generation failed: {msg}',
