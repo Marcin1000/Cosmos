@@ -193,6 +193,7 @@ async function nowaRozmowa(id, pytanie) {
       ok(pr && pr.ostatniaRola === 'user' && pr.ostatnia.includes('NOTATKI ZESPOŁU') && !pr.system.includes('NOTATKI ZESPOŁU'),
         'O1e. notatki w ostatniej wypowiedzi człowieka, nie w system');
       ok(!/PROFIL|KONTEKST PERCEPCJI|JAK ODPOWIADASZ/.test(an.tekst) && an.max_tokens <= 2048, 'O1f. rola bez instrukcji Cosmosa (paczka z białej listy), stały limit tokenów');
+      ok(!z.some((x) => /klatka z kamery/i.test(x.tekst)), 'O1g. pytanie bez obrazu – żadna rola ani prowadzący nie dostaje notki o klatce z kamery (runda 11)');
       // O2 – sierota (nikt nie potwierdził odebrania)
       await spij(900);
       const plik = path.join(katalogOsoby(katalog), 'conversations', `${rozmowa}.json`);
@@ -288,6 +289,14 @@ async function nowaRozmowa(id, pytanie) {
       const kon5 = zd(w5, 'rola').filter((e) => e.r === 'r2' && e.ms !== undefined).pop() || {};
       ok(kon5.stan === 'gotowa' && kon5.zapas && kon5.zapas.silnik === 'cloud',
         `O4h. autorzy z innej rodziny (OpenAI) – recenzent dalej ma zapas na Nemotronie prowadzącego (${kon5.stan}, ${JSON.stringify(kon5.zapas || null)})`);
+      // O4i (runda 11, W1.8): wkład dobił do limitu znaków – strumień przerwany, wkład zachowany jako gotowy (przycięty).
+      await zeruj();
+      const w6 = await tura({ messages: [{ role: 'user', content: 'Długo: rola-dluga:ANALITYK' }], zespol: { sklad: [{ rola: 'analityk' }, { rola: 'recenzent' }] } });
+      const kon6 = zd(w6, 'rola').filter((e) => e.r === 'r1' && e.ms !== undefined).pop() || {};
+      const pr6 = (await zadania()).find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
+      ok(kon6.stan === 'gotowa' && kon6.urwane === true && kon6.znakow >= 7900 && kon6.znakow < 8100 && /długi wkład/.test(pr6.ostatnia)
+        && !/KONIEC-WKLADU/.test(pr6.ostatnia) && w6.koniec && w6.koniec.blad === '',
+        `O4i. wkład ponad limit znaków – strumień przerwany, notatka zachowana (${kon6.stan}, urwane: ${kon6.urwane}, ${kon6.znakow} znaków)`);
     }
 
     // ------------------------------------------------------------ O5 Stop

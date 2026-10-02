@@ -255,6 +255,8 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
     const g2 = await tura(page, 'scena-przepis Plan na Sycylię z nastawami aparatu.');
     const k2 = await koniec();
     ok(g2.max > 900 && !g2.spadki.length, `G2a. przepisany plan: tekst nie spada (max ${g2.max}, spadki: ${g2.spadki.join('; ') || 'brak'})`);
+    const slad2 = await page.evaluate(() => [...document.querySelectorAll('#messages .msg-search[data-narzedzie="plan"] summary')].map((x) => x.textContent));
+    ok(slad2.length === 1 && /^Plan zdjęciowy · [^·]+ · 15 wrz 2027$/.test(slad2[0]), `G2c. ślad planu: data-narzedzie="plan" i podpis „miejsce · dzień” (${JSON.stringify(slad2)})`);
     ok(k2.tabele === 1 && k2.poprzednie.length === 1 && k2.poprzednie[0].tytul === 'Poprzednia wersja' && /06:40/.test(k2.ekran),
       `G2b. na końcu jeden plan (z danymi), stara wersja zwinięta (tabel: ${k2.tabele}, poprzednie: ${k2.poprzednie.length})`);
 
@@ -353,6 +355,50 @@ async function tura(page, pytanie, { wTrakcie } = {}) {
         `G7b. jedno pytanie, jedna odpowiedź – solo zwinięte nad nią jako „Odpowiedź bez zespołu” (${JSON.stringify(m7)})`);
       ok(/w tym zastąpiona odpowiedź: \d/.test(s7.replace(/\u00a0/g, ' ')) && Math.abs(kwotaZ(s7) - (po7 - przed7)) <= 0.011,
         `G7c. „cała odpowiedź” z kosztem zastąpionej odpowiedzi = przyrost licznika od pytania solo (stopka „${s7}”, licznik +${(po7 - przed7).toFixed(4)} zł)`);
+    }
+
+    // ---------------------------------------------------------------- G9, G10
+    {
+      /* G9. K7: iOS nie zmniejsza okna przy klawiaturze – mówi o niej tylko
+         visualViewport. Podstawiony visualViewport (wysokość jak przy klawiaturze). */
+      const c9 = await b.newContext({ viewport: { width: 390, height: 800 }, serviceWorkers: 'block' });
+      await c9.addInitScript(() => {
+        const vv = new EventTarget();
+        vv.height = window.innerHeight || 800; vv.width = 390; vv.scale = 1; vv.offsetTop = 0; vv.offsetLeft = 0; vv.pageTop = 0; vv.pageLeft = 0;
+        Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
+        window.__vv = vv;
+      });
+      const p9 = await c9.newPage();
+      await p9.goto(`${ADRES}/app`, { waitUntil: 'load' });
+      await p9.waitForSelector('.app.gotowa', { timeout: 15000 }).catch(() => {});
+      const klasa = () => p9.evaluate(() => document.documentElement.classList.contains('klawiatura'));
+      const przed9 = await klasa();
+      await p9.evaluate(() => { window.__vv.height = 420; window.__vv.dispatchEvent(new Event('resize')); });
+      const z9 = await klasa();
+      await p9.evaluate(() => { window.__vv.height = window.innerHeight; window.__vv.dispatchEvent(new Event('resize')); });
+      const po9 = await klasa();
+      ok(!przed9 && z9 && !po9, `G9. html.klawiatura z visualViewport: bez ${przed9}, z klawiaturą ${z9}, po schowaniu ${po9}`);
+      /* G10. Wpisany tekst wygrywa: dotknięcie podpowiedzi nie nadpisuje go i nie wysyła. */
+      await p9.fill('#input', 'moje własne pytanie');
+      await p9.evaluate(() => document.querySelector('.suggestion').click());
+      await spij(300);
+      const z10 = await p9.evaluate(() => ({ pole: document.getElementById('input').value, wiad: (activeConversation ? activeConversation.messages.length : 0) }));
+      ok(z10.pole === 'moje własne pytanie' && z10.wiad === 0, `G10. dotknięcie podpowiedzi przy wpisanym tekście nic nie nadpisuje i nie wysyła (${JSON.stringify(z10)})`);
+      /* G11. Plan jako tabela (K5): pasek zdjęć sekcji staje POD tabelą, nie nad nią. */
+      const z11 = await p9.evaluate(() => {
+        const body = document.createElement('div');
+        body.className = 'msg-content md';
+        body.innerHTML = renderMarkdown('**Plan**\n\n| Dzień | Miejsce | Plan | Nastawy |\n|---|---|---|---|\n| 1 | Etna | spacer | f/8 |\n\nUwagi pod tabelą.\n\n### Dzień 2\nTaormina.');
+        document.body.appendChild(body);
+        const foto = { thumb: '/icons/icon-192.png', full: '/icons/icon-192.png', title: 'x', url: 'https://przyklad.pl' };
+        wstawPaski(body, { zdjecia: [{ q: 'Etna', etykieta: 'Etna', po: 10, sekcja: 0, photos: [foto], stan: 'gotowe' },
+          { q: 'Taormina', etykieta: 'Taormina', po: 200, sekcja: 1, photos: [foto], stan: 'gotowe' }] });
+        const dzieci = [...body.children].map((e) => (e.classList.contains('zdj-pasek') ? 'PASEK' : e.tagName));
+        body.remove();
+        return dzieci.join(',');
+      });
+      ok(/^P,TABLE,PASEK,P,H3,PASEK/.test(z11), `G11. pasek sekcji z tabelą stoi pod tabelą, w sekcji bez tabeli – pod nagłówkiem (${z11})`);
+      await c9.close();
     }
 
     ok(!bledy.length, `brak błędów JS (${bledy.slice(0, 3).join(' | ')})`);

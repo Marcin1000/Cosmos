@@ -629,9 +629,11 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
       const s1 = await sklad(chmura);
       const d1 = s1.darmowe;
       const rec1 = d1 && d1.role.find((r) => r.rola === 'recenzent');
-      ok(s1.role.some((r) => r.silnik === 'claude') && d1 && d1.role.length === 2 && d1.role.every((r) => !PLATNE.includes(r.silnik))
+      ok(s1.role.some((r) => r.silnik === 'claude') && d1 && d1.role.length >= 1 && d1.role.every((r) => !PLATNE.includes(r.silnik))
         // Runda 11: zalecane darmowe dopiero po udanej sondzie (tu rejestru brak) – analityk na modelu chmury z .env.
-        && d1.role[0].model === chmura.model && rec1 && !['nemotron'].includes(rodzinaModelu(rec1.model))
+        && d1.role[0].model === chmura.model
+        // Bez innej rodziny w puli darmowej recenzent odpada z kodem „rodzina” (nie Nemotron recenzujący Nemotrona).
+        && (rec1 ? !['nemotron'].includes(rodzinaModelu(rec1.model)) : d1.odrzucone.some((o) => o.rola === 'recenzent' && o.kod === 'rodzina'))
         && d1.szacunekZl === 0 && d1.prowadzacyPlatny === false && s1.tylkoDarmowe === false,
         `N1. wariant „Darmowe modele” obok proponowanego: role na chmurze NVIDIA, analityk na modelu chmury (zalecane tylko po sondzie), recenzent spoza Nemotrona, 0 zł (${d1 && d1.role.map((r) => `${r.rola}:${r.model}`).join(', ')})`);
       const k1 = (s1.kandydaci || {}).analityk || [];

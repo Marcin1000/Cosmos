@@ -816,6 +816,16 @@ const zdjeciaZSieci = (m) => Boolean(m && m.role === 'assistant' && !m.search &&
 const pierwszyBlokTresci = (body) => [...body.children]
   .find((c) => !c.matches('details.think-block, .model-note, .msg-docs, .msg-images, .zdj-pasek')) || null;
 
+/** Ostatnia tabela sekcji (od nagłówka – albo od początku – do następnego nagłówka) albo null. */
+function tabelaSekcji(body, naglowek) {
+  let tabela = null;
+  for (let e = naglowek ? naglowek.nextElementSibling : body.firstElementChild; e; e = e.nextElementSibling) {
+    if (/^H[1-4]$/.test(e.tagName)) break;
+    if (e.tagName === 'TABLE') tabela = e;
+  }
+  return tabela;
+}
+
 function wstawPaski(body, m, zrodlo = m) {
   const grupy = Array.isArray(m.zdjecia) ? m.zdjecia : [];
   const naglowki = body.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4');
@@ -843,8 +853,15 @@ function wstawPaski(body, m, zrodlo = m) {
     zostaja.add(pasek);
     if (obecny === pasek) continue;
     if (obecny) obecny.replaceWith(pasek);
-    else if (n > 0) naglowki[n - 1].after(pasek);
-    else body.insertBefore(pasek, pierwszyBlokTresci(body));
+    else {
+      /* Sekcja z tabelą (plan jako tabela, K5): pasek POD tabelą, nie nad nią –
+         nad tabelą zdjęcia wszystkich dni stały przed planem, do którego należą
+         (agencja-ux, runda 11, krok przejściowy przed wierszami zdjęć). */
+      const tabela = tabelaSekcji(body, n > 0 ? naglowki[n - 1] : null);
+      if (tabela) tabela.after(pasek);
+      else if (n > 0) naglowki[n - 1].after(pasek);
+      else body.insertBefore(pasek, pierwszyBlokTresci(body));
+    }
   }
   for (const stary of body.querySelectorAll(':scope > .zdj-pasek')) if (!zostaja.has(stary)) stary.remove();
   /* Czego zabrakło – mówi Cosmos, bez rundy modelu. Dawniej robił to model
@@ -950,7 +967,8 @@ function messageElement(m, idx = -1, opcje = {}) {
     // Ikona zależna od narzędzia (plan – słońce zamiast lupy, agencja-ux, runda 11).
     if (m.narzedzie) msg.dataset.narzedzie = m.narzedzie;
     msg.innerHTML =
-      `<details class="search-results"><summary>${(!m.narzedzie || m.narzedzie === 'szukaj')
+      `<details class="search-results"><summary>${m.narzedzie === 'plan' && podpisPlanu(text) ? escapeHtml(podpisPlanu(text))
+        : (!m.narzedzie || m.narzedzie === 'szukaj')
         ? t('chat.searchResults', { q: escapeHtml(m.searchQuery || '') })
         : t('chat.toolResult', { n: t(`narzedzie.${m.narzedzie}`), q: escapeHtml(m.searchQuery || '') })}</summary>` +
       `<pre>${escapeHtml(text)}</pre></details>`;
@@ -1100,6 +1118,23 @@ function messageElement(m, idx = -1, opcje = {}) {
   msg.appendChild(col);
   elementyWiadomosci.set(opcje.zrodlo || m, msg);
   return msg;
+}
+
+/** Ślad planu (K4): „Plan zdjęciowy · Taormina · 15 wrz 2027” z danych, które
+ *  dostał model – zamiast „Plan zdjęciowy – dane dla modelu: plan zdjęciowy”. */
+function podpisPlanu(tresc) {
+  const i = String(tresc || '').indexOf('{');
+  if (i < 0) return '';
+  let d;
+  try { d = JSON.parse(String(tresc).slice(i)); } catch { return ''; }
+  const dane = d && d.dane && typeof d.dane === 'object' ? d.dane : d;
+  if (!dane || typeof dane !== 'object' || dane.error) return '';
+  const jezyk = getLang() === 'en' ? 'en-GB' : 'pl-PL';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dane.kiedy || ''));
+  const dzien = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
+    .toLocaleDateString(jezyk, { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\.$/, '') : '';
+  return [t('ag.planLinia'), typeof dane.miejsce === 'string' && dane.miejsce ? dane.miejsce.slice(0, 80) : t('ag.planTutaj'), dzien]
+    .filter(Boolean).join(' · ');
 }
 
 /** Poprzednie wersje odpowiedzi (K6) – zwinięta linijka na górze karty:
@@ -4370,12 +4405,30 @@ document.addEventListener('click', (e) => {
 // podpowiedzi na ekranie startowym
 document.querySelectorAll('.suggestion').forEach((btn) => {
   btn.addEventListener('click', () => {
+    /* Wpisane zdanie wygrywa z podpowiedzią: dotknięcie (podpowiedzi są wtedy
+       ukryte przez CSS, ale palec trafia w ich miejsce) nadpisywało tekst
+       i od razu go wysyłało (agencja-ux, runda 11). */
+    if (el.input.value.trim()) { el.input.focus(); return; }
     el.input.value = t(btn.dataset.promptKey);
     autosizeInput();
     updateSendButton();
     sendMessage();
   });
 });
+
+/* K7: klawiatura ekranowa na iOS. Safari ignoruje `interactive-widget`, więc
+   okno się nie zmniejsza – o klawiaturze mówi dopiero visualViewport. Klasa
+   `klawiatura` na <html> włącza te same reguły układu co niskie okno
+   (style.css, powitanie przy klawiaturze). */
+function ustawKlaseKlawiatury() {
+  const vv = window.visualViewport;
+  const jest = Boolean(vv) && vv.height < window.innerHeight - 120;
+  document.documentElement.classList.toggle('klawiatura', jest);
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', ustawKlaseKlawiatury);
+  ustawKlaseKlawiatury();
+}
 
 // ----------------------------------------------------------------
 // Zmysły: mowa (TTS) – Piper przez senses, fallback: głos systemowy
