@@ -53,6 +53,8 @@
         „Tylko lokalnie” na scenie → zero żądań do chmury, 10 s ciszy → bez zespołu;
    P19. „Pytaj przed startem” na serwerze: wyłączone w przeglądarce idzie tam
         JEDNYM zapisem i znika z pamięci przeglądarki;
+   P21. „Darmowe modele”: wybór w bramce i ustawienie osoby docierają do
+        serwera jako zespol.tylkoDarmowe (skład na darmowych silnikach).
    P20. blok: postęp po składzie z „poprawka” słowem, „ok.” przy szacunku,
         stopka „koszt ról · cała odpowiedź” (z prowadzącym, C2), „5 ról”. */
 const path = require('path');
@@ -301,14 +303,55 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const bramka2 = await page.waitForSelector('.zespol[data-stan="propozycja"] .btn-primary', { timeout: 15000 }).catch(() => null);
     const b62 = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"]') || {}).innerText || '');
     ok(Boolean(bramka2) && /Claude/i.test(b62) && !/wyśle treść rozmowy do chmury/.test(b62), 'P6d. rola na innym płatnym silniku – skład do potwierdzenia (bez zdania o chmurze)');
-    const szac = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"] .zespol-szacunek') || {}).textContent || '');
-    ok(/^koszt (ok\. \d+,\d{2}|poniżej 0,01)\s?zł$/.test(szac.replace(/\u00a0/g, ' ')), `P17c. szacunek kosztu w bramce płatnego silnika – z etykietą „koszt” („${szac}”)`);
+    // Przy dwóch gotowych składach (K5) kwota stoi w polu „Proponowany”, bez segmentu – w stopce z etykietą „koszt”.
+    const szac = await page.evaluate(() => { const z = document.querySelector('.zespol[data-stan="propozycja"]');
+      const seg = z && z.querySelector('.zespol-wariant[data-wariant="proponowany"] span');
+      return seg ? `segment:${seg.textContent}` : ((z && z.querySelector('.zespol-szacunek')) || {}).textContent || ''; });
+    ok(/^(koszt |segment:)(ok\. \d+,\d{2}|poniżej 0,01)\s?zł$/.test(szac.replace(/\u00a0/g, ' ')), `P17c. szacunek kosztu w bramce płatnego silnika – „koszt” w stopce albo kwota w polu „Proponowany” („${szac}”)`);
     if (bramka2) await page.click('.zespol[data-stan="propozycja"] .btn-ghost');
     await koniecTury();
     const m62 = await wiadomosci();
     ok(m62.length === 2 && !m62.some((m) => m.narzedzie === 'zespol'), '„Bez agentów” – odpowiedź bez zespołu'.replace(/^/, 'P6e. '));
-    await page.evaluate(() => zmienUstawieniaZespolu({ potwierdzaj: false }));
     await page.evaluate(() => fetch('/api/zespol/ustawienia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: {} }) }));
+
+    // ---------------------------------------------------------------- P21
+    /* „Darmowe modele” (K5): wybór w bramce dociera do serwera jako
+       zespol.tylkoDarmowe, a ustawienie „darmowy” omija bramkę płatnego
+       silnika. Plan podstawiony – liczy się droga przez app.js, nie dobór. */
+    const plan21 = (skladDomyslny) => ({ sklad: {
+      role: [{ rola: 'programista', zadanie: 'kod', silnik: 'claude', model: 'claude-sonnet-5' }], szacunekZl: 0.31,
+      darmowe: { role: [{ rola: 'programista', zadanie: 'kod', silnik: 'cloud', model: 'qwen/qwen3-coder-480b-a35b-instruct' }], odrzucone: [], szacunekZl: 0 },
+      ...(skladDomyslny ? { skladDomyslny } : {}) } });
+    let domyslny21 = '';
+    await page.route('**/api/zespol/plan', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(plan21(domyslny21)) }));
+    const zespol21 = () => (zadaniaCzatu.find((z) => z.zespol) || {}).zespol || null;
+    await nowaRozmowa();
+    zadaniaCzatu.length = 0;
+    await btn.click();
+    await wyslij('plan-kod napisz funkcję za darmo');
+    const seg21 = await page.waitForSelector('.zespol[data-stan="propozycja"] .zespol-wariant[data-wariant="darmowe"]', { timeout: 15000 }).catch(() => null);
+    if (seg21) await seg21.click();
+    const uwaga21 = await page.evaluate(() => (document.querySelector('.zespol[data-stan="propozycja"] .zespol-uwaga') || {}).textContent || '');
+    if (seg21) await page.click('.zespol[data-stan="propozycja"] .btn-primary');
+    await koniecTury();
+    const z21a = zespol21();
+    ok(Boolean(seg21) && /gorsz|słabsz/i.test(uwaga21) && z21a && z21a.tylkoDarmowe === true && z21a.sklad[0].silnik === 'cloud',
+      `P21a. bramka: „Darmowe modele” + Start → skład darmowy z tylkoDarmowe do serwera, z uwagą o jakości (${JSON.stringify(z21a).slice(0, 200)}; „${uwaga21.slice(0, 80)}”)`);
+    domyslny21 = 'darmowy';
+    await nowaRozmowa();
+    zadaniaCzatu.length = 0;
+    await btn.click();
+    await wyslij('plan-kod napisz funkcję domyślnie za darmo');
+    // Bramka (błąd) albo koniec tury; bramkę zamyka „Bez agentów”, żeby zestaw szedł dalej.
+    await page.waitForFunction(() => !isGenerating || document.querySelector('.zespol[data-stan="propozycja"]'), null, { timeout: 60000 });
+    const bramka21b = await page.locator('.zespol[data-stan="propozycja"]').count();
+    if (bramka21b) await page.click('.zespol[data-stan="propozycja"] .btn-ghost');
+    await koniecTury();
+    const z21b = zespol21();
+    ok(z21b && z21b.tylkoDarmowe === true && z21b.sklad[0].silnik === 'cloud' && bramka21b === 0,
+      `P21b. ustawienie „Darmowe modele”: skład darmowy bez bramki płatnego silnika, z tylkoDarmowe (${JSON.stringify(z21b).slice(0, 200)})`);
+    await page.unroute('**/api/zespol/plan');
+    await page.evaluate(() => zmienUstawieniaZespolu({ potwierdzaj: false }));
 
     // ---------------------------------------------------------------- P12, P13
     await nowaRozmowa();
@@ -671,9 +714,11 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     const g18 = await gp.evaluate(() => ({ mowa: window.__mowa.join(' '), przyciski: [...document.querySelectorAll('#voice-zgoda button')].map((x) => x.textContent),
       kropki: document.querySelectorAll('#voice-overlay .voice-zespol .vz-rola').length }));
     const przed18 = doModeli(await stanAtrapy()).filter((x) => x.rodzaj === 'rola');
-    ok(jest18 && /Zespół chce wysłać rozmowę do chmury: NVIDIA\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów” – zgoda obowiązuje do końca tej rozmowy\.$/.test(g18.mowa)
+    ok(jest18 && /Zespół chce wysłać rozmowę do chmury: (NVIDIA|OpenAI|Claude)(, (NVIDIA|OpenAI|Claude))*\. Powiedz „tak”, „tylko lokalnie” albo „bez agentów” – zgoda obowiązuje do końca tej rozmowy\.$/.test(g18.mowa)
       && g18.przyciski.join('|') === 'Tak|Tylko lokalnie|Bez agentów' && g18.kropki > 0,
       `P18a. tryb głosowy: Cosmos mówi pytanie o chmurę (co wychodzi i na jak długo), na scenie trzy przyciski i kropki ról (${JSON.stringify(g18).slice(0, 400)})`);
+    /* Którą chmurę dobierze serwer (NVIDIA albo płatną z lepszą polszczyzną – runda 10),
+       nie jest przedmiotem P18: liczy się, że pytanie ją nazywa, a role ruszają dopiero po „tak”. */
     // Serwer czeka na zgodę, zanim ruszy JAKĄKOLWIEK rolę (Z8) – lokalne też nie zajmują GPU na darmo.
     ok(przed18.length === 0, `P18b. zanim padnie odpowiedź, żadna rola nie rusza – ani w chmurze, ani lokalnie (${przed18.map((x) => x.silnik).join(',') || 0})`);
     // Echo ogona pytania z głośnika tuż po końcu mowy – nie rozstrzyga i nie liczy się jako niejasne.
@@ -686,7 +731,7 @@ const doModeli = (z) => z.filter((x) => x.rodzaj !== 'szukanie');
     await gp.evaluate(() => __powiedz('Tak, można wysłać do chmury'));
     const r18c = await po18();
     ok(echo18.czeka && echo18.mowa === mowaPrzed18, `P18c. ogon pytania z głośnika (echo) nie rozstrzyga zgody i nie wywołuje „nie rozumiem” (czeka: ${echo18.czeka}, wypowiedzi: ${mowaPrzed18} → ${echo18.mowa})`);
-    ok(r18c.chmura && r18c.m.some((x) => /^zespol:.*cloud/.test(x)) && r18c.m[r18c.m.length - 1] === 'assistant'
+    ok(r18c.chmura && r18c.m.some((x) => /^zespol:.*(cloud|openai|claude)/.test(x)) && r18c.m[r18c.m.length - 1] === 'assistant'
       && r18c.m.filter((x) => x.startsWith('zespol')).length === 1,
       `P18d. „Tak, można wysłać do chmury” mikrofonem (słowa z pytania) → role w chmurze, jedne notatki, jedna odpowiedź (${r18c.m.join(',')})`);
     for (const [odp, opis] of [['Tak, ale tylko lokalnie', 'P18e. „Tak, ale tylko lokalnie” mikrofonem (75% słów z pytania – nie echo)'],

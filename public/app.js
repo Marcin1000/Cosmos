@@ -2930,7 +2930,10 @@ function zespolDoWyslania(conv, prosba) {
   const baza = { modele: modeleZakladek(), zgoda: { chmura: zgodaChmury(conv) || Boolean(prosba && prosba.zgoda) },
     // Fotograf: miejsce i czas z planu, gdy skład układa osoba (planista wtedy nie rusza).
     ...(prosba && prosba.miejsce ? { miejsce: prosba.miejsce } : {}), ...(prosba && prosba.kiedy ? { kiedy: prosba.kiedy } : {}) };
-  if (prosba && Array.isArray(prosba.sklad) && prosba.sklad.length) return { ...baza, sklad: prosba.sklad, uruchom: true };
+  // „Darmowe modele” (K5): serwer dobiera rolom z Auto tylko darmowe silniki.
+  if (prosba && Array.isArray(prosba.sklad) && prosba.sklad.length) {
+    return { ...baza, sklad: prosba.sklad, uruchom: true, ...(prosba.tylkoDarmowe ? { tylkoDarmowe: true } : {}) };
+  }
   if (prosba && prosba.uruchom) return { ...baza, uruchom: true };
   /* Bez prośby – serwer sam decyduje (bramka 0 ms), czy pytanie warte jest
      zespołu: „Proponuj”, „Uruchamiaj sam”, a w każdym trybie poza wyłączonym
@@ -3096,19 +3099,25 @@ const platnyInny = (role, prowadzacy) => potwierdzajZespolu()
 
 /**
  * Skład do przejrzenia (bramka zgody, edycja) w miejscu elementu `zamiast`.
- * naWynik({sklad, zgoda}) – Start albo „Tylko lokalnie”; naWynik(null) – „Bez agentów”.
+ * naWynik({sklad, zgoda, tylkoDarmowe?}) – Start albo „Tylko lokalnie”; naWynik(null) – „Bez agentów”.
+ * `darmowe`, `skladDomyslny`, `kandydaci`, `szacunekProwadzacyZl` – z planu (K5), `wariant` – wymuszony start.
  */
-function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, szacunekZl, miejsce = '', kiedy = '', naWynik }) {
+function pokazPropozycje(zamiast, { conv, role, prowadzacy, lokalnie = null, szacunekZl, miejsce = '', kiedy = '', naWynik,
+  darmowe = null, skladDomyslny = '', kandydaci = null, szacunekProwadzacyZl, wariant = '' }) {
   const mk = { ...(miejsce ? { miejsce } : {}), ...(kiedy ? { kiedy } : {}) };
   const pytajOZgode = prowadzacy.silnik === 'local' && !zgodaChmury(conv);
   const lokalnieDomyslnie = pytajOZgode && serverConfig.endpoints && serverConfig.endpoints.local
     ? role.map((r) => ({ ...r, silnik: 'local', model: r.silnik === 'local' ? r.model : prowadzacy.model, auto: false })) : null;
   const p = zespolWidok.propozycja({
     role, prowadzacy, pytajOZgode, lokalnie: lokalnie || lokalnieDomyslnie, szacunekZl,
+    darmowe, skladDomyslny, kandydaci, szacunekProwadzacyZl, wariant,
     maxRol: cfgZespolu().maxRol || 3, katalog: katalogRol(conv),
-    otworzEdytor: (r, btn, gotowe) => otworzEdytorRoli(r, btn, gotowe),
-    naStart: ({ role: r, zgoda }) => { if (zgoda) ustawZgode(conv); naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda, ...mk }); },
-    naTylkoLokalnie: (r) => naWynik({ sklad: ZESPOL.skladDoWyslania(r), ...mk }),
+    otworzEdytor: (r, btn, gotowe, dodatki) => otworzEdytorRoli(r, btn, gotowe, { dodatki }),
+    naStart: ({ role: r, zgoda, tylkoDarmowe }) => {
+      if (zgoda) ustawZgode(conv);
+      naWynik({ sklad: ZESPOL.skladDoWyslania(r), zgoda, ...(tylkoDarmowe ? { tylkoDarmowe: true } : {}), ...mk });
+    },
+    naTylkoLokalnie: (r, { tylkoDarmowe } = {}) => naWynik({ sklad: ZESPOL.skladDoWyslania(r), ...(tylkoDarmowe ? { tylkoDarmowe: true } : {}), ...mk }),
     naBez: () => naWynik(null),
   });
   zamiast.replaceWith(p.el);
@@ -3170,6 +3179,10 @@ async function bramkaZespolu(conv) {
     // Planu nie ma – serwer ułoży skład sam, w biegu.
     if (!role.length) return { uruchom: true };
     const zaZgoda = ZESPOL.wymagaZgodyZ(plan.wymagaZgody) ? ZESPOL.skladZaZgoda(role) : null;
+    /* Skład startowy bez bramki: przy ustawieniu „Darmowe modele” – darmowy (K5).
+       Darmowy wariant idzie na darmowe silniki, więc nie wymaga potwierdzenia płatnego. */
+    const start = ZESPOL.skladStartowy(plan.sklad);
+    const zDarmowe = start.tylkoDarmowe ? { tylkoDarmowe: true } : {};
     // Fotograf w składzie: miejsce i czas z planu idą razem ze składem.
     const mkPlanu = { ...(plan.sklad.miejsce ? { miejsce: String(plan.sklad.miejsce) } : {}), ...(plan.sklad.kiedy ? { kiedy: String(plan.sklad.kiedy) } : {}) };
     const pytajOZgode = Boolean(zaZgoda && ZESPOL.silnikiChmury(zaZgoda).length);
@@ -3177,20 +3190,24 @@ async function bramkaZespolu(conv) {
        idzie głosem (i trzema przyciskami na scenie). O płatny silnik głos nie
        pyta osobno: o zespół poproszono tu wprost, a koszt stoi w bloku. */
     if (voiceMode) {
-      if (!pytajOZgode) return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
+      if (!pytajOZgode) return { sklad: ZESPOL.skladDoWyslania(start.role), ...zDarmowe, ...mkPlanu };
       const w = await pytajOZgodeGlosem(ZESPOL.silnikiChmury(zaZgoda), zaZgoda);
       if (ac.signal.aborted || turaPrzerwana) return 'stop';
       if (w === 'tak') { ustawZgode(conv); return { sklad: ZESPOL.skladDoWyslania(zaZgoda), zgoda: true, ...mkPlanu }; }
       if (w === 'lokalnie') return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
       return null;
     }
-    if (!pytajOZgode && !platnyInny(role, prowadzacy)) return { sklad: ZESPOL.skladDoWyslania(role), ...mkPlanu };
+    if (!pytajOZgode && (start.wariant === 'darmowe' || !platnyInny(role, prowadzacy))) {
+      return { sklad: ZESPOL.skladDoWyslania(start.role), ...zDarmowe, ...mkPlanu };
+    }
     return await new Promise((ok) => {
       ac.signal.addEventListener('abort', () => ok('stop'), { once: true });
       pokazPropozycje(dobieranie.el, {
         conv, prowadzacy, role: zaZgoda || role, lokalnie: pytajOZgode ? role : null,
         // Szacunek planu dotyczy składu z planu; za zgodą (inne silniki) liczy się z ról.
         szacunekZl: zaZgoda ? undefined : plan.sklad.szacunekZl, ...mkPlanu,
+        darmowe: plan.sklad.darmowe || null, skladDomyslny: plan.sklad.skladDomyslny || '',
+        kandydaci: plan.sklad.kandydaci || null, szacunekProwadzacyZl: plan.sklad.szacunekProwadzacyZl,
         naWynik: (w) => ok(w),
       });
       scrollToBottom();
@@ -3318,21 +3335,28 @@ function dolozPropozycjeZespolu(conv) {
   const linijka = zespolWidok.sugestia(p, {
     naUruchom: () => uruchomPropozycje(conv, p, prowadzacy, false, linijka),
     naZmien: () => uruchomPropozycje(conv, p, prowadzacy, true, linijka),
+    naUruchomDarmowo: () => uruchomPropozycje(conv, p, prowadzacy, false, linijka, 'darmowe'),
     naNieTeraz: () => { dopiszDoSesji('cosmos.zespol.cisza', conv.id); propozycjaZespolu = null; linijka.remove(); el.input.focus(); },
   });
   kolumna.insertBefore(linijka, kolumna.querySelector('.msg-actions'));
 }
 
 /** „Uruchom” = regeneracja TEJ odpowiedzi zespołem; „Zmień” – najpierw edycja składu. */
-function uruchomPropozycje(conv, p, prowadzacy, edycja, linijka) {
+function uruchomPropozycje(conv, p, prowadzacy, edycja, linijka, wariant = '') {
   if (isGenerating) return;
-  const chmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && ZESPOL.silnikiChmury(p.role).length > 0;
-  if (!edycja && !chmura && !platnyInny(p.role, prowadzacy)) {
-    zespolOdPytania(conv, { sklad: ZESPOL.skladDoWyslania(p.role), ...(p.miejsce ? { miejsce: p.miejsce } : {}), ...(p.kiedy ? { kiedy: p.kiedy } : {}) });
+  // Skład startowy jak w linijce (ustawienie „Darmowe modele”) albo wymuszony przez „Za 0 zł”.
+  const start = wariant === 'darmowe' && p.darmowe
+    ? { wariant: 'darmowe', role: ZESPOL.wariantDarmowy(p.darmowe).role, tylkoDarmowe: true } : ZESPOL.skladStartowy(p);
+  const chmura = prowadzacy.silnik === 'local' && !zgodaChmury(conv) && ZESPOL.silnikiChmury(start.role).length > 0;
+  if (!edycja && !chmura && (start.wariant === 'darmowe' || !platnyInny(start.role, prowadzacy))) {
+    zespolOdPytania(conv, { sklad: ZESPOL.skladDoWyslania(start.role), ...(start.tylkoDarmowe ? { tylkoDarmowe: true } : {}),
+      ...(p.miejsce ? { miejsce: p.miejsce } : {}), ...(p.kiedy ? { kiedy: p.kiedy } : {}) });
     return;
   }
   pokazPropozycje(linijka, {
     conv, prowadzacy, role: p.role.map((r) => ({ ...r })), szacunekZl: p.szacunekZl, miejsce: p.miejsce, kiedy: p.kiedy,
+    darmowe: p.darmowe || null, skladDomyslny: p.skladDomyslny || '', kandydaci: p.kandydaci || null,
+    szacunekProwadzacyZl: p.szacunekProwadzacyZl, wariant,
     naWynik: (w) => (w ? zespolOdPytania(conv, w) : renderMessages({ przewin: false })),
   });
 }
@@ -3356,13 +3380,15 @@ function grupyModeli(r) {
 const bezDostepuSilniki = () => (konta_.ja()?.rola === 'czlonek'
   ? SILNIKI_Z_MODELEM.filter((s) => !(serverConfig.endpoints && serverConfig.endpoints[s])) : []);
 
-function otworzEdytorRoli(r, btn, gotowe, { zUsun = true, wybrany } = {}) {
+function otworzEdytorRoli(r, btn, gotowe, { zUsun = true, wybrany, dodatki = null } = {}) {
   zespolWidok.edytor({
     tytul: zespolWidok.nazwaRoli(r),
     grupy: grupyModeli(r),
     wybrany: wybrany !== undefined ? wybrany : (r.auto || !r.model ? null : { silnik: r.silnik, model: r.model }),
     autoPodpis: r.model ? t('ag.re.autoTeraz', { model: `${nazwaSilnika(r.silnik)} ${String(r.model).split('/').pop()}` }) : '',
     bezDostepu: bezDostepuSilniki(), zUsun, kotwica: btn, gotowe,
+    // K5: kandydaci z planu, model „polecany” i Auto = „najlepszy darmowy” w składzie darmowym.
+    ...(dodatki ? { kandydaci: dodatki.kandydaci, polecany: dodatki.polecany, trybDarmowy: dodatki.trybDarmowy } : {}),
   });
 }
 
