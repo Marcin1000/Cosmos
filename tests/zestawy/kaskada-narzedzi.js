@@ -43,7 +43,7 @@ const WZORCE = {
 
 /** Świeży zestaw narzędzi z atrapami. Każdy przypadek dostaje własny,
  *  żeby jeden nie widział śladów po drugim. */
-function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null, znakSilnika = null, metaOdpowiedzi = null } = {}) {
+function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null, znakSilnika = null, metaOdpowiedzi = null, jezyk = null } = {}) {
   const dziennik = { doModelu: [], wiadomosci: [], adresy: [], glos: [], odswiezenia: 0 };
   const conv = { messages: [] };
 
@@ -113,6 +113,7 @@ function stanowisko({ odpowiedzi = {}, opoznienieMs = 0, sygnal = null, znakSiln
     znakSilnika,
     metaOdpowiedzi,
     natywneSzukanie: protokol.natywneSzukanie,
+    ...(jezyk ? { jezyk: () => jezyk } : {}),
   });
 
   const poNazwie = Object.fromEntries(narzedzia.map((n) => [n.nazwa, n]));
@@ -873,6 +874,46 @@ async function uruchom(st, nazwa, acc, stan) {
       console.log(`18g. kart tekstu: zapowiedź ${asystent(st).length}, treść ${asystent(st2).length}`);
       if (asystent(st).length) fail.push('18g. zapowiedź „potrzebuję aktualnych informacji” stoi jako osobna karta nad paskiem „Szukam…”');
       if (asystent(st2).length !== 1) fail.push('18g. tekst z treścią przed wyszukaniem zniknął');
+    }
+    /* h) Runda 12 (agencja-rozmowa, eksport 6): badacz zespołu już szukał, a prowadzący
+       dopisał INNE zapytanie, po angielsku. Druga runda kończyła się „Odpowiedz teraz…
+       na podstawie tych wyników” i gubiła zasady zespołu. Teraz bez wyszukania. */
+    {
+      const zNotatkami = (st) => st.conv.messages.push({ role: 'user', content: 'Plan Sycylii ze zdjęciami' },
+        { role: 'user', search: true, narzedzie: 'zespol', content: 'NOTATKI ZESPOŁU…', zespol: { v: 1, szukaj: 'Sycylia wrzesień pogoda' } });
+      const st = stanowisko();
+      zNotatkami(st);
+      const w = await uruchom(st, 'szukaj', `${ODPOWIEDZ}\n[SZUKAJ: Sicily September average temperature sunshine hours]`, stanT());
+      const szukano = st.dziennik.doModelu.some((x) => /WYNIKI DLA/.test(x.tresc));
+      const st2 = stanowisko();
+      zNotatkami(st2);
+      const w2 = await uruchom(st2, 'szukaj', '[SZUKAJ: Sicily September weather]', stanT());
+      const szukano2 = st2.dziennik.doModelu.some((x) => /WYNIKI DLA/.test(x.tresc));
+      // Następna tura (nowe pytanie człowieka po notatkach) – szukanie działa jak zwykle.
+      const st3 = stanowisko();
+      zNotatkami(st3);
+      st3.conv.messages.push({ role: 'assistant', content: 'Plan…' }, { role: 'user', content: 'A jaka pogoda w Katanii?' });
+      await uruchom(st3, 'szukaj', '[SZUKAJ: Katania pogoda]', stanT());
+      const szukano3 = st3.dziennik.doModelu.some((x) => /WYNIKI DLA/.test(x.tresc));
+      console.log(`18h. [SZUKAJ:] po badaczu: z odpowiedzią → ${w && w.akcja} (szukano: ${szukano}); sam znacznik → ${w2 && w2.akcja}, `
+        + `sterowanie: ${st2.dziennik.doModelu.map((x) => x.sterowanie).join()} (szukano: ${szukano2}); następna tura szuka: ${szukano3}`);
+      if (!w || w.akcja !== 'koniec' || szukano) fail.push('18h. [SZUKAJ:] prowadzącego po badaczu (gotowa odpowiedź) szuka drugi raz zamiast zakończyć turę');
+      if (!w2 || w2.akcja !== 'dalej' || szukano2 || !st2.dziennik.doModelu.every((x) => x.sterowanie)) fail.push('18h. sam [SZUKAJ:] po badaczu szuka drugi raz zamiast polecenia „wyniki są w notatkach”');
+      if (!szukano3) fail.push('18h. po turze zespołu z badaczem następna tura nie może już szukać');
+    }
+    /* i) Runda 12: wyniki angielskie – ostatnie słowo przed odpowiedzią przypomina o polskich
+       nazwach miejsc; w angielskim interfejsie – nie. */
+    {
+      const pl = stanowisko({ jezyk: 'pl' });
+      await uruchom(pl, 'szukaj', '[SZUKAJ: Syrakuzy zabytki]', stanT());
+      const en = stanowisko({ jezyk: 'en' });
+      await uruchom(en, 'szukaj', '[SZUKAJ: Syracuse sights]', stanT());
+      const ostPl = (pl.dziennik.doModelu[0] || {}).tresc || '';
+      const ostEn = (en.dziennik.doModelu[0] || {}).tresc || '';
+      const okPl = /po polsku[^\n]*$/.test(ostPl) && /Syrakuzy/.test(ostPl.split('\n').pop());
+      console.log(`18i. przypomnienie o polskich nazwach na końcu wyników: pl ${okPl}, en ${/po polsku/.test(ostEn)}`);
+      if (!okPl) fail.push('18i. wyniki wyszukiwania po polsku bez przypomnienia o polskich nazwach miejsc na końcu');
+      if (/po polsku/.test(ostEn)) fail.push('18i. angielska rozmowa dostaje przypomnienie o polskich nazwach');
     }
   }
 

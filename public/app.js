@@ -272,7 +272,7 @@ function ponowNiezapisane() {
   }
 }
 // Najpierw powrót po odpowiedź porzuconą bez sieci, dopiero potem zapis kopii z przeglądarki.
-window.addEventListener('online', () => { wznowPorzucony().finally(ponowNiezapisane); });
+window.addEventListener('online', () => { wrocPoOdpowiedz(); });
 $('zapis-retry')?.addEventListener('click', ponowNiezapisane);
 if (niezapisane().size) {
   const pasek = $('zapis-bar');
@@ -283,11 +283,11 @@ if (niezapisane().size) {
 /* Powrót do karty (telefon wyjęty z kieszeni): świeża wersja aktywnej
    rozmowy, zanim ktoś zacznie pisać do nieaktualnej. */
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && !isGenerating && await wznowPorzucony()) return;
+  if (document.visibilityState === 'visible' && !isGenerating && await wrocPoOdpowiedz()) return;
   if (document.visibilityState !== 'visible' || !activeId || isGenerating) return;
   const id = activeId;
   try {
-    const r = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`);
+    const r = serwerOdpowiedzial(await fetch(`/api/conversations?id=${encodeURIComponent(id)}`));
     if (!r.ok || activeId !== id || isGenerating) return;
     const zSerwera = naprawStareRuchyNarzedzi(await r.json());
     if ((zSerwera.updatedAt || 0) <= (wersjaNaSerwerze.get(id) || 0)) return;
@@ -760,6 +760,9 @@ const {
 } = utworzWidoki({
   t, readJsonSafe, saveConversations, renderMessages,
   msgPhotos, msgDalej, PORCJA_ARCHIWUM,
+  /* Porażka miniatury zapamiętana w rozmowie – po odświeżeniu i na drugim
+     urządzeniu kafel już nie wraca. W trakcie tury zapisze ją koniec tury. */
+  zdjecieNiewczytane: () => { if (!isGenerating && activeConversation) saveConversationsSoon(1500); },
 });
 
 /* Nić rozmowy: każda odpowiedź pamięta, który silnik ją napisał, i nosi jego
@@ -810,7 +813,11 @@ const znakSilnika = () => znakTury || ({ silnik: endpoint, model: currentModel()
    wraca na swoje miejsce, a grupa, która przyszła, podmienia tylko swój pasek. */
 const elementyWiadomosci = new WeakMap();   // wiadomość → element .msg na ekranie
 const paskiPamiec = new WeakMap();          // wiadomość → Map(sekcja → { klucz, el })
-const kluczPaska = (grupy) => grupy.map((g) => `${g.q}|${g.stan}|${(g.photos || []).length}|${((g.photos || [])[0] || {}).thumb || ''}`).join('§');
+// Zdjęcia, które się nie wczytały (`niewczytane`), nie liczą się – pasek bez nich to inny pasek.
+const kluczPaska = (grupy) => grupy.map((g) => {
+  const fotki = (g.photos || []).filter((p) => p && !p.niewczytane);
+  return `${g.q}|${g.stan}|${fotki.length}|${(fotki[0] || {}).thumb || ''}`;
+}).join('§');
 /** Stary zapis: zdjęcia z sieci jako osobna wiadomość { text: zapytanie, photos } (bez `dalej` – to archiwum). */
 const zdjeciaZSieci = (m) => Boolean(m && m.role === 'assistant' && !m.search && m.content && typeof m.content === 'object'
   && Array.isArray(m.content.photos) && !m.content.dalej && !m.content.szukam && !m.content.run);
@@ -1011,7 +1018,21 @@ function messageElement(m, idx = -1, opcje = {}) {
          zawsze skończy się tak samo – droga prowadzi do Ustawień. Limit budżetu
          od właściciela zmienia tylko on – wtedy zostaje sama „Chmura”. */
       if (m.budzet === 'wlasciciel') ponow.hidden = true;
-      if (m.trwaly) {
+      if (m.porzucony && m.bieg) {
+        /* Bieg porzucony bez sieci: odpowiedź jest (albo zaraz będzie) na
+           serwerze. „Ponów” pytało model od nowa – druga płatna tura za coś,
+           co już zapłacone (it-plynnosc, runda 12). */
+        ponow.className = 'msg-action-btn msg-ponow msg-pobierz ik ik-odswiez';
+        ponow.textContent = t('chat.pobierzOdpowiedz');
+        ponow.title = t('chat.pobierzOdpowiedzTytul');
+        ponow.addEventListener('click', async () => {
+          ponow.disabled = true;
+          wrocOd = 0;                 // ręczna prośba – pełne okno ponowień od nowa
+          wrocProba = 0;
+          const wrocilo = await wrocPoOdpowiedz();
+          if (!wrocilo && ponow.isConnected) ponow.disabled = false;
+        });
+      } else if (m.trwaly) {
         ponow.className = 'msg-action-btn msg-ponow ik ik-trybik';
         // Budżet w złotówkach ustawia się w Ustawienia → Agenci, nie w silnikach.
         ponow.textContent = t(m.budzet ? 'chat.doBudzetu' : 'chat.doUstawien');
@@ -1784,7 +1805,7 @@ function ensureConversation(firstUserText) {
 
 async function loadConversations() {
   try {
-    const res = await fetch('/api/conversations');
+    const res = serwerOdpowiedzial(await fetch('/api/conversations'));
     const data = await res.json();
     conversations = data.conversations || [];
     cacheConvIndex();
@@ -2639,6 +2660,7 @@ async function streamOnce(conv, opcje = {}) {
         }),
         signal: abortController.signal,
       });
+    serwerOdpowiedzial(res);
 
     if (!res.ok) {
       let errText = t('httpErr', { status: res.status });
@@ -2800,8 +2822,8 @@ async function streamOnce(conv, opcje = {}) {
         const od = (biegBiezacy?.ostatnie ?? -1) + 1;
         let wrot;
         try {
-          wrot = await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
-            { signal: abortController.signal });
+          wrot = serwerOdpowiedzial(await fetch(`/api/chat/bieg?id=${encodeURIComponent(biegId)}&od=${od}`,
+            { signal: abortController.signal }));
         } catch (err) {
           if (abortController.signal.aborted) throw err;
           continue;                  // sieci nadal nie ma – próbujemy dalej
@@ -2873,6 +2895,36 @@ async function streamOnce(conv, opcje = {}) {
   }
 }
 
+/* Prośba o zdjęcia w pytaniu tury (ostatnia wypowiedź człowieka, nie wynik narzędzia). */
+const PROSBA_O_ZDJECIA = /(?<!\p{L})(zdj[eę]ci|zdjęć|fotk|fotografi[ei]|foto(?!graf)|photos?|pictures?|images?)/iu;
+function prosiOZdjecia(conv) {
+  const m = [...((conv && conv.messages) || [])].reverse().find((x) => x.role === 'user' && !x.search);
+  if (!m) return false;
+  const tekst = typeof m.content === 'string' ? m.content : (m.content && m.content.text) || '';
+  return PROSBA_O_ZDJECIA.test(tekst);
+}
+/* Nagłówek dnia planu: „### Dzień 3 · Taormina · odpoczynek”, „## Day 2: Etna”.
+   Nazwa miejsca to pierwszy człon po numerze; człon, który jest rodzajem dnia
+   (odpoczynek, przyjazd), miejscem nie jest. */
+const NAGLOWEK_DNIA = /^#{1,4}\s*(?:\*\*)?\s*(?:dzie[ńn]|day)\s*\d+\s*(?:\*\*)?\s*[·•:–\-|,.]\s*(.+)$/iu;
+const NIE_MIEJSCE = /^(odpoczyn\p{L}*|relaks\p{L}*|przyjazd|wyjazd|powr[óo]t|przelot|podr[óo]ż\p{L}*|dzie[ńn] wolny|zwiedzanie|pla[żz]owanie|rest|relax\p{L}*|arrival|departure|travel\p{L}*|free day|sightseeing)$/iu;
+function miejscaZNaglowkowDni(tekst) {
+  const nazwy = [];
+  const znane = new Set();
+  for (const linia of String(tekst || '').split('\n')) {
+    const m = linia.trim().match(NAGLOWEK_DNIA);
+    if (!m) continue;
+    const czlony = m[1].replace(/\*\*|__/g, '').split(/\s+[·•|–-]\s+|\s*[·•|(]\s*|\s*,\s+/)
+      .map((x) => x.replace(/[.:;)]+$/, '').trim()).filter(Boolean);
+    const nazwa = czlony.find((x) => !NIE_MIEJSCE.test(x) && x.length >= 2 && x.length <= 60);
+    if (!nazwa || znane.has(bezOgonkowKlient(nazwa))) continue;
+    znane.add(bezOgonkowKlient(nazwa));
+    nazwy.push(nazwa);
+    if (nazwy.length >= 8) break;
+  }
+  return nazwy;
+}
+
 /* Powrót do odpowiedzi, która powstawała, gdy strona była zamknięta.
    Wywoływane raz, przy starcie. Nie pyta o nic modelu – podpina się do tego,
    co serwer już policzył albo właśnie liczy. */
@@ -2883,10 +2935,10 @@ async function wznowBieg() {
 
   let dane;
   try {
-    const r = await fetch('/api/chat/biegi');
-    if (!r.ok) return;
+    const r = serwerOdpowiedzial(await fetch('/api/chat/biegi'));
+    if (!r.ok) return 'siec';
     dane = await r.json();
-  } catch { return; }                 // serwer offline – wznowienie poczeka
+  } catch { return 'siec'; }          // serwer offline – wrocPoOdpowiedz spróbuje znowu
 
   const b = (dane.biegi || []).find((x) => x.id === zapis.id);
   /* Bieg skończył się, gdy nas nie było, a serwer zapisał już odpowiedź do
@@ -2914,6 +2966,7 @@ async function wznowBieg() {
      wznowieniu bez przeładowania (zerwane Wi-Fi), gdzie początek już jest
      narysowany, i tam siedzi w pamięci, nie w localStorage. */
   await runGeneration(cel, { bieg: zapis.id, od: 0 });
+  return true;
 }
 
 /** Odpowiedź porzucona po długiej przerwie w sieci (karta została z urywkiem
@@ -2928,16 +2981,22 @@ async function wznowPorzucony() {
   let zapis = null;
   try { zapis = JSON.parse(localStorage.getItem(BIEG_KLUCZ) || 'null'); } catch { /* śmieci */ }
   const conv = activeConversation;
+  /* Bez zapisu w pamięci przeglądarki (inna karta, wyczyszczona pamięć) bieg
+     zna sama karta błędu – „Pobierz odpowiedź” ma działać i wtedy. */
+  if (conv && (!zapis || !zapis.id || zapis.convId !== conv.id)) {
+    const karta = [...conv.messages].reverse().find((m) => m.error && m.porzucony && m.bieg);
+    if (karta) zapis = { id: karta.bieg, convId: conv.id };
+  }
   if (!zapis || !zapis.id || !conv || conv.id !== zapis.convId) return false;
   if (!conv.messages.some((m) => m.bieg === zapis.id && m.error)) return false;
   wznawiamPorzucony = true;
   try {
     let dane;
     try {
-      const r = await fetch('/api/chat/biegi');
-      if (!r.ok) return false;
+      const r = serwerOdpowiedzial(await fetch('/api/chat/biegi'));
+      if (!r.ok) return 'siec';
       dane = await r.json();
-    } catch { return false; }                // sieci jeszcze nie ma
+    } catch { return 'siec'; }               // sieci jeszcze nie ma – wrocPoOdpowiedz ponowi
     if (isGenerating || activeConversation !== conv) return false;
     const b = (dane.biegi || []).find((x) => x.id === zapis.id);
     if (b && (b.trwa || !b.zapisany)) {
@@ -2949,7 +3008,7 @@ async function wznowPorzucony() {
     zapamietajBieg(null);
     // Zapisany przez serwer: świeża rozmowa z serwera, scalona – pełna odpowiedź wypiera urywek.
     try {
-      const r = await fetch(`/api/conversations?id=${encodeURIComponent(conv.id)}`);
+      const r = serwerOdpowiedzial(await fetch(`/api/conversations?id=${encodeURIComponent(conv.id)}`));
       if (r.ok && activeConversation === conv && !isGenerating) {
         const zSerwera = naprawStareRuchyNarzedzi(await r.json());
         wersjaNaSerwerze.set(conv.id, zSerwera.updatedAt);
@@ -2958,9 +3017,61 @@ async function wznowPorzucony() {
         renderMessages({ przewin: sledzeDol });
         return true;
       }
-    } catch { /* offline */ }
+      if (!r.ok) return 'siec';
+    } catch { return 'siec'; }
     return false;
   } finally { wznawiamPorzucony = false; }
+}
+
+/** Powrót po odpowiedź, która czeka na serwerze (it-plynnosc, runda 12).
+ *
+ *  Jedna droga dla wszystkich okazji: start strony, powrót do karty
+ *  (visibilitychange, pageshow), 'online' i serwer znów osiągalny. Dawniej
+ *  każda z nich robiła JEDNO zapytanie, a telefon budzi stronę chwilę przed
+ *  siecią – zapytanie padało i karta zostawała z „wrócę po nią” do następnej
+ *  zmiany okna, choć pełna odpowiedź leżała gotowa na serwerze. Teraz porażka
+ *  sieci ponawia się po 1, 2, 4, 8 s… przez około 30 s.
+ *
+ *  Kolejność: najpierw odpowiedź porzucona w tej karcie (urywek z kartą błędu),
+ *  potem bieg sprzed przeładowania, na końcu zapis kopii z przeglądarki – kopia
+ *  z urywkiem nie może wyprzedzić pełnej odpowiedzi. Zwraca true, gdy coś wróciło. */
+const WROC_PONOW_MS = [1000, 2000, 4000, 8000, 15000];
+const WROC_OKNO_MS = 30000;
+let wrocTimer = null;
+let wrocOd = 0;
+let wrocProba = 0;
+let wracam = false;
+let biegPoStarcie = true;
+const biegWOtwartej = () => {
+  try { const z = JSON.parse(localStorage.getItem(BIEG_KLUCZ) || 'null'); return Boolean(z && z.id && z.convId && z.convId === activeId); } catch { return false; }
+};
+async function wrocPoOdpowiedz() {
+  clearTimeout(wrocTimer);
+  wrocTimer = null;
+  if (wracam || isGenerating) return false;
+  wracam = true;
+  let wynik = false;
+  try {
+    wynik = await wznowPorzucony();
+    /* Bieg sprzed przeładowania – przy starcie zawsze, później tylko w otwartej
+       rozmowie: powrót do karty nie może przerzucić kogoś do innej rozmowy. */
+    if (wynik !== true && wynik !== 'siec' && (biegPoStarcie || biegWOtwartej())) {
+      wynik = (await wznowBieg()) || false;
+      if (wynik !== 'siec') biegPoStarcie = false;
+    }
+  } catch { wynik = 'siec'; } finally { wracam = false; }
+  if (wynik === 'siec') {
+    if (!wrocOd) wrocOd = Date.now();
+    if (Date.now() - wrocOd < WROC_OKNO_MS) {
+      const zwloka = WROC_PONOW_MS[Math.min(wrocProba++, WROC_PONOW_MS.length - 1)];
+      wrocTimer = setTimeout(wrocPoOdpowiedz, zwloka);
+      return false;
+    }
+  }
+  wrocOd = 0;
+  wrocProba = 0;
+  if (wynik !== 'siec') ponowNiezapisane();
+  return wynik === true;
 }
 
 // Model, który faktycznie odpowiedział, gdy różni się od wybranego.
@@ -4091,7 +4202,13 @@ async function runGeneration(conv, podpiecie = null) {
       if (!uzyte) {
         /* Model napisał gotową odpowiedź bez odłożonych zdjęć – dokładamy je
            sami pod nią, zamiast je zgubić. */
-        const zapomniane = [...stan.grafikiOdlozone].filter((q) => !stan.grafiki.has(bezOgonkowKlient(q)));
+        let zapomniane = [...stan.grafikiOdlozone].filter((q) => !stan.grafiki.has(bezOgonkowKlient(q)));
+        /* Człowiek prosił o zdjęcia, a model napisał plan bez ani jednego
+           znacznika – Marcin dostawał zero zdjęć (agencja-rozmowa, runda 12,
+           eksport 3). Miejsca bierzemy z nagłówków dni planu. */
+        if (!zapomniane.length && !ostatnia && !stan.grafiki.size && prosiOZdjecia(conv)) {
+          zapomniane = miejscaZNaglowkowDni(stripSearchMarker(acc));
+        }
         if (zapomniane.length && !ostatnia) {
           /* Znaczniki stawiamy sami – pod akapitami, które mówią o danym
              miejscu – i puszczamy przez narzędzie zdjęć. Ono odtwarza układ:
@@ -4246,7 +4363,9 @@ async function runGeneration(conv, podpiecie = null) {
         // Budżet: zdanie klienta mówi wszystko, a zdanie serwera jest po polsku (w EN było polskim `title`).
         ...(tekstBledu !== err.message && !budzet ? { szczegol: err.message } : {}),
         ...(err.trwaly || budzet ? { trwaly: true } : {}), ...(budzet ? { budzet: err.limit === 'wlasciciel' ? 'wlasciciel' : 'wlasny' } : {}),
-        ...(zapasChmura ? { zapas: 'cloud' } : {}), ...bieg });
+        ...(zapasChmura ? { zapas: 'cloud' } : {}), ...bieg,
+        // Odpowiedź pisze się dalej na serwerze – karta dostaje „Pobierz odpowiedź”, nie płatne „Ponów”.
+        ...(err.porzucony && err.bieg ? { porzucony: true } : {}) });
       saveConversations(false, conv);
       /* W trybie głosowym człowiek nie patrzy na ekran, więc zdanie ma
          powiedzieć, CO się stało. Dawniej brak środków, limit i uśpiony dom
@@ -8437,12 +8556,25 @@ function updateModelBadge() {
    który nie jest „ok” – nie częściej niż co 10 s: każde sprawdzenie odpytuje
    wszystkie silniki i trwa do kilku sekund (it-plynnosc). */
 let ostatnieSprawdzenie = 0;
+/* Tyknięcie co 30 s. Zaległe tyknięcie po odmrożeniu karty strzela w tej samej
+   milisekundzie co visibilitychange – drugie /api/status naraz tylko dublowało
+   porażkę (it-plynnosc, runda 12). */
+function sprawdzStanCyklicznie() {
+  if (Date.now() - ostatnieSprawdzenie >= 5000) refreshStatus();
+}
 function odswiezStanGdyTrzeba(silnik) {
   if (Date.now() - ostatnieSprawdzenie < 10000) return;
   if (silnik && stanSilnikow[silnik] === 'ok') return;
   refreshStatus();
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') odswiezStanGdyTrzeba(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  powrotZTla();
+  odswiezStanGdyTrzeba();
+});
+// Strona odmrożona (Page Lifecycle) albo wyjęta z pamięci wstecz/dalej – też powrót z tła.
+document.addEventListener('resume', powrotZTla);
+window.addEventListener('pageshow', (e) => { if (e.persisted) { powrotZTla(); odswiezStanGdyTrzeba(); wrocPoOdpowiedz(); } });
 
 /* WYBÓR MODELU Z PLAKIETKI. Model zmieniało się tylko w Ustawieniach → Silniki;
    plakietka w prawym górnym rogu pokazywała go, ale nic nie robiła (Marcin).
@@ -8588,6 +8720,10 @@ function setServerReachable(ok) {
   const bar = $('offline-bar');
   if (bar) bar.hidden = ok;
   updateSendButton();
+  /* Serwer wrócił – to pewniejszy znak niż zdarzenie 'online', które po
+     zawieszeniu sieci w tle w ogóle nie przychodzi (navigator.onLine się nie
+     zmienił). Po odpowiedź, która czeka na serwerze. */
+  if (ok) wrocPoOdpowiedz();
 }
 
 async function retryConnection() {
@@ -8618,10 +8754,66 @@ let statusNr = 0;
 /* O osiągalności decyduje żądanie WYSŁANE najpóźniej, nie to, które
    najpóźniej wróciło – dotyczy i statusu, i konfiguracji. */
 let startOsiagalnosci = 0;
+/* Jedna porażka to jeszcze nie „brak połączenia” (it-plynnosc, runda 12).
+   Telefon po powrocie z tła budzi stronę chwilę przed siecią: pierwsze
+   /api/status padało, pasek „Brak połączenia z serwerem Cosmosa” wisiał do
+   następnego tyknięcia co 30 s, a Wyślij było zablokowane – Marcin: „kiedy
+   zmieniam okno na telefonie, to rozłącza Cosmosa”. Teraz porażka ponawia
+   sprawdzenie po 1, 2, 4 s…, pasek staje dopiero po 3 porażkach z rzędu albo
+   po 8 s bez sukcesu, a przez 10 s po powrocie z tła nie staje wcale. */
+const PONOW_STATUS_MS = [1000, 2000, 4000, 8000, 15000];
+const LASKA_PO_TLE_MS = 10000;
+let porazkiSerwera = 0;
+let pierwszaPorazka = 0;
+let ostatniaPorazka = -1000;
+let laskaDo = 0;
+let laskaTimer = null;
+let ponowStatusTimer = null;
 function zglosOsiagalnosc(ok, start) {
   if (start < startOsiagalnosci) return;
   startOsiagalnosci = start;
-  setServerReachable(ok);
+  if (ok) {
+    porazkiSerwera = 0;
+    pierwszaPorazka = 0;
+    ostatniaPorazka = -1000;
+    clearTimeout(ponowStatusTimer);
+    ponowStatusTimer = null;
+    setServerReachable(true);
+    return;
+  }
+  const teraz = performance.now();
+  // Konfiguracja i status padające w tej samej chwili to jedna porażka, nie dwie.
+  if (teraz - ostatniaPorazka > 300) porazkiSerwera++;
+  ostatniaPorazka = teraz;
+  if (!pierwszaPorazka) pierwszaPorazka = teraz;
+  ocenOsiagalnosc();
+  if (!ponowStatusTimer) {
+    // W oknie łaski gęściej – sieć wstaje zwykle w 1–3 s, a pasek ma zgasnąć, zanim ktoś go zobaczy.
+    let zwloka = PONOW_STATUS_MS[Math.max(0, Math.min(porazkiSerwera - 1, PONOW_STATUS_MS.length - 1))];
+    if (teraz < laskaDo) zwloka = Math.min(zwloka, 2000);
+    ponowStatusTimer = setTimeout(() => { ponowStatusTimer = null; refreshStatus(); }, zwloka);
+  }
+}
+/** Pasek i blokada Wyślij – dopiero gdy porażki to już seria, a nie mrugnięcie sieci. */
+function ocenOsiagalnosc() {
+  if (!porazkiSerwera) return;
+  const teraz = performance.now();
+  if (teraz < laskaDo) return;
+  if (porazkiSerwera >= 3 || teraz - pierwszaPorazka > 8000) setServerReachable(false);
+}
+/** Każda odpowiedź własnego serwera (bieg czatu, rozmowy, strumień zdarzeń) dowodzi,
+ *  że jest osiągalny. 5xx bywa odpowiedzią Cloudflare'a za padniętym serwerem – nie liczy się. */
+function serwerOdpowiedzial(r) {
+  if (!r || typeof r.status !== 'number' || r.status < 500) zglosOsiagalnosc(true, performance.now());
+  return r;
+}
+/** Strona wraca z tła: okno łaski i JEDNO sprawdzenie stanu. */
+function powrotZTla() {
+  laskaDo = performance.now() + LASKA_PO_TLE_MS;
+  porazkiSerwera = 0;
+  pierwszaPorazka = 0;
+  clearTimeout(laskaTimer);
+  laskaTimer = setTimeout(ocenOsiagalnosc, LASKA_PO_TLE_MS + 50);
 }
 async function refreshStatusWlasciwe() {
   const nr = ++statusNr;
@@ -8689,7 +8881,8 @@ async function refreshStatusWlasciwe() {
     }
   } catch {
     zglosOsiagalnosc(false, start);
-    if (nr !== statusNr) return;
+    // Pojedyncza porażka (albo okno łaski) – kropek nie gasimy, zanim zgaśnie serwer.
+    if (nr !== statusNr || serverReachable) return;
     setStatusRow(el.statusCloud, false, '–');
     setStatusRow(el.statusLocal, false, '–');
     setStatusRow(el.statusSenses, false, '–');
@@ -8870,12 +9063,12 @@ function startApp() {
     const zapisana = JSON.parse(localStorage.getItem(KLUCZ_KOLEJKI) || '[]');
     if (Array.isArray(zapisana) && zapisana.length) { kolejka = zapisana; renderKolejka(); }
   } catch { /* bez pamięci */ }
-  loadConversations().then(przywrocOstatnia).then(wznowBieg).then(() => ruszKolejke())
+  loadConversations().then(przywrocOstatnia).then(wrocPoOdpowiedz).then(() => ruszKolejke())
     .catch(() => { /* wznowienie nie może blokować startu */ });
   renderMessages();
   updateSendButton();
   loadServerConfig();
-  setInterval(refreshStatus, 30000);
+  setInterval(sprawdzStanCyklicznie, 30000);
   // Nauka: harmonogram rutyn
   try { scheduleControls(); } catch { /* ignore */ }
   loadProcedures();
@@ -8979,7 +9172,7 @@ function sluchajZdarzen() {
 
   /* Udane połączenie zeruje zwłokę. Dawniej robiło to dopiero zdarzenie –
      po serii restartów kanał, który już działał, wznawiał się potem co minutę. */
-  strumienZdarzen.onopen = () => { zwlokaWznowienia = 1000; };
+  strumienZdarzen.onopen = () => { zwlokaWznowienia = 1000; serwerOdpowiedzial(); };
   strumienZdarzen.addEventListener('zdarzenie', (e) => {
     zwlokaWznowienia = 1000;
     try { obsluzZdarzenie(JSON.parse(e.data)); } catch { /* zniekształcone */ }

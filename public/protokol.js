@@ -294,6 +294,133 @@ function utworzProtokol() {
     return ile;
   }
 
+  /* ============ ZNACZNIKI ZDJĘĆ TAM, GDZIE IM NIE MIEJSCE (runda 12) ============
+     Prowadzący zespołu pisał plan jako tabelę ze znacznikami w komórkach
+     („| 1 | Palermo | … | [GRAFIKA: Palermo] |”, w nagłówku „[GRAFIKA: miejsce]”).
+     Po wycięciu znaczników zostawała pusta kolumna i „<br>”, wszystkie paski
+     stały w jednej sekcji, a pierwszy miał podpis „miejsce” – słowo-szablon
+     przepisane z instrukcji (agencja-rozmowa, eksport 4). Drugi kształt:
+     sekcja „Zdjęcia kluczowych miejsc (do wstawienia w odpowiedzi)” ze zdaniem
+     „poniżej znaczniki, które wywołają pobranie zdjęć” – kuchnia na ekranie
+     (eksport 5). Instrukcje już tego zabraniają; to jest siatka na model,
+     który nie posłucha. */
+  const SZABLON_ZAPYTANIA = /^(?:nazwa\s+)?(?:miejsc[ea]|miejscowo\p{L}+|lokalizacj\p{L}+|atrakcj\p{L}+)(?:\s+dnia)?$|^nazwa$|^(?:place|location|place name|landmark)$/iu;
+  const czyszczoneZapytanie = (q) => String(q || '').replace(/[<>()[\]…"„”*_]/g, '').replace(/\.{2,}/g, '').trim();
+  const zapytanieSzablon = (q) => SZABLON_ZAPYTANIA.test(czyszczoneZapytanie(q));
+  const ZAPOWIEDZ_ZNACZNIKOW = /znacznik|wywoła\p{L}*\s+pobrani|pobrani\p{L}*\s+zdjęć|do wstawienia|\bmarkers?\b/iu;
+  const WIERSZ_TABELI = /^[ \t]*\|/;
+  const SEPARATOR_TABELI = /^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*$/;
+
+  /** Tabela ze znacznikami w komórkach → ta sama tabela bez nich (pusta kolumna
+   *  wypada razem z nagłówkiem), a pod nią punkty „- Dzień 1 · Palermo: [GRAFIKA: …]”
+   *  – podpis paska bierze się z punktu listy, a pasek widok stawia pod tabelą. */
+  function tabeleBezZnacznikow(tekst) {
+    const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
+    const linie = tekst.split('\n');
+    const wynik = [];
+    let wKodzie = false;
+    for (let i = 0; i < linie.length;) {
+      if (PLOT_MD.test(linie[i])) wKodzie = !wKodzie;
+      if (wKodzie || !WIERSZ_TABELI.test(linie[i])) { wynik.push(linie[i]); i++; continue; }
+      const blok = [];
+      while (i < linie.length && WIERSZ_TABELI.test(linie[i])) blok.push(linie[i++]);
+      if (!blok.some((l) => new RegExp(PHOTO_MARKER_RE.source, 'i').test(l))) { wynik.push(...blok); continue; }
+      const wiersze = blok.map((l) => (SEPARATOR_TABELI.test(l) ? null
+        : l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')));
+      const naglowek = wiersze.find(Boolean) || [];
+      const pod = [];
+      wiersze.forEach((w, r) => {
+        if (!w) return;
+        const zapytania = [];
+        const zeZnacznikiem = new Set();
+        w.forEach((c, k) => {
+          const trafienia = [...c.matchAll(WZ)];
+          if (!trafienia.length) return;
+          zeZnacznikiem.add(k);
+          for (const t of trafienia) zapytania.push(...t[1].split(/[;；]/).map((x) => x.trim()).filter((x) => x && !zapytanieSzablon(x)));
+          w[k] = c.replace(WZ, '').replace(/^(?:\s*<br\s*\/?>)+|(?:<br\s*\/?>\s*)+$/gi, '');
+        });
+        if (w === naglowek || !zapytania.length) return;
+        /* Podpis: pierwsze dwie niepuste komórki bez znacznika, „1” z kolumny
+           „Dzień” → „Dzień 1”. */
+        const czesci = [];
+        w.forEach((c, k) => {
+          const czysta = c.replace(/<br\s*\/?>/gi, ' ').replace(/[*_`]/g, '').trim();
+          if (czesci.length >= 2 || zeZnacznikiem.has(k) || !czysta) return;
+          const tytul = String(naglowek[k] || '').replace(/[*_`]/g, '').trim();
+          czesci.push(/^\d{1,3}$/.test(czysta) && tytul && tytul.length <= 12 ? `${tytul} ${czysta}` : czysta);
+        });
+        pod.push({ zapytania, podpis: czesci.join(' · ').slice(0, 80) });
+      });
+      const kolumn = Math.max(...wiersze.filter(Boolean).map((w) => w.length));
+      const puste = new Set([...Array(kolumn).keys()]
+        .filter((k) => wiersze.every((w) => !w || !String(w[k] || '').replace(/<br\s*\/?>/gi, '').trim())));
+      blok.forEach((l, r) => {
+        const w = wiersze[r];
+        if (!w) {
+          const kol = l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+          wynik.push('| ' + kol.filter((_, k) => !puste.has(k)).map((c) => c.trim()).join(' | ') + ' |');
+          return;
+        }
+        wynik.push('| ' + w.filter((_, k) => !puste.has(k)).map((c) => c.trim()).join(' | ') + ' |');
+      });
+      if (pod.length) {
+        wynik.push('');
+        for (const p of pod) {
+          // Kilka zapytań w jednej komórce – każde ma własny pasek i własną nazwę.
+          if (p.podpis && p.zapytania.length === 1) wynik.push(`- ${p.podpis}: [GRAFIKA: ${p.zapytania[0]}]`);
+          else wynik.push(`[GRAFIKA: ${p.zapytania.join('; ')}]`);
+        }
+      }
+    }
+    return wynik.join('\n');
+  }
+
+  /** Zapowiedź znaczników („poniżej znaczniki, które wywołają pobranie zdjęć:”)
+   *  wypada; nagłówek, pod którym stoją same znaczniki (i taka zapowiedź), wypada
+   *  razem z nimi, a zdjęcia rozchodzą się pod akapity o tych miejscach. */
+  function bezZapowiedziZnacznikow(tekst) {
+    const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
+    const samZnacznik = (l) => new RegExp(PHOTO_MARKER_RE.source, 'i').test(l)
+      && /^[ \t]*(?:[-*+•]|\d{1,3}[.)])?[ \t]*[*_`]*[ \t]*$/.test(l.replace(WZ, ''));
+    const zapowiedz = (l) => !samZnacznik(l) && ZAPOWIEDZ_ZNACZNIKOW.test(l) && !NAGLOWEK_MD.test(l);
+    const linie = tekst.split('\n');
+    const wynik = [];
+    const doRozlozenia = [];
+    for (let i = 0; i < linie.length; i++) {
+      if (NAGLOWEK_MD.test(linie[i])) {
+        let j = i + 1;
+        let znacznikow = 0;
+        let koniec = i;
+        let maZapowiedz = false;
+        while (j < linie.length && (!linie[j].trim() || samZnacznik(linie[j]) || zapowiedz(linie[j]))) {
+          if (samZnacznik(linie[j])) { znacznikow++; koniec = j; }
+          if (zapowiedz(linie[j])) maZapowiedz = true;
+          j++;
+        }
+        /* „### Dzień 2 · Cefalù” z samym znacznikiem pod spodem to zwykły dzień
+           planu – zostaje. Wypada tylko sekcja ze zdjęciami jako takimi:
+           z zapowiedzią znaczników albo nagłówek o zdjęciach, po którym nic już nie ma. */
+        const koniecSekcji = j >= linie.length || NAGLOWEK_MD.test(linie[j]);
+        if (znacznikow && (maZapowiedz || (koniecSekcji && /zdj[eę]|foto|photo|galeri|grafik/i.test(linie[i])))) {
+          for (let k = i + 1; k <= koniec; k++) {
+            for (const t of linie[k].matchAll(WZ)) doRozlozenia.push(...t[1].split(/[;；]/).map((x) => x.trim()).filter(Boolean));
+          }
+          i = koniec;
+          continue;
+        }
+      }
+      if (zapowiedz(linie[i])) {
+        let j = i + 1;
+        while (j < linie.length && !linie[j].trim()) j++;
+        if (j < linie.length && samZnacznik(linie[j])) continue;
+      }
+      wynik.push(linie[i]);
+    }
+    const reszta = wynik.join('\n');
+    return doRozlozenia.length ? wstawZnacznikiZdjec(reszta.replace(/\n+$/, ''), doRozlozenia) : reszta;
+  }
+
   /**
    * Rozłóż odpowiedź ze znacznikami zdjęć na czysty tekst i miejsca zdjęć.
    *
@@ -302,6 +429,8 @@ function utworzProtokol() {
    */
   function rozlozZdjecia(surowe) {
     const WZ = new RegExp(PHOTO_MARKER_RE.source, 'gi');
+    surowe = String(surowe || '');
+    if (new RegExp(PHOTO_MARKER_RE.source, 'i').test(surowe)) surowe = bezZapowiedziZnacznikow(tabeleBezZnacznikow(surowe));
     const ZNAK = (n) => `${n}`;
     const grupy = [];            // numer znacznika → zapytania
     const etykiety = [];         // numer znacznika → podpis z punktu listy (runda 11)
@@ -327,7 +456,8 @@ function utworzProtokol() {
         const numer = grupy.length;
         if (etyk) etykiety[numer] = etyk[1].replace(/[*_]+/g, '').trim();
         const wziete = [];
-        for (const q of t[1].split(/[;；]/).map((x) => x.trim()).filter(Boolean)) {
+        // Słowo-szablon z instrukcji („[GRAFIKA: miejsce]”) to nie miejsce – pasek z podpisem „miejsce” nic nie pokazuje.
+        for (const q of t[1].split(/[;；]/).map((x) => x.trim()).filter((x) => x && !zapytanieSzablon(x))) {
           const klucz = bezOgonkowKlient(q);
           if (widziane.has(klucz)) continue;         // ta sama rzecz drugi raz w jednej odpowiedzi
           widziane.add(klucz);

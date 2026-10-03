@@ -44,6 +44,9 @@ if (!maPrzegladarke()) {
   process.exit(0);
 }
 
+/* Prawdziwa miniatura (192×192). Pasek odrzuca obrazki, które się nie wczytały
+   albo są mniejsze niż 100×75 – sam nagłówek PNG zostawiłby pusty pasek. */
+const MINIATURA = require('fs').readFileSync(require('path').join(__dirname, '../../public/icons/cosmos-192.png'));
 const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
   title: `${q} ${od + i}`, thumb: `https://upload.wikimedia.org/${encodeURIComponent(q)}/${od + i}.jpg`,
   full: `https://upload.wikimedia.org/${encodeURIComponent(q)}/${od + i}-pelne.jpg`, source: 'https://commons.wikimedia.org/',
@@ -69,7 +72,7 @@ const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
       if (natychmiast) return odpowiedz();
       czekajace.set(q, odpowiedz);
     });
-    await p.route('**/thumb?*', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('89504e470d0a1a0a', 'hex') }));
+    await p.route('**/thumb?*', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: MINIATURA }));
     await p.goto(`${env.adres}/app`, { waitUntil: 'load' });
     await p.waitForFunction(() => document.querySelector('.app.gotowa') && typeof NARZEDZIA !== 'undefined');
 
@@ -225,7 +228,7 @@ const fotki = (q, od, ile) => Array.from({ length: ile }, (_, i) => ({
     /* ---- 8. Telefon 412 px: nic nie wystaje w bok ---- */
     const tel = await b.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
     const pt = await tel.newPage();
-    await pt.route('**/thumb?*', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('89504e470d0a1a0a', 'hex') }));
+    await pt.route('**/thumb?*', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: MINIATURA }));
     await pt.goto(`${env.adres}/app`, { waitUntil: 'load' });
     await pt.waitForFunction(() => document.querySelector('.app.gotowa'));
     const szer = await pt.evaluate((f) => {

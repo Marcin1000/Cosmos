@@ -192,5 +192,48 @@ sprawdz('„<tool>” w zwykłym zdaniu', 'Znacznik <tool> w HTML-u.', 'Znacznik
   if (!ok3) fail.push('K8: błąd z innego biegu zmienia scalanie');
 }
 
+// 12. Runda 12 (agencja-rozmowa, eksporty 4 i 5): znaczniki w komórkach tabeli,
+//     słowo-szablon „miejsce” i sekcja „Zdjęcia… do wstawienia” z zapowiedzią znaczników.
+{
+  const e4 = ['**Plan wyjazdu na Sycylię**', '',
+    '| Dzień | Miejsce bazowe | Aktywność | [GRAFIKA: miejsce] |',
+    '|-------|----------------|-----------|--------------------|',
+    '| 1 | Palermo | Przyjazd | [GRAFIKA: Palermo] |',
+    '| 2 | Palermo | Zwiedzanie | [GRAFIKA: Cappella Palatina; Mondello] |',
+    '| 6 | Catania | Etna | [GRAFIKA: Etna]<br> |',
+    '', '### Uwagi', '- Średnia temperatura 28 °C'].join('\n');
+  const r4 = rozlozZdjecia(e4);
+  const wiersze = r4.tresc.split('\n').filter((l) => /^\s*\|/.test(l));
+  const kolumn = new Set(wiersze.map((l) => l.split('|').length));
+  const podpisy = r4.zdjecia.map((g) => `${g.q}=${g.etykieta}`);
+  const ok4 = !/\|[ \t]*\|/.test(r4.tresc) && !/<br/i.test(r4.tresc) && kolumn.size === 1 && wiersze[0].split('|').length === 5
+    && !r4.zdjecia.some((g) => /^miejsce$/i.test(g.q)) && podpisy.includes('Palermo=Dzień 1 · Palermo')
+    && podpisy.includes('Etna=Dzień 6 · Catania') && podpisy.includes('Cappella Palatina=Cappella Palatina')
+    && /\| 1 \| Palermo \| Przyjazd \|/.test(r4.tresc) && /### Uwagi/.test(r4.tresc)
+    // paski pod tabelą, nie nad nią: kotwica za ostatnim wierszem tabeli
+    && r4.zdjecia.every((g) => g.po >= r4.tresc.indexOf('| 6 | Catania'));
+  console.log(`${ok4 ? 'OK ' : 'ŹLE'} tabela ze znacznikami: czyste komórki, bez pustej kolumny, podpisy dni (${podpisy.join(', ')})`);
+  if (!ok4) fail.push(`tabela ze znacznikami w komórkach: ${JSON.stringify(r4.tresc)} / ${podpisy.join(', ')}`);
+
+  const e5 = ['### Dzień 1 · Palermo · zwiedzanie', 'Katedra i targ Ballarò.', '',
+    '### Dzień 2 · Cefalù', '[GRAFIKA: Cefalù]', '',
+    '### Dzień 3 · Etna', 'Wjazd kolejką.', '',
+    '### Zdjęcia kluczowych miejsc (do wstawienia w odpowiedzi)',
+    'Każde z miejsc warto uwiecznić – poniżej znaczniki, które wywołają pobranie zdjęć z internetu:',
+    '[GRAFIKA: Palermo]', '[GRAFIKA: Etna]', '', '> **Uwaga:** daty przykładowe.'].join('\n');
+  const r5 = rozlozZdjecia(e5);
+  const sekcja = (q) => (r5.zdjecia.find((g) => g.q === q) || {}).sekcja;
+  const ok5 = !/znacznik|do wstawienia|Zdjęcia kluczowych/i.test(r5.tresc) && /### Dzień 2 · Cefalù/.test(r5.tresc)
+    && sekcja('Palermo') === 1 && sekcja('Cefalù') === 2 && sekcja('Etna') === 3 && /daty przykładowe/.test(r5.tresc);
+  console.log(`${ok5 ? 'OK ' : 'ŹLE'} sekcja „Zdjęcia… do wstawienia” znika, zdjęcia przy dniach (Palermo→${sekcja('Palermo')}, Etna→${sekcja('Etna')})`);
+  if (!ok5) fail.push(`sekcja zdjęć z zapowiedzią znaczników: ${JSON.stringify(r5.tresc)} / ${JSON.stringify(r5.zdjecia.map((g) => [g.q, g.sekcja]))}`);
+
+  // Strona odwrotna: tabela bez znaczników i zwykły dzień z samym znacznikiem zostają nietknięte.
+  const czysta = '| Dzień | Miejsce |\n|---|---|\n| 1 | Palermo |';
+  const okC = rozlozZdjecia(czysta).tresc === czysta && rozlozZdjecia('[GRAFIKA: nazwa miejsca]\nTekst.').zdjecia.length === 0;
+  console.log(`${okC ? 'OK ' : 'ŹLE'} tabela bez znaczników bez zmian, „[GRAFIKA: nazwa miejsca]” nie daje paska`);
+  if (!okC) fail.push('tabela bez znaczników zmieniona albo szablon „nazwa miejsca” dał pasek');
+}
+
 console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nRESZTKI ZNACZNIKÓW OK');
 process.exit(fail.length ? 1 : 0);

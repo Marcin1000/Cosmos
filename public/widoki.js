@@ -26,6 +26,7 @@
  * @param {Function} z.msgPhotos zdjęcia z wiadomości
  * @param {Function} z.msgDalej stan stronicowania wyniku archiwum
  * @param {number}   z.PORCJA_ARCHIWUM ile miniatur dobiera jedno kliknięcie
+ * @param {Function} [z.zdjecieNiewczytane] kafel paska odpadł (`p.niewczytane`) – zapisz rozmowę
  * @returns {object} { runPanel, photosGrid, pasekZdjec, stopkaArchiwum, naKafelek,
  *                     openTextViewer, openImageViewer, przesunPodglad, closeImageViewer }
  */
@@ -33,6 +34,7 @@ function utworzWidoki(z) {
   const {
     t, readJsonSafe, saveConversations, renderMessages,
     msgPhotos, msgDalej, PORCJA_ARCHIWUM,
+    zdjecieNiewczytane = () => {},
   } = z;
 
   /** Wynik uruchomionego programu: co wypisał, jak długo to trwało i co narysował.
@@ -192,7 +194,6 @@ function utworzWidoki(z) {
     pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/></svg>',
     lewo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
     prawo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
-    brak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 15l4-4 4 4 3-3 5 5"/><path d="M3 3l18 18"/></svg>',
   };
   const linkBezpieczny = (u) => (typeof u === 'string' && (/^https?:\/\//i.test(u) || /^\/(?!\/)/.test(u)) ? u : '');
   const stronaZrodla = (p) => (typeof p.source === 'string' && /^https?:\/\//i.test(p.source) ? p.source : '');
@@ -202,12 +203,28 @@ function utworzWidoki(z) {
   };
   const miniatura = (p) => (/^\/(?!\/)/.test(p.thumb || '') ? p.thumb : `/api/search/thumb?u=${encodeURIComponent(p.thumb || '')}`);
 
+  /* Zdjęcie, które się nie wczytało albo okazało się ikonką, logo czy banerem,
+     nie wraca: `p.niewczytane` zostaje w rozmowie (zapis), a pasek i podgląd je
+     pomijają. Marcin: „nie pokazujmy zdjęć, których nie można wczytać”. */
+  const widoczne = (g) => (g.photos || []).filter((p) => p && !p.niewczytane);
+  /* Miniatura za mała na zdjęcie miejsca (piksel śledzący, „brak obrazka”,
+     ikonka) albo o proporcjach banera – to nie jest zdjęcie miejsca. */
+  const MIN_SZER = 100;
+  const MIN_WYS = 75;
+  const MAX_PROPORCJA = 3;
+  const nieZdjecie = (img) => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return false;               // SVG bez wymiarów – rozstrzyga serwer
+    return w < MIN_SZER || h < MIN_WYS || w / h > MAX_PROPORCJA || h / w > MAX_PROPORCJA;
+  };
+
   /** Wszystkie zdjęcia odpowiedzi w kolejności pasków – podgląd przewija przez całość. */
   function zdjeciaOdpowiedzi(grupy) {
     const lista = [];
     for (const g of grupy) {
       if (g.stan !== 'gotowe') continue;
-      const fotki = g.photos || [];
+      const fotki = widoczne(g);
       fotki.forEach((p, i) => lista.push({ p, g, i: i + 1, n: fotki.length }));
     }
     return lista;
@@ -221,7 +238,7 @@ function utworzWidoki(z) {
    * @returns {HTMLElement|null} `.zdj-pasek` albo null, gdy nie ma czego pokazać
    */
   function pasekZdjec(grupy, wszystkie = grupy) {
-    const gotowe = grupy.filter((g) => g.stan === 'gotowe' && (g.photos || []).length);
+    const gotowe = grupy.filter((g) => g.stan === 'gotowe' && widoczne(g).length);
     const czekaja = grupy.filter((g) => g.stan === 'szukam' || g.stan === 'do-pobrania');
     if (!gotowe.length && !czekaja.length) return null;
     const pasek = document.createElement('div');
@@ -250,9 +267,12 @@ function utworzWidoki(z) {
       }
       if (g.stan !== 'gotowe') continue;
       const etykieta = g.etykieta || g.q || '';
-      (g.photos || []).forEach((p, i) => {
+      const gi = String(grupy.indexOf(g));
+      const fotki = widoczne(g);
+      fotki.forEach((p, i) => {
         const a = document.createElement('a');
         a.className = 'zdj-kafel';
+        a.dataset.grupa = gi;
         const zrodlo = stronaZrodla(p);
         a.href = zrodlo || linkBezpieczny(p.full) || '#';
         a.target = '_blank';
@@ -261,7 +281,7 @@ function utworzWidoki(z) {
         a.title = [etykieta, host, p.licencja].filter(Boolean).join(' · ');
         if (i === 0) {
           a.dataset.miejsceStart = '';
-          a.setAttribute('aria-label', t('photo.etykietaAria', { miejsce: etykieta, n: (g.photos || []).length }));
+          a.setAttribute('aria-label', t('photo.etykietaAria', { miejsce: etykieta, n: fotki.length }));
         }
         const img = document.createElement('img');
         img.alt = etykieta || p.title || t('photo.found');
@@ -272,16 +292,11 @@ function utworzWidoki(z) {
         if (tor.children.length < 3) { img.loading = 'lazy'; img.src = adres; } else img.dataset.src = adres;
         let wprost = /^\/(?!\/)/.test(p.thumb || '');
         img.addEventListener('error', () => {
-          // Proxy odmówiło – przeglądarka może pobrać obrazek sama; potem kafel z odnośnikiem.
+          // Proxy odmówiło – przeglądarka może pobrać obrazek sama; dopiero potem kafel odpada.
           if (!wprost && /^https:\/\//i.test(p.thumb || '')) { wprost = true; img.src = p.thumb; return; }
-          img.remove();
-          a.classList.add('pusty');
-          a.title = t('photo.niewczytaneTytul');
-          const info = document.createElement('span');
-          info.innerHTML = IK_ZDJ.brak;
-          info.append(document.createTextNode(t('photo.niewczytane')));
-          a.prepend(info);
+          odrzucKafel(a, p);
         });
+        img.addEventListener('load', () => { if (nieZdjecie(img)) odrzucKafel(a, p); });
         a.appendChild(img);
         if (host) {
           const chip = document.createElement('span');
@@ -329,9 +344,10 @@ function utworzWidoki(z) {
     tor.addEventListener('scroll', stan, { passive: true });
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(stan).observe(tor);
     // Jeden przystanek Tab na pasek, ←/→ Home/End między kaflami.
-    const kafle = [...tor.querySelectorAll('a.zdj-kafel')];
-    kafle.forEach((k, i) => k.setAttribute('tabindex', i === 0 ? '0' : '-1'));
+    [...tor.querySelectorAll('a.zdj-kafel')].forEach((k, i) => k.setAttribute('tabindex', i === 0 ? '0' : '-1'));
     tor.addEventListener('keydown', (e) => {
+      // Liczone przy naciśnięciu – kafle, które się nie wczytały, w międzyczasie odpadły.
+      const kafle = [...tor.querySelectorAll('a.zdj-kafel')];
       const i = kafle.indexOf(document.activeElement);
       if (i < 0) return;
       const cel = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: kafle.length - 1 }[e.key];
@@ -342,6 +358,34 @@ function utworzWidoki(z) {
       kafle[cel].focus({ preventScroll: true });
       kafle[cel].scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
+    /** Kafel, który się nie wczytał albo nie jest zdjęciem miejsca – znika.
+     *  Etykieta miejsca przechodzi na następny kafel tej samej grupy; miejsce
+     *  bez żadnego kafla znika z opisu paska, a pasek bez kafli – cały. */
+    function odrzucKafel(a, p) {
+      if (!a.isConnected && !a.parentNode) return;
+      if (!p.niewczytane) { p.niewczytane = true; zdjecieNiewczytane(p); }
+      const nastepny = [...tor.querySelectorAll(`a.zdj-kafel[data-grupa="${a.dataset.grupa}"]`)].find((k) => k !== a) || null;
+      if (a.hasAttribute('data-miejsce-start') && nastepny) {
+        nastepny.dataset.miejsceStart = '';
+        const et = a.querySelector('.zdj-etykieta');
+        if (et) nastepny.appendChild(et);
+        const g = grupy[Number(a.dataset.grupa)];
+        const n = tor.querySelectorAll(`a.zdj-kafel[data-grupa="${a.dataset.grupa}"]`).length - 1;
+        if (g) nastepny.setAttribute('aria-label', t('photo.etykietaAria', { miejsce: g.etykieta || g.q || '', n }));
+      }
+      const mialFokus = a.getAttribute('tabindex') === '0';
+      const zFokusem = document.activeElement === a;
+      a.remove();
+      const kafle = [...tor.querySelectorAll('a.zdj-kafel')];
+      if (!kafle.length && !tor.querySelector('.szkielet')) { pasek.remove(); return; }
+      if (mialFokus && kafle[0]) {
+        kafle[0].setAttribute('tabindex', '0');
+        if (zFokusem) kafle[0].focus({ preventScroll: true });
+      }
+      const zostaly = gotowe.filter((g) => tor.querySelector(`a.zdj-kafel[data-grupa="${grupy.indexOf(g)}"]`));
+      if (zostaly.length) pasek.setAttribute('aria-label', t('photo.pasekMiejsca', { miejsca: zostaly.map((g) => g.etykieta || g.q).join(', ') }));
+      stan();
+    }
     const odlozone = tor.querySelectorAll('img[data-src]');
     if (odlozone.length) {
       const wczytaj = (img) => { img.src = img.dataset.src; img.removeAttribute('data-src'); };

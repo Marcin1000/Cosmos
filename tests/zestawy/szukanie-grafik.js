@@ -40,6 +40,18 @@ const { srodowisko } = require('../pomoc');
     [zdj('Ortigia', 'https://upload.wikimedia.org/a/Ortigia.svg.png'), false],
     [zdj('Ortigia ikona', 'https://x/i.png', 120, 120), false],
     [zdj('Herbata na tarasie w Ortigii', 'https://x/herbata.jpg'), true],
+    // it-plynnosc, runda 12: lokalny plik Wikipedii (logo klubu bez słowa „logo”), sklejone „…logo”, CoA, plakat, kwadratowy PNG
+    [zdj('CC Ortigia', 'https://upload.wikimedia.org/wikipedia/it/3/3f/CC_Ortigia.png'), false],
+    [zdj('Ortigia z lotu ptaka', 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Ortigia_aerea.jpg'), true],
+    [zdj('Ortigia', 'https://x/ortigialogo.jpg'), false],
+    [zdj('Siracusa', 'https://x/Siracusa-CoA.png'), false],
+    [zdj('Ortigia – locandina del festival', 'https://x/ortigia-festival.jpg'), false],
+    [zdj('Ortigia poster', 'https://x/o.jpg'), false],
+    [zdj('Okładka przewodnika Ortigia', 'https://x/p.jpg'), false],
+    [zdj('Ortigia', 'https://x/ortigia-znak.png', 512, 500), false],
+    [zdj('Ortigia', 'https://x/ortigia-panorama.png', 2400, 1600), true],
+    [zdj('Ortigia', 'https://x/ortigia-kwadrat.jpg', 800, 800), true],
+    [zdj('Cocoa na Ortigii', 'https://x/cocoa.jpg'), true],
   ];
   const zle = odsiew.filter(([x, dobre]) => toZdjecieMiejsca(x) !== dobre).map(([x]) => x.title);
   console.log(`1c. odsiew nie-zdjęć: ${zle.length ? 'ŹLE dla ' + zle.join(', ') : 'ok'}`);

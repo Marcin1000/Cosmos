@@ -34,6 +34,10 @@ if (!maPrzegladarke()) {
   const pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
   const bledy = [];
   pg.on('pageerror', (e) => bledy.push(e.message));
+  /* Atrapa grafik oddaje miniatury 1×1 – pasek odrzuca takie (piksel śledzący,
+     ikonka), więc podstawiamy prawdziwą miniaturę 192×192. */
+  const miniatura = require('fs').readFileSync(require('path').join(__dirname, '../../public/icons/cosmos-192.png'));
+  await pg.route('**/api/search/thumb?*', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: miniatura }));
   await pg.goto(env.adres + '/app', { waitUntil: 'load' });
   await pg.waitForTimeout(600);
 

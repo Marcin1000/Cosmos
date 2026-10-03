@@ -1223,10 +1223,6 @@ body::after {
 .zdj-kafel.szkielet:nth-child(even) { animation-delay: .3s; }
 @media (prefers-reduced-motion: reduce) { .zdj-kafel.szkielet { animation: none; } .zdj-kafel img { transition: none; } }
 /* Miniatura nie przyszła – kafel zostaje, z odnośnikiem do źródła. */
-.zdj-kafel.pusty { display: grid; place-items: center; text-align: center; padding: 10px; background: var(--bg-sidebar); border: 1px dashed var(--border-strong); font-size: 12px; line-height: 1.35; color: var(--text-dim); text-decoration: none; }
-.zdj-kafel.pusty::after { display: none; }
-.zdj-kafel.pusty:has(.zdj-etykieta) { place-items: start center; padding-top: 16px; }   /* etykieta miejsca nie zasłania zdania */
-.zdj-kafel.pusty svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5; display: block; margin: 0 auto 6px; }
 /* Czego zabrakło – zdanie od Cosmosa, bez rundy modelu. */
 .cosmos-uwagi { margin: 12px 0 4px; }
 .zdj-brak { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; font-size: 13px; line-height: 1.5; color: var(--text-dim); }

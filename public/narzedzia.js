@@ -127,6 +127,7 @@ async function czekajNaZadanie(odp, { pobierz, readJsonSafe, t, naPostep, spij, 
  * @param {Function} [z.zapiszWkrotce] (rozmowa) – zapis z krótką zwłoką (po każdej grupie zdjęć)
  * @param {Function} [z.sygnal] () → AbortSignal tury – „Zatrzymaj” przerywa pobieranie zdjęć
  * @param {Function} [z.metaOdpowiedzi] () → { think, note } rundy, która napisała odpowiedź
+ * @param {Function} [z.jezyk] () → 'pl' | 'en' – język interfejsu (domyślnie `getLang` z i18n.js)
  * @returns {Array<object>} narzędzia w kolejności sprawdzania
  */
 function utworzNarzedzia(z) {
@@ -144,6 +145,23 @@ function utworzNarzedzia(z) {
   /* Wyszukiwanie zapisane po swojemu (bez dwukropka, `<tool_call>`, `<TOOLCALL>`)
      – protokol.js. W przeglądarce `utworzProtokol` jest globalny (protokol.js
      ładuje się przed tym plikiem), test może podać funkcję wprost. */
+  /* Język interfejsu – w przeglądarce `getLang` z i18n.js, test może podać `z.jezyk`. */
+  const jezyk = typeof z.jezyk === 'function' ? z.jezyk
+    : () => (typeof getLang === 'function' ? getLang() : 'pl');
+
+  /** Czy w bieżącej turze (od ostatniej wypowiedzi człowieka) zespół z badaczem
+   *  już szukał – notatki zespołu niosą wtedy `zespol.szukaj`. */
+  function zespolSzukal(conv) {
+    const w = (conv && conv.messages) || [];
+    for (let i = w.length - 1; i >= 0; i--) {
+      const m = w[i];
+      if (!m) continue;
+      if (m.narzedzie === 'zespol' && m.zespol && m.zespol.szukaj) return true;
+      if (m.role === 'user' && !m.search) return false;
+    }
+    return false;
+  }
+
   const natywneSzukanie = z.natywneSzukanie
     || (typeof utworzProtokol === 'function' ? utworzProtokol().natywneSzukanie : null);
 
@@ -302,6 +320,17 @@ function utworzNarzedzia(z) {
           + 'ponownie: odpowiedz na ich podstawie albo zapytaj o coś innego.',
           q);
       }
+      /* Zespół z badaczem już szukał w tej turze (runda 12, agencja-rozmowa):
+         prowadzący dopisywał drugie, inne zapytanie – zwykle po angielsku – i druga
+         runda dostawała wyniki z ostatnim zdaniem „Odpowiedz teraz… na podstawie
+         tych wyników”, które przykrywało zasady zespołu (zdjęcia, plan). Serwer
+         zdejmuje prowadzącemu opis [SZUKAJ:]; to jest siatka na model, który i tak go napisze. */
+      if (zespolSzukal(k.conv)) {
+        return (await zakonczTekstem(k)) || sterowanie(k,
+          'WYSZUKIWANIE W TEJ TURZE ZROBIŁ JUŻ ZESPÓŁ – wyniki są w notatkach. Nie szukaj ponownie: '
+          + 'odpowiedz z notatek, a czego w nich brak, powiedz jednym zdaniem.',
+          q);
+      }
       k.stan.szukaj.add(odcisk);
       /* ILE ICH BYŁO. Model, który poprosił o dziesięć wyszukań, a dostał
          jedno, pisze potem odpowiedź tak, jakby miał wszystkie dziesięć –
@@ -325,7 +354,13 @@ function utworzNarzedzia(z) {
         ? '\n\nUWAGA: to wyszukiwanie TEKSTU – zdjęć nie pokazuje. Jeśli użytkownik chce zdjęć, '
           + 'wstaw w osobnej linii [GRAFIKA: nazwa miejsca] – osobny znacznik na każde miejsce, przy „inne zdjęcia” z innym ujęciem.'
         : '';
-      dodajWynikNarzedzia(k.conv, wyniki + uwaga + oZdjecia, q);
+      /* Wyniki bywają angielskie, a „Odpowiedz teraz…” to ostatnie słowo przed
+         odpowiedzią – „Syracuse” i „Valley of the Temples” szły wprost do polskiego
+         tekstu (runda 12). Przypomnienie stoi na samym końcu. */
+      const nazwyPl = jezyk() === 'pl'
+        ? '\n\nNazwy miejsc pisz po polsku, gdy polska forma istnieje (Syrakuzy, Katania, Dolina Świątyń, Teatr Grecki) – nie przepisuj angielskich z wyników.'
+        : '';
+      dodajWynikNarzedzia(k.conv, wyniki + uwaga + oZdjecia + nazwyPl, q);
       return { akcja: 'dalej' };
     },
   };

@@ -138,6 +138,8 @@ const stanyKoncowe = (w) => {
 const atrapa = async (silnik) => (await fetch(`http://127.0.0.1:${A[silnik]}/__stan`)).json();
 const zeruj = async () => { await fetch(`http://127.0.0.1:${A.cloud}/__zeruj`); };
 const zadania = async () => (await atrapa('cloud')).zadania;
+/** Zasady pod notatkami – to, co prowadzący czyta po „TERAZ napisz” (runda 12: zakres planu tam, nie w <wklad>). */
+const poTeraz = (t) => String(t || '').split('TERAZ napisz')[1] || '';
 const post = (p, dane) => fetch(`${ADRES}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dane) });
 
 async function nowaRozmowa(id, pytanie) {
@@ -364,6 +366,12 @@ async function nowaRozmowa(id, pytanie) {
       const b = z.find((x) => x.rola === 'BADACZ'); const r = z.find((x) => x.rola === 'RECENZENT');
       ok(z.some((x) => x.rodzaj === 'szukanie') && b && b.tekst.includes('WYNIK-ATRAPY') && r && !r.tekst.includes('WYNIKI WYSZUKIWANIA:'),
         'O9. badacz dostaje wyniki wyszukiwania z serwera, recenzent nie');
+      /* Runda 12: prowadzący po badaczu szukał drugi raz (po angielsku) – nie dostaje opisu [SZUKAJ:],
+         opis zdjęć [GRAFIKA:] zostaje. */
+      const prB = z.find((x) => x.rodzaj === 'prowadzacy') || { system: '' };
+      const OPIS_SZUKANIA = /NARZĘDZIE – (WYSZUKIWANIE W INTERNECIE|INTERNET):/;
+      ok(!OPIS_SZUKANIA.test(prB.system) && /\[GRAFIKA:/.test(prB.system),
+        'O9c. z badaczem w składzie prowadzący nie dostaje opisu [SZUKAJ:] (opis zdjęć zostaje)');
       const pl = z.find((x) => x.rodzaj === 'planista');
       await zeruj();
       await tura({ messages: [{ role: 'user', content: 'Ile kosztuje Galaxy S24?' }], zespol: { sklad: [{ rola: 'badacz', silnik: 'cloud' }, { rola: 'recenzent', silnik: 'cloud' }] } });
@@ -484,7 +492,7 @@ async function nowaRozmowa(id, pytanie) {
       const f2 = z2.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
       const pr2 = z2.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
       ok(/brak – plan nie został policzony: nie znaleziono miejsca „Atlantyda Zaginiona”/.test(f2.ostatnia) && !/SPRÓBUJ|Plener →/.test(f2.ostatnia)
-        && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia) && /Planu zdjęciowego nie policzono \(nie znaleziono miejsca/.test(pr2.ostatnia),
+        && !/plan zdjęciowy jest policzony/.test(pr2.ostatnia) && /planu zdjęciowego nie policzono \(nie znaleziono miejsca/.test(poTeraz(pr2.ostatnia)),
         'O14d. nieznane miejsce: fotograf dostaje krótkie „brak planu” dla roli (bez poleceń dla człowieka), prowadzący wie, że planu nie ma i godzin nie zgaduje');
 
       /* Runda 11 (R1, R3). Zapisana lokalizacja (dom) – wtedy instrukcja PLAN
@@ -504,8 +512,10 @@ async function nowaRozmowa(id, pytanie) {
       const planK4 = fazaP.plan || {};
       ok(fazaP.planPoliczony === true && /Morskie Oko/.test(planK4.miejsce || '') && /^2026-10-01T\d{2}:\d{2}/.test(planK4.kiedy || '')
         && planK4.strefa === 'Europe/Warsaw' && /01\.10\.2026/.test(planK4.chwila || '')
-        && /Plan zdjęciowy policzono dla: Morskie Oko[^.]*01\.10\.2026/.test(prP.ostatnia) && /inne miejsce albo inny czas/.test(prP.ostatnia),
-        `O14j. K4: faza niesie plan {miejsce, kiedy, strefa, chwila} (${JSON.stringify(planK4)}); prowadzący dostaje zakres planu od Cosmosa`);
+        && /WYŁĄCZNIE z planu policzonego dla: Morskie Oko[^;]*01\.10\.2026/.test(poTeraz(prP.ostatnia)) && /dla innych miejsc i dni/.test(poTeraz(prP.ostatnia))
+        && !/<wklad rola="[^"]*Cosmos|<wklad[^>]*model="Cosmos"[^>]*>[^<]*policzono dla/.test(prP.ostatnia),
+        `O14j. K4: faza niesie plan {miejsce, kiedy, strefa, chwila} (${JSON.stringify(planK4)}); zakres planu to punkt zasad po „TERAZ napisz”, nie notatka`);
+      ok(/NARZĘDZIE – (WYSZUKIWANIE W INTERNECIE|INTERNET):/.test(prP.system), 'O14j2. bez badacza prowadzący zachowuje opis [SZUKAJ:]');
       await zeruj();
       const ww = await tura({ messages: [{ role: 'user', content: 'Jadę na Sycylię, kiedy tam złota godzina?' }],
         zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }] } });
@@ -513,7 +523,7 @@ async function nowaRozmowa(id, pytanie) {
       const fw2 = zw.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
       const prW = zw.find((x) => x.rodzaj === 'prowadzacy') || { ostatnia: '' };
       ok(/plan nie został policzony: pytanie dotyczy wyjazdu/.test(fw2.ostatnia) && !/52\.2297|"godziny"/.test(fw2.ostatnia)
-        && !(zd(ww, 'faza')[0] || {}).planPoliczony && /Planu zdjęciowego nie policzono \(pytanie dotyczy wyjazdu/.test(prW.ostatnia),
+        && !(zd(ww, 'faza')[0] || {}).planPoliczony && /planu zdjęciowego nie policzono \(pytanie dotyczy wyjazdu/.test(poTeraz(prW.ostatnia)),
         'O14k. R3: pytanie o wyjazd bez miejsca – brak planu (nie plan domu), prowadzący wie, że godzin nie ma');
       await zeruj();
       await tura({ messages: [{ role: 'user', content: 'Zachód słońca nad Morskim Okiem we wrześniu 2027 – kiedy?' }],
