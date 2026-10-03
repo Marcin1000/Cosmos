@@ -131,6 +131,11 @@ for (const krotko of [false, true]) {
     && !OKOLICA.test(zasady({ pytanie: 'Jakie nastawy na zachód słońca?' }).po)
     && !OKOLICA.test(zasady({ pytanie: q, trybGlosowy: true }).po),
     '9. pytanie o okolicę bez badacza → [SZUKAJ:] w zasadach; z badaczem, bez szukania, w głosie i przy innym pytaniu – nie');
+  // Runda 12 (Sycylia 9 i 10): „z atrakcjami” to nie okolica małej miejscowości – reguła nie może zakazać Palermo.
+  const sycylia = 'Wybieram się na Sycylię za rok we wrześniu, plan z podziałem na dni odpoczynku i dni na zwiedzanie z atrakcjami.';
+  ok(!OKOLICA.test(zasady({ pytanie: sycylia }).po) && !/nazwy konkretnych miejsc tylko z pytania/.test(zasady({ pytanie: sycylia }).po),
+    '9b. „wycieczka z atrakcjami” po Sycylii – bez zakazu nazw i bez wymuszonego [SZUKAJ:] (model odmawiał planu)');
+  ok(/nie odmawiaj planu/.test(zasady({ pytanie: sycylia }).po), '9c. ubogie notatki nie zwalniają z odpowiedzi – zasada „nie odmawiaj planu”');
   ok(/w polskiej formie[^\n]*Syrakuzy/.test(zdj.po), '9. zasady: polskie nazwy miejsc (Syrakuzy), bez angielskich');
 }
 

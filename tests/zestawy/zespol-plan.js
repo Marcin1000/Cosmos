@@ -174,7 +174,9 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
       'C3. sprzęt tylko dla sprzętowca i recenzenta');
     ok(flat('badacz').includes('WYNIK-X') && !flat('analityk').includes('WYNIK-X'), 'C4. wyniki wyszukiwania tylko dla badacza');
     // Runda 12: analityk wymyślał nazwy miejsc w okolicy – jego instrukcja tego zabrania.
-    ok(/Nazw konkretnych miejsc[^.]*nie podawaj/.test(flat('analityk')), 'C4b. analityk: bez nazw miejsc spoza pytania i danych');
+    ok(/Nazw konkretnych miejsc[^.]*nie podawaj/.test(flat('analityk')) && !/zabytk[^.]*nie podawaj/.test(flat('analityk'))
+      && /Znane miasta, regiony i zabytki podawaj/.test(flat('analityk')),
+      'C4b. analityk: bez wymyślonych punktów w okolicy małej miejscowości, ale znane miasta i zabytki wolno (Sycylia, runda 12)');
     const planista = JSON.stringify(P.promptPlanisty({ pytanie: 'Plan wycieczki blisko Złotokłosu', role: P.widoczneRole({}) }));
     ok(/"szukaj"[^"]*w języku pytania/.test(planista.replace(/\\"/g, '"')) && /miejsca w okolicy[^"]*ZAWSZE badacz/.test(planista.replace(/\\"/g, '"')),
       'C4c. planista: „szukaj” w języku pytania; miejsca w okolicy – zawsze badacz');
