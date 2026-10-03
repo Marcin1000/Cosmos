@@ -277,7 +277,9 @@ to the lead model. A day later the same report found the opposite bias: free mod
 choose between; bonuses for being free now apply only to the free variant. Returning to the app on a
 phone no longer shows "no connection" for the few seconds the network needs to wake up, the answer
 that finished on the server is fetched by itself, and photo tiles that fail to load disappear
-instead of sitting there as broken placeholders.
+instead of sitting there as broken placeholders. The archive is searched only when the question is about the person's own material:
+a model that appended an archive tag to a finished trip plan used to dig through 57 000
+OneDrive files and add a second, unrelated answer.
 
 **Comments explain decisions, not syntax.** Where a fix looks arbitrary, the
 comment says which real failure produced it. The codebase is in Polish, which is

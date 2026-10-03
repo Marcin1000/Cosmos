@@ -1049,6 +1049,11 @@ w Studiu obraz się **generuje**, w Plenerze się go **kręci**.
 | 🚁 **Misja drona** | siatka nalotu (szerokość, długość, odstęp, kierunek, wysokość, prędkość) → plik `.kmz` do DJI Fly | `/api/plan/mission`, format WPML |
 | 🗂 **Archiwum materiału** | OneDrive: indeksowanie, dane z plików (data, aparat, obiektyw, ISO, GPS) czytane z EXIF-u przez żądanie zakresu, opisy obrazem, telemetria klipów z `.SRT` | `/api/onedrive/*`, `/api/archive/*` |
 
+**Archiwum tylko na pytanie o własny materiał.** Cosmos przeszukuje OneDrive, gdy pytasz
+o swoje zdjęcia („moje”, „mam”, „nakręciłem”, „archiwum”, „folder”). Gdy model sam dopisze
+znacznik archiwum po gotowej odpowiedzi na inne pytanie (np. plan wycieczki), znacznik wypada
+i tura się kończy – bez przekopywania archiwum i bez drugiej odpowiedzi.
+
 **Archiwum przerobione w całości na 59 tysiącach plików** – indeksowanie, dane
 z plików i rozpoznana treść na każdym zdjęciu. Prawie wszystko, co w nim jest,
 wzięło się z pomiaru na tym zbiorze, bo małe archiwum nie pokazuje żadnej

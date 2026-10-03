@@ -85,6 +85,8 @@ function utworzProtokol() {
 
   function stripSearchMarker(s) {
     let out = bezRusztowania(String(s || ''));
+    // Podwojony znak nagłówka („### ### Dzień 1”) – model przepisał szablon z instrukcji (runda 12).
+    out = out.replace(/^(#{1,6})[ \t]+#{1,6}[ \t]+/gm, '$1 ');
     const przed = out;
     /* Wywołanie narzędzia w formacie modeli z function callingiem
        (`<tool_call>{"name": …}</tool_call>` – Qwen, Hermes, Nemotron 3;

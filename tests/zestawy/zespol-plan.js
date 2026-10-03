@@ -617,6 +617,12 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     const M3 = require(path.join(KORZEN, 'lib/miejsca.js'));
     const palermo = await M3.wspolrzedneMiejsca('Palermo');
     const zakopane = await M3.wspolrzedneMiejsca('Zakopane');
+    // M3c (runda 12): miejsce z pytania, gdy planista go nie poda.
+    const PL = require(path.join(KORZEN, 'lib/zespol-plan.js'));
+    const mz = (t) => PL.miejscaZPytania(t)[0];
+    ok(mz('Wybieram się na Sycylię z rodziną za rok we wrześniu') === 'Sycylia' && mz('Plan wycieczki foto blisko Złotokłosu.') === 'Złotokłos'
+      && mz('Zdjęcia w Taorminie o świcie') === 'Taormina' && mz('Plener w Warszawa Praga') === 'Warszawa Praga',
+      `M3c. miejsce z pytania z odmianą (${['Wybieram się na Sycylię', 'blisko Złotokłosu.', 'Zdjęcia w Taorminie', 'Plener w Warszawa Praga'].map(mz).join(', ')})`);
     const sycylia = await M3.wspolrzedneMiejsca('Sycylia');
     ok(sycylia && Math.abs(sycylia.lat - 37.58) < 0.01, `M3b. „Sycylia”: adres lokalu „Posmakuj Sycylii, 32” w Polsce odrzucony → Sycylia we Włoszech (${sycylia && sycylia.lat})`);
     ok(palermo && Math.abs(palermo.lat - 38.12) < 0.01 && zakopane && Math.abs(zakopane.lat - 49.3) < 0.01

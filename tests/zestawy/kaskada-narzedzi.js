@@ -793,6 +793,20 @@ async function uruchom(st, nazwa, acc, stan) {
     const stanT = (dod = {}) => ({ archiwum: new Set(), grafiki: new Set(), plan: new Set(), ...dod });
     const asystent = (st) => st.conv.messages.filter((m) => m.role === 'assistant' && typeof m.content === 'string' && !m.status);
 
+    // r12) [ARCHIWUM:] dopisany po gotowym planie, a pytanie nie dotyczy własnego materiału → koniec, bez archiwum
+    {
+      const st = stanowisko();
+      st.conv.messages.push({ role: 'user', content: 'Plan wycieczki foto blisko Złotokłosu.' });
+      const w = await uruchom(st, 'archiwum', `${ODPOWIEDZ}\n\n[ARCHIWUM: miejsce=Złotokłos]`, stanT());
+      const st2 = stanowisko();
+      st2.conv.messages.push({ role: 'user', content: 'Pokaż moje zdjęcia z Mazur' });
+      await uruchom(st2, 'archiwum', `${ODPOWIEDZ}\n\n[ARCHIWUM: folder=Mazury]`, stanT());
+      const pytalArchiwum = (x) => x.dziennik.adresy.some((a) => a.includes('/api/archive'));
+      console.log(`18r12. archiwum bez pytania o własny materiał → ${w && w.akcja}, archiwum: ${pytalArchiwum(st)}; „moje zdjęcia” → archiwum: ${pytalArchiwum(st2)}`);
+      if (!w || w.akcja !== 'koniec' || pytalArchiwum(st)) fail.push('18r12. [ARCHIWUM:] po gotowym planie przeszukał archiwum, choć nikt o nie nie pytał');
+      if (!pytalArchiwum(st2)) fail.push('18r12. pytanie o „moje zdjęcia” nie dotarło do archiwum');
+    }
+
     // a) plan policzony przez fotografa + gotowa odpowiedź → koniec, bez /api/plan, bez polecenia dla modelu
     {
       const st = stanowisko({ znakSilnika: () => ({ silnik: 'claude', model: 'claude-sonnet-5' }), metaOdpowiedzi: () => ({ think: 'MYŚL', note: '' }) });

@@ -393,6 +393,16 @@ function utworzNarzedzia(z) {
          zero, drugie jest sensowne (inny rok, `folder=` zamiast `miejsce=`)
          i wolno je zadać. Rozróżnienie idzie więc po WYNIKU, nie po liczbie
          wywołań. */
+      /* Archiwum tylko na pytanie o WŁASNY materiał. Na „Plan wycieczki foto blisko
+         Złotokłosu” model napisał plan, a na końcu sam dopisał [ARCHIWUM:] – Cosmos
+         przekopał 57 tys. plików z OneDrive i dołożył drugą odpowiedź o portretach
+         z telefonu, o które nikt nie pytał (Marcin, runda 12). Gdy pytanie nie mówi
+         o własnych zdjęciach, a przed znacznikiem stoi gotowa odpowiedź – znacznik
+         wypada i tura się kończy. */
+      if (!pytaOWlasnyMaterial(ostatniePytanie(k.conv))) {
+        const koniec = await zakonczTekstem(k);
+        if (koniec) return koniec;
+      }
       if (k.stan.archiwumZWynikiem) {
         return (await zakonczTekstem(k)) || sterowanie(k,
           'MASZ JUŻ WYNIK Z ARCHIWUM w tej turze i on odpowiada na pytanie '
@@ -594,10 +604,20 @@ function utworzNarzedzia(z) {
      dowie się o zdjęciach z historii: w następnej turze zobaczy własne
      znaczniki w miejscach, gdzie je postawił (app.js, toApiMessages). */
 
+  /** Tekst ostatniego pytania człowieka w rozmowie. */
+  function ostatniePytanie(conv) {
+    const pytanie = [...((conv && conv.messages) || [])].reverse().find((m) => m && m.role === 'user' && !m.search);
+    return pytanie ? (typeof pytanie.content === 'string' ? pytanie.content : (pytanie.content && pytanie.content.text) || '') : '';
+  }
+
+  /** Czy pytanie dotyczy własnego materiału (archiwum, OneDrive, „moje zdjęcia”, „ile nakręciłem”). */
+  function pytaOWlasnyMaterial(tekst) {
+    return /(?<!\p{L})(moj\p{L}*|mój|mam(?!\p{L})|miałem|miałam|archiw\p{L}*|onedrive|nakręci\p{L}*|nagra\p{L}*|zrobi(łem|łam|liśmy)|sfotografowa\p{L}*|folder\p{L}*|katalog\p{L}*|plik\p{L}*|my|mine|archive|did i|have i)(?!\p{L})/iu.test(String(tekst || ''));
+  }
+
   /** Czy człowiek prosi teraz o INNE zdjęcia (wtedy pamięć rozmowy nie wystarczy). */
   function prosiOInne(conv) {
-    const pytanie = [...conv.messages].reverse().find((m) => m && m.role === 'user' && !m.search);
-    const tekst = pytanie ? (typeof pytanie.content === 'string' ? pytanie.content : (pytanie.content && pytanie.content.text) || '') : '';
+    const tekst = ostatniePytanie(conv);
     return /(?<!\p{L})(inn\p{L}*|więcej|wiecej|kolejn\p{L}*|nowe|nowych|other|more|different|another)(?!\p{L})/iu.test(tekst);
   }
 

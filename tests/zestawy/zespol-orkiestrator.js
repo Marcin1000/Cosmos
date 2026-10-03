@@ -517,7 +517,8 @@ async function nowaRozmowa(id, pytanie) {
         `O14j. K4: faza niesie plan {miejsce, kiedy, strefa, chwila} (${JSON.stringify(planK4)}); zakres planu to punkt zasad po „TERAZ napisz”, nie notatka`);
       ok(/NARZĘDZIE – (WYSZUKIWANIE W INTERNECIE|INTERNET):/.test(prP.system), 'O14j2. bez badacza prowadzący zachowuje opis [SZUKAJ:]');
       await zeruj();
-      const ww = await tura({ messages: [{ role: 'user', content: 'Jadę na Sycylię, kiedy tam złota godzina?' }],
+      // Runda 12: miejsce stojące w pytaniu bierze się z pytania – tu żadnego nie ma.
+      const ww = await tura({ messages: [{ role: 'user', content: 'jadę na wakacje w przyszłym tygodniu, kiedy tam złota godzina?' }],
         zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }] } });
       const zw = await zadania();
       const fw2 = zw.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
@@ -526,12 +527,11 @@ async function nowaRozmowa(id, pytanie) {
         && !(zd(ww, 'faza')[0] || {}).planPoliczony && /planu zdjęciowego nie policzono \(pytanie dotyczy wyjazdu/.test(poTeraz(prW.ostatnia)),
         'O14k. R3: pytanie o wyjazd bez miejsca – brak planu (nie plan domu), prowadzący wie, że godzin nie ma');
       await zeruj();
-      await tura({ messages: [{ role: 'user', content: 'Zachód słońca nad Morskim Okiem we wrześniu 2027 – kiedy?' }],
+      const wt = await tura({ messages: [{ role: 'user', content: 'Zachód słońca nad Morskim Okiem we wrześniu 2027 – kiedy?' }],
         zespol: { sklad: [{ rola: 'fotograf' }, { rola: 'analityk' }], miejsce: 'Morskie Oko' } });
-      const zt = await zadania();
-      const ft = zt.find((x) => x.rola === 'FOTOGRAF') || { ostatnia: '' };
-      ok(/plan nie został policzony: pytanie podaje termin/.test(ft.ostatnia) && !zt.some((x) => x.rodzaj === 'geokod'),
-        'O14l. R3: termin w pytaniu, a planista nie dał „kiedy” – brak planu (nie plan na dziś)');
+      const planT = (zd(wt, 'faza')[0] || {}).plan || {};
+      // Runda 12: termin bierze się z pytania – plan na wrzesień 2027, nie na dziś i nie brak planu.
+      ok(/^2027-09/.test(planT.kiedy || ''), `O14l. R3: termin w pytaniu, a planista nie dał „kiedy” – plan na termin z pytania (${planT.kiedy || 'brak'})`);
       await post('/api/location', { location: '' });
     }
 

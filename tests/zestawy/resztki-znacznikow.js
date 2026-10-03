@@ -235,5 +235,14 @@ sprawdz('„<tool>” w zwykłym zdaniu', 'Znacznik <tool> w HTML-u.', 'Znacznik
   if (!okC) fail.push('tabela bez znaczników zmieniona albo szablon „nazwa miejsca” dał pasek');
 }
 
+// Runda 12: podwojony znak nagłówka („### ### Dzień 1” z eksportu Złotokłosu) i zwykły nagłówek bez zmian.
+{
+  const dwa = stripSearchMarker('### ### Dzień 1 · Złotokłos\nTekst');
+  const jeden = stripSearchMarker('## Plan\n#hashtag zostaje');
+  const okH = dwa.startsWith('### Dzień 1 · Złotokłos') && jeden === '## Plan\n#hashtag zostaje';
+  console.log(`${okH ? 'OK ' : 'ŹLE'} podwojony nagłówek „### ###” scalony („${dwa.split('\n')[0]}”)`);
+  if (!okH) fail.push('podwojony nagłówek „### ### Dzień” zostaje na ekranie');
+}
+
 console.log(fail.length ? '\nDO POPRAWY:\n- ' + fail.join('\n- ') : '\nRESZTKI ZNACZNIKÓW OK');
 process.exit(fail.length ? 1 : 0);
