@@ -144,9 +144,15 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
      (zrzut 3 Marcina: Sonnet za 0,26 zł przy darmowym Nemotronie). Płatny
      pierwszy na liście, żeby dawny remis rozstrzygała kolejność. */
   const remis = [k('claude-sonnet-5', 'claude'), k('nvidia/llama-3.3-nemotron-super-49b-v1.5', 'cloud')];
-  ok(U.dobierzModel('analityk', remis, { prowadzacy: super120 })?.id === 'nvidia/llama-3.3-nemotron-super-49b-v1.5'
-    && U.ocenKandydata('analityk', remis[1], { prowadzacy: super120 }) - U.ocenKandydata('analityk', remis[0], { prowadzacy: super120 }) === 1,
-    'C10. remis cech: darmowy silnik +1, płatny wygrywa tylko przewagą cech');
+  /* Runda 12 (Marcin: „zespół sam zaczyna na darmowych”): w składzie proponowanym premii za
+     darmowość nie ma – remis punktów rozstrzyga cena, więc darmowy wygrywa tylko remis, a płatny
+     wygrywa przewagą cech; +1 dla darmowego zostaje w wariancie „Darmowe modele”. */
+  const cenaR = (id, s) => (s === 'claude' ? 63 : null);
+  ok(U.ocenKandydata('analityk', remis[1], { prowadzacy: super120 }) === U.ocenKandydata('analityk', remis[0], { prowadzacy: super120 })
+    && U.dobierzModel('analityk', remis, { prowadzacy: super120, cena: cenaR })?.id === 'nvidia/llama-3.3-nemotron-super-49b-v1.5'
+    && U.ocenKandydata('analityk', remis[1], { prowadzacy: super120, tylkoDarmowe: true })
+      - U.ocenKandydata('analityk', remis[1], { prowadzacy: super120 }) >= 1,
+    'C10. proponowany: remis cech bez premii za darmowość (rozstrzyga cena); „Darmowe modele”: darmowy +1');
   ok(U.dobierzModel('badacz', [k('gpt-4o', 'openai'), super120], { prowadzacy: super120 })?.id === 'gpt-4o',
     'C10b. płatny z przewagą cech (polszczyzna) dalej wygrywa w składzie proponowanym');
   // C11: zapora ceny przy płatnym prowadzącym – ten sam poziom („pelny”), ale droższy model odpada.
@@ -185,8 +191,10 @@ const ok = (warunek, opis) => { console.log(`${warunek ? '✓' : '✗'} ${opis}`
     const darmSpr = k('nvidia/nemotron-3-super-120b-a12b', 'cloud', { sprawdzenie: { rozmowa: true, obrazy: 'nie', czas: 900 } });
     ok(U.ocenKandydata('analityk', sonnet, oC) === U.ocenKandydata('analityk', gpt54, oC)
       && U.dobierzModel('analityk', [sonnet, gpt54], oC)?.id === 'gpt-5.4' && U.rankingModeli('analityk', [sonnet, gpt54], oC)[0].k.id === 'gpt-5.4'
-      && U.ocenKandydata('analityk', darmSpr, oC) - U.ocenKandydata('analityk', k('nvidia/nemotron-3-super-120b-a12b', 'cloud'), oC) === 2,
-      'C14. płatny: sonda nie daje punktów, remis → tańszy (GPT-5.4 przed sprawdzonym Sonnetem); darmowy dalej +2 za sondę');
+      && U.ocenKandydata('analityk', darmSpr, oC) === U.ocenKandydata('analityk', k('nvidia/nemotron-3-super-120b-a12b', 'cloud'), oC)
+      && U.ocenKandydata('analityk', darmSpr, { ...oC, tylkoDarmowe: true })
+        - U.ocenKandydata('analityk', k('nvidia/nemotron-3-super-120b-a12b', 'cloud'), { ...oC, tylkoDarmowe: true }) === 2,
+      'C14. sonda nie daje punktów w składzie proponowanym (remis → tańszy: GPT-5.4 przed Sonnetem); w „Darmowe modele” darmowy +2 za sondę');
   }
   // C13: Ultra ma te same cechy analityka co Super 49B, ale jest „wolny” – pierwszy na liście i tak przegrywa.
   ok(U.umiejetnosci('nvidia/nemotron-3-ultra-550b', 'cloud').wolny === true
