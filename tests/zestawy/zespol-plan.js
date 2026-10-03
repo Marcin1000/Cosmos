@@ -587,6 +587,9 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
           { category: 'highway', type: 'residential', lat: '50.06', lon: '19.94', display_name: 'Palermo, Kraków' }],
         'Palermo|': [{ category: 'place', type: 'city', lat: '38.1157', lon: '13.3615', display_name: 'Palermo, Sycylia, Włochy' }],
         'Zakopane|pl': [{ category: 'boundary', type: 'administrative', lat: '49.2992', lon: '19.9496', display_name: 'Zakopane, małopolskie' }],
+        // Runda 12: adres lokalu ma klasę „place”, ale typ „house” – to nie miejsce do planu.
+        'Sycylia|pl': [{ category: 'place', type: 'house', addresstype: 'place', lat: '52.40', lon: '16.92', display_name: 'Posmakuj Sycylii, 32, Poznań' }],
+        'Sycylia|': [{ category: 'boundary', type: 'administrative', lat: '37.58', lon: '14.15', display_name: 'Sycylia, Włochy' }],
       };
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(W[`${q}|${kraj}`] || []));
@@ -598,6 +601,8 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     const M3 = require(path.join(KORZEN, 'lib/miejsca.js'));
     const palermo = await M3.wspolrzedneMiejsca('Palermo');
     const zakopane = await M3.wspolrzedneMiejsca('Zakopane');
+    const sycylia = await M3.wspolrzedneMiejsca('Sycylia');
+    ok(sycylia && Math.abs(sycylia.lat - 37.58) < 0.01, `M3b. „Sycylia”: adres lokalu „Posmakuj Sycylii, 32” w Polsce odrzucony → Sycylia we Włoszech (${sycylia && sycylia.lat})`);
     ok(palermo && Math.abs(palermo.lat - 38.12) < 0.01 && zakopane && Math.abs(zakopane.lat - 49.3) < 0.01
       && pytania.filter((x) => x.startsWith('Zakopane')).length === 1,
       `M3. geokoder w kraju: pizzeria i ulica „Palermo” odrzucone → Palermo na Sycylii (${palermo && palermo.lat}); Zakopane z kraju jednym zapytaniem (${pytania.join(', ')})`);
