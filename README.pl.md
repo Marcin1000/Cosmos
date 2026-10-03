@@ -9,7 +9,7 @@
   <a href="https://cosmosai.live"><img alt="cosmosai.live" src="https://img.shields.io/badge/cosmosai.live-strona-16171B?style=flat-square"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-5E9E3A?style=flat-square">
   <img alt="Zależności produkcyjne: zero" src="https://img.shields.io/badge/zale%C5%BCno%C5%9Bci-0-2F6FEB?style=flat-square">
-  <img alt="160 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-160-5E9E3A?style=flat-square">
+  <img alt="161 zestawów testów" src="https://img.shields.io/badge/zestawy%20test%C3%B3w-161-5E9E3A?style=flat-square">
   <img alt="Licencja PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licencja-PolyForm%20Noncommercial-5E616B?style=flat-square">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-C8643B?style=flat-square"></a>
 </p>
@@ -99,7 +99,7 @@ produkcyjnego, `node server.js`, nic do zbudowania. Wdrożenie na VPS to
 Czujniki w Pythonie są świadomym wyjątkiem – nikt nie powinien pisać detektora
 obiektów od zera – i chodzą w osobnym procesie na osobnej maszynie.
 
-**Testy mierzą zachowanie, nigdy tekst źródła.** 160 zestawów plus 10 selftestów
+**Testy mierzą zachowanie, nigdy tekst źródła.** 161 zestawów plus 10 selftestów
 Pythona. Nauczone drogo: testy sprawdzające tekst źródła padły sześć razy przy
 jednym refaktorze, mimo że pilnowane przez nie funkcje działały bez zarzutu.
 Test, który pada, gdy nic się nie stało, uczy, żeby go ignorować. Każdy zestaw
@@ -158,7 +158,7 @@ node server.js            # http://localhost:3000 (strona produktowa), /app (Cos
 To cała instalacja. Bez kroku budowania, bez menedżera pakietów, bez kontenera.
 
 ```bash
-npm test                  # 160 zestawów + 10 selftestów Pythona (~12 min)
+npm test                  # 161 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie      # tylko bez przeglądarki (~30 s)
 node scripts/audyt.js     # 15 sekcji audytu statycznego (~40 s)
 ```
@@ -231,6 +231,9 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
 - ☁️ / 🖥️ **Tryb hybrydowy** – przełącznik Chmura NVIDIA ↔ lokalny GPU w pasku górnym.
   Po dodaniu klucza dochodzą osobne zakładki **OpenAI** i **Claude** (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`) – każda z własnym modelem
+- 📱 **Powrót do aplikacji na telefonie** – po przełączeniu okna Cosmos daje sieci kilka sekund na
+  powrót, zanim pokaże „Brak połączenia”, i sam wraca po odpowiedź, która dokończyła się na serwerze
+  (na karcie przerwanej odpowiedzi jest „Pobierz odpowiedź”, nie płatne „Ponów”)
 - 🛰️ Monitor statusu silników i zmysłów na żywo w panelu bocznym; kropka w prawym górnym
   rogu jest w kolorze silnika (lokalny GPU – niebieska), gdy silnik odpowiada, a szara z powodem
   w podpowiedzi (np. „brak odpowiedzi w 8 s”), gdy nie
@@ -289,7 +292,9 @@ Poniżej pełny opis każdego elementu – funkcje, konfiguracja, API, koszty.
   którego dotyczą), podpisany nazwą miejsca. Tekst stoi, a paski wypełniają się, gdy
   zdjęcia przychodzą; po zdjęciach tura się kończy – bez drugiej rundy modelu. Plan na kilka dni
   model pisze dzień po dniu („### Dzień 1 · Palermo · zwiedzanie”, pod nim zdjęcia, „Światło:”
-  i „Aparat:”), a szeroka tabela na telefonie rysuje się jako karty dni; „pokaż inne zdjęcia”
+  i „Aparat:”), a szeroka tabela na telefonie rysuje się jako karty dni. Zdjęcie, które się nie
+  wczytało, znika z paska (pasek bez żadnego zdjęcia znika cały); loga, herby, mapy, ikony i plakaty
+  odpadają już na serwerze; „pokaż inne zdjęcia”
   daje zdjęcia, których w rozmowie jeszcze nie było. Klucz płacisz Ty: członek korzysta
   z Serpera i Brave'a tylko z przyznaniem **Wyszukiwarki (Google)** w panelu Dostęp i do
   limitu (`COSMOS_SZUKANIE_NA_MINUTE`, `COSMOS_SZUKANIE_NA_DOBE`); bez przyznania ma
@@ -572,7 +577,10 @@ modele – albo ten sam model w kilku rolach. Działa przy każdym silniku i prz
   Uczciwie mówi, że trzeba się liczyć ze słabszą odpowiedzią. W bramce przełączasz składy jednym
   kliknięciem, pod odpowiedzią solo jest link **„Za 0 zł”**, a w Ustawienia → Agenci → **Jaki skład
   proponować** możesz ustawić darmowy jako domyślny – wtedy rolom na „Auto” serwer dobiera tylko
-  darmowe silniki. Zalecany model open source trafia do składu dopiero po udanej sondzie na Twoim
+  darmowe silniki. Proponowany skład to zawsze najlepiej dopasowany (może być płatny); premie za
+  darmowość działają tylko w wariancie „Darmowe modele”, więc bramka ma z czego wybierać. Plan
+  wycieczki „w okolicy” zawsze dostaje badacza, żeby miejsca były z wyszukiwania, a nie zmyślone.
+  Zalecany model open source trafia do składu dopiero po udanej sondzie na Twoim
   kluczu (serwer sprawdza listę przy starcie i raz na dobę), a model, który NVIDIA wycofała (odpowiedź
   410), zostaje zapamiętany i nie wraca w następnej turze. Gdy rola musi przejść na zapasowy model,
   blok pokazuje jedną cichą notę „Niedostępne: … – role na zapasowym modelu”.
@@ -1522,7 +1530,7 @@ Budżety zmienisz w `.env` (`MEMORY_SEARCH_BUDGET_MS`, `SEARCH_TIMEOUT_MS`,
 ## 🧪 Testy
 
 ```bash
-npm test                 # 160 zestawów + 10 selftestów Pythona (~12 min)
+npm test                 # 161 zestawów + 10 selftestów Pythona (~12 min)
 npm run test:szybkie     # tylko bez przeglądarki (~30 s)
 npm test -- --lista      # co jest do uruchomienia
 ```

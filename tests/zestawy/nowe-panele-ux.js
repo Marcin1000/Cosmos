@@ -91,7 +91,7 @@ const WASKI = { width: 360, height: 740 };
     c.messages.push({ role: 'user', content: { text: 'sprawdź to',
       docs: [{ name: 'Umowa-o-dzielo-bardzo-dluga-nazwa-pliku-2026-final-v3.pdf', chars: 8412, text: 'treść' }] } });
     c.messages.push({ role: 'assistant', content: { text: '', photos: Array.from({ length: 8 }, (_, i) => ({
-      title: `Zdjęcie ${i}`, thumb: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      title: `Zdjęcie ${i}`, thumb: `/icons/cosmos-512.png?${i}`,
       source: 'https://bardzo-dluga-nazwa-domeny-testowej.example.com/strona/podstrona' })) } });
     renderMessages();
   });
