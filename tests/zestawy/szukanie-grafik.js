@@ -29,6 +29,22 @@ const { srodowisko } = require('../pomoc');
   if ((dMalo.results || []).length !== 3) fail.push('parametr ile=3 nie ogranicza wyników');
   if (!((dDuzo.results || []).length > (d.results || []).length)) fail.push('parametr ile=16 nie daje więcej wyników niż domyślnie');
 
+  // 1c. (runda 12) logo, herb, mapa, SVG i ikona to nie zdjęcie miejsca – odpadają przed paskiem
+  const { toZdjecieMiejsca } = require('../../lib/grafiki.js');
+  const zdj = (title, full, w = 1200, h = 800) => ({ title, full, thumb: full, source: '', width: w, height: h });
+  const odsiew = [
+    [zdj('Ortigia, Syrakuzy – nabrzeże', 'https://upload.wikimedia.org/a/Ortigia_nabrzeze.jpg'), true],
+    [zdj('Mapa Sycylii', 'https://x/mapa.png'), false],
+    [zdj('US Ortigia logo', 'https://x/ortigia-logo.png'), false],
+    [zdj('Stemma di Siracusa', 'https://x/Siracusa-Stemma.png'), false],
+    [zdj('Ortigia', 'https://upload.wikimedia.org/a/Ortigia.svg.png'), false],
+    [zdj('Ortigia ikona', 'https://x/i.png', 120, 120), false],
+    [zdj('Herbata na tarasie w Ortigii', 'https://x/herbata.jpg'), true],
+  ];
+  const zle = odsiew.filter(([x, dobre]) => toZdjecieMiejsca(x) !== dobre).map(([x]) => x.title);
+  console.log(`1c. odsiew nie-zdjęć: ${zle.length ? 'ŹLE dla ' + zle.join(', ') : 'ok'}`);
+  if (zle.length) fail.push(`odsiew logo/herbów/map/ikon nie działa: ${zle.join(', ')}`);
+
   // 2. puste zapytanie odrzucone, nie wysyłane dalej
   const puste = await fetch(`${env.adres}/api/search/images?q=`);
   console.log(`2. puste zapytanie → HTTP ${puste.status}`);
