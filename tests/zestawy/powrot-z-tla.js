@@ -213,12 +213,15 @@ async function obserwuj(page, ms, wTrakcie) {
         await page.setViewportSize({ width: szer, height: wys });
         for (const motyw of ['light', 'dark']) {
           await page.emulateMedia({ colorScheme: motyw });
+          // Motyw idzie za systemem tylko przy starcie – przełączamy go jawnie.
+          await page.evaluate((m) => { if (typeof applyTheme === 'function') applyTheme(m); }, motyw);
           await spij(250);
           await page.screenshot({ path: path.join(process.env.ZRZUTY, `wa-${nazwa}-${motyw}-${szer}.png`) });
         }
       }
       await page.setViewportSize({ width: 390, height: 800 });
       await page.emulateMedia({ colorScheme: 'light' });
+      await page.evaluate(() => { if (typeof applyTheme === 'function') applyTheme('light'); });
     };
 
     // ---------------------------------------------------------------- A
