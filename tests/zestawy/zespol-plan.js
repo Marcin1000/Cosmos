@@ -93,6 +93,9 @@ process.on('beforeExit', () => { if (!skonczone) { console.log('✗ zestaw urwa�
     ok(b('Niech agenci sprawdzą ten kod') === 'jawna' && b('use a team of agents for this') === 'jawna', 'A2. „niech agenci…”, „use a team of agents” = jawna');
     ok(b('Agent Smith to postać z jakiego filmu?') === 'sam', 'A3. „Agent Smith…” NIE uruchamia zespołu');
     ok(P.bramka('Zrób to zespołem', { tryb: 'wylaczony' }).decyzja === 'sam', 'A4. tryb wyłączony – nawet jawna prośba nie uruchamia');
+    // Runda 12 (Sycylia 11 i 12): prośba o nastawy aparatu do miejsc i pory dnia woła fotografa (plan z godzinami).
+    const sycWsk = P.bramka('Plan wyjazdu na Sycylię za rok we wrześniu ze zdjęciami miejsc wraz z nastawieniami aparatu dopasowanymi do tych miejsc, pogody i pory dnia.', { tryb: 'proponuj' }).wskazowki;
+    ok(sycWsk.includes('fotograf'), `A4b. „nastawienia aparatu … pory dnia” → fotograf we wskazówkach (${sycWsk.join(', ')})`);
     const trudne = 'Napisz skrypt w Pythonie, który porówna aktualne ceny obiektywów w 2026 i sprawdź źródła, oraz policz średnią?';
     ok(P.bramka(trudne, { tryb: 'proponuj' }).decyzja === 'planista', `A5. trudne pytanie (kod + fakty) – planista (${P.bramka(trudne, { tryb: 'proponuj' }).punkty} pkt)`);
     ok(P.bramka(trudne, { tryb: 'proponuj', trybGlosowy: true }).decyzja === 'sam', 'A6. tryb głosowy – bez jawnej prośby zespół nie rusza');
