@@ -56,10 +56,10 @@ const SUPER_49B = {
   kontekst: 'duży',
   cechy: ['szybki', 'rozumowanie', 'narzędzia', 'polski', 'kod'],
   poziom: 'pelny',
-  uwaga: 'W chmurze NVIDIA wycofany 26.08.2026 (HTTP 410) – działa tylko z własnego serwera NIM. W chmurze weź Nemotron 3 Super.',
+  uwaga: 'W chmurze NVIDIA wycofany 26.08.2026 (HTTP 410) – działa tylko z własnego serwera NIM. W chmurze weź Nemotron 3 Ultra.',
   en: {
     opis: 'Llama 3.3 Nemotron 49B – a fast previous-generation conversation model.',
-    uwaga: 'Retired from the NVIDIA cloud on 2026-08-26 (HTTP 410) – works only from your own NIM server. In the cloud take Nemotron 3 Super.',
+    uwaga: 'Retired from the NVIDIA cloud on 2026-08-26 (HTTP 410) – works only from your own NIM server. In the cloud take Nemotron 3 Ultra.',
     mocne: ['everyday conversation', 'longer texts', 'reasoning', 'code'],
     kontekst: 'large',
   },
@@ -78,12 +78,12 @@ const MODEL_CATALOG = [
     myslenie: 'enable_thinking',
     // Rola zespołu ma 90 s i 45 s ciszy – Ultra przegrywa z szybszym modelem o tych samych cechach.
     wolny: true,
-    uwaga: 'Najwolniejszy z rodziny i nie zawsze odpowiada – do szybkich pytań weź Nemotron 3 Super.',
+    uwaga: 'Najwolniejszy z rodziny – do szybkich pytań weź Nemotron 3 Nano Omni.',
     en: {
       opis: 'NVIDIA\'s flagship – best for work where quality matters more than time.',
       mocne: ['hard reasoning', 'long analyses', 'best Polish', 'multi-step code'],
       kontekst: '1M tokens',
-      uwaga: 'Slowest of the family and doesn\'t always answer – for quick questions take Nemotron 3 Super.',
+      uwaga: 'Slowest of the family – for quick questions take Nemotron 3 Nano Omni.',
     },
   },
   {
@@ -98,12 +98,12 @@ const MODEL_CATALOG = [
     cechy: ['rozumowanie', 'narzędzia', 'kod'],
     poziom: 'pelny',
     myslenie: 'enable_thinking',
-    uwaga: 'Polszczyzna nierówna w długich tekstach – zdarzają się błędy odmiany.',
+    uwaga: 'W chmurze NVIDIA odpowiada HTTP 404 od 25.10.2026 – weź Nemotron 3 Ultra. Polszczyzna nierówna w długich tekstach – zdarzają się błędy odmiany.',
     en: {
       opis: 'Strong but uneven – measured 0.5 s on one run and 5.8 s on another.',
       mocne: ['everyday work', 'reasoning', 'tool calling', 'code'],
       kontekst: '1M tokens',
-      uwaga: 'Uneven Polish in long texts – inflection mistakes happen.',
+      uwaga: 'Returns HTTP 404 in the NVIDIA cloud since 2026-10-25 – take Nemotron 3 Ultra. Uneven Polish in long texts – inflection mistakes happen.',
     },
   },
   {

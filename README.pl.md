@@ -474,7 +474,7 @@ domyślna dla urządzeń, które niczego nie wybrały.
 | Do czego | Model | Uwagi |
 |---|---|---|
 | Czat w chmurze | `nemotron-3-ultra-550b-a55b` | Domyślny. 55 mld aktywnych = najlepsza polszczyzna; 2,5–3,6 s, zawsze 3/3 prób |
-| Czat, gdy wolisz tempo | `nemotron-3-super-120b-a12b` | MoE 12 mld aktywnych, kontekst 1M. Zwykle 1,3 s, raz na kilka razy 4,4 s |
+| ~~Czat, gdy wolisz tempo~~ | `nemotron-3-super-120b-a12b` | **Od 25.10.2026 odpowiada HTTP 404** – Cosmos go już nie zaleca |
 | Wzrok w chmurze | `nemotron-3-nano-omni-30b-a3b-reasoning` | Omni-modalny: obrazy, wideo, mowa, tekst |
 | Model lokalny (RTX 3080) | `nemotron-nano-9b-v2` | ~6 GB w 4-bit – mieści się w 10 GB |
 | Lokalny wzrok | `llama-3.1-nemotron-nano-vl-8b-v1` | 8B, zmieści się obok |
@@ -1462,7 +1462,7 @@ czyli czas do ostatniego znaku krótkiej odpowiedzi.
 | Do czego | Model | przebieg 1 · 2 · 3 |
 |---|---|---|
 | **Rozmowa (jakość)** | `nvidia/nemotron-3-ultra-550b-a55b` | 3,1 · 2,5 · 3,6 s · 55 mld aktywnych = najlepsza polszczyzna |
-| **Rozmowa (tempo)** | `nvidia/nemotron-3-super-120b-a12b` | 4,4 · 1,2 · 1,3 s · kontekst 1M, ale 12 mld aktywnych |
+| Rozmowa (tempo) | `nvidia/nemotron-3-super-120b-a12b` | 4,4 · 1,2 · 1,3 s · **od 25.10.2026 HTTP 404** |
 | **Zdjęcia** | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | 1,7 · 1,9 · 1,0 s · czyta też wideo |
 | Najszybszy sensowny | `openai/gpt-oss-20b` | 1,0 · 1,5 · 1,7 s |
 | Wizyjny, lekki | `nvidia/nemotron-nano-12b-v2-vl` | 2,2 · 1,2 · 2,5 s · **wycofany przez NVIDIĘ 26.08.2026 (410)** |
@@ -1476,11 +1476,12 @@ dwa razy szybszy, Ultra bardziej przewidywalny i wyraźnie lepszy po polsku**
 tego, ile modelu naprawdę pracuje nad zdaniem).
 
 Domyślny jest **Ultra**, bo 3 s mieszczą się jeszcze w ocenie „dobra – nie
-przeszkadza", a polszczyzny nie da się nadrobić szybkością. Jeśli wolisz
-tempo – jedna linijka w `.env` i restart:
+przeszkadza", a polszczyzny nie da się nadrobić szybkością. Super i tak
+odpada: od 25.10.2026 NVIDIA odpowiada na niego HTTP 404. Model zmieniasz
+jedną linijką w `.env` i restartem:
 
 ```bash
-NEMOTRON_MODEL=nvidia/nemotron-3-super-120b-a12b
+NEMOTRON_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 ```
 
 Cztery rzeczy, które pomiar obalił – **wszystkie były błędami narzędzia,
